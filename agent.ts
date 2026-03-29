@@ -27,7 +27,25 @@ Working directory: ${process.cwd()}
 
 Be concise, data-driven, and actionable in your responses.`;
 
-const messages: { role: string; parts: { text: string }[] }[] = [];
+const tools = [
+  {
+    functionDeclarations: [
+      {
+        name: "list_files",
+        description: "List files and directories at the given path",
+        parameters: {
+          type: "object",
+          properties: {
+            directory: { type: "string", description: "Directory path to list" },
+          },
+          required: ["directory"],
+        },
+      },
+    ],
+  },
+];
+
+const messages: any[] = [];
 
 async function chat(userMessage: string): Promise<string> {
   messages.push({ role: "user", parts: [{ text: userMessage }] });
@@ -35,6 +53,7 @@ async function chat(userMessage: string): Promise<string> {
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: messages,
+    tools,
     generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
   };
 
@@ -44,9 +63,17 @@ async function chat(userMessage: string): Promise<string> {
     body: JSON.stringify(body),
   });
 
-  const json = await res.json();
+  const json: any = await res.json();
   const modelMessage = json.candidates[0].content;
   messages.push(modelMessage);
+
+  const functionCall = modelMessage.parts.find((p: any) => p.functionCall);
+  if (functionCall) {
+    const { name, args } = functionCall.functionCall;
+    console.log(`\n🔧 ${name}(${JSON.stringify(args)})`);
+    return "";
+  }
+
   return modelMessage.parts[0].text;
 }
 
