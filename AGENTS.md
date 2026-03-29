@@ -14,7 +14,7 @@ Agentic loop: prompt -> LLM -> tool call -> execute -> result back -> LLM -> ...
 
 ## Tools
 - [x] list_files
-- [ ] read_file
+- [x] read_file
 - [ ] run_bash
 - [ ] edit_file
 

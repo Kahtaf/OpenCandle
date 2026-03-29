@@ -41,6 +41,17 @@ const tools = [
           required: ["directory"],
         },
       },
+      {
+        name: "read_file",
+        description: "Read the contents of a file at the given path",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "File path to read" },
+          },
+          required: ["path"],
+        },
+      },
     ],
   },
 ];
@@ -51,6 +62,12 @@ function executeTool(name: string, args: any): string {
   switch (name) {
     case "list_files":
       return readdirSync(args.directory).join("\n");
+    case "read_file":
+      try {
+        return readFileSync(args.path, "utf-8");
+      } catch (e: any) {
+        return `Error reading file: ${e.message}`;
+      }
     default:
       return `Unknown tool: ${name}`;
   }
