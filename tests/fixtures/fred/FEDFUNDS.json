@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "seriess": [
+      {
+        "id": "FEDFUNDS",
+        "title": "Federal Funds Effective Rate",
+        "units": "Percent",
+        "frequency": "Monthly",
+        "last_updated": "2024-04-01"
+      }
+    ]
+  },
+  "observations": {
+    "observations": [
+      { "date": "2024-01-01", "value": "5.33" },
+      { "date": "2024-02-01", "value": "5.33" },
+      { "date": "2024-03-01", "value": "5.33" }
+    ]
+  }
+}

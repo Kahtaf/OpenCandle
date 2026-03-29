@@ -1,0 +1,33 @@
+{
+  "data": {
+    "children": [
+      {
+        "data": {
+          "title": "$AAPL earnings beat expectations, stock surges 5%",
+          "score": 1523,
+          "num_comments": 342,
+          "permalink": "/r/wallstreetbets/comments/abc123/aapl_earnings/",
+          "created_utc": 1711900800
+        }
+      },
+      {
+        "data": {
+          "title": "Why I'm bullish on $TSLA and $NVDA this quarter",
+          "score": 876,
+          "num_comments": 231,
+          "permalink": "/r/wallstreetbets/comments/def456/tsla_nvda/",
+          "created_utc": 1711897200
+        }
+      },
+      {
+        "data": {
+          "title": "Fed decision tomorrow - what are your plays?",
+          "score": 2100,
+          "num_comments": 567,
+          "permalink": "/r/wallstreetbets/comments/ghi789/fed_decision/",
+          "created_utc": 1711893600
+        }
+      }
+    ]
+  }
+}

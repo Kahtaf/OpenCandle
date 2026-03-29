@@ -1,0 +1,31 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "AAPL",
+          "regularMarketPrice": 178.72,
+          "previousClose": 175.10,
+          "regularMarketOpen": 176.15,
+          "regularMarketDayHigh": 179.50,
+          "regularMarketDayLow": 175.82,
+          "regularMarketVolume": 55123456,
+          "fiftyTwoWeekHigh": 199.62,
+          "fiftyTwoWeekLow": 143.90
+        },
+        "timestamp": [1711641600, 1711728000, 1711814400, 1711900800],
+        "indicators": {
+          "quote": [
+            {
+              "open": [171.00, 172.50, 174.00, 176.15],
+              "high": [173.50, 175.00, 176.80, 179.50],
+              "low": [170.20, 171.80, 173.50, 175.82],
+              "close": [172.28, 174.56, 175.10, 178.72],
+              "volume": [48000000, 52000000, 49000000, 55123456]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

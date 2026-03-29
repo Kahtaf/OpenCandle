@@ -1,0 +1,24 @@
+{
+  "name": "vantage",
+  "version": "0.1.0",
+  "description": "Financial trading & investing agent",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "^0.63.1",
+    "@mariozechner/pi-ai": "^0.63.1",
+    "@sinclair/typebox": "^0.34.0",
+    "camoufox-js": "^0.9.3",
+    "playwright-core": "^1.58.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

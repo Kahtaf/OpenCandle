@@ -1,0 +1,142 @@
+{
+  "optionChain": {
+    "result": [
+      {
+        "underlyingSymbol": "AAPL",
+        "expirationDates": [
+          1774828800,
+          1775001600,
+          1775088000
+        ],
+        "strikes": [
+          180.0,
+          200.0,
+          205.0,
+          210.0,
+          215.0
+        ],
+        "hasMiniOptions": false,
+        "quote": {
+          "symbol": "AAPL",
+          "regularMarketPrice": 248.8,
+          "regularMarketChange": -4.09,
+          "regularMarketChangePercent": -1.6173,
+          "shortName": "Apple Inc."
+        },
+        "options": [
+          {
+            "expirationDate": 1774828800,
+            "hasMiniOptions": false,
+            "calls": [
+              {
+                "contractSymbol": "AAPL260330C00200000",
+                "strike": 200.0,
+                "currency": "USD",
+                "lastPrice": 53.42,
+                "change": 0.0,
+                "percentChange": 0.0,
+                "volume": 10,
+                "openInterest": 16,
+                "bid": 46.75,
+                "ask": 50.65,
+                "contractSize": "REGULAR",
+                "expiration": 1774828800,
+                "lastTradeDate": 1774273366,
+                "impliedVolatility": 2.3203166992187496,
+                "inTheMoney": true
+              },
+              {
+                "contractSymbol": "AAPL260330C00225000",
+                "strike": 225.0,
+                "currency": "USD",
+                "lastPrice": 25.72,
+                "change": -3.2300014,
+                "percentChange": -11.157172,
+                "volume": 18,
+                "openInterest": 22,
+                "bid": 22.15,
+                "ask": 25.6,
+                "contractSize": "REGULAR",
+                "expiration": 1774828800,
+                "lastTradeDate": 1774632697,
+                "impliedVolatility": 0.648441015625,
+                "inTheMoney": true
+              },
+              {
+                "contractSymbol": "AAPL260330C00230000",
+                "strike": 230.0,
+                "currency": "USD",
+                "lastPrice": 25.41,
+                "change": 0.0,
+                "percentChange": 0.0,
+                "volume": 4,
+                "openInterest": 3,
+                "bid": 17.6,
+                "ask": 20.65,
+                "contractSize": "REGULAR",
+                "expiration": 1774828800,
+                "lastTradeDate": 1774534836,
+                "impliedVolatility": 0.6884796777343751,
+                "inTheMoney": true
+              }
+            ],
+            "puts": [
+              {
+                "contractSymbol": "AAPL260330P00180000",
+                "strike": 180.0,
+                "currency": "USD",
+                "lastPrice": 0.1,
+                "change": 0.0,
+                "percentChange": 0.0,
+                "volume": 1,
+                "openInterest": 1,
+                "bid": 0.0,
+                "ask": 0.01,
+                "contractSize": "REGULAR",
+                "expiration": 1774828800,
+                "lastTradeDate": 1774023712,
+                "impliedVolatility": 1.3750031249999999,
+                "inTheMoney": false
+              },
+              {
+                "contractSymbol": "AAPL260330P00200000",
+                "strike": 200.0,
+                "currency": "USD",
+                "lastPrice": 0.05,
+                "change": 0.020000001,
+                "percentChange": 66.66667,
+                "volume": 51,
+                "openInterest": 90,
+                "bid": 0.01,
+                "ask": 0.04,
+                "contractSize": "REGULAR",
+                "expiration": 1774828800,
+                "lastTradeDate": 1774640564,
+                "impliedVolatility": 1.125004375,
+                "inTheMoney": false
+              },
+              {
+                "contractSymbol": "AAPL260330P00205000",
+                "strike": 205.0,
+                "currency": "USD",
+                "lastPrice": 0.04,
+                "change": 0.0,
+                "percentChange": 0.0,
+                "volume": 2,
+                "openInterest": 1007,
+                "bid": 0.0,
+                "ask": 0.27,
+                "contractSize": "REGULAR",
+                "expiration": 1774828800,
+                "lastTradeDate": 1774359001,
+                "impliedVolatility": 1.2460975195312498,
+                "inTheMoney": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "error": null
+  }
+}

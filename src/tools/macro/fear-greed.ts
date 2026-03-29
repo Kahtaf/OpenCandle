@@ -1,0 +1,33 @@
+import { Type } from "@sinclair/typebox";
+import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { getFearGreedIndex } from "../../providers/fear-greed.js";
+import type { FearGreedData } from "../../types/sentiment.js";
+
+const params = Type.Object({});
+
+export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
+  name: "get_fear_greed",
+  label: "Fear & Greed Index",
+  description:
+    "Get the CNN Fear & Greed Index — a sentiment indicator from 0 (Extreme Fear) to 100 (Extreme Greed). Includes current, previous close, week ago, and month ago values.",
+  parameters: params,
+  async execute(toolCallId, _args) {
+    const fg = await getFearGreedIndex();
+
+    const gauge = buildGauge(fg.value);
+    const text = [
+      `**Fear & Greed Index: ${fg.value} — ${fg.label}**`,
+      gauge,
+      `Previous Close: ${fg.previousClose} | Week Ago: ${fg.weekAgo} | Month Ago: ${fg.monthAgo}`,
+    ].join("\n");
+
+    return { content: [{ type: "text", text }], details: fg };
+  },
+};
+
+function buildGauge(value: number): string {
+  const width = 20;
+  const pos = Math.round((value / 100) * width);
+  const bar = "█".repeat(pos) + "░".repeat(width - pos);
+  return `[${bar}] ${value}/100`;
+}

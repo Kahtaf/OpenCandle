@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "value": "36",
+      "value_classification": "Fear",
+      "timestamp": "1711900800"
+    },
+    {
+      "value": "38",
+      "value_classification": "Fear",
+      "timestamp": "1711814400"
+    },
+    {
+      "value": "42",
+      "value_classification": "Fear",
+      "timestamp": "1711728000"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 node_modules/
 .env
-.build-agent-progress
 dist/
 .DS_Store
+.vantage-portfolio.json
+.build-agent-progress

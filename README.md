@@ -1,38 +1,84 @@
 # Vantage
 
-A financial advisory coding agent built from scratch with raw HTTP calls to the Gemini API. No SDKs, no frameworks — just TypeScript and `fetch`.
+A financial agent that talks to markets. Ask it for stock prices, options chains with Greeks, macro data, sentiment — it fetches real data, computes analytics locally, and gives you actionable answers.
 
-Vantage helps investors and traders with market analysis, portfolio decisions, and trading strategies.
+## What This Does
 
-## Setup
+Vantage is an AI-powered terminal agent for investors and traders. Instead of switching between Yahoo Finance, FRED, Reddit, and a spreadsheet, you ask one agent and it chains the right tools together. It computes technical indicators and options Greeks locally (Black-Scholes), so there's no API dependency for math.
 
-1. Get a free Gemini API key at https://aistudio.google.com/apikey
-2. Copy your key into `.env`:
-   ```
-   GEMINI_API_KEY=your-key-here
-   ```
+Type `analyze TSLA` and it runs a full 6-analyst breakdown — fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
 
-## Run
+## Getting Started
 
 ```bash
-npx tsx agent.ts
+npm install
+cp .env.example .env
+# Add your GEMINI_API_KEY to .env
+npm start
 ```
 
-## Tools
+### API Keys
 
-| Tool | Description |
-|------|-------------|
-| `list_files` | List files and directories |
-| `read_file` | Read file contents |
-| `run_bash` | Execute shell commands |
-| `edit_file` | Create and edit files |
+| Key | Required | Free Tier | What It Unlocks |
+|-----|----------|-----------|-----------------|
+| `GEMINI_API_KEY` | Yes | Yes | LLM (switchable to any provider via Pi-mono) |
+| `ALPHA_VANTAGE_API_KEY` | No | 25 req/day | Company fundamentals, earnings, financials |
+| `FRED_API_KEY` | No | Generous | Fed rates, CPI, GDP, unemployment, yield curve |
 
-## How it works
+Yahoo Finance, CoinGecko, Reddit, and Fear & Greed Index need no keys.
 
-An LLM in a loop with tools — the same architecture behind every coding agent:
+## Usage
 
 ```
-user input → LLM → tool call → execute → result → LLM → ... → text response
+> What's the price of AAPL?
+> Get the options chain for TSLA expiring April 24
+> Show me MSFT puts with Greeks
+> What's the Fear and Greed index?
+> Get the fed funds rate from FRED
+> Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
+> Run risk analysis on SPY
+> analyze AAPL
 ```
 
-Built incrementally in 8 steps. Run `git log --oneline` to see the progression.
+## Tools (16)
+
+| Category | Tools | Data Source |
+|----------|-------|------------|
+| **Market Data** | `search_ticker`, `get_stock_quote`, `get_stock_history`, `get_crypto_price`, `get_crypto_history` | Yahoo Finance, CoinGecko |
+| **Options** | `get_option_chain` — strikes, bids/asks, volume, OI, IV, computed Greeks | Yahoo Finance + Black-Scholes |
+| **Fundamentals** | `get_company_overview`, `get_financials`, `get_earnings` | Alpha Vantage |
+| **Technical** | `get_technical_indicators` — SMA, EMA, RSI, MACD, Bollinger Bands | Computed locally from OHLCV |
+| **Macro** | `get_economic_data`, `get_fear_greed` | FRED, alternative.me |
+| **Sentiment** | `get_reddit_sentiment`, `get_news_sentiment` | Reddit JSON API |
+| **Portfolio** | `track_portfolio`, `analyze_risk` — Sharpe, VaR, max drawdown | Yahoo Finance + local math |
+
+## How It Works
+
+Built on [Pi-mono](https://github.com/badlogic/pi-mono)'s `pi-ai` (unified LLM API across 20+ providers) and `pi-agent-core` (agentic loop with parallel tool execution). Tools are defined with [TypeBox](https://github.com/sinclairzx81/typebox) schemas.
+
+```
+User prompt -> Gemini -> tool calls -> execute in parallel -> results -> Gemini -> response
+                ^                                                          |
+                |__________ loop until no more tool calls ________________|
+```
+
+Key architectural choices:
+- **Local computation** over API calls for math (indicators, Greeks, risk metrics)
+- **Stealth browser fallback** via [Camoufox](https://github.com/daijro/camoufox) when Yahoo rate-limits Node.js `fetch`
+- **TTL caching + token bucket rate limiting** per provider
+- **Multi-analyst orchestration** via Pi-mono's follow-up message hooks
+
+## Test
+
+```bash
+npm test              # 116 unit tests
+npm run test:watch    # watch mode
+```
+
+## Tech Stack
+
+- **Runtime**: TypeScript, Node.js
+- **LLM**: Gemini 2.5 Flash via Pi-mono (swappable to Anthropic, OpenAI, etc.)
+- **Browser**: Camoufox (anti-detection Firefox for scraping fallback)
+- **Testing**: Vitest with fixture-mocked `fetch`
+- **No frameworks**: Raw providers, no LangChain/LlamaIndex
