@@ -1,5 +1,6 @@
 import * as readline from "node:readline";
 import { readFileSync, readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 
 // Load .env file
 const env = readFileSync(".env", "utf-8");
@@ -52,6 +53,17 @@ const tools = [
           required: ["path"],
         },
       },
+      {
+        name: "run_bash",
+        description: "Execute a bash command and return its output",
+        parameters: {
+          type: "object",
+          properties: {
+            command: { type: "string", description: "Bash command to execute" },
+          },
+          required: ["command"],
+        },
+      },
     ],
   },
 ];
@@ -67,6 +79,18 @@ function executeTool(name: string, args: any): string {
         return readFileSync(args.path, "utf-8");
       } catch (e: any) {
         return `Error reading file: ${e.message}`;
+      }
+    case "run_bash":
+      try {
+        return execSync(args.command, {
+          timeout: 30000,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+      } catch (e: any) {
+        const stdout = e.stdout || "";
+        const stderr = e.stderr || "";
+        return `Exit code ${e.status ?? 1}:\n${stdout}${stderr}`.trim();
       }
     default:
       return `Unknown tool: ${name}`;
