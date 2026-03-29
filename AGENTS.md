@@ -13,7 +13,7 @@ gemini/typescript coding agent built from scratch with raw HTTP calls.
 Agentic loop: prompt -> LLM -> tool call -> execute -> result back -> LLM -> ... -> text response
 
 ## Tools
-- [ ] list_files
+- [x] list_files
 - [ ] read_file
 - [ ] run_bash
 - [ ] edit_file

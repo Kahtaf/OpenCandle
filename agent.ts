@@ -1,5 +1,5 @@
 import * as readline from "node:readline";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 // Load .env file
 const env = readFileSync(".env", "utf-8");
@@ -47,9 +47,16 @@ const tools = [
 
 const messages: any[] = [];
 
-async function chat(userMessage: string): Promise<string> {
-  messages.push({ role: "user", parts: [{ text: userMessage }] });
+function executeTool(name: string, args: any): string {
+  switch (name) {
+    case "list_files":
+      return readdirSync(args.directory).join("\n");
+    default:
+      return `Unknown tool: ${name}`;
+  }
+}
 
+async function callApi(): Promise<any> {
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: messages,
@@ -63,18 +70,38 @@ async function chat(userMessage: string): Promise<string> {
     body: JSON.stringify(body),
   });
 
-  const json: any = await res.json();
-  const modelMessage = json.candidates[0].content;
-  messages.push(modelMessage);
+  return res.json();
+}
 
-  const functionCall = modelMessage.parts.find((p: any) => p.functionCall);
-  if (functionCall) {
-    const { name, args } = functionCall.functionCall;
-    console.log(`\n🔧 ${name}(${JSON.stringify(args)})`);
-    return "";
+async function chat(userMessage: string): Promise<string> {
+  messages.push({ role: "user", parts: [{ text: userMessage }] });
+
+  while (true) {
+    const json: any = await callApi();
+    const modelMessage = json.candidates[0].content;
+    messages.push(modelMessage);
+
+    const toolCalls = modelMessage.parts.filter((p: any) => p.functionCall);
+    if (toolCalls.length === 0) {
+      return modelMessage.parts[0].text;
+    }
+
+    const responseParts: any[] = [];
+    for (const part of toolCalls) {
+      const { name, args } = part.functionCall;
+      console.log(`\n🔧 ${name}(${JSON.stringify(args)})`);
+      const result = executeTool(name, args);
+      console.log(`📄 ${result}`);
+      responseParts.push({
+        functionResponse: {
+          name,
+          response: { name, content: result },
+        },
+      });
+    }
+
+    messages.push({ role: "function", parts: responseParts });
   }
-
-  return modelMessage.parts[0].text;
 }
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
