@@ -3,6 +3,7 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getOverview, getFinancials } from "../../providers/alpha-vantage.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import { getConfig } from "../../config.js";
+import type { FinancialStatement } from "../../types/fundamentals.js";
 
 export interface DCFResult {
   intrinsicValue: number;
@@ -115,6 +116,14 @@ function computeDCFSimple(
   return (sumPV + pvTV - debt) / shares;
 }
 
+export function computeNetDebt(f: FinancialStatement): number {
+  if (f.totalDebt != null && f.cashAndEquivalents != null) {
+    return f.totalDebt - f.cashAndEquivalents;
+  }
+  // Fallback: totalLiabilities - totalAssets (negative means net cash position)
+  return f.totalLiabilities - f.totalAssets;
+}
+
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   growth_rate: Type.Optional(
@@ -142,10 +151,7 @@ export const dcfTool: AgentTool<typeof params> = {
     const config = getConfig();
 
     if (!config.alphaVantageApiKey) {
-      return {
-        content: [{ type: "text", text: "Error: Alpha Vantage API key required for DCF analysis. Set ALPHA_VANTAGE_API_KEY in .env" }],
-        details: null,
-      };
+      throw new Error("ALPHA_VANTAGE_API_KEY not configured. Add it to your .env file.");
     }
 
     const [overview, financials, quote] = await Promise.all([
@@ -175,9 +181,7 @@ export const dcfTool: AgentTool<typeof params> = {
     const terminalGrowth = args.terminal_growth ?? 0.03;
     const years = args.projection_years ?? 5;
     const sharesOutstanding = quote.price > 0 ? overview.marketCap / quote.price : 1;
-    const netDebt = financials[0]
-      ? financials[0].totalLiabilities - financials[0].totalAssets + financials[0].totalEquity
-      : 0;
+    const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
 
     const result = computeDCF({
       freeCashFlow: latestFCF,

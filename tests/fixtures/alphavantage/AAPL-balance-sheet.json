@@ -4,13 +4,17 @@
       "fiscalDateEnding": "2024-09-30",
       "totalAssets": "364980000000",
       "totalLiabilities": "308030000000",
-      "totalShareholderEquity": "56950000000"
+      "totalShareholderEquity": "56950000000",
+      "shortLongTermDebtTotal": "111088000000",
+      "cashAndCashEquivalentsAtCarryingValue": "29943000000"
     },
     {
       "fiscalDateEnding": "2023-09-30",
       "totalAssets": "352583000000",
       "totalLiabilities": "290437000000",
-      "totalShareholderEquity": "62146000000"
+      "totalShareholderEquity": "62146000000",
+      "shortLongTermDebtTotal": "109280000000",
+      "cashAndCashEquivalentsAtCarryingValue": "29965000000"
     }
   ]
 }

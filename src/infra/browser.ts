@@ -13,6 +13,7 @@ import type { Browser, Page } from "playwright-core";
 let browser: Browser | null = null;
 let page: Page | null = null;
 let launching: Promise<void> | null = null;
+let pageQueue: Promise<void> = Promise.resolve();
 
 async function ensureBrowser(): Promise<Page> {
   if (page && browser?.isConnected()) return page;
@@ -34,14 +35,29 @@ async function ensureBrowser(): Promise<Page> {
   return page!;
 }
 
+async function withPage<T>(fn: (p: Page) => Promise<T>): Promise<T> {
+  let resolve!: () => void;
+  const next = new Promise<void>((r) => { resolve = r; });
+  const prev = pageQueue;
+  pageQueue = next;
+  await prev;
+  try {
+    const p = await ensureBrowser();
+    return await fn(p);
+  } finally {
+    resolve();
+  }
+}
+
 export const StealthBrowser = {
   /**
    * Navigate to a URL, run a JS function in the page context, and return the result.
    */
   async evaluate<T>(url: string, fn: () => T | Promise<T>): Promise<T> {
-    const p = await ensureBrowser();
-    await p.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-    return p.evaluate(fn);
+    return withPage(async (p) => {
+      await p.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+      return p.evaluate(fn);
+    });
   },
 
   /**
@@ -49,15 +65,14 @@ export const StealthBrowser = {
    * Useful for APIs that block Node.js fetch but allow real browsers.
    */
   async fetchJson<T>(url: string, options?: { cookies?: string }): Promise<T> {
-    const p = await ensureBrowser();
-
-    const result = await p.evaluate(async (fetchUrl: string) => {
-      const res = await fetch(fetchUrl, { credentials: "include" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    }, url);
-
-    return result as T;
+    return withPage(async (p) => {
+      const result = await p.evaluate(async (fetchUrl: string) => {
+        const res = await fetch(fetchUrl, { credentials: "include" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      }, url);
+      return result as T;
+    });
   },
 
   /**
@@ -65,16 +80,16 @@ export const StealthBrowser = {
    * The page must already be on a relevant domain for cookies to work.
    */
   async run<T>(fn: (page: Page) => Promise<T>): Promise<T> {
-    const p = await ensureBrowser();
-    return fn(p);
+    return withPage(async (p) => fn(p));
   },
 
   /**
    * Navigate to a URL and establish session cookies for that domain.
    */
   async initSession(url: string): Promise<void> {
-    const p = await ensureBrowser();
-    await p.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    return withPage(async (p) => {
+      await p.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    });
   },
 
   /**

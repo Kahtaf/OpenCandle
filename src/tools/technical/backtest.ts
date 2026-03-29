@@ -69,8 +69,12 @@ function backtestSMACrossover(bars: OHLCV[], closes: number[]): BacktestResult {
       position = false;
     }
 
-    if (equity > peak) peak = equity;
-    const dd = (peak - equity) / peak;
+    // Track mark-to-market equity for accurate drawdown
+    const currentEquity = position
+      ? equity * (1 + (price - entryPrice) / entryPrice)
+      : equity;
+    if (currentEquity > peak) peak = currentEquity;
+    const dd = (peak - currentEquity) / peak;
     if (dd > maxDd) maxDd = dd;
   }
 
@@ -119,8 +123,12 @@ function backtestRSIMeanReversion(bars: OHLCV[], closes: number[]): BacktestResu
       position = false;
     }
 
-    if (equity > peak) peak = equity;
-    const dd = (peak - equity) / peak;
+    // Track mark-to-market equity for accurate drawdown
+    const currentEquity = position
+      ? equity * (1 + (price - entryPrice) / entryPrice)
+      : equity;
+    if (currentEquity > peak) peak = currentEquity;
+    const dd = (peak - currentEquity) / peak;
     if (dd > maxDd) maxDd = dd;
   }
 

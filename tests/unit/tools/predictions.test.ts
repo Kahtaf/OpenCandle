@@ -180,4 +180,83 @@ describe("checkPredictions", () => {
     expect(result.total).toBe(0);
     expect(result.hitRate).toBe(0);
   });
+
+  it("does not score predictions that have not yet expired", () => {
+    const predictions: Prediction[] = [
+      {
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 8,
+        entryPrice: 180,
+        date: "2026-03-01",
+        expiresAt: "2026-04-30", // still open
+        timeframeDays: 60,
+      },
+    ];
+
+    const result = checkPredictions(
+      predictions,
+      new Map([["AAPL", 200]]),
+      new Date("2026-03-29"),
+    );
+    expect(result.open).toBe(1);
+    expect(result.correct).toBe(0);
+    expect(result.wrong).toBe(0);
+  });
+
+  it("scores expired predictions", () => {
+    const predictions: Prediction[] = [
+      {
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 8,
+        entryPrice: 180,
+        date: "2026-01-01",
+        expiresAt: "2026-01-31", // expired
+        timeframeDays: 30,
+      },
+    ];
+
+    const result = checkPredictions(
+      predictions,
+      new Map([["AAPL", 200]]),
+      new Date("2026-03-29"),
+    );
+    expect(result.open).toBe(0);
+    expect(result.correct).toBe(1);
+  });
+
+  it("hitRate excludes open predictions", () => {
+    const predictions: Prediction[] = [
+      {
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 8,
+        entryPrice: 180,
+        date: "2026-01-01",
+        expiresAt: "2026-01-31", // expired, correct
+        timeframeDays: 30,
+      },
+      {
+        symbol: "MSFT",
+        direction: "bullish",
+        conviction: 6,
+        entryPrice: 400,
+        date: "2026-03-01",
+        expiresAt: "2026-04-30", // still open
+        timeframeDays: 60,
+      },
+    ];
+
+    const result = checkPredictions(
+      predictions,
+      new Map([["AAPL", 200], ["MSFT", 380]]),
+      new Date("2026-03-29"),
+    );
+    expect(result.open).toBe(1);
+    expect(result.correct).toBe(1);
+    expect(result.wrong).toBe(0);
+    // hitRate = 1/1 = 100% (only scored the expired one)
+    expect(result.hitRate).toBe(1.0);
+  });
 });

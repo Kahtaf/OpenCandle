@@ -3,8 +3,8 @@ export interface FearGreedData {
   label: string; // "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
   timestamp: number;
   previousClose: number;
-  weekAgo: number;
-  monthAgo: number;
+  weekAgo: number | null;
+  monthAgo: number | null;
 }
 
 export interface RedditSentimentResult {

@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getSeries } from "../../providers/fred.js";
+import { getConfig } from "../../config.js";
 import { FRED_SERIES } from "../../types/macro.js";
 import type { FredSeries } from "../../types/macro.js";
 
@@ -20,12 +21,9 @@ export const fredDataTool: AgentTool<typeof params, FredSeries> = {
     "Get economic data from FRED (Federal Reserve Economic Data): interest rates, CPI, GDP, unemployment, yield curve, and more. Requires FRED_API_KEY.",
   parameters: params,
   async execute(toolCallId, args) {
-    const apiKey = process.env.FRED_API_KEY;
+    const apiKey = getConfig().fredApiKey;
     if (!apiKey) {
-      return {
-        content: [{ type: "text", text: "Error: FRED_API_KEY not configured. Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html" }],
-        details: null as any,
-      };
+      throw new Error("FRED_API_KEY not configured. Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html");
     }
 
     const limit = args.limit ?? 30;

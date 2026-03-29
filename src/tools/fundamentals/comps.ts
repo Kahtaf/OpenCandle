@@ -96,24 +96,15 @@ export const compsTool: AgentTool<typeof params> = {
   async execute(toolCallId, args) {
     const config = getConfig();
     if (!config.alphaVantageApiKey) {
-      return {
-        content: [{ type: "text", text: "Error: Alpha Vantage API key required. Set ALPHA_VANTAGE_API_KEY in .env" }],
-        details: null,
-      };
+      throw new Error("ALPHA_VANTAGE_API_KEY not configured. Add it to your .env file.");
     }
 
     const symbols = args.symbols.map((s) => s.toUpperCase());
     if (symbols.length < 2) {
-      return {
-        content: [{ type: "text", text: "Error: Need at least 2 symbols to compare." }],
-        details: null,
-      };
+      throw new Error("Need at least 2 symbols to compare.");
     }
     if (symbols.length > 6) {
-      return {
-        content: [{ type: "text", text: "Error: Maximum 6 symbols for comparison." }],
-        details: null,
-      };
+      throw new Error("Maximum 6 symbols for comparison.");
     }
 
     const companies = await Promise.all(

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getFinancials } from "../../../src/providers/alpha-vantage.js";
+import { getFinancials, getOverview } from "../../../src/providers/alpha-vantage.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
@@ -92,6 +92,45 @@ describe("alpha-vantage provider", () => {
 
       // Should only fetch once (3 calls), second call uses cache
       expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it("parses totalDebt and cashAndEquivalents from balance sheet", async () => {
+      mockThreeStatements();
+      const statements = await getFinancials("AAPL", "test-key");
+
+      expect(statements[0].totalDebt).toBe(111088000000);
+      expect(statements[0].cashAndEquivalents).toBe(29943000000);
+    });
+  });
+
+  describe("getOverview", () => {
+    it("does not map a price field to avgVolume", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          Symbol: "AAPL",
+          Name: "Apple Inc",
+          Description: "Apple Inc designs and manufactures...",
+          Exchange: "NASDAQ",
+          Sector: "Technology",
+          Industry: "Consumer Electronics",
+          MarketCapitalization: "3000000000000",
+          PERatio: "30",
+          ForwardPE: "28",
+          EPS: "6.50",
+          DividendYield: "0.005",
+          Beta: "1.25",
+          "52WeekHigh": "200",
+          "52WeekLow": "150",
+          "50DayMovingAverage": "180.50",
+          ProfitMargin: "0.25",
+          QuarterlyRevenueGrowthYOY: "0.08",
+        }),
+      });
+
+      const overview = await getOverview("AAPL", "test-key");
+      // avgVolume should NOT be 180.50 (the 50DayMovingAverage price)
+      expect(overview.avgVolume).not.toBe(180.50);
     });
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeCorrelation } from "../../../src/tools/portfolio/correlation.js";
+import { computeCorrelation, alignReturnsByDate } from "../../../src/tools/portfolio/correlation.js";
+import type { OHLCV } from "../../../src/types/market.js";
 
 describe("computeCorrelation", () => {
   it("returns 1.0 for perfectly correlated data", () => {
@@ -42,5 +43,61 @@ describe("computeCorrelation", () => {
     const r = computeCorrelation(a, b);
     expect(r).toBeGreaterThanOrEqual(-1);
     expect(r).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("alignReturnsByDate", () => {
+  function makeBars(dates: string[], basePrice: number = 100): OHLCV[] {
+    return dates.map((date, i) => ({
+      date,
+      open: basePrice + i,
+      high: basePrice + i + 1,
+      low: basePrice + i - 1,
+      close: basePrice + i,
+      volume: 1_000_000,
+    }));
+  }
+
+  it("aligns two series with misaligned dates to common dates only", () => {
+    // Symbol A has dates 1-5, Symbol B has dates 2-6 (overlap: 2-5)
+    const barsA = makeBars(["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05"]);
+    const barsB = makeBars(["2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05", "2025-01-06"], 200);
+
+    const result = alignReturnsByDate(
+      new Map([["A", barsA], ["B", barsB]]),
+      2,
+    );
+
+    const returnsA = result.get("A")!;
+    const returnsB = result.get("B")!;
+    expect(returnsA.length).toBe(returnsB.length);
+    // Common dates: 2-5 = 4 dates, returns from 4 dates = 3 returns
+    expect(returnsA.length).toBe(3);
+  });
+
+  it("handles a gap in one series (e.g., holiday)", () => {
+    // Symbol A trades all 5 days, Symbol B misses day 3
+    const barsA = makeBars(["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05"]);
+    const barsB = makeBars(["2025-01-01", "2025-01-02", "2025-01-04", "2025-01-05"], 200);
+
+    const result = alignReturnsByDate(
+      new Map([["A", barsA], ["B", barsB]]),
+      2,
+    );
+
+    const returnsA = result.get("A")!;
+    const returnsB = result.get("B")!;
+    expect(returnsA.length).toBe(returnsB.length);
+    // Common dates: 1, 2, 4, 5 → 3 returns
+    expect(returnsA.length).toBe(3);
+  });
+
+  it("throws when overlap is below minimum threshold", () => {
+    const barsA = makeBars(["2025-01-01", "2025-01-02", "2025-01-03"]);
+    const barsB = makeBars(["2025-01-10", "2025-01-11", "2025-01-12"], 200);
+
+    expect(() =>
+      alignReturnsByDate(new Map([["A", barsA], ["B", barsB]]))
+    ).toThrow();
   });
 });

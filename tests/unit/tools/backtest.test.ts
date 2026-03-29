@@ -84,4 +84,34 @@ describe("runBacktest", () => {
     const result = runBacktest(bars, "sma_crossover");
     expect(result.trades).toBe(0);
   });
+
+  it("SMA crossover: captures mark-to-market drawdown when position stays open", () => {
+    // Build: 60-bar uptrend → buy signal, then 10-bar mild decline that
+    // ends the data (position force-closed). The decline is small enough
+    // that SMA20 stays above SMA50, so no sell signal fires.
+    // With the bug: equity stays at 1.0 until force-close, drawdown = 0.
+    // With the fix: mark-to-market equity drops during the decline.
+    const bars: OHLCV[] = [];
+    for (let i = 0; i < 60; i++) {
+      bars.push({
+        date: `2024-01-${String(i + 1).padStart(2, "0")}`,
+        open: 100 + i * 0.5, high: 101 + i * 0.5,
+        low: 99 + i * 0.5, close: 100 + i * 0.5, volume: 1_000_000,
+      });
+    }
+    const peakPrice = bars[bars.length - 1].close; // ~129.5
+    // Decline 15% over 10 bars — too gentle/short to flip SMA20 < SMA50
+    for (let i = 0; i < 10; i++) {
+      const price = peakPrice * (1 - 0.15 * (i + 1) / 10);
+      bars.push({
+        date: `2024-03-${String(i + 1).padStart(2, "0")}`,
+        open: price, high: price + 1, low: price - 1, close: price, volume: 1_000_000,
+      });
+    }
+
+    const result = runBacktest(bars, "sma_crossover");
+    // Position should still be open at end (force-closed)
+    // Max drawdown should reflect the ~15% unrealized loss
+    expect(result.maxDrawdown).toBeGreaterThan(0.05);
+  });
 });

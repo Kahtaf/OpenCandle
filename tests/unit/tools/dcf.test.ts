@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeDCF } from "../../../src/tools/fundamentals/dcf.js";
+import { computeDCF, computeNetDebt } from "../../../src/tools/fundamentals/dcf.js";
+import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 
 describe("computeDCF", () => {
   const baseParams = {
@@ -123,5 +124,45 @@ describe("computeDCF", () => {
     const fcfY1 = baseParams.freeCashFlow * (1 + baseParams.growthRate);
     const pvMidYear = fcfY1 / (1 + baseParams.discountRate) ** 0.5;
     expect(result.projectedCashFlows[0].presentValue).toBeCloseTo(pvMidYear, 0);
+  });
+});
+
+describe("computeNetDebt", () => {
+  const baseStatement: FinancialStatement = {
+    fiscalDate: "2025-09-30",
+    revenue: 400e9,
+    grossProfit: 180e9,
+    operatingIncome: 120e9,
+    netIncome: 100e9,
+    eps: 6.5,
+    totalAssets: 365e9,
+    totalLiabilities: 308e9,
+    totalEquity: 57e9,
+    operatingCashFlow: 120e9,
+    freeCashFlow: 100e9,
+  };
+
+  it("uses totalDebt - cashAndEquivalents when both are available", () => {
+    const statement: FinancialStatement = {
+      ...baseStatement,
+      totalDebt: 111e9,
+      cashAndEquivalents: 30e9,
+    };
+    expect(computeNetDebt(statement)).toBeCloseTo(81e9, -6);
+  });
+
+  it("falls back to totalLiabilities - totalAssets when debt/cash fields are missing", () => {
+    const netDebt = computeNetDebt(baseStatement);
+    // totalLiabilities - totalAssets = 308B - 365B = -57B (net cash position)
+    expect(netDebt).toBeCloseTo(308e9 - 365e9, -6);
+  });
+
+  it("does NOT return zero for a company with significant debt", () => {
+    const statement: FinancialStatement = {
+      ...baseStatement,
+      totalDebt: 111e9,
+      cashAndEquivalents: 30e9,
+    };
+    expect(computeNetDebt(statement)).not.toBe(0);
   });
 });

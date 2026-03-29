@@ -42,7 +42,7 @@ export async function getOverview(
     beta: parseNullableNum(data.Beta),
     week52High: parseNum(data["52WeekHigh"]),
     week52Low: parseNum(data["52WeekLow"]),
-    avgVolume: parseNum(data["50DayMovingAverage"]),
+    avgVolume: 0, // Alpha Vantage OVERVIEW does not expose average volume
     profitMargin: parseNullableNum(data.ProfitMargin),
     revenueGrowth: parseNullableNum(data.QuarterlyRevenueGrowthYOY),
   };
@@ -108,6 +108,9 @@ export async function getFinancials(
     const opCashFlow = parseNum(cf.operatingCashflow);
     const capex = parseNum(cf.capitalExpenditures);
 
+    const totalDebt = parseNum(balance.shortLongTermDebtTotal);
+    const cash = parseNum(balance.cashAndCashEquivalentsAtCarryingValue);
+
     return {
       fiscalDate: r.fiscalDateEnding,
       revenue: parseNum(r.totalRevenue),
@@ -120,6 +123,8 @@ export async function getFinancials(
       totalEquity: parseNum(balance.totalShareholderEquity),
       operatingCashFlow: opCashFlow,
       freeCashFlow: opCashFlow - capex,
+      totalDebt: totalDebt || undefined,
+      cashAndEquivalents: cash || undefined,
     };
   });
 

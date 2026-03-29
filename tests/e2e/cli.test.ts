@@ -175,7 +175,7 @@ async function run() {
   // This test is special — the orchestrator queues 7 followUp messages after the initial prompt.
   // We need to capture ALL agent turns, not just the first.
   console.log(`\n  Testing: Comprehensive analysis triggers named personas`);
-  console.log(`  Prompt: "Give me a quick analysis of NVDA using get_stock_quote and get_technical_indicators"`);
+  console.log(`  Prompt: "analyze NVDA"`);
   try {
     cache.clear();
     let allText = "";
@@ -183,7 +183,7 @@ async function run() {
     let turnCount = 0;
 
     const { text, toolCalls } = await queryAgent(
-      "Give me a quick analysis of NVDA. Use get_stock_quote for the current price and get_technical_indicators for the trend."
+      "analyze NVDA"
     );
     allText += text;
     allTools.push(...toolCalls);

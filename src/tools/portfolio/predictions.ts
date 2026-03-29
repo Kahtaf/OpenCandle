@@ -18,6 +18,7 @@ export interface Prediction {
 
 export interface PredictionCheckResult {
   total: number;
+  open: number;
   correct: number;
   wrong: number;
   hitRate: number;
@@ -30,6 +31,7 @@ export interface PredictionCheckResult {
     currentPrice: number;
     pnlPercent: number;
     correct: boolean;
+    status: "open" | "resolved";
   }>;
 }
 
@@ -78,20 +80,41 @@ export function recordPrediction(params: {
 export function checkPredictions(
   predictions: Prediction[],
   currentPrices: Map<string, number>,
+  now: Date = new Date(),
 ): PredictionCheckResult {
   if (predictions.length === 0) {
-    return { total: 0, correct: 0, wrong: 0, hitRate: 0, weightedHitRate: 0, details: [] };
+    return { total: 0, open: 0, correct: 0, wrong: 0, hitRate: 0, weightedHitRate: 0, details: [] };
   }
 
   const details: PredictionCheckResult["details"] = [];
   let totalConviction = 0;
   let correctConviction = 0;
+  let openCount = 0;
+
+  const nowStr = now.toISOString().split("T")[0];
 
   for (const p of predictions) {
     const currentPrice = currentPrices.get(p.symbol);
     if (currentPrice == null) continue;
 
+    const isExpired = p.expiresAt <= nowStr;
     const pnlPercent = (currentPrice - p.entryPrice) / p.entryPrice;
+
+    if (!isExpired) {
+      openCount++;
+      details.push({
+        symbol: p.symbol,
+        direction: p.direction,
+        conviction: p.conviction,
+        entryPrice: p.entryPrice,
+        currentPrice,
+        pnlPercent,
+        correct: false,
+        status: "open",
+      });
+      continue;
+    }
+
     const correct =
       (p.direction === "bullish" && currentPrice > p.entryPrice) ||
       (p.direction === "bearish" && currentPrice < p.entryPrice) ||
@@ -105,19 +128,22 @@ export function checkPredictions(
       currentPrice,
       pnlPercent,
       correct,
+      status: "resolved",
     });
 
     totalConviction += p.conviction;
     if (correct) correctConviction += p.conviction;
   }
 
-  const correctCount = details.filter((d) => d.correct).length;
+  const resolved = details.filter((d) => d.status === "resolved");
+  const correctCount = resolved.filter((d) => d.correct).length;
 
   return {
     total: details.length,
+    open: openCount,
     correct: correctCount,
-    wrong: details.length - correctCount,
-    hitRate: details.length > 0 ? correctCount / details.length : 0,
+    wrong: resolved.length - correctCount,
+    hitRate: resolved.length > 0 ? correctCount / resolved.length : 0,
     weightedHitRate: totalConviction > 0 ? correctConviction / totalConviction : 0,
     details,
   };
@@ -158,10 +184,7 @@ export const predictionsTool: AgentTool<typeof params> = {
   async execute(toolCallId, args) {
     if (args.action === "record") {
       if (!args.symbol || !args.direction || !args.conviction || !args.entry_price) {
-        return {
-          content: [{ type: "text", text: "Error: symbol, direction, conviction, and entry_price are required for record action." }],
-          details: null,
-        };
+        throw new Error("symbol, direction, conviction, and entry_price are required for record action.");
       }
 
       const prediction = recordPrediction({
@@ -204,16 +227,18 @@ export const predictionsTool: AgentTool<typeof params> = {
 
     const result = checkPredictions(predictions, priceMap);
 
+    const resolved = result.correct + result.wrong;
     const lines = [
-      `**Prediction Scorecard** — ${result.total} predictions tracked`,
+      `**Prediction Scorecard** — ${result.total} predictions (${resolved} resolved, ${result.open} open)`,
       ``,
-      `Hit Rate: ${(result.hitRate * 100).toFixed(0)}% (${result.correct}/${result.total})`,
+      `Hit Rate: ${(result.hitRate * 100).toFixed(0)}% (${result.correct}/${resolved})`,
       `Weighted Hit Rate: ${(result.weightedHitRate * 100).toFixed(0)}% (by conviction)`,
       ``,
       ...result.details.map((d) => {
-        const icon = d.correct ? "+" : "-";
+        const icon = d.status === "open" ? "~" : d.correct ? "+" : "-";
         const sign = d.pnlPercent >= 0 ? "+" : "";
-        return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)`;
+        const label = d.status === "open" ? " (open)" : "";
+        return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
       }),
     ];
 

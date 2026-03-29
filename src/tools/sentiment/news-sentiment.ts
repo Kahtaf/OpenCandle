@@ -10,10 +10,10 @@ const params = Type.Object({
 });
 
 export const newsSentimentTool: AgentTool<typeof params, RedditSentimentResult> = {
-  name: "get_news_sentiment",
-  label: "News Sentiment",
+  name: "get_reddit_discussions",
+  label: "Reddit Financial Discussions",
   description:
-    "Get recent news discussion from financial Reddit communities about a specific topic. Useful for gauging market sentiment around a stock or event.",
+    "Search financial Reddit communities (r/stocks, r/investing) for recent discussions about a topic. Useful for gauging retail sentiment, but not a substitute for news or institutional analysis.",
   parameters: params,
   async execute(toolCallId, args) {
     // Use r/stocks and r/investing as news proxies
@@ -37,7 +37,7 @@ export const newsSentimentTool: AgentTool<typeof params, RedditSentimentResult> 
 
     const uniqueMentions = [...new Set(allMentions)];
     const text = [
-      `**News Sentiment for "${args.topic}"** — ${allPosts.length} relevant posts found`,
+      `**Reddit Discussions for "${args.topic}"** — ${allPosts.length} relevant posts found`,
       uniqueMentions.length > 0
         ? `Related tickers: ${uniqueMentions.map((t) => `$${t}`).join(", ")}`
         : "",
@@ -57,6 +57,9 @@ export const newsSentimentTool: AgentTool<typeof params, RedditSentimentResult> 
         postCount: allPosts.length,
         posts: allPosts,
         topMentions: uniqueMentions,
+        sentimentScore: 0,
+        bullishCount: 0,
+        bearishCount: 0,
         fetchedAt: new Date().toISOString(),
       },
     };

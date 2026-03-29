@@ -56,10 +56,7 @@ export const watchlistTool: AgentTool<typeof params> = {
 
     if (args.action === "add") {
       if (!args.symbol) {
-        return {
-          content: [{ type: "text", text: "Error: symbol is required for add action" }],
-          details: null,
-        };
+        throw new Error("symbol is required for add action.");
       }
       const symbol = args.symbol.toUpperCase();
       const existing = items.findIndex((i) => i.symbol === symbol);
@@ -88,10 +85,7 @@ export const watchlistTool: AgentTool<typeof params> = {
 
     if (args.action === "remove") {
       if (!args.symbol) {
-        return {
-          content: [{ type: "text", text: "Error: symbol is required for remove action" }],
-          details: null,
-        };
+        throw new Error("symbol is required for remove action.");
       }
       const symbol = args.symbol.toUpperCase();
       const idx = items.findIndex((i) => i.symbol === symbol);

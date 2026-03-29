@@ -73,15 +73,17 @@ describe("sec-edgar provider", () => {
     expect(filings[0]).toHaveProperty("url");
   });
 
-  it("constructs correct EDGAR archive URL from accession number", async () => {
+  it("constructs accession-specific EDGAR archive URL", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(mockSearchResponse),
     });
 
     const filings = await searchFilings("AAPL");
-    // URL should point to the EDGAR archive
+    // URL should contain the accession number (without dashes) and point to the filing
     expect(filings[0].url).toContain("sec.gov");
+    expect(filings[0].url).toContain("000032019324000123"); // accessionNoDash
+    expect(filings[0].url).toContain("0000320193-24-000123"); // full accession
   });
 
   it("caches results", async () => {

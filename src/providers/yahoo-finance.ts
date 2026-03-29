@@ -215,6 +215,24 @@ export async function getOptionsChain(
   return chain;
 }
 
+/**
+ * Compute time to expiry in years from a Yahoo expiration timestamp (midnight UTC).
+ * US equity options expire at 4:00 PM ET. During EDT that is 20:00 UTC.
+ * We use 21:00 UTC (4 PM EST / 5 PM EDT) as a conservative close offset
+ * and apply a floor of ~1 hour to prevent numerical instability near expiry.
+ */
+export function computeTimeToExpiry(expirationTs: number, nowMs: number = Date.now()): number {
+  const MARKET_CLOSE_OFFSET_S = 21 * 3600; // 21:00 UTC ≈ 4 PM ET
+  const MIN_TIME_YEARS = 1 / (365 * 24);   // ~1 hour floor
+  const SECONDS_PER_YEAR = 365 * 24 * 3600;
+
+  const expiryCloseTs = expirationTs + MARKET_CLOSE_OFFSET_S;
+  const remainingS = expiryCloseTs - nowMs / 1000;
+
+  if (remainingS <= 0) return 0;
+  return Math.max(MIN_TIME_YEARS, remainingS / SECONDS_PER_YEAR);
+}
+
 function parseOptionsResponse(symbol: string, data: YahooOptionsResponse): OptionsChain {
   if (data.optionChain.error) {
     throw new Error(`Yahoo Finance options: ${JSON.stringify(data.optionChain.error)}`);
@@ -228,7 +246,7 @@ function parseOptionsResponse(symbol: string, data: YahooOptionsResponse): Optio
 
   const expirationTs = opts.expirationDate;
   const expirationDate = new Date(expirationTs * 1000).toISOString().split("T")[0];
-  const timeYears = Math.max(0, (expirationTs - Date.now() / 1000) / (365 * 24 * 3600));
+  const timeYears = computeTimeToExpiry(expirationTs);
 
   const mapContract = (c: any, type: "call" | "put"): OptionContract => {
     const strike = c.strike ?? c.strike?.raw ?? 0;

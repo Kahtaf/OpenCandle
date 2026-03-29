@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getEarnings } from "../../providers/alpha-vantage.js";
+import { getConfig } from "../../config.js";
 import type { EarningsData } from "../../types/fundamentals.js";
 
 const params = Type.Object({
@@ -14,12 +15,9 @@ export const earningsTool: AgentTool<typeof params, EarningsData> = {
     "Get quarterly earnings: reported EPS, estimated EPS, and surprise percentage for the last 8 quarters. Requires ALPHA_VANTAGE_API_KEY.",
   parameters: params,
   async execute(toolCallId, args) {
-    const apiKey = process.env.ALPHA_VANTAGE_API_KEY;
+    const apiKey = getConfig().alphaVantageApiKey;
     if (!apiKey) {
-      return {
-        content: [{ type: "text", text: "Error: ALPHA_VANTAGE_API_KEY not configured." }],
-        details: { symbol: args.symbol, quarterly: [] },
-      };
+      throw new Error("ALPHA_VANTAGE_API_KEY not configured. Add it to your .env file.");
     }
 
     const earnings = await getEarnings(args.symbol.toUpperCase(), apiKey);

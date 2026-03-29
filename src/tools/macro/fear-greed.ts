@@ -9,7 +9,7 @@ export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
   name: "get_fear_greed",
   label: "Fear & Greed Index",
   description:
-    "Get the CNN Fear & Greed Index — a sentiment indicator from 0 (Extreme Fear) to 100 (Extreme Greed). Includes current, previous close, week ago, and month ago values.",
+    "Get the Crypto Fear & Greed Index (alternative.me) — a sentiment indicator from 0 (Extreme Fear) to 100 (Extreme Greed). Includes current value and previous close.",
   parameters: params,
   async execute(toolCallId, _args) {
     const fg = await getFearGreedIndex();
@@ -18,7 +18,7 @@ export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
     const text = [
       `**Fear & Greed Index: ${fg.value} — ${fg.label}**`,
       gauge,
-      `Previous Close: ${fg.previousClose} | Week Ago: ${fg.weekAgo} | Month Ago: ${fg.monthAgo}`,
+      `Previous Close: ${fg.previousClose}${fg.weekAgo != null ? ` | Week Ago: ${fg.weekAgo}` : ""}${fg.monthAgo != null ? ` | Month Ago: ${fg.monthAgo}` : ""}`,
     ].join("\n");
 
     return { content: [{ type: "text", text }], details: fg };

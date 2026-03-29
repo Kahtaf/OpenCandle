@@ -35,16 +35,14 @@ export async function httpGet<T>(
       await sleep(opts.retryDelayMs * attempt);
     }
 
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), opts.timeoutMs);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), opts.timeoutMs);
 
+    try {
       const response = await fetch(url, {
         signal: controller.signal,
         headers: opts.headers,
       });
-
-      clearTimeout(timeout);
 
       if (!response.ok) {
         const body = await response.text().catch(() => "");
@@ -57,6 +55,8 @@ export async function httpGet<T>(
       if (error instanceof HttpError && error.status >= 400 && error.status < 500) {
         throw error; // Don't retry client errors
       }
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

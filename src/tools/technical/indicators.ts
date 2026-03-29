@@ -85,7 +85,7 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
       `RSI(14): ${latestRsi?.toFixed(1) ?? "N/A"} ${rsiSignal(latestRsi)}`,
       `MACD: ${latestMacd?.macd.toFixed(2) ?? "N/A"} | Signal: ${latestMacd?.signal.toFixed(2) ?? "N/A"} | Histogram: ${latestMacd?.histogram.toFixed(2) ?? "N/A"}`,
       `Bollinger Bands: Upper $${latestBB?.upper.toFixed(2) ?? "N/A"} | Mid $${latestBB?.middle.toFixed(2) ?? "N/A"} | Lower $${latestBB?.lower.toFixed(2) ?? "N/A"}`,
-      `OBV Trend: ${obvTrend} | VWAP: $${latestVwap?.toFixed(2) ?? "N/A"}`,
+      `OBV Trend: ${obvTrend} | VWAP (cumulative): $${latestVwap?.toFixed(2) ?? "N/A"}`,
       ``,
       trendSummary(latest, sma20, sma50, latestRsi, latestMacd, obvTrend, latestVwap),
     ];
@@ -237,8 +237,8 @@ function trendSummary(
   if (macd && macd.histogram < 0) signals.push("MACD bearish (histogram negative)");
   if (obvTrend === "Rising" && price > (latestSma20 ?? 0)) signals.push("Volume confirming price advance (OBV rising)");
   if (obvTrend === "Falling" && price < (latestSma20 ?? Infinity)) signals.push("Volume confirming price decline (OBV falling)");
-  if (vwap != null && price > vwap) signals.push("Price above VWAP — bullish intraday bias");
-  if (vwap != null && price < vwap) signals.push("Price below VWAP — bearish intraday bias");
+  if (vwap != null && price > vwap) signals.push("Price above cumulative VWAP — bullish volume-weighted bias");
+  if (vwap != null && price < vwap) signals.push("Price below cumulative VWAP — bearish volume-weighted bias");
 
   return signals.length > 0 ? "Signals: " + signals.join(" | ") : "No strong signals";
 }

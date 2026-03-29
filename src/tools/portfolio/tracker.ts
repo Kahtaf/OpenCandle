@@ -52,10 +52,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
 
     if (args.action === "add") {
       if (!args.symbol || !args.shares || !args.avg_cost) {
-        return {
-          content: [{ type: "text", text: "Error: symbol, shares, and avg_cost are required for add action" }],
-          details: null,
-        };
+        throw new Error("symbol, shares, and avg_cost are required for add action.");
       }
       const symbol = args.symbol.toUpperCase();
       const existing = positions.find((p) => p.symbol === symbol);
@@ -81,10 +78,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
 
     if (args.action === "remove") {
       if (!args.symbol) {
-        return {
-          content: [{ type: "text", text: "Error: symbol is required for remove action" }],
-          details: null,
-        };
+        throw new Error("symbol is required for remove action.");
       }
       const symbol = args.symbol.toUpperCase();
       const idx = positions.findIndex((p) => p.symbol === symbol);

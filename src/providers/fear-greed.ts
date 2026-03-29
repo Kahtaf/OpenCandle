@@ -30,8 +30,8 @@ export async function getFearGreedIndex(): Promise<FearGreedData> {
     label: current.value_classification,
     timestamp: Date.now(),
     previousClose: entries[1] ? parseInt(entries[1].value, 10) : value,
-    weekAgo: 0, // Not provided by this API
-    monthAgo: 0,
+    weekAgo: null,
+    monthAgo: null,
   };
 
   cache.set(cacheKey, result, TTL.SENTIMENT);

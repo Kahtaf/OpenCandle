@@ -1,7 +1,48 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getOptionsChain, getYahooCrumb, clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
+import { getOptionsChain, getYahooCrumb, clearCrumbCache, computeTimeToExpiry } from "../../../src/providers/yahoo-finance.js";
 import { cache } from "../../../src/infra/cache.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
+
+describe("computeTimeToExpiry", () => {
+  // Expiration: 2026-03-30 00:00 UTC (midnight) = 1774828800
+  const expirationTs = 1774828800;
+
+  it("returns positive timeYears on expiration morning (10 AM ET = 14:00 UTC)", () => {
+    // 2026-03-30 14:00 UTC = midnight + 14*3600 = 1774828800 + 50400 = 1774879200
+    const nowMs = (expirationTs + 14 * 3600) * 1000;
+    const t = computeTimeToExpiry(expirationTs, nowMs);
+    expect(t).toBeGreaterThan(0);
+  });
+
+  it("returns positive timeYears at 3 PM ET on expiration day (19:00 UTC)", () => {
+    const nowMs = (expirationTs + 19 * 3600) * 1000;
+    const t = computeTimeToExpiry(expirationTs, nowMs);
+    expect(t).toBeGreaterThan(0);
+  });
+
+  it("returns zero after market close (4 PM ET = 20:00 UTC) on expiration day", () => {
+    // After 21:00 UTC (4 PM EDT), options have expired
+    const nowMs = (expirationTs + 21 * 3600 + 1) * 1000;
+    const t = computeTimeToExpiry(expirationTs, nowMs);
+    expect(t).toBe(0);
+  });
+
+  it("returns positive timeYears the day before expiration", () => {
+    // 2026-03-29 12:00 UTC = expirationTs - 12*3600
+    const nowMs = (expirationTs - 12 * 3600) * 1000;
+    const t = computeTimeToExpiry(expirationTs, nowMs);
+    expect(t).toBeGreaterThan(0);
+  });
+
+  it("has a minimum floor to prevent numerical instability", () => {
+    // Just before market close on expiration day
+    const nowMs = (expirationTs + 20 * 3600 + 3599) * 1000; // 20:59:59 UTC
+    const t = computeTimeToExpiry(expirationTs, nowMs);
+    expect(t).toBeGreaterThan(0);
+    // Floor should be at least ~1 hour in years
+    expect(t).toBeGreaterThanOrEqual(1 / (365 * 24));
+  });
+});
 
 describe("yahoo-finance options provider", () => {
   const originalFetch = globalThis.fetch;

@@ -61,6 +61,17 @@ describe("fear-greed provider", () => {
     expect(fg.label).toBe("Extreme Greed");
   });
 
+  it("returns null for weekAgo and monthAgo when not available", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(fixture),
+    });
+
+    const fg = await getFearGreedIndex();
+    expect(fg.weekAgo).toBeNull();
+    expect(fg.monthAgo).toBeNull();
+  });
+
   it("caches results", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

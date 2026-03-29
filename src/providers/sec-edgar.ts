@@ -84,8 +84,9 @@ export async function searchFilings(
 }
 
 function buildEdgarUrl(cik: string, accession: string): string {
+  const cikNum = cik.replace(/^0+/, "");
   const accessionNoDash = accession.replace(/-/g, "");
-  return `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=&dateb=&owner=include&count=40&search_text=&action=getcompany`;
+  return `https://www.sec.gov/Archives/edgar/data/${cikNum}/${accessionNoDash}/${accession}-index.htm`;
 }
 
 function getDateYearsAgo(years: number): string {

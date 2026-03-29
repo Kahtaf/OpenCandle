@@ -40,17 +40,17 @@ Yahoo Finance, CoinGecko, Reddit, and Fear & Greed Index need no keys.
 > analyze AAPL
 ```
 
-## Tools (16)
+## Tools (23)
 
 | Category | Tools | Data Source |
 |----------|-------|------------|
 | **Market Data** | `search_ticker`, `get_stock_quote`, `get_stock_history`, `get_crypto_price`, `get_crypto_history` | Yahoo Finance, CoinGecko |
 | **Options** | `get_option_chain` — strikes, bids/asks, volume, OI, IV, computed Greeks | Yahoo Finance + Black-Scholes |
-| **Fundamentals** | `get_company_overview`, `get_financials`, `get_earnings` | Alpha Vantage |
-| **Technical** | `get_technical_indicators` — SMA, EMA, RSI, MACD, Bollinger Bands | Computed locally from OHLCV |
+| **Fundamentals** | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies`, `get_sec_filings` | Alpha Vantage, SEC EDGAR |
+| **Technical** | `get_technical_indicators`, `backtest_strategy` — SMA, EMA, RSI, MACD, Bollinger Bands, backtesting | Computed locally from OHLCV |
 | **Macro** | `get_economic_data`, `get_fear_greed` | FRED, alternative.me |
-| **Sentiment** | `get_reddit_sentiment`, `get_news_sentiment` | Reddit JSON API |
-| **Portfolio** | `track_portfolio`, `analyze_risk` — Sharpe, VaR, max drawdown | Yahoo Finance + local math |
+| **Sentiment** | `get_reddit_sentiment`, `get_reddit_discussions` | Reddit JSON API |
+| **Portfolio** | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `track_prediction` | Yahoo Finance + local math |
 
 ## How It Works
 
@@ -71,7 +71,7 @@ Key architectural choices:
 ## Test
 
 ```bash
-npm test              # 116 unit tests
+npm test              # 208 unit tests
 npm run test:watch    # watch mode
 ```
 

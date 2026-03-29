@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
 import { computeDailyReturns } from "./risk-analysis.js";
+import type { OHLCV } from "../../types/market.js";
 
 export function computeCorrelation(returnsA: number[], returnsB: number[]): number {
   const n = Math.min(returnsA.length, returnsB.length);
@@ -28,6 +29,46 @@ export function computeCorrelation(returnsA: number[], returnsB: number[]): numb
   return cov / Math.sqrt(varA * varB);
 }
 
+const DEFAULT_MIN_OVERLAP = 20;
+
+export function alignReturnsByDate(
+  historiesBySymbol: Map<string, OHLCV[]>,
+  minOverlap: number = DEFAULT_MIN_OVERLAP,
+): Map<string, number[]> {
+  // Build date → close price maps for each symbol
+  const priceByDate = new Map<string, Map<string, number>>();
+  for (const [symbol, bars] of historiesBySymbol) {
+    const dateMap = new Map<string, number>();
+    for (const bar of bars) {
+      dateMap.set(bar.date, bar.close);
+    }
+    priceByDate.set(symbol, dateMap);
+  }
+
+  // Find common dates across all symbols
+  const symbols = [...historiesBySymbol.keys()];
+  const firstDates = priceByDate.get(symbols[0])!;
+  const commonDates = [...firstDates.keys()].filter((date) =>
+    symbols.every((s) => priceByDate.get(s)!.has(date)),
+  ).sort();
+
+  if (commonDates.length < minOverlap) {
+    throw new Error(
+      `Insufficient date overlap for correlation: ${commonDates.length} common dates (need ${minOverlap}+). Symbols may trade on different exchanges or have sparse history.`,
+    );
+  }
+
+  // Extract aligned close prices, then compute returns
+  const result = new Map<string, number[]>();
+  for (const symbol of symbols) {
+    const dateMap = priceByDate.get(symbol)!;
+    const alignedCloses = commonDates.map((d) => dateMap.get(d)!);
+    result.set(symbol, computeDailyReturns(alignedCloses));
+  }
+
+  return result;
+}
+
 const params = Type.Object({
   symbols: Type.Array(Type.String(), {
     description: "Array of 2+ ticker symbols to compute correlation matrix (e.g. ['AAPL','MSFT','GOOGL'])",
@@ -49,10 +90,7 @@ export const correlationTool: AgentTool<typeof params> = {
     const period = args.period ?? "1y";
 
     if (symbols.length < 2) {
-      return {
-        content: [{ type: "text", text: "Error: Need at least 2 symbols for correlation analysis." }],
-        details: null,
-      };
+      throw new Error("Need at least 2 symbols for correlation analysis.");
     }
 
     // Fetch history for all symbols in parallel
@@ -60,11 +98,12 @@ export const correlationTool: AgentTool<typeof params> = {
       symbols.map((s) => getHistory(s, period, "1d")),
     );
 
-    const returnsBySymbol = new Map<string, number[]>();
+    const historiesBySymbol = new Map<string, OHLCV[]>();
     for (let i = 0; i < symbols.length; i++) {
-      const closes = histories[i].map((b) => b.close);
-      returnsBySymbol.set(symbols[i], computeDailyReturns(closes));
+      historiesBySymbol.set(symbols[i], histories[i]);
     }
+
+    const returnsBySymbol = alignReturnsByDate(historiesBySymbol);
 
     // Build correlation matrix
     const matrix: Record<string, Record<string, number>> = {};
