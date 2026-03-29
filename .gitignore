@@ -2,3 +2,4 @@ node_modules/
 .env
 .build-agent-progress
 dist/
+.DS_Store
