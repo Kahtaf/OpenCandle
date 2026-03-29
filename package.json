@@ -6,7 +6,10 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "tsx tests/e2e/tools.test.ts",
+    "test:e2e:cli": "tsx tests/e2e/cli.test.ts",
+    "test:e2e:providers": "tsx tests/e2e/providers.test.ts"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.63.1",

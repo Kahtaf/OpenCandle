@@ -23,8 +23,15 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     const limit = Math.min(args.limit ?? 25, 100);
     const result = await getSubredditPosts(args.subreddit, limit);
 
+    const sentimentLabel =
+      result.sentimentScore > 0.3 ? "Bullish" :
+      result.sentimentScore < -0.3 ? "Bearish" :
+      result.sentimentScore > 0 ? "Leaning Bullish" :
+      result.sentimentScore < 0 ? "Leaning Bearish" : "Neutral";
+
     const lines = [
       `**r/${result.subreddit}** — ${result.postCount} hot posts (${result.fetchedAt})`,
+      `Sentiment Score: ${result.sentimentScore.toFixed(2)} (${sentimentLabel}) | Bullish: ${result.bullishCount} | Bearish: ${result.bearishCount}`,
     ];
 
     if (result.topMentions.length > 0) {

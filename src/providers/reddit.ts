@@ -51,14 +51,47 @@ export async function getSubredditPosts(
     .slice(0, 10)
     .map(([ticker]) => ticker);
 
+  const sentiment = scoreSentiment(posts);
+
   const result: RedditSentimentResult = {
     subreddit,
     postCount: posts.length,
     posts,
     topMentions,
+    sentimentScore: sentiment.score,
+    bullishCount: sentiment.bullish,
+    bearishCount: sentiment.bearish,
     fetchedAt: new Date().toISOString(),
   };
 
   cache.set(cacheKey, result, TTL.SENTIMENT);
   return result;
+}
+
+const BULLISH_TERMS = [
+  "moon", "buy", "undervalued", "breakout", "calls", "bullish",
+  "rocket", "diamond hands", "accumulate", "dip buy", "long", "rip", "squeeze",
+];
+
+const BEARISH_TERMS = [
+  "crash", "overvalued", "sell", "puts", "bearish", "bubble",
+  "dump", "short", "bagholding", "exit", "drill", "tank", "rug",
+];
+
+export function scoreSentiment(
+  posts: Array<{ title: string }>,
+): { score: number; bullish: number; bearish: number } {
+  let bullish = 0;
+  let bearish = 0;
+  for (const post of posts) {
+    const lower = post.title.toLowerCase();
+    bullish += BULLISH_TERMS.filter((t) => lower.includes(t)).length;
+    bearish += BEARISH_TERMS.filter((t) => lower.includes(t)).length;
+  }
+  const total = bullish + bearish;
+  return {
+    score: total === 0 ? 0 : (bullish - bearish) / total,
+    bullish,
+    bearish,
+  };
 }

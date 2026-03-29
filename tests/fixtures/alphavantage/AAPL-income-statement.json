@@ -1,0 +1,20 @@
+{
+  "annualReports": [
+    {
+      "fiscalDateEnding": "2024-09-30",
+      "totalRevenue": "391035000000",
+      "grossProfit": "180683000000",
+      "operatingIncome": "123216000000",
+      "netIncome": "93736000000",
+      "reportedEPS": "6.08"
+    },
+    {
+      "fiscalDateEnding": "2023-09-30",
+      "totalRevenue": "383285000000",
+      "grossProfit": "169148000000",
+      "operatingIncome": "114301000000",
+      "netIncome": "96995000000",
+      "reportedEPS": "6.13"
+    }
+  ]
+}

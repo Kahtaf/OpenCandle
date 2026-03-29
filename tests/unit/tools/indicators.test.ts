@@ -5,7 +5,10 @@ import {
   computeRSI,
   computeMACD,
   computeBollingerBands,
+  computeOBV,
+  computeVWAP,
 } from "../../../src/tools/technical/indicators.js";
+import type { OHLCV } from "../../../src/types/market.js";
 
 // 50-point price series for deterministic testing (need 35+ for MACD)
 const prices = [
@@ -124,5 +127,71 @@ describe("computeBollingerBands", () => {
     for (const b of bb) {
       expect(b.upper - b.middle).toBeCloseTo(b.middle - b.lower, 10);
     }
+  });
+});
+
+// Helper to build OHLCV bars for OBV/VWAP tests
+function makeBars(data: Array<{ close: number; volume: number; high?: number; low?: number }>): OHLCV[] {
+  return data.map((d, i) => ({
+    date: `2024-01-${String(i + 1).padStart(2, "0")}`,
+    open: d.close,
+    high: d.high ?? d.close + 1,
+    low: d.low ?? d.close - 1,
+    close: d.close,
+    volume: d.volume,
+  }));
+}
+
+describe("computeOBV", () => {
+  it("adds volume on up days and subtracts on down days", () => {
+    const bars = makeBars([
+      { close: 100, volume: 1000 },
+      { close: 105, volume: 2000 },  // up → +2000
+      { close: 103, volume: 1500 },  // down → -1500
+      { close: 108, volume: 3000 },  // up → +3000
+    ]);
+    const obv = computeOBV(bars);
+    expect(obv).toHaveLength(4);
+    expect(obv[0]).toBe(0);
+    expect(obv[1]).toBe(2000);      // 0 + 2000
+    expect(obv[2]).toBe(500);       // 2000 - 1500
+    expect(obv[3]).toBe(3500);      // 500 + 3000
+  });
+
+  it("does not change OBV on flat days", () => {
+    const bars = makeBars([
+      { close: 100, volume: 1000 },
+      { close: 100, volume: 5000 },  // flat → no change
+    ]);
+    const obv = computeOBV(bars);
+    expect(obv[1]).toBe(0);
+  });
+
+  it("returns single element for single bar", () => {
+    const bars = makeBars([{ close: 100, volume: 1000 }]);
+    const obv = computeOBV(bars);
+    expect(obv).toHaveLength(1);
+    expect(obv[0]).toBe(0);
+  });
+});
+
+describe("computeVWAP", () => {
+  it("computes cumulative volume-weighted average price", () => {
+    const bars: OHLCV[] = [
+      { date: "2024-01-01", open: 100, high: 110, low: 90, close: 100, volume: 1000 },
+      { date: "2024-01-02", open: 105, high: 115, low: 95, close: 105, volume: 2000 },
+    ];
+    const vwap = computeVWAP(bars);
+    expect(vwap).toHaveLength(2);
+    // Bar 1: TP = (110+90+100)/3 = 100, cumPV = 100000, cumVol = 1000, VWAP = 100
+    expect(vwap[0]).toBeCloseTo(100, 2);
+    // Bar 2: TP = (115+95+105)/3 = 105, cumPV = 100000+210000=310000, cumVol = 3000, VWAP = 103.33
+    expect(vwap[1]).toBeCloseTo(310000 / 3000, 2);
+  });
+
+  it("returns 0 for zero volume", () => {
+    const bars = makeBars([{ close: 100, volume: 0 }]);
+    const vwap = computeVWAP(bars);
+    expect(vwap[0]).toBe(0);
   });
 });

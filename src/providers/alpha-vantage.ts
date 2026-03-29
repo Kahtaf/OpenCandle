@@ -85,28 +85,52 @@ export async function getFinancials(
   const cached = cache.get<FinancialStatement[]>(cacheKey);
   if (cached) return cached;
 
-  await rateLimiter.acquire("alphavantage");
+  // Fetch sequentially to respect Alpha Vantage rate limits (5 req/min free tier)
+  const incomeData = await fetchStatement<{ annualReports: any[] }>("INCOME_STATEMENT", symbol, apiKey);
+  const balanceData = await fetchStatement<{ annualReports: any[] }>("BALANCE_SHEET", symbol, apiKey);
+  const cashFlowData = await fetchStatement<{ annualReports: any[] }>("CASH_FLOW", symbol, apiKey);
 
-  // Fetch income statement (Alpha Vantage provides annual reports)
-  const url = buildUrl("INCOME_STATEMENT", { symbol }, apiKey);
-  const data = await httpGet<{ annualReports: any[] }>(url);
+  const incomeReports = incomeData.annualReports ?? [];
+  const balanceReports = balanceData.annualReports ?? [];
+  const cashFlowReports = cashFlowData.annualReports ?? [];
 
-  const statements = (data.annualReports ?? []).slice(0, 4).map((r: any) => ({
-    fiscalDate: r.fiscalDateEnding,
-    revenue: parseNum(r.totalRevenue),
-    grossProfit: parseNum(r.grossProfit),
-    operatingIncome: parseNum(r.operatingIncome),
-    netIncome: parseNum(r.netIncome),
-    eps: parseFloat(r.reportedEPS) || 0,
-    totalAssets: 0, // Would need separate BALANCE_SHEET call
-    totalLiabilities: 0,
-    totalEquity: 0,
-    operatingCashFlow: 0, // Would need separate CASH_FLOW call
-    freeCashFlow: 0,
-  }));
+  // Index balance sheet and cash flow by fiscal date for merging
+  const balanceByDate = new Map(
+    balanceReports.map((r: any) => [r.fiscalDateEnding, r]),
+  );
+  const cashFlowByDate = new Map(
+    cashFlowReports.map((r: any) => [r.fiscalDateEnding, r]),
+  );
+
+  const statements = incomeReports.slice(0, 4).map((r: any) => {
+    const balance = balanceByDate.get(r.fiscalDateEnding) ?? {};
+    const cf = cashFlowByDate.get(r.fiscalDateEnding) ?? {};
+    const opCashFlow = parseNum(cf.operatingCashflow);
+    const capex = parseNum(cf.capitalExpenditures);
+
+    return {
+      fiscalDate: r.fiscalDateEnding,
+      revenue: parseNum(r.totalRevenue),
+      grossProfit: parseNum(r.grossProfit),
+      operatingIncome: parseNum(r.operatingIncome),
+      netIncome: parseNum(r.netIncome),
+      eps: parseFloat(r.reportedEPS) || 0,
+      totalAssets: parseNum(balance.totalAssets),
+      totalLiabilities: parseNum(balance.totalLiabilities),
+      totalEquity: parseNum(balance.totalShareholderEquity),
+      operatingCashFlow: opCashFlow,
+      freeCashFlow: opCashFlow - capex,
+    };
+  });
 
   cache.set(cacheKey, statements, TTL.FUNDAMENTALS);
   return statements;
+}
+
+async function fetchStatement<T>(fn: string, symbol: string, apiKey: string): Promise<T> {
+  await rateLimiter.acquire("alphavantage");
+  const url = buildUrl(fn, { symbol }, apiKey);
+  return httpGet<T>(url);
 }
 
 function parseNum(s: string | undefined): number {

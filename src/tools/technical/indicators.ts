@@ -3,6 +3,35 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
 import type { OHLCV } from "../../types/market.js";
 
+// --- Volume-based indicators ---
+
+export function computeOBV(bars: OHLCV[]): number[] {
+  const obv: number[] = [0];
+  for (let i = 1; i < bars.length; i++) {
+    if (bars[i].close > bars[i - 1].close) {
+      obv.push(obv[i - 1] + bars[i].volume);
+    } else if (bars[i].close < bars[i - 1].close) {
+      obv.push(obv[i - 1] - bars[i].volume);
+    } else {
+      obv.push(obv[i - 1]);
+    }
+  }
+  return obv;
+}
+
+export function computeVWAP(bars: OHLCV[]): number[] {
+  const vwap: number[] = [];
+  let cumPV = 0;
+  let cumVol = 0;
+  for (const bar of bars) {
+    const tp = (bar.high + bar.low + bar.close) / 3;
+    cumPV += tp * bar.volume;
+    cumVol += bar.volume;
+    vwap.push(cumVol === 0 ? 0 : cumPV / cumVol);
+  }
+  return vwap;
+}
+
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   range: Type.Optional(
@@ -36,11 +65,17 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
     const rsi = computeRSI(closes, 14);
     const macd = computeMACD(closes);
     const bb = computeBollingerBands(closes, 20, 2);
+    const obv = computeOBV(bars);
+    const vwap = computeVWAP(bars);
 
     const latest = closes[closes.length - 1];
     const latestRsi = rsi[rsi.length - 1];
     const latestMacd = macd[macd.length - 1];
     const latestBB = bb[bb.length - 1];
+    const latestVwap = vwap[vwap.length - 1];
+    const obvTrend = obv.length >= 20
+      ? (obv[obv.length - 1] > obv[obv.length - 20] ? "Rising" : "Falling")
+      : "N/A";
 
     const lines = [
       `**${symbol} Technical Analysis** (${bars[0].date} to ${bars[bars.length - 1].date})`,
@@ -50,13 +85,14 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
       `RSI(14): ${latestRsi?.toFixed(1) ?? "N/A"} ${rsiSignal(latestRsi)}`,
       `MACD: ${latestMacd?.macd.toFixed(2) ?? "N/A"} | Signal: ${latestMacd?.signal.toFixed(2) ?? "N/A"} | Histogram: ${latestMacd?.histogram.toFixed(2) ?? "N/A"}`,
       `Bollinger Bands: Upper $${latestBB?.upper.toFixed(2) ?? "N/A"} | Mid $${latestBB?.middle.toFixed(2) ?? "N/A"} | Lower $${latestBB?.lower.toFixed(2) ?? "N/A"}`,
+      `OBV Trend: ${obvTrend} | VWAP: $${latestVwap?.toFixed(2) ?? "N/A"}`,
       ``,
-      trendSummary(latest, sma20, sma50, latestRsi, latestMacd),
+      trendSummary(latest, sma20, sma50, latestRsi, latestMacd, obvTrend, latestVwap),
     ];
 
     return {
       content: [{ type: "text", text: lines.join("\n") }],
-      details: { sma20, sma50, rsi, macd, bb },
+      details: { sma20, sma50, rsi, macd, bb, obv, vwap },
     };
   },
 };
@@ -183,6 +219,8 @@ function trendSummary(
   sma50: number[],
   rsi: number | undefined,
   macd: { macd: number; signal: number; histogram: number } | undefined,
+  obvTrend?: string,
+  vwap?: number,
 ): string {
   const signals: string[] = [];
 
@@ -197,6 +235,10 @@ function trendSummary(
   if (rsi != null && rsi <= 30) signals.push("RSI oversold — potential bounce");
   if (macd && macd.histogram > 0) signals.push("MACD bullish (histogram positive)");
   if (macd && macd.histogram < 0) signals.push("MACD bearish (histogram negative)");
+  if (obvTrend === "Rising" && price > (latestSma20 ?? 0)) signals.push("Volume confirming price advance (OBV rising)");
+  if (obvTrend === "Falling" && price < (latestSma20 ?? Infinity)) signals.push("Volume confirming price decline (OBV falling)");
+  if (vwap != null && price > vwap) signals.push("Price above VWAP — bullish intraday bias");
+  if (vwap != null && price < vwap) signals.push("Price below VWAP — bearish intraday bias");
 
   return signals.length > 0 ? "Signals: " + signals.join(" | ") : "No strong signals";
 }

@@ -1,0 +1,14 @@
+{
+  "annualReports": [
+    {
+      "fiscalDateEnding": "2024-09-30",
+      "operatingCashflow": "118254000000",
+      "capitalExpenditures": "9959000000"
+    },
+    {
+      "fiscalDateEnding": "2023-09-30",
+      "operatingCashflow": "110543000000",
+      "capitalExpenditures": "11062000000"
+    }
+  ]
+}

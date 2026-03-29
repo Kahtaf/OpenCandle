@@ -1,0 +1,16 @@
+{
+  "annualReports": [
+    {
+      "fiscalDateEnding": "2024-09-30",
+      "totalAssets": "364980000000",
+      "totalLiabilities": "308030000000",
+      "totalShareholderEquity": "56950000000"
+    },
+    {
+      "fiscalDateEnding": "2023-09-30",
+      "totalAssets": "352583000000",
+      "totalLiabilities": "290437000000",
+      "totalShareholderEquity": "62146000000"
+    }
+  ]
+}

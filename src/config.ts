@@ -26,6 +26,8 @@ export function loadEnv(path = ".env"): void {
   }
 }
 
+let cachedConfig: Config | null = null;
+
 export function loadConfig(): Config {
   loadEnv();
 
@@ -34,9 +36,18 @@ export function loadConfig(): Config {
     throw new Error("Missing GEMINI_API_KEY in .env file");
   }
 
-  return {
+  cachedConfig = {
     geminiApiKey,
     alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY,
     fredApiKey: process.env.FRED_API_KEY,
   };
+
+  return cachedConfig;
+}
+
+export function getConfig(): Config {
+  if (!cachedConfig) {
+    return loadConfig();
+  }
+  return cachedConfig;
 }

@@ -14,7 +14,14 @@ import { newsSentimentTool } from "./sentiment/news-sentiment.js";
 import { technicalIndicatorsTool } from "./technical/indicators.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
+import { watchlistTool } from "./portfolio/watchlist.js";
+import { correlationTool } from "./portfolio/correlation.js";
 import { optionChainTool } from "./options/option-chain.js";
+import { dcfTool } from "./fundamentals/dcf.js";
+import { compsTool } from "./fundamentals/comps.js";
+import { secFilingsTool } from "./fundamentals/sec-filings.js";
+import { backtestTool } from "./technical/backtest.js";
+import { predictionsTool } from "./portfolio/predictions.js";
 
 export function getAllTools(): AgentTool<any>[] {
   return [
@@ -26,13 +33,20 @@ export function getAllTools(): AgentTool<any>[] {
     companyOverviewTool,
     financialsTool,
     earningsTool,
+    dcfTool,
+    compsTool,
+    secFilingsTool,
     fredDataTool,
     fearGreedTool,
     redditSentimentTool,
     newsSentimentTool,
     technicalIndicatorsTool,
+    backtestTool,
     portfolioTrackerTool,
     riskAnalysisTool,
+    watchlistTool,
+    correlationTool,
+    predictionsTool,
     optionChainTool,
   ];
 }

@@ -2,16 +2,16 @@
  * End-to-end test: runs every tool against 10 stocks and 10 crypto tickers.
  * Reports pass/fail for each combination.
  */
-import { cache } from "../src/infra/cache.js";
-import { loadEnv } from "../src/config.js";
-import { getQuote, getHistory } from "../src/providers/yahoo-finance.js";
-import { getCryptoPrice, getCryptoHistory } from "../src/providers/coingecko.js";
-import { getOverview, getEarnings, getFinancials } from "../src/providers/alpha-vantage.js";
-import { getSeries } from "../src/providers/fred.js";
-import { getFearGreedIndex } from "../src/providers/fear-greed.js";
-import { getSubredditPosts } from "../src/providers/reddit.js";
-import { computeRiskMetrics, computeDailyReturns } from "../src/tools/portfolio/risk-analysis.js";
-import { computeSMA, computeRSI, computeMACD, computeBollingerBands } from "../src/tools/technical/indicators.js";
+import { cache } from "../../src/infra/cache.js";
+import { loadEnv } from "../../src/config.js";
+import { getQuote, getHistory } from "../../src/providers/yahoo-finance.js";
+import { getCryptoPrice, getCryptoHistory } from "../../src/providers/coingecko.js";
+import { getOverview, getEarnings, getFinancials } from "../../src/providers/alpha-vantage.js";
+import { getSeries } from "../../src/providers/fred.js";
+import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
+import { getSubredditPosts } from "../../src/providers/reddit.js";
+import { computeRiskMetrics, computeDailyReturns } from "../../src/tools/portfolio/risk-analysis.js";
+import { computeSMA, computeRSI, computeMACD, computeBollingerBands } from "../../src/tools/technical/indicators.js";
 
 loadEnv();
 
