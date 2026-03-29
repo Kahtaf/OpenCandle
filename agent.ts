@@ -17,14 +17,35 @@ if (!API_KEY) {
   process.exit(1);
 }
 
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
+
+async function chat(userMessage: string): Promise<string> {
+  const body = {
+    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
+  };
+
+  const res = await fetch(GEMINI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const json = await res.json();
+  return json.candidates[0].content.parts[0].text;
+}
+
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const prompt = (q: string): Promise<string> =>
   new Promise((resolve) => rl.question(q, resolve));
 
 async function main() {
+  console.log("Vantage is ready. Type a message or Ctrl+C to exit.\n");
   while (true) {
     const input = await prompt("> ");
-    // TODO: send to LLM API and print response
+    if (!input.trim()) continue;
+    const response = await chat(input);
+    console.log(`\n${response}\n`);
   }
 }
 
