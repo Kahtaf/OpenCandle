@@ -19,12 +19,21 @@ if (!API_KEY) {
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
+const SYSTEM_PROMPT = `You are Vantage, a financial advisory agent for investors and traders. You help users with market analysis, portfolio decisions, and trading strategies.
+
+You have access to tools that let you interact with the filesystem and run commands. Use tools proactively — for example, list files to understand a project before asking the user for specific paths.
+
+Working directory: ${process.cwd()}
+
+Be concise, data-driven, and actionable in your responses.`;
+
 const messages: { role: string; parts: { text: string }[] }[] = [];
 
 async function chat(userMessage: string): Promise<string> {
   messages.push({ role: "user", parts: [{ text: userMessage }] });
 
   const body = {
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: messages,
     generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
   };
