@@ -19,9 +19,13 @@ if (!API_KEY) {
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`;
 
+const messages: { role: string; parts: { text: string }[] }[] = [];
+
 async function chat(userMessage: string): Promise<string> {
+  messages.push({ role: "user", parts: [{ text: userMessage }] });
+
   const body = {
-    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    contents: messages,
     generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
   };
 
@@ -32,7 +36,9 @@ async function chat(userMessage: string): Promise<string> {
   });
 
   const json = await res.json();
-  return json.candidates[0].content.parts[0].text;
+  const modelMessage = json.candidates[0].content;
+  messages.push(modelMessage);
+  return modelMessage.parts[0].text;
 }
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
