@@ -16,7 +16,7 @@ Agentic loop: prompt -> LLM -> tool call -> execute -> result back -> LLM -> ...
 - [x] list_files
 - [x] read_file
 - [x] run_bash
-- [ ] edit_file
+- [x] edit_file
 
 ## Structure
 - `agent.ts` -- main agent source

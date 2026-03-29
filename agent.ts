@@ -1,5 +1,5 @@
 import * as readline from "node:readline";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
 
 // Load .env file
@@ -64,6 +64,24 @@ const tools = [
           required: ["command"],
         },
       },
+      {
+        name: "edit_file",
+        description:
+          "Edit a file by replacing a specific string with new content. Can also create new files.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "File path to edit or create" },
+            old_string: {
+              type: "string",
+              description:
+                "String to find and replace (empty string to create new file or append)",
+            },
+            new_string: { type: "string", description: "Replacement string" },
+          },
+          required: ["path", "old_string", "new_string"],
+        },
+      },
     ],
   },
 ];
@@ -92,6 +110,28 @@ function executeTool(name: string, args: any): string {
         const stderr = e.stderr || "";
         return `Exit code ${e.status ?? 1}:\n${stdout}${stderr}`.trim();
       }
+    case "edit_file": {
+      const { path, old_string, new_string } = args;
+      if (old_string === "") {
+        if (!existsSync(path)) {
+          writeFileSync(path, new_string);
+          return `Created ${path}`;
+        }
+        const existing = readFileSync(path, "utf-8");
+        writeFileSync(path, existing + new_string);
+        return `Appended to ${path}`;
+      }
+      try {
+        const content = readFileSync(path, "utf-8");
+        const count = content.split(old_string).length - 1;
+        if (count === 0) return `Error: old_string not found in ${path}`;
+        if (count > 1) return `Error: old_string found ${count} times in ${path} (must be unique)`;
+        writeFileSync(path, content.replace(old_string, new_string));
+        return `Edited ${path}`;
+      } catch (e: any) {
+        return `Error editing file: ${e.message}`;
+      }
+    }
     default:
       return `Unknown tool: ${name}`;
   }
