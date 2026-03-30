@@ -3,43 +3,11 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/vantage-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const SCHEMA_V1 = `
   CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    started_at TEXT NOT NULL,
-    ended_at TEXT,
-    cwd TEXT,
-    log_path TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    role TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    content_text TEXT,
-    workflow_type TEXT,
-    message_index INTEGER,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS tool_calls (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    tool_call_id TEXT,
-    message_id INTEGER,
-    tool_name TEXT NOT NULL,
-    args_json TEXT,
-    result_summary TEXT,
-    success INTEGER,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
   );
 
   CREATE TABLE IF NOT EXISTS user_preferences (
@@ -54,17 +22,6 @@ const SCHEMA_V1 = `
     UNIQUE(namespace, key)
   );
 
-  CREATE TABLE IF NOT EXISTS memory_facts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind TEXT NOT NULL,
-    fact_text TEXT NOT NULL,
-    value_json TEXT,
-    confidence TEXT DEFAULT 'medium',
-    source_message_id INTEGER,
-    created_at TEXT NOT NULL,
-    expires_at TEXT
-  );
-
   CREATE TABLE IF NOT EXISTS workflow_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
@@ -73,8 +30,7 @@ const SCHEMA_V1 = `
     resolved_slots_json TEXT,
     defaults_used_json TEXT,
     output_summary TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
+    created_at TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS recommendations (
@@ -116,13 +72,9 @@ export function initDefaultDatabase(): Database.Database {
 }
 
 function migrateSchema(db: Database.Database, from: number, to: number): void {
-  if (from < 2 && to >= 2) {
-    const columns = db.pragma("table_info(tool_calls)") as Array<{ name: string }>;
-    const hasToolCallId = columns.some((column) => column.name === "tool_call_id");
-    if (!hasToolCallId) {
-      db.exec("ALTER TABLE tool_calls ADD COLUMN tool_call_id TEXT");
-    }
-  }
+  // v2→v3: sessions, messages, tool_calls, memory_facts tables removed
+  // (now handled by Pi's native session persistence).
+  // Orphan tables in existing DBs are harmless — no destructive migration needed.
   db.prepare("UPDATE schema_version SET version = ?").run(to);
 }
 

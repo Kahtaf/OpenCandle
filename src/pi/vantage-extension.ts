@@ -10,6 +10,7 @@ import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsWorkflow, buildOptionsScreenerWorkflow, buildPortfolioWorkflow } from "../workflows/index.js";
 import { getVantageToolDefinitions } from "./tool-adapter.js";
 import { runVantageSetup } from "./setup.js";
+import { initDefaultDatabase, MemoryStorage, buildMemoryContext, extractPreferences } from "../memory/index.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -121,6 +122,9 @@ function queueCompareWorkflow(
 
 export default function vantageExtension(pi: ExtensionAPI): void {
   let activeSequenceId = 0;
+  let storage: MemoryStorage | null = null;
+  let sessionId = "unknown";
+
   const beginSequence = (): number => {
     activeSequenceId += 1;
     return activeSequenceId;
@@ -154,6 +158,10 @@ export default function vantageExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    const db = initDefaultDatabase();
+    storage = new MemoryStorage(db);
+    sessionId = ctx.sessionManager.getSessionId();
+
     if (!ctx.hasUI) return;
     const result = await runVantageSetup(pi, ctx, { mode: "startup" });
     if (result === "shutdown") {
@@ -167,6 +175,20 @@ export default function vantageExtension(pi: ExtensionAPI): void {
 
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
+
+    // Extract and persist user preferences from natural language
+    if (storage) {
+      for (const pref of extractPreferences(event.text)) {
+        storage.upsertPreference({
+          key: pref.key,
+          valueJson: JSON.stringify(pref.value),
+          confidence: pref.confidence,
+          source: "inferred",
+        });
+      }
+    }
+    const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
+
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
       queueComprehensiveAnalysis(pi, analysis.symbol, ctx, beginSequence, isCurrentSequence);
@@ -176,29 +198,61 @@ export default function vantageExtension(pi: ExtensionAPI): void {
     const classification = classifyIntent(event.text);
 
     if (classification.workflow === "portfolio_builder") {
-      const workflow = buildPortfolioWorkflow(resolvePortfolioSlots(classification.entities));
+      const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);
+      const workflow = buildPortfolioWorkflow(resolution);
+      if (storage) {
+        storage.insertWorkflowRun({
+          sessionId,
+          workflowType: "portfolio_builder",
+          inputSlotsJson: JSON.stringify(classification.entities),
+          resolvedSlotsJson: JSON.stringify(resolution.resolved),
+          defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
+        });
+      }
+      pi.appendEntry("vantage-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
       queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
       return { action: "handled" };
     }
 
     if (classification.workflow === "options_screener") {
-      const resolution = resolveOptionsScreenerSlots(classification.entities);
+      const resolution = resolveOptionsScreenerSlots(classification.entities, workflowPrefs);
       if (resolution.missingRequired.length === 0) {
         const workflow = buildOptionsScreenerWorkflow(resolution);
+        if (storage) {
+          storage.insertWorkflowRun({
+            sessionId,
+            workflowType: "options_screener",
+            inputSlotsJson: JSON.stringify(classification.entities),
+            resolvedSlotsJson: JSON.stringify(resolution.resolved),
+            defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
+          });
+        }
+        pi.appendEntry("vantage-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
         queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
         return { action: "handled" };
       }
     }
 
     if (classification.workflow === "compare_assets" && classification.entities.symbols.length >= 2) {
+      if (storage) {
+        storage.insertWorkflowRun({
+          sessionId,
+          workflowType: "compare_assets",
+          inputSlotsJson: JSON.stringify(classification.entities),
+          resolvedSlotsJson: JSON.stringify({ symbols: classification.entities.symbols }),
+          defaultsUsedJson: JSON.stringify([]),
+        });
+      }
+      pi.appendEntry("vantage-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
       queueCompareWorkflow(pi, classification.entities.symbols, ctx, beginSequence, isCurrentSequence);
       return { action: "handled" };
     }
   });
 
   pi.on("before_agent_start", async (event) => {
+    const memoryContext = storage ? buildMemoryContext(storage) : "";
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${buildSystemPrompt()}`,
+      systemPrompt: `${event.systemPrompt}\n\n${buildSystemPrompt(memoryContext || undefined)}`,
     };
   });
 }

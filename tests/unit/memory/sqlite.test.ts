@@ -16,26 +16,26 @@ describe("initDatabase", () => {
     db.close();
   });
 
-  it("creates all 7 domain tables plus schema_version", () => {
+  it("creates domain tables plus schema_version", () => {
     const tables = getTableNames(db);
-    expect(tables).toContain("sessions");
-    expect(tables).toContain("messages");
-    expect(tables).toContain("tool_calls");
     expect(tables).toContain("user_preferences");
-    expect(tables).toContain("memory_facts");
     expect(tables).toContain("workflow_runs");
     expect(tables).toContain("recommendations");
     expect(tables).toContain("schema_version");
+    expect(tables).not.toContain("sessions");
+    expect(tables).not.toContain("messages");
+    expect(tables).not.toContain("tool_calls");
+    expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 2", () => {
-    expect(getSchemaVersion(db)).toBe(2);
+  it("sets schema version to 3", () => {
+    expect(getSchemaVersion(db)).toBe(3);
   });
 
   it("is idempotent — running again does not error", () => {
     const db2 = initDatabase(":memory:");
     const tables = getTableNames(db2);
-    expect(tables.length).toBeGreaterThanOrEqual(8);
+    expect(tables.length).toBeGreaterThanOrEqual(4);
     db2.close();
   });
 
@@ -46,16 +46,6 @@ describe("initDatabase", () => {
     expect(existsSync(dbPath)).toBe(true);
     fileDb.close();
     rmSync(base, { recursive: true, force: true });
-  });
-
-  it("sessions table has expected columns", () => {
-    const info = db.pragma("table_info(sessions)") as Array<{ name: string }>;
-    const cols = info.map((c) => c.name);
-    expect(cols).toContain("id");
-    expect(cols).toContain("started_at");
-    expect(cols).toContain("ended_at");
-    expect(cols).toContain("cwd");
-    expect(cols).toContain("log_path");
   });
 
   it("user_preferences table has expected columns", () => {
@@ -82,11 +72,5 @@ describe("initDatabase", () => {
     expect(cols).toContain("defaults_used_json");
     expect(cols).toContain("output_summary");
     expect(cols).toContain("created_at");
-  });
-
-  it("tool_calls table includes tool_call_id", () => {
-    const info = db.pragma("table_info(tool_calls)") as Array<{ name: string }>;
-    const cols = info.map((c) => c.name);
-    expect(cols).toContain("tool_call_id");
   });
 });
