@@ -5,7 +5,7 @@ import {
   type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { loadFileConfig, saveFileConfig, type VantageFileConfig } from "../config.js";
-import { loadOnboardingState, saveOnboardingState } from "../onboarding/state.js";
+import { ONBOARDING_VERSION, loadOnboardingState, saveOnboardingState } from "../onboarding/state.js";
 
 const SETUP_STATUS_KEY = "vantage-setup";
 
@@ -137,6 +137,7 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
       manualCodeReject = reject;
     });
 
+    // Cast required: advanced providers return dynamic IDs outside the SDK's static union type
     void ctx.modelRegistry.authStorage.login(providerId as any, {
       onAuth: (info) => {
         dialog.showAuth(info.url, info.instructions);
@@ -345,7 +346,7 @@ function upsertFinanceKey(
 async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Promise<void> {
   const effectiveConfig = loadFileConfig();
   if (hasFinanceKeys(effectiveConfig)) {
-    saveOnboardingState({ version: 1, financeSetupStatus: "completed" });
+    saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: "completed" });
     return;
   }
 
@@ -369,7 +370,7 @@ async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Pro
   ]);
 
   if (choice !== "Yes") {
-    saveOnboardingState({ version: 1, financeSetupStatus: "dismissed" });
+    saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: "dismissed" });
     return;
   }
 
@@ -391,10 +392,12 @@ async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Pro
     }
   }
 
-  saveFileConfig(nextConfig);
+  if (nextConfig !== effectiveConfig) {
+    saveFileConfig(nextConfig);
+  }
 
   const status = hasFinanceKeys(nextConfig) ? "completed" : "dismissed";
-  saveOnboardingState({ version: 1, financeSetupStatus: status });
+  saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: status });
 }
 
 export async function runVantageSetup(
