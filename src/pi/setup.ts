@@ -4,7 +4,13 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
-import { loadFileConfig, saveFileConfig, type VantageFileConfig } from "../config.js";
+import {
+  getFinanceProviderReadiness,
+  loadFileConfig,
+  saveFileConfig,
+  type FinanceProviderReadiness,
+  type VantageFileConfig,
+} from "../config.js";
 import { openInBrowser } from "../infra/open-url.js";
 import { ONBOARDING_VERSION, loadOnboardingState, saveOnboardingState } from "../onboarding/state.js";
 
@@ -324,10 +330,8 @@ async function runLlmSetup(
   }
 }
 
-function hasFinanceKeys(fileConfig: VantageFileConfig): boolean {
-  return Boolean(
-    fileConfig.providers?.alphaVantage?.apiKey && fileConfig.providers?.fred?.apiKey,
-  );
+function hasFinanceKeys(readiness: FinanceProviderReadiness): boolean {
+  return readiness.hasAlphaVantage && readiness.hasFred;
 }
 
 function upsertFinanceKey(
@@ -348,8 +352,9 @@ function upsertFinanceKey(
 }
 
 async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Promise<void> {
-  const effectiveConfig = loadFileConfig();
-  if (hasFinanceKeys(effectiveConfig)) {
+  const fileConfig = loadFileConfig();
+  const readiness = getFinanceProviderReadiness();
+  if (hasFinanceKeys(readiness)) {
     saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: "completed" });
     return;
   }
@@ -378,33 +383,36 @@ async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Pro
     return;
   }
 
-  let nextConfig = effectiveConfig;
+  let nextConfig = fileConfig;
+  let nextReadiness = readiness;
 
-  if (!nextConfig.providers?.alphaVantage?.apiKey) {
+  if (!nextReadiness.hasAlphaVantage) {
     await openInBrowser(ALPHA_VANTAGE_SIGNUP_URL).catch(() => {});
     ctx.ui.notify("Opening Alpha Vantage signup in your browser...", "info");
     const alphaKey = await ctx.ui.input("Alpha Vantage API key (optional)", "Enter key or leave blank");
     const trimmed = alphaKey?.trim();
     if (trimmed) {
       nextConfig = upsertFinanceKey(nextConfig, "alphaVantage", trimmed);
+      nextReadiness = { ...nextReadiness, hasAlphaVantage: true };
     }
   }
 
-  if (!nextConfig.providers?.fred?.apiKey) {
+  if (!nextReadiness.hasFred) {
     await openInBrowser(FRED_SIGNUP_URL).catch(() => {});
     ctx.ui.notify("Opening FRED API key page in your browser...", "info");
     const fredKey = await ctx.ui.input("FRED API key (optional)", "Enter key or leave blank");
     const trimmed = fredKey?.trim();
     if (trimmed) {
       nextConfig = upsertFinanceKey(nextConfig, "fred", trimmed);
+      nextReadiness = { ...nextReadiness, hasFred: true };
     }
   }
 
-  if (nextConfig !== effectiveConfig) {
+  if (nextConfig !== fileConfig) {
     saveFileConfig(nextConfig);
   }
 
-  const status = hasFinanceKeys(nextConfig) ? "completed" : "dismissed";
+  const status = hasFinanceKeys(nextReadiness) ? "completed" : "dismissed";
   saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: status });
 }
 

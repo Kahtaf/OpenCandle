@@ -23,14 +23,12 @@ function createUi(overrides: Partial<any> = {}) {
 }
 
 describe("Vantage setup", () => {
-  const originalVantageHome = process.env.VANTAGE_HOME;
+  const originalEnv = { ...process.env };
+  const originalCwd = process.cwd();
 
   afterEach(() => {
-    if (originalVantageHome == null) {
-      delete process.env.VANTAGE_HOME;
-    } else {
-      process.env.VANTAGE_HOME = originalVantageHome;
-    }
+    process.env = { ...originalEnv };
+    process.chdir(originalCwd);
     vi.restoreAllMocks();
   });
 
@@ -82,6 +80,7 @@ describe("Vantage setup", () => {
   it("writes finance keys to ~/.vantage/config.json after setup", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
     process.env.VANTAGE_HOME = tempDir;
+    process.chdir(tempDir);
 
     const authStorage = AuthStorage.inMemory({
       google: { type: "api_key", key: "test-google-key" },
@@ -121,6 +120,7 @@ describe("Vantage setup", () => {
 
     const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
     process.env.VANTAGE_HOME = tempDir;
+    process.chdir(tempDir);
 
     const authStorage = AuthStorage.inMemory({
       google: { type: "api_key", key: "test-google-key" },
@@ -148,6 +148,122 @@ describe("Vantage setup", () => {
     expect(mockOpen).toHaveBeenCalledWith("https://www.alphavantage.co/support/#api-key");
     expect(mockOpen).toHaveBeenCalledWith("https://fredaccount.stlouisfed.org/apikeys");
 
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("skips finance setup when both provider keys come from env", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
+    process.env.VANTAGE_HOME = tempDir;
+    process.chdir(tempDir);
+    process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
+    process.env.FRED_API_KEY = "fred-env";
+
+    const authStorage = AuthStorage.inMemory({
+      google: { type: "api_key", key: "test-google-key" },
+    } as any);
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
+    const ui = createUi();
+
+    await runVantageSetup(
+      { setModel: vi.fn().mockResolvedValue(true) } as any,
+      {
+        hasUI: true,
+        ui,
+        modelRegistry,
+        model: currentModel,
+        shutdown: vi.fn(),
+      } as any,
+      { mode: "startup" },
+    );
+
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
+
+    delete process.env.ALPHA_VANTAGE_API_KEY;
+    delete process.env.FRED_API_KEY;
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("skips finance setup when readiness is split across env and config", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
+    process.env.VANTAGE_HOME = tempDir;
+    process.chdir(tempDir);
+    process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
+
+    const authStorage = AuthStorage.inMemory({
+      google: { type: "api_key", key: "test-google-key" },
+    } as any);
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
+    const ui = createUi();
+
+    const configJson = JSON.stringify({
+      providers: {
+        fred: { apiKey: "fred-file" },
+      },
+    });
+    await import("node:fs").then(({ writeFileSync }) =>
+      writeFileSync(join(tempDir, "config.json"), `${configJson}\n`, "utf-8"),
+    );
+
+    await runVantageSetup(
+      { setModel: vi.fn().mockResolvedValue(true) } as any,
+      {
+        hasUI: true,
+        ui,
+        modelRegistry,
+        model: currentModel,
+        shutdown: vi.fn(),
+      } as any,
+      { mode: "startup" },
+    );
+
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
+
+    delete process.env.ALPHA_VANTAGE_API_KEY;
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("prompts only for providers missing from the effective config", async () => {
+    const { openInBrowser } = await import("../../../src/infra/open-url.js");
+    const mockOpen = vi.mocked(openInBrowser);
+    mockOpen.mockClear();
+
+    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
+    process.env.VANTAGE_HOME = tempDir;
+    process.chdir(tempDir);
+    process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
+
+    const authStorage = AuthStorage.inMemory({
+      google: { type: "api_key", key: "test-google-key" },
+    } as any);
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
+    const ui = createUi();
+    ui.select.mockResolvedValueOnce("Yes");
+    ui.input.mockResolvedValueOnce("fred-key");
+
+    await runVantageSetup(
+      { setModel: vi.fn().mockResolvedValue(true) } as any,
+      {
+        hasUI: true,
+        ui,
+        modelRegistry,
+        model: currentModel,
+        shutdown: vi.fn(),
+      } as any,
+      { mode: "manual", forceFinancePrompt: true },
+    );
+
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(mockOpen).toHaveBeenCalledWith("https://fredaccount.stlouisfed.org/apikeys");
+    expect(readFileSync(join(tempDir, "config.json"), "utf-8")).toContain("fred-key");
+    expect(readFileSync(join(tempDir, "config.json"), "utf-8")).not.toContain("alpha-env");
+    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
+
+    delete process.env.ALPHA_VANTAGE_API_KEY;
     rmSync(tempDir, { recursive: true, force: true });
   });
 
