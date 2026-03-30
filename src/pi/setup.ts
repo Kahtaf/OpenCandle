@@ -5,9 +5,13 @@ import {
   type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { loadFileConfig, saveFileConfig, type VantageFileConfig } from "../config.js";
+import { openInBrowser } from "../infra/open-url.js";
 import { ONBOARDING_VERSION, loadOnboardingState, saveOnboardingState } from "../onboarding/state.js";
 
 const SETUP_STATUS_KEY = "vantage-setup";
+
+const ALPHA_VANTAGE_SIGNUP_URL = "https://www.alphavantage.co/support/#api-key";
+const FRED_SIGNUP_URL = "https://fredaccount.stlouisfed.org/apikeys";
 
 type SetupMode = "startup" | "manual";
 type SetupRequirement = "ready" | "select_model" | "connect_auth";
@@ -377,6 +381,8 @@ async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Pro
   let nextConfig = effectiveConfig;
 
   if (!nextConfig.providers?.alphaVantage?.apiKey) {
+    await openInBrowser(ALPHA_VANTAGE_SIGNUP_URL).catch(() => {});
+    ctx.ui.notify("Opening Alpha Vantage signup in your browser...", "info");
     const alphaKey = await ctx.ui.input("Alpha Vantage API key (optional)", "Enter key or leave blank");
     const trimmed = alphaKey?.trim();
     if (trimmed) {
@@ -385,6 +391,8 @@ async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Pro
   }
 
   if (!nextConfig.providers?.fred?.apiKey) {
+    await openInBrowser(FRED_SIGNUP_URL).catch(() => {});
+    ctx.ui.notify("Opening FRED API key page in your browser...", "info");
     const fredKey = await ctx.ui.input("FRED API key (optional)", "Enter key or leave blank");
     const trimmed = fredKey?.trim();
     if (trimmed) {

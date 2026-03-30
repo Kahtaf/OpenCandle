@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../../src/infra/open-url.js", async () => ({
+  openInBrowser: vi.fn(async () => {}),
+}));
+
 import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -105,6 +110,43 @@ describe("Vantage setup", () => {
     expect(readFileSync(join(tempDir, "config.json"), "utf-8")).toContain("alpha-key");
     expect(readFileSync(join(tempDir, "config.json"), "utf-8")).toContain("fred-key");
     expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
+
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("opens signup pages in the browser during finance setup", async () => {
+    const { openInBrowser } = await import("../../../src/infra/open-url.js");
+    const mockOpen = vi.mocked(openInBrowser);
+    mockOpen.mockClear();
+
+    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
+    process.env.VANTAGE_HOME = tempDir;
+
+    const authStorage = AuthStorage.inMemory({
+      google: { type: "api_key", key: "test-google-key" },
+    } as any);
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const currentModel = modelRegistry.getAvailable().find((m) => m.provider === "google");
+    const ui = createUi();
+    ui.select.mockResolvedValueOnce("Yes");
+    ui.input.mockResolvedValueOnce("alpha-key").mockResolvedValueOnce("fred-key");
+
+    const ctx = {
+      hasUI: true,
+      ui,
+      modelRegistry,
+      model: currentModel,
+      shutdown: vi.fn(),
+    };
+
+    await runVantageSetup(
+      { setModel: vi.fn().mockResolvedValue(true) } as any,
+      ctx as any,
+      { mode: "manual", forceFinancePrompt: true },
+    );
+
+    expect(mockOpen).toHaveBeenCalledWith("https://www.alphavantage.co/support/#api-key");
+    expect(mockOpen).toHaveBeenCalledWith("https://fredaccount.stlouisfed.org/apikeys");
 
     rmSync(tempDir, { recursive: true, force: true });
   });
