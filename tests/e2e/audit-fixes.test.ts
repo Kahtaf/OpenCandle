@@ -6,13 +6,20 @@
  * Usage: npx tsx tests/e2e/audit-fixes.test.ts
  */
 import assert from "node:assert";
-import type { AgentEvent } from "@mariozechner/pi-agent-core";
-import { loadConfig } from "../../src/config.js";
-import { createAgent } from "../../src/agent.js";
+import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { createVantageSession } from "../../src/agent.js";
 import { cache } from "../../src/infra/cache.js";
 
-const config = loadConfig();
-const agent = createAgent(config);
+const { session } = await createVantageSession({
+  cwd: process.cwd(),
+  sessionManager: SessionManager.inMemory(),
+  settingsManager: SettingsManager.inMemory({
+    defaultProvider: "google",
+    defaultModel: "gemini-2.5-flash",
+  }),
+  useInlineExtension: true,
+});
 
 let passed = 0;
 let failed = 0;
@@ -24,7 +31,7 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
   const toolResults = new Map<string, any>();
 
   return new Promise((resolve) => {
-    const unsubscribe = agent.subscribe((event: AgentEvent) => {
+    const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       switch (event.type) {
         case "message_update":
           if (event.assistantMessageEvent.type === "text_delta") {
@@ -43,7 +50,7 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
           break;
       }
     });
-    agent.prompt(prompt);
+    void session.prompt(prompt);
   });
 }
 
@@ -164,4 +171,5 @@ if (failures.length > 0) {
 }
 console.log();
 
+session.dispose();
 process.exit(failed > 0 ? 1 : 0);

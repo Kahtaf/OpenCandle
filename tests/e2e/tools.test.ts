@@ -62,8 +62,8 @@ async function run() {
   console.log("1. Config:");
   await test("getConfig returns valid config", async () => {
     const c = getConfig();
-    assert(c.geminiApiKey != null, "geminiApiKey is null");
-    assert(typeof c.geminiApiKey === "string", "geminiApiKey not a string");
+    assert("alphaVantageApiKey" in c, "alphaVantageApiKey key missing");
+    assert("fredApiKey" in c, "fredApiKey key missing");
   });
 
   // ============================

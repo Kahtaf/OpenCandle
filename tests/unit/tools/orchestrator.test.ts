@@ -41,18 +41,15 @@ describe("isAnalysisRequest", () => {
 
 describe("runComprehensiveAnalysis", () => {
   function runAndCapture(symbol: string) {
-    const followUpCalls: any[] = [];
-    const mockAgent = {
-      followUp: vi.fn((msg: any) => followUpCalls.push(msg)),
-    };
-    runComprehensiveAnalysis(mockAgent as any, symbol);
-    const texts = followUpCalls.map((c: any) => c.content[0].text);
-    return { mockAgent, followUpCalls, texts };
+    const followUpCalls: string[] = [];
+    const enqueueFollowUp = vi.fn((prompt: string) => followUpCalls.push(prompt));
+    runComprehensiveAnalysis(enqueueFollowUp, symbol);
+    return { enqueueFollowUp, texts: followUpCalls };
   }
 
   it("queues 7 follow-up messages (5 analysts + synthesis + validation)", () => {
-    const { mockAgent } = runAndCapture("AAPL");
-    expect(mockAgent.followUp).toHaveBeenCalledTimes(7);
+    const { enqueueFollowUp } = runAndCapture("AAPL");
+    expect(enqueueFollowUp).toHaveBeenCalledTimes(7);
   });
 
   it("uses named investment persona labels", () => {

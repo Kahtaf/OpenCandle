@@ -1,5 +1,3 @@
-import type { Agent } from "@mariozechner/pi-agent-core";
-
 export type AnalystRole =
   | "valuation"
   | "momentum"
@@ -75,28 +73,31 @@ Be direct and actionable. This is your final word on ${symbol}.`;
 const VALIDATION_PROMPT = (symbol: string) =>
   `**[Validation Check]** Review your complete analysis of ${symbol} above. For each specific number you cited (price, P/E, revenue, RSI, intrinsic value, etc.), verify it matches the tool output data you received. Flag any inconsistencies. If you stated a number without fetching it first, call that out as UNVERIFIED. Output: VALIDATED if all numbers check out, or list specific corrections needed.`;
 
-export function runComprehensiveAnalysis(agent: Agent, symbol: string): void {
+export function getInitialAnalysisPrompt(symbol: string): string {
+  return `Begin comprehensive analysis of ${symbol}. Start by getting the current stock quote.`;
+}
+
+export function getComprehensiveAnalysisPrompts(symbol: string): string[] {
   const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
+  const prompts = [getInitialAnalysisPrompt(symbol)];
 
   for (const role of roles) {
-    agent.followUp({
-      role: "user",
-      content: [{ type: "text", text: ANALYST_PROMPTS[role](symbol) }],
-      timestamp: Date.now(),
-    });
+    prompts.push(ANALYST_PROMPTS[role](symbol));
   }
 
-  agent.followUp({
-    role: "user",
-    content: [{ type: "text", text: SYNTHESIS_PROMPT(symbol) }],
-    timestamp: Date.now(),
-  });
+  prompts.push(SYNTHESIS_PROMPT(symbol));
+  prompts.push(VALIDATION_PROMPT(symbol));
 
-  agent.followUp({
-    role: "user",
-    content: [{ type: "text", text: VALIDATION_PROMPT(symbol) }],
-    timestamp: Date.now(),
-  });
+  return prompts;
+}
+
+export function runComprehensiveAnalysis(
+  enqueueFollowUp: (prompt: string) => void,
+  symbol: string,
+): void {
+  for (const prompt of getComprehensiveAnalysisPrompts(symbol).slice(1)) {
+    enqueueFollowUp(prompt);
+  }
 }
 
 export function isAnalysisRequest(input: string): { match: boolean; symbol?: string } {
@@ -114,4 +115,11 @@ export function isAnalysisRequest(input: string): { match: boolean; symbol?: str
   }
 
   return { match: false };
+}
+
+export function normalizeSymbol(input: string): string | undefined {
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+  const candidate = trimmed.replace(/\$/g, "").toUpperCase();
+  return /^[A-Z]{1,5}$/.test(candidate) ? candidate : undefined;
 }

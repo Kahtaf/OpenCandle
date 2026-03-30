@@ -17,22 +17,22 @@ describe("loadEnv", () => {
   });
 
   it("parses key=value pairs from .env file", () => {
-    mockedReadFileSync.mockReturnValue("GEMINI_API_KEY=test-key-123\nFRED_API_KEY=fred-456");
+    mockedReadFileSync.mockReturnValue("OPENAI_API_KEY=test-key-123\nFRED_API_KEY=fred-456");
     loadEnv();
-    expect(process.env.GEMINI_API_KEY).toBe("test-key-123");
+    expect(process.env.OPENAI_API_KEY).toBe("test-key-123");
     expect(process.env.FRED_API_KEY).toBe("fred-456");
   });
 
   it("ignores comment lines", () => {
-    mockedReadFileSync.mockReturnValue("# This is a comment\nGEMINI_API_KEY=test-key");
+    mockedReadFileSync.mockReturnValue("# This is a comment\nOPENAI_API_KEY=test-key");
     loadEnv();
-    expect(process.env.GEMINI_API_KEY).toBe("test-key");
+    expect(process.env.OPENAI_API_KEY).toBe("test-key");
   });
 
   it("ignores empty lines", () => {
-    mockedReadFileSync.mockReturnValue("\n\nGEMINI_API_KEY=test-key\n\n");
+    mockedReadFileSync.mockReturnValue("\n\nOPENAI_API_KEY=test-key\n\n");
     loadEnv();
-    expect(process.env.GEMINI_API_KEY).toBe("test-key");
+    expect(process.env.OPENAI_API_KEY).toBe("test-key");
   });
 
   it("handles values containing equals signs", () => {
@@ -57,21 +57,18 @@ describe("loadConfig", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns config when GEMINI_API_KEY is set", () => {
-    mockedReadFileSync.mockReturnValue("GEMINI_API_KEY=my-key");
+  it("returns finance-provider config without requiring LLM credentials", () => {
+    mockedReadFileSync.mockReturnValue("OPENAI_API_KEY=my-key");
     const config = loadConfig();
-    expect(config.geminiApiKey).toBe("my-key");
-  });
-
-  it("throws when GEMINI_API_KEY is missing", () => {
-    mockedReadFileSync.mockReturnValue("");
-    delete process.env.GEMINI_API_KEY;
-    expect(() => loadConfig()).toThrow("Missing GEMINI_API_KEY");
+    expect(config).toEqual({
+      alphaVantageApiKey: undefined,
+      fredApiKey: undefined,
+    });
   });
 
   it("includes optional keys when present", () => {
     mockedReadFileSync.mockReturnValue(
-      "GEMINI_API_KEY=gem\nALPHA_VANTAGE_API_KEY=av\nFRED_API_KEY=fred",
+      "OPENAI_API_KEY=openai\nALPHA_VANTAGE_API_KEY=av\nFRED_API_KEY=fred",
     );
     const config = loadConfig();
     expect(config.alphaVantageApiKey).toBe("av");
@@ -79,7 +76,7 @@ describe("loadConfig", () => {
   });
 
   it("optional keys are undefined when not set", () => {
-    mockedReadFileSync.mockReturnValue("GEMINI_API_KEY=gem");
+    mockedReadFileSync.mockReturnValue("OPENAI_API_KEY=openai");
     delete process.env.ALPHA_VANTAGE_API_KEY;
     delete process.env.FRED_API_KEY;
     const config = loadConfig();

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 
 export interface Config {
-  geminiApiKey: string;
   alphaVantageApiKey?: string;
   fredApiKey?: string;
 }
@@ -31,13 +30,7 @@ let cachedConfig: Config | null = null;
 export function loadConfig(): Config {
   loadEnv();
 
-  const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!geminiApiKey) {
-    throw new Error("Missing GEMINI_API_KEY in .env file");
-  }
-
   cachedConfig = {
-    geminiApiKey,
     alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY,
     fredApiKey: process.env.FRED_API_KEY,
   };
