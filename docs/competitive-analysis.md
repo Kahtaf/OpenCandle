@@ -388,7 +388,7 @@ Zero infrastructure cost — purely prompt engineering.
 
 Parameters: `action` (record/check), `symbol`, `prediction` (bullish/bearish/neutral), `target_price` (optional), `timeframe` (e.g., "30d")
 
-Record action saves to `.vantage-predictions.json`:
+Record action saves to `~/.vantage/predictions.json`:
 ```json
 {
   "symbol": "AAPL",
@@ -409,7 +409,7 @@ Check action fetches current prices, computes directional accuracy:
 
 | Project | Stealable Idea | Relevance | Notes |
 |---------|---------------|-----------|-------|
-| **OpenAlice** | Watchlist config file | **MEDIUM** | `.vantage-watchlist.json` with alert levels. Same persistence pattern as portfolio. |
+| **OpenAlice** | Watchlist config file | **MEDIUM** | `~/.vantage/watchlist.json` with alert levels. Same persistence pattern as portfolio. |
 | **Polymarket Agents** | Event-driven analysis (earnings dates, FOMC) | **MEDIUM** | Economic calendar tool would add context. Hard to find free API. |
 | **Financial Datasets MCP** | MCP server exposure of tools | **LOW** | Interesting for interop but no clear user benefit today. |
 | **Microsoft MarS** | Order-level market simulation | **LOW** | Computationally intensive, not relevant to advisory role. |

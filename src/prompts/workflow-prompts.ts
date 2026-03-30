@@ -136,6 +136,7 @@ ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
+- This is an educational sample allocation request. Build the draft portfolio and include the standard disclaimer instead of refusing.
 - Present an allocation table: symbol, allocation %, dollar amount, and rationale for each position.
 - Include a risk summary (portfolio volatility, diversification quality).
 - Suggest what to change for more growth or more safety.
@@ -195,7 +196,7 @@ Screen and rank options contracts for ${s.symbol}:
 
 Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.
-2. Use get_option_chain for ${s.symbol} to get the full chain with Greeks.
+2. Use get_option_chain for ${s.symbol} to get the full chain with Greeks. If you filter by contract type, pass \`type: "call"\` or \`type: "put"\` in lowercase.
 3. Filter contracts matching: ${s.direction === "bullish" ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
 4. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
@@ -224,7 +225,7 @@ Compare these assets side by side: ${symbolList}
 
 Steps:
 1. Use get_stock_quote for each of: ${symbolList}.
-2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics.
+2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
 3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
 5. Use analyze_correlation across [${symbolList}] to check diversification.
@@ -236,5 +237,5 @@ Response format:
 - Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown.
 - Highlight which asset is stronger on each metric.
 - Provide a summary verdict: which is most attractive and why.
-- Note any caveats (different sectors, market cap disparity, etc.).`;
+- Note any caveats (different sectors, market cap disparity, unavailable fundamentals, etc.).`;
 }

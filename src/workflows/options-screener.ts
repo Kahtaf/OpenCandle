@@ -1,10 +1,6 @@
 import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
-
-export interface WorkflowPlan {
-  initialPrompt: string;
-  followUps: string[];
-}
+import type { WorkflowPlan } from "./types.js";
 
 export function buildOptionsScreenerWorkflow(resolution: SlotResolution<OptionsScreenerSlots>): WorkflowPlan {
   const initialPrompt = buildOptionsScreenerPrompt(resolution);

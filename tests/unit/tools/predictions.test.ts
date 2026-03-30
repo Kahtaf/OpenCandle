@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { join } from "node:path";
 import {
   recordPrediction,
   checkPredictions,
@@ -8,18 +9,29 @@ import * as fs from "node:fs";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
+  mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
 }));
 
 describe("recordPrediction", () => {
+  const originalEnv = process.env.VANTAGE_HOME;
+  const vantageHome = "/tmp/vantage-predictions-test";
+
   beforeEach(() => {
+    process.env.VANTAGE_HOME = vantageHome;
     vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
     vi.mocked(fs.readFileSync).mockReturnValue("[]");
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
   });
 
   afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.VANTAGE_HOME;
+    } else {
+      process.env.VANTAGE_HOME = originalEnv;
+    }
     vi.restoreAllMocks();
   });
 
@@ -33,6 +45,9 @@ describe("recordPrediction", () => {
     });
 
     expect(fs.writeFileSync).toHaveBeenCalled();
+    expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(
+      join(vantageHome, "predictions.json"),
+    );
     const written: Prediction[] = JSON.parse(
       vi.mocked(fs.writeFileSync).mock.calls[0][1] as string,
     );

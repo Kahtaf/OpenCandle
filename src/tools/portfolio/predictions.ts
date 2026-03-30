@@ -2,8 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
-
-const PREDICTIONS_FILE = ".vantage-predictions.json";
+import { ensureParentDir, getPredictionsPath } from "../../infra/vantage-paths.js";
 
 export interface Prediction {
   symbol: string;
@@ -36,16 +35,19 @@ export interface PredictionCheckResult {
 }
 
 function loadPredictions(): Prediction[] {
-  if (!existsSync(PREDICTIONS_FILE)) return [];
+  const predictionsPath = getPredictionsPath();
+  if (!existsSync(predictionsPath)) return [];
   try {
-    return JSON.parse(readFileSync(PREDICTIONS_FILE, "utf-8"));
+    return JSON.parse(readFileSync(predictionsPath, "utf-8"));
   } catch {
     return [];
   }
 }
 
 function savePredictions(predictions: Prediction[]): void {
-  writeFileSync(PREDICTIONS_FILE, JSON.stringify(predictions, null, 2));
+  const predictionsPath = getPredictionsPath();
+  ensureParentDir(predictionsPath);
+  writeFileSync(predictionsPath, JSON.stringify(predictions, null, 2));
 }
 
 export function recordPrediction(params: {

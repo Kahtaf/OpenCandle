@@ -17,7 +17,7 @@ export const earningsTool: AgentTool<typeof params, EarningsData> = {
   async execute(toolCallId, args) {
     const apiKey = getConfig().alphaVantageApiKey;
     if (!apiKey) {
-      throw new Error("ALPHA_VANTAGE_API_KEY not configured. Add it to your .env file.");
+      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.vantage/config.json.");
     }
 
     const earnings = await getEarnings(args.symbol.toUpperCase(), apiKey);

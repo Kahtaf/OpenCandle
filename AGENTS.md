@@ -42,3 +42,7 @@ TypeScript-based financial data analysis and market intelligence toolset. Integr
 npm run build
 npm test
 ```
+
+## RUNTIME STATE
+- Pi runtime config belongs in `.pi/` and `~/.pi/agent/...`; do not move Pi auth, models, or settings into Vantage storage.
+- Vantage user state belongs in `~/.vantage/`, and the published CLI should not depend on a repo-local `.pi/extensions/...` file.

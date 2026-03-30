@@ -16,19 +16,19 @@ To make the agent easily installable by anyone with Node.js:
      "vantage": "./dist/cli.js"
    }
    ```
-3. **Configuration Management**: Move away from relying solely on local `.env` files. Implement a global configuration system (e.g., using `conf` or `env-paths`) to store API keys securely in `~/.vantage/config.json` or `~/.config/vantage/`.
+3. **Configuration Management**: Keep Pi-managed auth/model config in `~/.pi/agent/...` and use `~/.vantage/` only for Vantage-owned user state such as watchlists, portfolios, predictions, logs, and memory.
 
 ---
 
 ## 3. User Interface: The TUI (Text User Interface)
 
-Since Vantage is heavily based on `pi-agent`, giving users visibility into the agent's "thought process" and tool execution is critical for trust and UX. 
+Since Vantage is built on Pi, giving users visibility into the agent's "thought process" and tool execution is critical for trust and UX.
 
-**Recommendation:** Build a TUI using **Ink** (React for interactive CLIs) or **Clack** (for beautiful, linear CLI prompts).
+**Recommendation:** Reuse Pi's existing TUI and interactive runtime rather than building a separate Ink or Clack shell.
 **Core TUI Features:**
 - **Streaming Responses**: Render the LLM's streaming output with real-time markdown parsing.
 - **Thought / Status Indicators**: Spinners showing active tool executions (e.g., `⠋ Fetching TSLA option chain...`, `⠙ Running Black-Scholes local computation...`).
-- **Configuration Flow**: An interactive first-run wizard prompting the user for their `GEMINI_API_KEY`, `ALPHA_VANTAGE_API_KEY`, etc.
+- **Configuration Flow**: Pi-native `/login` and `/model` flows for LLM access, plus Vantage-specific setup for finance provider keys when needed.
 - **Error Boundaries**: Graceful, readable error handling if rate limits (e.g., Yahoo Finance) are hit or Camoufox stealth sessions fail.
 
 ---
@@ -65,8 +65,8 @@ flowchart LR
 To ensure adoption and easy onboarding:
 
 1. **`README.md` (User-Facing)**
-   - **Quickstart**: `npm install -g vantage-agent && vantage`
-   - **Configuration**: How to add API keys via the CLI wizard.
+   - **Quickstart**: `npm install -g @kahtaf/vantage && vantage`
+   - **Configuration**: Explain that Pi manages LLM auth/models, while Vantage stores user data in `~/.vantage/`.
    - **Features & Examples**: Demonstrating the financial, macro, and sentiment capabilities.
 2. **`CONTRIBUTING.md` (Developer-Facing)**
    - Clear instructions on the architecture (tools vs providers vs analysts).
@@ -82,6 +82,6 @@ To ensure adoption and easy onboarding:
 | Phase | Milestone | Description |
 |-------|-----------|-------------|
 | **Phase 1** | CLI & Config | Build the global config manager (key storage) and basic CLI entry point. Setup `tsup` build process. |
-| **Phase 2** | TUI Integration | Integrate Ink/Clack. Add spinners, streaming markdown rendering, and interactive setup. |
+| **Phase 2** | TUI Integration | Finish Pi-based TUI integration, finance-specific onboarding, and interactive setup polish. |
 | **Phase 3** | CI/CD | Add GitHub Actions for linting, strict Vitest execution, and Semantic Release automation. |
 | **Phase 4** | Documentation | Finalize README, CONTRIBUTING, and release v1.0.0 to npm. |

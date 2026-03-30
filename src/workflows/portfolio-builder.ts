@@ -1,10 +1,6 @@
 import type { PortfolioSlots, SlotResolution } from "../routing/types.js";
 import { buildPortfolioPrompt } from "../prompts/workflow-prompts.js";
-
-export interface WorkflowPlan {
-  initialPrompt: string;
-  followUps: string[];
-}
+import type { WorkflowPlan } from "./types.js";
 
 export function buildPortfolioWorkflow(resolution: SlotResolution<PortfolioSlots>): WorkflowPlan {
   const initialPrompt = buildPortfolioPrompt(resolution);

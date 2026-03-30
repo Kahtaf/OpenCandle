@@ -12,7 +12,7 @@ const params = Type.Object({
     }),
   ),
   type: Type.Optional(
-    Type.Union([Type.Literal("call"), Type.Literal("put")], {
+    Type.Union([Type.Literal("call"), Type.Literal("put"), Type.Literal("CALL"), Type.Literal("PUT")], {
       description: "Filter by option type. Omit for both calls and puts.",
     }),
   ),
@@ -26,6 +26,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
   parameters: params,
   async execute(toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
+    const normalizedType = args.type?.toLowerCase();
     const expirationTs = args.expiration
       ? Math.floor(new Date(args.expiration).getTime() / 1000)
       : undefined;
@@ -39,8 +40,8 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
       "",
     ];
 
-    const showCalls = !args.type || args.type === "call";
-    const showPuts = !args.type || args.type === "put";
+    const showCalls = !normalizedType || normalizedType === "call";
+    const showPuts = !normalizedType || normalizedType === "put";
 
     if (showCalls && chain.calls.length > 0) {
       lines.push(`**CALLS** (${chain.calls.length} contracts, volume: ${chain.totalCallVolume.toLocaleString()})`);

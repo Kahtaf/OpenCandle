@@ -3,20 +3,22 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import type { Position, PortfolioSummary } from "../../types/portfolio.js";
-
-const PORTFOLIO_FILE = ".vantage-portfolio.json";
+import { ensureParentDir, getPortfolioPath } from "../../infra/vantage-paths.js";
 
 function loadPortfolio(): Position[] {
-  if (!existsSync(PORTFOLIO_FILE)) return [];
+  const portfolioPath = getPortfolioPath();
+  if (!existsSync(portfolioPath)) return [];
   try {
-    return JSON.parse(readFileSync(PORTFOLIO_FILE, "utf-8"));
+    return JSON.parse(readFileSync(portfolioPath, "utf-8"));
   } catch {
     return [];
   }
 }
 
 function savePortfolio(positions: Position[]): void {
-  writeFileSync(PORTFOLIO_FILE, JSON.stringify(positions, null, 2));
+  const portfolioPath = getPortfolioPath();
+  ensureParentDir(portfolioPath);
+  writeFileSync(portfolioPath, JSON.stringify(positions, null, 2));
 }
 
 async function getCurrentPrice(symbol: string): Promise<number> {
@@ -45,7 +47,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
   name: "track_portfolio",
   label: "Portfolio Tracker",
   description:
-    "Track your portfolio of stocks and crypto. Add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker. Data persisted to .vantage-portfolio.json.",
+    "Track your portfolio of stocks and crypto. Add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker. Data persisted to ~/.vantage/portfolio.json.",
   parameters: params,
   async execute(toolCallId, args) {
     const positions = loadPortfolio();

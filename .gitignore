@@ -3,4 +3,7 @@ node_modules/
 dist/
 .DS_Store
 .vantage-portfolio.json
+.vantage-watchlist.json
+.vantage/
 .build-agent-progress
+agent-eval-results*.json

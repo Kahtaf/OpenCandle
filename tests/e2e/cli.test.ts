@@ -4,13 +4,27 @@
  *
  * Usage: npx tsx tests/e2e/cli.test.ts
  */
-import type { AgentEvent } from "@mariozechner/pi-agent-core";
-import { loadConfig } from "../../src/config.js";
-import { createAgent } from "../../src/agent.js";
+import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { getConfig } from "../../src/config.js";
+import { createVantageSession } from "../../src/agent.js";
 import { cache } from "../../src/infra/cache.js";
 
-const config = loadConfig();
-const agent = createAgent(config);
+const config = getConfig();
+const vantageHome = mkdtempSync(join(tmpdir(), "vantage-cli-test-"));
+process.env.VANTAGE_HOME = vantageHome;
+const { session } = await createVantageSession({
+  cwd: process.cwd(),
+  sessionManager: SessionManager.inMemory(),
+  settingsManager: SettingsManager.inMemory({
+    defaultProvider: "google",
+    defaultModel: "gemini-2.5-flash",
+  }),
+  useInlineExtension: true,
+});
 
 let passed = 0;
 let failed = 0;
@@ -21,7 +35,7 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
   const toolCalls: string[] = [];
 
   return new Promise((resolve) => {
-    const unsubscribe = agent.subscribe((event: AgentEvent) => {
+    const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
       switch (event.type) {
         case "message_update":
           if (event.assistantMessageEvent.type === "text_delta") {
@@ -37,7 +51,7 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
           break;
       }
     });
-    agent.prompt(prompt);
+    void session.prompt(prompt);
   });
 }
 
@@ -65,7 +79,7 @@ function assert(cond: boolean, msg: string) {
 
 async function run() {
   console.log("=== Vantage CLI E2E Tests ===");
-  console.log(`Testing through the actual agent (Gemini LLM + all 23 tools)\n`);
+  console.log(`Testing through the Pi-based Vantage session\n`);
 
   // --- 1. Stock Quote (sanity) ---
   await test(
@@ -213,10 +227,9 @@ async function run() {
   }
 
   // Clean up
-  const { existsSync, unlinkSync } = await import("node:fs");
-  for (const f of [".vantage-watchlist.json", ".vantage-predictions.json"]) {
-    if (existsSync(f)) unlinkSync(f);
-  }
+  rmSync(vantageHome, { recursive: true, force: true });
+  delete process.env.VANTAGE_HOME;
+  session.dispose();
 
   process.exit(failed > 0 ? 1 : 0);
 }

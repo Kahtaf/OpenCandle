@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { isAnalysisRequest, runComprehensiveAnalysis } from "../../../src/analysts/orchestrator.js";
+import { isAnalysisRequest, normalizeSymbol, runComprehensiveAnalysis } from "../../../src/analysts/orchestrator.js";
 
 describe("isAnalysisRequest", () => {
   it("matches 'analyze AAPL'", () => {
@@ -32,6 +32,12 @@ describe("isAnalysisRequest", () => {
     expect(result.symbol).toBe("AAPL");
   });
 
+  it("matches class-share symbols like BRK.B", () => {
+    const result = isAnalysisRequest("analyze BRK.B");
+    expect(result.match).toBe(true);
+    expect(result.symbol).toBe("BRK.B");
+  });
+
   it("does not match random text", () => {
     expect(isAnalysisRequest("what is the price of AAPL").match).toBe(false);
     expect(isAnalysisRequest("hello world").match).toBe(false);
@@ -39,20 +45,33 @@ describe("isAnalysisRequest", () => {
   });
 });
 
+describe("normalizeSymbol", () => {
+  it("accepts plain tickers", () => {
+    expect(normalizeSymbol("aapl")).toBe("AAPL");
+  });
+
+  it("accepts class-share tickers with dots and slashes", () => {
+    expect(normalizeSymbol("brk.b")).toBe("BRK.B");
+    expect(normalizeSymbol("rds/a")).toBe("RDS/A");
+  });
+
+  it("rejects invalid symbols", () => {
+    expect(normalizeSymbol("hello world")).toBeUndefined();
+    expect(normalizeSymbol("TOO-LONG")).toBeUndefined();
+  });
+});
+
 describe("runComprehensiveAnalysis", () => {
   function runAndCapture(symbol: string) {
-    const followUpCalls: any[] = [];
-    const mockAgent = {
-      followUp: vi.fn((msg: any) => followUpCalls.push(msg)),
-    };
-    runComprehensiveAnalysis(mockAgent as any, symbol);
-    const texts = followUpCalls.map((c: any) => c.content[0].text);
-    return { mockAgent, followUpCalls, texts };
+    const followUpCalls: string[] = [];
+    const enqueueFollowUp = vi.fn((prompt: string) => followUpCalls.push(prompt));
+    runComprehensiveAnalysis(enqueueFollowUp, symbol);
+    return { enqueueFollowUp, texts: followUpCalls };
   }
 
   it("queues 7 follow-up messages (5 analysts + synthesis + validation)", () => {
-    const { mockAgent } = runAndCapture("AAPL");
-    expect(mockAgent.followUp).toHaveBeenCalledTimes(7);
+    const { enqueueFollowUp } = runAndCapture("AAPL");
+    expect(enqueueFollowUp).toHaveBeenCalledTimes(7);
   });
 
   it("uses named investment persona labels", () => {
