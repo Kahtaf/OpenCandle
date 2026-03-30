@@ -1,12 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
-import { getConfigPath } from "./infra/vantage-paths.js";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { ensureParentDir, getConfigPath } from "./infra/vantage-paths.js";
 
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
 }
 
-interface VantageFileConfig {
+export interface VantageFileConfig {
   providers?: {
     alphaVantage?: {
       apiKey?: string;
@@ -15,6 +15,11 @@ interface VantageFileConfig {
       apiKey?: string;
     };
   };
+}
+
+export interface FinanceProviderReadiness {
+  hasAlphaVantage: boolean;
+  hasFred: boolean;
 }
 
 export function loadEnv(path = ".env"): void {
@@ -39,7 +44,15 @@ export function loadEnv(path = ".env"): void {
 
 let cachedConfig: Config | null = null;
 
-function loadFileConfig(path = getConfigPath()): VantageFileConfig {
+function resolveConfig(fileConfig: VantageFileConfig): Config {
+  return {
+    alphaVantageApiKey:
+      process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
+    fredApiKey: process.env.FRED_API_KEY ?? fileConfig.providers?.fred?.apiKey,
+  };
+}
+
+export function loadFileConfig(path = getConfigPath()): VantageFileConfig {
   if (!existsSync(path)) {
     return {};
   }
@@ -61,15 +74,23 @@ function loadFileConfig(path = getConfigPath()): VantageFileConfig {
   }
 }
 
+export function saveFileConfig(config: VantageFileConfig, path = getConfigPath()): void {
+  ensureParentDir(path);
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+}
+
+export function getFinanceProviderReadiness(path = getConfigPath()): FinanceProviderReadiness {
+  loadEnv();
+  const config = resolveConfig(loadFileConfig(path));
+  return {
+    hasAlphaVantage: Boolean(config.alphaVantageApiKey),
+    hasFred: Boolean(config.fredApiKey),
+  };
+}
+
 export function loadConfig(): Config {
   loadEnv();
-  const fileConfig = loadFileConfig();
-
-  cachedConfig = {
-    alphaVantageApiKey:
-      process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
-    fredApiKey: process.env.FRED_API_KEY ?? fileConfig.providers?.fred?.apiKey,
-  };
+  cachedConfig = resolveConfig(loadFileConfig());
 
   return cachedConfig;
 }

@@ -1,34 +1,61 @@
-# TESTS KNOWLEDGE BASE
+# TESTS
 
-**Generated:** 2026-03-29T19:27:06Z
+Unit + e2e tests for all Vantage modules. Fixtures prevent live API calls in CI.
 
-## OVERVIEW
-Test suites for the financial tools and API providers, strongly relying on static fixtures to prevent live API calls during CI.
+## COMMANDS
+```bash
+npm test                       # vitest run (unit only)
+npm run test:watch             # vitest watch mode
+npm run test:e2e               # e2e tool tests
+npm run test:e2e:cli           # e2e CLI tests
+npm run test:e2e:providers     # e2e provider tests (hits live APIs)
+```
 
 ## STRUCTURE
 ```
 tests/
 ├── unit/
-│   ├── tools/       # Tests for each domain tool
-│   ├── providers/   # Tests for API clients
-│   └── infra/       # Tests for core utilities
-├── fixtures/        # Mock JSON responses
-│   ├── alphavantage/
-│   ├── coingecko/
-│   ├── fred/
-│   └── yahoo/
-└── e2e/             # End-to-end workflow tests
+│   ├── tools/        # One test per tool
+│   ├── providers/    # One test per API client
+│   ├── infra/        # Cache, rate-limiter, HTTP, browser, paths, config
+│   ├── memory/       # SQLite storage, sessions, preferences, retrieval
+│   ├── routing/      # Intent classification, entity extraction, slots
+│   ├── workflows/    # Workflow builders
+│   ├── pi/           # Pi extension, setup, session, tool adapter
+│   ├── prompts/      # Workflow prompt templates
+│   └── onboarding/   # Setup flow
+├── e2e/              # End-to-end workflow + CLI tests
+├── integration/      # Cross-module integration tests
+└── fixtures/         # Mock JSON responses
+    ├── alphavantage/  # Income, balance sheet, cash flow
+    ├── coingecko/     # Crypto prices, fear & greed
+    ├── fred/          # Economic indicators
+    └── yahoo/         # Quotes, history, options, reddit
 ```
 
-## WHERE TO LOOK
-| Task | Location |
-|------|----------|
-| Updating mock API data | `tests/fixtures/[provider]/` |
-| Testing a new tool | `tests/unit/tools/` |
+## TEST PATTERN
+```ts
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { cache } from "../../../src/infra/cache.js";
+import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
+
+const originalFetch = globalThis.fetch;
+beforeEach(() => { cache.clear(); });
+afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks(); });
+
+globalThis.fetch = vi.fn().mockResolvedValue({
+  ok: true,
+  json: () => Promise.resolve(quoteFixture),
+});
+```
 
 ## CONVENTIONS
-- **TDD MANDATORY**: Red/green TDD is strictly required for all new features. Write failing tests before implementation.
+- **TDD mandatory.** Write the failing test first.
+- Unit tests mirror `src/` structure: `tests/unit/<module>/` maps to `src/<module>/`.
+- Mock fetch at `globalThis.fetch` level. Never stub provider internals.
+- Use `:memory:` SQLite for memory/storage tests.
 
 ## ANTI-PATTERNS
-- **NEVER** write implementation code before writing a failing test.
-- **NEVER** make live external API calls in unit tests (use `tests/fixtures/`).
+- Never write implementation before a failing test.
+- Never make live API calls in unit tests (use `tests/fixtures/`).
+- Never import test fixtures into production code.

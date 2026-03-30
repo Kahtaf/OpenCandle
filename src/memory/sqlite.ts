@@ -3,43 +3,11 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/vantage-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 1;
 
-const SCHEMA_V1 = `
+const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    started_at TEXT NOT NULL,
-    ended_at TEXT,
-    cwd TEXT,
-    log_path TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    role TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    content_text TEXT,
-    workflow_type TEXT,
-    message_index INTEGER,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS tool_calls (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    tool_call_id TEXT,
-    message_id INTEGER,
-    tool_name TEXT NOT NULL,
-    args_json TEXT,
-    result_summary TEXT,
-    success INTEGER,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
   );
 
   CREATE TABLE IF NOT EXISTS user_preferences (
@@ -54,17 +22,6 @@ const SCHEMA_V1 = `
     UNIQUE(namespace, key)
   );
 
-  CREATE TABLE IF NOT EXISTS memory_facts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    kind TEXT NOT NULL,
-    fact_text TEXT NOT NULL,
-    value_json TEXT,
-    confidence TEXT DEFAULT 'medium',
-    source_message_id INTEGER,
-    created_at TEXT NOT NULL,
-    expires_at TEXT
-  );
-
   CREATE TABLE IF NOT EXISTS workflow_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
@@ -73,8 +30,7 @@ const SCHEMA_V1 = `
     resolved_slots_json TEXT,
     defaults_used_json TEXT,
     output_summary TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id)
+    created_at TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS recommendations (
@@ -95,18 +51,7 @@ export function initDatabase(path: string): Database.Database {
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
-
-  db.exec(SCHEMA_V1);
-
-  // Set schema version if not yet set
-  const row = db.prepare("SELECT version FROM schema_version LIMIT 1").get() as
-    | { version: number }
-    | undefined;
-  if (!row) {
-    db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
-  } else if (row.version < CURRENT_SCHEMA_VERSION) {
-    migrateSchema(db, row.version, CURRENT_SCHEMA_VERSION);
-  }
+  ensureCurrentSchema(db);
 
   return db;
 }
@@ -115,15 +60,39 @@ export function initDefaultDatabase(): Database.Database {
   return initDatabase(getStateDbPath());
 }
 
-function migrateSchema(db: Database.Database, from: number, to: number): void {
-  if (from < 2 && to >= 2) {
-    const columns = db.pragma("table_info(tool_calls)") as Array<{ name: string }>;
-    const hasToolCallId = columns.some((column) => column.name === "tool_call_id");
-    if (!hasToolCallId) {
-      db.exec("ALTER TABLE tool_calls ADD COLUMN tool_call_id TEXT");
-    }
+function ensureCurrentSchema(db: Database.Database): void {
+  const currentVersion = readSchemaVersion(db);
+  if (currentVersion !== CURRENT_SCHEMA_VERSION) {
+    resetSchema(db);
+    return;
   }
-  db.prepare("UPDATE schema_version SET version = ?").run(to);
+
+  db.exec(CURRENT_SCHEMA);
+}
+
+function readSchemaVersion(db: Database.Database): number | null {
+  const table = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_version'")
+    .get() as { name: string } | undefined;
+  if (!table) {
+    return null;
+  }
+
+  const row = db.prepare("SELECT version FROM schema_version LIMIT 1").get() as
+    | { version: number }
+    | undefined;
+  return row?.version ?? null;
+}
+
+function resetSchema(db: Database.Database): void {
+  db.exec(`
+    DROP TABLE IF EXISTS recommendations;
+    DROP TABLE IF EXISTS workflow_runs;
+    DROP TABLE IF EXISTS user_preferences;
+    DROP TABLE IF EXISTS schema_version;
+  `);
+  db.exec(CURRENT_SCHEMA);
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
 }
 
 export function getTableNames(db: Database.Database): string[] {

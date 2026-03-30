@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import {
   getConfigPath,
   getLogsDir,
+  getOnboardingPath,
   getPortfolioPath,
   getPredictionsPath,
   getStateDbPath,
@@ -31,6 +32,7 @@ describe("vantage paths", () => {
     expect(getPortfolioPath()).toBe(join(homedir(), ".vantage", "portfolio.json"));
     expect(getPredictionsPath()).toBe(join(homedir(), ".vantage", "predictions.json"));
     expect(getConfigPath()).toBe(join(homedir(), ".vantage", "config.json"));
+    expect(getOnboardingPath()).toBe(join(homedir(), ".vantage", "onboarding.json"));
     expect(getStateDbPath()).toBe(join(homedir(), ".vantage", "state.db"));
     expect(getLogsDir()).toBe(join(homedir(), ".vantage", "logs"));
   });

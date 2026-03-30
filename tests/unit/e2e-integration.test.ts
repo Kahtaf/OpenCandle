@@ -1,14 +1,17 @@
 /**
- * End-to-end integration test for the new orchestration layer.
+ * End-to-end integration test for the orchestration layer.
  *
  * Tests the full pipeline: user input → classify → extract entities →
- * resolve slots → build prompt → persist to SQLite → log to JSONL →
+ * resolve slots → build prompt → persist to SQLite →
  * extract preferences → retrieve memory context.
+ *
+ * Session lifecycle, chat history, and tool-call tracking are handled
+ * by Pi's native session persistence — not tested here.
  *
  * Does NOT require a live LLM — exercises all orchestration logic in isolation.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -18,7 +21,7 @@ import { resolvePortfolioSlots, resolveOptionsScreenerSlots } from "../../src/ro
 import { buildPortfolioPrompt, buildOptionsScreenerPrompt, buildCompareAssetsPrompt } from "../../src/prompts/workflow-prompts.js";
 import { buildPortfolioWorkflow } from "../../src/workflows/portfolio-builder.js";
 import { buildOptionsScreenerWorkflow } from "../../src/workflows/options-screener.js";
-import { initDatabase, MemoryStorage, ChatLogger, createSession, buildMemoryContext } from "../../src/memory/index.js";
+import { initDatabase, MemoryStorage, buildMemoryContext } from "../../src/memory/index.js";
 import { extractPreferences } from "../../src/memory/preference-extractor.js";
 import { buildSystemPrompt } from "../../src/system-prompt.js";
 import type Database from "better-sqlite3";
@@ -28,22 +31,12 @@ describe("E2E integration: full orchestration pipeline", () => {
   let db: Database.Database;
   let storage: MemoryStorage;
   let tempDir: string;
-  let chatLogger: ChatLogger;
-  let sessionId: string;
+  const sessionId = "pi-test-session";
 
   beforeEach(() => {
     db = initDatabase(":memory:");
     storage = new MemoryStorage(db);
     tempDir = mkdtempSync(join(tmpdir(), "vantage-e2e-"));
-    const session = createSession();
-    sessionId = session.id;
-    chatLogger = new ChatLogger(join(tempDir, "logs"), sessionId);
-    storage.insertSession({
-      id: sessionId,
-      startedAt: session.startedAt,
-      cwd: session.cwd,
-      logPath: chatLogger.getLogPath(),
-    });
   });
 
   afterEach(() => {
@@ -106,25 +99,6 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(resolvedSlots.budget).toBe(10_000);
     });
 
-    it("logs events to JSONL", () => {
-      chatLogger.log({ type: "user_message", payload: { text: INPUT } });
-      chatLogger.log({
-        type: "workflow_selected",
-        payload: { workflow: "portfolio_builder", confidence: 0.9, tier: "rule" },
-      });
-
-      const content = readFileSync(chatLogger.getLogPath(), "utf-8");
-      const lines = content.trim().split("\n");
-      expect(lines).toHaveLength(2);
-
-      const event1 = JSON.parse(lines[0]);
-      expect(event1.type).toBe("user_message");
-      expect(event1.payload.text).toBe(INPUT);
-
-      const event2 = JSON.parse(lines[1]);
-      expect(event2.type).toBe("workflow_selected");
-      expect(event2.payload.workflow).toBe("portfolio_builder");
-    });
   });
 
   // -----------------------------------------------------------------------
@@ -385,134 +359,9 @@ describe("E2E integration: full orchestration pipeline", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Scenario 8: Session lifecycle and message tracking
+  // Scenario 8: Cross-workflow routing edge cases
   // -----------------------------------------------------------------------
-  describe("Scenario 8: session lifecycle and message tracking", () => {
-    it("session is created and can be ended", () => {
-      const s = storage.getSession(sessionId);
-      expect(s).toBeTruthy();
-      expect(s!.ended_at).toBeNull();
-
-      storage.endSession(sessionId, "2026-03-29T18:00:00Z");
-      const ended = storage.getSession(sessionId);
-      expect(ended!.ended_at).toBe("2026-03-29T18:00:00Z");
-    });
-
-    it("messages are tracked with role and workflow type", () => {
-      storage.insertMessage({
-        sessionId,
-        role: "user",
-        contentText: "I have $10k to invest",
-        workflowType: "portfolio_builder",
-        messageIndex: 0,
-      });
-      storage.insertMessage({
-        sessionId,
-        role: "assistant",
-        contentText: "Here is a draft portfolio...",
-        workflowType: "portfolio_builder",
-        messageIndex: 1,
-      });
-
-      const rows = db.prepare("SELECT * FROM messages WHERE session_id = ? ORDER BY message_index").all(sessionId) as Array<Record<string, unknown>>;
-      expect(rows).toHaveLength(2);
-      expect(rows[0].role).toBe("user");
-      expect(rows[1].role).toBe("assistant");
-      expect(rows[0].workflow_type).toBe("portfolio_builder");
-    });
-
-    it("tool calls are tracked with start and completion", () => {
-      storage.insertToolCallStart({
-        sessionId,
-        toolCallId: "tc-abc",
-        toolName: "get_stock_quote",
-        argsJson: JSON.stringify({ symbol: "AAPL" }),
-      });
-      storage.completeToolCall({
-        toolCallId: "tc-abc",
-        resultSummary: "AAPL: $195.50",
-        success: true,
-      });
-
-      const row = db.prepare("SELECT * FROM tool_calls WHERE tool_call_id = ?").get("tc-abc") as Record<string, unknown>;
-      expect(row.tool_name).toBe("get_stock_quote");
-      expect(row.success).toBe(1);
-      expect(row.result_summary).toBe("AAPL: $195.50");
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Scenario 9: JSONL chat log is complete and parseable
-  // -----------------------------------------------------------------------
-  describe("Scenario 9: JSONL log integrity", () => {
-    it("full session lifecycle produces valid JSONL", () => {
-      chatLogger.log({ type: "session_start", payload: { cwd: "/test" } });
-      chatLogger.log({ type: "user_message", payload: { text: "I have $10k to invest" } });
-      chatLogger.log({
-        type: "workflow_selected",
-        payload: { workflow: "portfolio_builder", confidence: 0.9, tier: "rule" },
-      });
-      chatLogger.log({
-        type: "slot_resolution",
-        payload: {
-          resolved: { budget: 10000, riskProfile: "balanced" },
-          defaultsUsed: ["riskProfile", "timeHorizon"],
-        },
-      });
-      chatLogger.log({
-        type: "tool_call_start",
-        payload: { toolCallId: "tc-1", toolName: "get_stock_quote", args: { symbol: "VOO" } },
-      });
-      chatLogger.log({
-        type: "tool_call_end",
-        payload: { toolCallId: "tc-1", toolName: "get_stock_quote", isError: false },
-      });
-      chatLogger.log({
-        type: "assistant_message",
-        payload: { text: "Here is your portfolio draft..." },
-      });
-      chatLogger.log({ type: "session_end", payload: {} });
-
-      const content = readFileSync(chatLogger.getLogPath(), "utf-8");
-      const lines = content.trim().split("\n");
-      expect(lines).toHaveLength(8);
-
-      // Every line must parse as valid JSON with required fields
-      for (const line of lines) {
-        const event = JSON.parse(line);
-        expect(event.type).toBeTruthy();
-        expect(event.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-        expect(event.sessionId).toBe(sessionId);
-        expect(event.payload).toBeDefined();
-      }
-
-      // Verify event ordering
-      const types = lines.map((l) => JSON.parse(l).type);
-      expect(types).toEqual([
-        "session_start",
-        "user_message",
-        "workflow_selected",
-        "slot_resolution",
-        "tool_call_start",
-        "tool_call_end",
-        "assistant_message",
-        "session_end",
-      ]);
-    });
-
-    it("log file path uses date-based directory and session ID", () => {
-      chatLogger.log({ type: "session_start", payload: {} });
-      const logPath = chatLogger.getLogPath();
-      expect(logPath).toMatch(/\d{4}\/\d{2}\/\d{2}\//);
-      expect(logPath).toContain(sessionId);
-      expect(existsSync(logPath)).toBe(true);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // Scenario 10: Cross-workflow routing edge cases
-  // -----------------------------------------------------------------------
-  describe("Scenario 10: routing edge cases", () => {
+  describe("Scenario 8: routing edge cases", () => {
     it("'what does delta mean?' → general_finance_qa, not options_screener", () => {
       const classification = classifyIntent("what does delta mean?");
       expect(classification.workflow).toBe("general_finance_qa");
@@ -546,9 +395,9 @@ describe("E2E integration: full orchestration pipeline", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Scenario 11: DTE hint to target mapping
+  // Scenario 9: DTE hint to target mapping
   // -----------------------------------------------------------------------
-  describe("Scenario 11: DTE hint resolution", () => {
+  describe("Scenario 9: DTE hint resolution", () => {
     it("'weekly AAPL puts' → 7_to_14_days DTE", () => {
       const classification = classifyIntent("weekly AAPL puts");
       const resolution = resolveOptionsScreenerSlots(classification.entities);
@@ -572,10 +421,10 @@ describe("E2E integration: full orchestration pipeline", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Scenario 12: Multi-turn preference accumulation
+  // Scenario 10: Multi-turn preference accumulation
   // Simulates: Turn 1 sets risk, Turn 2 uses it automatically.
   // -----------------------------------------------------------------------
-  describe("Scenario 12: multi-turn preference accumulation", () => {
+  describe("Scenario 10: multi-turn preference accumulation", () => {
     it("preferences from turn 1 influence slot resolution in turn 2", () => {
       // Turn 1: user states preference, no workflow
       const turn1 = "I'm conservative and prefer ETFs";
@@ -610,9 +459,9 @@ describe("E2E integration: full orchestration pipeline", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Scenario 13: Date grounding uses local timezone
+  // Scenario 11: Date grounding uses local timezone
   // -----------------------------------------------------------------------
-  describe("Scenario 13: local timezone date grounding", () => {
+  describe("Scenario 11: local timezone date grounding", () => {
     it("portfolio prompt date matches local date, not UTC", () => {
       const classification = classifyIntent("invest $10k");
       const resolution = resolvePortfolioSlots(classification.entities);
@@ -639,9 +488,9 @@ describe("E2E integration: full orchestration pipeline", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Scenario 14: Clarification provenance — values from clarification are "user" sourced
+  // Scenario 12: Clarification provenance — values from clarification are "user" sourced
   // -----------------------------------------------------------------------
-  describe("Scenario 14: clarification provenance", () => {
+  describe("Scenario 12: clarification provenance", () => {
     it("clarification-extracted risk profile gets 'user' source, not 'preference'", () => {
       // Simulate: user says "What should I invest in?" → clarification → "$15k and I'm aggressive"
       // After clarification, entities should have budget + riskProfile from extractEntities.
@@ -703,9 +552,9 @@ describe("E2E integration: full orchestration pipeline", () => {
   });
 
   // -----------------------------------------------------------------------
-  // Scenario 15: SQLite database file creation
+  // Scenario 13: SQLite database file creation
   // -----------------------------------------------------------------------
-  describe("Scenario 15: SQLite file-backed database", () => {
+  describe("Scenario 13: SQLite file-backed database", () => {
     it("creates the database file with parent directories", () => {
       const dbPath = join(tempDir, "nested", "deep", "state.db");
       const fileDb = initDatabase(dbPath);

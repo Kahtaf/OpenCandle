@@ -1,6 +1,8 @@
 import {
+  type AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
+  type ModelRegistry,
   type CreateAgentSessionResult,
   type SettingsManager,
   type SessionManager,
@@ -10,6 +12,8 @@ import vantageExtension from "./vantage-extension.js";
 
 export interface CreateVantageSessionOptions {
   cwd?: string;
+  authStorage?: AuthStorage;
+  modelRegistry?: ModelRegistry;
   settingsManager?: SettingsManager;
   sessionManager?: SessionManager;
   useInlineExtension?: boolean;
@@ -36,6 +40,8 @@ export async function createVantageSession(
 
   return createAgentSession({
     cwd,
+    authStorage: options.authStorage,
+    modelRegistry: options.modelRegistry,
     sessionManager: options.sessionManager,
     settingsManager: options.settingsManager,
     resourceLoader,

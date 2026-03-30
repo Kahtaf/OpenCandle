@@ -16,41 +16,6 @@ describe("MemoryStorage", () => {
     db.close();
   });
 
-  describe("sessions", () => {
-    it("inserts and retrieves a session", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
-      const session = storage.getSession("s1");
-      expect(session).toBeTruthy();
-      expect(session!.id).toBe("s1");
-      expect(session!.cwd).toBe("/test");
-    });
-
-    it("updates session end time", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
-      storage.endSession("s1", "2026-03-29T11:00:00Z");
-      const session = storage.getSession("s1");
-      expect(session!.ended_at).toBe("2026-03-29T11:00:00Z");
-    });
-  });
-
-  describe("messages", () => {
-    it("inserts a user message", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
-      const messageId = storage.insertMessage({
-        sessionId: "s1",
-        role: "user",
-        contentText: "Build me a portfolio",
-        workflowType: "portfolio_builder",
-        messageIndex: 0,
-      });
-
-      const row = db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId) as Record<string, unknown>;
-      expect(row.role).toBe("user");
-      expect(row.workflow_type).toBe("portfolio_builder");
-      expect(row.content_text).toBe("Build me a portfolio");
-    });
-  });
-
   describe("user_preferences", () => {
     it("inserts and retrieves a preference", () => {
       storage.upsertPreference({
@@ -62,7 +27,7 @@ describe("MemoryStorage", () => {
       });
       const pref = storage.getPreference("global", "risk_profile");
       expect(pref).toBeTruthy();
-      expect(JSON.parse(pref!.value_json)).toBe("balanced");
+      expect(JSON.parse(pref!.value_json as string)).toBe("balanced");
     });
 
     it("upserts existing preference", () => {
@@ -81,7 +46,7 @@ describe("MemoryStorage", () => {
         source: "explicit",
       });
       const pref = storage.getPreference("global", "risk_profile");
-      expect(JSON.parse(pref!.value_json)).toBe("conservative");
+      expect(JSON.parse(pref!.value_json as string)).toBe("conservative");
     });
 
     it("queries all preferences by namespace", () => {
@@ -139,9 +104,8 @@ describe("MemoryStorage", () => {
 
   describe("workflow_runs", () => {
     it("inserts and retrieves a workflow run", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
       const runId = storage.insertWorkflowRun({
-        sessionId: "s1",
+        sessionId: "pi-session-1",
         workflowType: "portfolio_builder",
         inputSlotsJson: JSON.stringify({ budget: 10000 }),
         resolvedSlotsJson: JSON.stringify({ budget: 10000, riskProfile: "balanced" }),
@@ -156,16 +120,15 @@ describe("MemoryStorage", () => {
     });
 
     it("retrieves recent runs in reverse chronological order", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
       storage.insertWorkflowRun({
-        sessionId: "s1",
+        sessionId: "pi-session-1",
         workflowType: "portfolio_builder",
         inputSlotsJson: "{}",
         resolvedSlotsJson: "{}",
         defaultsUsedJson: "[]",
       });
       storage.insertWorkflowRun({
-        sessionId: "s1",
+        sessionId: "pi-session-1",
         workflowType: "options_screener",
         inputSlotsJson: "{}",
         resolvedSlotsJson: "{}",
@@ -178,9 +141,8 @@ describe("MemoryStorage", () => {
     });
 
     it("updates workflow output summary after the run completes", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
       const runId = storage.insertWorkflowRun({
-        sessionId: "s1",
+        sessionId: "pi-session-1",
         workflowType: "portfolio_builder",
         inputSlotsJson: "{}",
         resolvedSlotsJson: "{}",
@@ -198,9 +160,8 @@ describe("MemoryStorage", () => {
 
   describe("recommendations", () => {
     it("inserts and retrieves recommendations for a workflow run", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
       const runId = storage.insertWorkflowRun({
-        sessionId: "s1",
+        sessionId: "pi-session-1",
         workflowType: "portfolio_builder",
         inputSlotsJson: "{}",
         resolvedSlotsJson: "{}",
@@ -224,29 +185,6 @@ describe("MemoryStorage", () => {
       expect(recs).toHaveLength(2);
       expect(recs[0].symbol).toBe("AAPL");
       expect(recs[1].symbol).toBe("VOO");
-    });
-  });
-
-  describe("tool_calls", () => {
-    it("stores tool start and completion in the same row", () => {
-      storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
-      storage.insertToolCallStart({
-        sessionId: "s1",
-        toolCallId: "tc-1",
-        toolName: "get_stock_quote",
-        argsJson: JSON.stringify({ symbol: "AAPL" }),
-      });
-      storage.completeToolCall({
-        toolCallId: "tc-1",
-        resultSummary: "{\"price\":180}",
-        success: true,
-      });
-
-      const row = db.prepare("SELECT * FROM tool_calls WHERE tool_call_id = ?").get("tc-1") as Record<string, unknown>;
-      expect(row.tool_name).toBe("get_stock_quote");
-      expect(row.args_json).toBe(JSON.stringify({ symbol: "AAPL" }));
-      expect(row.result_summary).toBe("{\"price\":180}");
-      expect(row.success).toBe(1);
     });
   });
 });

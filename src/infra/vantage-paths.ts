@@ -47,6 +47,10 @@ export function getConfigPath(): string {
   return resolveVantagePath("config.json");
 }
 
+export function getOnboardingPath(): string {
+  return resolveVantagePath("onboarding.json");
+}
+
 export function getStateDbPath(): string {
   return resolveVantagePath("state.db");
 }

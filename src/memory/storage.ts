@@ -1,12 +1,5 @@
 import type Database from "better-sqlite3";
 
-interface SessionInput {
-  id: string;
-  startedAt: string;
-  cwd: string;
-  logPath?: string;
-}
-
 interface PreferenceInput {
   namespace?: string;
   key: string;
@@ -43,73 +36,8 @@ interface RecommendationInput {
   payloadJson?: string;
 }
 
-interface MessageInput {
-  sessionId: string;
-  role: string;
-  contentText?: string;
-  workflowType?: string;
-  messageIndex?: number;
-}
-
-interface ToolCallStartInput {
-  sessionId: string;
-  toolCallId: string;
-  toolName: string;
-  argsJson?: string;
-  messageId?: number;
-}
-
-interface ToolCallEndInput {
-  toolCallId: string;
-  resultSummary?: string;
-  success: boolean;
-}
-
 export class MemoryStorage {
   constructor(private readonly db: Database.Database) {}
-
-  // --- Sessions ---
-
-  insertSession(input: SessionInput): void {
-    this.db
-      .prepare(
-        "INSERT INTO sessions (id, started_at, cwd, log_path) VALUES (?, ?, ?, ?)",
-      )
-      .run(input.id, input.startedAt, input.cwd, input.logPath ?? null);
-  }
-
-  getSession(id: string): Record<string, string | null> | null {
-    return (
-      (this.db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as Record<
-        string,
-        string | null
-      >) ?? null
-    );
-  }
-
-  endSession(id: string, endedAt: string): void {
-    this.db.prepare("UPDATE sessions SET ended_at = ? WHERE id = ?").run(endedAt, id);
-  }
-
-  // --- Messages ---
-
-  insertMessage(input: MessageInput): number {
-    const now = new Date().toISOString();
-    const result = this.db
-      .prepare(
-        `INSERT INTO messages (session_id, role, created_at, content_text, workflow_type, message_index)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        input.sessionId,
-        input.role,
-        now,
-        input.contentText ?? null,
-        input.workflowType ?? null,
-        input.messageIndex ?? null,
-      );
-    return Number(result.lastInsertRowid);
-  }
 
   // --- Preferences ---
 
@@ -233,34 +161,6 @@ export class MemoryStorage {
   }
 
   // --- Recommendations ---
-
-  insertToolCallStart(input: ToolCallStartInput): number {
-    const now = new Date().toISOString();
-    const result = this.db
-      .prepare(
-        `INSERT INTO tool_calls (session_id, tool_call_id, message_id, tool_name, args_json, success, created_at)
-         VALUES (?, ?, ?, ?, ?, NULL, ?)`,
-      )
-      .run(
-        input.sessionId,
-        input.toolCallId,
-        input.messageId ?? null,
-        input.toolName,
-        input.argsJson ?? null,
-        now,
-      );
-    return Number(result.lastInsertRowid);
-  }
-
-  completeToolCall(input: ToolCallEndInput): void {
-    this.db
-      .prepare(
-        `UPDATE tool_calls
-         SET result_summary = ?, success = ?
-         WHERE tool_call_id = ?`,
-      )
-      .run(input.resultSummary ?? null, input.success ? 1 : 0, input.toolCallId);
-  }
 
   insertRecommendation(input: RecommendationInput): number {
     const now = new Date().toISOString();

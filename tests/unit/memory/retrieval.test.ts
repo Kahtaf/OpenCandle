@@ -57,9 +57,8 @@ describe("buildMemoryContext", () => {
   });
 
   it("includes recent workflow summary when present", () => {
-    storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
     storage.insertWorkflowRun({
-      sessionId: "s1",
+      sessionId: "pi-session-1",
       workflowType: "portfolio_builder",
       inputSlotsJson: JSON.stringify({ budget: 10000 }),
       resolvedSlotsJson: JSON.stringify({ budget: 10000, riskProfile: "balanced" }),
@@ -77,9 +76,8 @@ describe("buildMemoryContext", () => {
       key: "risk_profile",
       valueJson: JSON.stringify("conservative"),
     });
-    storage.insertSession({ id: "s1", startedAt: "2026-03-29T10:00:00Z", cwd: "/test" });
     storage.insertWorkflowRun({
-      sessionId: "s1",
+      sessionId: "pi-session-1",
       workflowType: "portfolio_builder",
       inputSlotsJson: "{}",
       resolvedSlotsJson: "{}",

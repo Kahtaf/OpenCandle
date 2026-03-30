@@ -97,6 +97,7 @@ describe("yahoo-finance options provider", () => {
   });
 
   describe("getOptionsChain", () => {
+
     function mockCrumbAndOptions() {
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === "string" && url.includes("fc.yahoo.com")) {

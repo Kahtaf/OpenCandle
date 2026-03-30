@@ -19,6 +19,8 @@ cp .env.example .env
 npm start
 ```
 
+On first run, Vantage now guides you through AI model setup before chat starts. If you want to rerun that flow later, use `/setup`.
+
 ### API Keys
 
 | Key | Required | Free Tier | What It Unlocks |
@@ -66,6 +68,7 @@ Vantage now runs inside Pi's interactive TUI. Useful controls:
 ```text
 /model          Switch provider/model
 /login          Authenticate an OAuth-backed provider
+/setup          Rerun Vantage setup
 /analyze NVDA   Run the multi-analyst workflow
 ```
 

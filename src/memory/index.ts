@@ -1,6 +1,5 @@
-export { createSession, endSession } from "./session.js";
-export { ChatLogger, createDefaultChatLogger } from "./chat-log.js";
 export { initDatabase, initDefaultDatabase, getTableNames, getSchemaVersion } from "./sqlite.js";
 export { MemoryStorage } from "./storage.js";
+export type { WorkflowPreferences } from "./storage.js";
 export { buildMemoryContext } from "./retrieval.js";
-export type { SessionMetadata, LogEvent, LogEventType } from "./types.js";
+export { extractPreferences } from "./preference-extractor.js";

@@ -4,7 +4,16 @@ import { buildSystemPrompt } from "../../../src/system-prompt.js";
 import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestrator.js";
 import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
+import { initDatabase, MemoryStorage } from "../../../src/memory/index.js";
 import vantageExtension from "../../../src/pi/vantage-extension.js";
+
+vi.mock("../../../src/memory/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
+  return {
+    ...actual,
+    initDefaultDatabase: () => actual.initDatabase(":memory:"),
+  };
+});
 
 type EventHandler = (...args: any[]) => any;
 
@@ -77,6 +86,7 @@ describe("vantage extension", () => {
 
     expect(fake.tools).toHaveLength(23);
     expect(fake.commands.has("analyze")).toBe(true);
+    expect(fake.commands.has("setup")).toBe(true);
   });
 
   it("queues the comprehensive analysis prompt sequence for /analyze", async () => {
@@ -233,6 +243,105 @@ describe("vantage extension", () => {
 
     expect(result).toEqual({ action: "handled" });
     expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+  });
+
+  describe("memory integration", () => {
+    function createSessionCtx() {
+      return {
+        hasUI: false,
+        sessionManager: { getSessionId: () => "test-session-id" },
+        ui: { notify: vi.fn() },
+      };
+    }
+
+    async function initMemory(fake: ReturnType<typeof createFakeApi>) {
+      const sessionStartHandler = fake.handlers.get("session_start")?.[0];
+      await sessionStartHandler!({ type: "session_start" }, createSessionCtx());
+    }
+
+    it("initializes storage on session_start", async () => {
+      const fake = createFakeApi();
+      vantageExtension(fake.api);
+      await initMemory(fake);
+
+      // Storage is initialized — before_agent_start should include memory context
+      const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
+      const result = await beforeStartHandler!(
+        { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
+        {},
+      );
+      expect(result.systemPrompt).toContain("BASE");
+      expect(result.systemPrompt).toContain(buildSystemPrompt());
+    });
+
+    it("extracts preferences from user input and passes them to slot resolvers", async () => {
+      const fake = createFakeApi();
+      vantageExtension(fake.api);
+      await initMemory(fake);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
+
+      // Turn 1: state preference
+      await inputHandler!(
+        { type: "input", text: "I'm conservative and prefer ETFs", source: "interactive" },
+        ctx,
+      );
+
+      // Turn 2: portfolio request — should use stored preference
+      const result = await inputHandler!(
+        { type: "input", text: "invest $10k", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toEqual({ action: "handled" });
+      // The prompt should use conservative from preference, not balanced default
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("conservative");
+      expect(fake.sendUserMessage.mock.calls[0][0]).not.toContain("balanced [DEFAULT]");
+    });
+
+    it("records workflow runs after dispatch", async () => {
+      const fake = createFakeApi();
+      vantageExtension(fake.api);
+      await initMemory(fake);
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
+
+      await inputHandler!(
+        { type: "input", text: "invest $10k in balanced portfolio", source: "interactive" },
+        ctx,
+      );
+
+      // appendEntry should be called with workflow data
+      expect(fake.api.appendEntry).toHaveBeenCalledWith(
+        "vantage-workflow",
+        expect.objectContaining({ workflow: "portfolio_builder" }),
+      );
+    });
+
+    it("injects memory context into system prompt after preferences are stored", async () => {
+      const fake = createFakeApi();
+      vantageExtension(fake.api);
+      await initMemory(fake);
+
+      // Store a preference via input
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
+      await inputHandler!(
+        { type: "input", text: "I'm conservative", source: "interactive" },
+        ctx,
+      );
+
+      // Check system prompt includes the preference
+      const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
+      const result = await beforeStartHandler!(
+        { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
+        {},
+      );
+      expect(result.systemPrompt).toContain("risk_profile");
+      expect(result.systemPrompt).toContain("conservative");
+    });
   });
 
   it("cancels stale follow-ups when a newer workflow starts", async () => {
