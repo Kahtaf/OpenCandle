@@ -1,15 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadConfig, loadEnv } from "../../../src/config.js";
-import { existsSync, readFileSync } from "node:fs";
+import { loadConfig, loadEnv, loadFileConfig, saveFileConfig } from "../../../src/config.js";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
+  mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
 const mockedExistsSync = vi.mocked(existsSync);
+const mockedMkdirSync = vi.mocked(mkdirSync);
 const mockedReadFileSync = vi.mocked(readFileSync);
+const mockedWriteFileSync = vi.mocked(writeFileSync);
 
 describe("loadEnv", () => {
   const originalEnv = { ...process.env };
@@ -21,6 +25,7 @@ describe("loadEnv", () => {
 
   beforeEach(() => {
     mockedExistsSync.mockReturnValue(false);
+    mockedMkdirSync.mockImplementation(() => undefined);
   });
 
   it("parses key=value pairs from .env file", () => {
@@ -69,6 +74,7 @@ describe("loadConfig", () => {
   beforeEach(() => {
     process.env.VANTAGE_HOME = vantageHome;
     mockedExistsSync.mockReturnValue(false);
+    mockedMkdirSync.mockImplementation(() => undefined);
     mockedReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
     });
@@ -176,5 +182,52 @@ describe("loadConfig", () => {
     });
 
     expect(() => loadConfig()).toThrowError(`Invalid Vantage config at ${configPath}`);
+  });
+
+  it("writes ~/.vantage/config.json", () => {
+    saveFileConfig(
+      {
+        providers: {
+          alphaVantage: { apiKey: "av-file" },
+          fred: { apiKey: "fred-file" },
+        },
+      },
+      configPath,
+    );
+
+    expect(mockedWriteFileSync).toHaveBeenCalledWith(
+      configPath,
+      `${JSON.stringify(
+        {
+          providers: {
+            alphaVantage: { apiKey: "av-file" },
+            fred: { apiKey: "fred-file" },
+          },
+        },
+        null,
+        2,
+      )}\n`,
+      "utf-8",
+    );
+  });
+
+  it("loads config.json through the exported file reader", () => {
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: {
+            alphaVantage: { apiKey: "av-file" },
+          },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+
+    expect(loadFileConfig(configPath)).toEqual({
+      providers: {
+        alphaVantage: { apiKey: "av-file" },
+      },
+    });
   });
 });

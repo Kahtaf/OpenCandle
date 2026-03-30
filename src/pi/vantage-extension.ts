@@ -9,6 +9,7 @@ import { classifyIntent, resolveOptionsScreenerSlots, resolvePortfolioSlots } fr
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsWorkflow, buildOptionsScreenerWorkflow, buildPortfolioWorkflow } from "../workflows/index.js";
 import { getVantageToolDefinitions } from "./tool-adapter.js";
+import { runVantageSetup } from "./setup.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -142,8 +143,22 @@ export default function vantageExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand("setup", {
+    description: "Run Vantage setup for your AI model and market data providers",
+    handler: async (_args, ctx) => {
+      const result = await runVantageSetup(pi, ctx, { mode: "manual", forceFinancePrompt: true });
+      if (result === "ready") {
+        ctx.ui.notify("Vantage setup complete.", "info");
+      }
+    },
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     if (!ctx.hasUI) return;
+    const result = await runVantageSetup(pi, ctx, { mode: "startup" });
+    if (result === "shutdown") {
+      return;
+    }
     ctx.ui.notify(
       "Vantage finance mode. Try /analyze NVDA or ask for quotes, options, macro, or portfolio analysis.",
       "info",

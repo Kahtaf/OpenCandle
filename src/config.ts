@@ -1,12 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
-import { getConfigPath } from "./infra/vantage-paths.js";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { ensureParentDir, getConfigPath } from "./infra/vantage-paths.js";
 
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
 }
 
-interface VantageFileConfig {
+export interface VantageFileConfig {
   providers?: {
     alphaVantage?: {
       apiKey?: string;
@@ -39,7 +39,7 @@ export function loadEnv(path = ".env"): void {
 
 let cachedConfig: Config | null = null;
 
-function loadFileConfig(path = getConfigPath()): VantageFileConfig {
+export function loadFileConfig(path = getConfigPath()): VantageFileConfig {
   if (!existsSync(path)) {
     return {};
   }
@@ -59,6 +59,11 @@ function loadFileConfig(path = getConfigPath()): VantageFileConfig {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Invalid Vantage config at ${path}: ${message}`);
   }
+}
+
+export function saveFileConfig(config: VantageFileConfig, path = getConfigPath()): void {
+  ensureParentDir(path);
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 }
 
 export function loadConfig(): Config {

@@ -77,6 +77,7 @@ describe("vantage extension", () => {
 
     expect(fake.tools).toHaveLength(23);
     expect(fake.commands.has("analyze")).toBe(true);
+    expect(fake.commands.has("setup")).toBe(true);
   });
 
   it("queues the comprehensive analysis prompt sequence for /analyze", async () => {
