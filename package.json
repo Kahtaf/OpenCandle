@@ -15,10 +15,12 @@
     "@mariozechner/pi-agent-core": "^0.63.1",
     "@mariozechner/pi-ai": "^0.63.1",
     "@sinclair/typebox": "^0.34.0",
+    "better-sqlite3": "^12.8.0",
     "camoufox-js": "^0.9.3",
     "playwright-core": "^1.58.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

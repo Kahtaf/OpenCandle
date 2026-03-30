@@ -8,7 +8,7 @@ export function createAgent(config: Config): Agent {
   const agent = new Agent({
     initialState: {
       systemPrompt: buildSystemPrompt(),
-      model: getModel("google", "gemini-2.5-flash"),
+      model: getModel("google", "gemini-3-flash-preview"),
       tools: getAllTools(),
     },
     getApiKey: (provider: string) => {
