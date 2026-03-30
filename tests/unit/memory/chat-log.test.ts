@@ -2,13 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ChatLogger } from "../../../src/memory/chat-log.js";
+import { ChatLogger, createDefaultChatLogger } from "../../../src/memory/chat-log.js";
 import type { LogEvent } from "../../../src/memory/types.js";
 
 describe("ChatLogger", () => {
   let tempDir: string;
   let logger: ChatLogger;
   const sessionId = "test-session-123";
+  const originalVantageHome = process.env.VANTAGE_HOME;
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "vantage-log-test-"));
@@ -16,6 +17,11 @@ describe("ChatLogger", () => {
   });
 
   afterEach(() => {
+    if (originalVantageHome == null) {
+      delete process.env.VANTAGE_HOME;
+    } else {
+      process.env.VANTAGE_HOME = originalVantageHome;
+    }
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -83,5 +89,13 @@ describe("ChatLogger", () => {
     logger.log({ type: "session_start", payload: {} });
     const logPath = logger.getLogPath();
     expect(logPath).toContain(sessionId);
+  });
+
+  it("builds the default logger under VANTAGE_HOME/logs", () => {
+    process.env.VANTAGE_HOME = tempDir;
+
+    const defaultLogger = createDefaultChatLogger(sessionId);
+
+    expect(defaultLogger.getLogPath()).toContain(join(tempDir, "logs"));
   });
 });

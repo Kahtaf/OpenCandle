@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import * as fs from "node:fs";
+import { join } from "node:path";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
+  mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
 }));
@@ -14,14 +16,24 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
 }));
 
 describe("watchlistTool", () => {
+  const originalEnv = process.env.VANTAGE_HOME;
+  const vantageHome = "/tmp/vantage-watchlist-test";
+
   beforeEach(() => {
+    process.env.VANTAGE_HOME = vantageHome;
     vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
     vi.mocked(fs.readFileSync).mockReturnValue("[]");
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
     vi.mocked(getQuote).mockResolvedValue({ price: 180 } as any);
   });
 
   afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.VANTAGE_HOME;
+    } else {
+      process.env.VANTAGE_HOME = originalEnv;
+    }
     vi.restoreAllMocks();
   });
 
@@ -40,6 +52,9 @@ describe("watchlistTool", () => {
     });
 
     expect(fs.writeFileSync).toHaveBeenCalled();
+    expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(
+      join(vantageHome, "watchlist.json"),
+    );
     const written = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
     expect(written).toHaveLength(1);
     expect(written[0].symbol).toBe("AAPL");

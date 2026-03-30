@@ -21,11 +21,12 @@ export async function createVantageSession(
   loadEnv();
 
   const cwd = options.cwd ?? process.cwd();
-  const resourceLoader = options.useInlineExtension
+  const useInlineExtension = options.useInlineExtension ?? true;
+  const resourceLoader = useInlineExtension
     ? new DefaultResourceLoader({
         cwd,
+        settingsManager: options.settingsManager,
         extensionFactories: [vantageExtension],
-        noExtensions: true,
       })
     : undefined;
 

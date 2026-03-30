@@ -1,5 +1,6 @@
 import { mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
+import { getLogsDir } from "../infra/vantage-paths.js";
 import type { LogEvent, LogEventType } from "./types.js";
 
 interface LogInput {
@@ -43,4 +44,8 @@ export class ChatLogger {
 
     appendFileSync(this.logPath, JSON.stringify(event) + "\n", "utf-8");
   }
+}
+
+export function createDefaultChatLogger(sessionId: string): ChatLogger {
+  return new ChatLogger(getLogsDir(), sessionId);
 }

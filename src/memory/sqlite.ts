@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
+import { getStateDbPath } from "../infra/vantage-paths.js";
 
 const CURRENT_SCHEMA_VERSION = 2;
 
@@ -108,6 +109,10 @@ export function initDatabase(path: string): Database.Database {
   }
 
   return db;
+}
+
+export function initDefaultDatabase(): Database.Database {
+  return initDatabase(getStateDbPath());
 }
 
 function migrateSchema(db: Database.Database, from: number, to: number): void {

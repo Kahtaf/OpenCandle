@@ -409,13 +409,15 @@ without forcing the LLM to re-read entire chat histories.
 
 Use a hybrid local-only design:
 
+This is the canonical Vantage storage layout. Pi runtime config, auth, and model selection remain Pi-managed under `~/.pi/agent/...` and optional project `.pi/` overrides.
+
 1. **SQLite database**
    - canonical store for structured memory and metadata
-   - recommended path: `~/.vantage/state.db`
+   - canonical path: `~/.vantage/state.db`
 
 2. **Append-only JSONL chat logs**
    - raw transcript and event log for debugging / audit
-   - recommended path: `~/.vantage/logs/YYYY/MM/DD/<session-id>.jsonl`
+   - canonical path: `~/.vantage/logs/YYYY/MM/DD/<session-id>.jsonl`
 
 This is the recommended design over "only SQLite" or "only JSON files".
 

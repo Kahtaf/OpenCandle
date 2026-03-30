@@ -1,6 +1,5 @@
 /**
- * E2E test for all NEW features implemented from competitive analysis.
- * Tests tool execute functions directly with real API calls.
+ * E2E test for Vantage tool functions with real API calls.
  *
  * Usage: npx tsx tests/e2e/tools.test.ts
  */
@@ -15,9 +14,14 @@ import { scoreSentiment } from "../../src/providers/reddit.js";
 import { checkPredictions, type Prediction } from "../../src/tools/portfolio/predictions.js";
 import { searchFilings } from "../../src/providers/sec-edgar.js";
 import { getHistory } from "../../src/providers/yahoo-finance.js";
-import { existsSync, unlinkSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 loadConfig();
+
+const vantageHome = mkdtempSync(join(tmpdir(), "vantage-tools-test-"));
+process.env.VANTAGE_HOME = vantageHome;
 
 const tools = getAllTools();
 let passed = 0;
@@ -51,10 +55,7 @@ async function run() {
   console.log(`\n=== E2E: New Features from Competitive Analysis ===`);
   console.log(`Tools: ${tools.length} | AV Key: ${config.alphaVantageApiKey ? "yes" : "no"}\n`);
 
-  // Clean up test artifacts
-  for (const f of [".vantage-watchlist.json", ".vantage-predictions.json"]) {
-    if (existsSync(f)) unlinkSync(f);
-  }
+  rmSync(vantageHome, { recursive: true, force: true });
 
   // ============================
   // 1. getConfig fix verification
@@ -433,11 +434,10 @@ async function run() {
   console.log("\n12. Orchestrator:");
   await test("orchestrator roles are named personas", async () => {
     const { runComprehensiveAnalysis } = await import("../../src/analysts/orchestrator.js");
-    const calls: any[] = [];
-    const mockAgent = { followUp: (msg: any) => calls.push(msg) };
-    runComprehensiveAnalysis(mockAgent as any, "AAPL");
+    const calls: string[] = [];
+    runComprehensiveAnalysis((prompt) => calls.push(prompt), "AAPL");
     assert(calls.length === 7, `expected 7 followUps, got ${calls.length}`);
-    const texts = calls.map((c: any) => c.content[0].text);
+    const texts = calls;
     assert(texts[0].includes("[Valuation Analyst]"), "missing Valuation Analyst");
     assert(texts[1].includes("[Momentum Analyst]"), "missing Momentum Analyst");
     assert(texts[2].includes("[Options Analyst]"), "missing Options Analyst");
@@ -466,10 +466,8 @@ async function run() {
   }
   console.log();
 
-  // Clean up test artifacts
-  for (const f of [".vantage-watchlist.json", ".vantage-predictions.json"]) {
-    if (existsSync(f)) unlinkSync(f);
-  }
+  rmSync(vantageHome, { recursive: true, force: true });
+  delete process.env.VANTAGE_HOME;
 
   process.exit(failed > 0 ? 1 : 0);
 }

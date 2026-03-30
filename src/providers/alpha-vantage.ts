@@ -4,6 +4,7 @@ import { rateLimiter } from "../infra/rate-limiter.js";
 import type { CompanyOverview, EarningsData, FinancialStatement } from "../types/fundamentals.js";
 
 const BASE_URL = "https://www.alphavantage.co/query";
+const MISSING_OVERVIEW_TTL = 15 * 60_000;
 
 function buildUrl(fn: string, params: Record<string, string>, apiKey: string): string {
   const qs = new URLSearchParams({ function: fn, ...params, apikey: apiKey });
@@ -15,8 +16,12 @@ export async function getOverview(
   apiKey: string,
 ): Promise<CompanyOverview> {
   const cacheKey = `av:overview:${symbol}`;
+  const missingCacheKey = `${cacheKey}:missing`;
   const cached = cache.get<CompanyOverview>(cacheKey);
   if (cached) return cached;
+  if (cache.get<string>(missingCacheKey)) {
+    throw new Error(`Alpha Vantage: No data found for ${symbol}`);
+  }
 
   await rateLimiter.acquire("alphavantage");
 
@@ -24,6 +29,7 @@ export async function getOverview(
   const data = await httpGet<Record<string, string>>(url);
 
   if (!data.Symbol) {
+    cache.set(missingCacheKey, "missing", MISSING_OVERVIEW_TTL);
     throw new Error(`Alpha Vantage: No data found for ${symbol}`);
   }
 

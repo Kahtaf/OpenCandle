@@ -1,8 +1,20 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { getConfigPath } from "./infra/vantage-paths.js";
 
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
+}
+
+interface VantageFileConfig {
+  providers?: {
+    alphaVantage?: {
+      apiKey?: string;
+    };
+    fred?: {
+      apiKey?: string;
+    };
+  };
 }
 
 export function loadEnv(path = ".env"): void {
@@ -27,12 +39,36 @@ export function loadEnv(path = ".env"): void {
 
 let cachedConfig: Config | null = null;
 
+function loadFileConfig(path = getConfigPath()): VantageFileConfig {
+  if (!existsSync(path)) {
+    return {};
+  }
+
+  let content: string;
+  try {
+    content = readFileSync(path, "utf-8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Unable to read Vantage config at ${path}: ${message}`);
+  }
+
+  try {
+    const parsed = JSON.parse(content) as VantageFileConfig;
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid Vantage config at ${path}: ${message}`);
+  }
+}
+
 export function loadConfig(): Config {
   loadEnv();
+  const fileConfig = loadFileConfig();
 
   cachedConfig = {
-    alphaVantageApiKey: process.env.ALPHA_VANTAGE_API_KEY,
-    fredApiKey: process.env.FRED_API_KEY,
+    alphaVantageApiKey:
+      process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
+    fredApiKey: process.env.FRED_API_KEY ?? fileConfig.providers?.fred?.apiKey,
   };
 
   return cachedConfig;

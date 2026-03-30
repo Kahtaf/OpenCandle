@@ -6,14 +6,16 @@ A financial agent that talks to markets. Ask it for stock prices, options chains
 
 Vantage is an AI-powered terminal agent for investors and traders. Instead of switching between Yahoo Finance, FRED, Reddit, and a spreadsheet, you ask one agent and it chains the right tools together. It computes technical indicators and options Greeks locally (Black-Scholes), so there's no API dependency for math.
 
-Type `analyze TSLA` and it runs a full 6-analyst breakdown — fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
+Type `analyze TSLA` and it runs a full 5-analyst breakdown — fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
+
+[Pi](https://pi.dev/) powers the runtime, TUI, auth, and model selection. Vantage keeps its own user data in `~/.vantage/`.
 
 ## Getting Started
 
 ```bash
 npm install
 cp .env.example .env
-# Add any provider keys you want to use (for example GEMINI_API_KEY)
+# Add any LLM env vars you want to use locally (for example GEMINI_API_KEY)
 npm start
 ```
 
@@ -29,6 +31,33 @@ npm start
 
 Yahoo Finance, CoinGecko, Reddit, and Fear & Greed Index need no keys.
 Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.json`, `/login`, `/model`, and `~/.pi/agent/models.json`.
+
+### State and Config
+
+- Pi runtime config and optional project overrides live in `.pi/` and `~/.pi/agent/...`.
+- Vantage finance-provider config lives in `~/.vantage/config.json`:
+
+```json
+{
+  "providers": {
+    "alphaVantage": {
+      "apiKey": "..."
+    },
+    "fred": {
+      "apiKey": "..."
+    }
+  }
+}
+```
+
+- Environment variables still work and override `~/.vantage/config.json`.
+- Vantage user data lives in `~/.vantage/`:
+  - `~/.vantage/watchlist.json`
+  - `~/.vantage/portfolio.json`
+  - `~/.vantage/predictions.json`
+  - `~/.vantage/state.db`
+  - `~/.vantage/logs/...`
+- The published CLI should work from any directory without depending on a repo-local `.pi/extensions/...` file. Project `.pi/` remains optional for user overrides.
 
 ## Usage
 
@@ -67,7 +96,7 @@ analyze AAPL
 
 ## How It Works
 
-Built on [Pi-mono](https://github.com/badlogic/pi-mono)'s `pi-coding-agent` SDK and TUI, with Vantage loaded as a finance-only Pi extension. Tools are defined with [TypeBox](https://github.com/sinclairzx81/typebox) schemas and registered through Pi's extension system.
+Built on [Pi-mono](https://github.com/badlogic/pi-mono)'s `pi-coding-agent` SDK and TUI, with Vantage loaded as a bundled finance-only Pi extension. Tools are defined with [TypeBox](https://github.com/sinclairzx81/typebox) schemas and registered through Pi's extension system.
 
 ```
 User prompt -> Pi session -> selected provider/model -> tool calls -> execute in parallel -> response
@@ -80,6 +109,7 @@ Key architectural choices:
 - **Stealth browser fallback** via [Camoufox](https://github.com/daijro/camoufox) when Yahoo rate-limits Node.js `fetch`
 - **TTL caching + token bucket rate limiting** per provider
 - **Pi-native auth/model flow** via `/model`, `/login`, `auth.json`, and `models.json`
+- **Global Vantage state** under `~/.vantage/`, separate from Pi config
 - **Multi-analyst orchestration** via Pi extension commands and follow-up message hooks
 
 ## Test

@@ -6,11 +6,16 @@
  */
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getConfig } from "../../src/config.js";
 import { createVantageSession } from "../../src/agent.js";
 import { cache } from "../../src/infra/cache.js";
 
 const config = getConfig();
+const vantageHome = mkdtempSync(join(tmpdir(), "vantage-cli-test-"));
+process.env.VANTAGE_HOME = vantageHome;
 const { session } = await createVantageSession({
   cwd: process.cwd(),
   sessionManager: SessionManager.inMemory(),
@@ -222,10 +227,8 @@ async function run() {
   }
 
   // Clean up
-  const { existsSync, unlinkSync } = await import("node:fs");
-  for (const f of [".vantage-watchlist.json", ".vantage-predictions.json"]) {
-    if (existsSync(f)) unlinkSync(f);
-  }
+  rmSync(vantageHome, { recursive: true, force: true });
+  delete process.env.VANTAGE_HOME;
   session.dispose();
 
   process.exit(failed > 0 ? 1 : 0);

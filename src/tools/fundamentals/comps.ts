@@ -17,6 +17,7 @@ export interface CompsMetric {
 export interface CompsResult {
   companies: CompanyOverview[];
   metrics: CompsMetric[];
+  unavailableSymbols: string[];
 }
 
 type MetricDef = {
@@ -58,7 +59,7 @@ export function computeComps(companies: CompanyOverview[]): CompsResult {
     return { metric: def.name, values, median, p25, p75, best, worst };
   });
 
-  return { companies, metrics };
+  return { companies, metrics, unavailableSymbols: [] };
 }
 
 function computeMedian(sorted: number[]): number | null {
@@ -96,26 +97,37 @@ export const compsTool: AgentTool<typeof params> = {
   async execute(toolCallId, args) {
     const config = getConfig();
     if (!config.alphaVantageApiKey) {
-      throw new Error("ALPHA_VANTAGE_API_KEY not configured. Add it to your .env file.");
+      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.vantage/config.json.");
     }
 
     const symbols = args.symbols.map((s) => s.toUpperCase());
-    if (symbols.length < 2) {
-      throw new Error("Need at least 2 symbols to compare.");
-    }
-    if (symbols.length > 6) {
-      throw new Error("Maximum 6 symbols for comparison.");
-    }
 
-    const companies = await Promise.all(
-      symbols.map((s) => getOverview(s, config.alphaVantageApiKey!)),
+    const settled = await Promise.allSettled(
+      symbols.map(async (s) => ({ symbol: s, overview: await getOverview(s, config.alphaVantageApiKey!) })),
     );
 
-    const result = computeComps(companies);
+    const companies: CompanyOverview[] = [];
+    const unavailableSymbols: string[] = [];
 
-    const header = `**Comparable Company Analysis**: ${symbols.join(" vs ")}`;
+    for (const [index, result] of settled.entries()) {
+      if (result.status === "fulfilled") {
+        companies.push(result.value.overview);
+        continue;
+      }
+      unavailableSymbols.push(symbols[index]);
+    }
+
+    if (companies.length === 0) {
+      throw new Error(`Unable to fetch comparable-company fundamentals for: ${symbols.join(", ")}`);
+    }
+
+    const result = computeComps(companies);
+    result.unavailableSymbols = unavailableSymbols;
+
+    const availableSymbols = companies.map((company) => company.symbol);
+    const header = `**Comparable Company Analysis**: ${availableSymbols.join(" vs ")}`;
     const rows = result.metrics.map((m) => {
-      const vals = symbols.map((s) => {
+      const vals = availableSymbols.map((s) => {
         const v = m.values[s];
         if (v == null) return "N/A".padStart(10);
         if (Math.abs(v) < 1) return `${(v * 100).toFixed(1)}%`.padStart(10);
@@ -127,8 +139,11 @@ export const compsTool: AgentTool<typeof params> = {
       return `  ${m.metric.padEnd(16)} ${vals.join("")}  Med: ${medStr}  Best: ${m.best}`;
     });
 
-    const symHeader = `  ${"Metric".padEnd(16)} ${symbols.map((s) => s.padStart(10)).join("")}`;
-    const text = [header, "", symHeader, ...rows].join("\n");
+    const symHeader = `  ${"Metric".padEnd(16)} ${availableSymbols.map((s) => s.padStart(10)).join("")}`;
+    const noteLines = unavailableSymbols.length > 0
+      ? ["", `Unavailable fundamentals: ${unavailableSymbols.join(", ")}`]
+      : [];
+    const text = [header, "", symHeader, ...rows, ...noteLines].join("\n");
 
     return { content: [{ type: "text", text }], details: result };
   },

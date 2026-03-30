@@ -3,10 +3,8 @@ import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import { getAllTools } from "../tools/index.js";
 
-type VantageAgentTool<TParams extends TSchema = TSchema, TDetails = unknown> = AgentTool<TParams, TDetails>;
-
 export function agentToolToPiTool<TParams extends TSchema, TDetails>(
-  tool: VantageAgentTool<TParams, TDetails>,
+  tool: AgentTool<TParams, TDetails>,
 ): ToolDefinition<TParams, TDetails> {
   return {
     name: tool.name,

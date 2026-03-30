@@ -72,4 +72,12 @@ describe("get_option_chain tool", () => {
     );
     expect(optionsCalls[0][0]).toContain("AAPL");
   });
+
+  it("accepts uppercase CALL filter values", async () => {
+    mockCrumbAndOptions();
+    const result = await optionChainTool.execute("call-4", { symbol: "AAPL", type: "CALL" });
+    const text = (result.content[0] as any).text;
+    expect(text).toContain("**CALLS**");
+    expect(text).not.toContain("**PUTS**");
+  });
 });

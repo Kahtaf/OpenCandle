@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { buildSystemPrompt } from "../../../src/system-prompt.js";
 import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestrator.js";
+import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
+import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import vantageExtension from "../../../src/pi/vantage-extension.js";
 
 type EventHandler = (...args: any[]) => any;
@@ -12,6 +14,7 @@ interface FakeUi {
 
 interface FakeCommandContext {
   isIdle(): boolean;
+  hasPendingMessages?(): boolean;
   ui: FakeUi;
 }
 
@@ -101,7 +104,6 @@ describe("vantage extension", () => {
       expect(fake.sendUserMessage).toHaveBeenNthCalledWith(
         index + 1,
         prompt,
-        { deliverAs: "followUp" },
       );
     }
   });
@@ -110,11 +112,17 @@ describe("vantage extension", () => {
     const fake = createFakeApi();
     vantageExtension(fake.api);
 
+    let idle = false;
+    fake.sendUserMessage.mockImplementation(() => {
+      idle = true;
+    });
+
     const inputHandler = fake.handlers.get("input")?.[0];
     expect(inputHandler).toBeDefined();
 
     const ctx = {
-      isIdle: () => false,
+      isIdle: () => idle,
+      hasPendingMessages: () => false,
       ui: { notify: vi.fn() },
     };
 
@@ -126,13 +134,12 @@ describe("vantage extension", () => {
     expect(result).toEqual({ action: "handled" });
 
     const prompts = getComprehensiveAnalysisPrompts("NVDA");
+    await vi.runAllTimersAsync();
     expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length);
+    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, prompts[0], { deliverAs: "followUp" });
     for (const [index, prompt] of prompts.entries()) {
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(
-        index + 1,
-        prompt,
-        { deliverAs: "followUp" },
-      );
+      if (index === 0) continue;
+      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
     }
     expect(ctx.ui.notify).toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
   });
@@ -151,5 +158,109 @@ describe("vantage extension", () => {
 
     expect(result.systemPrompt).toContain("BASE");
     expect(result.systemPrompt).toContain(buildSystemPrompt());
+  });
+
+  it("routes portfolio-builder prompts through the deterministic workflow", async () => {
+    const fake = createFakeApi();
+    vantageExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      ui: { notify: vi.fn() },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "Build me a diversified ETF portfolio with $10000 for a balanced risk profile.", source: "interactive" },
+      ctx,
+    );
+
+    const workflow = buildPortfolioWorkflow(resolvePortfolioSlots({
+      symbols: [],
+      budget: 10_000,
+      riskProfile: "balanced",
+    }));
+
+    expect(result).toEqual({ action: "handled" });
+    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+  });
+
+  it("routes options-screening prompts through the deterministic workflow", async () => {
+    const fake = createFakeApi();
+    vantageExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      ui: { notify: vi.fn() },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "Screen bullish AAPL call options around 30 to 45 DTE with good liquidity.", source: "interactive" },
+      ctx,
+    );
+
+    const workflow = buildOptionsScreenerWorkflow(resolveOptionsScreenerSlots({
+      symbols: ["AAPL"],
+      direction: "bullish",
+    }));
+
+    expect(result).toEqual({ action: "handled" });
+    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+  });
+
+  it("routes compare prompts through the deterministic workflow", async () => {
+    const fake = createFakeApi();
+    vantageExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      ui: { notify: vi.fn() },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "Compare AAPL and MSFT side by side.", source: "interactive" },
+      ctx,
+    );
+
+    const workflow = buildCompareAssetsWorkflow({
+      resolved: { symbols: ["AAPL", "MSFT"] },
+      sources: { symbols: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    });
+
+    expect(result).toEqual({ action: "handled" });
+    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+  });
+
+  it("cancels stale follow-ups when a newer workflow starts", async () => {
+    const fake = createFakeApi();
+    vantageExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+    };
+
+    await inputHandler!(
+      { type: "input", text: "analyze NVDA", source: "interactive" },
+      ctx,
+    );
+    await inputHandler!(
+      { type: "input", text: "analyze AAPL", source: "interactive" },
+      ctx,
+    );
+
+    await vi.runAllTimersAsync();
+
+    const calls = fake.sendUserMessage.mock.calls.map((call) => call[0]);
+    expect(calls[0]).toBe(getComprehensiveAnalysisPrompts("NVDA")[0]);
+    expect(calls[1]).toBe(getComprehensiveAnalysisPrompts("AAPL")[0]);
+    expect(calls).not.toContain(getComprehensiveAnalysisPrompts("NVDA")[1]);
+    expect(calls).toContain(getComprehensiveAnalysisPrompts("AAPL")[1]);
   });
 });

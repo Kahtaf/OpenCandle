@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfig, loadEnv } from "../../../src/config.js";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 vi.mock("node:fs", () => ({
+  existsSync: vi.fn(),
   readFileSync: vi.fn(),
 }));
 
+const mockedExistsSync = vi.mocked(existsSync);
 const mockedReadFileSync = vi.mocked(readFileSync);
 
 describe("loadEnv", () => {
@@ -14,6 +17,10 @@ describe("loadEnv", () => {
   afterEach(() => {
     process.env = { ...originalEnv };
     vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    mockedExistsSync.mockReturnValue(false);
   });
 
   it("parses key=value pairs from .env file", () => {
@@ -51,10 +58,20 @@ describe("loadEnv", () => {
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
+  const vantageHome = "/tmp/vantage-config-test";
+  const configPath = join(vantageHome, "config.json");
 
   afterEach(() => {
     process.env = { ...originalEnv };
     vi.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    process.env.VANTAGE_HOME = vantageHome;
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
   });
 
   it("returns finance-provider config without requiring LLM credentials", () => {
@@ -66,21 +83,98 @@ describe("loadConfig", () => {
     });
   });
 
-  it("includes optional keys when present", () => {
-    mockedReadFileSync.mockReturnValue(
-      "OPENAI_API_KEY=openai\nALPHA_VANTAGE_API_KEY=av\nFRED_API_KEY=fred",
-    );
+  it("includes optional keys from .env when present", () => {
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === ".env") {
+        return "OPENAI_API_KEY=openai\nALPHA_VANTAGE_API_KEY=av\nFRED_API_KEY=fred";
+      }
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.alphaVantageApiKey).toBe("av");
     expect(config.fredApiKey).toBe("fred");
   });
 
+  it("loads finance-provider keys from ~/.vantage/config.json", () => {
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: {
+            alphaVantage: { apiKey: "av-file" },
+            fred: { apiKey: "fred-file" },
+          },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+
+    const config = loadConfig();
+
+    expect(config.alphaVantageApiKey).toBe("av-file");
+    expect(config.fredApiKey).toBe("fred-file");
+  });
+
+  it("environment variables override ~/.vantage/config.json", () => {
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: {
+            alphaVantage: { apiKey: "av-file" },
+            fred: { apiKey: "fred-file" },
+          },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    process.env.ALPHA_VANTAGE_API_KEY = "av-env";
+    process.env.FRED_API_KEY = "fred-env";
+
+    const config = loadConfig();
+
+    expect(config.alphaVantageApiKey).toBe("av-env");
+    expect(config.fredApiKey).toBe("fred-env");
+  });
+
   it("optional keys are undefined when not set", () => {
-    mockedReadFileSync.mockReturnValue("OPENAI_API_KEY=openai");
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === ".env") {
+        return "OPENAI_API_KEY=openai";
+      }
+      throw new Error("ENOENT");
+    });
     delete process.env.ALPHA_VANTAGE_API_KEY;
     delete process.env.FRED_API_KEY;
     const config = loadConfig();
     expect(config.alphaVantageApiKey).toBeUndefined();
     expect(config.fredApiKey).toBeUndefined();
+  });
+
+  it("handles missing provider blocks in config.json", () => {
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({ providers: { alphaVantage: {} } });
+      }
+      throw new Error("ENOENT");
+    });
+
+    const config = loadConfig();
+
+    expect(config.alphaVantageApiKey).toBeUndefined();
+    expect(config.fredApiKey).toBeUndefined();
+  });
+
+  it("throws a clear error for malformed ~/.vantage/config.json", () => {
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return "{";
+      }
+      throw new Error("ENOENT");
+    });
+
+    expect(() => loadConfig()).toThrowError(`Invalid Vantage config at ${configPath}`);
   });
 });

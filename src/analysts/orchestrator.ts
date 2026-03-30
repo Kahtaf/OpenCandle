@@ -5,6 +5,9 @@ export type AnalystRole =
   | "contrarian"
   | "risk";
 
+const SYMBOL_CAPTURE = "(\\$?[A-Za-z]{1,5}(?:[./-][A-Za-z]{1,2})?)";
+const NORMALIZED_SYMBOL_PATTERN = /^[A-Z]{1,5}(?:[./-][A-Z]{1,2})?$/;
+
 const VOTING_INSTRUCTION = `
 
 End your analysis with this exact format:
@@ -12,14 +15,20 @@ SIGNAL: BUY | HOLD | SELL
 CONVICTION: [1-10]
 THESIS: [one sentence summary of your position]`;
 
+const EXECUTION_GUARDRAILS = `
+Execution rules:
+- Reuse tool outputs that were already fetched earlier in the session. Do not call the same tool again for the same symbol unless you need a missing field.
+- If a required provider returns unavailable or missing data, stop that leg quickly, label the missing metrics as unavailable, and continue with the remaining evidence.
+- Do not retry the same failing fundamentals call multiple times.`;
+
 const ANALYST_PROMPTS: Record<AnalystRole, (symbol: string) => string> = {
   valuation: (symbol) =>
     `**[Valuation Analyst]** You are a Damodaran-style valuation analyst. Your approach: connect the company's narrative to numbers, then compute intrinsic value. Analyze ${symbol}:
-1. Use get_company_overview for P/E, forward P/E, EPS, profit margin, and market cap.
-2. Use get_financials for revenue, income, and free cash flow trends across years.
-3. Use get_earnings for EPS surprise patterns and growth trajectory.
-4. Use compute_dcf to estimate intrinsic value — review the margin of safety and sensitivity table.
-Assess: What growth rate is the market implicitly pricing in? Is the current price above or below your intrinsic value range? Cite specific numbers with their source tool. Keep reasoning data-driven — every claim must reference a fetched number.${VOTING_INSTRUCTION}`,
+1. Start with get_company_overview for P/E, forward P/E, EPS, profit margin, and market cap.
+2. If overview data is available, use get_financials for revenue, income, and free cash flow trends across years.
+3. If financial statements are available, use get_earnings for EPS surprise patterns and growth trajectory.
+4. Only use compute_dcf once you have the inputs needed to estimate intrinsic value.
+Assess: What growth rate is the market implicitly pricing in? Is the current price above or below your intrinsic value range? Cite specific numbers with their source tool. Keep reasoning data-driven — every claim must reference a fetched number.${EXECUTION_GUARDRAILS}${VOTING_INSTRUCTION}`,
 
   momentum: (symbol) =>
     `**[Momentum Analyst]** You are a CAN SLIM-style momentum analyst. Price action and volume are your primary evidence. Analyze ${symbol}:
@@ -28,7 +37,7 @@ Assess: What growth rate is the market implicitly pricing in? Is the current pri
 3. Check RSI (overbought >70 / oversold <30) and MACD histogram direction.
 4. Identify key support/resistance from Bollinger Bands and SMA(20)/SMA(50).
 5. Use get_earnings to check if earnings are accelerating quarter over quarter.
-State specific price levels. A breakout on rising volume is bullish; a breakdown on high volume is bearish. No vague language — cite the numbers.${VOTING_INSTRUCTION}`,
+State specific price levels. A breakout on rising volume is bullish; a breakdown on high volume is bearish. No vague language — cite the numbers.${EXECUTION_GUARDRAILS}${VOTING_INSTRUCTION}`,
 
   options: (symbol) =>
     `**[Options Analyst]** You analyze what the derivatives market is pricing in. Analyze ${symbol}:
@@ -37,7 +46,7 @@ State specific price levels. A breakout on rising volume is bullish; a breakdown
 3. Look for unusually high volume contracts (>3x average OI) that signal institutional positioning.
 4. Note the overall IV level — is it elevated (expecting a move) or compressed (quiet period)?
 5. Check if smart money is positioning via deep ITM or OTM options with high volume.
-What is the options market pricing in that the stock price alone doesn't show?${VOTING_INSTRUCTION}`,
+What is the options market pricing in that the stock price alone doesn't show?${EXECUTION_GUARDRAILS}${VOTING_INSTRUCTION}`,
 
   contrarian: (symbol) =>
     `**[Contrarian Analyst]** You are a Burry-style contrarian. Your job is to find what the crowd is missing. Be terse and data-driven — cite concrete numbers like "FCF yield 14.7%" or "P/E 8.3x vs sector 22x." Analyze ${symbol}:
@@ -45,8 +54,8 @@ What is the options market pricing in that the stock price alone doesn't show?${
 2. Use get_reddit_sentiment on wallstreetbets and stocks — check the sentiment score. Extreme bullishness from retail is a warning; extreme bearishness may be opportunity.
 3. Use get_reddit_discussions for ${symbol} to gauge retail narrative.
 4. Cross-reference: Is sentiment overly bullish while fundamentals (revenue, margins, FCF) are deteriorating? Is everyone bearish while the numbers quietly improve?
-5. Use get_company_overview to find metrics the crowd ignores (debt levels, margin trends, cash position).
-Where is the consensus wrong? What is the market over-pricing or under-pricing?${VOTING_INSTRUCTION}`,
+5. Reuse get_company_overview or other fundamentals already fetched earlier in the session if available. If fundamentals are unavailable, say so and base the contrarian view on sentiment and price only.
+Where is the consensus wrong? What is the market over-pricing or under-pricing?${EXECUTION_GUARDRAILS}${VOTING_INSTRUCTION}`,
 
   risk: (symbol) =>
     `**[Risk Manager]** You are the final check before capital is deployed. Your job is to quantify downside, not to have an opinion on direction. Analyze ${symbol}:
@@ -55,7 +64,7 @@ Where is the consensus wrong? What is the market over-pricing or under-pricing?$
 3. Risk/reward: Is potential upside at least 2x the max drawdown? If not, the trade is unfavorable regardless of thesis.
 4. Correlation: If this is in a portfolio, would it add diversification or concentration risk?
 5. Scenario analysis: What is the max realistic downside in a 1-sigma and 2-sigma move?
-Be quantitative. Every assessment must include a number.${VOTING_INSTRUCTION}`,
+Be quantitative. Every assessment must include a number.${EXECUTION_GUARDRAILS}${VOTING_INSTRUCTION}`,
 };
 
 const SYNTHESIS_PROMPT = (symbol: string) =>
@@ -102,15 +111,15 @@ export function runComprehensiveAnalysis(
 
 export function isAnalysisRequest(input: string): { match: boolean; symbol?: string } {
   const patterns = [
-    /^analyze\s+(\$?[A-Za-z]{1,5})\s*$/i,
-    /^full\s+analysis\s+(?:of\s+)?(\$?[A-Za-z]{1,5})\s*$/i,
-    /^deep\s+dive\s+(?:on\s+)?(\$?[A-Za-z]{1,5})\s*$/i,
+    new RegExp(`^analyze\\s+${SYMBOL_CAPTURE}\\s*$`, "i"),
+    new RegExp(`^full\\s+analysis\\s+(?:of\\s+)?${SYMBOL_CAPTURE}\\s*$`, "i"),
+    new RegExp(`^deep\\s+dive\\s+(?:on\\s+)?${SYMBOL_CAPTURE}\\s*$`, "i"),
   ];
 
   for (const pattern of patterns) {
     const match = input.match(pattern);
     if (match) {
-      return { match: true, symbol: match[1].replace("$", "").toUpperCase() };
+      return { match: true, symbol: match[1].replace(/\$/g, "").toUpperCase() };
     }
   }
 
@@ -121,5 +130,5 @@ export function normalizeSymbol(input: string): string | undefined {
   const trimmed = input.trim();
   if (!trimmed) return undefined;
   const candidate = trimmed.replace(/\$/g, "").toUpperCase();
-  return /^[A-Z]{1,5}$/.test(candidate) ? candidate : undefined;
+  return NORMALIZED_SYMBOL_PATTERN.test(candidate) ? candidate : undefined;
 }

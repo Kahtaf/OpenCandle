@@ -2,8 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
-
-const WATCHLIST_FILE = ".vantage-watchlist.json";
+import { ensureParentDir, getWatchlistPath } from "../../infra/vantage-paths.js";
 
 interface WatchlistItem {
   symbol: string;
@@ -14,16 +13,19 @@ interface WatchlistItem {
 }
 
 function loadWatchlist(): WatchlistItem[] {
-  if (!existsSync(WATCHLIST_FILE)) return [];
+  const watchlistPath = getWatchlistPath();
+  if (!existsSync(watchlistPath)) return [];
   try {
-    return JSON.parse(readFileSync(WATCHLIST_FILE, "utf-8"));
+    return JSON.parse(readFileSync(watchlistPath, "utf-8"));
   } catch {
     return [];
   }
 }
 
 function saveWatchlist(items: WatchlistItem[]): void {
-  writeFileSync(WATCHLIST_FILE, JSON.stringify(items, null, 2));
+  const watchlistPath = getWatchlistPath();
+  ensureParentDir(watchlistPath);
+  writeFileSync(watchlistPath, JSON.stringify(items, null, 2));
 }
 
 const params = Type.Object({
@@ -49,7 +51,7 @@ export const watchlistTool: AgentTool<typeof params> = {
   name: "manage_watchlist",
   label: "Watchlist",
   description:
-    "Manage your watchlist of stocks and crypto. Add symbols with optional target and stop prices, remove symbols, or check current prices against your alert levels. Data persisted to .vantage-watchlist.json.",
+    "Manage your watchlist of stocks and crypto. Add symbols with optional target and stop prices, remove symbols, or check current prices against your alert levels. Data persisted to ~/.vantage/watchlist.json.",
   parameters: params,
   async execute(toolCallId, args) {
     const items = loadWatchlist();
