@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible defect in Vantage
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please provide a small, reproducible report with the exact command, prompt, or workflow that failed.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: Concise description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction
+      description: List the exact steps to reproduce the issue.
+      placeholder: |
+        1. Run ...
+        2. Ask ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include error output if relevant.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Vantage version
+      description: npm version, git commit, or local branch
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Environment
+      description: Node version and OS
+      placeholder: Node 22 on macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, relevant provider setup, or anything else maintainers should know
