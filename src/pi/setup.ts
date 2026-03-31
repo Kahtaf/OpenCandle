@@ -9,12 +9,12 @@ import {
   loadFileConfig,
   saveFileConfig,
   type FinanceProviderReadiness,
-  type VantageFileConfig,
+  type OpenCandleFileConfig,
 } from "../config.js";
 import { openInBrowser } from "../infra/open-url.js";
 import { ONBOARDING_VERSION, loadOnboardingState, saveOnboardingState } from "../onboarding/state.js";
 
-const SETUP_STATUS_KEY = "vantage-setup";
+const SETUP_STATUS_KEY = "opencandle-setup";
 
 const ALPHA_VANTAGE_SIGNUP_URL = "https://www.alphavantage.co/support/#api-key";
 const FRED_SIGNUP_URL = "https://fredaccount.stlouisfed.org/apikeys";
@@ -30,7 +30,7 @@ function renderSetupHeader(title: string, body: string[]) {
     render(): string[] {
       return [
         "",
-        theme.bold(theme.fg("accent", "Vantage Setup")),
+        theme.bold(theme.fg("accent", "OpenCandle Setup")),
         theme.fg("muted", title),
         "",
         ...body.map((line) => theme.fg("dim", line)),
@@ -251,7 +251,7 @@ async function runLlmSetup(
     if (requirement === "select_model") {
       setSetupChrome(ctx, "Choose an AI model", [
         "You already have at least one Pi-connected provider.",
-        "Pick the model Vantage should use for chat and analysis.",
+        "Pick the model OpenCandle should use for chat and analysis.",
       ]);
       const selected = await selectModel(api, ctx);
       if (selected) {
@@ -260,7 +260,7 @@ async function runLlmSetup(
       const retry = await ctx.ui.select("Model setup", ["Try again", "Exit setup"]);
       if (retry !== "Try again") {
         if (mode === "startup") {
-          ctx.ui.notify("Vantage needs an AI model before chat can start.", "warning");
+          ctx.ui.notify("OpenCandle needs an AI model before chat can start.", "warning");
           ctx.shutdown();
           return "shutdown";
         }
@@ -270,11 +270,11 @@ async function runLlmSetup(
     }
 
     setSetupChrome(ctx, "Connect an AI model", [
-      "Welcome to Vantage.",
+      "Welcome to OpenCandle.",
       "Choose sign-in or paste an API key to enable chat and analysis.",
     ]);
 
-    const choice = await ctx.ui.select("Welcome to Vantage", [
+    const choice = await ctx.ui.select("Welcome to OpenCandle", [
       "Sign in",
       "Paste API key",
       "Exit setup",
@@ -282,7 +282,7 @@ async function runLlmSetup(
 
     if (choice !== "Sign in" && choice !== "Paste API key") {
       if (mode === "startup") {
-        ctx.ui.notify("Vantage needs an AI model before chat can start.", "warning");
+        ctx.ui.notify("OpenCandle needs an AI model before chat can start.", "warning");
         ctx.shutdown();
         return "shutdown";
       }
@@ -335,10 +335,10 @@ function hasFinanceKeys(readiness: FinanceProviderReadiness): boolean {
 }
 
 function upsertFinanceKey(
-  config: VantageFileConfig,
+  config: OpenCandleFileConfig,
   provider: "alphaVantage" | "fred",
   apiKey: string,
-): VantageFileConfig {
+): OpenCandleFileConfig {
   return {
     ...config,
     providers: {
@@ -416,7 +416,7 @@ async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Pro
   saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: status });
 }
 
-export async function runVantageSetup(
+export async function runOpenCandleSetup(
   api: ExtensionAPI,
   ctx: ExtensionContext,
   options: { mode: SetupMode; forceFinancePrompt?: boolean } = { mode: "startup" },

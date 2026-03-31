@@ -1,4 +1,4 @@
-# VANTAGE
+# OPENCANDLE
 
 Financial data analysis agent. TypeScript + Vitest + Pi shell framework.
 Integrates Yahoo Finance, AlphaVantage, FRED, CoinGecko, Reddit, SEC EDGAR.
@@ -18,7 +18,7 @@ npm run test:e2e:providers     # e2e provider tests (hits live APIs)
 src/
 ├── providers/    # API clients (yahoo-finance, alpha-vantage, fred, coingecko, reddit, sec-edgar, fear-greed)
 ├── tools/        # Market data tools by domain → see src/tools/AGENTS.md
-├── infra/        # HTTP client, cache, rate-limiter, browser, vantage-paths
+├── infra/        # HTTP client, cache, rate-limiter, browser, opencandle-paths
 ├── types/        # Shared interfaces (market, options, fundamentals, macro, sentiment, portfolio)
 ├── routing/      # Intent classification, entity extraction, slot resolution
 ├── workflows/    # Multi-step workflow builders
@@ -98,5 +98,5 @@ export const cache = new Cache();
 - Draw conclusions until all relevant data is gathered
 
 ## RUNTIME STATE
-- Pi config: `.pi/` and `~/.pi/agent/` — do not move into Vantage storage.
-- Vantage user state: `~/.vantage/` — CLI must not depend on repo-local `.pi/extensions/`.
+- Pi config: `.pi/` and `~/.pi/agent/` — do not move into OpenCandle storage.
+- OpenCandle user state: `~/.opencandle/` — CLI must not depend on repo-local `.pi/extensions/`.

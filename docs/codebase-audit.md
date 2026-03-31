@@ -1,4 +1,4 @@
-# Vantage Codebase Audit
+# OpenCandle Codebase Audit
 
 **Date:** 2026-03-29
 **Scope:** Repository review of the financial agent implementation, focusing on correctness, code quality, architecture, UX, and improvement opportunities.
@@ -528,4 +528,4 @@ Definition of done:
 
 ## Bottom Line
 
-Vantage is a strong prototype, but not yet a trustworthy financial agent. The biggest gap is not feature breadth; it is analytical correctness and trustworthiness. If the next iteration fixes the current metric bugs, removes misleading labels, and hardens persistence/orchestration, the project will move from "impressive demo" to something materially more dependable.
+OpenCandle is a strong prototype, but not yet a trustworthy financial agent. The biggest gap is not feature breadth; it is analytical correctness and trustworthiness. If the next iteration fixes the current metric bugs, removes misleading labels, and hardens persistence/orchestration, the project will move from "impressive demo" to something materially more dependable.

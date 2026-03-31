@@ -8,7 +8,7 @@ import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { getLlmSetupRequirement, runVantageSetup } from "../../../src/pi/setup.js";
+import { getLlmSetupRequirement, runOpenCandleSetup } from "../../../src/pi/setup.js";
 
 function createUi(overrides: Partial<any> = {}) {
   return {
@@ -22,7 +22,7 @@ function createUi(overrides: Partial<any> = {}) {
   };
 }
 
-describe("Vantage setup", () => {
+describe("OpenCandle setup", () => {
   const originalEnv = { ...process.env };
   const originalCwd = process.cwd();
 
@@ -66,7 +66,7 @@ describe("Vantage setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runVantageSetup(
+    const result = await runOpenCandleSetup(
       { setModel } as any,
       ctx as any,
       { mode: "manual", forceFinancePrompt: false },
@@ -77,9 +77,9 @@ describe("Vantage setup", () => {
     expect(setModel).toHaveBeenCalled();
   });
 
-  it("writes finance keys to ~/.vantage/config.json after setup", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
-    process.env.VANTAGE_HOME = tempDir;
+  it("writes finance keys to ~/.opencandle/config.json after setup", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
+    process.env.OPENCANDLE_HOME = tempDir;
     process.chdir(tempDir);
 
     const authStorage = AuthStorage.inMemory({
@@ -100,7 +100,7 @@ describe("Vantage setup", () => {
       shutdown: vi.fn(),
     };
 
-    await runVantageSetup(
+    await runOpenCandleSetup(
       { setModel } as any,
       ctx as any,
       { mode: "manual", forceFinancePrompt: true },
@@ -118,8 +118,8 @@ describe("Vantage setup", () => {
     const mockOpen = vi.mocked(openInBrowser);
     mockOpen.mockClear();
 
-    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
-    process.env.VANTAGE_HOME = tempDir;
+    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
+    process.env.OPENCANDLE_HOME = tempDir;
     process.chdir(tempDir);
 
     const authStorage = AuthStorage.inMemory({
@@ -139,7 +139,7 @@ describe("Vantage setup", () => {
       shutdown: vi.fn(),
     };
 
-    await runVantageSetup(
+    await runOpenCandleSetup(
       { setModel: vi.fn().mockResolvedValue(true) } as any,
       ctx as any,
       { mode: "manual", forceFinancePrompt: true },
@@ -152,8 +152,8 @@ describe("Vantage setup", () => {
   });
 
   it("skips finance setup when both provider keys come from env", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
-    process.env.VANTAGE_HOME = tempDir;
+    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
+    process.env.OPENCANDLE_HOME = tempDir;
     process.chdir(tempDir);
     process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
     process.env.FRED_API_KEY = "fred-env";
@@ -165,7 +165,7 @@ describe("Vantage setup", () => {
     const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
     const ui = createUi();
 
-    await runVantageSetup(
+    await runOpenCandleSetup(
       { setModel: vi.fn().mockResolvedValue(true) } as any,
       {
         hasUI: true,
@@ -186,8 +186,8 @@ describe("Vantage setup", () => {
   });
 
   it("skips finance setup when readiness is split across env and config", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
-    process.env.VANTAGE_HOME = tempDir;
+    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
+    process.env.OPENCANDLE_HOME = tempDir;
     process.chdir(tempDir);
     process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
 
@@ -207,7 +207,7 @@ describe("Vantage setup", () => {
       writeFileSync(join(tempDir, "config.json"), `${configJson}\n`, "utf-8"),
     );
 
-    await runVantageSetup(
+    await runOpenCandleSetup(
       { setModel: vi.fn().mockResolvedValue(true) } as any,
       {
         hasUI: true,
@@ -231,8 +231,8 @@ describe("Vantage setup", () => {
     const mockOpen = vi.mocked(openInBrowser);
     mockOpen.mockClear();
 
-    const tempDir = mkdtempSync(join(tmpdir(), "vantage-setup-"));
-    process.env.VANTAGE_HOME = tempDir;
+    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
+    process.env.OPENCANDLE_HOME = tempDir;
     process.chdir(tempDir);
     process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
 
@@ -245,7 +245,7 @@ describe("Vantage setup", () => {
     ui.select.mockResolvedValueOnce("Yes");
     ui.input.mockResolvedValueOnce("fred-key");
 
-    await runVantageSetup(
+    await runOpenCandleSetup(
       { setModel: vi.fn().mockResolvedValue(true) } as any,
       {
         hasUI: true,
@@ -280,7 +280,7 @@ describe("Vantage setup", () => {
       shutdown,
     };
 
-    const result = await runVantageSetup(
+    const result = await runOpenCandleSetup(
       { setModel: vi.fn() } as any,
       ctx as any,
       { mode: "startup" },

@@ -10,29 +10,29 @@ import {
 
 describe("onboarding state", () => {
   let tempDir: string;
-  const originalVantageHome = process.env.VANTAGE_HOME;
+  const originalOpenCandleHome = process.env.OPENCANDLE_HOME;
 
   afterEach(() => {
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true });
     }
-    if (originalVantageHome == null) {
-      delete process.env.VANTAGE_HOME;
+    if (originalOpenCandleHome == null) {
+      delete process.env.OPENCANDLE_HOME;
     } else {
-      process.env.VANTAGE_HOME = originalVantageHome;
+      process.env.OPENCANDLE_HOME = originalOpenCandleHome;
     }
   });
 
   it("returns defaults when onboarding.json does not exist", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "vantage-onboarding-"));
-    process.env.VANTAGE_HOME = tempDir;
+    tempDir = mkdtempSync(join(tmpdir(), "opencandle-onboarding-"));
+    process.env.OPENCANDLE_HOME = tempDir;
 
     expect(loadOnboardingState()).toEqual(getDefaultOnboardingState());
   });
 
-  it("persists onboarding.json under VANTAGE_HOME", () => {
-    tempDir = mkdtempSync(join(tmpdir(), "vantage-onboarding-"));
-    process.env.VANTAGE_HOME = tempDir;
+  it("persists onboarding.json under OPENCANDLE_HOME", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "opencandle-onboarding-"));
+    process.env.OPENCANDLE_HOME = tempDir;
 
     saveOnboardingState({ version: 1, financeSetupStatus: "dismissed" });
 

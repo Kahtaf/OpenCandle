@@ -1,1 +1,1 @@
-export { createVantageSession, type CreateVantageSessionOptions } from "./pi/session.js";
+export { createOpenCandleSession, type CreateOpenCandleSessionOptions } from "./pi/session.js";

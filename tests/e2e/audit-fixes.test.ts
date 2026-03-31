@@ -8,10 +8,10 @@
 import assert from "node:assert";
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
-import { createVantageSession } from "../../src/agent.js";
+import { createOpenCandleSession } from "../../src/agent.js";
 import { cache } from "../../src/infra/cache.js";
 
-const { session } = await createVantageSession({
+const { session } = await createOpenCandleSession({
   cwd: process.cwd(),
   sessionManager: SessionManager.inMemory(),
   settingsManager: SettingsManager.inMemory({

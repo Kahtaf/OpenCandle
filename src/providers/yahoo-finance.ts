@@ -37,7 +37,7 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
 
   const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
   const data = await httpGet<YahooChartResponse>(url, {
-    headers: { "User-Agent": "Vantage/1.0" },
+    headers: { "User-Agent": "OpenCandle/1.0" },
   });
 
   if (data.chart.error) {
@@ -90,7 +90,7 @@ export async function getHistory(
 
   const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
   const data = await httpGet<YahooChartResponse>(url, {
-    headers: { "User-Agent": "Vantage/1.0" },
+    headers: { "User-Agent": "OpenCandle/1.0" },
   });
 
   if (data.chart.error) {

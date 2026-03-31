@@ -5,9 +5,9 @@ import {
   SessionManager,
   SettingsManager,
 } from "@mariozechner/pi-coding-agent";
-import { createVantageSession } from "../../../src/pi/session.js";
+import { createOpenCandleSession } from "../../../src/pi/session.js";
 
-describe("createVantageSession", () => {
+describe("createOpenCandleSession", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
@@ -18,12 +18,12 @@ describe("createVantageSession", () => {
     process.env = { ...originalEnv };
   });
 
-  it("starts in finance-only mode and loads the bundled Vantage extension", async () => {
+  it("starts in finance-only mode and loads the bundled OpenCandle extension", async () => {
     process.env.GEMINI_API_KEY = "";
     process.env.OPENAI_API_KEY = "";
     process.env.ANTHROPIC_API_KEY = "";
 
-    const result = await createVantageSession({
+    const result = await createOpenCandleSession({
       cwd: process.cwd(),
       settingsManager: SettingsManager.inMemory(),
       sessionManager: SessionManager.inMemory(),
@@ -42,7 +42,7 @@ describe("createVantageSession", () => {
     result.session.dispose();
   });
 
-  it("surfaces Pi provider availability from environment variables without Vantage-specific auth wiring", async () => {
+  it("surfaces Pi provider availability from environment variables without OpenCandle-specific auth wiring", async () => {
     process.env.GEMINI_API_KEY = "gemini-key";
     process.env.OPENAI_API_KEY = "openai-key";
     process.env.ANTHROPIC_API_KEY = "anthropic-key";

@@ -2,7 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
-import { ensureParentDir, getPredictionsPath } from "../../infra/vantage-paths.js";
+import { ensureParentDir, getPredictionsPath } from "../../infra/opencandle-paths.js";
 
 export interface Prediction {
   symbol: string;

@@ -1,5 +1,5 @@
 /**
- * E2E test for Vantage tool functions with real API calls.
+ * E2E test for OpenCandle tool functions with real API calls.
  *
  * Usage: npx tsx tests/e2e/tools.test.ts
  */
@@ -20,8 +20,8 @@ import { join } from "node:path";
 
 loadConfig();
 
-const vantageHome = mkdtempSync(join(tmpdir(), "vantage-tools-test-"));
-process.env.VANTAGE_HOME = vantageHome;
+const openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-tools-test-"));
+process.env.OPENCANDLE_HOME = openCandleHome;
 
 const tools = getAllTools();
 let passed = 0;
@@ -55,7 +55,7 @@ async function run() {
   console.log(`\n=== E2E: New Features from Competitive Analysis ===`);
   console.log(`Tools: ${tools.length} | AV Key: ${config.alphaVantageApiKey ? "yes" : "no"}\n`);
 
-  rmSync(vantageHome, { recursive: true, force: true });
+  rmSync(openCandleHome, { recursive: true, force: true });
 
   // ============================
   // 1. getConfig fix verification
@@ -466,8 +466,8 @@ async function run() {
   }
   console.log();
 
-  rmSync(vantageHome, { recursive: true, force: true });
-  delete process.env.VANTAGE_HOME;
+  rmSync(openCandleHome, { recursive: true, force: true });
+  delete process.env.OPENCANDLE_HOME;
 
   process.exit(failed > 0 ? 1 : 0);
 }

@@ -5,7 +5,7 @@ import {
   SettingsManager,
   initTheme,
 } from "@mariozechner/pi-coding-agent";
-import { createVantageSession } from "./agent.js";
+import { createOpenCandleSession } from "./agent.js";
 import { loadEnv } from "./config.js";
 
 async function main(): Promise<void> {
@@ -18,7 +18,7 @@ async function main(): Promise<void> {
 
   initTheme(settingsManager.getTheme(), true);
 
-  const { session, modelFallbackMessage } = await createVantageSession({
+  const { session, modelFallbackMessage } = await createOpenCandleSession({
     cwd,
     settingsManager,
     authStorage,

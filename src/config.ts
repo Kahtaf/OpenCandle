@@ -1,12 +1,12 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { ensureParentDir, getConfigPath } from "./infra/vantage-paths.js";
+import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
 
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
 }
 
-export interface VantageFileConfig {
+export interface OpenCandleFileConfig {
   providers?: {
     alphaVantage?: {
       apiKey?: string;
@@ -44,7 +44,7 @@ export function loadEnv(path = ".env"): void {
 
 let cachedConfig: Config | null = null;
 
-function resolveConfig(fileConfig: VantageFileConfig): Config {
+function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
   return {
     alphaVantageApiKey:
       process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
@@ -52,7 +52,7 @@ function resolveConfig(fileConfig: VantageFileConfig): Config {
   };
 }
 
-export function loadFileConfig(path = getConfigPath()): VantageFileConfig {
+export function loadFileConfig(path = getConfigPath()): OpenCandleFileConfig {
   if (!existsSync(path)) {
     return {};
   }
@@ -62,19 +62,19 @@ export function loadFileConfig(path = getConfigPath()): VantageFileConfig {
     content = readFileSync(path, "utf-8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Unable to read Vantage config at ${path}: ${message}`);
+    throw new Error(`Unable to read OpenCandle config at ${path}: ${message}`);
   }
 
   try {
-    const parsed = JSON.parse(content) as VantageFileConfig;
+    const parsed = JSON.parse(content) as OpenCandleFileConfig;
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Invalid Vantage config at ${path}: ${message}`);
+    throw new Error(`Invalid OpenCandle config at ${path}: ${message}`);
   }
 }
 
-export function saveFileConfig(config: VantageFileConfig, path = getConfigPath()): void {
+export function saveFileConfig(config: OpenCandleFileConfig, path = getConfigPath()): void {
   ensureParentDir(path);
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 }

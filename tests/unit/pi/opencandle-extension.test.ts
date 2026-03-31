@@ -5,7 +5,7 @@ import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestra
 import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import { initDatabase, MemoryStorage } from "../../../src/memory/index.js";
-import vantageExtension from "../../../src/pi/vantage-extension.js";
+import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
@@ -70,7 +70,7 @@ function createFakeApi() {
   return { api, tools, commands, handlers, sendUserMessage };
 }
 
-describe("vantage extension", () => {
+describe("opencandle extension", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
@@ -82,7 +82,7 @@ describe("vantage extension", () => {
 
   it("registers the finance tool surface and analyze command", () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     expect(fake.tools).toHaveLength(23);
     expect(fake.commands.has("analyze")).toBe(true);
@@ -91,7 +91,7 @@ describe("vantage extension", () => {
 
   it("queues the comprehensive analysis prompt sequence for /analyze", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     const ctx: FakeCommandContext = {
       isIdle: () => true,
@@ -120,7 +120,7 @@ describe("vantage extension", () => {
 
   it("intercepts natural-language analyze input and queues the same prompt sequence", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     let idle = false;
     fake.sendUserMessage.mockImplementation(() => {
@@ -154,9 +154,9 @@ describe("vantage extension", () => {
     expect(ctx.ui.notify).toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
   });
 
-  it("appends the Vantage system prompt before agent start", async () => {
+  it("appends the OpenCandle system prompt before agent start", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
     expect(beforeStartHandler).toBeDefined();
@@ -172,7 +172,7 @@ describe("vantage extension", () => {
 
   it("routes portfolio-builder prompts through the deterministic workflow", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     const inputHandler = fake.handlers.get("input")?.[0];
     const ctx = {
@@ -197,7 +197,7 @@ describe("vantage extension", () => {
 
   it("routes options-screening prompts through the deterministic workflow", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     const inputHandler = fake.handlers.get("input")?.[0];
     const ctx = {
@@ -221,7 +221,7 @@ describe("vantage extension", () => {
 
   it("routes compare prompts through the deterministic workflow", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     const inputHandler = fake.handlers.get("input")?.[0];
     const ctx = {
@@ -261,7 +261,7 @@ describe("vantage extension", () => {
 
     it("initializes storage on session_start", async () => {
       const fake = createFakeApi();
-      vantageExtension(fake.api);
+      openCandleExtension(fake.api);
       await initMemory(fake);
 
       // Storage is initialized — before_agent_start should include memory context
@@ -276,7 +276,7 @@ describe("vantage extension", () => {
 
     it("extracts preferences from user input and passes them to slot resolvers", async () => {
       const fake = createFakeApi();
-      vantageExtension(fake.api);
+      openCandleExtension(fake.api);
       await initMemory(fake);
 
       const inputHandler = fake.handlers.get("input")?.[0];
@@ -302,7 +302,7 @@ describe("vantage extension", () => {
 
     it("records workflow runs after dispatch", async () => {
       const fake = createFakeApi();
-      vantageExtension(fake.api);
+      openCandleExtension(fake.api);
       await initMemory(fake);
 
       const inputHandler = fake.handlers.get("input")?.[0];
@@ -315,14 +315,14 @@ describe("vantage extension", () => {
 
       // appendEntry should be called with workflow data
       expect(fake.api.appendEntry).toHaveBeenCalledWith(
-        "vantage-workflow",
+        "opencandle-workflow",
         expect.objectContaining({ workflow: "portfolio_builder" }),
       );
     });
 
     it("injects memory context into system prompt after preferences are stored", async () => {
       const fake = createFakeApi();
-      vantageExtension(fake.api);
+      openCandleExtension(fake.api);
       await initMemory(fake);
 
       // Store a preference via input
@@ -346,7 +346,7 @@ describe("vantage extension", () => {
 
   it("cancels stale follow-ups when a newer workflow starts", async () => {
     const fake = createFakeApi();
-    vantageExtension(fake.api);
+    openCandleExtension(fake.api);
 
     const inputHandler = fake.handlers.get("input")?.[0];
     const ctx = {

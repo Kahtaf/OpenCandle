@@ -28,7 +28,7 @@ export const searchTickerTool: AgentTool<typeof params> = {
   async execute(toolCallId, args) {
     const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(args.query)}&quotesCount=10&newsCount=0`;
     const data = await httpGet<YahooSearchResponse>(url, {
-      headers: { "User-Agent": "Vantage/1.0" },
+      headers: { "User-Agent": "OpenCandle/1.0" },
     });
 
     const quotes = data.quotes ?? [];

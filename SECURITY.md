@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Until Vantage reaches `1.0.0`, security support is limited to the latest pre-1.0 release line.
+Until OpenCandle reaches `1.0.0`, security support is limited to the latest pre-1.0 release line.
 
 | Version | Supported |
 | ------- | --------- |

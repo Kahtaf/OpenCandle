@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible defect in Vantage
+description: Report a reproducible defect in OpenCandle
 title: "bug: "
 labels:
   - bug
@@ -44,7 +44,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Vantage version
+      label: OpenCandle version
       description: npm version, git commit, or local branch
       placeholder: 0.1.0 or commit SHA
     validations:

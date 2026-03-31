@@ -353,7 +353,7 @@ describe("E2E integration: full orchestration pipeline", () => {
 
     it("system prompt works without memory context", () => {
       const prompt = buildSystemPrompt();
-      expect(prompt).toContain("You are Vantage");
+      expect(prompt).toContain("You are OpenCandle");
       expect(prompt).not.toContain("Persistent Memory Context");
     });
   });

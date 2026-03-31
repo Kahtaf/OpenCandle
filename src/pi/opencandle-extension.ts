@@ -8,8 +8,8 @@ import {
 import { classifyIntent, resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../routing/index.js";
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsWorkflow, buildOptionsScreenerWorkflow, buildPortfolioWorkflow } from "../workflows/index.js";
-import { getVantageToolDefinitions } from "./tool-adapter.js";
-import { runVantageSetup } from "./setup.js";
+import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
+import { runOpenCandleSetup } from "./setup.js";
 import { initDefaultDatabase, MemoryStorage, buildMemoryContext, extractPreferences } from "../memory/index.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
@@ -120,7 +120,7 @@ function queueCompareWorkflow(
   queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
 }
 
-export default function vantageExtension(pi: ExtensionAPI): void {
+export default function openCandleExtension(pi: ExtensionAPI): void {
   let activeSequenceId = 0;
   let storage: MemoryStorage | null = null;
   let sessionId = "unknown";
@@ -131,12 +131,12 @@ export default function vantageExtension(pi: ExtensionAPI): void {
   };
   const isCurrentSequence = (sequenceId: number): boolean => sequenceId === activeSequenceId;
 
-  for (const tool of getVantageToolDefinitions()) {
+  for (const tool of getOpenCandleToolDefinitions()) {
     pi.registerTool(tool);
   }
 
   pi.registerCommand("analyze", {
-    description: "Run the multi-analyst Vantage workflow for a ticker symbol",
+    description: "Run the multi-analyst OpenCandle workflow for a ticker symbol",
     handler: async (args, ctx) => {
       const symbol = normalizeSymbol(args);
       if (!symbol) {
@@ -148,11 +148,11 @@ export default function vantageExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("setup", {
-    description: "Run Vantage setup for your AI model and market data providers",
+    description: "Run OpenCandle setup for your AI model and market data providers",
     handler: async (_args, ctx) => {
-      const result = await runVantageSetup(pi, ctx, { mode: "manual", forceFinancePrompt: true });
+      const result = await runOpenCandleSetup(pi, ctx, { mode: "manual", forceFinancePrompt: true });
       if (result === "ready") {
-        ctx.ui.notify("Vantage setup complete.", "info");
+        ctx.ui.notify("OpenCandle setup complete.", "info");
       }
     },
   });
@@ -163,12 +163,12 @@ export default function vantageExtension(pi: ExtensionAPI): void {
     sessionId = ctx.sessionManager.getSessionId();
 
     if (!ctx.hasUI) return;
-    const result = await runVantageSetup(pi, ctx, { mode: "startup" });
+    const result = await runOpenCandleSetup(pi, ctx, { mode: "startup" });
     if (result === "shutdown") {
       return;
     }
     ctx.ui.notify(
-      "Vantage finance mode. Try /analyze NVDA or ask for quotes, options, macro, or portfolio analysis.",
+      "OpenCandle finance mode. Try /analyze NVDA or ask for quotes, options, macro, or portfolio analysis.",
       "info",
     );
   });
@@ -209,7 +209,7 @@ export default function vantageExtension(pi: ExtensionAPI): void {
           defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
         });
       }
-      pi.appendEntry("vantage-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
+      pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
       queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
       return { action: "handled" };
     }
@@ -227,7 +227,7 @@ export default function vantageExtension(pi: ExtensionAPI): void {
             defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
           });
         }
-        pi.appendEntry("vantage-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
+        pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
         queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
         return { action: "handled" };
       }
@@ -243,7 +243,7 @@ export default function vantageExtension(pi: ExtensionAPI): void {
           defaultsUsedJson: JSON.stringify([]),
         });
       }
-      pi.appendEntry("vantage-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
+      pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
       queueCompareWorkflow(pi, classification.entities.symbols, ctx, beginSequence, isCurrentSequence);
       return { action: "handled" };
     }

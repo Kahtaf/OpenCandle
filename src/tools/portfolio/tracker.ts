@@ -3,7 +3,7 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import type { Position, PortfolioSummary } from "../../types/portfolio.js";
-import { ensureParentDir, getPortfolioPath } from "../../infra/vantage-paths.js";
+import { ensureParentDir, getPortfolioPath } from "../../infra/opencandle-paths.js";
 
 function loadPortfolio(): Position[] {
   const portfolioPath = getPortfolioPath();

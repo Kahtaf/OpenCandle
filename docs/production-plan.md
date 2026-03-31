@@ -1,18 +1,18 @@
-# Vantage OSS Launch Plan
+# OpenCandle OSS Launch Plan
 
 ## 1. Purpose
 
-This document is the canonical plan for taking Vantage from a local development project to a public npm package with a credible open source maintenance baseline.
+This document is the canonical plan for taking OpenCandle from a local development project to a public npm package with a credible open source maintenance baseline.
 
 The goal is not just "make it publish." The goal is to make the package installable, understandable, supportable, and safe to adopt:
 
-- Public npm package: `@kahtaf/vantage`
-- User-facing executable: `vantage`
+- Public npm package: `opencandle`
+- User-facing executable: `opencandle`
 - Supported install mode: global npm install
 - Pi-owned config remains in `~/.pi/agent/...`
-- Vantage-owned state remains in `~/.vantage/`
+- OpenCandle-owned state remains in `~/.opencandle/`
 
-Vantage should follow Pi's minimal CLI-first posture where possible: keep the runtime surface small, keep the config model explicit, and avoid process overhead that does not help the first public release.
+OpenCandle should follow Pi's minimal CLI-first posture where possible: keep the runtime surface small, keep the config model explicit, and avoid process overhead that does not help the first public release.
 
 ## 2. Current State and Gaps
 
@@ -20,7 +20,7 @@ Vantage should follow Pi's minimal CLI-first posture where possible: keep the ru
 
 - A working TypeScript codebase with Vitest coverage and mocked provider fixtures
 - A user-facing [README](/Users/kahtaf/.codex/worktrees/dc41/vantage/README.md)
-- A clear runtime-state separation between Pi config and Vantage-owned data
+- A clear runtime-state separation between Pi config and OpenCandle-owned data
 - A draft production plan focused on packaging/TUI/CI concerns
 
 ### 2.2. Current OSS hygiene gaps
@@ -44,15 +44,15 @@ This section defines the package contract the repository must support before the
 
 ### 3.1. Package identity
 
-- Package name: `@kahtaf/vantage`
-- Executable: `vantage`
-- Install command: `npm install -g @kahtaf/vantage`
-- Update command: `npm install -g @kahtaf/vantage@latest`
+- Package name: `opencandle`
+- Executable: `opencandle`
+- Install command: `npm install -g opencandle`
+- Update command: `npm install -g opencandle@latest`
 
 ### 3.2. Runtime and state boundaries
 
 - Pi manages model/auth configuration in `~/.pi/agent/...`
-- Vantage manages finance-provider config and user state in `~/.vantage/`
+- OpenCandle manages finance-provider config and user state in `~/.opencandle/`
 - The published CLI must work from any directory
 - The published CLI must not depend on a repo-local `.pi/extensions/...` path
 
@@ -174,7 +174,7 @@ Use a hybrid release flow:
 - `npm run release:patch|minor|major` for the maintainer preparation flow
 - GitHub Actions publish from pushed `v*` tags using npm trusted publishing
 
-For Vantage, this is simpler than Changesets because the repo currently publishes a single package, not a multi-package workspace.
+For OpenCandle, this is simpler than Changesets because the repo currently publishes a single package, not a multi-package workspace.
 
 ### 7.3. Publish pipeline
 
@@ -253,7 +253,7 @@ Deliverables:
 
 Exit criteria:
 
-- A fresh machine can install and run `vantage`
+- A fresh machine can install and run `opencandle`
 - Update instructions work as documented
 - User-facing docs match the published package behavior
 
@@ -262,8 +262,8 @@ Exit criteria:
 The launch is not complete until all of the following pass:
 
 1. `npm pack --dry-run` includes only the built CLI/runtime artifacts and standard metadata files.
-2. A fresh machine can install globally, run `vantage --help`, complete first-run setup, and update via npm without a repo-local `.pi/extensions/...`.
-3. [README.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/README.md) accurately describes the real config and state split between `~/.pi/agent` and `~/.vantage/`.
+2. A fresh machine can install globally, run `opencandle --help`, complete first-run setup, and update via npm without a repo-local `.pi/extensions/...`.
+3. [README.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/README.md) accurately describes the real config and state split between `~/.pi/agent` and `~/.opencandle/`.
 4. A contributor can follow [CONTRIBUTING.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/CONTRIBUTING.md), run `npm test`, and understand the test/fixture workflow without tribal knowledge.
 5. The documented release flow can generate a changelog, publish from a GitHub Actions tag workflow, and leave the changelog reset with a fresh `Unreleased` section.
 

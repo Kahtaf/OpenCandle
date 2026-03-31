@@ -18,6 +18,6 @@ export function agentToolToPiTool<TParams extends TSchema, TDetails>(
   };
 }
 
-export function getVantageToolDefinitions(): ToolDefinition[] {
+export function getOpenCandleToolDefinitions(): ToolDefinition[] {
   return getAllTools().map((tool) => agentToolToPiTool(tool));
 }

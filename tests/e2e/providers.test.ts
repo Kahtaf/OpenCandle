@@ -56,7 +56,7 @@ async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-console.log("=== Vantage E2E Test Suite ===\n");
+console.log("=== OpenCandle E2E Test Suite ===\n");
 
 // --- STOCKS: Quote + History ---
 console.log(`\n[1/8] Stock Quotes (${STOCKS.length} tickers)...`);

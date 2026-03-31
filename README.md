@@ -1,14 +1,14 @@
-# Vantage
+# OpenCandle
 
 A financial agent that talks to markets. Ask it for stock prices, options chains with Greeks, macro data, sentiment — it fetches real data, computes analytics locally, and gives you actionable answers.
 
 ## What This Does
 
-Vantage is an AI-powered terminal agent for investors and traders. Instead of switching between Yahoo Finance, FRED, Reddit, and a spreadsheet, you ask one agent and it chains the right tools together. It computes technical indicators and options Greeks locally (Black-Scholes), so there's no API dependency for math.
+OpenCandle is an AI-powered terminal agent for investors and traders. Instead of switching between Yahoo Finance, FRED, Reddit, and a spreadsheet, you ask one agent and it chains the right tools together. It computes technical indicators and options Greeks locally (Black-Scholes), so there's no API dependency for math.
 
 Type `analyze TSLA` and it runs a full 5-analyst breakdown — fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
 
-[Pi](https://pi.dev/) powers the runtime, TUI, auth, and model selection. Vantage keeps its own user data in `~/.vantage/`.
+[Pi](https://pi.dev/) powers the runtime, TUI, auth, and model selection. OpenCandle keeps its own user data in `~/.opencandle/`.
 
 ## Getting Started
 
@@ -19,7 +19,7 @@ cp .env.example .env
 npm start
 ```
 
-On first run, Vantage now guides you through AI model setup before chat starts. If you want to rerun that flow later, use `/setup`.
+On first run, OpenCandle now guides you through AI model setup before chat starts. If you want to rerun that flow later, use `/setup`.
 
 ### API Keys
 
@@ -37,7 +37,7 @@ Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.jso
 ### State and Config
 
 - Pi runtime config and optional project overrides live in `.pi/` and `~/.pi/agent/...`.
-- Vantage finance-provider config lives in `~/.vantage/config.json`:
+- OpenCandle finance-provider config lives in `~/.opencandle/config.json`:
 
 ```json
 {
@@ -52,23 +52,23 @@ Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.jso
 }
 ```
 
-- Environment variables still work and override `~/.vantage/config.json`.
-- Vantage user data lives in `~/.vantage/`:
-  - `~/.vantage/watchlist.json`
-  - `~/.vantage/portfolio.json`
-  - `~/.vantage/predictions.json`
-  - `~/.vantage/state.db`
-  - `~/.vantage/logs/...`
+- Environment variables still work and override `~/.opencandle/config.json`.
+- OpenCandle user data lives in `~/.opencandle/`:
+  - `~/.opencandle/watchlist.json`
+  - `~/.opencandle/portfolio.json`
+  - `~/.opencandle/predictions.json`
+  - `~/.opencandle/state.db`
+  - `~/.opencandle/logs/...`
 - The published CLI should work from any directory without depending on a repo-local `.pi/extensions/...` file. Project `.pi/` remains optional for user overrides.
 
 ## Usage
 
-Vantage now runs inside Pi's interactive TUI. Useful controls:
+OpenCandle now runs inside Pi's interactive TUI. Useful controls:
 
 ```text
 /model          Switch provider/model
 /login          Authenticate an OAuth-backed provider
-/setup          Rerun Vantage setup
+/setup          Rerun OpenCandle setup
 /analyze NVDA   Run the multi-analyst workflow
 ```
 
@@ -99,7 +99,7 @@ analyze AAPL
 
 ## How It Works
 
-Built on [Pi-mono](https://github.com/badlogic/pi-mono)'s `pi-coding-agent` SDK and TUI, with Vantage loaded as a bundled finance-only Pi extension. Tools are defined with [TypeBox](https://github.com/sinclairzx81/typebox) schemas and registered through Pi's extension system.
+Built on [Pi-mono](https://github.com/badlogic/pi-mono)'s `pi-coding-agent` SDK and TUI, with OpenCandle loaded as a bundled finance-only Pi extension. Tools are defined with [TypeBox](https://github.com/sinclairzx81/typebox) schemas and registered through Pi's extension system.
 
 ```
 User prompt -> Pi session -> selected provider/model -> tool calls -> execute in parallel -> response
@@ -112,7 +112,7 @@ Key architectural choices:
 - **Stealth browser fallback** via [Camoufox](https://github.com/daijro/camoufox) when Yahoo rate-limits Node.js `fetch`
 - **TTL caching + token bucket rate limiting** per provider
 - **Pi-native auth/model flow** via `/model`, `/login`, `auth.json`, and `models.json`
-- **Global Vantage state** under `~/.vantage/`, separate from Pi config
+- **Global OpenCandle state** under `~/.opencandle/`, separate from Pi config
 - **Multi-analyst orchestration** via Pi extension commands and follow-up message hooks
 
 ## Test

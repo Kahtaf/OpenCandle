@@ -1,10 +1,10 @@
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it, vi } from "vitest";
-import { agentToolToPiTool, getVantageToolDefinitions } from "../../../src/pi/tool-adapter.js";
+import { agentToolToPiTool, getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { getAllTools } from "../../../src/tools/index.js";
 
 describe("tool adapter", () => {
-  it("maps a Vantage tool to a Pi tool with the same public shape", async () => {
+  it("maps an OpenCandle tool to a Pi tool with the same public shape", async () => {
     const execute = vi.fn().mockResolvedValue({
       content: [{ type: "text", text: "ok" }],
       details: { symbol: "MSFT" },
@@ -31,9 +31,9 @@ describe("tool adapter", () => {
     expect(result.content[0].type).toBe("text");
   });
 
-  it("exposes every Vantage tool as a Pi tool definition", () => {
+  it("exposes every OpenCandle tool as a Pi tool definition", () => {
     const sourceNames = getAllTools().map((tool) => tool.name).sort();
-    const adaptedNames = getVantageToolDefinitions().map((tool) => tool.name).sort();
+    const adaptedNames = getOpenCandleToolDefinitions().map((tool) => tool.name).sort();
 
     expect(adaptedNames).toEqual(sourceNames);
   });
