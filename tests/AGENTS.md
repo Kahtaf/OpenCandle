@@ -1,6 +1,6 @@
 # TESTS
 
-Unit + e2e tests for all Vantage modules. Fixtures prevent live API calls in CI.
+Unit + e2e tests for all OpenCandle modules. Fixtures prevent live API calls in CI.
 
 ## COMMANDS
 ```bash

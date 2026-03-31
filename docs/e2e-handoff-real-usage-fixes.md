@@ -1,4 +1,4 @@
-# Vantage Real-Usage E2E Fix Handoff
+# OpenCandle Real-Usage E2E Fix Handoff
 
 **Date:** 2026-03-29  
 **Status:** Implementation handoff for the next agent  
@@ -9,7 +9,7 @@
 
 ## 1. Why This Doc Exists
 
-The recent routing, follow-up, and memory work materially improved Vantage:
+The recent routing, follow-up, and memory work materially improved OpenCandle:
 
 - broad portfolio prompts now trigger portfolio construction instead of generic refusal
 - broad options prompts now trigger options screening instead of asking for an exact expiry and stopping

@@ -1,15 +1,15 @@
-# Vantage Workflow Routing, Clarification, and Memory Design
+# OpenCandle Workflow Routing, Clarification, and Memory Design
 
 **Date:** 2026-03-29
 **Status:** Proposed implementation plan
 **Audience:** The next agent or engineer implementing the feature set, plus any reviewer expected to challenge the design
-**Scope:** Make Vantage meaningfully more useful on ambiguous real-user prompts without rewriting the existing tool layer
+**Scope:** Make OpenCandle meaningfully more useful on ambiguous real-user prompts without rewriting the existing tool layer
 
 ---
 
 ## 1. Executive Summary
 
-Vantage is currently strongest when the user speaks in the product's exact internal dialect, for example:
+OpenCandle is currently strongest when the user speaks in the product's exact internal dialect, for example:
 
 - `analyze NVDA`
 - `get the options chain for TSLA`
@@ -144,7 +144,7 @@ This prevents:
 
 ### Primary goals
 
-1. Make Vantage useful on realistic investor prompts without requiring the user to speak in internal tool names.
+1. Make OpenCandle useful on realistic investor prompts without requiring the user to speak in internal tool names.
 2. Ask fewer but better follow-up questions.
 3. Persist enough memory to improve future turns.
 4. Keep the system inspectable and debuggable.
@@ -393,7 +393,7 @@ The design intentionally separates:
 
 #### 5.4.1 Memory goals
 
-The memory system should allow Vantage to remember:
+The memory system should allow OpenCandle to remember:
 
 - user risk profile
 - time horizon
@@ -409,15 +409,15 @@ without forcing the LLM to re-read entire chat histories.
 
 Use a hybrid local-only design:
 
-This is the canonical Vantage storage layout. Pi runtime config, auth, and model selection remain Pi-managed under `~/.pi/agent/...` and optional project `.pi/` overrides.
+This is the canonical OpenCandle storage layout. Pi runtime config, auth, and model selection remain Pi-managed under `~/.pi/agent/...` and optional project `.pi/` overrides.
 
 1. **SQLite database**
    - canonical store for structured memory and metadata
-   - canonical path: `~/.vantage/state.db`
+   - canonical path: `~/.opencandle/state.db`
 
 2. **Append-only JSONL chat logs**
    - raw transcript and event log for debugging / audit
-   - canonical path: `~/.vantage/logs/YYYY/MM/DD/<session-id>.jsonl`
+   - canonical path: `~/.opencandle/logs/YYYY/MM/DD/<session-id>.jsonl`
 
 This is the recommended design over "only SQLite" or "only JSON files".
 
@@ -911,7 +911,7 @@ Rejected.
 Why:
 
 - Current cwd-based state is already a UX problem
-- Memory should survive launching Vantage from different directories
+- Memory should survive launching OpenCandle from different directories
 - Preferences are user-level, not project-level
 
 The correct default is a user-scoped app-data location.
@@ -1228,7 +1228,7 @@ These references are included so the implementing agent can inspect the upstream
 
 ## Bottom Line
 
-Vantage does not need a bigger tool catalog to become much more useful on real-user prompts. It needs:
+OpenCandle does not need a bigger tool catalog to become much more useful on real-user prompts. It needs:
 
 - workflow routing
 - bounded clarification

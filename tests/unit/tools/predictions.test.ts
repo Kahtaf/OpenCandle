@@ -15,11 +15,11 @@ vi.mock("node:fs", () => ({
 }));
 
 describe("recordPrediction", () => {
-  const originalEnv = process.env.VANTAGE_HOME;
-  const vantageHome = "/tmp/vantage-predictions-test";
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  const openCandleHome = "/tmp/opencandle-predictions-test";
 
   beforeEach(() => {
-    process.env.VANTAGE_HOME = vantageHome;
+    process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
     vi.mocked(fs.readFileSync).mockReturnValue("[]");
@@ -28,9 +28,9 @@ describe("recordPrediction", () => {
 
   afterEach(() => {
     if (originalEnv == null) {
-      delete process.env.VANTAGE_HOME;
+      delete process.env.OPENCANDLE_HOME;
     } else {
-      process.env.VANTAGE_HOME = originalEnv;
+      process.env.OPENCANDLE_HOME = originalEnv;
     }
     vi.restoreAllMocks();
   });
@@ -46,7 +46,7 @@ describe("recordPrediction", () => {
 
     expect(fs.writeFileSync).toHaveBeenCalled();
     expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(
-      join(vantageHome, "predictions.json"),
+      join(openCandleHome, "predictions.json"),
     );
     const written: Prediction[] = JSON.parse(
       vi.mocked(fs.writeFileSync).mock.calls[0][1] as string,

@@ -20,7 +20,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: What should Vantage do?
+      description: What should OpenCandle do?
       placeholder: Describe the intended behavior at a user level.
     validations:
       required: true

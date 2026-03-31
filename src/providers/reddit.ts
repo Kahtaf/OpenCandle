@@ -26,7 +26,7 @@ export async function getSubredditPosts(
 
   const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=${limit}`;
   const data = await httpGet<RedditListingResponse>(url, {
-    headers: { "User-Agent": "Vantage/1.0 (financial analysis agent)" },
+    headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
   });
 
   const posts = data.data.children.map((child) => ({

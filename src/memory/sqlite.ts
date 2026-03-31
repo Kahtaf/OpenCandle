@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import { getStateDbPath } from "../infra/vantage-paths.js";
+import { getStateDbPath } from "../infra/opencandle-paths.js";
 
 const CURRENT_SCHEMA_VERSION = 1;
 

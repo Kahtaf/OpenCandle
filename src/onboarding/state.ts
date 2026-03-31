@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { ensureParentDir, getOnboardingPath } from "../infra/vantage-paths.js";
+import { ensureParentDir, getOnboardingPath } from "../infra/opencandle-paths.js";
 
 export const ONBOARDING_VERSION = 1;
 

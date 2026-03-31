@@ -63,8 +63,8 @@ describe("loadEnv", () => {
 
 describe("loadConfig", () => {
   const originalEnv = { ...process.env };
-  const vantageHome = "/tmp/vantage-config-test";
-  const configPath = join(vantageHome, "config.json");
+  const openCandleHome = "/tmp/opencandle-config-test";
+  const configPath = join(openCandleHome, "config.json");
 
   afterEach(() => {
     process.env = { ...originalEnv };
@@ -72,7 +72,7 @@ describe("loadConfig", () => {
   });
 
   beforeEach(() => {
-    process.env.VANTAGE_HOME = vantageHome;
+    process.env.OPENCANDLE_HOME = openCandleHome;
     mockedExistsSync.mockReturnValue(false);
     mockedMkdirSync.mockImplementation(() => undefined);
     mockedReadFileSync.mockImplementation(() => {
@@ -101,7 +101,7 @@ describe("loadConfig", () => {
     expect(config.fredApiKey).toBe("fred");
   });
 
-  it("loads finance-provider keys from ~/.vantage/config.json", () => {
+  it("loads finance-provider keys from ~/.opencandle/config.json", () => {
     mockedExistsSync.mockImplementation((path) => path === configPath);
     mockedReadFileSync.mockImplementation((path) => {
       if (path === configPath) {
@@ -121,7 +121,7 @@ describe("loadConfig", () => {
     expect(config.fredApiKey).toBe("fred-file");
   });
 
-  it("environment variables override ~/.vantage/config.json", () => {
+  it("environment variables override ~/.opencandle/config.json", () => {
     mockedExistsSync.mockImplementation((path) => path === configPath);
     mockedReadFileSync.mockImplementation((path) => {
       if (path === configPath) {
@@ -172,7 +172,7 @@ describe("loadConfig", () => {
     expect(config.fredApiKey).toBeUndefined();
   });
 
-  it("throws a clear error for malformed ~/.vantage/config.json", () => {
+  it("throws a clear error for malformed ~/.opencandle/config.json", () => {
     mockedExistsSync.mockImplementation((path) => path === configPath);
     mockedReadFileSync.mockImplementation((path) => {
       if (path === configPath) {
@@ -181,10 +181,10 @@ describe("loadConfig", () => {
       throw new Error("ENOENT");
     });
 
-    expect(() => loadConfig()).toThrowError(`Invalid Vantage config at ${configPath}`);
+    expect(() => loadConfig()).toThrowError(`Invalid OpenCandle config at ${configPath}`);
   });
 
-  it("writes ~/.vantage/config.json", () => {
+  it("writes ~/.opencandle/config.json", () => {
     saveFileConfig(
       {
         providers: {

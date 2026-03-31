@@ -1,6 +1,6 @@
 # Code of Conduct
 
-Vantage is committed to a respectful, technically serious, and inclusive collaboration environment.
+OpenCandle is committed to a respectful, technically serious, and inclusive collaboration environment.
 
 ## Expected Behavior
 

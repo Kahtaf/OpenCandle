@@ -1,13 +1,13 @@
-# Vantage Competitive Analysis: Open-Source Financial AI Agents
+# OpenCandle Competitive Analysis: Open-Source Financial AI Agents
 
 **Date:** 2026-03-29
-**Purpose:** Identify what Vantage can learn from existing open-source financial agents — algorithms, tools, APIs, system prompts, and architectural patterns — and provide actionable recommendations.
+**Purpose:** Identify what OpenCandle can learn from existing open-source financial agents — algorithms, tools, APIs, system prompts, and architectural patterns — and provide actionable recommendations.
 
 ---
 
 ## Table of Contents
 
-1. [Vantage Current State](#vantage-current-state)
+1. [OpenCandle Current State](#vantage-current-state)
 2. [Competitor Directory](#competitor-directory)
 3. [Per-Competitor Analysis: What to Steal](#per-competitor-analysis)
 4. [Cross-Cutting Patterns](#cross-cutting-patterns)
@@ -18,9 +18,9 @@
 
 ---
 
-## 1. Vantage Current State
+## 1. OpenCandle Current State
 
-Before analyzing competitors, here's what Vantage already has (15 tools):
+Before analyzing competitors, here's what OpenCandle already has (15 tools):
 
 | Category | Tools | Data Sources |
 |----------|-------|-------------|
@@ -92,12 +92,12 @@ Before analyzing competitors, here's what Vantage already has (15 tools):
 
 | Idea | Relevance | Why |
 |------|-----------|-----|
-| SEC EDGAR filing fetcher (10-K, 10-Q, 8-K) | **HIGH** | Free API, no key needed. Vantage has zero SEC data. Filings contain material info not in price/fundamentals APIs. |
+| SEC EDGAR filing fetcher (10-K, 10-Q, 8-K) | **HIGH** | Free API, no key needed. OpenCandle has zero SEC data. Filings contain material info not in price/fundamentals APIs. |
 | Options chain data via Yahoo Finance | **MEDIUM** | Yahoo options endpoint is free and accessible with same approach as existing Yahoo provider. Reveals institutional positioning. |
 | Insider trading data (SEC Form 4) | **MEDIUM** | Public EDGAR data showing insider buys/sells — strong signal. |
 | Sector/industry screening | **LOW** | Requires maintaining a symbol universe. Better addressed through search_ticker improvements. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **SEC EDGAR integration:**
 - New provider: `src/providers/sec-edgar.ts`
@@ -124,11 +124,11 @@ Before analyzing competitors, here's what Vantage already has (15 tools):
 
 | Idea | Relevance | Why |
 |------|-----------|-----|
-| Named investor personas with distinct frameworks | **HIGH** | Vantage already has 4 analyst roles but they're generic. Persona prompts produce dramatically more interesting, varied analysis. Purely a prompt change — zero infrastructure cost. |
-| Consensus voting (BUY/HOLD/SELL with conviction) | **HIGH** | Vantage's current synthesis asks the LLM to weigh everything qualitatively. Structured voting is more rigorous and auditable. |
-| Valuation-specific analyst (DCF, comps) | **HIGH** | Vantage has fundamental data but no valuation model. A DCF tool is a significant differentiator. |
+| Named investor personas with distinct frameworks | **HIGH** | OpenCandle already has 4 analyst roles but they're generic. Persona prompts produce dramatically more interesting, varied analysis. Purely a prompt change — zero infrastructure cost. |
+| Consensus voting (BUY/HOLD/SELL with conviction) | **HIGH** | OpenCandle's current synthesis asks the LLM to weigh everything qualitatively. Structured voting is more rigorous and auditable. |
+| Valuation-specific analyst (DCF, comps) | **HIGH** | OpenCandle has fundamental data but no valuation model. A DCF tool is a significant differentiator. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Named personas — modify `src/analysts/orchestrator.ts`:**
 
@@ -163,9 +163,9 @@ Synthesis prompt tallies signals and weighted convictions to produce a final ver
 |------|-----------|-----|
 | Debate/challenge mechanism between analysts | **MEDIUM** | More nuanced output, but doubles token cost. Worth it for deep analysis only. |
 | Separate News Analyst vs Sentiment Analyst | **MEDIUM** | Reddit sentiment (retail noise) is different from news analysis (institutional events). Splitting makes sense analytically. |
-| "Researcher" role for additional context | **LOW** | Would require web search capability Vantage doesn't have. |
+| "Researcher" role for additional context | **LOW** | Would require web search capability OpenCandle doesn't have. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Debate mechanism — optional `--deep` analysis mode:**
 - After initial 4 analyst passes, add a challenge round
@@ -178,7 +178,7 @@ Synthesis prompt tallies signals and weighted convictions to produce a final ver
 
 ### 3.4 Dexter (20.4k stars)
 
-**What they do well:** TypeScript-based (closest to Vantage's stack). Self-validation loop, SEC filing reader, scratchpad logging, skill system with YAML frontmatter.
+**What they do well:** TypeScript-based (closest to OpenCandle's stack). Self-validation loop, SEC filing reader, scratchpad logging, skill system with YAML frontmatter.
 
 **What to steal:**
 
@@ -186,9 +186,9 @@ Synthesis prompt tallies signals and weighted convictions to produce a final ver
 |------|-----------|-----|
 | Self-validation loop | **HIGH** | After analysis, agent re-checks cited numbers against tool output. Catches hallucinated financial numbers — the single most dangerous failure mode. Simple prompt addition. |
 | Scratchpad / reasoning log | **MEDIUM** | Persisting intermediate reasoning. Useful for multi-session tracking. |
-| Skill system | **LOW** | Vantage's tool system already serves this purpose. Over-engineering at current scale. |
+| Skill system | **LOW** | OpenCandle's tool system already serves this purpose. Over-engineering at current scale. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Self-validation — add to `src/analysts/orchestrator.ts`:**
 ```typescript
@@ -220,11 +220,11 @@ Could also add a programmatic check: compare numbers in synthesis text against `
 
 | Idea | Relevance | Why |
 |------|-----------|-----|
-| Structured quantitative sentiment scoring | **HIGH** | Vantage currently returns raw Reddit posts. No actual sentiment score. Adding a keyword-based score makes sentiment quantitative. |
+| Structured quantitative sentiment scoring | **HIGH** | OpenCandle currently returns raw Reddit posts. No actual sentiment score. Adding a keyword-based score makes sentiment quantitative. |
 | Financial-specific prompt templates | **MEDIUM** | FinGPT's classification prompts can be adapted for Gemini. |
-| Fine-tuned model | **LOW** | Requires GPU infra. Not feasible for Vantage. |
+| Fine-tuned model | **LOW** | Requires GPU infra. Not feasible for OpenCandle. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Quantitative sentiment scoring — modify `src/providers/reddit.ts`:**
 
@@ -259,9 +259,9 @@ Crude but gives the LLM a number to reference instead of interpreting raw post t
 | Idea | Relevance | Why |
 |------|-----------|-----|
 | Historical backtesting concept | **MEDIUM** | "What would have happened" is a natural question. Reuses existing indicator computations. |
-| RL training environments | **LOW** | Requires GPU infra. Vantage is advisory, not execution. |
+| RL training environments | **LOW** | Requires GPU infra. OpenCandle is advisory, not execution. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Simple backtesting tool — new `src/tools/technical/backtest.ts`:**
 
@@ -286,10 +286,10 @@ Pure computation — no new APIs needed.
 
 | Idea | Relevance | Why |
 |------|-----------|-----|
-| Portfolio P&L tracking over time | **MEDIUM** | Currently Vantage only shows current snapshot. Historical tracking helps evaluate decisions. |
+| Portfolio P&L tracking over time | **MEDIUM** | Currently OpenCandle only shows current snapshot. Historical tracking helps evaluate decisions. |
 | Paper trading mode | **LOW** | Requires execution simulation. Beyond advisory scope. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 Extend `Position` type to include snapshots: `Array<{date: string, price: number, value: number}>`. When viewing portfolio, append today's snapshot. New tool `get_portfolio_history` reads snapshots and computes daily P&L, cumulative return, and comparison to SPY.
 
@@ -308,7 +308,7 @@ Extend `Position` type to include snapshots: `Array<{date: string, price: number
 | Tax-loss harvesting suggestions | **MEDIUM** | For portfolio positions with unrealized losses, suggest selling and identify replacement securities. Useful but niche. |
 | Portfolio rebalancing | **MEDIUM** | Given target allocations and current positions, compute trades needed. Simple math. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **DCF tool — new `src/tools/fundamentals/dcf.ts`:**
 
@@ -341,9 +341,9 @@ Fetches `get_company_overview` for each (parallel `Promise.all`). Produces compa
 
 | Idea | Relevance | Why |
 |------|-----------|-----|
-| Chain-of-thought analytical framework in system prompt | **HIGH** | Vantage says "chain tools" but doesn't enforce structured reasoning steps. FinCoT adds explicit checkpoints. Free improvement — zero code changes. |
+| Chain-of-thought analytical framework in system prompt | **HIGH** | OpenCandle says "chain tools" but doesn't enforce structured reasoning steps. FinCoT adds explicit checkpoints. Free improvement — zero code changes. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Modify `src/system-prompt.ts` — add structured framework:**
 
@@ -382,13 +382,13 @@ Zero infrastructure cost — purely prompt engineering.
 | Outcome tracking and prompt scoring | **MEDIUM** | Track recommendations, later check if price moved in predicted direction. Builds a track record. |
 | Analysis quality scoring rubric | **MEDIUM** | Agent scores own analysis on data completeness, logical consistency, risk acknowledgment. |
 
-**How to apply to Vantage:**
+**How to apply to OpenCandle:**
 
 **Prediction tracking — new `src/tools/portfolio/predictions.ts`:**
 
 Parameters: `action` (record/check), `symbol`, `prediction` (bullish/bearish/neutral), `target_price` (optional), `timeframe` (e.g., "30d")
 
-Record action saves to `~/.vantage/predictions.json`:
+Record action saves to `~/.opencandle/predictions.json`:
 ```json
 {
   "symbol": "AAPL",
@@ -409,24 +409,24 @@ Check action fetches current prices, computes directional accuracy:
 
 | Project | Stealable Idea | Relevance | Notes |
 |---------|---------------|-----------|-------|
-| **OpenAlice** | Watchlist config file | **MEDIUM** | `~/.vantage/watchlist.json` with alert levels. Same persistence pattern as portfolio. |
+| **OpenAlice** | Watchlist config file | **MEDIUM** | `~/.opencandle/watchlist.json` with alert levels. Same persistence pattern as portfolio. |
 | **Polymarket Agents** | Event-driven analysis (earnings dates, FOMC) | **MEDIUM** | Economic calendar tool would add context. Hard to find free API. |
 | **Financial Datasets MCP** | MCP server exposure of tools | **LOW** | Interesting for interop but no clear user benefit today. |
 | **Microsoft MarS** | Order-level market simulation | **LOW** | Computationally intensive, not relevant to advisory role. |
-| **FinMem** | Layered memory architecture | **LOW** | Interesting concept but Vantage has no persistent memory system to layer on. |
-| **AgenticTrading** | MCP/A2A protocol integration | **LOW** | Protocol-forward but premature for Vantage's current stage. |
+| **FinMem** | Layered memory architecture | **LOW** | Interesting concept but OpenCandle has no persistent memory system to layer on. |
+| **AgenticTrading** | MCP/A2A protocol integration | **LOW** | Protocol-forward but premature for OpenCandle's current stage. |
 
 ---
 
 ## 4. Cross-Cutting Patterns
 
-These gaps appear across multiple competitors — things almost every serious project has that Vantage lacks:
+These gaps appear across multiple competitors — things almost every serious project has that OpenCandle lacks:
 
 ### 4.1 Balance Sheet and Cash Flow Data
 
 **Appears in:** OpenBB, Anthropic plugins, Dexter, FinRobot
 
-**The problem:** Vantage's `getFinancials` only fetches income statements. The `FinancialStatement` type has fields for `totalAssets`, `totalLiabilities`, `totalEquity`, `operatingCashFlow`, and `freeCashFlow` — but they're all hardcoded to 0.
+**The problem:** OpenCandle's `getFinancials` only fetches income statements. The `FinancialStatement` type has fields for `totalAssets`, `totalLiabilities`, `totalEquity`, `operatingCashFlow`, and `freeCashFlow` — but they're all hardcoded to 0.
 
 **The fix:** Add `BALANCE_SHEET` and `CASH_FLOW` API calls to `src/providers/alpha-vantage.ts`. These are existing Alpha Vantage endpoints with the same rate limits. The types already support the data.
 
@@ -434,7 +434,7 @@ These gaps appear across multiple competitors — things almost every serious pr
 
 **Appears in:** FinRL, TradingAgents, OpenBB
 
-**The problem:** Vantage fetches volume in `getHistory` but the technical indicators tool completely ignores it. Volume confirmation is a fundamental concept.
+**The problem:** OpenCandle fetches volume in `getHistory` but the technical indicators tool completely ignores it. Volume confirmation is a fundamental concept.
 
 **The fix:** Add to `src/tools/technical/indicators.ts`:
 - **OBV (On-Balance Volume):** Cumulative volume — add on up-days, subtract on down-days
@@ -506,7 +506,7 @@ Ideas that appear frequently in competitors but should be explicitly excluded:
 
 | Idea | Why Not |
 |------|---------|
-| **Live trading execution** | Vantage is advisory. Execution creates liability and complexity that dwarfs the benefit. |
+| **Live trading execution** | OpenCandle is advisory. Execution creates liability and complexity that dwarfs the benefit. |
 | **Reinforcement learning models** | Requires GPU infra, training pipelines, ongoing model management. Not feasible in TypeScript. |
 | **Fine-tuned financial models** | Same infrastructure burden. Gemini with good prompting is the right approach. |
 | **100+ data integrations** | Breadth for breadth's sake adds maintenance. Focus on 5-8 high-value sources covering 95% of retail needs. |

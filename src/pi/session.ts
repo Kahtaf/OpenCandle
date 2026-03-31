@@ -8,9 +8,9 @@ import {
   type SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import { loadEnv } from "../config.js";
-import vantageExtension from "./vantage-extension.js";
+import openCandleExtension from "./opencandle-extension.js";
 
-export interface CreateVantageSessionOptions {
+export interface CreateOpenCandleSessionOptions {
   cwd?: string;
   authStorage?: AuthStorage;
   modelRegistry?: ModelRegistry;
@@ -19,8 +19,8 @@ export interface CreateVantageSessionOptions {
   useInlineExtension?: boolean;
 }
 
-export async function createVantageSession(
-  options: CreateVantageSessionOptions = {},
+export async function createOpenCandleSession(
+  options: CreateOpenCandleSessionOptions = {},
 ): Promise<CreateAgentSessionResult> {
   loadEnv();
 
@@ -30,7 +30,7 @@ export async function createVantageSession(
     ? new DefaultResourceLoader({
         cwd,
         settingsManager: options.settingsManager,
-        extensionFactories: [vantageExtension],
+        extensionFactories: [openCandleExtension],
       })
     : undefined;
 

@@ -2,8 +2,6 @@ node_modules/
 .env
 dist/
 .DS_Store
-.vantage-portfolio.json
-.vantage-watchlist.json
-.vantage/
+.opencandle/
 .build-agent-progress
 agent-eval-results*.json

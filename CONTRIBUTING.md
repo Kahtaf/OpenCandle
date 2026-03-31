@@ -1,6 +1,6 @@
-# Contributing to Vantage
+# Contributing to OpenCandle
 
-Vantage is a financial data analysis agent built with TypeScript, Vitest, and Pi. Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.
+OpenCandle is a financial data analysis agent built with TypeScript, Vitest, and Pi. Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.
 
 ## Before You Start
 
@@ -74,7 +74,7 @@ For non-trivial work, link the issue or design discussion that established scope
 
 ## Release Notes and Changelog Discipline
 
-Vantage follows Pi's release style where possible: manual semver bump scripts, a maintained `CHANGELOG.md` with an `Unreleased` section, and explicit release commands.
+OpenCandle follows Pi's release style where possible: manual semver bump scripts, a maintained `CHANGELOG.md` with an `Unreleased` section, and explicit release commands.
 
 Prefer clear prefixes such as:
 
@@ -116,7 +116,7 @@ Do not:
 - guess financial numbers or metrics
 - hardcode mock data into tools
 - make live API calls in unit tests
-- blur the separation between Pi-owned config and Vantage-owned state
+- blur the separation between Pi-owned config and OpenCandle-owned state
 
 ## Where Things Live
 

@@ -10,13 +10,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getConfig } from "../../src/config.js";
-import { createVantageSession } from "../../src/agent.js";
+import { createOpenCandleSession } from "../../src/agent.js";
 import { cache } from "../../src/infra/cache.js";
 
 const config = getConfig();
-const vantageHome = mkdtempSync(join(tmpdir(), "vantage-cli-test-"));
-process.env.VANTAGE_HOME = vantageHome;
-const { session } = await createVantageSession({
+const openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-cli-test-"));
+process.env.OPENCANDLE_HOME = openCandleHome;
+const { session } = await createOpenCandleSession({
   cwd: process.cwd(),
   sessionManager: SessionManager.inMemory(),
   settingsManager: SettingsManager.inMemory({
@@ -78,8 +78,8 @@ function assert(cond: boolean, msg: string) {
 }
 
 async function run() {
-  console.log("=== Vantage CLI E2E Tests ===");
-  console.log(`Testing through the Pi-based Vantage session\n`);
+  console.log("=== OpenCandle CLI E2E Tests ===");
+  console.log(`Testing through the Pi-based OpenCandle session\n`);
 
   // --- 1. Stock Quote (sanity) ---
   await test(
@@ -227,8 +227,8 @@ async function run() {
   }
 
   // Clean up
-  rmSync(vantageHome, { recursive: true, force: true });
-  delete process.env.VANTAGE_HOME;
+  rmSync(openCandleHome, { recursive: true, force: true });
+  delete process.env.OPENCANDLE_HOME;
   session.dispose();
 
   process.exit(failed > 0 ? 1 : 0);
