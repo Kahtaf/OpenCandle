@@ -9,7 +9,19 @@
     "test:watch": "vitest",
     "test:e2e": "tsx tests/e2e/tools.test.ts",
     "test:e2e:cli": "tsx tests/e2e/cli.test.ts",
-    "test:e2e:providers": "tsx tests/e2e/providers.test.ts"
+    "test:e2e:providers": "tsx tests/e2e/providers.test.ts",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "version:set": "npm version",
+    "prepublishOnly": "npm test",
+    "publish:dry": "npm publish --access public --dry-run",
+    "release:patch": "node scripts/release.mjs patch",
+    "release:minor": "node scripts/release.mjs minor",
+    "release:major": "node scripts/release.mjs major"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "^0.63.1",

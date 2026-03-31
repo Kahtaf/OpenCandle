@@ -122,6 +122,13 @@ npm test              # 208 unit tests
 npm run test:watch    # watch mode
 ```
 
+## Project Docs
+
+- OSS launch and npm release plan: [docs/production-plan.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/docs/production-plan.md)
+- Contributor guide: [CONTRIBUTING.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/CONTRIBUTING.md)
+- Security policy: [SECURITY.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/SECURITY.md)
+- Release history: [CHANGELOG.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/CHANGELOG.md)
+
 ## Tech Stack
 
 - **Runtime**: TypeScript, Node.js

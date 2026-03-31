@@ -1,0 +1,42 @@
+name: Feature request
+description: Propose a new capability or a meaningful change to existing behavior
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use this form for non-trivial feature work. Start here before opening a large PR so scope and tradeoffs can be discussed first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What user problem should this solve?
+      placeholder: Describe the workflow gap, pain point, or unmet need.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should Vantage do?
+      placeholder: Describe the intended behavior at a user level.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider, and why are they worse?
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks or tradeoffs
+      description: Call out complexity, maintenance cost, API/provider constraints, or user confusion risk
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: How would we know this feature is working well?
+      placeholder: Tests, user flows, acceptance checks, or rollout signals
