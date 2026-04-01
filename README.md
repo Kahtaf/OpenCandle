@@ -12,6 +12,8 @@ Type `analyze TSLA` and it runs a full 5-analyst breakdown — fundamentals, tec
 
 ## Getting Started
 
+**Requires Node.js ≥ 20.**
+
 ### Standalone CLI
 
 ```bash
@@ -22,7 +24,13 @@ opencandle
 npx opencandle@latest
 ```
 
-On first run, OpenCandle guides you through AI model setup before chat starts. If you want to rerun that flow later, use `/setup`.
+On first run, OpenCandle walks you through setup:
+
+1. **Connect an AI provider** — sign in with OAuth (Google, OpenAI, Anthropic) or paste an API key
+2. **Pick a model** — choose from the available models on your connected provider
+3. **Optional: add market-data keys** — Alpha Vantage and FRED for fundamentals and macro data (can skip)
+
+To rerun setup later, use `/setup`.
 
 ### From Source
 
@@ -65,7 +73,8 @@ Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.jso
 ```
 
 - Environment variables still work and override `~/.opencandle/config.json`.
-- OpenCandle user data lives in `~/.opencandle/`:
+- Set `OPENCANDLE_HOME` to override the default `~/.opencandle/` data directory.
+- OpenCandle user data lives in `~/.opencandle/` (or `$OPENCANDLE_HOME`):
   - `~/.opencandle/watchlist.json`
   - `~/.opencandle/portfolio.json`
   - `~/.opencandle/predictions.json`
@@ -75,7 +84,7 @@ Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.jso
 
 ## Usage
 
-OpenCandle now runs inside Pi's interactive TUI. Useful controls:
+OpenCandle runs inside Pi's interactive TUI. Useful controls:
 
 ```text
 /model          Switch provider/model
@@ -130,7 +139,7 @@ Key architectural choices:
 ## Test
 
 ```bash
-npm test              # 208 unit tests
+npm test              # unit tests
 npm run test:watch    # watch mode
 ```
 

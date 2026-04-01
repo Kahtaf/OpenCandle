@@ -10,6 +10,7 @@ import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsWorkflow, buildOptionsScreenerWorkflow, buildPortfolioWorkflow } from "../workflows/index.js";
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 import { getThirdPartyToolDescriptions } from "../tool-kit.js";
+import { registerAskUserTool } from "../tools/interaction/ask-user.js";
 import { runOpenCandleSetup } from "./setup.js";
 import { initDefaultDatabase, MemoryStorage, buildMemoryContext, extractPreferences } from "../memory/index.js";
 
@@ -135,6 +136,7 @@ export default function openCandleExtension(pi: ExtensionAPI): void {
   for (const tool of getOpenCandleToolDefinitions()) {
     pi.registerTool(tool);
   }
+  registerAskUserTool(pi);
 
   pi.registerCommand("analyze", {
     description: "Run the multi-analyst OpenCandle workflow for a ticker symbol",

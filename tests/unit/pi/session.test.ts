@@ -33,7 +33,7 @@ describe("createOpenCandleSession", () => {
     expect(result.session.getActiveToolNames()).not.toContain("bash");
     expect(result.session.getActiveToolNames()).toContain("get_stock_quote");
     expect(result.session.getActiveToolNames()).toContain("manage_watchlist");
-    expect(result.session.getActiveToolNames()).toHaveLength(23);
+    expect(result.session.getActiveToolNames()).toHaveLength(24);
     expect(result.session.getAllTools().some((tool) => tool.name === "read")).toBe(true);
     if (result.modelFallbackMessage) {
       expect(result.modelFallbackMessage).toContain("No models available");
