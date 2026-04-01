@@ -8,7 +8,7 @@
 import assert from "node:assert";
 import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
-import { createOpenCandleSession } from "../../src/agent.js";
+import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 
 const { session } = await createOpenCandleSession({

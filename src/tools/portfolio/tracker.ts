@@ -47,7 +47,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
   name: "track_portfolio",
   label: "Portfolio Tracker",
   description:
-    "Track your portfolio of stocks and crypto. Add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker. Data persisted to ~/.vantage/portfolio.json.",
+    "Track your portfolio of stocks and crypto. Add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker. Data persisted to ~/.opencandle/portfolio.json.",
   parameters: params,
   async execute(toolCallId, args) {
     const positions = loadPortfolio();

@@ -8,6 +8,10 @@ const COMMON_WORDS = new Set([
   "SAY", "SHE", "TOO", "USE", "WAY", "WHO", "BOY", "DID", "GET", "HAS", "HIM",
   "OUT", "PUT", "RUN", "SET", "TOP", "WHY", "BIG", "END", "FAR", "FEW",
   "GOT", "LOW", "MAN", "OFF", "PAY", "TRY", "TWO", "BUY", "ETF", "ETFS",
+  // Technical analysis acronyms
+  "SMA", "EMA", "RSI", "MACD", "OBV", "ATR", "ADX", "VWAP",
+  // Fundamental analysis acronyms
+  "DCF", "FCF", "ROE", "ROA", "ROI", "EPS", "NAV", "WACC", "EBIT",
   "BEST", "WHAT", "WITH", "THAT", "THIS", "FROM", "HAVE", "BEEN", "SOME",
   "THEM", "THAN", "LIKE", "JUST", "OVER", "ALSO", "BACK", "MUCH", "MOST",
   "ONLY", "VERY", "WHEN", "COME", "MAKE", "FIND", "HERE", "KNOW", "TAKE",

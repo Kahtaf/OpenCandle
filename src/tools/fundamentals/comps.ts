@@ -97,7 +97,7 @@ export const compsTool: AgentTool<typeof params> = {
   async execute(toolCallId, args) {
     const config = getConfig();
     if (!config.alphaVantageApiKey) {
-      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.vantage/config.json.");
+      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
     }
 
     const symbols = args.symbols.map((s) => s.toUpperCase());

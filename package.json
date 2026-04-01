@@ -2,9 +2,58 @@
   "name": "opencandle",
   "version": "0.1.0",
   "description": "Financial trading & investing agent",
+  "license": "MIT",
+  "homepage": "https://github.com/Kahtaf/OpenCandle#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kahtaf/OpenCandle.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Kahtaf/OpenCandle/issues"
+  },
   "type": "module",
+  "bin": {
+    "opencandle": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./tool-kit": {
+      "types": "./dist/tool-kit.d.ts",
+      "import": "./dist/tool-kit.js"
+    },
+    "./infra": {
+      "types": "./dist/infra/index.d.ts",
+      "import": "./dist/infra/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/pi/opencandle-extension.js"
+    ]
+  },
+  "keywords": [
+    "pi-package",
+    "opencandle",
+    "finance"
+  ],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "start": "tsx src/index.ts",
+    "build": "tsc && chmod +x dist/cli.js",
+    "prepare": "npm run build",
+    "start": "tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "tsx tests/e2e/tools.test.ts",
@@ -24,15 +73,21 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@mariozechner/pi-agent-core": "^0.63.1",
-    "@mariozechner/pi-ai": "^0.63.1",
-    "@mariozechner/pi-coding-agent": "^0.64.0",
-    "@sinclair/typebox": "^0.34.0",
     "better-sqlite3": "^12.8.0",
     "camoufox-js": "^0.9.3",
     "playwright-core": "^1.58.2"
   },
+  "peerDependencies": {
+    "@mariozechner/pi-agent-core": "*",
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
   "devDependencies": {
+    "@mariozechner/pi-agent-core": "^0.63.1",
+    "@mariozechner/pi-ai": "^0.63.1",
+    "@mariozechner/pi-coding-agent": "^0.64.0",
+    "@sinclair/typebox": "^0.34.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",

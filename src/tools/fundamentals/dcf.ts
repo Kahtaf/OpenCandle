@@ -151,7 +151,7 @@ export const dcfTool: AgentTool<typeof params> = {
     const config = getConfig();
 
     if (!config.alphaVantageApiKey) {
-      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.vantage/config.json.");
+      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
     }
 
     const [overview, financials, quote] = await Promise.all([

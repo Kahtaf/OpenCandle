@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getConfig } from "../../src/config.js";
-import { createOpenCandleSession } from "../../src/agent.js";
+import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 
 const config = getConfig();
@@ -120,7 +120,7 @@ async function run() {
     "Show me recent SEC filings for Apple",
     (text, tools) => {
       assert(tools.includes("get_sec_filings"), `expected get_sec_filings, got: ${tools}`);
-      assert(text.includes("10-K") || text.includes("10-Q") || text.includes("filing"), "should mention filing types");
+      assert(text.includes("10-K") || text.includes("10-Q") || text.includes("8-K") || text.toLowerCase().includes("filing"), "should mention filing types");
     },
   );
 

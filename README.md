@@ -12,14 +12,26 @@ Type `analyze TSLA` and it runs a full 5-analyst breakdown — fundamentals, tec
 
 ## Getting Started
 
+### Standalone CLI
+
+```bash
+npm install -g opencandle
+opencandle
+
+# or run without installing globally
+npx opencandle@latest
+```
+
+On first run, OpenCandle guides you through AI model setup before chat starts. If you want to rerun that flow later, use `/setup`.
+
+### From Source
+
 ```bash
 npm install
 cp .env.example .env
 # Add any LLM env vars you want to use locally (for example GEMINI_API_KEY)
 npm start
 ```
-
-On first run, OpenCandle now guides you through AI model setup before chat starts. If you want to rerun that flow later, use `/setup`.
 
 ### API Keys
 
@@ -124,10 +136,10 @@ npm run test:watch    # watch mode
 
 ## Project Docs
 
-- OSS launch and npm release plan: [docs/production-plan.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/docs/production-plan.md)
-- Contributor guide: [CONTRIBUTING.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/CONTRIBUTING.md)
-- Security policy: [SECURITY.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/SECURITY.md)
-- Release history: [CHANGELOG.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/CHANGELOG.md)
+- OSS launch and npm release plan: [docs/production-plan.md](https://github.com/Kahtaf/OpenCandle/blob/main/docs/production-plan.md)
+- Contributor guide: [CONTRIBUTING.md](https://github.com/Kahtaf/OpenCandle/blob/main/CONTRIBUTING.md)
+- Security policy: [SECURITY.md](https://github.com/Kahtaf/OpenCandle/blob/main/SECURITY.md)
+- Release history: [CHANGELOG.md](https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md)
 
 ## Tech Stack
 

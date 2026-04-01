@@ -23,7 +23,7 @@ export const fredDataTool: AgentTool<typeof params, FredSeries> = {
   async execute(toolCallId, args) {
     const apiKey = getConfig().fredApiKey;
     if (!apiKey) {
-      throw new Error("FRED API key not configured. Set FRED_API_KEY or add ~/.vantage/config.json. Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html");
+      throw new Error("FRED API key not configured. Set FRED_API_KEY or add ~/.opencandle/config.json. Get a free key at https://fred.stlouisfed.org/docs/api/api_key.html");
     }
 
     const limit = args.limit ?? 30;

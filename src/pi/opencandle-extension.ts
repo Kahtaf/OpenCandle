@@ -9,6 +9,7 @@ import { classifyIntent, resolveOptionsScreenerSlots, resolvePortfolioSlots } fr
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsWorkflow, buildOptionsScreenerWorkflow, buildPortfolioWorkflow } from "../workflows/index.js";
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
+import { getThirdPartyToolDescriptions } from "../tool-kit.js";
 import { runOpenCandleSetup } from "./setup.js";
 import { initDefaultDatabase, MemoryStorage, buildMemoryContext, extractPreferences } from "../memory/index.js";
 
@@ -251,8 +252,18 @@ export default function openCandleExtension(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", async (event) => {
     const memoryContext = storage ? buildMemoryContext(storage) : "";
+
+    let thirdPartySection = "";
+    const thirdPartyTools = getThirdPartyToolDescriptions();
+    if (thirdPartyTools.length > 0) {
+      const lines = thirdPartyTools
+        .map((t) => `- ${t.name}: ${t.description}`)
+        .join("\n");
+      thirdPartySection = `\n\n## Third-Party Tools\nThe following community-contributed tools are also available:\n${lines}`;
+    }
+
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${buildSystemPrompt(memoryContext || undefined)}`,
+      systemPrompt: `${event.systemPrompt}\n\n${buildSystemPrompt(memoryContext || undefined)}${thirdPartySection}`,
     };
   });
 }
