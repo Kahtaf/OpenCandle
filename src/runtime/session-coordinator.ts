@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 import { MemoryManager } from "../memory/manager.js";
 import { extractPreferences } from "../memory/preference-extractor.js";
@@ -101,9 +101,9 @@ export class SessionCoordinator {
   /** Run setup flow. */
   async runSetup(
     pi: ExtensionAPI,
-    ctx: ExtensionCommandContext,
+    ctx: ExtensionContext | ExtensionCommandContext,
     options: { mode: "startup" | "manual"; forceFinancePrompt?: boolean },
-  ): Promise<"ready" | "shutdown"> {
+  ): Promise<"ready" | "shutdown" | "cancelled"> {
     return runOpenCandleSetup(pi, ctx, options);
   }
 
@@ -121,7 +121,7 @@ export class SessionCoordinator {
   }
 
   /** Record a workflow run in storage. */
-  recordWorkflowRun(workflowType: string, entities: Record<string, unknown>, resolved: Record<string, unknown>, defaultsUsed: unknown[]): void {
+  recordWorkflowRun(workflowType: string, entities: object, resolved: object, defaultsUsed: unknown[]): void {
     this.storage?.insertWorkflowRun({
       sessionId: this.sessionId,
       workflowType,
