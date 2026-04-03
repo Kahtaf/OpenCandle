@@ -29,8 +29,8 @@ describe("initDatabase", () => {
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 1", () => {
-    expect(getSchemaVersion(db)).toBe(1);
+  it("sets schema version to 2", () => {
+    expect(getSchemaVersion(db)).toBe(2);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -105,7 +105,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(1);
+    expect(getSchemaVersion(resetDb)).toBe(2);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
