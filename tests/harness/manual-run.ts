@@ -10,25 +10,41 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
+import { classifyIntent } from "../../src/routing/classify-intent.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 
 const ipcDir = process.argv[2] || join(tmpdir(), "oc-ipc-" + Date.now());
 const prompt = process.argv[3] || "Help me build a diversified stock portfolio for long-term growth";
 
+// Optional: pre-scripted answers as JSON array in argv[4]
+const scriptedAnswers: string[] = process.argv[4] ? JSON.parse(process.argv[4]) as string[] : [];
+let scriptedIndex = 0;
+
 mkdirSync(ipcDir, { recursive: true });
 console.log(`IPC dir: ${ipcDir}`);
 console.log(`Prompt: ${prompt}`);
+if (scriptedAnswers.length > 0) {
+  console.log(`Scripted answers: ${scriptedAnswers.length}`);
+}
 
 function setStatus(status: string) {
   writeFileSync(join(ipcDir, "status"), status, "utf-8");
 }
 
+const askUserTranscript: Array<{ question: string; answer: string | null }> = [];
+
 const askUserHandler: AskUserHandler = async (params) => {
-  // Write question
+  // If scripted answers are available, consume the next one
+  if (scriptedIndex < scriptedAnswers.length) {
+    const answer = scriptedAnswers[scriptedIndex++];
+    askUserTranscript.push({ question: params.question, answer });
+    return { answer, cancelled: false };
+  }
+
+  // Fall back to IPC-based polling
   writeFileSync(join(ipcDir, "question.json"), JSON.stringify(params, null, 2), "utf-8");
   setStatus("waiting");
 
-  // Poll for answer
   const answerPath = join(ipcDir, "answer.json");
   const start = Date.now();
   const timeout = 5 * 60 * 1000; // 5 min
@@ -36,6 +52,7 @@ const askUserHandler: AskUserHandler = async (params) => {
   while (!existsSync(answerPath)) {
     if (Date.now() - start > timeout) {
       setStatus("running");
+      askUserTranscript.push({ question: params.question, answer: null });
       return { answer: null, cancelled: true };
     }
     await new Promise((r) => setTimeout(r, 200));
@@ -44,11 +61,11 @@ const askUserHandler: AskUserHandler = async (params) => {
   const raw = readFileSync(answerPath, "utf-8");
   const { value } = JSON.parse(raw) as { value: string };
 
-  // Clean up for next round
   rmSync(answerPath, { force: true });
   rmSync(join(ipcDir, "question.json"), { force: true });
   setStatus("running");
 
+  askUserTranscript.push({ question: params.question, answer: value });
   return { answer: value, cancelled: false };
 };
 
@@ -70,8 +87,8 @@ cache.clear();
 setStatus("running");
 
 let text = "";
-const toolCalls: string[] = [];
-const toolResults: Record<string, string>[] = [];
+const toolCalls: Array<{ name: string; args: unknown; result?: unknown }> = [];
+const pendingTools = new Map<string, { name: string; args: unknown }>();
 
 await new Promise<void>((resolve) => {
   const unsub = session.subscribe((event: AgentSessionEvent) => {
@@ -79,7 +96,14 @@ await new Promise<void>((resolve) => {
       text += event.assistantMessageEvent.delta;
     }
     if (event.type === "tool_execution_start") {
-      toolCalls.push(event.toolName);
+      pendingTools.set(event.toolCallId, { name: event.toolName, args: event.args });
+    }
+    if (event.type === "tool_execution_end") {
+      const pending = pendingTools.get(event.toolCallId);
+      if (pending) {
+        toolCalls.push({ name: pending.name, args: pending.args, result: event.result });
+        pendingTools.delete(event.toolCallId);
+      }
     }
     if (event.type === "agent_end") {
       unsub();
@@ -90,7 +114,8 @@ await new Promise<void>((resolve) => {
 });
 
 // Write final trace
-const trace = { prompt, toolCalls, text };
+const classification = classifyIntent(prompt);
+const trace = { prompt, classification, toolCalls, askUserTranscript, text };
 writeFileSync(join(ipcDir, "trace.json"), JSON.stringify(trace, null, 2), "utf-8");
 setStatus("done");
 console.log("Session complete. Trace written.");

@@ -1,0 +1,23 @@
+{
+  "aggregate": 0.93,
+  "cases": {
+    "quote-accuracy": 1.0,
+    "ratio-accuracy": 1.0,
+    "backtest-metrics": 1.0,
+    "stock-quote": 1.0,
+    "technicals": 1.0,
+    "backtest": 1.0,
+    "sec-filings": 0.0,
+    "fear-greed": 1.0,
+    "macro-gdp": 1.0,
+    "dcf-valuation": 1.0,
+    "bullish-recommendation": 1.0,
+    "high-conviction-signal": 1.0,
+    "no-guaranteed-language": 1.0,
+    "portfolio-builder-conservative": 1.0,
+    "portfolio-builder-aggressive": 1.0,
+    "options-screener": 1.0,
+    "compare-assets": 1.0,
+    "comprehensive-analysis": 0.978
+  }
+}
