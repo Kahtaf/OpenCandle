@@ -14,15 +14,20 @@ import {
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
+import type { AskUserHandler } from "../types/index.js";
 
-export default function openCandleExtension(pi: ExtensionAPI): void {
+export interface OpenCandleExtensionOptions {
+  askUserHandler?: AskUserHandler;
+}
+
+export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
   const coordinator = new SessionCoordinator();
 
   // Register tools
   for (const tool of getOpenCandleToolDefinitions()) {
     pi.registerTool(tool);
   }
-  registerAskUserTool(pi);
+  registerAskUserTool(pi, options?.askUserHandler);
 
   // /analyze command
   pi.registerCommand("analyze", {

@@ -97,6 +97,10 @@ export const cache = new Cache();
 - Make live API calls in unit tests
 - Draw conclusions until all relevant data is gathered
 
+## TESTING OPENCANDLE AS AN AGENT
+
+Run `npx tsx tests/harness/manual-run.ts <ipc-dir> "<prompt>"` in background. Poll `<ipc-dir>/status` (`running`/`waiting`/`done`). When `waiting`, read `question.json`, write `{"value":"..."}` to `answer.json`, repeat until `done`. Final output in `trace.json`.
+
 ## RUNTIME STATE
 - Pi config: `.pi/` and `~/.pi/agent/` — do not move into OpenCandle storage.
 - OpenCandle user state: `~/.opencandle/` — CLI must not depend on repo-local `.pi/extensions/`.

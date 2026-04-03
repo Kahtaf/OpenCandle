@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AskUserHandler } from "../../types/index.js";
 
 interface AskUserDetails {
   question: string;
@@ -55,7 +56,7 @@ function noUiResult(question: string, questionType: string): {
   };
 }
 
-export function registerAskUserTool(pi: ExtensionAPI): void {
+export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHandler): void {
   pi.registerTool({
     name: "ask_user",
     label: "Ask User",
@@ -67,6 +68,19 @@ export function registerAskUserTool(pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const { question, question_type: questionType } = params;
+
+      // Priority: injected handler > UI > no-UI fallback
+      if (askUserHandler) {
+        const result = await askUserHandler({
+          question,
+          questionType,
+          options: params.options,
+          placeholder: params.placeholder,
+          reason: params.reason,
+        });
+        if (result.cancelled) return cancelledResult(question, questionType);
+        return answerResult(question, questionType, result.answer!);
+      }
 
       if (!ctx?.hasUI) {
         return noUiResult(question, questionType);

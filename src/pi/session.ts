@@ -9,6 +9,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { loadEnv } from "../config.js";
 import openCandleExtension from "./opencandle-extension.js";
+import type { AskUserHandler } from "../types/index.js";
 
 export interface CreateOpenCandleSessionOptions {
   cwd?: string;
@@ -17,6 +18,7 @@ export interface CreateOpenCandleSessionOptions {
   settingsManager?: SettingsManager;
   sessionManager?: SessionManager;
   useInlineExtension?: boolean;
+  askUserHandler?: AskUserHandler;
 }
 
 export async function createOpenCandleSession(
@@ -30,7 +32,7 @@ export async function createOpenCandleSession(
     ? new DefaultResourceLoader({
         cwd,
         settingsManager: options.settingsManager,
-        extensionFactories: [openCandleExtension],
+        extensionFactories: [(pi) => openCandleExtension(pi, { askUserHandler: options.askUserHandler })],
       })
     : undefined;
 
