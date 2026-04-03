@@ -5,3 +5,5 @@ dist/
 .opencandle/
 .build-agent-progress
 agent-eval-results*.json
+tests/evals/runs/*
+!tests/evals/runs/.gitkeep

@@ -59,6 +59,8 @@
     "test:e2e": "tsx tests/e2e/tools.test.ts",
     "test:e2e:cli": "tsx tests/e2e/cli.test.ts",
     "test:e2e:providers": "tsx tests/e2e/providers.test.ts",
+    "test:evals": "vitest run --config vitest.config.evals.ts",
+    "test:evals:usually": "EVAL_TIER=usually vitest run --config vitest.config.evals.ts",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version",
@@ -92,6 +94,7 @@
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "vitest-evals": "^0.7.0"
   }
 }
