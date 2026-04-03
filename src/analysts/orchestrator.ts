@@ -100,6 +100,37 @@ export function getComprehensiveAnalysisPrompts(symbol: string): string[] {
   return prompts;
 }
 
+import type { WorkflowDefinition } from "../runtime/prompt-step.js";
+import { promptStep } from "../runtime/prompt-step.js";
+
+export function buildComprehensiveAnalysisDefinition(symbol: string): WorkflowDefinition {
+  const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
+
+  const steps = [
+    promptStep("initial_fetch", "Fetch initial quote data", getInitialAnalysisPrompt(symbol), {
+      expectedOutputs: ["quote"],
+    }),
+    ...roles.map((role) =>
+      promptStep(`analyst_${role}`, `${role} analysis`, ANALYST_PROMPTS[role](symbol), {
+        skippable: true,
+        requiredInputs: ["quote"],
+        expectedOutputs: [`${role}_signal`],
+      }),
+    ),
+    promptStep("synthesis", "Synthesize analyst signals", SYNTHESIS_PROMPT(symbol), {
+      requiredInputs: roles.map((r) => `${r}_signal`),
+      expectedOutputs: ["verdict"],
+    }),
+    promptStep("validation", "Validate cited numbers", VALIDATION_PROMPT(symbol), {
+      skippable: true,
+      requiredInputs: ["verdict"],
+      expectedOutputs: ["validation_result"],
+    }),
+  ];
+
+  return { workflowType: "comprehensive_analysis", steps };
+}
+
 export function runComprehensiveAnalysis(
   enqueueFollowUp: (prompt: string) => void,
   symbol: string,

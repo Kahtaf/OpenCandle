@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -42,6 +42,17 @@ const CURRENT_SCHEMA = `
     created_at TEXT NOT NULL,
     FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id)
   );
+
+  CREATE TABLE IF NOT EXISTS workflow_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL,
+    step_index INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    payload_json TEXT,
+    timestamp TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_workflow_events_run_id ON workflow_events(run_id);
 `;
 
 export function initDatabase(path: string): Database.Database {

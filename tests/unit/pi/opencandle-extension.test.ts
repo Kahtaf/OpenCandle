@@ -1,10 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { buildSystemPrompt } from "../../../src/system-prompt.js";
 import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestrator.js";
 import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
-import { initDatabase, MemoryStorage } from "../../../src/memory/index.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
@@ -167,7 +165,10 @@ describe("opencandle extension", () => {
     );
 
     expect(result.systemPrompt).toContain("BASE");
-    expect(result.systemPrompt).toContain(buildSystemPrompt());
+    // Composable prompt sections now build the system prompt
+    expect(result.systemPrompt).toContain("OpenCandle");
+    expect(result.systemPrompt).toContain("Available Tools");
+    expect(result.systemPrompt).toContain("Disclaimer");
   });
 
   it("routes portfolio-builder prompts through the deterministic workflow", async () => {
@@ -264,14 +265,14 @@ describe("opencandle extension", () => {
       openCandleExtension(fake.api);
       await initMemory(fake);
 
-      // Storage is initialized — before_agent_start should include memory context
+      // Storage is initialized — before_agent_start should include system prompt
       const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
       const result = await beforeStartHandler!(
         { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
         {},
       );
       expect(result.systemPrompt).toContain("BASE");
-      expect(result.systemPrompt).toContain(buildSystemPrompt());
+      expect(result.systemPrompt).toContain("OpenCandle");
     });
 
     it("extracts preferences from user input and passes them to slot resolvers", async () => {
@@ -369,7 +370,9 @@ describe("opencandle extension", () => {
     const calls = fake.sendUserMessage.mock.calls.map((call) => call[0]);
     expect(calls[0]).toBe(getComprehensiveAnalysisPrompts("NVDA")[0]);
     expect(calls[1]).toBe(getComprehensiveAnalysisPrompts("AAPL")[0]);
+    // The NVDA follow-ups should have been cancelled
     expect(calls).not.toContain(getComprehensiveAnalysisPrompts("NVDA")[1]);
+    // The AAPL follow-ups should proceed
     expect(calls).toContain(getComprehensiveAnalysisPrompts("AAPL")[1]);
   });
 });

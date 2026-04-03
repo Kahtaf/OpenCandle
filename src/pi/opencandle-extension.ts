@@ -1,143 +1,30 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { buildSystemPrompt } from "../system-prompt.js";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
-  getComprehensiveAnalysisPrompts,
   isAnalysisRequest,
   normalizeSymbol,
 } from "../analysts/orchestrator.js";
+import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.js";
 import { classifyIntent, resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../routing/index.js";
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
-import { buildCompareAssetsWorkflow, buildOptionsScreenerWorkflow, buildPortfolioWorkflow } from "../workflows/index.js";
+import {
+  buildPortfolioWorkflowDefinition,
+  buildOptionsScreenerWorkflowDefinition,
+  buildCompareAssetsWorkflowDefinition,
+} from "../workflows/index.js";
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
-import { getThirdPartyToolDescriptions } from "../tool-kit.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
-import { runOpenCandleSetup } from "./setup.js";
-import { initDefaultDatabase, MemoryStorage, buildMemoryContext, extractPreferences } from "../memory/index.js";
-
-const PROMPT_SETTLE_POLL_MS = 25;
-const IMMEDIATE_IDLE_GRACE_MS = 100;
-
-type QueueContext = ExtensionCommandContext | {
-  isIdle(): boolean;
-  hasPendingMessages?(): boolean;
-  ui?: { notify(message: string, level?: string): void };
-};
-
-function hasPendingMessages(ctx: QueueContext): boolean {
-  return ctx.hasPendingMessages?.() ?? false;
-}
-
-function isReadyForNextPrompt(ctx: QueueContext): boolean {
-  return ctx.isIdle() && !hasPendingMessages(ctx);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function waitForPromptSettlement(
-  ctx: QueueContext,
-  isCurrentSequence: () => boolean,
-): Promise<boolean> {
-  let sawBusyOrPending = !isReadyForNextPrompt(ctx);
-  const startedAt = Date.now();
-
-  while (isCurrentSequence()) {
-    const ready = isReadyForNextPrompt(ctx);
-    if (!ready) {
-      sawBusyOrPending = true;
-    }
-
-    if (sawBusyOrPending && ready) {
-      return true;
-    }
-
-    if (!sawBusyOrPending && ready && Date.now() - startedAt >= IMMEDIATE_IDLE_GRACE_MS) {
-      return true;
-    }
-
-    await sleep(PROMPT_SETTLE_POLL_MS);
-  }
-
-  return false;
-}
-
-function queuePromptSequence(
-  pi: ExtensionAPI,
-  prompts: string[],
-  ctx: QueueContext,
-  beginSequence: () => number,
-  isCurrentSequence: (sequenceId: number) => boolean,
-): void {
-  if (prompts.length === 0) return;
-
-  const [initialPrompt, ...followUps] = prompts;
-  const sequenceId = beginSequence();
-  const startedBusy = !isReadyForNextPrompt(ctx);
-
-  if (startedBusy) {
-    pi.sendUserMessage(initialPrompt, { deliverAs: "followUp" });
-    ctx.ui?.notify?.("Analysis queued as follow-up.", "info");
-  } else {
-    pi.sendUserMessage(initialPrompt);
-  }
-
-  // Submit workflow prompts one turn at a time so a newer workflow can cancel
-  // the remaining prompts before they are handed to Pi's internal follow-up queue.
-  void (async () => {
-    for (const prompt of followUps) {
-      const settled = await waitForPromptSettlement(ctx, () => isCurrentSequence(sequenceId));
-      if (!settled || !isCurrentSequence(sequenceId)) {
-        return;
-      }
-      pi.sendUserMessage(prompt);
-    }
-  })();
-}
-
-function queueComprehensiveAnalysis(
-  pi: ExtensionAPI,
-  symbol: string,
-  ctx: QueueContext,
-  beginSequence: () => number,
-  isCurrentSequence: (sequenceId: number) => boolean,
-): void {
-  queuePromptSequence(pi, getComprehensiveAnalysisPrompts(symbol), ctx, beginSequence, isCurrentSequence);
-}
-
-function queueCompareWorkflow(
-  pi: ExtensionAPI,
-  symbols: string[],
-  ctx: QueueContext,
-  beginSequence: () => number,
-  isCurrentSequence: (sequenceId: number) => boolean,
-): void {
-  const resolution: SlotResolution<CompareAssetsSlots> = {
-    resolved: { symbols },
-    sources: { symbols: "user" },
-    defaultsUsed: [],
-    missingRequired: [],
-  };
-  const workflow = buildCompareAssetsWorkflow(resolution);
-  queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
-}
+import { SessionCoordinator } from "../runtime/session-coordinator.js";
 
 export default function openCandleExtension(pi: ExtensionAPI): void {
-  let activeSequenceId = 0;
-  let storage: MemoryStorage | null = null;
-  let sessionId = "unknown";
+  const coordinator = new SessionCoordinator();
 
-  const beginSequence = (): number => {
-    activeSequenceId += 1;
-    return activeSequenceId;
-  };
-  const isCurrentSequence = (sequenceId: number): boolean => sequenceId === activeSequenceId;
-
+  // Register tools
   for (const tool of getOpenCandleToolDefinitions()) {
     pi.registerTool(tool);
   }
   registerAskUserTool(pi);
 
+  // /analyze command
   pi.registerCommand("analyze", {
     description: "Run the multi-analyst OpenCandle workflow for a ticker symbol",
     handler: async (args, ctx) => {
@@ -146,27 +33,28 @@ export default function openCandleExtension(pi: ExtensionAPI): void {
         ctx.ui.notify("Usage: /analyze <ticker>", "warning");
         return;
       }
-      queueComprehensiveAnalysis(pi, symbol, ctx, beginSequence, isCurrentSequence);
+      const definition = buildComprehensiveAnalysisDefinition(symbol);
+      coordinator.executeWorkflow(pi, definition, ctx);
     },
   });
 
+  // /setup command
   pi.registerCommand("setup", {
     description: "Run OpenCandle setup for your AI model and market data providers",
     handler: async (_args, ctx) => {
-      const result = await runOpenCandleSetup(pi, ctx, { mode: "manual", forceFinancePrompt: true });
+      const result = await coordinator.runSetup(pi, ctx, { mode: "manual", forceFinancePrompt: true });
       if (result === "ready") {
         ctx.ui.notify("OpenCandle setup complete.", "info");
       }
     },
   });
 
+  // Session start
   pi.on("session_start", async (_event, ctx) => {
-    const db = initDefaultDatabase();
-    storage = new MemoryStorage(db);
-    sessionId = ctx.sessionManager.getSessionId();
+    coordinator.initSession(ctx.sessionManager.getSessionId());
 
     if (!ctx.hasUI) return;
-    const result = await runOpenCandleSetup(pi, ctx, { mode: "startup" });
+    const result = await coordinator.runSetup(pi, ctx, { mode: "startup" });
     if (result === "shutdown") {
       return;
     }
@@ -176,96 +64,65 @@ export default function openCandleExtension(pi: ExtensionAPI): void {
     );
   });
 
+  // Input handling — classify intent and dispatch workflows
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
 
-    // Extract and persist user preferences from natural language
-    if (storage) {
-      for (const pref of extractPreferences(event.text)) {
-        storage.upsertPreference({
-          key: pref.key,
-          valueJson: JSON.stringify(pref.value),
-          confidence: pref.confidence,
-          source: "inferred",
-        });
-      }
-    }
+    // Extract and persist user preferences
+    coordinator.extractAndStorePreferences(event.text);
+    const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
 
+    // Check for comprehensive analysis pattern
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
-      queueComprehensiveAnalysis(pi, analysis.symbol, ctx, beginSequence, isCurrentSequence);
+      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol);
+      coordinator.executeWorkflow(pi, definition, ctx);
       return { action: "handled" };
     }
 
+    // Classify intent
     const classification = classifyIntent(event.text);
 
     if (classification.workflow === "portfolio_builder") {
       const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);
-      const workflow = buildPortfolioWorkflow(resolution);
-      if (storage) {
-        storage.insertWorkflowRun({
-          sessionId,
-          workflowType: "portfolio_builder",
-          inputSlotsJson: JSON.stringify(classification.entities),
-          resolvedSlotsJson: JSON.stringify(resolution.resolved),
-          defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
-        });
-      }
+      coordinator.recordWorkflowRun("portfolio_builder", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
-      queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
+      const definition = buildPortfolioWorkflowDefinition(resolution);
+      coordinator.executeWorkflow(pi, definition, ctx);
       return { action: "handled" };
     }
 
     if (classification.workflow === "options_screener") {
       const resolution = resolveOptionsScreenerSlots(classification.entities, workflowPrefs);
       if (resolution.missingRequired.length === 0) {
-        const workflow = buildOptionsScreenerWorkflow(resolution);
-        if (storage) {
-          storage.insertWorkflowRun({
-            sessionId,
-            workflowType: "options_screener",
-            inputSlotsJson: JSON.stringify(classification.entities),
-            resolvedSlotsJson: JSON.stringify(resolution.resolved),
-            defaultsUsedJson: JSON.stringify(resolution.defaultsUsed),
-          });
-        }
+        coordinator.recordWorkflowRun("options_screener", classification.entities, resolution.resolved, resolution.defaultsUsed);
         pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
-        queuePromptSequence(pi, [workflow.initialPrompt, ...workflow.followUps], ctx, beginSequence, isCurrentSequence);
+        const definition = buildOptionsScreenerWorkflowDefinition(resolution);
+        coordinator.executeWorkflow(pi, definition, ctx);
         return { action: "handled" };
       }
     }
 
     if (classification.workflow === "compare_assets" && classification.entities.symbols.length >= 2) {
-      if (storage) {
-        storage.insertWorkflowRun({
-          sessionId,
-          workflowType: "compare_assets",
-          inputSlotsJson: JSON.stringify(classification.entities),
-          resolvedSlotsJson: JSON.stringify({ symbols: classification.entities.symbols }),
-          defaultsUsedJson: JSON.stringify([]),
-        });
-      }
+      const resolution: SlotResolution<CompareAssetsSlots> = {
+        resolved: { symbols: classification.entities.symbols },
+        sources: { symbols: "user" },
+        defaultsUsed: [],
+        missingRequired: [],
+      };
+      coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
-      queueCompareWorkflow(pi, classification.entities.symbols, ctx, beginSequence, isCurrentSequence);
+      const definition = buildCompareAssetsWorkflowDefinition(resolution);
+      coordinator.executeWorkflow(pi, definition, ctx);
       return { action: "handled" };
     }
   });
 
+  // System prompt assembly — delegate to coordinator
   pi.on("before_agent_start", async (event) => {
-    const memoryContext = storage ? buildMemoryContext(storage) : "";
-
-    let thirdPartySection = "";
-    const thirdPartyTools = getThirdPartyToolDescriptions();
-    if (thirdPartyTools.length > 0) {
-      const lines = thirdPartyTools
-        .map((t) => `- ${t.name}: ${t.description}`)
-        .join("\n");
-      thirdPartySection = `\n\n## Third-Party Tools\nThe following community-contributed tools are also available:\n${lines}`;
-    }
-
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${buildSystemPrompt(memoryContext || undefined)}${thirdPartySection}`,
+      systemPrompt: coordinator.buildSystemPrompt(event.systemPrompt),
     };
   });
 }
