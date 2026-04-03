@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { registerAskUserTool } from "../../../src/tools/interaction/ask-user.js";
+import type { AskUserHandler } from "../../../src/types/index.js";
 
 function createMockCtx(hasUI: boolean) {
   return {
@@ -14,12 +15,12 @@ function createMockCtx(hasUI: boolean) {
   };
 }
 
-function captureRegisteredTool() {
+function captureRegisteredTool(askUserHandler?: AskUserHandler) {
   let captured: any = null;
   const mockPi = {
     registerTool: (tool: any) => { captured = tool; },
   } as unknown as ExtensionAPI;
-  registerAskUserTool(mockPi);
+  registerAskUserTool(mockPi, askUserHandler);
   return captured;
 }
 
@@ -153,5 +154,94 @@ describe("ask_user tool", () => {
     );
     expect(result.details.cancelled).toBe(false);
     expect(result.details.answer).toBe("No");
+  });
+});
+
+describe("ask_user tool with injected handler", () => {
+  it("handler receives correct params and answer flows back", async () => {
+    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+      .mockResolvedValue({ answer: "Technology", cancelled: false });
+
+    const tool = captureRegisteredTool(handler);
+    const ctx = createMockCtx(true);
+
+    const result = await tool.execute(
+      "call-1",
+      {
+        question: "Which sector?",
+        question_type: "select",
+        options: ["Technology", "Healthcare"],
+        placeholder: "pick one",
+        reason: "need to narrow search",
+      },
+      undefined, undefined, ctx,
+    );
+
+    // Handler receives all params correctly
+    expect(handler).toHaveBeenCalledWith({
+      question: "Which sector?",
+      questionType: "select",
+      options: ["Technology", "Healthcare"],
+      placeholder: "pick one",
+      reason: "need to narrow search",
+    });
+
+    // Answer flows back to tool result
+    expect(result.details.cancelled).toBe(false);
+    expect(result.details.answer).toBe("Technology");
+    expect(result.content[0].text).toContain("Technology");
+
+    // UI methods are NOT called — handler takes priority
+    expect(ctx.ui.select).not.toHaveBeenCalled();
+  });
+
+  it("handler cancelled result returns cancelled tool result", async () => {
+    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+      .mockResolvedValue({ answer: null, cancelled: true });
+
+    const tool = captureRegisteredTool(handler);
+    const result = await tool.execute(
+      "call-1",
+      { question: "Risk tolerance?", question_type: "text" },
+      undefined, undefined, undefined,
+    );
+
+    expect(result.details.cancelled).toBe(true);
+    expect(result.details.answer).toBeNull();
+    expect(result.content[0].text).toContain("cancelled");
+  });
+
+  it("handler takes priority over ctx.hasUI", async () => {
+    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+      .mockResolvedValue({ answer: "Yes", cancelled: false });
+
+    const tool = captureRegisteredTool(handler);
+    const ctx = createMockCtx(true); // UI available, but handler should still win
+
+    const result = await tool.execute(
+      "call-1",
+      { question: "Proceed?", question_type: "confirm" },
+      undefined, undefined, ctx,
+    );
+
+    expect(handler).toHaveBeenCalled();
+    expect(result.details.answer).toBe("Yes");
+    expect(ctx.ui.confirm).not.toHaveBeenCalled();
+  });
+
+  it("handler takes priority over no-UI fallback", async () => {
+    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+      .mockResolvedValue({ answer: "AAPL", cancelled: false });
+
+    const tool = captureRegisteredTool(handler);
+    // No ctx at all — without handler, would return no-UI fallback
+    const result = await tool.execute(
+      "call-1",
+      { question: "Enter ticker", question_type: "text" },
+      undefined, undefined, undefined,
+    );
+
+    expect(result.details.cancelled).toBe(false);
+    expect(result.details.answer).toBe("AAPL");
   });
 });
