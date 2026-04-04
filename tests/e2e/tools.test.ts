@@ -432,25 +432,28 @@ async function run() {
   // 12. Orchestrator personas
   // ============================
   console.log("\n12. Orchestrator:");
-  await test("orchestrator roles are named personas", async () => {
+  await test("orchestrator roles are named personas with debate", async () => {
     const { runComprehensiveAnalysis } = await import("../../src/analysts/orchestrator.js");
     const calls: string[] = [];
     runComprehensiveAnalysis((prompt) => calls.push(prompt), "AAPL");
-    assert(calls.length === 7, `expected 7 followUps, got ${calls.length}`);
+    assert(calls.length === 10, `expected 10 followUps, got ${calls.length}`);
     const texts = calls;
     assert(texts[0].includes("[Valuation Analyst]"), "missing Valuation Analyst");
     assert(texts[1].includes("[Momentum Analyst]"), "missing Momentum Analyst");
     assert(texts[2].includes("[Options Analyst]"), "missing Options Analyst");
     assert(texts[3].includes("[Contrarian Analyst]"), "missing Contrarian Analyst");
     assert(texts[4].includes("[Risk Manager]"), "missing Risk Manager");
-    assert(texts[5].includes("[Synthesis]"), "missing Synthesis");
-    assert(texts[6].includes("[Validation"), "missing Validation");
+    assert(texts[5].includes("[Bull Researcher]"), "missing Bull Researcher");
+    assert(texts[6].includes("[Bear Researcher]"), "missing Bear Researcher");
+    assert(texts[7].includes("[Bull Rebuttal]"), "missing Bull Rebuttal");
+    assert(texts[8].includes("[Synthesis]"), "missing Synthesis");
+    assert(texts[9].includes("[Validation"), "missing Validation");
     // Check voting format in each analyst
     for (let i = 0; i < 5; i++) {
       assert(texts[i].includes("SIGNAL:"), `analyst ${i} missing SIGNAL format`);
     }
-    // Check synthesis mentions tallying
-    assert(texts[5].toLowerCase().includes("tally"), "synthesis missing tally instruction");
+    // Check synthesis resolves debate
+    assert(texts[8].includes("RESOLVE THE DEBATE"), "synthesis missing debate resolution");
   });
 
   // ============================

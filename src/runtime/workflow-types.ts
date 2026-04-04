@@ -59,6 +59,20 @@ export interface AnalystOutput {
   rawText?: string;
 }
 
+/** Debate side in bull/bear adversarial debate. */
+export type DebateSide = "bull" | "bear";
+
+/** Structured output from a debate step (eval/test only — not used in live path). */
+export interface DebateOutput {
+  side: DebateSide;
+  thesis: string;
+  keyRisk: string;
+  concessions: string[];
+  remainingConviction: number;
+  evidence: EvidenceRecord[];
+  rawText: string;
+}
+
 /** A complete workflow run definition and state. */
 export interface WorkflowRun {
   runId: string;

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add adversarial bull/bear debate phase to comprehensive analysis — 3 new workflow steps (bull researcher, bear researcher, self-gating rebuttal) between analysts and synthesis, producing debate-aware verdicts with reversal conditions
 - Add agent test harness with file-based IPC — any coding agent can drive OpenCandle via CLI, answer follow-up questions, and get structured traces of every tool call and interaction
 - Add injectable `askUserHandler` to `createOpenCandleSession()` for non-UI contexts
 - Add trace collector that captures tool calls, results, text, and interactions from session events

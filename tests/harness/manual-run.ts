@@ -90,13 +90,44 @@ let text = "";
 const toolCalls: Array<{ name: string; args: unknown; result?: unknown }> = [];
 const pendingTools = new Map<string, { name: string; args: unknown }>();
 
+// For multi-turn workflows (e.g., comprehensive analysis with debate),
+// the extension sends follow-up user messages after each LLM turn settles.
+// Each follow-up triggers a new agent turn ending with agent_end.
+// We wait for sustained quiet (no new turns) before finalizing the trace.
+// The grace period must be long enough for the workflow runner to poll
+// settlement (~100ms), send the next prompt, and for the LLM to start.
+const SETTLE_GRACE_MS = 30_000;
+
 await new Promise<void>((resolve) => {
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  let agentEndCount = 0;
+
+  const cancelSettle = () => {
+    if (settleTimer) {
+      clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+  };
+
+  const finish = () => {
+    cancelSettle();
+    unsub();
+    resolve();
+  };
+
+  const resetSettleTimer = () => {
+    cancelSettle();
+    settleTimer = setTimeout(finish, SETTLE_GRACE_MS);
+  };
+
   const unsub = session.subscribe((event: AgentSessionEvent) => {
     if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
       text += event.assistantMessageEvent.delta;
+      cancelSettle();
     }
     if (event.type === "tool_execution_start") {
       pendingTools.set(event.toolCallId, { name: event.toolName, args: event.args });
+      cancelSettle();
     }
     if (event.type === "tool_execution_end") {
       const pending = pendingTools.get(event.toolCallId);
@@ -106,8 +137,9 @@ await new Promise<void>((resolve) => {
       }
     }
     if (event.type === "agent_end") {
-      unsub();
-      resolve();
+      agentEndCount++;
+      // Wait for possible follow-up messages from the workflow runner
+      resetSettleTimer();
     }
   });
   void session.prompt(prompt);

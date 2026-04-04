@@ -1,5 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { isAnalysisRequest, normalizeSymbol, runComprehensiveAnalysis } from "../../../src/analysts/orchestrator.js";
+import {
+  isAnalysisRequest,
+  normalizeSymbol,
+  runComprehensiveAnalysis,
+  buildBullPrompt,
+  buildBearPrompt,
+  buildRebuttalPrompt,
+  buildSynthesisPrompt,
+  buildComprehensiveAnalysisDefinition,
+} from "../../../src/analysts/orchestrator.js";
 
 describe("isAnalysisRequest", () => {
   it("matches 'analyze AAPL'", () => {
@@ -69,9 +78,9 @@ describe("runComprehensiveAnalysis", () => {
     return { enqueueFollowUp, texts: followUpCalls };
   }
 
-  it("queues 7 follow-up messages (5 analysts + synthesis + validation)", () => {
+  it("queues 10 follow-up messages (5 analysts + 3 debate + synthesis + validation)", () => {
     const { enqueueFollowUp } = runAndCapture("AAPL");
-    expect(enqueueFollowUp).toHaveBeenCalledTimes(7);
+    expect(enqueueFollowUp).toHaveBeenCalledTimes(10);
   });
 
   it("uses named investment persona labels", () => {
@@ -100,17 +109,127 @@ describe("runComprehensiveAnalysis", () => {
     }
   });
 
-  it("has synthesis prompt that references vote tallying", () => {
+  it("includes debate prompts (bull, bear, rebuttal) after analysts", () => {
     const { texts } = runAndCapture("AAPL");
-    const synthesis = texts[5];
+    expect(texts[5]).toContain("[Bull Researcher]");
+    expect(texts[6]).toContain("[Bear Researcher]");
+    expect(texts[7]).toContain("[Bull Rebuttal]");
+  });
+
+  it("has synthesis prompt that resolves the debate", () => {
+    const { texts } = runAndCapture("AAPL");
+    const synthesis = texts[8];
     expect(synthesis).toContain("[Synthesis]");
-    expect(synthesis.toLowerCase()).toMatch(/tally|vote|signal/);
+    expect(synthesis).toContain("RESOLVE THE DEBATE");
+    expect(synthesis).toContain("DEBATE WINNER");
+    expect(synthesis).toContain("REVERSAL CONDITION");
   });
 
   it("ends with a validation check as the final follow-up", () => {
     const { texts } = runAndCapture("AAPL");
-    const validation = texts[6];
+    const validation = texts[9];
     expect(validation).toContain("[Validation");
     expect(validation.toLowerCase()).toMatch(/verify|check|validated/);
+  });
+});
+
+describe("debate prompt generation", () => {
+  it("bull prompt contains required markers and guardrails", () => {
+    const prompt = buildBullPrompt("AAPL");
+    expect(prompt).toContain("[Bull Researcher]");
+    expect(prompt).toContain("AAPL");
+    expect(prompt).toContain("BULL THESIS:");
+    expect(prompt).toContain("KEY RISK TO THIS THESIS:");
+    expect(prompt).toContain("up to 2 tools");
+    expect(prompt).toContain("Execution rules:");
+  });
+
+  it("bear prompt contains required markers and guardrails", () => {
+    const prompt = buildBearPrompt("AAPL");
+    expect(prompt).toContain("[Bear Researcher]");
+    expect(prompt).toContain("AAPL");
+    expect(prompt).toContain("BEAR THESIS:");
+    expect(prompt).toContain("WHAT WOULD CHANGE MY MIND:");
+    expect(prompt).toContain("up to 2 tools");
+    expect(prompt).toContain("Execution rules:");
+  });
+
+  it("rebuttal prompt contains self-gating instructions and guardrails", () => {
+    const prompt = buildRebuttalPrompt("AAPL");
+    expect(prompt).toContain("[Bull Rebuttal]");
+    expect(prompt).toContain("AAPL");
+    expect(prompt).toContain("SIGNAL: BUY");
+    expect(prompt).toContain("SIGNAL: SELL");
+    expect(prompt).toContain("REBUTTAL SKIPPED");
+    expect(prompt).toContain("CONCESSIONS:");
+    expect(prompt).toContain("REMAINING CONVICTION:");
+    expect(prompt).toContain("No tool calls");
+    expect(prompt).toContain("Execution rules:");
+  });
+});
+
+describe("buildSynthesisPrompt", () => {
+  it("references debate and self-adapts to rebuttal presence", () => {
+    const prompt = buildSynthesisPrompt("AAPL");
+    expect(prompt).toContain("[Synthesis]");
+    expect(prompt).toContain("AAPL");
+    expect(prompt).toContain("RESOLVE THE DEBATE");
+    expect(prompt).toContain("REBUTTAL SKIPPED");
+    expect(prompt).toContain("concessions as validated risks");
+  });
+
+  it("requires debate-aware output markers", () => {
+    const prompt = buildSynthesisPrompt("AAPL");
+    expect(prompt).toContain("VERDICT:");
+    expect(prompt).toContain("CONFIDENCE:");
+    expect(prompt).toContain("DEBATE WINNER:");
+    expect(prompt).toContain("REVERSAL CONDITION:");
+  });
+});
+
+describe("validation prompt", () => {
+  it("includes debate-specific checks", () => {
+    const def = buildComprehensiveAnalysisDefinition("AAPL");
+    const validationStep = def.steps.find((s) => s.stepType === "validation")!;
+    expect(validationStep.prompt).toContain("bull");
+    expect(validationStep.prompt).toContain("bear");
+    expect(validationStep.prompt).toContain("concessions");
+    expect(validationStep.prompt).toContain("reversal condition");
+    expect(validationStep.prompt).toContain("REBUTTAL SKIPPED");
+  });
+});
+
+describe("buildComprehensiveAnalysisDefinition", () => {
+  it("returns exactly 11 steps in correct order", () => {
+    const def = buildComprehensiveAnalysisDefinition("AAPL");
+    expect(def.steps).toHaveLength(11);
+    expect(def.steps.map((s) => s.stepType)).toEqual([
+      "initial_fetch",
+      "analyst_valuation",
+      "analyst_momentum",
+      "analyst_options",
+      "analyst_contrarian",
+      "analyst_risk",
+      "debate_bull",
+      "debate_bear",
+      "debate_rebuttal",
+      "synthesis",
+      "validation",
+    ]);
+  });
+
+  it("debate steps are not skippable", () => {
+    const def = buildComprehensiveAnalysisDefinition("AAPL");
+    const debateSteps = def.steps.filter((s) => s.stepType.startsWith("debate_"));
+    expect(debateSteps).toHaveLength(3);
+    for (const step of debateSteps) {
+      expect(step.skippable).toBe(false);
+    }
+  });
+
+  it("synthesis step is not skippable", () => {
+    const def = buildComprehensiveAnalysisDefinition("AAPL");
+    const synthesis = def.steps.find((s) => s.stepType === "synthesis")!;
+    expect(synthesis.skippable).toBe(false);
   });
 });

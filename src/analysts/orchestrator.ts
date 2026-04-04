@@ -67,20 +67,89 @@ Where is the consensus wrong? What is the market over-pricing or under-pricing?$
 Be quantitative. Every assessment must include a number.${EXECUTION_GUARDRAILS}${VOTING_INSTRUCTION}`,
 };
 
-const SYNTHESIS_PROMPT = (symbol: string) =>
-  `**[Synthesis]** You have received five analyst signals above for ${symbol}. Tally the SIGNAL votes (BUY/HOLD/SELL) and weight them by CONVICTION scores. Then provide:
-1. **Vote Tally**: X BUY, Y HOLD, Z SELL — weighted average conviction
-2. **Verdict**: Buy, Hold, or Sell — based on the signal consensus
-3. **Key thesis** in 2-3 sentences
-4. **Bull case** — what could go right
-5. **Bear case** — what could go wrong
-6. **Key levels** — entry, stop-loss, and target prices
-7. **Position sizing recommendation** based on risk profile
+export function buildBullPrompt(symbol: string): string {
+  return `**[Bull Researcher]** You have received five analyst perspectives above for ${symbol}.
+Build the strongest possible case FOR this position.
 
-Be direct and actionable. This is your final word on ${symbol}.`;
+Rules:
+- Cite analyst outputs and underlying tool evidence where available.
+- Address any bearish signals (SELL votes, high VaR, negative sentiment) and explain why they are less concerning than they appear.
+- You may call up to 2 tools if you identify a specific gap in the existing evidence. State the gap before calling the tool.
+- Reuse data already fetched in the session.
+${EXECUTION_GUARDRAILS}
+
+End with this exact format:
+BULL THESIS: [2-3 sentences building the case for the position]
+KEY RISK TO THIS THESIS: [one sentence — the single thing that would invalidate your case]`;
+}
+
+export function buildBearPrompt(symbol: string): string {
+  return `**[Bear Researcher]** You have received five analyst perspectives and a bull case above for ${symbol}. Your job is to dismantle the bull thesis.
+
+Rules:
+- Attack the weakest assumptions in the bull case above.
+- Cite analyst outputs and underlying tool evidence where available.
+- If the bull case ignored negative data points, surface them.
+- You may call up to 2 tools if you identify a specific gap in the existing evidence. State the gap before calling the tool.
+- Reuse data already fetched in the session.
+${EXECUTION_GUARDRAILS}
+
+End with this exact format:
+BEAR THESIS: [2-3 sentences arguing against the position]
+WHAT WOULD CHANGE MY MIND: [one sentence — what data would make you concede to the bull]`;
+}
+
+export function buildRebuttalPrompt(symbol: string): string {
+  return `**[Bull Rebuttal]** First, check the five analyst SIGNAL: lines above for ${symbol} (each analyst ended with "SIGNAL: BUY", "SIGNAL: HOLD", or "SIGNAL: SELL").
+If there is NO case where at least one analyst said SIGNAL: BUY and at least one said SIGNAL: SELL, respond with ONLY:
+REBUTTAL SKIPPED — consensus reached.
+
+Otherwise, the bear raised specific concerns above. Address each one directly.
+
+Rules:
+- Concede any point where the bear is factually correct.
+- For points you rebut, cite specific data from the analysts above.
+- Do not repeat your original thesis — respond to the bear's NEW arguments.
+- No tool calls in the rebuttal. Work with existing evidence only.
+${EXECUTION_GUARDRAILS}
+
+End with this exact format:
+CONCESSIONS: [bullet list of points you concede]
+REMAINING CONVICTION: [1-10, where 10 = fully confident despite bear case]`;
+}
+
+export function buildSynthesisPrompt(symbol: string): string {
+  return `**[Synthesis]** You have received five analyst signals with conviction scores for ${symbol}, a bull case arguing FOR the position, and a bear case arguing AGAINST.
+If a bull rebuttal with concessions appears above (not a line starting with "REBUTTAL SKIPPED"), treat the concessions as validated risks that must be addressed.
+
+Your job is NOT to average opinions. Your job is to RESOLVE THE DEBATE.
+
+1. **Vote Tally**: X BUY, Y HOLD, Z SELL — weighted average conviction
+2. **Verdict**: BUY, HOLD, or SELL
+3. **Debate winner**: Which side had the stronger argument, and why
+4. **Strongest counterpoint**: Address the losing side's best argument directly — explain why it's outweighed, or acknowledge it as a real risk
+5. **Reversal condition**: State the SPECIFIC, TESTABLE condition under which your verdict would reverse (the bear's "what would change my mind" or the bull's "key risk")
+6. **Key levels**: Entry, stop-loss, and target prices
+7. **Position sizing**: Based on risk manager's analysis
+
+Be direct and actionable. This is your final word on ${symbol}.
+
+End with this exact format:
+VERDICT: [BUY|HOLD|SELL]
+CONFIDENCE: [1-10]
+DEBATE WINNER: [BULL|BEAR]
+REVERSAL CONDITION: [specific, testable condition]`;
+}
 
 const VALIDATION_PROMPT = (symbol: string) =>
-  `**[Validation Check]** Review your complete analysis of ${symbol} above. For each specific number you cited (price, P/E, revenue, RSI, intrinsic value, etc.), verify it matches the tool output data you received. Flag any inconsistencies. If you stated a number without fetching it first, call that out as UNVERIFIED. Output: VALIDATED if all numbers check out, or list specific corrections needed.`;
+  `**[Validation Check]** Review the complete analysis of ${symbol} above, including the debate. For each specific number cited by any analyst, bull, or bear researcher, verify it matches tool output data received in the session. Flag any inconsistencies. If a number was stated without being fetched first, call it out as UNVERIFIED.
+
+Additionally check:
+1. Did the bull/bear cite real numbers from analyst outputs (not hallucinated)?
+2. If a rebuttal occurred (not a line starting with "REBUTTAL SKIPPED"), are the concessions genuine (did the bull actually give ground on the bear's specific points)?
+3. Is the reversal condition specific and testable (not vague like "if macro deteriorates")?
+
+Output: VALIDATED if all checks pass, or list specific corrections needed.`;
 
 export function getInitialAnalysisPrompt(symbol: string): string {
   return `Begin comprehensive analysis of ${symbol}. Start by getting the current stock quote.`;
@@ -94,7 +163,10 @@ export function getComprehensiveAnalysisPrompts(symbol: string): string[] {
     prompts.push(ANALYST_PROMPTS[role](symbol));
   }
 
-  prompts.push(SYNTHESIS_PROMPT(symbol));
+  prompts.push(buildBullPrompt(symbol));
+  prompts.push(buildBearPrompt(symbol));
+  prompts.push(buildRebuttalPrompt(symbol));
+  prompts.push(buildSynthesisPrompt(symbol));
   prompts.push(VALIDATION_PROMPT(symbol));
 
   return prompts;
@@ -105,6 +177,8 @@ import { promptStep } from "../runtime/prompt-step.js";
 
 export function buildComprehensiveAnalysisDefinition(symbol: string): WorkflowDefinition {
   const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
+
+  const analystOutputs = roles.map((r) => `${r}_signal`);
 
   const steps = [
     promptStep("initial_fetch", "Fetch initial quote data", getInitialAnalysisPrompt(symbol), {
@@ -117,8 +191,20 @@ export function buildComprehensiveAnalysisDefinition(symbol: string): WorkflowDe
         expectedOutputs: [`${role}_signal`],
       }),
     ),
-    promptStep("synthesis", "Synthesize analyst signals", SYNTHESIS_PROMPT(symbol), {
-      requiredInputs: roles.map((r) => `${r}_signal`),
+    promptStep("debate_bull", "Bull researcher case", buildBullPrompt(symbol), {
+      requiredInputs: analystOutputs,
+      expectedOutputs: ["bull_thesis"],
+    }),
+    promptStep("debate_bear", "Bear researcher case", buildBearPrompt(symbol), {
+      requiredInputs: [...analystOutputs, "bull_thesis"],
+      expectedOutputs: ["bear_thesis"],
+    }),
+    promptStep("debate_rebuttal", "Bull rebuttal (self-gating)", buildRebuttalPrompt(symbol), {
+      requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis"],
+      expectedOutputs: ["rebuttal"],
+    }),
+    promptStep("synthesis", "Resolve the debate", buildSynthesisPrompt(symbol), {
+      requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis", "rebuttal"],
       expectedOutputs: ["verdict"],
     }),
     promptStep("validation", "Validate cited numbers", VALIDATION_PROMPT(symbol), {

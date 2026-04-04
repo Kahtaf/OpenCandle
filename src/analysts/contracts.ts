@@ -1,4 +1,4 @@
-import type { AnalystOutput, AnalystSignal } from "../runtime/workflow-types.js";
+import type { AnalystOutput, AnalystSignal, DebateSide, DebateOutput } from "../runtime/workflow-types.js";
 import type { EvidenceRecord } from "../runtime/evidence.js";
 
 /** All analyst roles. */
@@ -101,6 +101,82 @@ export function tallyVotes(outputs: AnalystOutput[]): {
   else verdict = "HOLD";
 
   return { buy, hold, sell, weightedConviction, verdict };
+}
+
+/**
+ * Parse an LLM debate response into a structured DebateOutput.
+ * Eval/test helper only — not used in the live workflow path.
+ */
+export function parseDebateOutput(side: DebateSide, responseText: string): DebateOutput {
+  // Detect skipped rebuttal
+  if (/^rebuttal skipped/i.test(responseText.trim())) {
+    return {
+      side,
+      thesis: "",
+      keyRisk: "",
+      concessions: [],
+      remainingConviction: 0,
+      evidence: [],
+      rawText: responseText,
+    };
+  }
+
+  const thesis = extractDebateThesis(side, responseText);
+  const keyRisk = extractKeyRisk(side, responseText);
+  const concessions = extractConcessions(responseText);
+  const remainingConviction = extractRemainingConviction(responseText);
+
+  return {
+    side,
+    thesis,
+    keyRisk,
+    concessions,
+    remainingConviction,
+    evidence: [],
+    rawText: responseText,
+  };
+}
+
+function extractDebateThesis(side: DebateSide, text: string): string {
+  const label = side === "bull" ? "BULL THESIS" : "BEAR THESIS";
+  const match = text.match(new RegExp(`${label}:\\s*(.+)`, "i"));
+  return match ? match[1].trim() : "";
+}
+
+function extractKeyRisk(side: DebateSide, text: string): string {
+  if (side === "bear") {
+    const match = text.match(/WHAT WOULD CHANGE MY MIND:\s*(.+)/i);
+    return match ? match[1].trim() : "";
+  }
+  const match = text.match(/KEY RISK(?:\s+TO THIS THESIS)?:\s*(.+)/i);
+  return match ? match[1].trim() : "";
+}
+
+function extractConcessions(text: string): string[] {
+  const match = text.match(/CONCESSIONS:\s*([\s\S]*?)(?=REMAINING CONVICTION:|$)/i);
+  if (!match) return [];
+  return match[1]
+    .split("\n")
+    .map((line) => line.replace(/^[-*•]\s*/, "").trim())
+    .filter(Boolean);
+}
+
+function extractRemainingConviction(text: string): number {
+  const match = text.match(/REMAINING CONVICTION:\s*(\d+)/i);
+  if (match) {
+    const value = parseInt(match[1], 10);
+    if (value >= 1 && value <= 10) return value;
+  }
+  return 0;
+}
+
+/**
+ * Check whether analysts produced a BUY+SELL split.
+ * Eval/test helper only — not used in the live workflow path.
+ */
+export function isAnalystSplit(outputs: AnalystOutput[]): boolean {
+  const votes = tallyVotes(outputs);
+  return votes.buy > 0 && votes.sell > 0;
 }
 
 /** Collect all evidence from analyst outputs. */
