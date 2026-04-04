@@ -24,6 +24,7 @@ tests/
 │   ├── pi/           # Pi extension, setup, session, tool adapter
 │   ├── prompts/      # Workflow prompt templates
 │   └── onboarding/   # Setup flow
+├── harness/          # Agent test harness (file-based IPC) → see tests/harness/README.md
 ├── e2e/              # End-to-end workflow + CLI tests
 ├── integration/      # Cross-module integration tests
 └── fixtures/         # Mock JSON responses

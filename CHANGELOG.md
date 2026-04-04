@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Add agent test harness with file-based IPC — any coding agent can drive OpenCandle via CLI, answer follow-up questions, and get structured traces of every tool call and interaction
+- Add injectable `askUserHandler` to `createOpenCandleSession()` for non-UI contexts
+- Add trace collector that captures tool calls, results, text, and interactions from session events
+- Add `IpcChannel` class for atomic file-based question/answer exchange with `fs.watch` + polling fallback
+- Add CLI entry point (`tests/harness/cli.ts`) with `run`, `wait`, `answer`, `trace` subcommands
+
 ## [0.1.2] - 2026-04-01
 
 - Add `ask_user` clarification tool — agent now asks targeted follow-up questions for vague or broad requests instead of making assumptions
