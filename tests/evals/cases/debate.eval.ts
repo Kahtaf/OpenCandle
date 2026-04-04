@@ -5,6 +5,9 @@ import { registerEvalSuite } from "../eval-suite.js";
  * Eval cases for the adversarial bull/bear debate feature.
  * Verifies debate steps appear in trace, synthesis resolves tension,
  * and reversal condition is present.
+ *
+ * Note: expectedWorkflow is omitted because the extension intercepts
+ * "analyze X" before the router classifies it.
  */
 const debateCases: EvalCase[] = [
   {
@@ -12,7 +15,6 @@ const debateCases: EvalCase[] = [
     tier: "usually",
     prompt: "analyze AAPL",
     assertions: {
-      expectedWorkflow: "comprehensive_analysis",
       requiredTools: ["get_stock_quote"],
       dataFaithfulness: true,
       responseContains: [
@@ -35,7 +37,6 @@ const debateCases: EvalCase[] = [
     tier: "usually",
     prompt: "analyze MSFT",
     assertions: {
-      expectedWorkflow: "comprehensive_analysis",
       requiredTools: ["get_stock_quote"],
       responseContains: [
         /BULL THESIS:/i,
@@ -56,7 +57,7 @@ const tier = process.env.EVAL_TIER;
 const casesToRun = tier === "usually" ? debateCases : debateCases.filter((c) => c.tier === "always");
 
 if (casesToRun.length > 0) {
-  registerEvalSuite("Debate Evals (Usually-tier)", casesToRun, { threshold: 0.6 });
+  registerEvalSuite("Debate Evals (Usually-tier)", casesToRun, { threshold: 0.6, timeout: 600_000 });
 } else {
   describe("Debate Evals (Usually-tier)", () => {
     it.skip("skipped — run with EVAL_TIER=usually", () => {});

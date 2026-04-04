@@ -53,6 +53,75 @@ export const ANALYSIS_RUBRIC = [
 ];
 
 /**
+ * Debate-specific rubric items — measure the quality improvement from
+ * adversarial bull/bear debate. Used to compare debate-on vs debate-off.
+ */
+export const DEBATE_RUBRIC = [
+  {
+    id: "tension_resolution",
+    name: "Tension Resolution",
+    criterion: "The synthesis explicitly acknowledges competing viewpoints and explains why one outweighs the other, rather than averaging or ignoring disagreement.",
+    examples: {
+      pass: "The bull argued 25% DCF upside, but the bear correctly identified revenue deceleration. The bull case wins because FCF margins expanded from 24% to 28%, offsetting slower growth.",
+      fail: "Overall the stock looks good based on fundamentals and technicals.",
+    },
+  },
+  {
+    id: "falsifiable_conclusion",
+    name: "Falsifiable Conclusion",
+    criterion: "The conclusion states a specific, testable condition (metric + threshold + timeframe) that would reverse the verdict.",
+    examples: {
+      pass: "Reversal: If Q2 earnings show FCF margin contraction below 25%, the thesis breaks.",
+      fail: "Risks remain if the macro environment deteriorates significantly.",
+    },
+  },
+  {
+    id: "intellectual_honesty",
+    name: "Intellectual Honesty",
+    criterion: "The analysis concedes genuine weaknesses in its own position — naming specific data points that support the opposing view — rather than dismissing all counterarguments.",
+    examples: {
+      pass: "The bear correctly identified revenue deceleration (Q3: +12%, Q4: +9%, Q1: +6%) — this is a real risk, but offset by margin expansion.",
+      fail: "All bearish concerns are minor and should not affect the investment thesis.",
+    },
+  },
+];
+
+/**
+ * Score debate quality using the debate-specific rubric items.
+ */
+export async function scoreDebateQuality(
+  trace: EvalTrace,
+  judgeFn: (prompt: string) => Promise<string>,
+  runs: number = 3,
+): Promise<LayerDetail> {
+  const itemScores: number[] = [];
+
+  for (const item of DEBATE_RUBRIC) {
+    const prompt = buildJudgePrompt(item, trace.text);
+    let passCount = 0;
+
+    for (let i = 0; i < runs; i++) {
+      const response = await judgeFn(prompt);
+      if (response.trim().toUpperCase().startsWith("PASS")) {
+        passCount++;
+      }
+    }
+
+    itemScores.push(passCount > runs / 2 ? 1 : 0);
+  }
+
+  const score = itemScores.reduce((a, b) => a + b, 0) / itemScores.length;
+  const passedItems = DEBATE_RUBRIC.filter((_, i) => itemScores[i] === 1).map((r) => r.id);
+  const failedItems = DEBATE_RUBRIC.filter((_, i) => itemScores[i] === 0).map((r) => r.id);
+
+  return {
+    passed: score >= 0.6,
+    score,
+    message: `Passed: ${passedItems.join(", ")}${failedItems.length > 0 ? ` | Failed: ${failedItems.join(", ")}` : ""}`,
+  };
+}
+
+/**
  * Build the LLM judge prompt for a single rubric item.
  */
 export function buildJudgePrompt(rubricItem: typeof ANALYSIS_RUBRIC[number], responseText: string): string {

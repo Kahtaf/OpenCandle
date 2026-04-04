@@ -200,7 +200,7 @@ describe("validation prompt", () => {
 });
 
 describe("buildComprehensiveAnalysisDefinition", () => {
-  it("returns exactly 11 steps in correct order", () => {
+  it("returns exactly 11 steps in correct order (debate on)", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
     expect(def.steps).toHaveLength(11);
     expect(def.steps.map((s) => s.stepType)).toEqual([
@@ -218,6 +218,28 @@ describe("buildComprehensiveAnalysisDefinition", () => {
     ]);
   });
 
+  it("returns exactly 8 steps without debate steps (debate off)", () => {
+    const def = buildComprehensiveAnalysisDefinition("AAPL", { debate: false });
+    expect(def.steps).toHaveLength(8);
+    expect(def.steps.map((s) => s.stepType)).toEqual([
+      "initial_fetch",
+      "analyst_valuation",
+      "analyst_momentum",
+      "analyst_options",
+      "analyst_contrarian",
+      "analyst_risk",
+      "synthesis",
+      "validation",
+    ]);
+  });
+
+  it("debate-off synthesis uses non-debate prompt", () => {
+    const def = buildComprehensiveAnalysisDefinition("AAPL", { debate: false });
+    const synthesis = def.steps.find((s) => s.stepType === "synthesis")!;
+    expect(synthesis.prompt).not.toContain("RESOLVE THE DEBATE");
+    expect(synthesis.prompt).toContain("Tally the SIGNAL votes");
+  });
+
   it("debate steps are not skippable", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
     const debateSteps = def.steps.filter((s) => s.stepType.startsWith("debate_"));
@@ -231,5 +253,16 @@ describe("buildComprehensiveAnalysisDefinition", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
     const synthesis = def.steps.find((s) => s.stepType === "synthesis")!;
     expect(synthesis.skippable).toBe(false);
+  });
+});
+
+describe("runComprehensiveAnalysis with debate toggle", () => {
+  it("queues 7 follow-ups with debate off (5 analysts + synthesis + validation)", () => {
+    const calls: string[] = [];
+    runComprehensiveAnalysis((p) => calls.push(p), "AAPL", { debate: false });
+    expect(calls).toHaveLength(7);
+    expect(calls[5]).toContain("[Synthesis]");
+    expect(calls[5]).not.toContain("RESOLVE THE DEBATE");
+    expect(calls[6]).toContain("[Validation");
   });
 });

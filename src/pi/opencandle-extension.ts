@@ -4,6 +4,7 @@ import {
   normalizeSymbol,
 } from "../analysts/orchestrator.js";
 import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.js";
+import { getConfig } from "../config.js";
 import { classifyIntent, resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../routing/index.js";
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import {
@@ -38,7 +39,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         ctx.ui.notify("Usage: /analyze <ticker>", "warning");
         return;
       }
-      const definition = buildComprehensiveAnalysisDefinition(symbol);
+      const definition = buildComprehensiveAnalysisDefinition(symbol, { debate: getConfig().debate });
       coordinator.executeWorkflow(pi, definition, ctx);
     },
   });
@@ -81,7 +82,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     // Check for comprehensive analysis pattern
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
-      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol);
+      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
       coordinator.executeWorkflow(pi, definition, ctx);
       return { action: "handled" };
     }

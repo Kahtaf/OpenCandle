@@ -86,6 +86,7 @@ describe("loadConfig", () => {
     expect(config).toEqual({
       alphaVantageApiKey: undefined,
       fredApiKey: undefined,
+      debate: true,
     });
   });
 
@@ -229,5 +230,33 @@ describe("loadConfig", () => {
         alphaVantage: { apiKey: "av-file" },
       },
     });
+  });
+
+  it("debate defaults to true when not set", () => {
+    delete process.env.OPENCANDLE_DEBATE;
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.debate).toBe(true);
+  });
+
+  it("debate reads from OPENCANDLE_DEBATE env var", () => {
+    process.env.OPENCANDLE_DEBATE = "false";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.debate).toBe(false);
+    delete process.env.OPENCANDLE_DEBATE;
+  });
+
+  it("debate reads from file config", () => {
+    delete process.env.OPENCANDLE_DEBATE;
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) return JSON.stringify({ debate: false });
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.debate).toBe(false);
   });
 });

@@ -24,7 +24,7 @@ export function runEvalCase(evalCase: EvalCase): EvalTrace {
 
     execFileSync("npx", ["tsx", ...args], {
       cwd: process.cwd(),
-      timeout: 120_000,
+      timeout: 600_000,
       stdio: "pipe",
       env: { ...process.env, NODE_ENV: "test" },
     });

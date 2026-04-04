@@ -90,13 +90,12 @@ let text = "";
 const toolCalls: Array<{ name: string; args: unknown; result?: unknown }> = [];
 const pendingTools = new Map<string, { name: string; args: unknown }>();
 
-// For multi-turn workflows (e.g., comprehensive analysis with debate),
-// the extension sends follow-up user messages after each LLM turn settles.
-// Each follow-up triggers a new agent turn ending with agent_end.
-// We wait for sustained quiet (no new turns) before finalizing the trace.
-// The grace period must be long enough for the workflow runner to poll
-// settlement (~100ms), send the next prompt, and for the LLM to start.
-const SETTLE_GRACE_MS = 30_000;
+// Multi-turn workflow detection: if the prompt matches the comprehensive
+// analysis pattern (e.g., "analyze AAPL"), the extension runs a multi-step
+// workflow with follow-up prompts. Use a longer settle grace for these.
+import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
+const isMultiTurn = isAnalysisRequest(prompt).match;
+const SETTLE_GRACE_MS = isMultiTurn ? 30_000 : 3_000;
 
 await new Promise<void>((resolve) => {
   let settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -138,7 +137,6 @@ await new Promise<void>((resolve) => {
     }
     if (event.type === "agent_end") {
       agentEndCount++;
-      // Wait for possible follow-up messages from the workflow runner
       resetSettleTimer();
     }
   });
