@@ -43,6 +43,7 @@ tests/            → see tests/AGENTS.md
 | Type definitions | `src/types/<domain>.ts` | One file per domain |
 | Memory / persistence | `src/memory/` | SQLite-backed |
 | Pi shell integration | `src/pi/` | Extension, session, tool adapter |
+| Add-on tool package | `docs/build-a-tool.md` | Guide for building tools as separate npm packages |
 
 ## CODE STYLE
 ```ts

@@ -8,7 +8,7 @@ import { ProviderTracker } from "./provider-tracker.js";
 import { WorkflowRunner } from "./workflow-runner.js";
 import { setRunContext, clearRunContext } from "./run-context.js";
 import { PromptContextBuilder } from "../prompts/context-builder.js";
-import { getThirdPartyToolDescriptions } from "../tool-kit.js";
+import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
 import { toStepDefinitions, promptStepOutput } from "./prompt-step.js";
 import type Database from "better-sqlite3";
@@ -139,9 +139,9 @@ export class SessionCoordinator {
   buildSystemPrompt(basePrompt: string, workflowType?: string): string {
     const builder = new PromptContextBuilder();
 
-    const thirdPartyTools = getThirdPartyToolDescriptions();
-    const thirdPartyDescriptions = thirdPartyTools.length > 0
-      ? thirdPartyTools.map((t) => `${t.name}: ${t.description}`)
+    const addonTools = getAddonToolDescriptions();
+    const addonDescriptions = addonTools.length > 0
+      ? addonTools.map((t) => `${t.name}: ${t.description}`)
       : undefined;
 
     const memoryContext = this.memoryManager
@@ -151,7 +151,7 @@ export class SessionCoordinator {
     builder.populateFromOptions({
       workflowType,
       memoryContext: memoryContext || undefined,
-      thirdPartyToolDescriptions: thirdPartyDescriptions,
+      addonToolDescriptions: addonDescriptions,
     });
 
     return `${basePrompt}\n\n${builder.build()}`;

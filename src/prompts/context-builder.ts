@@ -7,7 +7,7 @@ export interface PromptContextOptions {
   workflowInstructions?: string;
   memoryContext?: string;
   providerStatus?: string;
-  thirdPartyToolDescriptions?: string[];
+  addonToolDescriptions?: string[];
 }
 
 /**
@@ -58,7 +58,7 @@ export class PromptContextBuilder {
   populateFromOptions(options: PromptContextOptions): this {
     this.setSection("base-role", BASE_ROLE);
     this.setSection("safety-rules", SAFETY_RULES);
-    this.setSection("tool-catalog", buildToolCatalog(options.thirdPartyToolDescriptions));
+    this.setSection("tool-catalog", buildToolCatalog(options.addonToolDescriptions));
     if (options.workflowInstructions) {
       this.setSection("workflow-instructions", options.workflowInstructions);
     }
@@ -119,11 +119,11 @@ const TOOL_CATALOG = `## Available Tools
 - **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, and prediction tracking with accuracy scoring
 - **User Interaction**: ask_user — ask the user a clarification question when their request is ambiguous or missing key details`;
 
-function buildToolCatalog(thirdPartyDescriptions?: string[]): string {
-  if (!thirdPartyDescriptions || thirdPartyDescriptions.length === 0) {
+function buildToolCatalog(addonDescriptions?: string[]): string {
+  if (!addonDescriptions || addonDescriptions.length === 0) {
     return TOOL_CATALOG;
   }
-  return `${TOOL_CATALOG}\n\n## Third-Party Tools\nThe following community-contributed tools are also available:\n${thirdPartyDescriptions.map((d) => `- ${d}`).join("\n")}`;
+  return `${TOOL_CATALOG}\n\n## Add-on Tools\nThe following add-on tools are also available:\n${addonDescriptions.map((d) => `- ${d}`).join("\n")}`;
 }
 
 function formatMemorySection(memoryContext: string): string {

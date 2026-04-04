@@ -67,14 +67,14 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Disclaimer");
   });
 
-  it("includes third-party tools in tool catalog", () => {
+  it("includes add-on tools in tool catalog", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
-      thirdPartyToolDescriptions: ["my_custom_tool: Does something cool"],
+      addonToolDescriptions: ["my_custom_tool: Does something cool"],
     });
 
     const result = builder.build();
-    expect(result).toContain("Third-Party Tools");
+    expect(result).toContain("Add-on Tools");
     expect(result).toContain("my_custom_tool");
   });
 
