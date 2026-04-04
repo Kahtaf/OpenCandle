@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { computeSMA, computeRSI } from "./indicators.js";
 import type { OHLCV } from "../../types/market.js";
 
@@ -203,7 +204,14 @@ export const backtestTool: AgentTool<typeof params> = {
   async execute(toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const period = args.period ?? "2y";
-    const bars = await getHistory(symbol, period, "1d");
+    const historyResult = await wrapProvider("yahoo", () => getHistory(symbol, period, "1d"));
+    if (historyResult.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Backtest unavailable for ${symbol} (${historyResult.reason}).` }],
+        details: null as any,
+      };
+    }
+    const bars = historyResult.data;
 
     if (bars.length < 60) {
       return {

@@ -43,6 +43,11 @@ export { WorkflowEventLogger } from "./workflow-events.js";
 
 export { ProviderTracker } from "./provider-tracker.js";
 
+export type { ProviderId } from "./provider-ids.js";
+export { PROVIDER_ID } from "./provider-ids.js";
+
+export { setRunContext, clearRunContext, getProviderTracker } from "./run-context.js";
+
 export type { StepExecutor, StepExecutionContext, WorkflowRunnerOptions } from "./workflow-runner.js";
 export { WorkflowRunner } from "./workflow-runner.js";
 

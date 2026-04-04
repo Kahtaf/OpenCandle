@@ -6,6 +6,7 @@ import { runOpenCandleSetup } from "../pi/setup.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { WorkflowRunner } from "./workflow-runner.js";
+import { setRunContext, clearRunContext } from "./run-context.js";
 import { PromptContextBuilder } from "../prompts/context-builder.js";
 import { getThirdPartyToolDescriptions } from "../tool-kit.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
@@ -70,11 +71,13 @@ export class SessionCoordinator {
   private memoryManager: MemoryManager | null = null;
   private eventLogger: WorkflowEventLogger | null = null;
   private runner: WorkflowRunner;
+  private providerTracker: ProviderTracker;
   private sessionId = "unknown";
 
   constructor() {
     // Runner is always available — event logger is optional and added after session init
-    this.runner = new WorkflowRunner({ providerTracker: new ProviderTracker() });
+    this.providerTracker = new ProviderTracker();
+    this.runner = new WorkflowRunner({ providerTracker: this.providerTracker });
   }
 
   getStorage(): MemoryStorage | null {
@@ -91,9 +94,10 @@ export class SessionCoordinator {
     this.storage = new MemoryStorage(this.db);
     this.memoryManager = new MemoryManager(this.storage);
     this.eventLogger = new WorkflowEventLogger(this.db);
+    this.providerTracker = new ProviderTracker();
     this.runner = new WorkflowRunner({
       eventLogger: this.eventLogger,
-      providerTracker: new ProviderTracker(),
+      providerTracker: this.providerTracker,
     });
     this.sessionId = sessionId;
   }
@@ -178,6 +182,9 @@ export class SessionCoordinator {
       pi.sendUserMessage(firstStep.prompt);
     }
 
+    // Make the run's ProviderTracker accessible to tools during execution
+    setRunContext({ providerTracker: this.providerTracker });
+
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
     void runner.start(definition.workflowType, stepDefs, async (step, stepIndex) => {
@@ -196,11 +203,14 @@ export class SessionCoordinator {
         }
       }
       return promptStepOutput(stepIndex, step.stepType);
+    }).finally(() => {
+      clearRunContext();
     });
   }
 
   /** Cancel any active workflow. */
   cancelActiveWorkflow(): void {
+    clearRunContext();
     this.runner?.cancel();
   }
 }

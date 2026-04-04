@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getOverview } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
@@ -102,23 +103,29 @@ export const compsTool: AgentTool<typeof params> = {
 
     const symbols = args.symbols.map((s) => s.toUpperCase());
 
-    const settled = await Promise.allSettled(
-      symbols.map(async (s) => ({ symbol: s, overview: await getOverview(s, config.alphaVantageApiKey!) })),
+    const results = await Promise.all(
+      symbols.map(async (s) => ({
+        symbol: s,
+        result: await wrapProvider("alphavantage", () => getOverview(s, config.alphaVantageApiKey!)),
+      })),
     );
 
     const companies: CompanyOverview[] = [];
     const unavailableSymbols: string[] = [];
 
-    for (const [index, result] of settled.entries()) {
-      if (result.status === "fulfilled") {
-        companies.push(result.value.overview);
-        continue;
+    for (const { symbol: sym, result: r } of results) {
+      if (r.status === "ok") {
+        companies.push(r.data);
+      } else {
+        unavailableSymbols.push(sym);
       }
-      unavailableSymbols.push(symbols[index]);
     }
 
     if (companies.length === 0) {
-      throw new Error(`Unable to fetch comparable-company fundamentals for: ${symbols.join(", ")}`);
+      return {
+        content: [{ type: "text", text: `⚠ Company fundamentals unavailable for all symbols: ${symbols.join(", ")}. Alpha Vantage may be rate limited.` }],
+        details: null as any,
+      };
     }
 
     const result = computeComps(companies);

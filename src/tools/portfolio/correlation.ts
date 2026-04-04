@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { computeDailyReturns } from "./risk-analysis.js";
 import type { OHLCV } from "../../types/market.js";
 
@@ -94,13 +95,24 @@ export const correlationTool: AgentTool<typeof params> = {
     }
 
     // Fetch history for all symbols in parallel
-    const histories = await Promise.all(
-      symbols.map((s) => getHistory(s, period, "1d")),
+    const results = await Promise.all(
+      symbols.map(async (s) => ({
+        symbol: s,
+        result: await wrapProvider("yahoo", () => getHistory(s, period, "1d")),
+      })),
     );
 
+    const unavailable = results.filter((r) => r.result.status === "unavailable");
+    if (unavailable.length === results.length) {
+      return {
+        content: [{ type: "text", text: `⚠ Correlation analysis unavailable — could not fetch history for any symbol.` }],
+        details: null as any,
+      };
+    }
+
     const historiesBySymbol = new Map<string, OHLCV[]>();
-    for (let i = 0; i < symbols.length; i++) {
-      historiesBySymbol.set(symbols[i], histories[i]);
+    for (const { symbol: sym, result: r } of results) {
+      if (r.status === "ok") historiesBySymbol.set(sym, r.data);
     }
 
     const returnsBySymbol = alignReturnsByDate(historiesBySymbol);

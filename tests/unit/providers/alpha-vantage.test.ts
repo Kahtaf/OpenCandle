@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getFinancials, getOverview } from "../../../src/providers/alpha-vantage.js";
+import { getFinancials, getOverview, getGlobalQuote, getDailyHistory } from "../../../src/providers/alpha-vantage.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
 import balanceFixture from "../../fixtures/alphavantage/AAPL-balance-sheet.json";
 import cashFlowFixture from "../../fixtures/alphavantage/AAPL-cash-flow.json";
+import globalQuoteFixture from "../../fixtures/alphavantage/AAPL-global-quote.json";
+import dailyHistoryFixture from "../../fixtures/alphavantage/AAPL-time-series-daily.json";
 
 describe("alpha-vantage provider", () => {
   const originalFetch = globalThis.fetch;
@@ -100,6 +102,78 @@ describe("alpha-vantage provider", () => {
 
       expect(statements[0].totalDebt).toBe(111088000000);
       expect(statements[0].cashAndEquivalents).toBe(29943000000);
+    });
+  });
+
+  describe("getGlobalQuote", () => {
+    it("maps GLOBAL_QUOTE response to StockQuote", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(globalQuoteFixture),
+      });
+
+      const quote = await getGlobalQuote("AAPL", "test-key");
+      expect(quote.symbol).toBe("AAPL");
+      expect(quote.price).toBe(186.35);
+      expect(quote.change).toBe(1.35);
+      expect(quote.changePercent).toBeCloseTo(0.7297);
+      expect(quote.open).toBe(185.5);
+      expect(quote.high).toBe(187.2);
+      expect(quote.low).toBe(184.8);
+      expect(quote.previousClose).toBe(185.0);
+      expect(quote.volume).toBe(54321000);
+    });
+
+    it("sets zero/null for fields not in GLOBAL_QUOTE", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(globalQuoteFixture),
+      });
+
+      const quote = await getGlobalQuote("AAPL", "test-key");
+      expect(quote.marketCap).toBe(0);
+      expect(quote.pe).toBeNull();
+      expect(quote.week52High).toBe(0);
+      expect(quote.week52Low).toBe(0);
+    });
+
+    it("uses cache on second call", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(globalQuoteFixture),
+      });
+
+      await getGlobalQuote("AAPL", "test-key");
+      await getGlobalQuote("AAPL", "test-key");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("getDailyHistory", () => {
+    it("maps TIME_SERIES_DAILY response to OHLCV[]", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(dailyHistoryFixture),
+      });
+
+      const bars = await getDailyHistory("AAPL", "test-key", "1mo");
+      expect(bars.length).toBe(3);
+      // Sorted chronologically
+      expect(bars[0].date).toBe("2026-04-01");
+      expect(bars[2].date).toBe("2026-04-03");
+      expect(bars[2].close).toBe(186.35);
+      expect(bars[2].volume).toBe(54321000);
+    });
+
+    it("uses cache on second call", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(dailyHistoryFixture),
+      });
+
+      await getDailyHistory("AAPL", "test-key", "1mo");
+      await getDailyHistory("AAPL", "test-key", "1mo");
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
   });
 

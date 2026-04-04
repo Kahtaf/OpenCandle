@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getFearGreedIndex } from "../../providers/fear-greed.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { FearGreedData } from "../../types/sentiment.js";
 
 const params = Type.Object({});
@@ -12,7 +13,14 @@ export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
     "Get the Crypto Fear & Greed Index (alternative.me) — a sentiment indicator from 0 (Extreme Fear) to 100 (Extreme Greed). Includes current value and previous close.",
   parameters: params,
   async execute(toolCallId, _args) {
-    const fg = await getFearGreedIndex();
+    const result = await wrapProvider("feargreed", () => getFearGreedIndex());
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Fear & Greed Index unavailable (${result.reason}).` }],
+        details: null as any,
+      };
+    }
+    const fg = result.data;
 
     const gauge = buildGauge(fg.value);
     const text = [

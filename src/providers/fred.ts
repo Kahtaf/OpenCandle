@@ -1,5 +1,5 @@
 import { httpGet } from "../infra/http-client.js";
-import { cache, TTL } from "../infra/cache.js";
+import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import type { FredSeries, FredObservation } from "../types/macro.js";
 
@@ -31,35 +31,41 @@ export async function getSeries(
   const cached = cache.get<FredSeries>(cacheKey);
   if (cached) return cached;
 
-  await rateLimiter.acquire("fred");
+  try {
+    await rateLimiter.acquire("fred");
 
-  // Fetch series metadata and observations in parallel
-  const metaUrl = `${BASE_URL}/series?series_id=${seriesId}&api_key=${apiKey}&file_type=json`;
-  const obsUrl = `${BASE_URL}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=${limit}`;
+    // Fetch series metadata and observations in parallel
+    const metaUrl = `${BASE_URL}/series?series_id=${seriesId}&api_key=${apiKey}&file_type=json`;
+    const obsUrl = `${BASE_URL}/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=${limit}`;
 
-  const [metaData, obsData] = await Promise.all([
-    httpGet<FredSeriesResponse>(metaUrl),
-    httpGet<FredObservationsResponse>(obsUrl),
-  ]);
+    const [metaData, obsData] = await Promise.all([
+      httpGet<FredSeriesResponse>(metaUrl),
+      httpGet<FredObservationsResponse>(obsUrl),
+    ]);
 
-  const meta = metaData.seriess[0];
-  const observations: FredObservation[] = obsData.observations
-    .filter((o) => o.value !== ".")
-    .map((o) => ({
-      date: o.date,
-      value: parseFloat(o.value),
-    }))
-    .reverse(); // chronological order
+    const meta = metaData.seriess[0];
+    const observations: FredObservation[] = obsData.observations
+      .filter((o) => o.value !== ".")
+      .map((o) => ({
+        date: o.date,
+        value: parseFloat(o.value),
+      }))
+      .reverse(); // chronological order
 
-  const result: FredSeries = {
-    id: meta.id,
-    title: meta.title,
-    observations,
-    units: meta.units,
-    frequency: meta.frequency,
-    lastUpdated: meta.last_updated,
-  };
+    const result: FredSeries = {
+      id: meta.id,
+      title: meta.title,
+      observations,
+      units: meta.units,
+      frequency: meta.frequency,
+      lastUpdated: meta.last_updated,
+    };
 
-  cache.set(cacheKey, result, TTL.MACRO);
-  return result;
+    cache.set(cacheKey, result, TTL.MACRO);
+    return result;
+  } catch (error) {
+    const stale = cache.getStale<FredSeries>(cacheKey, STALE_LIMIT.MACRO);
+    if (stale) return stale.value;
+    throw error;
+  }
 }

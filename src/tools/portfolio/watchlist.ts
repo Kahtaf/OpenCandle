@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { ensureParentDir, getWatchlistPath } from "../../infra/opencandle-paths.js";
 
 interface WatchlistItem {
@@ -115,7 +116,11 @@ export const watchlistTool: AgentTool<typeof params> = {
 
     const checks = await Promise.all(
       items.map(async (item) => {
-        const quote = await getQuote(item.symbol);
+        const result = await wrapProvider("yahoo", () => getQuote(item.symbol));
+        if (result.status === "unavailable") {
+          return { ...item, currentPrice: 0, alerts: [`UNAVAILABLE: ${result.reason}`] };
+        }
+        const quote = result.data;
         const alerts: string[] = [];
         if (item.targetPrice && quote.price >= item.targetPrice) {
           alerts.push(`TARGET HIT: $${quote.price.toFixed(2)} >= $${item.targetPrice}`);

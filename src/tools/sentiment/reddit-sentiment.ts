@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getSubredditPosts } from "../../providers/reddit.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { RedditSentimentResult } from "../../types/sentiment.js";
 
 const params = Type.Object({
@@ -21,7 +22,14 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
   parameters: params,
   async execute(toolCallId, args) {
     const limit = Math.min(args.limit ?? 25, 100);
-    const result = await getSubredditPosts(args.subreddit, limit);
+    const providerResult = await wrapProvider("reddit", () => getSubredditPosts(args.subreddit, limit));
+    if (providerResult.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Reddit sentiment unavailable for r/${args.subreddit} (${providerResult.reason}).` }],
+        details: null as any,
+      };
+    }
+    const result = providerResult.data;
 
     const sentimentLabel =
       result.sentimentScore > 0.3 ? "Bullish" :

@@ -1,6 +1,9 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import { getGlobalQuote } from "../../providers/alpha-vantage.js";
+import { withFallback } from "../../providers/with-fallback.js";
+import { getConfig } from "../../config.js";
 import type { StockQuote } from "../../types/market.js";
 
 const params = Type.Object({
@@ -14,16 +17,42 @@ export const stockQuoteTool: AgentTool<typeof params, StockQuote> = {
     "Get real-time stock price, volume, market cap, and 52-week range for a ticker symbol",
   parameters: params,
   async execute(toolCallId, args) {
-    const quote = await getQuote(args.symbol.toUpperCase());
+    const symbol = args.symbol.toUpperCase();
+    const apiKey = getConfig().alphaVantageApiKey;
+
+    const entries = [
+      { provider: "yahoo" as const, fn: () => getQuote(symbol) },
+      ...(apiKey
+        ? [{ provider: "alphavantage" as const, fn: () => getGlobalQuote(symbol, apiKey) }]
+        : []),
+    ];
+
+    const result = await withFallback(entries);
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Stock quote unavailable for ${symbol} (${result.reason}).` }],
+        details: null as any,
+      };
+    }
+    const quote = result.data;
     const sign = quote.changePercent >= 0 ? "+" : "";
+
+    const week52 = quote.week52High > 0 && quote.week52Low > 0
+      ? `$${quote.week52Low.toFixed(2)} - $${quote.week52High.toFixed(2)}`
+      : "N/A";
+    const marketCapStr = quote.marketCap > 0 ? `$${formatLargeNumber(quote.marketCap)}` : "N/A";
+
     const text = [
       `${quote.symbol}: $${quote.price.toFixed(2)} (${sign}${quote.changePercent.toFixed(2)}%)`,
       `Open: $${quote.open.toFixed(2)} | High: $${quote.high.toFixed(2)} | Low: $${quote.low.toFixed(2)}`,
-      `Volume: ${quote.volume.toLocaleString()} | Market Cap: $${formatLargeNumber(quote.marketCap)}`,
-      `52W Range: $${quote.week52Low.toFixed(2)} - $${quote.week52High.toFixed(2)}`,
+      `Volume: ${quote.volume.toLocaleString()} | Market Cap: ${marketCapStr}`,
+      `52W Range: ${week52}`,
     ].join("\n");
 
-    return { content: [{ type: "text", text }], details: quote };
+    const prefix = result.stale
+      ? `⚠ Using cached quote from ${result.timestamp} (provider rate limited)\n`
+      : "";
+    return { content: [{ type: "text", text: prefix + text }], details: quote };
   },
 };
 

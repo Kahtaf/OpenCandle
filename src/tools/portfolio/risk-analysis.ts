@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { RiskMetrics } from "../../types/portfolio.js";
 
 const params = Type.Object({
@@ -19,7 +20,14 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
   async execute(toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const period = args.period ?? "1y";
-    const bars = await getHistory(symbol, period, "1d");
+    const result = await wrapProvider("yahoo", () => getHistory(symbol, period, "1d"));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Risk analysis unavailable for ${symbol} (${result.reason}).` }],
+        details: null as any,
+      };
+    }
+    const bars = result.data;
     const closes = bars.map((b) => b.close);
 
     if (closes.length < 30) {

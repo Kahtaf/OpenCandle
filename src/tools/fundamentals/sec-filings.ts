@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { searchFilings } from "../../providers/sec-edgar.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, TSLA)" }),
@@ -25,7 +26,14 @@ export const secFilingsTool: AgentTool<typeof params> = {
     const formTypes = args.form_types ?? ["10-K", "10-Q", "8-K"];
     const limit = args.limit ?? 10;
 
-    const filings = await searchFilings(symbol, formTypes, limit);
+    const result = await wrapProvider("sec-edgar", () => searchFilings(symbol, formTypes, limit));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ SEC filings unavailable for ${symbol} (${result.reason}).` }],
+        details: null,
+      };
+    }
+    const filings = result.data;
 
     if (filings.length === 0) {
       return {

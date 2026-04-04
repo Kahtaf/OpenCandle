@@ -73,16 +73,19 @@
 
 **Stolen from**: Anthropic's harness research (compounding failure paper)
 
-**What**: Three-level recovery in the workflow runner:
-1. Retry with enriched error context
-2. Fallback to alternate provider
-3. Graceful degradation (skip step, flag reduced confidence)
+**What**: Three-level recovery, broken into 3 independent specs:
 
-**Why high impact**: At 95% per-step reliability, a 20-step workflow succeeds only 36% of the time. Codified recovery makes multi-analyst workflows robust.
+**Level A — Provider Circuit Wiring** (Low effort): Wire the existing dead `ProviderTracker` circuit breaker into tool execution. Providers use `wrapProvider()` to return `ProviderResultUnavailable` instead of throwing. Tools return partial evidence instead of crashing. The plumbing already exists — just needs connecting.
 
-**Effort**: Medium — changes in `src/runtime/workflow-runner.ts` and `src/infra/`.
+**Level B — Stale Cache Degradation** (Low-Med effort): Add `getStale()` to `Cache` — returns expired entries as fallback when providers fail. Evidence tagged with `provenance.source: "stale_cache"` so LLM can reduce confidence. Domain-specific stale limits (15min quotes, 7-day fundamentals).
 
-**Files**: `src/runtime/workflow-runner.ts`, `src/infra/http-client.ts`, provider files
+**Level C — Provider Fallback Map** (Med effort): `withFallback()` utility that tries alternate providers when primary fails. AlphaVantage → SEC EDGAR for fundamentals. Yahoo → AlphaVantage for quotes. Normalizers map fallback data to primary's type shape with `null` for missing fields.
+
+**Why high impact**: With debate, comprehensive analysis is now 11 steps. At 95% per-step, that's 57% success. The AlphaVantage free tier (5 req/min) is the worst bottleneck. Level A is prerequisite for B and C.
+
+**Files**: `src/runtime/workflow-runner.ts`, `src/runtime/provider-tracker.ts` (wire), `src/infra/cache.ts`, `src/providers/wrap-provider.ts`, tool files
+
+**Specs**: `specs/provider-circuit-wiring/`, `specs/stale-cache-degradation/`, `specs/graceful-provider-fallback/`
 
 ---
 
@@ -134,11 +137,13 @@
 
 | # | Pattern | Effort | Impact | Status |
 |---|---------|--------|--------|--------|
-| 1 | Bull/Bear Debate | Med | Very High | ← Exploring |
+| 1 | Bull/Bear Debate | Med | Very High | Done |
+| 5a | Error Recovery: Circuit Wiring | Low | High | Spec'd |
+| 5b | Error Recovery: Stale Cache | Low-Med | High | Spec'd |
+| 5c | Error Recovery: Provider Fallback | Med | High | Spec'd |
 | 2 | Structured Reports | Med | Very High | Backlog |
-| 3 | Compact Tool Outputs | Low | High | Backlog |
+| 3 | Compact Tool Outputs | Low | High | Ruled out (diminishing returns) |
 | 4 | Data Availability Map | Low | High | Backlog |
-| 5 | Error Recovery | Med | High | Backlog |
 | 6 | MCP Server | Med | High | Backlog |
 | 7 | Session Summaries | Med | Medium | Backlog |
 | 8 | Progress Tracking | Low | Medium | Backlog |

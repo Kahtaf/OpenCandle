@@ -1,5 +1,5 @@
 import { httpGet } from "../infra/http-client.js";
-import { cache, TTL } from "../infra/cache.js";
+import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { StealthBrowser } from "../infra/browser.js";
 import type { StockQuote, OHLCV } from "../types/market.js";
@@ -33,48 +33,54 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
   const cached = cache.get<StockQuote>(cacheKey);
   if (cached) return cached;
 
-  await rateLimiter.acquire("yahoo");
+  try {
+    await rateLimiter.acquire("yahoo");
 
-  const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  const data = await httpGet<YahooChartResponse>(url, {
-    headers: { "User-Agent": "OpenCandle/1.0" },
-  });
+    const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+    const data = await httpGet<YahooChartResponse>(url, {
+      headers: { "User-Agent": "OpenCandle/1.0" },
+    });
 
-  if (data.chart.error) {
-    throw new Error(`Yahoo Finance: ${data.chart.error.description}`);
+    if (data.chart.error) {
+      throw new Error(`Yahoo Finance: ${data.chart.error.description}`);
+    }
+
+    const result = data.chart.result[0];
+    const meta = result.meta;
+    const indicators = result.indicators.quote[0];
+
+    const price = meta.regularMarketPrice ?? 0;
+    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+    const change = price - prevClose;
+    const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
+
+    // Open price: try meta first, fall back to indicators
+    const open = meta.regularMarketOpen ?? indicators?.open?.[0] ?? price;
+
+    const quote: StockQuote = {
+      symbol: meta.symbol,
+      price,
+      change,
+      changePercent,
+      open,
+      high: meta.regularMarketDayHigh ?? indicators?.high?.[0] ?? price,
+      low: meta.regularMarketDayLow ?? indicators?.low?.[0] ?? price,
+      previousClose: prevClose,
+      volume: meta.regularMarketVolume ?? 0,
+      marketCap: meta.marketCap ?? 0,
+      pe: null, // Not in chart endpoint
+      week52High: meta.fiftyTwoWeekHigh ?? 0,
+      week52Low: meta.fiftyTwoWeekLow ?? 0,
+      timestamp: Date.now(),
+    };
+
+    cache.set(cacheKey, quote, TTL.QUOTE);
+    return quote;
+  } catch (error) {
+    const stale = cache.getStale<StockQuote>(cacheKey, STALE_LIMIT.QUOTE);
+    if (stale) return stale.value;
+    throw error;
   }
-
-  const result = data.chart.result[0];
-  const meta = result.meta;
-  const indicators = result.indicators.quote[0];
-
-  const price = meta.regularMarketPrice ?? 0;
-  const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
-  const change = price - prevClose;
-  const changePercent = prevClose !== 0 ? (change / prevClose) * 100 : 0;
-
-  // Open price: try meta first, fall back to indicators
-  const open = meta.regularMarketOpen ?? indicators?.open?.[0] ?? price;
-
-  const quote: StockQuote = {
-    symbol: meta.symbol,
-    price,
-    change,
-    changePercent,
-    open,
-    high: meta.regularMarketDayHigh ?? indicators?.high?.[0] ?? price,
-    low: meta.regularMarketDayLow ?? indicators?.low?.[0] ?? price,
-    previousClose: prevClose,
-    volume: meta.regularMarketVolume ?? 0,
-    marketCap: meta.marketCap ?? 0,
-    pe: null, // Not in chart endpoint
-    week52High: meta.fiftyTwoWeekHigh ?? 0,
-    week52Low: meta.fiftyTwoWeekLow ?? 0,
-    timestamp: Date.now(),
-  };
-
-  cache.set(cacheKey, quote, TTL.QUOTE);
-  return quote;
 }
 
 export async function getHistory(
@@ -86,34 +92,40 @@ export async function getHistory(
   const cached = cache.get<OHLCV[]>(cacheKey);
   if (cached) return cached;
 
-  await rateLimiter.acquire("yahoo");
+  try {
+    await rateLimiter.acquire("yahoo");
 
-  const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
-  const data = await httpGet<YahooChartResponse>(url, {
-    headers: { "User-Agent": "OpenCandle/1.0" },
-  });
+    const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
+    const data = await httpGet<YahooChartResponse>(url, {
+      headers: { "User-Agent": "OpenCandle/1.0" },
+    });
 
-  if (data.chart.error) {
-    throw new Error(`Yahoo Finance: ${data.chart.error.description}`);
+    if (data.chart.error) {
+      throw new Error(`Yahoo Finance: ${data.chart.error.description}`);
+    }
+
+    const result = data.chart.result[0];
+    const timestamps = result.timestamp;
+    const quotes = result.indicators.quote[0];
+
+    const ohlcv: OHLCV[] = timestamps
+      .map((ts, i) => ({
+        date: new Date(ts * 1000).toISOString().split("T")[0],
+        open: quotes.open[i],
+        high: quotes.high[i],
+        low: quotes.low[i],
+        close: quotes.close[i],
+        volume: quotes.volume[i],
+      }))
+      .filter((bar) => bar.open != null && bar.close != null);
+
+    cache.set(cacheKey, ohlcv, TTL.HISTORY);
+    return ohlcv;
+  } catch (error) {
+    const stale = cache.getStale<OHLCV[]>(cacheKey, STALE_LIMIT.HISTORY);
+    if (stale) return stale.value;
+    throw error;
   }
-
-  const result = data.chart.result[0];
-  const timestamps = result.timestamp;
-  const quotes = result.indicators.quote[0];
-
-  const ohlcv: OHLCV[] = timestamps
-    .map((ts, i) => ({
-      date: new Date(ts * 1000).toISOString().split("T")[0],
-      open: quotes.open[i],
-      high: quotes.high[i],
-      low: quotes.low[i],
-      close: quotes.close[i],
-      volume: quotes.volume[i],
-    }))
-    .filter((bar) => bar.open != null && bar.close != null);
-
-  cache.set(cacheKey, ohlcv, TTL.HISTORY);
-  return ohlcv;
 }
 
 // --- Options Chain (v7 API with crumb+cookie auth) ---
@@ -206,6 +218,9 @@ export async function getOptionsChain(
       cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
       return chain;
     }
+    // All fetches failed — try stale cache before giving up
+    const stale = cache.getStale<OptionsChain>(cacheKey, STALE_LIMIT.OPTIONS_CHAIN);
+    if (stale) return stale.value;
     throw new Error(`Yahoo Finance options: HTTP ${res.status}`);
   }
 

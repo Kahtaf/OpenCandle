@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getOverview } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
@@ -20,7 +21,14 @@ export const companyOverviewTool: AgentTool<typeof params, CompanyOverview> = {
       throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
     }
 
-    const ov = await getOverview(args.symbol.toUpperCase(), apiKey);
+    const result = await wrapProvider("alphavantage", () => getOverview(args.symbol.toUpperCase(), apiKey));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Company overview unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without fundamentals.` }],
+        details: null as any,
+      };
+    }
+    const ov = result.data;
     const text = [
       `**${ov.name}** (${ov.symbol}) — ${ov.exchange}`,
       `Sector: ${ov.sector} | Industry: ${ov.industry}`,
@@ -32,7 +40,10 @@ export const companyOverviewTool: AgentTool<typeof params, CompanyOverview> = {
       ov.description.slice(0, 300) + (ov.description.length > 300 ? "..." : ""),
     ].join("\n");
 
-    return { content: [{ type: "text", text }], details: ov };
+    const prefix = result.stale
+      ? `⚠ Using cached fundamentals from ${result.timestamp} (Alpha Vantage rate limited)\n`
+      : "";
+    return { content: [{ type: "text", text: prefix + text }], details: ov };
   },
 };
 

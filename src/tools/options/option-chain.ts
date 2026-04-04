@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getOptionsChain } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { OptionsChain, OptionContract } from "../../types/options.js";
 
 const params = Type.Object({
@@ -31,7 +32,14 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
       ? Math.floor(new Date(args.expiration).getTime() / 1000)
       : undefined;
 
-    const chain = await getOptionsChain(symbol, expirationTs);
+    const result = await wrapProvider("yahoo", () => getOptionsChain(symbol, expirationTs));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Options chain unavailable for ${symbol} (${result.reason}).` }],
+        details: null as any,
+      };
+    }
+    const chain = result.data;
 
     const lines: string[] = [
       `**${chain.symbol} Options Chain** — Expiry: ${chain.expirationDate}`,

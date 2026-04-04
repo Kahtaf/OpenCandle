@@ -40,6 +40,33 @@ describe("toEvidenceRecord", () => {
     expect(record.provenance.timestamp).toBe("2026-04-02T14:30:00Z");
   });
 
+  it("converts ok result with providerId", () => {
+    const result: ProviderResult<number> = {
+      status: "ok",
+      data: 42,
+      timestamp: "2026-04-02T14:30:00Z",
+    };
+    const record = toEvidenceRecord("Value", result, "yahoo");
+
+    expect(record.provenance.source).toBe("fetched");
+    expect(record.provenance.provider).toBe("yahoo");
+  });
+
+  it("converts stale ok result to stale_cache evidence", () => {
+    const result: ProviderResult<{ price: number }> = {
+      status: "ok",
+      data: { price: 180.0 },
+      timestamp: "2026-04-02T12:00:00Z",
+      stale: true,
+    };
+    const record = toEvidenceRecord("Stock Price", result, "yahoo");
+
+    expect(record.provenance.source).toBe("stale_cache");
+    expect(record.provenance.timestamp).toBe("2026-04-02T12:00:00Z");
+    expect(record.provenance.provider).toBe("yahoo");
+    expect(record.provenance.confidence).toBe(0.5);
+  });
+
   it("converts unavailable result to unavailable evidence", () => {
     const result: ProviderResult<unknown> = {
       status: "unavailable",

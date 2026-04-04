@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getFinancials } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
@@ -20,7 +21,14 @@ export const financialsTool: AgentTool<typeof params, FinancialStatement[]> = {
       throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
     }
 
-    const statements = await getFinancials(args.symbol.toUpperCase(), apiKey);
+    const result = await wrapProvider("alphavantage", () => getFinancials(args.symbol.toUpperCase(), apiKey));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Financial statements unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without financials.` }],
+        details: [],
+      };
+    }
+    const statements = result.data;
     if (statements.length === 0) {
       return {
         content: [{ type: "text", text: `No financial data found for ${args.symbol}` }],

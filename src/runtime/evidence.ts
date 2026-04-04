@@ -5,7 +5,8 @@ export type ProvenanceSource =
   | "default"
   | "fetched"
   | "computed"
-  | "unavailable";
+  | "unavailable"
+  | "stale_cache";
 
 /** Tracks where a value came from, when, and with what confidence. */
 export interface Provenance {
@@ -28,6 +29,7 @@ export interface ProviderResultOk<T> {
   status: "ok";
   data: T;
   timestamp: string;
+  stale?: boolean;
 }
 
 /** Failed/unavailable provider result. */
@@ -49,15 +51,17 @@ export function isProviderOk<T>(result: ProviderResult<T>): result is ProviderRe
 export function toEvidenceRecord<T>(
   label: string,
   result: ProviderResult<T>,
+  providerId?: string,
 ): EvidenceRecord {
   if (isProviderOk(result)) {
     return {
       label,
       value: result.data,
       provenance: {
-        source: "fetched",
+        source: result.stale ? "stale_cache" : "fetched",
         timestamp: result.timestamp,
-        provider: undefined,
+        provider: providerId,
+        confidence: result.stale ? 0.5 : undefined,
       },
     };
   }

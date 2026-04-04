@@ -1,5 +1,5 @@
 import { httpGet } from "../infra/http-client.js";
-import { cache, TTL } from "../infra/cache.js";
+import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import type { RedditSentimentResult } from "../types/sentiment.js";
 
 interface RedditListingResponse {
@@ -24,48 +24,54 @@ export async function getSubredditPosts(
   const cached = cache.get<RedditSentimentResult>(cacheKey);
   if (cached) return cached;
 
-  const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=${limit}`;
-  const data = await httpGet<RedditListingResponse>(url, {
-    headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
-  });
+  try {
+    const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=${limit}`;
+    const data = await httpGet<RedditListingResponse>(url, {
+      headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
+    });
 
-  const posts = data.data.children.map((child) => ({
-    title: child.data.title,
-    score: child.data.score,
-    comments: child.data.num_comments,
-    url: `https://reddit.com${child.data.permalink}`,
-    created: new Date(child.data.created_utc * 1000).toISOString(),
-  }));
+    const posts = data.data.children.map((child) => ({
+      title: child.data.title,
+      score: child.data.score,
+      comments: child.data.num_comments,
+      url: `https://reddit.com${child.data.permalink}`,
+      created: new Date(child.data.created_utc * 1000).toISOString(),
+    }));
 
-  // Extract ticker-like mentions ($AAPL, $TSLA, etc.)
-  const tickerRegex = /\$([A-Z]{1,5})\b/g;
-  const mentionCounts = new Map<string, number>();
-  for (const post of posts) {
-    for (const match of post.title.matchAll(tickerRegex)) {
-      const ticker = match[1];
-      mentionCounts.set(ticker, (mentionCounts.get(ticker) ?? 0) + 1);
+    // Extract ticker-like mentions ($AAPL, $TSLA, etc.)
+    const tickerRegex = /\$([A-Z]{1,5})\b/g;
+    const mentionCounts = new Map<string, number>();
+    for (const post of posts) {
+      for (const match of post.title.matchAll(tickerRegex)) {
+        const ticker = match[1];
+        mentionCounts.set(ticker, (mentionCounts.get(ticker) ?? 0) + 1);
+      }
     }
+    const topMentions = [...mentionCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([ticker]) => ticker);
+
+    const sentiment = scoreSentiment(posts);
+
+    const result: RedditSentimentResult = {
+      subreddit,
+      postCount: posts.length,
+      posts,
+      topMentions,
+      sentimentScore: sentiment.score,
+      bullishCount: sentiment.bullish,
+      bearishCount: sentiment.bearish,
+      fetchedAt: new Date().toISOString(),
+    };
+
+    cache.set(cacheKey, result, TTL.SENTIMENT);
+    return result;
+  } catch (error) {
+    const stale = cache.getStale<RedditSentimentResult>(cacheKey, STALE_LIMIT.SENTIMENT);
+    if (stale) return stale.value;
+    throw error;
   }
-  const topMentions = [...mentionCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([ticker]) => ticker);
-
-  const sentiment = scoreSentiment(posts);
-
-  const result: RedditSentimentResult = {
-    subreddit,
-    postCount: posts.length,
-    posts,
-    topMentions,
-    sentimentScore: sentiment.score,
-    bullishCount: sentiment.bullish,
-    bearishCount: sentiment.bearish,
-    fetchedAt: new Date().toISOString(),
-  };
-
-  cache.set(cacheKey, result, TTL.SENTIMENT);
-  return result;
 }
 
 const BULLISH_TERMS = [

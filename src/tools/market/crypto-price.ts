@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getCryptoPrice } from "../../providers/coingecko.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CryptoPrice } from "../../types/market.js";
 
 const params = Type.Object({
@@ -17,7 +18,14 @@ export const cryptoPriceTool: AgentTool<typeof params, CryptoPrice> = {
     "Get current crypto price, 24h change, market cap, volume, ATH, and supply data",
   parameters: params,
   async execute(toolCallId, args) {
-    const crypto = await getCryptoPrice(args.id.toLowerCase());
+    const result = await wrapProvider("coingecko", () => getCryptoPrice(args.id.toLowerCase()));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Crypto price unavailable for ${args.id} (${result.reason}).` }],
+        details: null as any,
+      };
+    }
+    const crypto = result.data;
     const sign = crypto.changePercent24h >= 0 ? "+" : "";
     const text = [
       `${crypto.name} (${crypto.symbol.toUpperCase()}): $${formatPrice(crypto.price)} (${sign}${crypto.changePercent24h.toFixed(2)}%)`,

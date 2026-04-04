@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { ensureParentDir, getPredictionsPath } from "../../infra/opencandle-paths.js";
 
 export interface Prediction {
@@ -218,11 +219,11 @@ export const predictionsTool: AgentTool<typeof params> = {
     const priceMap = new Map<string, number>();
     await Promise.all(
       symbols.map(async (sym) => {
-        try {
-          const quote = await getQuote(sym);
-          priceMap.set(sym, quote.price);
-        } catch {
-          // Skip symbols that fail
+        const result = await wrapProvider("yahoo", () => getQuote(sym));
+        if (result.status === "ok") {
+          priceMap.set(sym, result.data.price);
+        } else {
+          // Skip symbols that are unavailable
         }
       }),
     );

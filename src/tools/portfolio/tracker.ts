@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { Position, PortfolioSummary } from "../../types/portfolio.js";
 import { ensureParentDir, getPortfolioPath } from "../../infra/opencandle-paths.js";
 
@@ -21,9 +22,10 @@ function savePortfolio(positions: Position[]): void {
   writeFileSync(portfolioPath, JSON.stringify(positions, null, 2));
 }
 
-async function getCurrentPrice(symbol: string): Promise<number> {
-  const quote = await getQuote(symbol);
-  return quote.price;
+async function getCurrentPrice(symbol: string): Promise<number | null> {
+  const result = await wrapProvider("yahoo", () => getQuote(symbol));
+  if (result.status === "unavailable") return null;
+  return result.data.price;
 }
 
 const params = Type.Object({
@@ -108,7 +110,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
 
     const enriched = await Promise.all(
       positions.map(async (p) => {
-        const currentPrice = await getCurrentPrice(p.symbol);
+        const currentPrice = await getCurrentPrice(p.symbol) ?? p.avgCost;
         const marketValue = currentPrice * p.shares;
         const totalCost = p.avgCost * p.shares;
         return {

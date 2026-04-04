@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getCryptoHistory } from "../../providers/coingecko.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { OHLCV } from "../../types/market.js";
 
 const params = Type.Object({
@@ -22,7 +23,14 @@ export const cryptoHistoryTool: AgentTool<typeof params, OHLCV[]> = {
   async execute(toolCallId, args) {
     const id = args.id.toLowerCase();
     const days = args.days ?? 180;
-    const bars = await getCryptoHistory(id, days);
+    const result = await wrapProvider("coingecko", () => getCryptoHistory(id, days));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Crypto history unavailable for ${id} (${result.reason}).` }],
+        details: [],
+      };
+    }
+    const bars = result.data;
 
     const summary = [
       `${id} — ${bars.length} bars (${days} days)`,

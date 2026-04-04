@@ -1,7 +1,14 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
+import { getDailyHistory } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { withFallback } from "../../providers/with-fallback.js";
+import { getConfig } from "../../config.js";
 import type { OHLCV } from "../../types/market.js";
+import type { ProviderResult } from "../../runtime/evidence.js";
+
+const DAILY_INTERVALS = new Set(["1d", "1wk", "1mo"]);
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
@@ -26,7 +33,31 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
     const symbol = args.symbol.toUpperCase();
     const range = args.range ?? "6mo";
     const interval = args.interval ?? "1d";
-    const bars = await getHistory(symbol, range, interval);
+    const apiKey = getConfig().alphaVantageApiKey;
+
+    let result: ProviderResult<OHLCV[]>;
+
+    if (DAILY_INTERVALS.has(interval) && apiKey) {
+      // Daily or above — can fall back to Alpha Vantage
+      result = await withFallback([
+        { provider: "yahoo", fn: () => getHistory(symbol, range, interval) },
+        { provider: "alphavantage", fn: () => getDailyHistory(symbol, apiKey, range) },
+      ]);
+    } else {
+      // Intraday — no cross-provider fallback
+      result = await wrapProvider("yahoo", () => getHistory(symbol, range, interval));
+    }
+
+    if (result.status === "unavailable") {
+      const intradayNote = !DAILY_INTERVALS.has(interval)
+        ? ` No alternate source for ${interval} data.`
+        : "";
+      return {
+        content: [{ type: "text", text: `⚠ Stock history unavailable for ${symbol} (${result.reason}).${intradayNote}` }],
+        details: [],
+      };
+    }
+    const bars = result.data;
 
     const summary = [
       `${symbol} — ${bars.length} bars (${range}, ${interval})`,

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Add three-level error recovery for provider failures: circuit breaker (Level A), stale cache fallback (Level B), cross-provider fallback for quotes and daily history (Level C)
+- All tools now return degraded text responses instead of crashing when providers are unavailable
+- Add `withFallback()` utility — stock quotes fall back from Yahoo to Alpha Vantage; daily history does the same with an interval guard (intraday stays Yahoo-only)
+- Add stale-while-error cache with domain-specific limits (15min quotes through 7-day fundamentals)
+- Wire existing `ProviderTracker` circuit breaker into tool execution via module-level run context bridge
+- Add `getGlobalQuote()` and `getDailyHistory()` to Alpha Vantage provider
 - Add adversarial bull/bear debate phase to comprehensive analysis — 3 new workflow steps (bull researcher, bear researcher, self-gating rebuttal) between analysts and synthesis, producing debate-aware verdicts with reversal conditions
 - Add agent test harness with file-based IPC — any coding agent can drive OpenCandle via CLI, answer follow-up questions, and get structured traces of every tool call and interaction
 - Add injectable `askUserHandler` to `createOpenCandleSession()` for non-UI contexts

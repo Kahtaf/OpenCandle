@@ -2,6 +2,7 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getOverview, getFinancials } from "../../providers/alpha-vantage.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
@@ -154,11 +155,27 @@ export const dcfTool: AgentTool<typeof params> = {
       throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
     }
 
-    const [overview, financials, quote] = await Promise.all([
-      getOverview(symbol, config.alphaVantageApiKey),
-      getFinancials(symbol, config.alphaVantageApiKey),
-      getQuote(symbol),
+    const [overviewResult, financialsResult, quoteResult] = await Promise.all([
+      wrapProvider("alphavantage", () => getOverview(symbol, config.alphaVantageApiKey!)),
+      wrapProvider("alphavantage", () => getFinancials(symbol, config.alphaVantageApiKey!)),
+      wrapProvider("yahoo", () => getQuote(symbol)),
     ]);
+
+    const missing: string[] = [];
+    if (overviewResult.status === "unavailable") missing.push(`company overview (${overviewResult.reason})`);
+    if (financialsResult.status === "unavailable") missing.push(`financial statements (${financialsResult.reason})`);
+    if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
+
+    if (financialsResult.status === "unavailable" || quoteResult.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ DCF valuation unavailable for ${symbol}. Missing: ${missing.join(", ")}. Both financials and current price are required.` }],
+        details: null,
+      };
+    }
+
+    const overview = overviewResult.status === "ok" ? overviewResult.data : null;
+    const financials = financialsResult.data;
+    const quote = quoteResult.data;
 
     const latestFCF = financials[0]?.freeCashFlow ?? 0;
     if (latestFCF <= 0) {
@@ -180,7 +197,8 @@ export const dcfTool: AgentTool<typeof params> = {
     const discountRate = args.discount_rate ?? 0.10;
     const terminalGrowth = args.terminal_growth ?? 0.03;
     const years = args.projection_years ?? 5;
-    const sharesOutstanding = quote.price > 0 ? overview.marketCap / quote.price : 1;
+    const marketCap = overview?.marketCap ?? 0;
+    const sharesOutstanding = quote.price > 0 && marketCap > 0 ? marketCap / quote.price : 1;
     const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
 
     const result = computeDCF({

@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getSubredditPosts } from "../../providers/reddit.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { RedditSentimentResult } from "../../types/sentiment.js";
 
 const params = Type.Object({
@@ -22,17 +23,14 @@ export const newsSentimentTool: AgentTool<typeof params, RedditSentimentResult> 
     const allMentions: string[] = [];
 
     for (const sub of subreddits) {
-      try {
-        const result = await getSubredditPosts(sub, 25);
-        // Filter posts that mention the topic
-        const relevant = result.posts.filter(
-          (p) => p.title.toLowerCase().includes(args.topic.toLowerCase()),
-        );
-        allPosts.push(...relevant);
-        allMentions.push(...result.topMentions);
-      } catch {
-        // Continue with other subreddits if one fails
-      }
+      const providerResult = await wrapProvider("reddit", () => getSubredditPosts(sub, 25));
+      if (providerResult.status === "unavailable") continue;
+      const result = providerResult.data;
+      const relevant = result.posts.filter(
+        (p) => p.title.toLowerCase().includes(args.topic.toLowerCase()),
+      );
+      allPosts.push(...relevant);
+      allMentions.push(...result.topMentions);
     }
 
     const uniqueMentions = [...new Set(allMentions)];

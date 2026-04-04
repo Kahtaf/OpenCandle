@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getEarnings } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import type { EarningsData } from "../../types/fundamentals.js";
 
@@ -20,7 +21,14 @@ export const earningsTool: AgentTool<typeof params, EarningsData> = {
       throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
     }
 
-    const earnings = await getEarnings(args.symbol.toUpperCase(), apiKey);
+    const result = await wrapProvider("alphavantage", () => getEarnings(args.symbol.toUpperCase(), apiKey));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ Earnings data unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without earnings history.` }],
+        details: null as any,
+      };
+    }
+    const earnings = result.data;
     if (earnings.quarterly.length === 0) {
       return {
         content: [{ type: "text", text: `No earnings data found for ${args.symbol}` }],

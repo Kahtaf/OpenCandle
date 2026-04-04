@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getSeries } from "../../providers/fred.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import { FRED_SERIES } from "../../types/macro.js";
 import type { FredSeries } from "../../types/macro.js";
@@ -27,7 +28,14 @@ export const fredDataTool: AgentTool<typeof params, FredSeries> = {
     }
 
     const limit = args.limit ?? 30;
-    const series = await getSeries(args.series_id.toUpperCase(), apiKey, limit);
+    const result = await wrapProvider("fred", () => getSeries(args.series_id.toUpperCase(), apiKey, limit));
+    if (result.status === "unavailable") {
+      return {
+        content: [{ type: "text", text: `⚠ FRED data unavailable for ${args.series_id.toUpperCase()} (${result.reason}).` }],
+        details: null as any,
+      };
+    }
+    const series = result.data;
 
     const latest = series.observations[series.observations.length - 1];
     const header = `**${series.title}** (${series.id})`;
@@ -39,6 +47,9 @@ export const fredDataTool: AgentTool<typeof params, FredSeries> = {
     const table = recent.map((o) => `${o.date}: ${o.value}`).join("\n");
 
     const text = [header, meta, current, "", "Recent observations:", table].join("\n");
-    return { content: [{ type: "text", text }], details: series };
+    const prefix = result.stale
+      ? `⚠ Using cached FRED data from ${result.timestamp} (FRED unavailable)\n`
+      : "";
+    return { content: [{ type: "text", text: prefix + text }], details: series };
   },
 };
