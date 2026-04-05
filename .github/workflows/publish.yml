@@ -2,12 +2,12 @@ name: Publish
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -31,19 +31,10 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Read package version
-        id: package
-        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Check whether this version is already published
-        id: published
-        run: |
-          if npm view "opencandle@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "already_published=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Publish to npm
-        if: steps.published.outputs.already_published == 'false'
         run: npm publish --access public --provenance
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" --generate-notes
