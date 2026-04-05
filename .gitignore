@@ -7,3 +7,6 @@ dist/
 agent-eval-results*.json
 tests/evals/runs/*
 !tests/evals/runs/.gitkeep
+.agents/
+.claude/skills/
+skills-lock.json
