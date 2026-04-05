@@ -11,6 +11,7 @@ import { fredDataTool } from "./macro/fred-data.js";
 import { fearGreedTool } from "./macro/fear-greed.js";
 import { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
 import { newsSentimentTool } from "./sentiment/news-sentiment.js";
+import { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 import { technicalIndicatorsTool } from "./technical/indicators.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
@@ -40,6 +41,7 @@ export function getAllTools(): AgentTool<any>[] {
     fearGreedTool,
     redditSentimentTool,
     newsSentimentTool,
+    twitterSentimentTool,
     technicalIndicatorsTool,
     backtestTool,
     portfolioTrackerTool,

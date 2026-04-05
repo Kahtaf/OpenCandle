@@ -6,6 +6,9 @@ import {
   InteractiveMode,
   ModelRegistry,
   SettingsManager,
+  SessionManager,
+  createAgentSessionRuntime,
+  createAgentSessionServices,
   getAgentDir,
   initTheme,
 } from "@mariozechner/pi-coding-agent";
@@ -122,22 +125,42 @@ async function main(): Promise<void> {
 
   initTheme(settingsManager.getTheme(), true);
 
-  const { session, modelFallbackMessage } = await createOpenCandleSession({
-    cwd,
-    settingsManager,
-    authStorage,
-    modelRegistry,
-  });
+  const sessionManager = SessionManager.create(agentDir);
+
+  const runtime = await createAgentSessionRuntime(
+    async (opts) => {
+      const services = await createAgentSessionServices({
+        cwd: opts.cwd,
+        agentDir: opts.agentDir,
+        authStorage,
+        settingsManager,
+        modelRegistry,
+      });
+      const result = await createOpenCandleSession({
+        cwd: opts.cwd,
+        settingsManager,
+        authStorage,
+        modelRegistry,
+        sessionManager: opts.sessionManager,
+      });
+      return {
+        ...result,
+        services,
+        diagnostics: services.diagnostics,
+      };
+    },
+    { cwd, agentDir, sessionManager },
+  );
 
   try {
-    const interactiveMode = new InteractiveMode(session, {
+    const interactiveMode = new InteractiveMode(runtime, {
       modelFallbackMessage: shouldSuppressFallbackMessage
         ? undefined
-        : modelFallbackMessage,
+        : runtime.modelFallbackMessage,
     });
     await interactiveMode.run();
   } finally {
-    session.dispose();
+    await runtime.dispose();
   }
 }
 

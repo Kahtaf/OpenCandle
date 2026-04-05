@@ -14,4 +14,5 @@ export {
   getOnboardingPath,
   getStateDbPath,
   getLogsDir,
+  getBrowserProfileDir,
 } from "./opencandle-paths.js";

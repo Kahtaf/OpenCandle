@@ -58,3 +58,7 @@ export function getStateDbPath(): string {
 export function getLogsDir(): string {
   return resolveOpenCandlePath("logs");
 }
+
+export function getBrowserProfileDir(): string {
+  return resolveOpenCandlePath("browser-profile");
+}

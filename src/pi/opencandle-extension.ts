@@ -14,6 +14,7 @@ import {
 } from "../workflows/index.js";
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
+import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
 import type { AskUserHandler } from "../types/index.js";
 
@@ -29,6 +30,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     pi.registerTool(tool);
   }
   registerAskUserTool(pi, options?.askUserHandler);
+  registerTwitterLoginTool(pi);
 
   // /analyze command
   pi.registerCommand("analyze", {

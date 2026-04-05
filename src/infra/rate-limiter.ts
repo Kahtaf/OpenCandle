@@ -55,3 +55,4 @@ rateLimiter.configure("yahoo", 5, 5);           // 5 req/s
 rateLimiter.configure("coingecko", 10, 0.167);  // 10 req/min
 rateLimiter.configure("alphavantage", 5, 0.083); // 5 req/min (free tier)
 rateLimiter.configure("fred", 120, 2);           // 120 req/min
+rateLimiter.configure("twitter", 5, 0.167);      // 5 req, ~10 req/min

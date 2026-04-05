@@ -82,7 +82,7 @@ describe("opencandle extension", () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);
 
-    expect(fake.tools).toHaveLength(24);
+    expect(fake.tools).toHaveLength(26);
     expect(fake.commands.has("analyze")).toBe(true);
     expect(fake.commands.has("setup")).toBe(true);
   });

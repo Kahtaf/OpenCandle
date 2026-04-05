@@ -1,0 +1,7 @@
+[
+  { "name": "auth_token", "value": "fake_auth_token_abc123", "domain": ".x.com", "path": "/" },
+  { "name": "ct0", "value": "fake_ct0_token_xyz789", "domain": ".x.com", "path": "/" },
+  { "name": "twid", "value": "u%3D123456789", "domain": ".x.com", "path": "/" },
+  { "name": "auth_token", "value": "fake_auth_token_abc123", "domain": ".twitter.com", "path": "/" },
+  { "name": "ct0", "value": "fake_ct0_token_xyz789", "domain": ".twitter.com", "path": "/" }
+]
