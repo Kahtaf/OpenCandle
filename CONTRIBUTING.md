@@ -128,4 +128,4 @@ Do not:
 - Pi integration: `src/pi/`
 - Tests and fixtures: `tests/`
 
-The repo-level [AGENTS.md](/Users/kahtaf/.codex/worktrees/dc41/vantage/AGENTS.md) remains the most specific implementation guide for code changes.
+The repo-level [AGENTS.md](./AGENTS.md) remains the most specific implementation guide for code changes.

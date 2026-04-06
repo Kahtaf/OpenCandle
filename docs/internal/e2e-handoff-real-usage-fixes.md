@@ -1,7 +1,8 @@
 # OpenCandle Real-Usage E2E Fix Handoff
 
 **Date:** 2026-03-29  
-**Status:** Implementation handoff for the next agent  
+**Last reviewed:** 2026-04-06  
+**Status:** ~70% of fixes landed — see per-section status annotations  
 **Audience:** Engineer / agent taking over runtime-quality fixes after workflow routing and memory landed  
 **Scope:** Fix the remaining issues discovered by running the real CLI agent against broad, realistic user prompts
 
@@ -56,37 +57,44 @@ Key runtime outcomes:
 
 ### Highest-severity fixes
 
-1. **Queued workflow follow-ups can leak into later turns**
+1. **Queued workflow follow-ups can leak into later turns** — NEEDS VERIFICATION
    - The agent can continue running synthetic follow-up prompts after it has already returned control to the user.
    - This can interleave output from an older workflow with a newer user request.
+   - *2026-04-06: `workflow-runner.ts` and `runId` tracking were added, which may address this. The original line references (`src/index.ts` L159, L242, L271) no longer match current code. Needs live testing to confirm resolution.*
 
-2. **Clarification budget parsing is wrong**
+2. **Clarification budget parsing is wrong** — FIXED
    - `$15k and I'm aggressive` was parsed as **$15**, not **$15,000**.
+   - *2026-04-06: Fixed in `src/routing/entity-extractor.ts` with robust money expression parsing supporting `$10k`, `$10,000`, `10000 dollars`, and mixed clarification strings.*
 
-3. **Options date handling is not grounded**
+3. **Options date handling is not grounded** — NEEDS VERIFICATION
    - The model referenced different current dates across runs and even invented one to make expiration selection fit.
    - This directly harms DTE filtering and options ranking quality.
+   - *2026-04-06: `src/prompts/workflow-prompts.ts` has a `todayStr()` function, but it's unclear whether the runtime date is reliably injected into all options workflow prompts. Needs live testing.*
 
 ### Medium-severity fixes
 
-4. **Assumption source labeling is inaccurate**
+4. **Assumption source labeling is inaccurate** — FIXED
    - Stored preferences are sometimes labeled as user-specified.
    - Same-turn explicit values and remembered values are not cleanly separated.
+   - *2026-04-06: Fixed in `src/prompts/sections.ts` with explicit source tagging (user-specified, saved preferences, default) via a `tag()` function.*
 
-5. **ETF workflows still call stock-fundamental tools**
+5. **ETF workflows still call stock-fundamental tools** — FIXED
    - `get_company_overview` is predictably failing on ETFs and adding noise, latency, and confusing narrative.
+   - *2026-04-06: Fixed in `src/prompts/workflow-prompts.ts` with conditional `isEtfOnly` logic that skips `get_company_overview` for ETF-focused portfolios.*
 
-6. **Options ranking logic is too weak**
+6. **Options ranking logic is too weak** — NEEDS VERIFICATION
    - The workflow can rank ultra-cheap, near-zero-delta calls as the “best” contracts because they pass filters.
+   - *2026-04-06: The options-screener prompt now includes `|delta| >= 0.20` floor, but the full weighted scoring system (moneyness fit, delta band fit, etc.) is not visible in code. May still rely on the LLM for ranking quality.*
 
-7. **Portfolio outputs can become unusably verbose**
+7. **Portfolio outputs can become unusably verbose** — FIXED
    - Some runs produced bloated multi-screen responses with poor signal density.
+   - *2026-04-06: Explicit length limits added to workflow prompts (portfolio: <40 lines, options: <30 lines, with per-section constraints).*
 
 ---
 
 ## 4. Detailed Findings
 
-## 4.1 Follow-Up Queue Leakage Across Turns
+## 4.1 Follow-Up Queue Leakage Across Turns — NEEDS VERIFICATION
 
 ### What happened
 
@@ -118,9 +126,9 @@ This breaks trust quickly:
 
 The follow-up mechanism appears to enqueue synthetic user messages immediately after the initial workflow prompt:
 
-- [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts#L159)
-- [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts#L242)
-- [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts#L271)
+- `src/index.ts` (L159)
+- `src/index.ts` (L242)
+- `src/index.ts` (L271)
 
 The likely issue is:
 
@@ -156,8 +164,8 @@ Do not keep the current hybrid model where the user prompt returns before intern
 
 ### Files to inspect
 
-- [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts)
-- possibly agent event ordering assumptions in [src/agent.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/agent.ts)
+- `src/index.ts`
+- possibly agent event ordering assumptions in `src/agent.ts`
 
 ### Acceptance criteria
 
@@ -170,7 +178,7 @@ Do not keep the current hybrid model where the user prompt returns before intern
 
 ---
 
-## 4.2 Budget Clarification Parsing Bug
+## 4.2 Budget Clarification Parsing Bug — FIXED
 
 ### What happened
 
@@ -205,7 +213,7 @@ If the parser mishandles these, the workflow becomes misleading while still look
 
 ### Likely root cause
 
-The current parsing path in [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts#L219) is too naive:
+The current parsing path in `src/index.ts` (L219) is too naive:
 
 - it strips symbols
 - then uses `parseFloat`
@@ -238,8 +246,8 @@ Suggested implementation:
 
 ### Files to inspect
 
-- [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts)
-- potentially [src/routing/entity-extractor.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/routing/entity-extractor.ts) if you want shared money parsing between first-turn extraction and clarification parsing
+- `src/index.ts`
+- potentially `src/routing/entity-extractor.ts` if you want shared money parsing between first-turn extraction and clarification parsing
 
 ### Acceptance criteria
 
@@ -256,7 +264,7 @@ Add tests for at least 8 mixed-language money inputs.
 
 ---
 
-## 4.3 Options Workflow Date Grounding Is Unreliable
+## 4.3 Options Workflow Date Grounding Is Unreliable — NEEDS VERIFICATION
 
 ### What happened
 
@@ -316,9 +324,9 @@ Recommended fix:
 
 ### Files to inspect
 
-- [src/workflows/options-screener.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/workflows/options-screener.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/prompts/workflow-prompts.ts)
-- possibly [src/routing/slot-resolver.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/routing/slot-resolver.ts)
+- `src/workflows/options-screener.ts`
+- `src/prompts/workflow-prompts.ts`
+- possibly `src/routing/slot-resolver.ts`
 
 ### Acceptance criteria
 
@@ -335,7 +343,7 @@ the answer must:
 
 ---
 
-## 4.4 Assumption Attribution Is Wrong
+## 4.4 Assumption Attribution Is Wrong — FIXED
 
 ### What happened
 
@@ -391,9 +399,9 @@ Do not infer this in the final prose layer from value equality alone.
 
 ### Files to inspect
 
-- [src/routing/slot-resolver.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/routing/slot-resolver.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/prompts/workflow-prompts.ts)
-- [src/index.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/index.ts)
+- `src/routing/slot-resolver.ts`
+- `src/prompts/workflow-prompts.ts`
+- `src/index.ts`
 
 ### Acceptance criteria
 
@@ -420,7 +428,7 @@ the answer should show:
 
 ---
 
-## 4.5 ETF Workflows Are Using The Wrong Tool Path
+## 4.5 ETF Workflows Are Using The Wrong Tool Path — FIXED
 
 ### What happened
 
@@ -474,8 +482,8 @@ The better long-term solution is to add ETF-aware tools, but that is not require
 
 ### Files to inspect
 
-- [src/workflows/portfolio-builder.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/workflows/portfolio-builder.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/prompts/workflow-prompts.ts)
+- `src/workflows/portfolio-builder.ts`
+- `src/prompts/workflow-prompts.ts`
 
 ### Acceptance criteria
 
@@ -487,7 +495,7 @@ For an ETF-focused portfolio request:
 
 ---
 
-## 4.6 Options Ranking Is Still Too Naive
+## 4.6 Options Ranking Is Still Too Naive — NEEDS VERIFICATION
 
 ### What happened
 
@@ -546,8 +554,8 @@ At minimum:
 
 ### Files to inspect
 
-- [src/workflows/options-screener.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/workflows/options-screener.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/prompts/workflow-prompts.ts)
+- `src/workflows/options-screener.ts`
+- `src/prompts/workflow-prompts.ts`
 
 ### Acceptance criteria
 
@@ -558,7 +566,7 @@ For the balanced default objective:
 
 ---
 
-## 4.7 Portfolio Output Length Needs Harder Constraints
+## 4.7 Portfolio Output Length Needs Harder Constraints — FIXED
 
 ### What happened
 
@@ -596,8 +604,8 @@ If needed, add post-processing truncation rules in the CLI renderer, but prompt 
 
 ### Files to inspect
 
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/prompts/workflow-prompts.ts)
-- [src/workflows/portfolio-builder.ts](/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/workflows/portfolio-builder.ts)
+- `src/prompts/workflow-prompts.ts`
+- `src/workflows/portfolio-builder.ts`
 
 ### Acceptance criteria
 
@@ -611,28 +619,21 @@ For the ETF-focused `$10k` conservative portfolio prompt:
 
 ## 5. Recommended Implementation Order
 
-Do these in this order:
+> **Status (2026-04-06):** 4 of 7 items are resolved. Remaining work is items 1, 3, and 6.
 
-1. **Fix follow-up queue leakage**
-   - This is the most dangerous control-flow problem.
+~~1. **Fix follow-up queue leakage**~~ — NEEDS VERIFICATION (runId tracking added, but live testing needed)
 
-2. **Fix budget clarification parsing**
-   - This is a straightforward correctness bug affecting common usage.
+~~2. **Fix budget clarification parsing**~~ — FIXED
 
-3. **Ground options date handling**
-   - This is required before trusting “month out” options answers.
+~~3. **Ground options date handling**~~ — NEEDS VERIFICATION (`todayStr()` exists but injection into all prompts unclear)
 
-4. **Fix assumption attribution**
-   - Important for trust and for reviewers evaluating memory behavior.
+~~4. **Fix assumption attribution**~~ — FIXED
 
-5. **Skip stock-fundamental tools for ETF workflows**
-   - Quick UX win with immediate latency reduction.
+~~5. **Skip stock-fundamental tools for ETF workflows**~~ — FIXED
 
-6. **Improve options ranking defaults**
-   - Important for recommendation quality after date handling is fixed.
+6. **Improve options ranking defaults** — NEEDS VERIFICATION (delta floor added, full scoring heuristic unclear)
 
-7. **Tighten output length**
-   - Important, but should come after correctness and control-flow fixes.
+~~7. **Tighten output length**~~ — FIXED
 
 ---
 

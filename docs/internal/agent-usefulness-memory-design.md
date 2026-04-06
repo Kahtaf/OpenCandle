@@ -1,7 +1,8 @@
 # OpenCandle Workflow Routing, Clarification, and Memory Design
 
 **Date:** 2026-03-29
-**Status:** Proposed implementation plan
+**Last reviewed:** 2026-04-06
+**Status:** ~95% implemented — see status notes below
 **Audience:** The next agent or engineer implementing the feature set, plus any reviewer expected to challenge the design
 **Scope:** Make OpenCandle meaningfully more useful on ambiguous real-user prompts without rewriting the existing tool layer
 
@@ -421,6 +422,8 @@ This is the canonical OpenCandle storage layout. Pi runtime config, auth, and mo
 
 This is the recommended design over "only SQLite" or "only JSON files".
 
+> **Implementation note (2026-04-06):** The actual implementation uses SQLite for both structured state *and* event logging (via the `workflow_events` table in `src/memory/sqlite.ts`), rather than separate JSONL files. The append-only JSONL log path (`~/.opencandle/logs/...`) was not implemented. The intent of auditability is preserved through the database-backed events table, but the raw-file inspection ergonomics described in §11 Criticism 4 are not available.
+
 #### Why hybrid storage is the right choice
 
 **Why not only JSON logs?**
@@ -572,6 +575,8 @@ This table becomes especially valuable for:
 ---
 
 ### 6.2 JSONL log format
+
+> **Implementation note (2026-04-06):** This section was not implemented as designed. Event logging uses the `workflow_events` SQLite table instead of separate JSONL files. The event types below are still a useful reference for what the table captures.
 
 Each session log should be append-only and line-oriented.
 
@@ -996,75 +1001,30 @@ The product becomes more useful without pretending to be personalized fiduciary 
 
 ## 12. Implementation Phases
 
-### Phase 1: Router and slot resolution
+> **Status (2026-04-06):** Phases 1–4 are complete. Phase 5 is partially complete (preference extraction and retrieval implemented; retention rules and delete/export commands not yet built).
 
-Deliverables:
+### Phase 1: Router and slot resolution — COMPLETE
 
-- workflow classifier
-- slot extraction
-- workflow defaults
-- 1-2 follow-up question policy
+Implemented in `src/routing/classify-intent.ts`, `src/routing/slot-resolver.ts`, `src/routing/defaults.ts`.
 
-Success criteria:
+### Phase 2: Local memory foundation — COMPLETE (with divergence)
 
-- `I have $10k to invest` no longer returns a generic refusal
-- `best MSFT calls a month out` no longer dead-ends on clarification
+SQLite schema implemented in `src/memory/sqlite.ts`. JSONL log writer was not built — event logging uses `workflow_events` table instead. Session lifecycle hooks and preference persistence are operational in `src/memory/storage.ts`.
 
-### Phase 2: Local memory foundation
+### Phase 3: Portfolio builder workflow — COMPLETE
 
-Deliverables:
+Implemented in `src/workflows/portfolio-builder.ts` with structured prompts in `src/prompts/workflow-prompts.ts`.
 
-- SQLite schema
-- JSONL log writer
-- session lifecycle hooks
-- basic preference persistence
+### Phase 4: Options screener workflow — COMPLETE
 
-Success criteria:
+Implemented in `src/workflows/options-screener.ts`.
 
-- sessions are logged
-- user preferences can be stored and retrieved
-- cwd no longer determines conversational memory
+### Phase 5: Memory refinement — PARTIAL
 
-### Phase 3: Portfolio builder workflow
-
-Deliverables:
-
-- candidate generation prompt
-- screening logic
-- risk/diversification pass
-- structured response template
-
-Success criteria:
-
-- broad portfolio prompts trigger useful workflows with tools
-- outputs include assumptions and draft allocations
-
-### Phase 4: Options screener workflow
-
-Deliverables:
-
-- DTE default handling
-- contract ranking heuristics
-- safer vs speculative mode
-- structured response template
-
-Success criteria:
-
-- broad options prompts yield ranked contracts with rationale
-
-### Phase 5: Memory refinement
-
-Deliverables:
-
-- preference extractor
-- memory summaries
-- retention rules
-- delete/export commands
-
-Success criteria:
-
-- the agent feels more consistent across sessions
-- prompt contexts remain compact
+- Preference extractor: implemented (`src/memory/preference-extractor.ts`)
+- Memory retrieval: implemented (`src/memory/retrieval.ts`) with bounded context injection
+- Retention rules: not yet implemented
+- Delete/export commands: not yet implemented
 
 ---
 

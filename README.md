@@ -1,12 +1,27 @@
-# OpenCandle
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/logo.png" alt="OpenCandle" width="120" />
+</p>
 
-A financial agent that talks to markets. Ask it for stock prices, options chains with Greeks, macro data, sentiment — it fetches real data, computes analytics locally, and gives you actionable answers.
+<h1 align="center">OpenCandle</h1>
 
-## What This Does
+<p align="center">
+  <a href="https://www.npmjs.com/package/opencandle"><img src="https://img.shields.io/npm/v/opencandle" alt="npm version" /></a>
+  <a href="https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml"><img src="https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/Kahtaf/OpenCandle/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node.js >= 20" />
+</p>
 
-OpenCandle is an AI-powered terminal agent for investors and traders. Instead of switching between Yahoo Finance, FRED, Reddit, and a spreadsheet, you ask one agent and it chains the right tools together. It computes technical indicators and options Greeks locally (Black-Scholes), so there's no API dependency for math.
+<p align="center">A financial agent that talks to markets. Ask it for stock prices, options chains with Greeks, macro data, or sentiment, and it fetches real data, computes analytics locally, and gives you actionable answers.</p>
 
-Type `analyze TSLA` and it runs a full 5-analyst breakdown — fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/demo.gif" alt="OpenCandle demo" width="640" />
+</p>
+
+## Why OpenCandle?
+
+Investors and traders may check Yahoo Finance for quotes, FRED for macro data, Reddit for sentiment, then copy numbers into a spreadsheet for analysis. OpenCandle replaces that workflow with a single terminal agent that fetches live data from all of those sources, computes technical indicators and options Greeks locally, and chains tools together to answer complex questions. No browser tabs, no manual copy-paste, no API dependency for math.
+
+Type `analyze TSLA` and it runs a full 5-analyst breakdown: fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
 
 [Pi](https://pi.dev/) powers the runtime, TUI, auth, and model selection. OpenCandle keeps its own user data in `~/.opencandle/`.
 
@@ -145,7 +160,7 @@ npm run test:watch    # watch mode
 
 ## Project Docs
 
-- OSS launch and npm release plan: [docs/production-plan.md](https://github.com/Kahtaf/OpenCandle/blob/main/docs/production-plan.md)
+- Build a tool guide: [docs/build-a-tool.md](https://github.com/Kahtaf/OpenCandle/blob/main/docs/build-a-tool.md)
 - Contributor guide: [CONTRIBUTING.md](https://github.com/Kahtaf/OpenCandle/blob/main/CONTRIBUTING.md)
 - Security policy: [SECURITY.md](https://github.com/Kahtaf/OpenCandle/blob/main/SECURITY.md)
 - Release history: [CHANGELOG.md](https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md)

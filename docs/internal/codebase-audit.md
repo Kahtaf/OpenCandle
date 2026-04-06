@@ -1,6 +1,7 @@
 # OpenCandle Codebase Audit
 
 **Date:** 2026-03-29
+**Last reviewed:** 2026-04-06
 **Scope:** Repository review of the financial agent implementation, focusing on correctness, code quality, architecture, UX, and improvement opportunities.
 
 ## Method
@@ -24,15 +25,15 @@ The highest-priority fixes are the options Greeks time handling, DCF net debt lo
 
 ## 1. Bugs
 
-| Priority | Issue | Evidence | Why it matters |
-|----------|-------|----------|----------------|
-| P0 | Expiration-day options Greeks can collapse to zero | `src/providers/yahoo-finance.ts:229-236` computes `timeYears` from the expiration timestamp at midnight UTC. On the expiration date, `timeYears` becomes `0` too early, which is consistent with the failing test from `npm test` in `tests/unit/providers/yahoo-options.test.ts`. | The agent can show incorrect delta/theta/vega for same-day options, which is a serious finance correctness failure. |
-| P0 | DCF net debt is effectively always zero | `src/tools/fundamentals/dcf.ts:177-180` uses `totalLiabilities - totalAssets + totalEquity`. Since `equity = assets - liabilities`, this algebra collapses to `0` for internally consistent statements. | The DCF output systematically ignores leverage, overstating equity value for indebted companies. |
-| P1 | `avgVolume` is mapped from the wrong Alpha Vantage field | `src/providers/alpha-vantage.ts:43-46` assigns `avgVolume` from `50DayMovingAverage`. | Any downstream logic or UI using average volume will silently receive a price moving average instead of volume. |
-| P1 | SEC filing "direct links" are not direct links | `src/providers/sec-edgar.ts:76-88` computes `accessionNoDash` but never uses it, and always returns a generic company browse page. | Users are told they are getting filing links, but they are not taken to the actual filing document. |
-| P1 | Prediction scoring ignores time horizon and target price | `src/tools/portfolio/predictions.ts:78-120` evaluates predictions only against the current spot price. `expiresAt` and `targetPrice` are stored but never used in scoring. | Accuracy metrics are misleading because they do not answer whether the prediction succeeded within its intended window. |
-| P1 | Correlation is calculated by index, not by date | `src/tools/portfolio/correlation.ts:6-28` truncates to the shorter array and correlates element `i` with element `i`. `src/tools/portfolio/correlation.ts:58-67` builds returns from each history independently with no date join. | Assets with different calendars, missing sessions, or sparse history will produce incorrect correlation numbers. |
-| P1 | Backtest max drawdown is understated | `src/tools/technical/backtest.ts:45-85` and `src/tools/technical/backtest.ts:97-130` update equity only when a trade is closed, then compute drawdown from realized equity only. | The reported risk profile can look much safer than the actual path of the strategy. |
+| Priority | Issue | Status | Evidence | Why it matters |
+|----------|-------|--------|----------|----------------|
+| P0 | Expiration-day options Greeks can collapse to zero | **FIXED** | `src/providers/yahoo-finance.ts` now uses `computeTimeToExpiry()` with market-close offset (21:00 UTC) and 1-hour floor. | The agent can show incorrect delta/theta/vega for same-day options, which is a serious finance correctness failure. |
+| P0 | DCF net debt is effectively always zero | **FIXED** | `src/tools/fundamentals/dcf.ts` now uses `computeNetDebt()` with `totalDebt - cashAndEquivalents` when available. Fallback formula (`totalLiabilities - totalAssets`) is still questionable — see note below. | The DCF output systematically ignores leverage, overstating equity value for indebted companies. |
+| P1 | `avgVolume` is mapped from the wrong Alpha Vantage field | **FIXED** | `src/providers/alpha-vantage.ts` now explicitly sets `avgVolume: 0` with a comment that Alpha Vantage OVERVIEW does not expose average volume. | Any downstream logic or UI using average volume will silently receive a price moving average instead of volume. |
+| P1 | SEC filing "direct links" are not direct links | **FIXED** | New `src/tools/fundamentals/sec-filings.ts` added with accession-specific URLs. | Users are told they are getting filing links, but they are not taken to the actual filing document. |
+| P1 | Prediction scoring ignores time horizon and target price | **FIXED** | `src/tools/portfolio/predictions.ts` now implemented with time-aware scoring. | Accuracy metrics are misleading because they do not answer whether the prediction succeeded within its intended window. |
+| P1 | Correlation is calculated by index, not by date | **FIXED** | `src/tools/portfolio/correlation.ts` now includes `alignReturnsByDate()` that joins histories on common dates before computing returns. | Assets with different calendars, missing sessions, or sparse history will produce incorrect correlation numbers. |
+| P1 | Backtest max drawdown is understated | **OPEN** | `src/tools/technical/backtest.ts` — needs review to confirm mark-to-market equity tracking was added. | The reported risk profile can look much safer than the actual path of the strategy. |
 
 ### Detailed Bug Notes
 
@@ -198,13 +199,13 @@ Equity only changes when a sell occurs. While a trade is open, drawdown is measu
 
 ## 2. Bad Code
 
-| Area | Evidence | Problem |
-|------|----------|---------|
-| Misleading "news sentiment" implementation | `src/tools/sentiment/news-sentiment.ts:12-63` | The tool is named `get_news_sentiment`, but it only filters Reddit post titles from `r/stocks` and `r/investing`. This is not news sentiment. |
-| Misleading Fear and Greed source and history | `src/tools/macro/fear-greed.ts:8-22` and `src/providers/fear-greed.ts:5-35` | The tool description says CNN Fear and Greed, but the provider uses `alternative.me`'s crypto index. It also fills `weekAgo` and `monthAgo` with `0`, which looks like real data even though it is missing. |
-| VWAP implementation is not session VWAP | `src/tools/technical/indicators.ts:22-32` | This computes one cumulative price-volume average across the whole selected range of daily bars. That is not the VWAP traders normally mean. The name overstates analytical precision. |
-| Timeout cleanup is incomplete | `src/infra/http-client.ts:38-60` | `clearTimeout(timeout)` only runs on the success path. Exceptions leave the timer behind until it fires, which is sloppy and unnecessary under load. |
-| Hidden JSON files as application state | `src/tools/portfolio/tracker.ts:7-20`, `src/tools/portfolio/watchlist.ts:6-27`, `src/tools/portfolio/predictions.ts:6-45` | Portfolio, watchlist, and prediction data are stored in hidden files in the current working directory, with no schema validation, locking, migration path, or corruption handling beyond "return empty". |
+| Area | Status | Evidence | Problem |
+|------|--------|----------|---------|
+| Misleading "news sentiment" implementation | **OPEN** | `src/tools/sentiment/news-sentiment.ts` | The tool is named `get_news_sentiment`, but it only filters Reddit post titles from `r/stocks` and `r/investing`. This is not news sentiment. |
+| Misleading Fear and Greed source and history | **OPEN** | `src/tools/macro/fear-greed.ts` and `src/providers/fear-greed.ts` | The tool description says CNN Fear and Greed, but the provider uses `alternative.me`'s crypto index. It also fills `weekAgo` and `monthAgo` with `0`, which looks like real data even though it is missing. |
+| VWAP implementation is not session VWAP | **OPEN** | `src/tools/technical/indicators.ts` | This computes one cumulative price-volume average across the whole selected range of daily bars. That is not the VWAP traders normally mean. The name overstates analytical precision. |
+| Timeout cleanup is incomplete | **FIXED** | `src/infra/http-client.ts` now clears timeout in `finally` block. | `clearTimeout(timeout)` only runs on the success path. Exceptions leave the timer behind until it fires, which is sloppy and unnecessary under load. |
+| Hidden JSON files as application state | **PARTIALLY ADDRESSED** | Portfolio/watchlist/predictions still use hidden files, but SQLite database at `~/.opencandle/state.db` now exists for memory/workflow state. Full migration of portfolio state to SQLite is still pending. | Portfolio, watchlist, and prediction data are stored in hidden files in the current working directory, with no schema validation, locking, migration path, or corruption handling beyond "return empty". |
 
 ### Detailed Code Quality Notes
 
@@ -529,3 +530,24 @@ Definition of done:
 ## Bottom Line
 
 OpenCandle is a strong prototype, but not yet a trustworthy financial agent. The biggest gap is not feature breadth; it is analytical correctness and trustworthiness. If the next iteration fixes the current metric bugs, removes misleading labels, and hardens persistence/orchestration, the project will move from "impressive demo" to something materially more dependable.
+
+---
+
+## Status Update (2026-04-06)
+
+**Resolved since original audit:**
+- All P0 bugs fixed (options Greeks, DCF net debt)
+- Most P1 bugs fixed (avgVolume, SEC links, prediction scoring, correlation alignment)
+- Timeout cleanup fixed
+- SQLite memory/state layer added at `~/.opencandle/state.db`
+- Tool count has grown from 23 to ~28 registered tools
+
+**Remaining open items:**
+- Backtest drawdown (mark-to-market equity) — needs verification
+- DCF fallback net-debt formula (`totalLiabilities - totalAssets`) is still not standard
+- News sentiment and Fear & Greed naming/source issues still open
+- VWAP misnaming still open
+- Portfolio/watchlist/predictions still use hidden JSON files (not yet migrated to SQLite)
+- Multi-analyst orchestration is still prompt sequencing, not isolated workers
+- Browser singleton concurrency risk still present
+- Config access inconsistency (some tools bypass `getConfig()`)

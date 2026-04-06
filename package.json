@@ -43,9 +43,20 @@
     ]
   },
   "keywords": [
-    "pi-package",
     "opencandle",
-    "finance"
+    "finance",
+    "stock",
+    "investing",
+    "trading",
+    "options",
+    "market-data",
+    "portfolio",
+    "ai-agent",
+    "terminal",
+    "financial-analysis",
+    "sentiment",
+    "technical-analysis",
+    "pi-package"
   ],
   "files": [
     "dist"

@@ -116,6 +116,15 @@ const fresh = await fetchData("AAPL");
 cache.set("my-tool:AAPL", fresh, TTL.MINUTES_15);
 ```
 
+For providers that may fail intermittently, use `cache.getStale()` to return the last known value within a longer window:
+
+```ts
+import { STALE_LIMIT } from "../infra/cache.js";
+
+const stale = cache.getStale<MyData>("my-tool:AAPL", STALE_LIMIT.SENTIMENT);
+if (stale) return stale.value; // serve stale data while provider is down
+```
+
 ### Rate Limiting
 
 ```ts
@@ -135,9 +144,12 @@ const result = await wrapProvider("my-source", () => fetchFromMyApi(symbol));
 if (result.status === "unavailable") {
   return { content: [{ type: "text", text: `Data unavailable: ${result.reason}` }], details: null };
 }
+// result.stale is true when serving cached data after a provider failure
 ```
 
 For multi-provider fallback, use `withFallback()` — see `src/tools/market/stock-quote.ts`.
+
+For a real-world example that uses `wrapProvider` with stale fallback and login-specific error detection, see `src/tools/sentiment/twitter-sentiment.ts`.
 
 ## Testing
 

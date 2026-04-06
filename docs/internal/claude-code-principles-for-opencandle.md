@@ -1,7 +1,7 @@
 # Claude Code Principles For OpenCandle
 
 **Date:** 2026-04-01  
-**Purpose:** Distill the architectural principles in `/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working` that are actually useful for OpenCandle, then translate them into concrete design guidance for this repo.  
+**Purpose:** Distill the architectural principles in the Claude Code source that are actually useful for OpenCandle, then translate them into concrete design guidance for this repo.  
 **Audience:** OpenCandle maintainers building the next generation of the agent runtime, workflow engine, memory system, and extension surface.
 
 ---
@@ -38,16 +38,16 @@ Representative source areas reviewed include:
 
 OpenCandle areas compared against those patterns include:
 
-- [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts)
-- [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts)
-- [src/routing/classify-intent.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/routing/classify-intent.ts)
-- [src/routing/slot-resolver.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/routing/slot-resolver.ts)
-- [src/workflows/portfolio-builder.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/portfolio-builder.ts)
-- [src/workflows/options-screener.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/options-screener.ts)
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts)
-- [src/memory/storage.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/storage.ts)
-- [src/memory/retrieval.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/retrieval.ts)
-- [src/tools/interaction/ask-user.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/tools/interaction/ask-user.ts)
+- `src/pi/opencandle-extension.ts`
+- `src/system-prompt.ts`
+- `src/routing/classify-intent.ts`
+- `src/routing/slot-resolver.ts`
+- `src/workflows/portfolio-builder.ts`
+- `src/workflows/options-screener.ts`
+- `src/analysts/orchestrator.ts`
+- `src/memory/storage.ts`
+- `src/memory/retrieval.ts`
+- `src/tools/interaction/ask-user.ts`
 
 This is not a recommendation to clone Claude Code wholesale. Claude Code solves a much broader problem. The goal here is to extract the principles that improve a financial analysis agent without dragging in irrelevant complexity.
 
@@ -84,86 +84,86 @@ Use these anchors when you want to verify that a principle in this document maps
 
 ### Session orchestration and turn loop
 
-- [QueryEngine session owner](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/QueryEngine.ts#L186)
-- [QueryEngine submitMessage lifecycle](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/QueryEngine.ts#L211)
-- [System prompt parts fetched per turn](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/QueryEngine.ts#L295)
-- [Transcript persistence during execution](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/QueryEngine.ts#L454)
-- [File snapshotting before edits](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/QueryEngine.ts#L649)
-- [Single-turn loop state type](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L204)
-- [Top-level `query()` entry](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L219)
-- [Core `queryLoop()` implementation](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L241)
-- [Tool-result budgeting before model call](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L379)
-- [Post-compaction message rebuild](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L528)
-- [Streaming tool execution path](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L563)
-- [Serial tool execution fallback](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/query.ts#L1385)
+- `QueryEngine.ts` (L186)
+- `QueryEngine.ts` (L211)
+- `QueryEngine.ts` (L295)
+- `QueryEngine.ts` (L454)
+- `QueryEngine.ts` (L649)
+- `query.ts` (L204)
+- `query.ts` (L219)
+- `query.ts` (L241)
+- `query.ts` (L379)
+- `query.ts` (L528)
+- `query.ts` (L563)
+- `query.ts` (L1385)
 
 ### Prompt and context assembly
 
-- [System context assembly](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/context.ts#L116)
-- [User context assembly](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/context.ts#L155)
-- [Dynamic prompt boundary marker](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/constants/prompts.ts#L114)
-- [Simple system rules section](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/constants/prompts.ts#L186)
-- [Task execution guidance section](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/constants/prompts.ts#L199)
-- [Boundary insertion in prompt assembly](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/constants/prompts.ts#L573)
-- [Effective system prompt selection](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/systemPrompt.ts#L41)
+- `context.ts` (L116)
+- `context.ts` (L155)
+- `constants/prompts.ts` (L114)
+- `constants/prompts.ts` (L186)
+- `constants/prompts.ts` (L199)
+- `constants/prompts.ts` (L573)
+- `utils/systemPrompt.ts` (L41)
 
 ### Tool system, tasking, and long-running work
 
-- [Global tool registry assembly](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools.ts#L191)
-- [Todo V2 / task-mode switch](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/tasks.ts#L133)
-- [Shared task-list identity resolution](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/tasks.ts#L199)
-- [Bash read/search classification](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/BashTool/BashTool.tsx#L95)
-- [Assistant blocking budget before backgrounding](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/BashTool/BashTool.tsx#L57)
-- [Bash tool definition](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/BashTool/BashTool.tsx#L420)
-- [File read tool definition](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/FileReadTool/FileReadTool.ts#L337)
-- [File read permission check](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/FileReadTool/FileReadTool.ts#L400)
-- [File write tool definition](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/FileWriteTool/FileWriteTool.ts#L94)
-- [File write permission check](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/FileWriteTool/FileWriteTool.ts#L137)
+- `tools.ts` (L191)
+- `utils/tasks.ts` (L133)
+- `utils/tasks.ts` (L199)
+- `tools/BashTool/BashTool.tsx` (L95)
+- `tools/BashTool/BashTool.tsx` (L57)
+- `tools/BashTool/BashTool.tsx` (L420)
+- `tools/FileReadTool/FileReadTool.ts` (L337)
+- `tools/FileReadTool/FileReadTool.ts` (L400)
+- `tools/FileWriteTool/FileWriteTool.ts` (L94)
+- `tools/FileWriteTool/FileWriteTool.ts` (L137)
 
 ### Memory and selective recall
 
-- [Memory type taxonomy](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/memoryTypes.ts#L14)
-- [Rules for when to access memory](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/memoryTypes.ts#L216)
-- [Rules for trusting recalled memory](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/memoryTypes.ts#L240)
-- [Memory line builder](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/memdir.ts#L199)
-- [Memory prompt loader](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/memdir.ts#L419)
-- [Selective memory recall system prompt](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/findRelevantMemories.ts#L18)
-- [Selective memory recall entrypoint](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/findRelevantMemories.ts#L39)
-- [Memory selection side query call](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/memdir/findRelevantMemories.ts#L100)
+- `memdir/memoryTypes.ts` (L14)
+- `memdir/memoryTypes.ts` (L216)
+- `memdir/memoryTypes.ts` (L240)
+- `memdir/memdir.ts` (L199)
+- `memdir/memdir.ts` (L419)
+- `memdir/findRelevantMemories.ts` (L18)
+- `memdir/findRelevantMemories.ts` (L39)
+- `memdir/findRelevantMemories.ts` (L100)
 
 ### Permissions, plan mode, and denial handling
 
-- [Permission request message construction](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/permissions/permissions.ts#L137)
-- [Deny-rule collection](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/permissions/permissions.ts#L213)
-- [Whole-tool rule matching](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/permissions/permissions.ts#L238)
-- [Dangerous bash allow-rule detection](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/permissions/permissionSetup.ts#L94)
-- [Plan-mode context preparation](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/permissions/permissionSetup.ts#L1462)
-- [Denial thresholds](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/utils/permissions/denialTracking.ts#L12)
+- `utils/permissions/permissions.ts` (L137)
+- `utils/permissions/permissions.ts` (L213)
+- `utils/permissions/permissions.ts` (L238)
+- `utils/permissions/permissionSetup.ts` (L94)
+- `utils/permissions/permissionSetup.ts` (L1462)
+- `utils/permissions/denialTracking.ts` (L12)
 
 ### Agents, skills, and extensibility
 
-- [Agent tool definition](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/AgentTool.tsx#L196)
-- [Agent-specific MCP initialization](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/runAgent.ts#L95)
-- [Sub-agent runtime entry](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/runAgent.ts#L248)
-- [Register per-agent hooks](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/runAgent.ts#L568)
-- [Clear per-agent hooks](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/runAgent.ts#L821)
-- [Built-in agent type guard](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/loadAgentsDir.ts#L168)
-- [Filter agents by MCP requirements](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/AgentTool/loadAgentsDir.ts#L250)
-- [Skill command merging](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/SkillTool/SkillTool.ts#L81)
-- [Forked skill execution](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/SkillTool/SkillTool.ts#L122)
-- [Skill usage tracking during execution](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/tools/SkillTool/SkillTool.ts#L620)
-- [Skill source-path resolution](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/skills/loadSkillsDir.ts#L78)
-- [Skill frontmatter parsing](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/skills/loadSkillsDir.ts#L185)
-- [Dynamic skill discovery by touched paths](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/skills/loadSkillsDir.ts#L861)
-- [Conditional skill activation](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/skills/loadSkillsDir.ts#L997)
+- `tools/AgentTool/AgentTool.tsx` (L196)
+- `tools/AgentTool/runAgent.ts` (L95)
+- `tools/AgentTool/runAgent.ts` (L248)
+- `tools/AgentTool/runAgent.ts` (L568)
+- `tools/AgentTool/runAgent.ts` (L821)
+- `tools/AgentTool/loadAgentsDir.ts` (L168)
+- `tools/AgentTool/loadAgentsDir.ts` (L250)
+- `tools/SkillTool/SkillTool.ts` (L81)
+- `tools/SkillTool/SkillTool.ts` (L122)
+- `tools/SkillTool/SkillTool.ts` (L620)
+- `skills/loadSkillsDir.ts` (L78)
+- `skills/loadSkillsDir.ts` (L185)
+- `skills/loadSkillsDir.ts` (L861)
+- `skills/loadSkillsDir.ts` (L997)
 
 ### MCP and external tool integration
 
-- [MCP auth error type](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/services/mcp/client.ts#L153)
-- [Session-expiry detection](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/services/mcp/client.ts#L194)
-- [Default MCP tool timeout](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/services/mcp/client.ts#L212)
-- [MCP connection cache entrypoint](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/services/mcp/client.ts#L596)
-- [LRU-cached MCP tool discovery](/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/services/mcp/client.ts#L1759)
+- `services/mcp/client.ts` (L153)
+- `services/mcp/client.ts` (L194)
+- `services/mcp/client.ts` (L212)
+- `services/mcp/client.ts` (L596)
+- `services/mcp/client.ts` (L1759)
 
 ---
 
@@ -183,7 +183,7 @@ Prompt queues look simple until workflow control gets real. The moment there are
 
 **OpenCandle today**
 
-- Workflow execution is driven from [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts).
+- Workflow execution is driven from `src/pi/opencandle-extension.ts`.
 - `queuePromptSequence()` serializes an `initialPrompt` plus follow-up strings.
 - This is already compensating for sequencing bugs with polling and sequence IDs.
 
@@ -202,9 +202,9 @@ Prompt queues look simple until workflow control gets real. The moment there are
 
 **OpenCandle target files**
 
-- [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts)
+- `src/pi/opencandle-extension.ts`
 - new runtime module under `src/workflows/` or `src/runtime/`
-- [src/memory/storage.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/storage.ts)
+- `src/memory/storage.ts`
 
 **Priority:** P0
 
@@ -221,7 +221,7 @@ Mixing session policy with turn logic makes it hard to reason about cancellation
 
 **OpenCandle today**
 
-- [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts) currently handles:
+- `src/pi/opencandle-extension.ts` currently handles:
   - session start
   - memory initialization
   - preference extraction
@@ -240,7 +240,7 @@ Mixing session policy with turn logic makes it hard to reason about cancellation
 
 **OpenCandle target files**
 
-- [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts)
+- `src/pi/opencandle-extension.ts`
 - new `src/runtime/*`
 
 **Priority:** P0
@@ -258,9 +258,9 @@ One monolithic prompt becomes hard to reason about, easy to bloat, and impossibl
 
 **OpenCandle today**
 
-- [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts) builds a single string.
+- `src/system-prompt.ts` builds a single string.
 - Memory context is appended as a raw text block.
-- Third-party tools are appended as another raw block in [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts).
+- Third-party tools are appended as another raw block in `src/pi/opencandle-extension.ts`.
 
 **What to apply**
 
@@ -278,8 +278,8 @@ One monolithic prompt becomes hard to reason about, easy to bloat, and impossibl
 
 **OpenCandle target files**
 
-- [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/prompts/workflow-prompts.ts)
+- `src/system-prompt.ts`
+- `src/prompts/workflow-prompts.ts`
 - new `src/prompts/sections.ts`
 
 **Priority:** P1
@@ -297,7 +297,7 @@ Prompt-only workflows are fragile because the runtime cannot inspect or recover 
 
 **OpenCandle today**
 
-- [src/workflows/types.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/types.ts) exposes only:
+- `src/workflows/types.ts` exposes only:
   - `initialPrompt`
   - `followUps`
 
@@ -328,10 +328,10 @@ This is too weak for:
 
 **OpenCandle target files**
 
-- [src/workflows/types.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/types.ts)
-- [src/workflows/portfolio-builder.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/portfolio-builder.ts)
-- [src/workflows/options-screener.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/options-screener.ts)
-- [src/workflows/compare-assets.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/workflows/compare-assets.ts)
+- `src/workflows/types.ts`
+- `src/workflows/portfolio-builder.ts`
+- `src/workflows/options-screener.ts`
+- `src/workflows/compare-assets.ts`
 
 **Priority:** P0
 
@@ -360,7 +360,7 @@ If those states are not explicit, the agent will quietly misrepresent certainty.
 
 **OpenCandle today**
 
-- Slot provenance exists in [src/routing/slot-resolver.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/routing/slot-resolver.ts) and [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/prompts/workflow-prompts.ts).
+- Slot provenance exists in `src/routing/slot-resolver.ts` and `src/prompts/workflow-prompts.ts`.
 - That is a good start.
 - But provenance is still mostly a prompt formatting convention, not a runtime contract.
 
@@ -377,9 +377,9 @@ If those states are not explicit, the agent will quietly misrepresent certainty.
 
 **OpenCandle target files**
 
-- [src/routing/slot-resolver.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/routing/slot-resolver.ts)
-- [src/memory/storage.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/storage.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/prompts/workflow-prompts.ts)
+- `src/routing/slot-resolver.ts`
+- `src/memory/storage.ts`
+- `src/prompts/workflow-prompts.ts`
 
 **Priority:** P0
 
@@ -398,11 +398,11 @@ Dumping all saved preferences and recent runs into every prompt will eventually 
 
 **OpenCandle today**
 
-- [src/memory/storage.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/storage.ts) stores:
+- `src/memory/storage.ts` stores:
   - user preferences
   - workflow runs
   - recommendations
-- [src/memory/retrieval.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/retrieval.ts) builds a compact text block by dumping recent preferences and workflows.
+- `src/memory/retrieval.ts` builds a compact text block by dumping recent preferences and workflows.
 
 **What to apply**
 
@@ -420,9 +420,9 @@ Dumping all saved preferences and recent runs into every prompt will eventually 
 
 **OpenCandle target files**
 
-- [src/memory/storage.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/storage.ts)
-- [src/memory/retrieval.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/retrieval.ts)
-- [src/memory/preference-extractor.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/preference-extractor.ts)
+- `src/memory/storage.ts`
+- `src/memory/retrieval.ts`
+- `src/memory/preference-extractor.ts`
 
 **Priority:** P0
 
@@ -450,7 +450,7 @@ This becomes a context-quality problem before it becomes a hard token-limit prob
 **OpenCandle today**
 
 - There is no prompt budgeting or compaction layer.
-- Comprehensive analysis is a chain of many prompts in [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts).
+- Comprehensive analysis is a chain of many prompts in `src/analysts/orchestrator.ts`.
 
 **What to apply**
 
@@ -461,8 +461,8 @@ This becomes a context-quality problem before it becomes a hard token-limit prob
 
 **OpenCandle target files**
 
-- [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts)
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts)
+- `src/system-prompt.ts`
+- `src/analysts/orchestrator.ts`
 - new `src/context/` or `src/runtime/context/`
 
 **Priority:** P1
@@ -480,7 +480,7 @@ Finance is far less forgiving than coding-assistant chatter. A numerically polis
 
 **OpenCandle today**
 
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts) already appends a validation prompt for comprehensive analysis.
+- `src/analysts/orchestrator.ts` already appends a validation prompt for comprehensive analysis.
 - That is directionally correct, but it is still LLM-only validation.
 
 **What to apply**
@@ -495,8 +495,8 @@ Finance is far less forgiving than coding-assistant chatter. A numerically polis
 
 **OpenCandle target files**
 
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts)
-- [src/prompts/workflow-prompts.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/prompts/workflow-prompts.ts)
+- `src/analysts/orchestrator.ts`
+- `src/prompts/workflow-prompts.ts`
 - new `src/runtime/validation.ts`
 
 **Priority:** P0
@@ -536,7 +536,7 @@ Once the agent makes multi-step decisions, the runtime needs more than just tool
 
 **OpenCandle target files**
 
-- [src/tool-kit.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/tool-kit.ts)
+- `src/tool-kit.ts`
 - `src/tools/*`
 - `src/providers/*`
 
@@ -576,8 +576,8 @@ A financial agent will constantly face:
 
 **OpenCandle target files**
 
-- [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts)
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts)
+- `src/system-prompt.ts`
+- `src/analysts/orchestrator.ts`
 - provider wrappers in `src/providers/`
 
 **Priority:** P0
@@ -596,7 +596,7 @@ OpenCandle’s routing work is already moving in this direction. The next step i
 
 **OpenCandle today**
 
-- [src/tools/interaction/ask-user.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/tools/interaction/ask-user.ts) is explicit and well-bounded.
+- `src/tools/interaction/ask-user.ts` is explicit and well-bounded.
 - Routing and slot resolution already identify missing required values.
 
 **What to apply**
@@ -608,8 +608,8 @@ OpenCandle’s routing work is already moving in this direction. The next step i
 
 **OpenCandle target files**
 
-- [src/tools/interaction/ask-user.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/tools/interaction/ask-user.ts)
-- [src/routing/slot-resolver.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/routing/slot-resolver.ts)
+- `src/tools/interaction/ask-user.ts`
+- `src/routing/slot-resolver.ts`
 - workflow runtime
 
 **Priority:** P1
@@ -644,7 +644,7 @@ Even if OpenCandle does not need shell backgrounding, it does need clear workflo
 
 **OpenCandle target files**
 
-- [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts)
+- `src/pi/opencandle-extension.ts`
 - workflow runtime
 
 **Priority:** P1
@@ -662,7 +662,7 @@ OpenCandle already uses analyst personas, but right now they are effectively a s
 
 **OpenCandle today**
 
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts) has useful role specialization.
+- `src/analysts/orchestrator.ts` has useful role specialization.
 - The weakness is execution model, not role idea.
 
 **What to apply**
@@ -677,7 +677,7 @@ OpenCandle already uses analyst personas, but right now they are effectively a s
 
 **OpenCandle target files**
 
-- [src/analysts/orchestrator.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/analysts/orchestrator.ts)
+- `src/analysts/orchestrator.ts`
 - workflow runtime
 
 **Priority:** P1
@@ -696,7 +696,7 @@ OpenCandle already has third-party tool registration, but not a strong reusable 
 
 **OpenCandle today**
 
-- [src/tool-kit.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/tool-kit.ts) supports third-party tool registration.
+- `src/tool-kit.ts` supports third-party tool registration.
 - That solves “new capability.”
 - It does not yet solve “new workflow.”
 
@@ -713,7 +713,7 @@ OpenCandle already has third-party tool registration, but not a strong reusable 
 
 **OpenCandle target files**
 
-- [src/tool-kit.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/tool-kit.ts)
+- `src/tool-kit.ts`
 - new `src/skills/` or `src/playbooks/`
 
 **Priority:** P2
@@ -732,7 +732,7 @@ If OpenCandle is going to become a serious agent, “what happened” must be re
 
 **OpenCandle today**
 
-- [src/memory/sqlite.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/sqlite.ts) stores workflow runs and recommendations.
+- `src/memory/sqlite.ts` stores workflow runs and recommendations.
 - That is useful, but still too summary-oriented.
 
 **What to apply**
@@ -751,8 +751,8 @@ If OpenCandle is going to become a serious agent, “what happened” must be re
 
 **OpenCandle target files**
 
-- [src/memory/sqlite.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/sqlite.ts)
-- [src/memory/storage.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/memory/storage.ts)
+- `src/memory/sqlite.ts`
+- `src/memory/storage.ts`
 
 **Priority:** P1
 
@@ -787,7 +787,7 @@ If OpenCandle is going to become a serious agent, “what happened” must be re
 
 **OpenCandle target files**
 
-- [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts)
+- `src/system-prompt.ts`
 - workflow runtime
 - validation layer
 
@@ -817,7 +817,7 @@ The analogous risk is using stale evidence after user clarification, new market 
 
 - provider/tool orchestration layer
 - workflow runtime
-- [src/infra/cache.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/infra/cache.ts)
+- `src/infra/cache.ts`
 
 **Priority:** P1
 
@@ -864,11 +864,11 @@ The rule is: copy the principle, not the surface area.
 - Replace prompt queues with a typed workflow runner.
 - Persist run IDs and step states.
 - Make cancellation and supersession explicit.
-- Move orchestration out of [src/pi/opencandle-extension.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/pi/opencandle-extension.ts).
+- Move orchestration out of `src/pi/opencandle-extension.ts`.
 
 ## Phase 2: Make context trustworthy
 
-- Refactor [src/system-prompt.ts](/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/system-prompt.ts) into section builders.
+- Refactor `src/system-prompt.ts` into section builders.
 - Replace memory dumping with selective recall.
 - Add structured provenance objects for slots, evidence, and assumptions.
 - Add runtime freshness policies for market-sensitive evidence.

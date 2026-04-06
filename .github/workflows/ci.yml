@@ -27,5 +27,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Validate package contents
+        run: |
+          PACK_OUTPUT=$(npm pack --dry-run 2>&1)
+          echo "$PACK_OUTPUT"
+
+          # Fail if tests, fixtures, or internal docs leak into tarball
+          if echo "$PACK_OUTPUT" | grep -qE '(tests/|fixtures/|docs/|\.env|openspec/)'; then
+            echo "::error::Tarball contains files that should not be published"
+            exit 1
+          fi
+
+          # Fail if dist/ is missing
+          if ! echo "$PACK_OUTPUT" | grep -q 'dist/'; then
+            echo "::error::Tarball is missing dist/ — build may have failed"
+            exit 1
+          fi
+
       - name: Run tests
         run: npm test
