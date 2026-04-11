@@ -17,7 +17,7 @@ const params = Type.Object({
 });
 
 interface TrendToolResult {
-  content: Array<{ type: string; text: string }>;
+  content: Array<{ type: "text"; text: string }>;
   details: any;
 }
 
