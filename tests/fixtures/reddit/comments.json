@@ -1,0 +1,85 @@
+[
+  {
+    "data": {
+      "children": [
+        {
+          "data": {
+            "id": "abc123",
+            "title": "$AAPL earnings beat expectations",
+            "selftext": "Apple just reported massive earnings beat.",
+            "author": "stock_guru",
+            "score": 542,
+            "num_comments": 89,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "data": {
+      "children": [
+        {
+          "kind": "t1",
+          "data": {
+            "id": "comment1",
+            "body": "This is incredibly bullish for AAPL. Buying more on Monday.",
+            "author": "bull_trader",
+            "score": 312,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/comment1/"
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "comment2",
+            "body": "I think the market is overreacting. Sell the news.",
+            "author": "bear_trader",
+            "score": 98,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/comment2/"
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "comment3",
+            "body": "Revenue numbers were great but margins are concerning.",
+            "author": "analyst99",
+            "score": 75,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/comment3/"
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "comment4",
+            "body": "Diamond hands on this one. AAPL to the moon!",
+            "author": "yolo_investor",
+            "score": 50,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/comment4/"
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "comment5",
+            "body": "Good earnings but already priced in IMO.",
+            "author": "cautious_carl",
+            "score": 30,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/comment5/"
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "id": "comment6",
+            "body": "Not as good as expected. Puts will print.",
+            "author": "put_buyer",
+            "score": 10,
+            "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/comment6/"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getSubredditPosts, scoreSentiment } from "../../../src/providers/reddit.js";
+import { getSubredditPosts, getPostComments, scoreSentiment } from "../../../src/providers/reddit.js";
 import { cache } from "../../../src/infra/cache.js";
 import fixture from "../../fixtures/yahoo/reddit-wallstreetbets.json";
+import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
+import commentsFixture from "../../fixtures/reddit/comments.json";
 
 describe("reddit provider", () => {
   const originalFetch = globalThis.fetch;
@@ -65,6 +67,58 @@ describe("reddit provider", () => {
     // Fixture has "bullish" in post 2, no bearish terms → positive score
     expect(result.sentimentScore).toBeGreaterThan(0);
     expect(result.bullishCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("returns id, author, and selftext per post", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(listingFixture),
+    });
+
+    const result = await getSubredditPosts("stocks", 25);
+    expect(result.posts[0]).toHaveProperty("id");
+    expect(result.posts[0].id).toBe("abc123");
+    expect(result.posts[0]).toHaveProperty("author");
+    expect(result.posts[0].author).toBe("stock_guru");
+    expect(result.posts[0]).toHaveProperty("selftext");
+    expect(result.posts[0].selftext).toContain("Apple just reported");
+  });
+});
+
+describe("getPostComments", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    cache.clear();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("extracts top N comments by score", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(commentsFixture),
+    });
+
+    const comments = await getPostComments("stocks", "abc123", 5);
+    expect(comments).toHaveLength(5);
+    expect(comments[0].author).toBe("bull_trader");
+    expect(comments[0].score).toBe(312);
+    expect(comments[0].body).toContain("bullish");
+  });
+
+  it("caches comments with 30-min TTL", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(commentsFixture),
+    });
+
+    await getPostComments("stocks", "abc123", 5);
+    await getPostComments("stocks", "abc123", 5);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 

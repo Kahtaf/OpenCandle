@@ -56,5 +56,7 @@ rateLimiter.configure("coingecko", 10, 0.167);  // 10 req/min
 rateLimiter.configure("alphavantage", 5, 0.083); // 5 req/min (free tier)
 rateLimiter.configure("fred", 120, 2);           // 120 req/min
 rateLimiter.configure("twitter", 5, 0.167);      // 5 req, ~10 req/min
+rateLimiter.configure("reddit", 5, 0.167);          // 5 req, ~10 req/min
+rateLimiter.configure("reddit_comments", 10, 0.5); // 10 req, ~30 req/min
 rateLimiter.configure("ddg", 3, 0.1);             // 3 req, ~6 req/min
 rateLimiter.configure("brave_search", 5, 0.083);  // 5 req, ~5 req/min

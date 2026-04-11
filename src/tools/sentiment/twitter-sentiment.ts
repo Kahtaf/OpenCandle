@@ -3,6 +3,8 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getTwitterSentiment } from "../../providers/twitter.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { TwitterSentimentResult } from "../../types/sentiment.js";
+import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
+import { getSentimentPipeline } from "../../sentiment/index.js";
 
 const params = Type.Object({
   query: Type.String({
@@ -72,6 +74,21 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
     if (providerResult.stale) {
       lines.push("");
       lines.push(`⚠ Stale data (cached at ${providerResult.timestamp})`);
+    }
+
+    // Index in sentiment store and append trend context
+    try {
+      const adapter = new TwitterAdapter();
+      const records = adapter.mapToRecords(result, args.query);
+      const pipeline = getSentimentPipeline();
+      const pipelineResult = await pipeline.processRecords(records, args.query);
+      if (pipelineResult.trend && pipelineResult.trend.length > 0) {
+        const t = pipelineResult.trend[0];
+        lines.push("");
+        lines.push(`Trend: ${t.sparkline} ${t.direction} (${t.delta >= 0 ? "+" : ""}${t.delta.toFixed(2)}, ${t.count} records)`);
+      }
+    } catch {
+      // Sentiment indexing is best-effort — don't fail the tool
     }
 
     return { content: [{ type: "text", text: lines.join("\n") }], details: result };

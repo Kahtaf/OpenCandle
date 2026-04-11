@@ -83,11 +83,10 @@ describe("loadConfig", () => {
   it("returns finance-provider config without requiring LLM credentials", () => {
     mockedReadFileSync.mockReturnValue("OPENAI_API_KEY=my-key");
     const config = loadConfig();
-    expect(config).toEqual({
-      alphaVantageApiKey: undefined,
-      fredApiKey: undefined,
-      debate: true,
-    });
+    expect(config.alphaVantageApiKey).toBeUndefined();
+    expect(config.fredApiKey).toBeUndefined();
+    expect(config.debate).toBe(true);
+    expect(config.sentiment).toBeDefined();
   });
 
   it("includes optional keys from .env when present", () => {
@@ -306,5 +305,59 @@ describe("loadConfig", () => {
     mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
     const config = loadConfig();
     expect(config.braveApiKey).toBeUndefined();
+  });
+
+  describe("sentiment config", () => {
+    it("sentiment defaults when not set", () => {
+      delete process.env.OPENCANDLE_DEBATE;
+      mockedExistsSync.mockReturnValue(false);
+      mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+      const config = loadConfig();
+      expect(config.sentiment).toEqual({
+        retentionDays: 30,
+        defaultSubreddits: ["wallstreetbets", "stocks", "investing", "options"],
+        commentsPerPost: 5,
+        divergenceThreshold: 0.4,
+      });
+    });
+
+    it("sentiment reads from file config", () => {
+      mockedExistsSync.mockImplementation((path) => path === configPath);
+      mockedReadFileSync.mockImplementation((path) => {
+        if (path === configPath) {
+          return JSON.stringify({
+            sentiment: {
+              retentionDays: 14,
+              defaultSubreddits: ["stocks"],
+              commentsPerPost: 3,
+              divergenceThreshold: 0.5,
+            },
+          });
+        }
+        throw new Error("ENOENT");
+      });
+      const config = loadConfig();
+      expect(config.sentiment).toEqual({
+        retentionDays: 14,
+        defaultSubreddits: ["stocks"],
+        commentsPerPost: 3,
+        divergenceThreshold: 0.5,
+      });
+    });
+
+    it("sentiment partial file config merges with defaults", () => {
+      mockedExistsSync.mockImplementation((path) => path === configPath);
+      mockedReadFileSync.mockImplementation((path) => {
+        if (path === configPath) {
+          return JSON.stringify({ sentiment: { retentionDays: 7 } });
+        }
+        throw new Error("ENOENT");
+      });
+      const config = loadConfig();
+      expect(config.sentiment!.retentionDays).toBe(7);
+      expect(config.sentiment!.defaultSubreddits).toEqual(["wallstreetbets", "stocks", "investing", "options"]);
+      expect(config.sentiment!.commentsPerPost).toBe(5);
+      expect(config.sentiment!.divergenceThreshold).toBe(0.4);
+    });
   });
 });

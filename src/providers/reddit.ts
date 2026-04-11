@@ -1,12 +1,17 @@
 import { httpGet } from "../infra/http-client.js";
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
 import type { RedditSentimentResult } from "../types/sentiment.js";
+import { BULLISH_TERMS, BEARISH_TERMS } from "../sentiment/keywords.js";
 
 interface RedditListingResponse {
   data: {
     children: Array<{
       data: {
+        id: string;
         title: string;
+        selftext: string;
+        author: string;
         score: number;
         num_comments: number;
         permalink: string;
@@ -15,6 +20,8 @@ interface RedditListingResponse {
     }>;
   };
 }
+
+const REDDIT_HEADERS = { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" };
 
 export async function getSubredditPosts(
   subreddit: string,
@@ -25,13 +32,17 @@ export async function getSubredditPosts(
   if (cached) return cached;
 
   try {
+    await rateLimiter.acquire("reddit");
     const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=${limit}`;
     const data = await httpGet<RedditListingResponse>(url, {
-      headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
+      headers: REDDIT_HEADERS,
     });
 
     const posts = data.data.children.map((child) => ({
+      id: child.data.id,
       title: child.data.title,
+      selftext: child.data.selftext ?? "",
+      author: child.data.author ?? "unknown",
       score: child.data.score,
       comments: child.data.num_comments,
       url: `https://reddit.com${child.data.permalink}`,
@@ -74,15 +85,52 @@ export async function getSubredditPosts(
   }
 }
 
-const BULLISH_TERMS = [
-  "moon", "buy", "undervalued", "breakout", "calls", "bullish",
-  "rocket", "diamond hands", "accumulate", "dip buy", "long", "rip", "squeeze",
-];
+// ── Comment fetching ────────────────────────────────────
 
-const BEARISH_TERMS = [
-  "crash", "overvalued", "sell", "puts", "bearish", "bubble",
-  "dump", "short", "bagholding", "exit", "drill", "tank", "rug",
-];
+export interface RedditComment {
+  id: string;
+  body: string;
+  author: string;
+  score: number;
+  permalink: string;
+}
+
+const COMMENT_TTL = 30 * 60 * 1000; // 30 minutes
+
+export async function getPostComments(
+  subreddit: string,
+  postId: string,
+  limit: number = 5,
+): Promise<RedditComment[]> {
+  const cacheKey = `reddit:comments:${subreddit}:${postId}:${limit}`;
+  const cached = cache.get<RedditComment[]>(cacheKey);
+  if (cached) return cached;
+
+  await rateLimiter.acquire("reddit_comments");
+  const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${postId}.json`;
+  const data = await httpGet<Array<{ data: { children: Array<{ kind: string; data: { id: string; body?: string; author?: string; score?: number; permalink?: string } }> } }>>(url, {
+    headers: REDDIT_HEADERS,
+  });
+
+  // Comments are in the second listing element
+  const commentListing = data[1]?.data?.children ?? [];
+  const comments: RedditComment[] = commentListing
+    .filter((c) => c.kind === "t1" && c.data.body)
+    .sort((a, b) => (b.data.score ?? 0) - (a.data.score ?? 0))
+    .slice(0, limit)
+    .map((c) => ({
+      id: c.data.id,
+      body: c.data.body!,
+      author: c.data.author ?? "unknown",
+      score: c.data.score ?? 0,
+      permalink: `https://reddit.com${c.data.permalink ?? ""}`,
+    }));
+
+  cache.set(cacheKey, comments, COMMENT_TTL);
+  return comments;
+}
+
+// ── Sentiment scoring ───────────────────────────────────
 
 export function scoreSentiment(
   posts: Array<{ title: string }>,

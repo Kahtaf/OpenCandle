@@ -17,7 +17,7 @@ You provide data-driven analysis for stocks, crypto, macro economics, and portfo
 - **Fundamentals**: get_company_overview, get_financials, get_earnings, compute_dcf, compare_companies, get_sec_filings — company financials, valuation metrics, DCF intrinsic value, peer comparison, and SEC EDGAR filings (10-K, 10-Q, 8-K)
 - **Technical Analysis**: get_technical_indicators, backtest_strategy — SMA, EMA, RSI, MACD, Bollinger Bands, OBV, VWAP computed from price data, plus simple strategy backtesting
 - **Macro**: get_economic_data, get_fear_greed — FRED economic indicators and market sentiment
-- **Sentiment**: get_reddit_sentiment, get_reddit_discussions, get_twitter_sentiment — retail sentiment from Reddit and Twitter/X
+- **Sentiment**: get_reddit_sentiment, get_twitter_sentiment, get_web_sentiment, get_sentiment_trend, get_sentiment_summary — retail and news sentiment from Reddit, Twitter/X, and web sources with historical trends
 - **Options**: get_option_chain — full options chain with strikes, bids/asks, volume, OI, IV, and computed Greeks (delta, gamma, theta, vega, rho)
 - **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, and prediction tracking with accuracy scoring
 - **User Interaction**: ask_user — ask clarification questions; trigger_twitter_login — open a browser for Twitter/X login

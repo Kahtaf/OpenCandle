@@ -1,0 +1,200 @@
+import { Type } from "@sinclair/typebox";
+import type { AgentTool } from "@mariozechner/pi-agent-core";
+import { getSubredditPosts, getPostComments } from "../../providers/reddit.js";
+import { getTwitterSentiment } from "../../providers/twitter.js";
+import { searchWeb } from "../../providers/web-search.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getConfig } from "../../config.js";
+import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
+import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
+import { WebAdapter } from "../../sentiment/adapters/web.js";
+import { getSentimentPipeline } from "../../sentiment/index.js";
+import type { SentinelRecord } from "../../sentiment/types.js";
+
+const params = Type.Object({
+  query: Type.String({ description: "Ticker or topic for cross-source sentiment summary" }),
+  hours: Type.Optional(
+    Type.Number({ description: "Lookback window in hours for live fetching. Default: 24" }),
+  ),
+});
+
+export const sentimentSummaryTool: AgentTool<typeof params> = {
+  name: "get_sentiment_summary",
+  label: "Sentiment Summary",
+  description:
+    "Cross-source sentiment summary combining Twitter, Reddit, and web/news. Returns per-source scores, aggregate sentiment, and divergence detection.",
+  parameters: params,
+  async execute(toolCallId, args) {
+    const hours = args.hours ?? 24;
+    const config = getConfig();
+    const warnings: string[] = [];
+    const allRecords: SentinelRecord[] = [];
+
+    const twitterAdapter = new TwitterAdapter();
+    const redditAdapter = new RedditAdapter();
+    const webAdapter = new WebAdapter();
+
+    // Fetch all sources in parallel
+    const [twitterResult, redditResults, webResult] = await Promise.allSettled([
+      // Twitter
+      wrapProvider("twitter", () => getTwitterSentiment(args.query, 50, hours)),
+      // Reddit — cross-subreddit
+      fetchRedditCrossSubreddit(args.query, config.sentiment?.defaultSubreddits ?? ["wallstreetbets", "stocks", "investing", "options"]),
+      // Web
+      searchWeb(args.query, { freshness: "day", limit: 10, category: "news" }),
+    ]);
+
+    // Process Twitter
+    if (twitterResult.status === "fulfilled" && twitterResult.value.status === "ok") {
+      const records = twitterAdapter.mapToRecords(twitterResult.value.data, args.query);
+      allRecords.push(...records);
+    } else {
+      const reason = twitterResult.status === "rejected"
+        ? twitterResult.reason?.message ?? "unknown error"
+        : (twitterResult.value as any).reason ?? "unavailable";
+      warnings.push(`Twitter: ${reason}`);
+    }
+
+    // Process Reddit
+    if (redditResults.status === "fulfilled") {
+      const { records: redditRecords, warnings: redditWarnings } = redditResults.value;
+      allRecords.push(...redditRecords);
+      warnings.push(...redditWarnings);
+    } else {
+      warnings.push(`Reddit: ${redditResults.reason?.message ?? "unknown error"}`);
+    }
+
+    // Process Web
+    if (webResult.status === "fulfilled" && webResult.value.status === "ok") {
+      const records = webAdapter.mapToRecords(webResult.value.data, args.query);
+      allRecords.push(...records);
+    } else {
+      const reason = webResult.status === "rejected"
+        ? webResult.reason?.message ?? "unknown error"
+        : (webResult.value as any).reason ?? "unavailable";
+      warnings.push(`Web: ${reason}`);
+    }
+
+    if (allRecords.length === 0) {
+      return {
+        content: [{ type: "text", text: `⚠ Sentiment summary unavailable for "${args.query}" — no sources returned data.\n${warnings.join("\n")}` }],
+        details: null as any,
+      };
+    }
+
+    // Score and index through pipeline
+    const pipeline = getSentimentPipeline();
+    const result = await pipeline.processRecords(allRecords, args.query);
+
+    // Group by source (exclude comments from per-source averages)
+    const bySource: Record<string, { total: number; count: number }> = {};
+    for (const rec of result.fresh) {
+      if (rec.metadata.isComment) continue;
+      if (!bySource[rec.source]) bySource[rec.source] = { total: 0, count: 0 };
+      bySource[rec.source].total += rec.sentiment.score;
+      bySource[rec.source].count++;
+    }
+
+    const lines: string[] = [];
+    lines.push(`**Sentiment summary for "${args.query}"** (last ${hours}h):`);
+    lines.push("");
+    lines.push("| Source | Score | Count | Signal |");
+    lines.push("|--------|-------|-------|--------|");
+
+    let totalScore = 0;
+    let totalCount = 0;
+    for (const [source, stats] of Object.entries(bySource)) {
+      const avg = stats.count > 0 ? stats.total / stats.count : 0;
+      const label = sentimentLabel(avg);
+      const sourceName = source === "web" ? "Web/News" : source.charAt(0).toUpperCase() + source.slice(1);
+      lines.push(`| ${sourceName} | ${avg >= 0 ? "+" : ""}${avg.toFixed(2)} | ${stats.count} | ${label} |`);
+      totalScore += stats.total;
+      totalCount += stats.count;
+    }
+
+    const aggregate = totalCount > 0 ? totalScore / totalCount : 0;
+    lines.push("");
+    lines.push(`**Aggregate:** ${aggregate >= 0 ? "+" : ""}${aggregate.toFixed(2)} (${sentimentLabel(aggregate)})`);
+
+    // Divergence
+    if (result.divergence && result.divergence.detected) {
+      lines.push("");
+      lines.push(result.divergence.message);
+    } else if (result.divergence && !result.divergence.detected) {
+      lines.push("");
+      lines.push(result.divergence.message);
+    }
+
+    // Trend
+    if (result.trend && result.trend.length > 0) {
+      const t = result.trend[0];
+      lines.push("");
+      lines.push(`Trend: ${t.sparkline} ${t.direction} (${t.count} records)`);
+    }
+
+    if (warnings.length > 0) {
+      lines.push("");
+      lines.push(warnings.map((w) => `⚠ ${w}`).join("\n"));
+    }
+
+    return { content: [{ type: "text", text: lines.join("\n") }], details: result };
+  },
+};
+
+async function fetchRedditCrossSubreddit(
+  query: string,
+  subreddits: string[],
+): Promise<{ records: SentinelRecord[]; warnings: string[] }> {
+  const adapter = new RedditAdapter();
+  const records: SentinelRecord[] = [];
+  const warnings: string[] = [];
+  const config = getConfig();
+  const commentsPerPost = config.sentiment?.commentsPerPost ?? 5;
+
+  for (const sub of subreddits) {
+    const result = await wrapProvider("reddit", () => getSubredditPosts(sub, 25));
+    if (result.status === "unavailable") {
+      warnings.push(`Reddit r/${sub}: ${result.reason}`);
+      continue;
+    }
+    const postRecords = adapter.mapPostsToRecords(result.data, query);
+
+    // Topic filter
+    const queryLower = query.toLowerCase();
+    const filtered = postRecords.filter((r) =>
+      r.text.toLowerCase().includes(queryLower) ||
+      (r.title?.toLowerCase().includes(queryLower) ?? false),
+    );
+    records.push(...filtered);
+
+    // Fetch comments for top posts
+    const topPosts = [...filtered]
+      .sort((a, b) => b.engagement.score - a.engagement.score)
+      .slice(0, 3); // fewer per sub since we're searching multiple
+    for (const post of topPosts) {
+      if ((post.engagement.replies ?? 0) === 0) continue;
+      try {
+        const comments = await getPostComments(sub, post.sourceId, commentsPerPost);
+        records.push(...adapter.mapCommentsToRecords(comments, post.sourceId, sub, query));
+      } catch { /* non-fatal */ }
+    }
+  }
+
+  // Deduplicate
+  const seen = new Set<string>();
+  const deduped = records.filter((r) => {
+    if (seen.has(r.sourceId)) return false;
+    seen.add(r.sourceId);
+    return true;
+  });
+
+  return { records: deduped, warnings };
+}
+
+function sentimentLabel(score: number): string {
+  if (score > 0.3) return "Bullish";
+  if (score < -0.3) return "Bearish";
+  if (score > 0) return "Leaning Bullish";
+  if (score < 0) return "Leaning Bearish";
+  return "Neutral";
+}

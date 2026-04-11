@@ -107,4 +107,30 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("search_web");
     expect(result).toContain("Web Search");
   });
+
+  it("includes new sentiment tools in catalog", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("get_sentiment_trend");
+    expect(result).toContain("get_sentiment_summary");
+    expect(result).toContain("get_web_sentiment");
+  });
+
+  it("does not reference get_reddit_discussions", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).not.toContain("get_reddit_discussions");
+  });
+
+  it("get_reddit_sentiment description mentions cross-subreddit", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("get_reddit_sentiment");
+  });
 });

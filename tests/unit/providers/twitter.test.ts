@@ -129,6 +129,40 @@ describe("getTwitterSentiment", () => {
     );
   });
 
+  it("includes tweet id in results", async () => {
+    mockExistsSync.mockReturnValue(true);
+
+    const { Scraper } = await import("@the-convocation/twitter-scraper");
+    const mockScraper = {
+      setCookies: vi.fn(),
+      isLoggedIn: vi.fn().mockResolvedValue(true),
+      searchTweets: vi.fn().mockReturnValue(
+        (async function* () {
+          for (const tweet of tweetFixture) {
+            yield { ...tweet, timeParsed: new Date(tweet.timeParsed) };
+          }
+        })(),
+      ),
+    };
+    vi.mocked(Scraper).mockImplementation(() => mockScraper as any);
+
+    const Database = (await import("better-sqlite3")).default;
+    vi.mocked(Database).mockImplementation(
+      () =>
+        ({
+          prepare: () => ({
+            all: (..._args: any[]) => cookieFixture,
+          }),
+          close: vi.fn(),
+        }) as any,
+    );
+
+    const result = await getTwitterSentiment("AAPL", 50, 24 * 365);
+    expect(result.tweets.length).toBeGreaterThan(0);
+    expect(result.tweets[0]).toHaveProperty("id");
+    expect(result.tweets[0].id).toBe("1234567890");
+  });
+
   it("returns cached result on second call", async () => {
     mockExistsSync.mockReturnValue(true);
 

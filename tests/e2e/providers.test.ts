@@ -9,7 +9,7 @@ import { getCryptoPrice, getCryptoHistory } from "../../src/providers/coingecko.
 import { getOverview, getEarnings, getFinancials } from "../../src/providers/alpha-vantage.js";
 import { getSeries } from "../../src/providers/fred.js";
 import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
-import { getSubredditPosts } from "../../src/providers/reddit.js";
+import { getSubredditPosts, getPostComments } from "../../src/providers/reddit.js";
 import { computeRiskMetrics, computeDailyReturns } from "../../src/tools/portfolio/risk-analysis.js";
 import { computeSMA, computeRSI, computeMACD, computeBollingerBands } from "../../src/tools/technical/indicators.js";
 
@@ -146,6 +146,48 @@ if (fredKey) {
 await test("reddit", "wallstreetbets", () => getSubredditPosts("wallstreetbets", 10));
 await test("reddit", "stocks", () => getSubredditPosts("stocks", 10));
 await test("reddit", "cryptocurrency", () => getSubredditPosts("cryptocurrency", 10));
+
+// Reddit comments e2e
+console.log("\n--- Reddit Comments ---");
+try {
+  const stocksPosts = await getSubredditPosts("stocks", 5);
+  if (stocksPosts.posts.length > 0) {
+    const topPost = stocksPosts.posts[0];
+    if (topPost.comments > 0) {
+      await test("reddit_comments", topPost.id, () => getPostComments("stocks", topPost.id, 5));
+    } else {
+      console.log("  SKIPPED (top post has no comments)");
+    }
+  }
+} catch (e) {
+  console.log(`  SKIPPED (${e instanceof Error ? e.message : e})`);
+}
+
+// Sentiment store e2e
+console.log("\n--- Sentiment Store ---");
+import { SentimentStore } from "../../src/sentiment/store.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+try {
+  const tmpDir = mkdtempSync(join(tmpdir(), "oc-store-e2e-"));
+  const dbPath = join(tmpDir, "sentinel.db");
+  const store = new SentimentStore(dbPath);
+  store.insert([{
+    id: "e2e-1", source: "twitter", sourceId: "tw-1", query: "AAPL",
+    title: null, text: "bullish AAPL", author: "@test", url: "https://x.com/test",
+    publishedAt: new Date().toISOString(), fetchedAt: new Date().toISOString(),
+    engagement: { score: 10, replies: null, shares: null, views: null },
+    sentiment: { score: 0.5, confidence: 0.7, method: "keyword", tickers: ["AAPL"] },
+    metadata: {},
+  }]);
+  const searchResults = store.search("AAPL");
+  console.log(`  ✅ Store: inserted 1, search returned ${searchResults.length}`);
+  store.close();
+  rmSync(tmpDir, { recursive: true });
+} catch (e) {
+  console.log(`  ❌ Store: ${e instanceof Error ? e.message : e}`);
+}
 
 // --- RESULTS ---
 console.log("\n\n=== RESULTS ===\n");

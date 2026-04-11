@@ -35,15 +35,7 @@ export function readTwitterCookies(profileDir: string): FirefoxCookie[] {
 
 // ── Sentiment scoring ────────────────────────────────────
 
-const BULLISH_TERMS = [
-  "moon", "buy", "undervalued", "breakout", "calls", "bullish",
-  "rocket", "diamond hands", "accumulate", "dip buy", "long", "rip", "squeeze",
-];
-
-const BEARISH_TERMS = [
-  "crash", "overvalued", "sell", "puts", "bearish", "bubble",
-  "dump", "short", "bagholding", "exit", "drill", "tank", "rug",
-];
+import { BULLISH_TERMS, BEARISH_TERMS } from "../sentiment/keywords.js";
 
 export function scoreTwitterSentiment(
   tweets: Array<{ text: string; likes: number; retweets: number }>,
@@ -125,6 +117,7 @@ export async function getTwitterSentiment(
       if (created < cutoff) continue;
 
       tweets.push({
+        id: tweet.id ?? "",
         text: tweet.text?.slice(0, 280) ?? "",
         author: tweet.username ?? "unknown",
         likes: tweet.likes ?? 0,
