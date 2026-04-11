@@ -8,6 +8,7 @@ export interface FearGreedData {
 }
 
 export interface TwitterTweet {
+  id: string;
   text: string;
   author: string;
   likes: number;
@@ -52,7 +53,10 @@ export interface RedditSentimentResult {
   subreddit: string;
   postCount: number;
   posts: Array<{
+    id: string;
     title: string;
+    selftext: string;
+    author: string;
     score: number;
     comments: number;
     url: string;

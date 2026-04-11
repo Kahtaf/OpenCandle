@@ -496,6 +496,26 @@ async function run() {
   });
 
   // ============================
+  // 14. Sentiment Pipeline Tools
+  // ============================
+  console.log("\n14. Sentiment Pipeline:");
+  await test("get_sentiment_trend returns no-data message for empty store", async () => {
+    const tool = getTool("get_sentiment_trend");
+    const result = await tool.execute("e2e", { query: "ZZZNOTREAL" });
+    assert(result.content[0].text.includes("No historical sentiment data"), "should say no data");
+  });
+
+  await test("get_sentiment_summary tool exists and has correct name", async () => {
+    const tool = getTool("get_sentiment_summary");
+    assert(tool.name === "get_sentiment_summary", "wrong name");
+  });
+
+  await test("get_web_sentiment tool exists and has correct name", async () => {
+    const tool = getTool("get_web_sentiment");
+    assert(tool.name === "get_web_sentiment", "wrong name");
+  });
+
+  // ============================
   // Summary
   // ============================
   console.log(`\n${"=".repeat(50)}`);

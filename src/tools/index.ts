@@ -10,7 +10,6 @@ import { earningsTool } from "./fundamentals/earnings.js";
 import { fredDataTool } from "./macro/fred-data.js";
 import { fearGreedTool } from "./macro/fear-greed.js";
 import { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
-import { newsSentimentTool } from "./sentiment/news-sentiment.js";
 import { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 import { technicalIndicatorsTool } from "./technical/indicators.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
@@ -24,6 +23,9 @@ import { secFilingsTool } from "./fundamentals/sec-filings.js";
 import { backtestTool } from "./technical/backtest.js";
 import { predictionsTool } from "./portfolio/predictions.js";
 import { webSearchTool } from "./sentiment/web-search.js";
+import { webSentimentTool } from "./sentiment/web-sentiment.js";
+import { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
+import { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 
 export function getAllTools(): AgentTool<any>[] {
   return [
@@ -41,7 +43,6 @@ export function getAllTools(): AgentTool<any>[] {
     fredDataTool,
     fearGreedTool,
     redditSentimentTool,
-    newsSentimentTool,
     twitterSentimentTool,
     technicalIndicatorsTool,
     backtestTool,
@@ -52,5 +53,8 @@ export function getAllTools(): AgentTool<any>[] {
     predictionsTool,
     optionChainTool,
     webSearchTool,
+    webSentimentTool,
+    sentimentTrendTool,
+    sentimentSummaryTool,
   ];
 }

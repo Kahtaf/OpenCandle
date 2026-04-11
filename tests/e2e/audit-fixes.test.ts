@@ -103,15 +103,13 @@ await test(
   },
 );
 
-// 3. Reddit discussions rename — tool should be called by new name
+// 3. Reddit sentiment tool
 await test(
-  "Reddit discussions tool uses new name",
+  "Reddit sentiment tool works",
   "What are people on Reddit saying about NVDA?",
   (text, tools) => {
-    const usedRedditTool = tools.includes("get_reddit_discussions") || tools.includes("get_reddit_sentiment");
-    assert(usedRedditTool, "should call a reddit tool");
-    // Should NOT see "News Sentiment" as a label
-    assert(!text.includes("News Sentiment for"), "should not use old 'News Sentiment' label");
+    const usedRedditTool = tools.includes("get_reddit_sentiment");
+    assert(usedRedditTool, "should call get_reddit_sentiment");
   },
 );
 

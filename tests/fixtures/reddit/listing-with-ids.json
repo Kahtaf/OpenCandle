@@ -1,0 +1,42 @@
+{
+  "data": {
+    "children": [
+      {
+        "data": {
+          "id": "abc123",
+          "title": "$AAPL earnings beat expectations",
+          "selftext": "Apple just reported massive earnings beat. Revenue up 15% YoY.",
+          "author": "stock_guru",
+          "score": 542,
+          "num_comments": 89,
+          "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/",
+          "created_utc": 1744300800
+        }
+      },
+      {
+        "data": {
+          "id": "def456",
+          "title": "NVDA looking bearish after guidance",
+          "selftext": "",
+          "author": "chip_watcher",
+          "score": 231,
+          "num_comments": 45,
+          "permalink": "/r/stocks/comments/def456/nvda_looking_bearish/",
+          "created_utc": 1744297200
+        }
+      },
+      {
+        "data": {
+          "id": "ghi789",
+          "title": "Weekly market discussion thread",
+          "selftext": "What are your moves this week?",
+          "author": "AutoModerator",
+          "score": 100,
+          "num_comments": 0,
+          "permalink": "/r/stocks/comments/ghi789/weekly_market_discussion/",
+          "created_utc": 1744293600
+        }
+      }
+    ]
+  }
+}

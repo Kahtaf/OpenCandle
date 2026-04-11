@@ -1,12 +1,20 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
 
+export interface SentimentConfig {
+  retentionDays: number;
+  defaultSubreddits: string[];
+  commentsPerPost: number;
+  divergenceThreshold: number;
+}
+
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
   braveApiKey?: string;
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
+  sentiment?: SentimentConfig;
 }
 
 export interface OpenCandleFileConfig {
@@ -23,6 +31,12 @@ export interface OpenCandleFileConfig {
   };
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
+  sentiment?: {
+    retentionDays?: number;
+    defaultSubreddits?: string[];
+    commentsPerPost?: number;
+    divergenceThreshold?: number;
+  };
 }
 
 export interface FinanceProviderReadiness {
@@ -52,14 +66,28 @@ export function loadEnv(path = ".env"): void {
 
 let cachedConfig: Config | null = null;
 
+const SENTIMENT_DEFAULTS: SentimentConfig = {
+  retentionDays: 30,
+  defaultSubreddits: ["wallstreetbets", "stocks", "investing", "options"],
+  commentsPerPost: 5,
+  divergenceThreshold: 0.4,
+};
+
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
   const debateEnv = process.env.OPENCANDLE_DEBATE;
+  const fileSentiment = fileConfig.sentiment;
   return {
     alphaVantageApiKey:
       process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
     fredApiKey: process.env.FRED_API_KEY ?? fileConfig.providers?.fred?.apiKey,
     braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
     debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
+    sentiment: {
+      retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
+      defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,
+      commentsPerPost: fileSentiment?.commentsPerPost ?? SENTIMENT_DEFAULTS.commentsPerPost,
+      divergenceThreshold: fileSentiment?.divergenceThreshold ?? SENTIMENT_DEFAULTS.divergenceThreshold,
+    },
   };
 }
 

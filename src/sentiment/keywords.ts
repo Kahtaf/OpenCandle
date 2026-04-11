@@ -1,0 +1,9 @@
+export const BULLISH_TERMS = [
+  "moon", "buy", "undervalued", "breakout", "calls", "bullish",
+  "rocket", "diamond hands", "accumulate", "dip buy", "long", "rip", "squeeze",
+] as const;
+
+export const BEARISH_TERMS = [
+  "crash", "overvalued", "sell", "puts", "bearish", "bubble",
+  "dump", "short", "bagholding", "exit", "drill", "tank", "rug",
+] as const;

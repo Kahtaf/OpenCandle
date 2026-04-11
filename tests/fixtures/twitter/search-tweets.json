@@ -1,5 +1,6 @@
 [
   {
+    "id": "1234567890",
     "text": "$AAPL moon incoming! So bullish on this breakout 🚀",
     "username": "trader_joe",
     "likes": 150,
@@ -10,6 +11,7 @@
     "timeParsed": "2026-04-04T10:00:00.000Z"
   },
   {
+    "id": "1234567891",
     "text": "$AAPL overvalued, this bubble is about to crash. Puts loaded.",
     "username": "bear_market_bob",
     "likes": 500,
@@ -20,6 +22,7 @@
     "timeParsed": "2026-04-04T09:30:00.000Z"
   },
   {
+    "id": "1234567892",
     "text": "Watching $AAPL and $TSLA today. Earnings next week could be interesting.",
     "username": "market_watcher",
     "likes": 30,
@@ -30,6 +33,7 @@
     "timeParsed": "2026-04-04T08:00:00.000Z"
   },
   {
+    "id": "1234567893",
     "text": "$AAPL diamond hands! Buy the dip, squeeze is coming $NVDA too",
     "username": "yolo_trader",
     "likes": 75,
@@ -40,6 +44,7 @@
     "timeParsed": "2026-04-04T07:00:00.000Z"
   },
   {
+    "id": "1234567894",
     "text": "Fed decision tomorrow - what are your $AAPL plays?",
     "username": "neutral_nancy",
     "likes": 10,
