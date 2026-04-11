@@ -1,0 +1,22 @@
+{
+  "type": "search",
+  "query": { "original": "AAPL stock news" },
+  "web": {
+    "results": [
+      {
+        "title": "Apple Inc (AAPL) Stock Price & News - Google Finance",
+        "url": "https://www.google.com/finance/quote/AAPL:NASDAQ",
+        "description": "Get the latest Apple Inc (AAPL) real-time quote, historical performance, charts, and other financial information.",
+        "meta_url": { "hostname": "google.com", "scheme": "https", "path": "/finance/quote/AAPL:NASDAQ" },
+        "age": null
+      },
+      {
+        "title": "Apple Investor Relations",
+        "url": "https://investor.apple.com/",
+        "description": "Apple's official investor relations page with earnings reports, SEC filings, and press releases.",
+        "meta_url": { "hostname": "investor.apple.com", "scheme": "https", "path": "/" },
+        "age": null
+      }
+    ]
+  }
+}

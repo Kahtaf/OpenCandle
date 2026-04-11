@@ -176,6 +176,34 @@ describe("classifyIntent", () => {
     });
   });
 
+  describe("news queries → general_finance_qa", () => {
+    it("matches 'any recent news about NVDA and AI chip exports'", () => {
+      const result = classifyIntent("Any recent news about NVDA and AI chip exports?");
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.confidence).toBeGreaterThanOrEqual(0.85);
+    });
+
+    it("matches 'what's the latest news on semiconductor tariffs'", () => {
+      const result = classifyIntent("What's the latest news on semiconductor tariffs?");
+      expect(result.workflow).toBe("general_finance_qa");
+    });
+
+    it("matches 'TSLA recent announcements'", () => {
+      const result = classifyIntent("TSLA recent announcements");
+      expect(result.workflow).toBe("general_finance_qa");
+    });
+
+    it("matches 'what's happening with Boeing safety investigation'", () => {
+      const result = classifyIntent("What's happening with the Boeing safety investigation?");
+      expect(result.workflow).toBe("general_finance_qa");
+    });
+
+    it("does NOT match 'analyze NVDA' (still single_asset_analysis)", () => {
+      const result = classifyIntent("analyze NVDA");
+      expect(result.workflow).toBe("single_asset_analysis");
+    });
+  });
+
   describe("unclassified", () => {
     it("returns unclassified for 'hello'", () => {
       const result = classifyIntent("hello");

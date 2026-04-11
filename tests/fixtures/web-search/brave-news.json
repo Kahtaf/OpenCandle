@@ -1,0 +1,26 @@
+{
+  "type": "news",
+  "query": { "original": "AAPL stock news" },
+  "results": [
+    {
+      "title": "Apple Reports Record Q1 Revenue, Beats Estimates",
+      "url": "https://www.reuters.com/technology/apple-q1-results-2026",
+      "description": "Apple Inc reported first-quarter revenue of $124.3 billion, surpassing analyst expectations.",
+      "age": "2 hours ago",
+      "meta_url": { "hostname": "reuters.com", "scheme": "https", "path": "/technology/apple-q1-results-2026" },
+      "source": "Reuters",
+      "breaking": false,
+      "thumbnail": { "src": "https://reuters.com/img/apple.jpg" }
+    },
+    {
+      "title": "AAPL Stock Rises on Strong iPhone Sales",
+      "url": "https://www.cnbc.com/2026/04/10/aapl-earnings.html",
+      "description": "Apple shares climbed 5% in after-hours trading on the back of strong iPhone revenue.",
+      "age": "4 hours ago",
+      "meta_url": { "hostname": "cnbc.com", "scheme": "https", "path": "/2026/04/10/aapl-earnings.html" },
+      "source": "CNBC",
+      "breaking": false,
+      "thumbnail": null
+    }
+  ]
+}

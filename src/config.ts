@@ -4,6 +4,7 @@ import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
+  braveApiKey?: string;
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
 }
@@ -14,6 +15,9 @@ export interface OpenCandleFileConfig {
       apiKey?: string;
     };
     fred?: {
+      apiKey?: string;
+    };
+    brave?: {
       apiKey?: string;
     };
   };
@@ -54,6 +58,7 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     alphaVantageApiKey:
       process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
     fredApiKey: process.env.FRED_API_KEY ?? fileConfig.providers?.fred?.apiKey,
+    braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
     debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
   };
 }

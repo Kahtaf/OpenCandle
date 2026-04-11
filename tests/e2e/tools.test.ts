@@ -429,7 +429,46 @@ async function run() {
   });
 
   // ============================
-  // 12. Orchestrator personas
+  // 12. Web Search
+  // ============================
+  console.log("\n12. Web Search:");
+  await test("search_web returns results for financial query", async () => {
+    const tool = getTool("search_web");
+    const result = await tool.execute("e2e", { query: "Federal Reserve rate decision" });
+    const text = result.content[0].text;
+
+    // Tool wraps failures into content text, so check for unavailable/rate-limit
+    if (text.includes("unavailable") || result.details === null) {
+      console.log("    (DDG rate-limited or unavailable — web search logic verified via unit tests)");
+      return;
+    }
+
+    const details = result.details;
+    assert(details.resultCount > 0, `expected results, got ${details.resultCount}`);
+    assert(details.provider === "ddg" || details.provider === "brave", `unexpected provider: ${details.provider}`);
+    assert(details.results[0].title.length > 0, "first result has empty title");
+    assert(details.results[0].url.startsWith("http"), "first result URL invalid");
+    assert(details.results[0].snippet.length > 0, "first result has empty snippet");
+    assert(details.results[0].source.length > 0, "first result has empty source");
+    console.log(`    ${details.resultCount} results via ${details.provider}. First: "${details.results[0].title.slice(0, 60)}..." (${details.results[0].source})`);
+  });
+
+  await test("search_web defaults to news category and day freshness", async () => {
+    const tool = getTool("search_web");
+    const result = await tool.execute("e2e", { query: "AAPL" });
+    const text = result.content[0].text;
+
+    if (text.includes("unavailable") || result.details === null) {
+      console.log("    (DDG rate-limited — defaults verified via unit tests)");
+      return;
+    }
+
+    assert(text.includes("news"), "output should mention news category");
+    assert(text.includes("day"), "output should mention day freshness");
+  });
+
+  // ============================
+  // 13. Orchestrator personas
   // ============================
   console.log("\n12. Orchestrator:");
   await test("orchestrator roles are named personas with debate", async () => {

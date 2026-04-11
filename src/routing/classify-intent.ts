@@ -33,6 +33,29 @@ const RULES: Rule[] = [
       );
     },
   },
+  // News / event queries — symbol or topic + news keywords
+  // Must come before compare_assets to prevent "NVDA and AI chip exports" from
+  // matching as a 2-symbol comparison.
+  {
+    workflow: "general_finance_qa",
+    confidence: 0.9,
+    test: (input) => {
+      const lower = input.toLowerCase();
+      const hasNewsKeyword =
+        /\bnews\b/.test(lower) ||
+        /\blatest\b/.test(lower) ||
+        /\brecent\b/.test(lower) ||
+        /\bhappening\b/.test(lower) ||
+        /\bannouncement/.test(lower) ||
+        /\binvestigation\b/.test(lower) ||
+        /\bregulat/.test(lower) ||
+        /\blawsuit\b/.test(lower) ||
+        /\btariff/.test(lower) ||
+        /\bexport/.test(lower) ||
+        /\bupdate\b/.test(lower);
+      return hasNewsKeyword;
+    },
+  },
   // Options: symbol + option keyword
   {
     workflow: "options_screener",

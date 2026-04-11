@@ -29,6 +29,25 @@ export interface TwitterSentimentResult {
   fetchedAt: string;
 }
 
+export interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  /** Domain extracted from url (e.g., "reuters.com") */
+  source: string;
+  /** ISO 8601 timestamp, null if unknown */
+  published: string | null;
+  category: "news" | "general";
+}
+
+export interface WebSearchEnvelope {
+  query: string;
+  results: WebSearchResult[];
+  resultCount: number;
+  fetchedAt: string;
+  provider: "ddg" | "brave";
+}
+
 export interface RedditSentimentResult {
   subreddit: string;
   postCount: number;

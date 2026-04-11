@@ -1,0 +1,36 @@
+{
+  "noResults": false,
+  "vqd": "4-987654321",
+  "results": [
+    {
+      "date": 1712764800,
+      "excerpt": "Apple reported Q1 2026 revenue of $124.3B, beating Wall Street estimates by a wide margin.",
+      "image": "https://reuters.com/images/apple-hq.jpg",
+      "relativeTime": "3 hours ago",
+      "syndicate": "Reuters",
+      "title": "Apple Q1 Earnings Top Estimates With Record Revenue",
+      "url": "https://www.reuters.com/technology/apple-q1-earnings-2026-04-10",
+      "isOld": false
+    },
+    {
+      "date": 1712761200,
+      "excerpt": "AAPL shares surged 5% in after-hours trading as iPhone revenue exceeded expectations.",
+      "image": "https://cnbc.com/images/aapl-chart.jpg",
+      "relativeTime": "4 hours ago",
+      "syndicate": "CNBC",
+      "title": "Apple Stock Jumps on Strong iPhone Sales",
+      "url": "https://www.cnbc.com/2026/04/10/apple-stock-earnings.html",
+      "isOld": false
+    },
+    {
+      "date": 1712750400,
+      "excerpt": "Analysts raise AAPL price targets following the earnings beat. Services revenue grew 18% YoY.",
+      "image": null,
+      "relativeTime": "7 hours ago",
+      "syndicate": "Bloomberg",
+      "title": "Wall Street Raises Apple Price Targets After Earnings Beat",
+      "url": "https://www.bloomberg.com/news/articles/apple-price-targets-2026",
+      "isOld": false
+    }
+  ]
+}

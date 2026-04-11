@@ -23,6 +23,7 @@ import { compsTool } from "./fundamentals/comps.js";
 import { secFilingsTool } from "./fundamentals/sec-filings.js";
 import { backtestTool } from "./technical/backtest.js";
 import { predictionsTool } from "./portfolio/predictions.js";
+import { webSearchTool } from "./sentiment/web-search.js";
 
 export function getAllTools(): AgentTool<any>[] {
   return [
@@ -50,5 +51,6 @@ export function getAllTools(): AgentTool<any>[] {
     correlationTool,
     predictionsTool,
     optionChainTool,
+    webSearchTool,
   ];
 }

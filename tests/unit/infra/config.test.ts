@@ -259,4 +259,52 @@ describe("loadConfig", () => {
     const config = loadConfig();
     expect(config.debate).toBe(false);
   });
+
+  it("loads braveApiKey from BRAVE_API_KEY env var", () => {
+    process.env.BRAVE_API_KEY = "brave-env-key";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.braveApiKey).toBe("brave-env-key");
+    delete process.env.BRAVE_API_KEY;
+  });
+
+  it("loads braveApiKey from providers.brave.apiKey in config file", () => {
+    delete process.env.BRAVE_API_KEY;
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: { brave: { apiKey: "brave-file-key" } },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.braveApiKey).toBe("brave-file-key");
+  });
+
+  it("env var BRAVE_API_KEY overrides file config", () => {
+    process.env.BRAVE_API_KEY = "brave-env-override";
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: { brave: { apiKey: "brave-file-key" } },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.braveApiKey).toBe("brave-env-override");
+    delete process.env.BRAVE_API_KEY;
+  });
+
+  it("braveApiKey is undefined when not configured", () => {
+    delete process.env.BRAVE_API_KEY;
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.braveApiKey).toBeUndefined();
+  });
 });

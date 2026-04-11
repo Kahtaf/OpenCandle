@@ -5,3 +5,5 @@ export { getCryptoPrice, getCryptoHistory } from "./coingecko.js";
 export { getSubredditPosts, scoreSentiment } from "./reddit.js";
 export { searchFilings, type SECFiling } from "./sec-edgar.js";
 export { getFearGreedIndex } from "./fear-greed.js";
+export { searchWeb, ddgSearch, braveSearch, normalizeFinancialQuery } from "./web-search.js";
+export type { WebSearchOpts } from "./web-search.js";

@@ -98,4 +98,13 @@ describe("PromptContextBuilder", () => {
     // But no workflow-specific content (we can't easily test absence,
     // but we verify the builder doesn't crash)
   });
+
+  it("includes search_web in tool catalog", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("search_web");
+    expect(result).toContain("Web Search");
+  });
 });
