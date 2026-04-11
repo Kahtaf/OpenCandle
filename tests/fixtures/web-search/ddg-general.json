@@ -1,0 +1,33 @@
+{
+  "noResults": false,
+  "vqd": "4-123456789",
+  "results": [
+    {
+      "hostname": "reuters.com",
+      "url": "https://www.reuters.com/technology/apple-earnings-q1-2026",
+      "title": "Apple Q1 2026 Earnings Beat Expectations",
+      "description": "<b>Apple</b> reported revenue of $124.3B, beating analyst estimates of $118B...",
+      "rawDescription": "Apple reported revenue of $124.3B, beating analyst estimates of $118B...",
+      "icon": "https://reuters.com/favicon.ico",
+      "bang": null
+    },
+    {
+      "hostname": "cnbc.com",
+      "url": "https://www.cnbc.com/2026/04/10/apple-stock-aapl-earnings.html",
+      "title": "AAPL Stock Surges After Strong Earnings Report",
+      "description": "<b>AAPL</b> shares rose 5% in after-hours trading following better-than-expected results...",
+      "rawDescription": "AAPL shares rose 5% in after-hours trading following better-than-expected results...",
+      "icon": "https://cnbc.com/favicon.ico",
+      "bang": null
+    },
+    {
+      "hostname": "finance.yahoo.com",
+      "url": "https://finance.yahoo.com/news/apple-earnings-report-2026",
+      "title": "Apple Inc (AAPL) Earnings Report - Yahoo Finance",
+      "description": "Get the latest <b>Apple</b> Inc earnings report including EPS, revenue, and guidance...",
+      "rawDescription": "Get the latest Apple Inc earnings report including EPS, revenue, and guidance...",
+      "icon": "https://finance.yahoo.com/favicon.ico",
+      "bang": null
+    }
+  ]
+}

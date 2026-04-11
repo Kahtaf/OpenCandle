@@ -4,7 +4,7 @@ export type { FredObservation, FredSeries } from "./macro.js";
 export { FRED_SERIES } from "./macro.js";
 export type { Greeks, OptionContract, OptionsChain } from "./options.js";
 export type { Position, PortfolioSummary, RiskMetrics, TechnicalIndicators } from "./portfolio.js";
-export type { FearGreedData, RedditSentimentResult } from "./sentiment.js";
+export type { FearGreedData, RedditSentimentResult, WebSearchResult, WebSearchEnvelope } from "./sentiment.js";
 
 /**
  * Handler for `ask_user` tool invocations in non-UI contexts (e.g. test harness).

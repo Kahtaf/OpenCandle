@@ -1,78 +1,65 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/logo.png" alt="OpenCandle" width="120" />
-</p>
+# OpenCandle
 
-<h1 align="center">OpenCandle</h1>
+OpenCandle is a terminal-first financial data agent built with TypeScript and Pi. It fetches market, macro, options, fundamentals, sentiment, and portfolio data from real providers, then lets the model synthesize that data into an answer.
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/opencandle"><img src="https://img.shields.io/npm/v/opencandle" alt="npm version" /></a>
-  <a href="https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml"><img src="https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://github.com/Kahtaf/OpenCandle/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License" /></a>
-  <img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen" alt="Node.js >= 20" />
-</p>
+This repository is useful in two ways:
 
-<p align="center">A financial agent that talks to markets. Ask it for stock prices, options chains with Greeks, macro data, or sentiment, and it fetches real data, computes analytics locally, and gives you actionable answers.</p>
+- Run `opencandle` as an interactive CLI for market research
+- Extend OpenCandle with new tools, providers, or Pi-compatible add-on packages
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/demo.gif" alt="OpenCandle demo" width="640" />
-</p>
+## What You Can Use It For
 
-## Why OpenCandle?
+- Quote and history lookups for stocks and crypto
+- Options chains with locally computed Greeks
+- Company fundamentals, earnings, and SEC filings
+- FRED macro series and Fear & Greed data
+- Reddit-based sentiment and discussion lookups
+- Portfolio tracking, watchlists, correlation, and risk analysis
+- Multi-step workflows such as `/analyze NVDA`
 
-Investors and traders may check Yahoo Finance for quotes, FRED for macro data, Reddit for sentiment, then copy numbers into a spreadsheet for analysis. OpenCandle replaces that workflow with a single terminal agent that fetches live data from all of those sources, computes technical indicators and options Greeks locally, and chains tools together to answer complex questions. No browser tabs, no manual copy-paste, no API dependency for math.
+OpenCandle is designed to fetch and format data. The model handles synthesis. Tool code should not invent financial conclusions or hardcode market numbers.
 
-Type `analyze TSLA` and it runs a full 5-analyst breakdown: fundamentals, technicals, options positioning, sentiment, risk — then synthesizes a verdict.
+## Install And Run
 
-[Pi](https://pi.dev/) powers the runtime, TUI, auth, and model selection. OpenCandle keeps its own user data in `~/.opencandle/`.
+Requires Node.js 20+.
 
-## Getting Started
-
-**Requires Node.js ≥ 20.**
-
-### Standalone CLI
+### CLI
 
 ```bash
 npm install -g opencandle
 opencandle
 
-# or run without installing globally
+# or without installing globally
 npx opencandle@latest
 ```
-
-On first run, OpenCandle walks you through setup:
-
-1. **Connect an AI provider** — sign in with OAuth (Google, OpenAI, Anthropic) or paste an API key
-2. **Pick a model** — choose from the available models on your connected provider
-3. **Optional: add market-data keys** — Alpha Vantage and FRED for fundamentals and macro data (can skip)
-
-To rerun setup later, use `/setup`.
 
 ### From Source
 
 ```bash
 npm install
 cp .env.example .env
-# Add any LLM env vars you want to use locally (for example GEMINI_API_KEY)
 npm start
 ```
 
-### API Keys
+On first run, OpenCandle walks you through model setup. You can rerun that flow later with `/setup`.
 
-| Key | Required | Free Tier | What It Unlocks |
-|-----|----------|-----------|-----------------|
-| `GEMINI_API_KEY` | No | Yes | Google Gemini via Pi auth/model registry |
-| `OPENAI_API_KEY` | No | Paid | OpenAI models via Pi auth/model registry |
-| `ANTHROPIC_API_KEY` | No | Paid | Anthropic models via Pi auth/model registry |
-| `ALPHA_VANTAGE_API_KEY` | No | 25 req/day | Company fundamentals, earnings, financials |
-| `FRED_API_KEY` | No | Generous | Fed rates, CPI, GDP, unemployment, yield curve |
+## Configuration
 
-Yahoo Finance, CoinGecko, Reddit, and Fear & Greed Index need no keys.
-Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.json`, `/login`, `/model`, and `~/.pi/agent/models.json`.
+Model access comes from Pi. Market data providers are optional and additive.
 
-### State and Config
+| Key | Required | Used For |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | No | Google models through Pi |
+| `OPENAI_API_KEY` | No | OpenAI models through Pi |
+| `ANTHROPIC_API_KEY` | No | Anthropic models through Pi |
+| `ALPHA_VANTAGE_API_KEY` | No | Fundamentals, earnings, financial statements |
+| `FRED_API_KEY` | No | Macro series such as rates, CPI, GDP, unemployment |
 
-- Pi runtime config and optional project overrides live in `.pi/` and `~/.pi/agent/...`.
-- OpenCandle finance-provider config lives in `~/.opencandle/config.json`:
+Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, and Fear & Greed data do not require keys.
+
+OpenCandle stores its own user state in `~/.opencandle/` by default. Pi configuration stays in `.pi/` and `~/.pi/agent/`. The CLI should not depend on repo-local `.pi/extensions/`.
+
+Provider keys can also be stored in `~/.opencandle/config.json`:
 
 ```json
 {
@@ -87,88 +74,109 @@ Pi also supports OAuth-backed and custom providers through `~/.pi/agent/auth.jso
 }
 ```
 
-- Environment variables still work and override `~/.opencandle/config.json`.
-- Set `OPENCANDLE_HOME` to override the default `~/.opencandle/` data directory.
-- OpenCandle user data lives in `~/.opencandle/` (or `$OPENCANDLE_HOME`):
-  - `~/.opencandle/watchlist.json`
-  - `~/.opencandle/portfolio.json`
-  - `~/.opencandle/predictions.json`
-  - `~/.opencandle/state.db`
-  - `~/.opencandle/logs/...`
-- The published CLI should work from any directory without depending on a repo-local `.pi/extensions/...` file. Project `.pi/` remains optional for user overrides.
+Environment variables override values from `~/.opencandle/config.json`. Set `OPENCANDLE_HOME` if you want OpenCandle state somewhere other than `~/.opencandle/`.
 
-## Usage
+## Basic Usage
 
-OpenCandle runs inside Pi's interactive TUI. Useful controls:
+OpenCandle runs inside Pi's interactive terminal UI.
+
+Useful commands:
 
 ```text
-/model          Switch provider/model
-/login          Authenticate an OAuth-backed provider
-/setup          Rerun OpenCandle setup
-/analyze NVDA   Run the multi-analyst workflow
+/setup
+/login
+/model
+/analyze AAPL
 ```
 
-Natural-language prompts still work:
+Example prompts:
 
 ```text
-What's the price of AAPL?
+What is AAPL trading at?
 Get the options chain for TSLA expiring April 24
 Show me MSFT puts with Greeks
-What's the Fear and Greed index?
 Get the fed funds rate from FRED
 Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
 Run risk analysis on SPY
-analyze AAPL
 ```
 
-## Tools (23)
+## Data Sources And Tool Coverage
 
-| Category | Tools | Data Source |
-|----------|-------|------------|
-| **Market Data** | `search_ticker`, `get_stock_quote`, `get_stock_history`, `get_crypto_price`, `get_crypto_history` | Yahoo Finance, CoinGecko |
-| **Options** | `get_option_chain` — strikes, bids/asks, volume, OI, IV, computed Greeks | Yahoo Finance + Black-Scholes |
-| **Fundamentals** | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies`, `get_sec_filings` | Alpha Vantage, SEC EDGAR |
-| **Technical** | `get_technical_indicators`, `backtest_strategy` — SMA, EMA, RSI, MACD, Bollinger Bands, backtesting | Computed locally from OHLCV |
-| **Macro** | `get_economic_data`, `get_fear_greed` | FRED, alternative.me |
-| **Sentiment** | `get_reddit_sentiment`, `get_reddit_discussions` | Reddit JSON API |
-| **Portfolio** | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `track_prediction` | Yahoo Finance + local math |
+| Area | Examples | Source |
+| --- | --- | --- |
+| Market data | quotes, history, ticker search, crypto price/history | Yahoo Finance, CoinGecko |
+| Options | chains, open interest, IV, Greeks | Yahoo Finance plus local calculations |
+| Fundamentals | overview, financials, earnings, DCF, company comparison | Alpha Vantage |
+| Macro | economic series, Fear & Greed | FRED, alternative.me |
+| Sentiment | Reddit sentiment, discussion snapshots | Reddit JSON API |
+| Filings | SEC filing search | SEC EDGAR |
+| Portfolio | watchlist, prediction tracking, correlation, risk | Local state plus market data |
 
-## How It Works
+## Engineering Notes
 
-Built on [Pi-mono](https://github.com/badlogic/pi-mono)'s `pi-coding-agent` SDK and TUI, with OpenCandle loaded as a bundled finance-only Pi extension. Tools are defined with [TypeBox](https://github.com/sinclairzx81/typebox) schemas and registered through Pi's extension system.
+### Project Shape
 
+```text
+src/
+├── providers/    API clients
+├── tools/        Tool implementations by domain
+├── infra/        Cache, rate limiter, HTTP, browser, paths
+├── routing/      Intent classification and slot resolution
+├── workflows/    Multi-step workflow builders
+├── memory/       SQLite-backed state and retrieval
+├── analysts/     Multi-analyst orchestration
+├── pi/           Pi integration and session wiring
+└── index.ts      Public exports
 ```
-User prompt -> Pi session -> selected provider/model -> tool calls -> execute in parallel -> response
-                ^                                                                  |
-                |____________________ Pi session + model registry _________________|
-```
 
-Key architectural choices:
-- **Local computation** over API calls for math (indicators, Greeks, risk metrics)
-- **Stealth browser fallback** via [Camoufox](https://github.com/daijro/camoufox) when Yahoo rate-limits Node.js `fetch`
-- **TTL caching + token bucket rate limiting** per provider
-- **Pi-native auth/model flow** via `/model`, `/login`, `auth.json`, and `models.json`
-- **Global OpenCandle state** under `~/.opencandle/`, separate from Pi config
-- **Multi-analyst orchestration** via Pi extension commands and follow-up message hooks
-
-## Test
+### Development Commands
 
 ```bash
-npm test              # unit tests
-npm run test:watch    # watch mode
+npm start
+npm test
+npm run test:watch
+npm run test:e2e
+npm run test:e2e:cli
+npm run test:e2e:providers
 ```
+
+`npm test` is the required baseline check after changes.
+
+### Repository Rules That Matter
+
+- TDD is mandatory for behavior changes
+- Unit tests mock `globalThis.fetch` and use JSON fixtures
+- Use `cache` and `rateLimiter` for external calls
+- Tools fetch and format data; analysts and prompts synthesize
+- Keep typing strict and use `.js` extensions on relative imports
+
+### Public Package Exports
+
+Besides the CLI, the package exposes pieces for engineers building on top of OpenCandle:
+
+- `opencandle`
+- `opencandle/tool-kit`
+- `opencandle/infra`
+- `opencandle/types`
+- `opencandle/providers`
+
+If you want to add a new tool or publish an add-on package, start with [docs/build-a-tool.md](./docs/build-a-tool.md).
+
+## Testing The Agent
+
+For end-to-end agent driving with file-based IPC:
+
+```bash
+npx tsx tests/harness/manual-run.ts /tmp/opencandle-ipc "What is AAPL trading at?"
+```
+
+The harness writes status and trace files into the IPC directory. See [tests/harness/README.md](./tests/harness/README.md) for the full flow.
 
 ## Project Docs
 
-- Build a tool guide: [docs/build-a-tool.md](https://github.com/Kahtaf/OpenCandle/blob/main/docs/build-a-tool.md)
-- Contributor guide: [CONTRIBUTING.md](https://github.com/Kahtaf/OpenCandle/blob/main/CONTRIBUTING.md)
-- Security policy: [SECURITY.md](https://github.com/Kahtaf/OpenCandle/blob/main/SECURITY.md)
-- Release history: [CHANGELOG.md](https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md)
-
-## Tech Stack
-
-- **Runtime**: TypeScript, Node.js
-- **LLM**: Pi model registry with Gemini, OpenAI, Anthropic, and custom providers
-- **Browser**: Camoufox (anti-detection Firefox for scraping fallback)
-- **Testing**: Vitest with fixture-mocked `fetch`
-- **No frameworks**: Raw providers, no LangChain/LlamaIndex
+- [CONTRIBUTING.md](./CONTRIBUTING.md)
+- [docs/build-a-tool.md](./docs/build-a-tool.md)
+- [tests/harness/README.md](./tests/harness/README.md)
+- [CHANGELOG.md](./CHANGELOG.md)
+- [SECURITY.md](./SECURITY.md)
+- [LICENSE](./LICENSE)

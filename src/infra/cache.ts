@@ -86,6 +86,7 @@ export const TTL = {
   SENTIMENT: 300_000,    // 5 minutes
   OPTIONS_CHAIN: 120_000, // 2 minutes
   CRUMB: 900_000,        // 15 minutes
+  WEB_SEARCH: 300_000,   // 5 minutes
 } as const;
 
 // Stale limits — how long past TTL expiry a cached value is still useful as fallback
@@ -96,4 +97,5 @@ export const STALE_LIMIT = {
   MACRO: 24 * 3_600_000,          // 24 hours
   SENTIMENT: 3_600_000,           // 1 hour
   OPTIONS_CHAIN: 30 * 60_000,     // 30 minutes
+  WEB_SEARCH: 3_600_000,          // 1 hour
 } as const;

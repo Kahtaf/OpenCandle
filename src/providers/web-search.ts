@@ -1,0 +1,277 @@
+import { search, searchNews, SafeSearchType, SearchTimeType } from "duck-duck-scrape";
+import type { SearchResult, SearchResults } from "duck-duck-scrape";
+import type { NewsResult } from "duck-duck-scrape";
+import { httpGet, HttpError } from "../infra/http-client.js";
+import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
+import { getConfig } from "../config.js";
+import { withFallback } from "./with-fallback.js";
+import type { ProviderResult } from "../runtime/evidence.js";
+import type { WebSearchResult, WebSearchEnvelope } from "../types/sentiment.js";
+
+export interface WebSearchOpts {
+  category: "news" | "general";
+  freshness: "hours" | "day" | "week" | "month";
+  limit: number;
+}
+
+const BARE_TICKER = /^[A-Z]{1,5}$/;
+const CASHTAG = /^\$[A-Z]{1,5}$/;
+
+/**
+ * Normalize queries for financial context.
+ * Only applied when category is "news" — general queries pass through unchanged.
+ */
+export function normalizeFinancialQuery(query: string, category: "news" | "general"): string {
+  if (category !== "news") return query;
+  if (CASHTAG.test(query)) return `${query.slice(1)} stock news`;
+  if (BARE_TICKER.test(query)) return `${query} stock news`;
+  return query;
+}
+
+function stripHtmlTags(text: string): string {
+  return text.replace(/<[^>]*>/g, "");
+}
+
+function mapFreshness(freshness: WebSearchOpts["freshness"]): SearchTimeType {
+  switch (freshness) {
+    case "hours":
+      return SearchTimeType.DAY; // closest available
+    case "day":
+      return SearchTimeType.DAY;
+    case "week":
+      return SearchTimeType.WEEK;
+    case "month":
+      return SearchTimeType.MONTH;
+  }
+}
+
+function extractDomain(url: string): string {
+  try {
+    const hostname = new URL(url).hostname;
+    return hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+function mapGeneralResult(r: SearchResult): WebSearchResult {
+  return {
+    title: r.title,
+    url: r.url,
+    snippet: stripHtmlTags(r.description),
+    source: r.hostname || extractDomain(r.url),
+    published: null,
+    category: "general",
+  };
+}
+
+function mapNewsResult(r: NewsResult): WebSearchResult {
+  return {
+    title: r.title,
+    url: r.url,
+    snippet: r.excerpt,
+    source: r.syndicate || extractDomain(r.url),
+    published: r.date ? new Date(r.date * 1000).toISOString() : null,
+    category: "news",
+  };
+}
+
+function ddgCacheKey(query: string, opts: WebSearchOpts): string {
+  return `web:ddg:${query}:${opts.category}:${opts.freshness}:${opts.limit}`;
+}
+
+export async function ddgSearch(
+  query: string,
+  opts: WebSearchOpts,
+): Promise<WebSearchEnvelope> {
+  const key = ddgCacheKey(query, opts);
+  const cached = cache.get<WebSearchEnvelope>(key);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("ddg");
+
+    let results: WebSearchResult[];
+
+    if (opts.category === "news") {
+      const response = await searchNews(
+        query,
+        { time: mapFreshness(opts.freshness), safeSearch: SafeSearchType.STRICT },
+        undefined,
+      );
+      results = (response.results || []).slice(0, opts.limit).map(mapNewsResult);
+    } else {
+      const response = await search(
+        query,
+        { time: mapFreshness(opts.freshness), safeSearch: SafeSearchType.STRICT },
+        undefined,
+      );
+      results = (response.results || []).slice(0, opts.limit).map(mapGeneralResult);
+    }
+
+    const envelope: WebSearchEnvelope = {
+      query,
+      results,
+      resultCount: results.length,
+      fetchedAt: new Date().toISOString(),
+      provider: "ddg",
+    };
+
+    cache.set(key, envelope, TTL.WEB_SEARCH);
+    return envelope;
+  } catch (error) {
+    const stale = cache.getStale<WebSearchEnvelope>(key, STALE_LIMIT.WEB_SEARCH);
+    if (stale) return stale.value;
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Brave Search
+// ---------------------------------------------------------------------------
+
+const BRAVE_BASE = "https://api.search.brave.com/res/v1";
+
+function mapBraveFreshness(freshness: WebSearchOpts["freshness"]): string {
+  switch (freshness) {
+    case "hours": return "ph";
+    case "day": return "pd";
+    case "week": return "pw";
+    case "month": return "pm";
+  }
+}
+
+interface BraveNewsResult {
+  title: string;
+  url: string;
+  description: string;
+  age?: string;
+  source?: string;
+  meta_url?: { hostname: string };
+}
+
+interface BraveWebResult {
+  title: string;
+  url: string;
+  description: string;
+  age?: string | null;
+  meta_url?: { hostname: string };
+}
+
+function mapBraveNewsResult(r: BraveNewsResult): WebSearchResult {
+  return {
+    title: r.title,
+    url: r.url,
+    snippet: r.description,
+    source: r.source || r.meta_url?.hostname || extractDomain(r.url),
+    published: null, // Brave news returns relative "age" not absolute timestamps
+    category: "news",
+  };
+}
+
+function mapBraveWebResult(r: BraveWebResult): WebSearchResult {
+  return {
+    title: r.title,
+    url: r.url,
+    snippet: r.description,
+    source: r.meta_url?.hostname || extractDomain(r.url),
+    published: null,
+    category: "general",
+  };
+}
+
+function braveCacheKey(query: string, opts: WebSearchOpts): string {
+  return `web:brave:${query}:${opts.category}:${opts.freshness}:${opts.limit}`;
+}
+
+export async function braveSearch(
+  query: string,
+  opts: WebSearchOpts,
+  apiKey: string,
+): Promise<WebSearchEnvelope> {
+  const key = braveCacheKey(query, opts);
+  const cached = cache.get<WebSearchEnvelope>(key);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("brave_search");
+
+    const endpoint = opts.category === "news" ? "news/search" : "web/search";
+    const freshness = mapBraveFreshness(opts.freshness);
+    const url = `${BRAVE_BASE}/${endpoint}?q=${encodeURIComponent(query)}&count=${opts.limit}&freshness=${freshness}`;
+
+    const data = await httpGet<Record<string, unknown>>(url, {
+      headers: {
+        "X-Subscription-Token": apiKey,
+        Accept: "application/json",
+      },
+    });
+
+    let results: WebSearchResult[];
+    if (opts.category === "news") {
+      const newsResults = ((data as any).results || []) as BraveNewsResult[];
+      results = newsResults.slice(0, opts.limit).map(mapBraveNewsResult);
+    } else {
+      const webResults = ((data as any).web?.results || []) as BraveWebResult[];
+      results = webResults.slice(0, opts.limit).map(mapBraveWebResult);
+    }
+
+    const envelope: WebSearchEnvelope = {
+      query,
+      results,
+      resultCount: results.length,
+      fetchedAt: new Date().toISOString(),
+      provider: "brave",
+    };
+
+    cache.set(key, envelope, TTL.WEB_SEARCH);
+    return envelope;
+  } catch (error: any) {
+    // Provide descriptive message for auth errors (HttpError uses .status)
+    const status = error instanceof HttpError ? error.status : error?.statusCode;
+    if (status === 401) {
+      throw new Error("Brave Search API key may be invalid or expired. Check BRAVE_API_KEY.");
+    }
+
+    const stale = cache.getStale<WebSearchEnvelope>(key, STALE_LIMIT.WEB_SEARCH);
+    if (stale) return stale.value;
+    throw error;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Cascade orchestrator
+// ---------------------------------------------------------------------------
+
+const DEFAULT_OPTS: WebSearchOpts = {
+  category: "news",
+  freshness: "day",
+  limit: 10,
+};
+
+export async function searchWeb(
+  query: string,
+  opts?: Partial<WebSearchOpts>,
+): Promise<ProviderResult<WebSearchEnvelope>> {
+  const resolved: WebSearchOpts = { ...DEFAULT_OPTS, ...opts };
+  const normalized = normalizeFinancialQuery(query, resolved.category);
+  const config = getConfig();
+
+  const entries: Array<{ provider: string; fn: () => Promise<WebSearchEnvelope> }> = [];
+
+  if (config.braveApiKey && resolved.category === "news") {
+    // Brave first for news (better quality), DDG fallback
+    entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
+    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+  } else if (config.braveApiKey) {
+    // General: DDG first (adequate quality), Brave fallback (save quota)
+    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+    entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
+  } else {
+    // No Brave key: DDG only
+    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+  }
+
+  return withFallback<WebSearchEnvelope>(entries);
+}
