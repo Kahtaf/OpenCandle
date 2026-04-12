@@ -100,8 +100,9 @@ describe("SentinelRecord types", () => {
       expect(SENTIMENT_SOURCES).toContain("web");
     });
 
-    it("has exactly 3 sources", () => {
-      expect(SENTIMENT_SOURCES).toHaveLength(3);
+    it("has exactly 4 sources", () => {
+      expect(SENTIMENT_SOURCES).toHaveLength(4);
+      expect(SENTIMENT_SOURCES).toContain("finnhub");
     });
   });
 });

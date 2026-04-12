@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-All notable changes to this project will be documented in this file.
+### Added
+
+- **Web search tool** — `web_search` with DuckDuckGo/Brave cascade for general market news and context lookups.
+- **Unified sentiment pipeline** — cross-source sentiment analysis aggregating Reddit, Twitter, and web signals with normalized scoring and trend tracking.
+
+### Fixed
+
+- Literal type for `content.type` in sentiment-trend tool.
 
 ## [0.2.0] - 2026-04-05
 

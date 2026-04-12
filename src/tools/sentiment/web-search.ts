@@ -19,6 +19,11 @@ const params = Type.Object({
   limit: Type.Optional(
     Type.Number({ description: "Number of results (1-20). Default: 10", minimum: 1, maximum: 20 }),
   ),
+  provider: Type.Optional(
+    Type.Union([Type.Literal("exa"), Type.Literal("brave"), Type.Literal("ddg")], {
+      description: "Override search provider (skip cascade). Default: auto (Exa → Brave → DDG)",
+    }),
+  ),
 });
 
 function escapeMd(text: string): string {
@@ -51,7 +56,8 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
     const freshness = args.freshness ?? "day";
     const limit = Math.max(1, Math.min(args.limit ?? 10, 20));
 
-    const result = await searchWeb(query, { category, freshness, limit });
+    const provider = args.provider;
+    const result = await searchWeb(query, { category, freshness, limit, provider });
 
     if (result.status === "unavailable") {
       return {

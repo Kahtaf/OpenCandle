@@ -6,6 +6,7 @@ import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { getConfig } from "../config.js";
 import { withFallback } from "./with-fallback.js";
+import { exaSearch } from "./exa-search.js";
 import type { ProviderResult } from "../runtime/evidence.js";
 import type { WebSearchResult, WebSearchEnvelope } from "../types/sentiment.js";
 
@@ -13,6 +14,8 @@ export interface WebSearchOpts {
   category: "news" | "general";
   freshness: "hours" | "day" | "week" | "month";
   limit: number;
+  /** Override provider: skip cascade, use this provider only. */
+  provider?: "exa" | "brave" | "ddg";
 }
 
 const BARE_TICKER = /^[A-Z]{1,5}$/;
@@ -260,18 +263,31 @@ export async function searchWeb(
 
   const entries: Array<{ provider: string; fn: () => Promise<WebSearchEnvelope> }> = [];
 
-  if (config.braveApiKey && resolved.category === "news") {
-    // Brave first for news (better quality), DDG fallback
-    entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
-    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
-  } else if (config.braveApiKey) {
-    // General: DDG first (adequate quality), Brave fallback (save quota)
-    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
-    entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
-  } else {
-    // No Brave key: DDG only
-    entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+  // Provider override: skip cascade, use only the specified provider
+  if (resolved.provider) {
+    switch (resolved.provider) {
+      case "exa":
+        entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
+        break;
+      case "brave":
+        if (!config.braveApiKey) {
+          return { status: "unavailable", reason: "BRAVE_API_KEY not configured", provider: "brave_search" };
+        }
+        entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
+        break;
+      case "ddg":
+        entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
+        break;
+    }
+    return withFallback<WebSearchEnvelope>(entries);
   }
+
+  // Default cascade: Exa → Brave → DDG
+  entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
+  if (config.braveApiKey) {
+    entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
+  }
+  entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
 
   return withFallback<WebSearchEnvelope>(entries);
 }

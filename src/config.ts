@@ -12,6 +12,8 @@ export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
   braveApiKey?: string;
+  exaApiKey?: string;
+  finnhubApiKey?: string;
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
   sentiment?: SentimentConfig;
@@ -26,6 +28,12 @@ export interface OpenCandleFileConfig {
       apiKey?: string;
     };
     brave?: {
+      apiKey?: string;
+    };
+    exa?: {
+      apiKey?: string;
+    };
+    finnhub?: {
       apiKey?: string;
     };
   };
@@ -81,6 +89,8 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
       process.env.ALPHA_VANTAGE_API_KEY ?? fileConfig.providers?.alphaVantage?.apiKey,
     fredApiKey: process.env.FRED_API_KEY ?? fileConfig.providers?.fred?.apiKey,
     braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
+    exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
+    finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
     debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
     sentiment: {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,

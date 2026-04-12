@@ -1,0 +1,68 @@
+[
+  {
+    "category": "company",
+    "datetime": 1775943540,
+    "headline": "2.5 Billion Reasons Apple Might Be the Best AI Stock to Buy Today",
+    "id": 139739692,
+    "image": "https://example.com/img1.png",
+    "related": "AAPL",
+    "source": "Yahoo",
+    "summary": "Apple may not be falling behind in AI after all.",
+    "url": "https://finnhub.io/api/news?id=abc123"
+  },
+  {
+    "category": "company",
+    "datetime": 1775865600,
+    "headline": "Apple Hires Uber's Asia-Pacific Government Relations Chief",
+    "id": 139738251,
+    "image": "https://example.com/img2.png",
+    "related": "AAPL",
+    "source": "Yahoo",
+    "summary": "Apple Inc. has hired Uber Technologies Inc.'s head of public policy and government relations for Asia-Pacific as it looks to revamp its supply chains in the region.",
+    "url": "https://finnhub.io/api/news?id=def456"
+  },
+  {
+    "category": "company",
+    "datetime": 1775864760,
+    "headline": "Apple, Levi's, and 5 More Stocks Get Analyst Attention",
+    "id": 139733693,
+    "image": "https://example.com/img3.png",
+    "related": "AAPL",
+    "source": "Yahoo",
+    "summary": "These reports, excerpted and edited by Barron's, were issued recently by investment and research firms about Apple and other companies.",
+    "url": "https://finnhub.io/api/news?id=ghi789"
+  },
+  {
+    "category": "company",
+    "datetime": 1775935869,
+    "headline": "Gary Black Says Tesla's 8-Week Slide Driven By Disappointing Deliveries",
+    "id": 139739288,
+    "image": "https://example.com/img4.png",
+    "related": "AAPL",
+    "source": "Yahoo",
+    "summary": "Investor Gary Black has outlined his take on why Tesla, Inc. has been declining for the past eight weeks due to disappointing delivery figures.",
+    "url": "https://finnhub.io/api/news?id=jkl012"
+  },
+  {
+    "category": "company",
+    "datetime": 1775906706,
+    "headline": "Japan Bets $16 Billion to Propel Rapidus in Global AI Chip Race",
+    "id": 139736377,
+    "image": "https://example.com/img5.png",
+    "related": "AAPL",
+    "source": "Yahoo",
+    "summary": "Japan approved additional subsidies to quicken Rapidus Corp.'s entry into the high-stakes AI chipmaking arena.",
+    "url": "https://finnhub.io/api/news?id=mno345"
+  },
+  {
+    "category": "company",
+    "datetime": 1775905797,
+    "headline": "VTSAX vs VOO ETF: Which Vanguard Fund Should You Buy in 2026?",
+    "id": 139736380,
+    "image": "https://example.com/img6.png",
+    "related": "AAPL",
+    "source": "Yahoo",
+    "summary": "For investors seeking low-cost U.S. stock market exposure, two Vanguard funds dominate the conversation.",
+    "url": "https://finnhub.io/api/news?id=pqr678"
+  }
+]

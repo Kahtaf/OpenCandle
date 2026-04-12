@@ -60,3 +60,5 @@ rateLimiter.configure("reddit", 5, 0.167);          // 5 req, ~10 req/min
 rateLimiter.configure("reddit_comments", 10, 0.5); // 10 req, ~30 req/min
 rateLimiter.configure("ddg", 3, 0.1);             // 3 req, ~6 req/min
 rateLimiter.configure("brave_search", 5, 0.083);  // 5 req, ~5 req/min
+rateLimiter.configure("exa", 5, 0.1);              // 5 req, ~6 req/min
+rateLimiter.configure("finnhub", 60, 1);            // 60 req/min (free tier)

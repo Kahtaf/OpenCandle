@@ -39,7 +39,7 @@ export class SentimentPipeline {
     // Compute divergence from fresh records
     let divergence: DivergenceResult | null = null;
     const sourceGroups = groupBySource(scored);
-    const sourceStats: { twitter?: SourceStats; reddit?: SourceStats; web?: SourceStats } = {};
+    const sourceStats: { twitter?: SourceStats; reddit?: SourceStats; web?: SourceStats; finnhub?: SourceStats } = {};
 
     for (const [source, recs] of Object.entries(sourceGroups)) {
       // Exclude comments from divergence calculation
