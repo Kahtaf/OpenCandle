@@ -1,0 +1,13 @@
+{
+  "result": {
+    "content": [
+      {
+        "type": "text",
+        "text": "",
+        "_meta": { "searchTime": 150.0 }
+      }
+    ]
+  },
+  "jsonrpc": "2.0",
+  "id": 1
+}

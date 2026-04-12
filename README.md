@@ -108,7 +108,7 @@ Run risk analysis on SPY
 | Options | chains, open interest, IV, Greeks | Yahoo Finance plus local calculations |
 | Fundamentals | overview, financials, earnings, DCF, company comparison | Alpha Vantage |
 | Macro | economic series, Fear & Greed | FRED, alternative.me |
-| Sentiment | Reddit sentiment, discussion snapshots | Reddit JSON API |
+| Sentiment | Reddit, Twitter/X, and web sentiment with cross-source pipeline | Reddit JSON API, Twitter/X, DuckDuckGo, Brave |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | watchlist, prediction tracking, correlation, risk | Local state plus market data |
 

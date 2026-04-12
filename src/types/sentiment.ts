@@ -46,7 +46,7 @@ export interface WebSearchEnvelope {
   results: WebSearchResult[];
   resultCount: number;
   fetchedAt: string;
-  provider: "ddg" | "brave";
+  provider: "ddg" | "brave" | "exa";
 }
 
 export interface RedditSentimentResult {

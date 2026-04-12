@@ -16,9 +16,20 @@ vi.mock("../../../src/providers/twitter.js", () => ({
   getTwitterSentiment: vi.fn(),
 }));
 
+// Mock the finnhub provider
+vi.mock("../../../src/providers/finnhub.js", () => ({
+  getCompanyNews: vi.fn(),
+  finnhubDateRange: vi.fn(() => ({ from: "2026-04-10", to: "2026-04-11" })),
+}));
+
 // Mock wrap-provider to avoid stale-cache retry delays
 vi.mock("../../../src/providers/wrap-provider.js", () => ({
   wrapProvider: vi.fn(),
+}));
+
+// Mock config to control finnhubApiKey
+vi.mock("../../../src/config.js", () => ({
+  getConfig: vi.fn(() => ({ finnhubApiKey: undefined })),
 }));
 
 // Mock the sentiment singleton to use :memory:
@@ -42,13 +53,16 @@ vi.mock("../../../src/sentiment/index.js", async (importOriginal) => {
 
 import { searchWeb } from "../../../src/providers/web-search.js";
 import { getTwitterSentiment } from "../../../src/providers/twitter.js";
+import { getCompanyNews } from "../../../src/providers/finnhub.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
+import { getConfig } from "../../../src/config.js";
 import { sentimentSummaryTool } from "../../../src/tools/sentiment/sentiment-summary.js";
 
 const mockedGetTwitterSentiment = vi.mocked(getTwitterSentiment);
 const mockedWrapProvider = vi.mocked(wrapProvider);
-
 const mockedSearchWeb = vi.mocked(searchWeb);
+const mockedGetCompanyNews = vi.mocked(getCompanyNews);
+const mockedGetConfig = vi.mocked(getConfig);
 
 beforeEach(() => { cache.clear(); });
 afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks(); });
@@ -124,5 +138,55 @@ describe("get_sentiment_summary tool", () => {
 
     const result = await sentimentSummaryTool.execute("call-2", { query: "XYZ" });
     expect(result.content[0].text).toContain("unavailable");
+  });
+
+  it("includes Finnhub in output when API key is configured and ticker query", async () => {
+    mockedGetConfig.mockReturnValue({ finnhubApiKey: "test-key" } as any);
+
+    // Mock Finnhub returning articles
+    mockedGetCompanyNews.mockResolvedValue([
+      {
+        headline: "Apple beats earnings",
+        summary: "Apple Inc reported record revenue for Q1.",
+        source: "Reuters",
+        datetime: 1775943540,
+        url: "https://finnhub.io/api/news?id=test1",
+        related: "AAPL",
+        id: 12345,
+        category: "company",
+        image: "",
+      },
+    ]);
+
+    // Mock other sources
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    mockedSearchWeb.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+
+    const result = await sentimentSummaryTool.execute("call-3", { query: "AAPL" });
+    const text = result.content[0].text;
+
+    expect(text).toContain("Finnhub");
+    expect(text).toContain("Sentiment summary");
+  });
+
+  it("does not include Finnhub when no API key is configured", async () => {
+    mockedGetConfig.mockReturnValue({} as any);
+
+    // Mock other sources with some data
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    const webEnvelope: WebSearchEnvelope = {
+      query: "AAPL",
+      results: [{ title: "Test", url: "https://test.com", snippet: "bullish AAPL", source: "test.com", published: null, category: "news" as const }],
+      resultCount: 1,
+      fetchedAt: new Date().toISOString(),
+      provider: "exa",
+    };
+    mockedSearchWeb.mockResolvedValue({ status: "ok", data: webEnvelope } as any);
+
+    const result = await sentimentSummaryTool.execute("call-4", { query: "AAPL" });
+    const text = result.content[0].text;
+
+    expect(text).not.toContain("Finnhub");
+    expect(mockedGetCompanyNews).not.toHaveBeenCalled();
   });
 });

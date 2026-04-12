@@ -307,6 +307,54 @@ describe("loadConfig", () => {
     expect(config.braveApiKey).toBeUndefined();
   });
 
+  it("loads finnhubApiKey from FINNHUB_API_KEY env var", () => {
+    process.env.FINNHUB_API_KEY = "finnhub-env-key";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.finnhubApiKey).toBe("finnhub-env-key");
+    delete process.env.FINNHUB_API_KEY;
+  });
+
+  it("loads finnhubApiKey from providers.finnhub.apiKey in config file", () => {
+    delete process.env.FINNHUB_API_KEY;
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: { finnhub: { apiKey: "finnhub-file-key" } },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.finnhubApiKey).toBe("finnhub-file-key");
+  });
+
+  it("env var FINNHUB_API_KEY overrides file config", () => {
+    process.env.FINNHUB_API_KEY = "finnhub-env-override";
+    mockedExistsSync.mockImplementation((path) => path === configPath);
+    mockedReadFileSync.mockImplementation((path) => {
+      if (path === configPath) {
+        return JSON.stringify({
+          providers: { finnhub: { apiKey: "finnhub-file-key" } },
+        });
+      }
+      throw new Error("ENOENT");
+    });
+    const config = loadConfig();
+    expect(config.finnhubApiKey).toBe("finnhub-env-override");
+    delete process.env.FINNHUB_API_KEY;
+  });
+
+  it("finnhubApiKey is undefined when not configured", () => {
+    delete process.env.FINNHUB_API_KEY;
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.finnhubApiKey).toBeUndefined();
+  });
+
   describe("sentiment config", () => {
     it("sentiment defaults when not set", () => {
       delete process.env.OPENCANDLE_DEBATE;

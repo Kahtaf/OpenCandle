@@ -45,7 +45,7 @@ export interface SourceStats {
 }
 
 export function computeDivergence(
-  sources: { twitter?: SourceStats; reddit?: SourceStats; web?: SourceStats },
+  sources: { twitter?: SourceStats; reddit?: SourceStats; web?: SourceStats; finnhub?: SourceStats },
   threshold: number,
 ): DivergenceResult {
   const retailSources: SourceStats[] = [];
@@ -54,6 +54,7 @@ export function computeDivergence(
 
   const newsSources: SourceStats[] = [];
   if (sources.web && sources.web.count >= 5) newsSources.push(sources.web);
+  if (sources.finnhub && sources.finnhub.count >= 5) newsSources.push(sources.finnhub);
 
   if (retailSources.length === 0 || newsSources.length === 0) {
     return {

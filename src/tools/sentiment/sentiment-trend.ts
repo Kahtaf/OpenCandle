@@ -10,7 +10,7 @@ const params = Type.Object({
     Type.Number({ description: "Number of days of history. Default: 7, max: 30" }),
   ),
   source: Type.Optional(
-    Type.Union([Type.Literal("twitter"), Type.Literal("reddit"), Type.Literal("web")], {
+    Type.Union([Type.Literal("twitter"), Type.Literal("reddit"), Type.Literal("web"), Type.Literal("finnhub")], {
       description: "Filter to a single source. Default: all sources.",
     }),
   ),

@@ -1,4 +1,4 @@
-export const SENTIMENT_SOURCES = ["twitter", "reddit", "web"] as const;
+export const SENTIMENT_SOURCES = ["twitter", "reddit", "web", "finnhub"] as const;
 export type SentimentSource = (typeof SENTIMENT_SOURCES)[number];
 
 export interface SentinelEngagement {

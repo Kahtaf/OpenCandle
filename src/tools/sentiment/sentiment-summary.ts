@@ -3,11 +3,13 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getSubredditPosts, getPostComments } from "../../providers/reddit.js";
 import { getTwitterSentiment } from "../../providers/twitter.js";
 import { searchWeb } from "../../providers/web-search.js";
+import { getCompanyNews, finnhubDateRange } from "../../providers/finnhub.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
 import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
 import { WebAdapter } from "../../sentiment/adapters/web.js";
+import { FinnhubAdapter, extractTickersFromQuery } from "../../sentiment/adapters/finnhub.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { SentinelRecord } from "../../sentiment/types.js";
 
@@ -33,15 +35,33 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     const twitterAdapter = new TwitterAdapter();
     const redditAdapter = new RedditAdapter();
     const webAdapter = new WebAdapter();
+    const finnhubAdapter = new FinnhubAdapter();
+
+    // Determine if Finnhub should be included (key configured + ticker in query)
+    const finnhubTickers = config.finnhubApiKey ? extractTickersFromQuery(args.query) : [];
+    const includeFinnhub = finnhubTickers.length > 0 && Boolean(config.finnhubApiKey);
+
+    // Finnhub fetch (built separately to avoid mixing promise types in allSettled)
+    const finnhubFetch: Promise<import("../../providers/finnhub.js").FinnhubArticle[]> = includeFinnhub
+      ? (async () => {
+          const { from, to } = finnhubDateRange("day");
+          const arrays = await Promise.all(
+            finnhubTickers.map((sym) => getCompanyNews(sym, from, to, config.finnhubApiKey!)),
+          );
+          return arrays.flat();
+        })()
+      : Promise.resolve([]);
 
     // Fetch all sources in parallel
-    const [twitterResult, redditResults, webResult] = await Promise.allSettled([
+    const [twitterResult, redditResults, webResult, finnhubResult] = await Promise.allSettled([
       // Twitter
       wrapProvider("twitter", () => getTwitterSentiment(args.query, 50, hours)),
       // Reddit — cross-subreddit
       fetchRedditCrossSubreddit(args.query, config.sentiment?.defaultSubreddits ?? ["wallstreetbets", "stocks", "investing", "options"]),
       // Web
       searchWeb(args.query, { freshness: "day", limit: 10, category: "news" }),
+      // Finnhub — only when includeFinnhub; otherwise resolves to []
+      finnhubFetch,
     ]);
 
     // Process Twitter
@@ -73,6 +93,19 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
         ? webResult.reason?.message ?? "unknown error"
         : (webResult.value as any).reason ?? "unavailable";
       warnings.push(`Web: ${reason}`);
+    }
+
+    // Process Finnhub (only when included — otherwise resolves to empty array anyway)
+    if (includeFinnhub) {
+      if (finnhubResult.status === "fulfilled") {
+        const articles = finnhubResult.value;
+        if (articles.length > 0) {
+          const records = finnhubAdapter.mapToRecords(articles, args.query);
+          allRecords.push(...records);
+        }
+      } else {
+        warnings.push(`Finnhub: ${finnhubResult.reason?.message ?? "unknown error"}`);
+      }
     }
 
     if (allRecords.length === 0) {

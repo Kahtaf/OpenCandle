@@ -19,6 +19,7 @@ import {
   searchWeb,
   normalizeFinancialQuery,
 } from "../../../src/providers/web-search.js";
+import { exaSearch } from "../../../src/providers/exa-search.js";
 import { httpGet } from "../../../src/infra/http-client.js";
 import { getConfig } from "../../../src/config.js";
 import braveNewsFixture from "../../fixtures/web-search/brave-news.json";
@@ -31,8 +32,12 @@ vi.mock("../../../src/infra/http-client.js", async (importOriginal) => {
 vi.mock("../../../src/config.js", () => ({
   getConfig: vi.fn(() => ({})),
 }));
+vi.mock("../../../src/providers/exa-search.js", () => ({
+  exaSearch: vi.fn(),
+}));
 const mockedHttpGet = vi.mocked(httpGet);
 const mockedGetConfig = vi.mocked(getConfig);
+const mockedExaSearch = vi.mocked(exaSearch);
 
 const mockedSearch = vi.mocked(search);
 const mockedSearchNews = vi.mocked(searchNews);
@@ -381,19 +386,58 @@ describe("braveSearch", () => {
 });
 
 describe("searchWeb cascade", () => {
+  const exaEnvelope = {
+    query: "AAPL stock news",
+    results: [{ title: "Exa Result", url: "https://exa.com/1", snippet: "exa", source: "exa.com", published: null, category: "news" as const }],
+    resultCount: 1,
+    fetchedAt: "2026-04-11T00:00:00Z",
+    provider: "exa" as const,
+  };
+
   beforeEach(() => {
     cache.clear();
     vi.clearAllMocks();
     rateLimiter.configure("ddg", 100, 100);
     rateLimiter.configure("brave_search", 100, 100);
+    rateLimiter.configure("exa", 100, 100);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("uses Brave first for news when key is configured", async () => {
+  it("uses Exa first when it succeeds (news)", async () => {
     mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
+    mockedExaSearch.mockResolvedValue(exaEnvelope);
+
+    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10 });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.data.provider).toBe("exa");
+    }
+    // Brave and DDG not called
+    expect(mockedHttpGet).not.toHaveBeenCalled();
+    expect(mockedSearchNews).not.toHaveBeenCalled();
+  });
+
+  it("uses Exa first when it succeeds (general)", async () => {
+    mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
+    mockedExaSearch.mockResolvedValue({ ...exaEnvelope, results: [{ ...exaEnvelope.results[0], category: "general" }] });
+
+    const result = await searchWeb("test", { category: "general", freshness: "day", limit: 10 });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.data.provider).toBe("exa");
+    }
+    expect(mockedHttpGet).not.toHaveBeenCalled();
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Brave when Exa fails and Brave key is configured", async () => {
+    mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
+    mockedExaSearch.mockRejectedValue(new Error("Exa timeout"));
     mockedHttpGet.mockResolvedValue(braveNewsFixture);
 
     const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10 });
@@ -402,12 +446,25 @@ describe("searchWeb cascade", () => {
     if (result.status === "ok") {
       expect(result.data.provider).toBe("brave");
     }
-    // DDG not called (searchNews not called)
     expect(mockedSearchNews).not.toHaveBeenCalled();
   });
 
-  it("falls back to DDG when Brave fails for news", async () => {
+  it("falls back to DDG when Exa fails and no Brave key", async () => {
+    mockedGetConfig.mockReturnValue({} as any);
+    mockedExaSearch.mockRejectedValue(new Error("Exa timeout"));
+    mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
+
+    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10 });
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.data.provider).toBe("ddg");
+    }
+  });
+
+  it("falls through entire cascade: Exa → Brave → DDG", async () => {
     mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
+    mockedExaSearch.mockRejectedValue(new Error("Exa down"));
     mockedHttpGet.mockRejectedValue(new Error("Brave 429"));
     mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
 
@@ -419,35 +476,9 @@ describe("searchWeb cascade", () => {
     }
   });
 
-  it("uses DDG first for general even when Brave key exists", async () => {
-    mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
-    mockedSearch.mockResolvedValue(ddgGeneralFixture as any);
-
-    const result = await searchWeb("test", { category: "general", freshness: "day", limit: 10 });
-
-    expect(result.status).toBe("ok");
-    if (result.status === "ok") {
-      expect(result.data.provider).toBe("ddg");
-    }
-    // Brave not called
-    expect(mockedHttpGet).not.toHaveBeenCalled();
-  });
-
-  it("uses DDG only when no Brave key", async () => {
-    mockedGetConfig.mockReturnValue({} as any);
-    mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
-
-    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10 });
-
-    expect(result.status).toBe("ok");
-    if (result.status === "ok") {
-      expect(result.data.provider).toBe("ddg");
-    }
-    expect(mockedHttpGet).not.toHaveBeenCalled();
-  });
-
   it("returns unavailable when all providers fail", async () => {
     mockedGetConfig.mockReturnValue({} as any);
+    mockedExaSearch.mockRejectedValue(new Error("Exa down"));
     mockedSearchNews.mockRejectedValue(new Error("DDG down"));
 
     const result = await searchWeb("test", { category: "news", freshness: "day", limit: 10 });
@@ -457,28 +488,68 @@ describe("searchWeb cascade", () => {
 
   it("applies default opts: category news, freshness day, limit 10", async () => {
     mockedGetConfig.mockReturnValue({} as any);
-    mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
+    mockedExaSearch.mockResolvedValue(exaEnvelope);
 
     const result = await searchWeb("AAPL");
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.data.provider).toBe("exa");
+    }
+    expect(mockedExaSearch).toHaveBeenCalledWith(
+      "AAPL stock news",
+      expect.objectContaining({ category: "news", freshness: "day", limit: 10 }),
+    );
+  });
+
+  it("normalizes bare ticker queries", async () => {
+    mockedGetConfig.mockReturnValue({} as any);
+    mockedExaSearch.mockResolvedValue(exaEnvelope);
+
+    const result = await searchWeb("AAPL");
+
+    expect(result.status).toBe("ok");
+    expect(mockedExaSearch).toHaveBeenCalledWith(
+      "AAPL stock news",
+      expect.any(Object),
+    );
+  });
+
+  it("provider override: ddg skips Exa entirely", async () => {
+    mockedGetConfig.mockReturnValue({} as any);
+    mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
+
+    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10, provider: "ddg" });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
       expect(result.data.provider).toBe("ddg");
     }
-    // searchNews called (not search) → category defaulted to "news"
-    expect(mockedSearchNews).toHaveBeenCalled();
-    expect(mockedSearch).not.toHaveBeenCalled();
+    expect(mockedExaSearch).not.toHaveBeenCalled();
   });
 
-  it("normalizes bare ticker queries", async () => {
+  it("provider override: exa skips DDG entirely", async () => {
     mockedGetConfig.mockReturnValue({} as any);
-    mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
+    mockedExaSearch.mockResolvedValue(exaEnvelope);
 
-    const result = await searchWeb("AAPL");
+    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10, provider: "exa" });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
-      expect(result.data.query).toBe("AAPL stock news");
+      expect(result.data.provider).toBe("exa");
+    }
+    expect(mockedSearchNews).not.toHaveBeenCalled();
+    expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("provider override: brave returns unavailable when no key", async () => {
+    mockedGetConfig.mockReturnValue({} as any);
+
+    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10, provider: "brave" });
+
+    expect(result.status).toBe("unavailable");
+    if (result.status === "unavailable") {
+      expect(result.reason).toMatch(/BRAVE_API_KEY/);
     }
   });
 });

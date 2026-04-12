@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": -32000,
+    "message": "Rate limit exceeded. Please try again later."
+  },
+  "jsonrpc": "2.0",
+  "id": 1
+}
