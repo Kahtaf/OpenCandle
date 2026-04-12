@@ -7,6 +7,7 @@ import { rateLimiter } from "../infra/rate-limiter.js";
 import { getConfig } from "../config.js";
 import { withFallback } from "./with-fallback.js";
 import { exaSearch } from "./exa-search.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 import type { ProviderResult } from "../runtime/evidence.js";
 import type { WebSearchResult, WebSearchEnvelope } from "../types/sentiment.js";
 
@@ -231,10 +232,9 @@ export async function braveSearch(
     cache.set(key, envelope, TTL.WEB_SEARCH);
     return envelope;
   } catch (error: any) {
-    // Provide descriptive message for auth errors (HttpError uses .status)
     const status = error instanceof HttpError ? error.status : error?.statusCode;
-    if (status === 401) {
-      throw new Error("Brave Search API key may be invalid or expired. Check BRAVE_API_KEY.");
+    if (status === 401 || status === 403) {
+      throw new ProviderCredentialError("brave", "stale", status);
     }
 
     const stale = cache.getStale<WebSearchEnvelope>(key, STALE_LIMIT.WEB_SEARCH);

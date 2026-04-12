@@ -207,4 +207,65 @@ describe("alpha-vantage provider", () => {
       expect(overview.avgVolume).not.toBe(180.50);
     });
   });
+
+  describe("credential errors", () => {
+    it("throws ProviderCredentialError with reason=stale on 401 from getOverview", async () => {
+      const { ProviderCredentialError } = await import(
+        "../../../src/providers/provider-credential-error.js"
+      );
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        text: () => Promise.resolve("Unauthorized"),
+      });
+
+      try {
+        await getOverview("AAPL", "bad-key");
+        throw new Error("expected ProviderCredentialError to be thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(ProviderCredentialError);
+        const credErr = err as InstanceType<typeof ProviderCredentialError>;
+        expect(credErr.provider).toBe("alpha_vantage");
+        expect(credErr.reason).toBe("stale");
+        expect(credErr.httpStatus).toBe(401);
+      }
+    });
+
+    it("throws ProviderCredentialError with reason=stale on 403 from getFinancials", async () => {
+      const { ProviderCredentialError } = await import(
+        "../../../src/providers/provider-credential-error.js"
+      );
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        statusText: "Forbidden",
+        text: () => Promise.resolve("Forbidden"),
+      });
+
+      await expect(getFinancials("NVDA", "bad-key")).rejects.toBeInstanceOf(
+        ProviderCredentialError,
+      );
+    });
+
+    it("still throws generic errors for non-auth failures", async () => {
+      const { ProviderCredentialError } = await import(
+        "../../../src/providers/provider-credential-error.js"
+      );
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Server Error",
+        text: () => Promise.resolve("Internal Server Error"),
+      });
+
+      try {
+        await getOverview("AAPL", "test-key");
+        throw new Error("expected an error to be thrown");
+      } catch (err) {
+        // Must NOT be ProviderCredentialError — a 500 is not a credential issue.
+        expect(err).not.toBeInstanceOf(ProviderCredentialError);
+      }
+    });
+  });
 });

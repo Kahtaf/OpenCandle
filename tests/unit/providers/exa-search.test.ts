@@ -414,7 +414,10 @@ describe("exaSearch (API path)", () => {
     expect(body.query).toBe("AAPL"); // not "AAPL past 24 hours"
   });
 
-  it("throws on API error with status and body", async () => {
+  it("throws ProviderCredentialError with reason=stale on 401", async () => {
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 401,
@@ -423,8 +426,54 @@ describe("exaSearch (API path)", () => {
       text: () => Promise.resolve('{"error":"Invalid API key"}'),
     });
 
+    try {
+      await exaSearch("test", { category: "news", freshness: "day", limit: 5 });
+      throw new Error("expected ProviderCredentialError");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ProviderCredentialError);
+      const credErr = err as InstanceType<typeof ProviderCredentialError>;
+      expect(credErr.provider).toBe("exa");
+      expect(credErr.reason).toBe("stale");
+      expect(credErr.httpStatus).toBe(401);
+    }
+  });
+
+  it("throws ProviderCredentialError on 403", async () => {
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      headers: new Headers({ "content-type": "application/json" }),
+      text: () => Promise.resolve("Forbidden"),
+    });
+
     await expect(
       exaSearch("test", { category: "news", freshness: "day", limit: 5 }),
-    ).rejects.toThrow(/Exa API HTTP 401/);
+    ).rejects.toBeInstanceOf(ProviderCredentialError);
+  });
+
+  it("throws generic Error on non-auth API errors (e.g. 500)", async () => {
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      headers: new Headers({ "content-type": "application/json" }),
+      text: () => Promise.resolve('{"error":"server error"}'),
+    });
+
+    try {
+      await exaSearch("test", { category: "news", freshness: "day", limit: 5 });
+      throw new Error("expected some error");
+    } catch (err) {
+      // Must NOT be classified as credential
+      expect(err).not.toBeInstanceOf(ProviderCredentialError);
+      expect((err as Error).message).toContain("Exa API HTTP 500");
+    }
   });
 });

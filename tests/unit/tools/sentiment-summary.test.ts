@@ -169,7 +169,12 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Sentiment summary");
   });
 
-  it("does not include Finnhub when no API key is configured", async () => {
+  it("does not fetch Finnhub when no API key is configured, but emits a soft-degraded tag", async () => {
+    // 7.6/7.7 — when the user has no Finnhub key but the query has tickers
+    // Finnhub could have served, the tool must NOT call `getCompanyNews` AND
+    // must include a `[OPENCANDLE_SOFT_DEGRADED provider=finnhub ...]` tag
+    // in the content so the extension's degradation accumulator picks it
+    // up for the turn-end gap note.
     mockedGetConfig.mockReturnValue({} as any);
 
     // Mock other sources with some data
@@ -186,7 +191,33 @@ describe("get_sentiment_summary tool", () => {
     const result = await sentimentSummaryTool.execute("call-4", { query: "AAPL" });
     const text = result.content[0].text;
 
-    expect(text).not.toContain("Finnhub");
+    // Finnhub was not fetched …
     expect(mockedGetCompanyNews).not.toHaveBeenCalled();
+    // … and there is no Finnhub data row in the per-source table.
+    expect(text).not.toMatch(/\|\s*Finnhub\s*\|/);
+    // … but the soft-degraded tag is emitted so the extension records it.
+    expect(text).toContain("[OPENCANDLE_SOFT_DEGRADED");
+    expect(text).toContain("provider=finnhub");
+  });
+
+  it("does not emit a Finnhub soft-degraded tag when the query has no finnhub-mappable ticker", async () => {
+    mockedGetConfig.mockReturnValue({} as any);
+
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    const webEnvelope: WebSearchEnvelope = {
+      query: "market sentiment",
+      results: [{ title: "Test", url: "https://test.com", snippet: "markets up today", source: "test.com", published: null, category: "news" as const }],
+      resultCount: 1,
+      fetchedAt: new Date().toISOString(),
+      provider: "exa",
+    };
+    mockedSearchWeb.mockResolvedValue({ status: "ok", data: webEnvelope } as any);
+
+    const result = await sentimentSummaryTool.execute("call-5", {
+      query: "market sentiment",
+    });
+    const text = result.content[0].text;
+
+    expect(text).not.toContain("provider=finnhub");
   });
 });

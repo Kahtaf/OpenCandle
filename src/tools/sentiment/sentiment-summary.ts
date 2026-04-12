@@ -12,6 +12,8 @@ import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { FinnhubAdapter, extractTickersFromQuery } from "../../sentiment/adapters/finnhub.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { SentinelRecord } from "../../sentiment/types.js";
+import { hasCredential } from "../../onboarding/providers.js";
+import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic for cross-source sentiment summary" }),
@@ -37,9 +39,16 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     const webAdapter = new WebAdapter();
     const finnhubAdapter = new FinnhubAdapter();
 
-    // Determine if Finnhub should be included (key configured + ticker in query)
-    const finnhubTickers = config.finnhubApiKey ? extractTickersFromQuery(args.query) : [];
+    // Determine if Finnhub should be included (key configured + ticker in
+    // query). `candidateTickers` is extracted unconditionally so we can tell
+    // a "no finnhub-mappable ticker in the query" case apart from a "query
+    // has tickers but user has no Finnhub key" case — the latter warrants a
+    // soft-degraded tag so the LLM surfaces it in the Data gaps section.
+    const candidateTickers = extractTickersFromQuery(args.query);
+    const finnhubTickers = config.finnhubApiKey ? candidateTickers : [];
     const includeFinnhub = finnhubTickers.length > 0 && Boolean(config.finnhubApiKey);
+    const finnhubSoftDegraded =
+      candidateTickers.length > 0 && !hasCredential("finnhub");
 
     // Finnhub fetch (built separately to avoid mixing promise types in allSettled)
     const finnhubFetch: Promise<import("../../providers/finnhub.js").FinnhubArticle[]> = includeFinnhub
@@ -108,9 +117,22 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
       }
     }
 
+    const softDegradedPrefix = finnhubSoftDegraded
+      ? `${buildSoftDegradedTag({
+          provider: "finnhub",
+          fallback: "other-sentiment-sources",
+          remediation: "run /connect news to enable Finnhub company news",
+        })}\n\n`
+      : "";
+
     if (allRecords.length === 0) {
       return {
-        content: [{ type: "text", text: `⚠ Sentiment summary unavailable for "${args.query}" — no sources returned data.\n${warnings.join("\n")}` }],
+        content: [
+          {
+            type: "text",
+            text: `${softDegradedPrefix}⚠ Sentiment summary unavailable for "${args.query}" — no sources returned data.\n${warnings.join("\n")}`,
+          },
+        ],
         details: null as any,
       };
     }
@@ -170,7 +192,8 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
       lines.push(warnings.map((w) => `⚠ ${w}`).join("\n"));
     }
 
-    return { content: [{ type: "text", text: lines.join("\n") }], details: result };
+    const output = softDegradedPrefix + lines.join("\n");
+    return { content: [{ type: "text", text: output }], details: result };
   },
 };
 

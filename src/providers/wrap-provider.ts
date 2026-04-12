@@ -1,10 +1,18 @@
 import type { ProviderResult } from "../runtime/evidence.js";
 import { getProviderTracker } from "../runtime/run-context.js";
 import { cache } from "../infra/cache.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 
 /**
  * Wrap a provider function call so that thrown exceptions are caught
  * and returned as a structured `ProviderResultUnavailable`.
+ *
+ * `ProviderCredentialError` is the one exception: it is re-thrown
+ * unchanged so the tool layer can catch it and emit a tagged
+ * `[OPENCANDLE_CREDENTIAL_REQUIRED ...]` tool-result content block
+ * (see `src/onboarding/tool-tags.ts`). Swallowing credential errors
+ * into `unavailable` would hide the just-in-time setup offer from
+ * the `tool_result` interception handler.
  *
  * When a run context is active, checks circuit breaker state before
  * calling and records failures after.
@@ -37,6 +45,13 @@ export async function wrapProvider<T>(
       stale: stale || undefined,
     };
   } catch (error) {
+    // Credential errors are re-thrown so the tool-layer `withCredentialCheck`
+    // helper can convert them into LLM-visible tagged content. Do NOT record
+    // these as tracker failures — they are a user-config problem, not a
+    // provider reliability problem.
+    if (error instanceof ProviderCredentialError) {
+      throw error;
+    }
     tracker?.recordFailure(providerId);
     const reason =
       error instanceof Error ? error.message : "unknown_error";

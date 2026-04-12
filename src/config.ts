@@ -47,11 +47,6 @@ export interface OpenCandleFileConfig {
   };
 }
 
-export interface FinanceProviderReadiness {
-  hasAlphaVantage: boolean;
-  hasFred: boolean;
-}
-
 export function loadEnv(path = ".env"): void {
   let content: string;
   try {
@@ -126,15 +121,6 @@ export function loadFileConfig(path = getConfigPath()): OpenCandleFileConfig {
 export function saveFileConfig(config: OpenCandleFileConfig, path = getConfigPath()): void {
   ensureParentDir(path);
   writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-}
-
-export function getFinanceProviderReadiness(path = getConfigPath()): FinanceProviderReadiness {
-  loadEnv();
-  const config = resolveConfig(loadFileConfig(path));
-  return {
-    hasAlphaVantage: Boolean(config.alphaVantageApiKey),
-    hasFred: Boolean(config.fredApiKey),
-  };
 }
 
 export function loadConfig(): Config {

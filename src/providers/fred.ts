@@ -1,6 +1,7 @@
-import { httpGet } from "../infra/http-client.js";
+import { httpGet, HttpError } from "../infra/http-client.js";
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 import type { FredSeries, FredObservation } from "../types/macro.js";
 
 const BASE_URL = "https://api.stlouisfed.org/fred";
@@ -64,6 +65,17 @@ export async function getSeries(
     cache.set(cacheKey, result, TTL.MACRO);
     return result;
   } catch (error) {
+    // FRED historically returns 400 with a body like "Bad Request. The value
+    // for variable api_key is not registered..." when the key is invalid. A
+    // separate 400 can also indicate a bad series_id, which is NOT a credential
+    // problem. We only reclassify as credential-related on 401/403 here to
+    // avoid surfacing a `/connect` prompt when the user's real mistake is a
+    // typo in a series id. Bad-FRED-key users will still see the raw error
+    // message in v1; a body-string check can be added later if this becomes a
+    // reported friction.
+    if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+      throw new ProviderCredentialError("fred", "stale", error.status);
+    }
     const stale = cache.getStale<FredSeries>(cacheKey, STALE_LIMIT.MACRO);
     if (stale) return stale.value;
     throw error;
