@@ -172,6 +172,12 @@ function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {
     if (!VALID_CONFIDENCE.has(p.confidence as string)) {
       throw new Error(`preference_updates[${idx}].confidence is invalid`);
     }
+    // Router-emitted preferences are always inferred — absent is accepted
+    // (normalized), but any explicit non-"inferred" value is an invariant
+    // violation the caller should see rather than silently lose.
+    if (p.source !== undefined && p.source !== "inferred") {
+      throw new Error(`preference_updates[${idx}].source must be "inferred" (got ${JSON.stringify(p.source)})`);
+    }
     return {
       key: p.key,
       value: p.value,

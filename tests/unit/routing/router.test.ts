@@ -95,6 +95,39 @@ describe("validateRouterOutput", () => {
     );
     expect(out.route).toBe("fallback");
   });
+
+  it("normalizes omitted preference_updates[].source to 'inferred'", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        route: "fallback",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [
+          { key: "risk_profile", value: "aggressive", confidence: "high" },
+        ],
+        missing_required: [],
+        reasoning: "",
+      }),
+    );
+    expect(out.preference_updates[0].source).toBe("inferred");
+  });
+
+  it("rejects preference_updates[].source other than 'inferred'", () => {
+    expect(() =>
+      validateRouterOutput(
+        JSON.stringify({
+          route: "fallback",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [
+            { key: "risk_profile", value: "aggressive", confidence: "high", source: "user" },
+          ],
+          missing_required: [],
+          reasoning: "",
+        }),
+      ),
+    ).toThrow(/source must be "inferred"/);
+  });
 });
 
 describe("route()", () => {
