@@ -144,13 +144,14 @@ describe("SentimentStore", () => {
 
   describe("getTimeSeries", () => {
     it("returns per-source bucketed averages", () => {
-      // Insert records across 2 days
-      for (let day = 10; day <= 11; day++) {
+      // Insert records across 2 days within the 7-day query window
+      const dayMs = 24 * 60 * 60 * 1000;
+      for (let daysAgo = 3; daysAgo >= 2; daysAgo--) {
         store.insert([
           makeRecord({
             source: "twitter",
-            fetchedAt: `2026-04-${day}T12:00:00Z`,
-            sentiment: { score: day === 10 ? 0.3 : 0.7, confidence: 0.8, method: "keyword", tickers: ["AAPL"] },
+            fetchedAt: new Date(Date.now() - daysAgo * dayMs).toISOString(),
+            sentiment: { score: daysAgo === 3 ? 0.3 : 0.7, confidence: 0.8, method: "keyword", tickers: ["AAPL"] },
           }),
         ]);
       }

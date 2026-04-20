@@ -232,15 +232,25 @@ describe("exaSearch (MCP path)", () => {
   });
 
   it("parses plain JSON response (Content-Type: application/json)", async () => {
-    globalThis.fetch = mockFetchResponse(JSON.stringify(mcpJsonFixture), {
-      contentType: "application/json",
-    });
+    // Fixture's Published date is 2026-03-18; pin Date.now() so it falls within the 30-day freshness window.
+    // Mock only Date.now (not fake timers) so fetch/AbortSignal.timeout keep working.
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-04-01T00:00:00Z").getTime());
+    // Reconfigure rate limiter AFTER mocking so its lastRefill is aligned with the mocked clock
+    // (otherwise refill sees huge negative elapsed and blocks forever).
+    rateLimiter.configure("exa", 100, 100);
+    try {
+      globalThis.fetch = mockFetchResponse(JSON.stringify(mcpJsonFixture), {
+        contentType: "application/json",
+      });
 
-    const result = await exaSearch("Fed rate", { category: "news", freshness: "month", limit: 5 });
+      const result = await exaSearch("Fed rate", { category: "news", freshness: "month", limit: 5 });
 
-    expect(result.provider).toBe("exa");
-    expect(result.resultCount).toBe(1);
-    expect(result.results[0].title).toContain("Fed Holds Rates");
+      expect(result.provider).toBe("exa");
+      expect(result.resultCount).toBe(1);
+      expect(result.results[0].title).toContain("Fed Holds Rates");
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("throws on JSON-RPC error response", async () => {

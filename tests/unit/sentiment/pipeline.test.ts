@@ -68,10 +68,11 @@ describe("SentimentPipeline", () => {
   });
 
   it("returns trend when store has prior history", async () => {
-    // Seed store with prior data across 2 time buckets
+    // Seed store with prior data across 2 time buckets (within the 7-day trend window)
+    const day = 24 * 60 * 60 * 1000;
     const oldRecords = [
-      makeRecord({ text: "bearish AAPL crash", fetchedAt: "2026-04-05T12:00:00Z" }),
-      makeRecord({ text: "bullish AAPL moon", fetchedAt: "2026-04-06T12:00:00Z" }),
+      makeRecord({ text: "bearish AAPL crash", fetchedAt: new Date(Date.now() - 4 * day).toISOString() }),
+      makeRecord({ text: "bullish AAPL moon", fetchedAt: new Date(Date.now() - 3 * day).toISOString() }),
     ];
     store.insert(oldRecords.map((r) => ({
       ...r,
