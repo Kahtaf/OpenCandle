@@ -7,7 +7,7 @@ import { WorkflowEventLogger } from "./workflow-events.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { WorkflowRunner } from "./workflow-runner.js";
 import { setRunContext, clearRunContext } from "./run-context.js";
-import { PromptContextBuilder } from "../prompts/context-builder.js";
+import { PromptContextBuilder, type FallbackContext } from "../prompts/context-builder.js";
 import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
 import { toStepDefinitions, promptStepOutput } from "./prompt-step.js";
@@ -15,6 +15,18 @@ import type Database from "better-sqlite3";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
+
+function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
+  if (typeof raw !== "string" || raw.length === 0) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 type QueueContext = ExtensionCommandContext | {
   isIdle(): boolean;
@@ -125,18 +137,67 @@ export class SessionCoordinator {
   }
 
   /** Record a workflow run in storage. */
-  recordWorkflowRun(workflowType: string, entities: object, resolved: object, defaultsUsed: unknown[]): void {
+  recordWorkflowRun(
+    workflowType: string,
+    entities: object,
+    resolved: object,
+    defaultsUsed: unknown[],
+    turnType: "workflow" | "fallback" = "workflow",
+  ): void {
     this.storage?.insertWorkflowRun({
       sessionId: this.sessionId,
       workflowType,
       inputSlotsJson: JSON.stringify(entities),
       resolvedSlotsJson: JSON.stringify(resolved),
       defaultsUsedJson: JSON.stringify(defaultsUsed),
+      turnType,
     });
   }
 
+  /**
+   * Expose prior turns + recent runs + profile snapshot for the router
+   * input context. Fixed-window per design.md §7 (last 5 turns, 3 runs).
+   */
+  buildRouterContextBase(): {
+    profileSnapshot: Record<string, unknown>;
+    recentWorkflowRuns: Array<{
+      workflowType: string;
+      turnType: string;
+      resolvedSlots?: Record<string, unknown>;
+      createdAt: string;
+    }>;
+  } {
+    if (!this.storage) {
+      return { profileSnapshot: {}, recentWorkflowRuns: [] };
+    }
+    const prefs = this.storage.getPreferencesByNamespace("global");
+    const profileSnapshot: Record<string, unknown> = {};
+    for (const p of prefs) {
+      const key = String(p.key);
+      const rawValue = p.value_json;
+      if (typeof rawValue === "string") {
+        try {
+          profileSnapshot[key] = JSON.parse(rawValue);
+        } catch {
+          profileSnapshot[key] = rawValue;
+        }
+      }
+    }
+    const runs = this.storage.getRecentWorkflowRuns(3).map((r) => ({
+      workflowType: String(r.workflow_type ?? ""),
+      turnType: String(r.turn_type ?? "workflow"),
+      resolvedSlots: parseMaybeJson(r.resolved_slots_json),
+      createdAt: String(r.created_at ?? ""),
+    }));
+    return { profileSnapshot, recentWorkflowRuns: runs };
+  }
+
   /** Build system prompt using composable sections. */
-  buildSystemPrompt(basePrompt: string, workflowType?: string): string {
+  buildSystemPrompt(
+    basePrompt: string,
+    workflowType?: string,
+    fallbackContext?: FallbackContext,
+  ): string {
     const builder = new PromptContextBuilder();
 
     const addonTools = getAddonToolDescriptions();
@@ -152,9 +213,27 @@ export class SessionCoordinator {
       workflowType,
       memoryContext: memoryContext || undefined,
       addonToolDescriptions: addonDescriptions,
+      fallbackContext,
     });
 
     return `${basePrompt}\n\n${builder.build()}`;
+  }
+
+  /**
+   * Stash a pending fallback context so the very next `before_agent_start`
+   * hook can slot it into the system prompt. Cleared after consumption so
+   * subsequent turns do not inherit stale fallback directives.
+   */
+  private pendingFallbackContext: FallbackContext | null = null;
+
+  setPendingFallbackContext(ctx: FallbackContext | null): void {
+    this.pendingFallbackContext = ctx;
+  }
+
+  consumePendingFallbackContext(): FallbackContext | null {
+    const ctx = this.pendingFallbackContext;
+    this.pendingFallbackContext = null;
+    return ctx;
   }
 
   /**

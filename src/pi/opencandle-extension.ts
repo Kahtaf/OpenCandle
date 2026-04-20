@@ -5,8 +5,20 @@ import {
 } from "../analysts/orchestrator.js";
 import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.js";
 import { getConfig } from "../config.js";
-import { classifyIntent, resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../routing/index.js";
+import {
+  classifyIntent,
+  createPiAiRouterClient,
+  resolveOptionsScreenerSlots,
+  resolvePortfolioSlots,
+  route as routeLlm,
+} from "../routing/index.js";
+import type {
+  RouterInputContext,
+  RouterLlmClient,
+  RouterOutput,
+} from "../routing/router-types.js";
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
+import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
 import {
   buildPortfolioWorkflowDefinition,
   buildOptionsScreenerWorkflowDefinition,
@@ -34,9 +46,15 @@ import { createDegradationAccumulator } from "../onboarding/degradation-accumula
 import { promptUser } from "../onboarding/prompt-user.js";
 import { runProviderConnect } from "../onboarding/connect.js";
 import type { AskUserHandler } from "../types/index.js";
+import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
 
 export interface OpenCandleExtensionOptions {
   askUserHandler?: AskUserHandler;
+  /**
+   * Optional router LLM client. When provided, this instance is used instead
+   * of the pi-ai-backed default. Intended for tests + offline eval runners.
+   */
+  routerLlmClient?: RouterLlmClient;
 }
 
 export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
@@ -174,6 +192,12 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     hardPromptFiredInWorkflow = false;
 
     if (!ctx.hasUI) return;
+    // Pin the user-facing disclaimer in the UI footer for the entire session.
+    // Using `setStatus` keeps it always visible to the user without ever
+    // entering the LLM's conversation context (unlike `sendMessage`, which Pi
+    // reinjects as a `role:"user"` message every turn).
+    ctx.ui.setStatus("opencandle-disclaimer", DISCLAIMER_TEXT);
+
     const result = await coordinator.runSetup(pi, ctx, { mode: "startup" });
     if (result === "shutdown") {
       return;
@@ -224,7 +248,21 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   // which soft providers fell back during this turn. The LLM has already
   // emitted its answer by the time this fires, so the per-tool-result
   // soft-degraded tags remain the primary carrier for the in-turn gap note.
-  pi.on("turn_end", async () => {
+  //
+  // Also persist a per-turn disclaimer entry via `appendEntry`. `CustomEntry`
+  // is NOT sent to LLM context (unlike `sendMessage`/`CustomMessage`, which
+  // Pi's `convertToLlm` reinjects as a `role:"user"` message), so this keeps
+  // the stance instruction-free while still producing a session record that
+  // downstream renderers / exporters / tests can surface. The always-visible
+  // footer status pinned at session_start is the primary user-visible channel.
+  pi.on("turn_end", async (event) => {
+    const msg = event.message;
+    const isFinalAssistantTurn =
+      msg.role === "assistant" && msg.stopReason === "stop";
+    if (isFinalAssistantTurn) {
+      pi.appendEntry("opencandle-disclaimer", { text: DISCLAIMER_TEXT });
+    }
+
     if (degradationAccumulator.isEmpty()) return;
     const state = loadOnboardingState();
     const annotation = degradationAccumulator.buildCombinedAnnotation(state);
@@ -416,22 +454,33 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     return undefined;
   });
 
-  // Input handling — classify intent and dispatch workflows
+  // Input handling — branches on OPENCANDLE_ROUTER_MODE.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
 
-    // Extract and persist user preferences
-    coordinator.extractAndStorePreferences(event.text);
-    const storage = coordinator.getStorage();
-    const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
-
-    // Check for comprehensive analysis pattern
+    // Check for comprehensive analysis pattern — same in both modes.
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
       const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
       coordinator.executeWorkflow(pi, definition, ctx);
       return { action: "handled" };
     }
+
+    const mode = getConfig().routerMode;
+    if (mode === "llm") {
+      const dispatched = await handleLlmRouterTurn(event.text, ctx);
+      // Dispatched a workflow → the original user turn is now represented by
+      // the workflow's queued prompts; tell Pi not to also forward it.
+      // Fallback path (no dispatch) → let Pi pass the user turn through to the
+      // main agent, which will run under the router-supplied fallback context.
+      return dispatched ? { action: "handled" } : undefined;
+    }
+
+    // --- rules mode (default) ---
+    // Extract and persist user preferences (legacy regex path)
+    coordinator.extractAndStorePreferences(event.text);
+    const storage = coordinator.getStorage();
+    const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
 
     // Classify intent
     const classification = classifyIntent(event.text);
@@ -471,10 +520,205 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     }
   });
 
-  // System prompt assembly — delegate to coordinator
+  /**
+   * LLM-mode input handler. In this mode `classifyIntent` and
+   * `extractPreferences` are NOT called — the router is the single source of
+   * classification + preference extraction. Mirrors rule-mode dispatch for
+   * identified workflows; for `fallback` turns, stashes a fallback context
+   * for the next `before_agent_start` to inject.
+   */
+  async function handleLlmRouterTurn(
+    text: string,
+    ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+  ): Promise<boolean> {
+    const storage = coordinator.getStorage();
+    const { profileSnapshot, recentWorkflowRuns } = coordinator.buildRouterContextBase();
+    const input: RouterInputContext = {
+      text,
+      // Prior-turn history is not wired in v1 — needs Pi session-manager
+      // integration. Router still functions with an empty window.
+      priorTurns: [],
+      profileSnapshot,
+      recentWorkflowRuns,
+    };
+
+    const client = options?.routerLlmClient ?? resolveRouterLlmClient(ctx);
+    if (!client) {
+      pi.appendEntry("opencandle-router-error", {
+        reason: "no_llm_client_available",
+        text,
+      });
+      return false;
+    }
+
+    let output: RouterOutput;
+    try {
+      output = await routeLlm(input, client);
+    } catch (err) {
+      pi.appendEntry("opencandle-router-error", {
+        reason: "route_failed",
+        text,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
+
+    pi.appendEntry("opencandle-router", { output });
+
+    // Preference writes: HIGH-confidence only. Medium/low are logged for
+    // observability even when no storage is available.
+    const dropped: typeof output.preference_updates = [];
+    for (const pref of output.preference_updates) {
+      if (pref.confidence === "high") {
+        storage?.upsertPreference({
+          key: pref.key,
+          valueJson: JSON.stringify(pref.value),
+          confidence: pref.confidence,
+          source: pref.source,
+        });
+      } else {
+        dropped.push(pref);
+      }
+    }
+    if (dropped.length > 0) {
+      pi.appendEntry("opencandle-router-prefs-dropped", { dropped });
+    }
+
+    // Workflow dispatch for recognised workflows.
+    if (output.route === "workflow" && output.workflow) {
+      return dispatchRouterWorkflow(output, ctx);
+    }
+
+    // Fallback: record the turn and stash the fallback context for the
+    // upcoming `before_agent_start` hook to render into the system prompt.
+    coordinator.recordWorkflowRun(
+      "fallback",
+      output.entities,
+      Object.fromEntries(Object.entries(output.slots).map(([k, v]) => [k, v.value])),
+      [],
+      "fallback",
+    );
+
+    const assumptionsBlock = buildAssumptionsBlockFromRouter(output.slots);
+    coordinator.setPendingFallbackContext({
+      assumptionsBlock,
+      missingRequired: output.missing_required,
+      extraContext: output.entities.symbols.length > 0
+        ? `Router-extracted symbols: ${output.entities.symbols.join(", ")}.`
+        : undefined,
+    });
+    return false;
+  }
+
+  function dispatchRouterWorkflow(
+    output: RouterOutput,
+    ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+  ): boolean {
+    const workflow = output.workflow!;
+    const storage = coordinator.getStorage();
+    const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
+
+    if (workflow === "portfolio_builder") {
+      const resolution = resolvePortfolioSlots(output.entities, workflowPrefs);
+      coordinator.recordWorkflowRun(
+        "portfolio_builder",
+        output.entities,
+        resolution.resolved,
+        resolution.defaultsUsed,
+        "workflow",
+      );
+      pi.appendEntry("opencandle-workflow", {
+        workflow: "portfolio_builder",
+        entities: output.entities,
+        resolved: resolution.resolved,
+      });
+      const definition = buildPortfolioWorkflowDefinition(resolution);
+      coordinator.executeWorkflow(pi, definition, ctx);
+      return true;
+    }
+    if (workflow === "options_screener") {
+      const resolution = resolveOptionsScreenerSlots(output.entities, workflowPrefs);
+      // Router may emit missing_required; main agent handles via ask_user.
+      // Still dispatch the workflow when symbol is present.
+      if (resolution.missingRequired.length === 0) {
+        coordinator.recordWorkflowRun(
+          "options_screener",
+          output.entities,
+          resolution.resolved,
+          resolution.defaultsUsed,
+          "workflow",
+        );
+        pi.appendEntry("opencandle-workflow", {
+          workflow: "options_screener",
+          entities: output.entities,
+          resolved: resolution.resolved,
+        });
+        const definition = buildOptionsScreenerWorkflowDefinition(resolution);
+        coordinator.executeWorkflow(pi, definition, ctx);
+        return true;
+      }
+      // Missing required symbol — treat as fallback with ask_user directive.
+    }
+    if (workflow === "compare_assets" && output.entities.symbols.length >= 2) {
+      const resolution: SlotResolution<CompareAssetsSlots> = {
+        resolved: { symbols: output.entities.symbols },
+        sources: { symbols: "user" },
+        defaultsUsed: [],
+        missingRequired: [],
+      };
+      coordinator.recordWorkflowRun(
+        "compare_assets",
+        output.entities,
+        resolution.resolved,
+        [],
+        "workflow",
+      );
+      pi.appendEntry("opencandle-workflow", {
+        workflow: "compare_assets",
+        symbols: output.entities.symbols,
+      });
+      const definition = buildCompareAssetsWorkflowDefinition(resolution);
+      coordinator.executeWorkflow(pi, definition, ctx);
+      return true;
+    }
+
+    // single_asset_analysis / watchlist / general_qa + any workflow with
+    // unmet required slots: fall through to fallback handling so the main
+    // agent still gets an Assumptions block + ask_user directive.
+    coordinator.recordWorkflowRun(
+      "fallback",
+      output.entities,
+      Object.fromEntries(Object.entries(output.slots).map(([k, v]) => [k, v.value])),
+      [],
+      "fallback",
+    );
+    const assumptionsBlock = buildAssumptionsBlockFromRouter(output.slots);
+    coordinator.setPendingFallbackContext({
+      assumptionsBlock,
+      missingRequired: output.missing_required,
+      extraContext: `Router classified as ${workflow} but declined to dispatch. Symbols: ${output.entities.symbols.join(", ") || "(none)"}.`,
+    });
+    return false;
+  }
+
+  function resolveRouterLlmClient(
+    ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+  ): RouterLlmClient | null {
+    // `ctx.model` is the currently selected pi-ai model. When unset (no auth
+    // configured yet), we skip the router and the main agent will run with
+    // its default unrouted flow (legacy rules path is the safer default).
+    const model = (ctx as { model?: unknown }).model;
+    if (!model) return null;
+    // biome-ignore lint/suspicious/noExplicitAny: Pi typings keep Model generic
+    return createPiAiRouterClient(model as any);
+  }
+
+  // System prompt assembly — delegate to coordinator. When a fallback context
+  // is pending (router-mode fallback turns), inject it into the prompt.
   pi.on("before_agent_start", async (event) => {
+    const fallbackContext = coordinator.consumePendingFallbackContext() ?? undefined;
     return {
-      systemPrompt: coordinator.buildSystemPrompt(event.systemPrompt),
+      systemPrompt: coordinator.buildSystemPrompt(event.systemPrompt, undefined, fallbackContext),
     };
   });
 }

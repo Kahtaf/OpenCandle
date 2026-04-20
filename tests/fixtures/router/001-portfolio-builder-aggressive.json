@@ -1,0 +1,26 @@
+{
+  "input": "I'm aggressive, give me a 3-year portfolio for $25k",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "portfolio_builder",
+    "entities": {
+      "symbols": [],
+      "budget": 25000,
+      "riskProfile": "aggressive",
+      "timeHorizon": "3y"
+    },
+    "slots": {
+      "budget": { "value": 25000, "source": "user", "confidence": "high" },
+      "risk_profile": { "value": "aggressive", "source": "user", "confidence": "high" },
+      "time_horizon": { "value": "3y", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [
+      { "key": "risk_profile", "value": "aggressive", "confidence": "high", "source": "inferred" }
+    ],
+    "missing_required": [],
+    "reasoning": "explicit budget + aggressive self-identification + 3y horizon"
+  },
+  "tags": ["portfolio_builder", "aggressive", "high-confidence-pref-write"]
+}

@@ -8,6 +8,8 @@ export interface SentimentConfig {
   divergenceThreshold: number;
 }
 
+export type RouterMode = "rules" | "llm";
+
 export interface Config {
   alphaVantageApiKey?: string;
   fredApiKey?: string;
@@ -16,6 +18,12 @@ export interface Config {
   finnhubApiKey?: string;
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
+  /**
+   * Intent-router rollout flag. `"rules"` (default) runs the legacy regex
+   * `classifyIntent` + `extractPreferences` path. `"llm"` runs the LLM router
+   * ahead of prompt assembly. Controlled by `OPENCANDLE_ROUTER_MODE`.
+   */
+  routerMode: RouterMode;
   sentiment?: SentimentConfig;
 }
 
@@ -76,6 +84,15 @@ const SENTIMENT_DEFAULTS: SentimentConfig = {
   divergenceThreshold: 0.4,
 };
 
+function resolveRouterMode(): RouterMode {
+  const raw = process.env.OPENCANDLE_ROUTER_MODE;
+  if (raw === undefined || raw === "") return "rules";
+  if (raw === "rules" || raw === "llm") return raw;
+  throw new Error(
+    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "rules" (default) or "llm".`,
+  );
+}
+
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
   const debateEnv = process.env.OPENCANDLE_DEBATE;
   const fileSentiment = fileConfig.sentiment;
@@ -87,6 +104,7 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
     debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
+    routerMode: resolveRouterMode(),
     sentiment: {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,
@@ -135,4 +153,9 @@ export function getConfig(): Config {
     return loadConfig();
   }
   return cachedConfig;
+}
+
+/** Test-only: clear the memoized config so the next `getConfig()` re-reads env. */
+export function resetConfigCache(): void {
+  cachedConfig = null;
 }

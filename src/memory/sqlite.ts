@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -30,7 +30,8 @@ const CURRENT_SCHEMA = `
     resolved_slots_json TEXT,
     defaults_used_json TEXT,
     output_summary TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    turn_type TEXT NOT NULL DEFAULT 'workflow'
   );
 
   CREATE TABLE IF NOT EXISTS recommendations (
@@ -73,12 +74,40 @@ export function initDefaultDatabase(): Database.Database {
 
 function ensureCurrentSchema(db: Database.Database): void {
   const currentVersion = readSchemaVersion(db);
-  if (currentVersion !== CURRENT_SCHEMA_VERSION) {
-    resetSchema(db);
+
+  if (currentVersion === CURRENT_SCHEMA_VERSION) {
+    // Up to date — still run CREATE TABLE IF NOT EXISTS for any missing auxiliary
+    // tables (e.g. workflow_events added out-of-band).
+    db.exec(CURRENT_SCHEMA);
     return;
   }
 
+  // Additive v2 → v3 migration: add turn_type column without dropping data.
+  if (currentVersion === 2) {
+    migrateV2ToV3(db);
+    return;
+  }
+
+  // Any other mismatch (null first-run, or a foreign schema): reset.
+  resetSchema(db);
+}
+
+function migrateV2ToV3(db: Database.Database): void {
+  const cols = (db.pragma("table_info(workflow_runs)") as Array<{ name: string }>).map(
+    (c) => c.name,
+  );
+
+  if (!cols.includes("turn_type")) {
+    db.exec(
+      `ALTER TABLE workflow_runs ADD COLUMN turn_type TEXT NOT NULL DEFAULT 'workflow'`,
+    );
+  }
+
+  // Ensure any tables or indexes added between versions are present.
   db.exec(CURRENT_SCHEMA);
+
+  db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
 }
 
 function readSchemaVersion(db: Database.Database): number | null {

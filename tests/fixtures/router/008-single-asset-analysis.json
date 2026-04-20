@@ -1,0 +1,19 @@
+{
+  "input": "analyze TSLA",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "single_asset_analysis",
+    "entities": {
+      "symbols": ["TSLA"]
+    },
+    "slots": {
+      "symbol": { "value": "TSLA", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "explicit analyze verb + single ticker"
+  },
+  "tags": ["single_asset_analysis"]
+}

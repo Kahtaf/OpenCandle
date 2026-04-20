@@ -1,0 +1,20 @@
+{
+  "input": "build me an options setup for a bullish view",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "options_screener",
+    "entities": {
+      "symbols": [],
+      "direction": "bullish"
+    },
+    "slots": {
+      "direction": { "value": "bullish", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": ["symbol"],
+    "reasoning": "bullish options setup but no ticker given; ask_user needed"
+  },
+  "tags": ["options_screener", "needs-clarification-missing-symbol"]
+}

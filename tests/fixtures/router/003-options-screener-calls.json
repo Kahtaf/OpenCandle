@@ -1,0 +1,23 @@
+{
+  "input": "find me bullish calls on NVDA 30-45 DTE",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "options_screener",
+    "entities": {
+      "symbols": ["NVDA"],
+      "direction": "bullish",
+      "dteHint": "month"
+    },
+    "slots": {
+      "symbol": { "value": "NVDA", "source": "user", "confidence": "high" },
+      "direction": { "value": "bullish", "source": "user", "confidence": "high" },
+      "dte_target": { "value": "25_to_45_days", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "bullish calls + explicit DTE window on NVDA"
+  },
+  "tags": ["options_screener", "calls", "nvda"]
+}

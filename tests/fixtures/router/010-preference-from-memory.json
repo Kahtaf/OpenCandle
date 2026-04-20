@@ -1,0 +1,23 @@
+{
+  "input": "build me a portfolio for $30k",
+  "priorTurns": [],
+  "profileSnapshot": {
+    "risk_profile": "conservative"
+  },
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "portfolio_builder",
+    "entities": {
+      "symbols": [],
+      "budget": 30000
+    },
+    "slots": {
+      "budget": { "value": 30000, "source": "user", "confidence": "high" },
+      "risk_profile": { "value": "conservative", "source": "preference", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "budget from turn, risk_profile from profile snapshot"
+  },
+  "tags": ["portfolio_builder", "preference-source"]
+}

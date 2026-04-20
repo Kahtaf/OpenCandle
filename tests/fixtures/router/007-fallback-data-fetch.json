@@ -1,0 +1,18 @@
+{
+  "input": "AAPL quote",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "fallback",
+    "entities": {
+      "symbols": ["AAPL"]
+    },
+    "slots": {
+      "symbol": { "value": "AAPL", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "simple data-fetch; main agent handles via its own tool loop"
+  },
+  "tags": ["fallback-data-fetch"]
+}
