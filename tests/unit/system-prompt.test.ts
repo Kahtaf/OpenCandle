@@ -43,3 +43,40 @@ describe("system prompt — skipped-tag handling instruction", () => {
     expect(prompt).toContain("Persistent Memory Context");
   });
 });
+
+describe("system prompt — analyst stance", () => {
+  it("does not contain refusal / fiduciary-advisor vocabulary", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).not.toMatch(/\bfinancial advice\b/i);
+    expect(prompt).not.toMatch(/\bnot financial advice\b/i);
+    expect(prompt).not.toMatch(/\bconsult (?:a )?qualified (?:financial )?advisor/i);
+    expect(prompt).not.toMatch(/\bfinancial advisory agent\b/i);
+  });
+
+  it("frames OpenCandle as a research analyst that commits to specifics", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt.toLowerCase()).toContain("analyst");
+    expect(prompt).toMatch(/entry|target|stop|allocation/i);
+    expect(prompt).toMatch(/commit/i);
+  });
+
+  it("teaches the commit + reasoning + confidence + invalidation shape", () => {
+    const prompt = buildSystemPrompt();
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain("confidence");
+    expect(lower).toContain("invalidation");
+    expect(lower).toContain("reasoning");
+  });
+
+  it("forbids fiduciary framing and permits analyst framing", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt.toLowerCase()).toMatch(/our read|analyst view|the data suggests/);
+    expect(prompt.toLowerCase()).toMatch(/fiduciary|tailored to your|personal (financial )?situation/);
+  });
+
+  it("teaches adaptive explanation depth from conversational signals", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt.toLowerCase()).toMatch(/calibrate|adapt/);
+    expect(prompt.toLowerCase()).toMatch(/vocabulary|prior turn|sophisticated|beginner/);
+  });
+});

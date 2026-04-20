@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { buildPortfolioWorkflow } from "../../../src/workflows/portfolio-builder.js";
+import { buildPortfolioWorkflow, buildPortfolioWorkflowDefinition } from "../../../src/workflows/portfolio-builder.js";
 import type { PortfolioSlots, SlotResolution } from "../../../src/routing/types.js";
 
 function makeResolution(overrides: Partial<PortfolioSlots> = {}): SlotResolution<PortfolioSlots> {
@@ -63,5 +63,15 @@ describe("buildPortfolioWorkflow", () => {
     expect(presentFollowUp).toBeTruthy();
     expect(presentFollowUp).toContain("1 sentence");
     expect(presentFollowUp).toContain("3 bullet");
+  });
+
+  it("synthesis step does not emit disclaimer directive", () => {
+    const def = buildPortfolioWorkflowDefinition(makeResolution());
+    const synthesize = def.steps.find((s) => s.stepType === "synthesize");
+    expect(synthesize).toBeDefined();
+    expect(synthesize!.prompt).not.toMatch(/standard disclaimer/i);
+    expect(synthesize!.prompt).not.toMatch(/end with the standard/i);
+    expect(synthesize!.prompt).not.toMatch(/\bdisclaimer\b/i);
+    expect(synthesize!.prompt).not.toMatch(/not financial advice/i);
   });
 });

@@ -64,7 +64,9 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("OpenCandle");
     expect(result).toContain("Available Tools");
     expect(result).toContain("risk_profile: aggressive");
-    expect(result).toContain("Disclaimer");
+    // Output format section still assembles (analyst stance replaces the old
+    // Disclaimer block).
+    expect(result).toContain("Analytical Framework");
   });
 
   it("includes add-on tools in tool catalog", () => {
@@ -132,5 +134,42 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("get_reddit_sentiment");
+  });
+
+  it("assembled prompt contains no refusal / fiduciary-advisor vocabulary", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      workflowInstructions: "Build a portfolio for $10k",
+      memoryContext: "risk_profile: aggressive",
+    });
+    const result = builder.build();
+    expect(result).not.toMatch(/\bfinancial advice\b/i);
+    expect(result).not.toMatch(/\bnot financial advice\b/i);
+    expect(result).not.toMatch(/\bconsult (?:a )?qualified (?:financial )?advisor/i);
+    expect(result).not.toMatch(/\bstandard disclaimer\b/i);
+  });
+
+  it("contains analyst-stance content in base-role and output-format", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+    const result = builder.build();
+    expect(result.toLowerCase()).toContain("analyst");
+    expect(result.toLowerCase()).toContain("invalidation");
+    expect(result.toLowerCase()).toContain("confidence");
+  });
+
+  it("stance is present on every workflow type and the unclassified path", () => {
+    for (const workflowType of ["portfolio_builder", "options_screener", "compare_assets", "unclassified"]) {
+      const builder = new PromptContextBuilder();
+      builder.populateFromOptions({
+        workflowType,
+        workflowInstructions: workflowType === "unclassified" ? undefined : `Workflow: ${workflowType}`,
+      });
+      const result = builder.build();
+      expect(result.toLowerCase()).toContain("analyst");
+      expect(result.toLowerCase()).toContain("invalidation");
+      expect(result).not.toMatch(/\bnot financial advice\b/i);
+      expect(result).not.toMatch(/\bstandard disclaimer\b/i);
+    }
   });
 });

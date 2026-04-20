@@ -323,3 +323,35 @@ describe("buildDisclosureBlock", () => {
     expect(prompt).toContain("Assumptions (reproduce this block exactly");
   });
 });
+
+describe("workflow prompts — no disclaimer / refusal directives", () => {
+  const compareResolution: SlotResolution<CompareAssetsSlots> = {
+    resolved: { symbols: ["AAPL", "MSFT"] },
+    sources: { symbols: "user" },
+    defaultsUsed: [],
+    missingRequired: [],
+  };
+
+  it("buildPortfolioPrompt contains no disclaimer directive", () => {
+    const prompt = buildPortfolioPrompt(makePortfolioResolution());
+    expect(prompt).not.toMatch(/standard disclaimer/i);
+    expect(prompt).not.toMatch(/\bdisclaimer\b/i);
+    expect(prompt).not.toMatch(/\beducational sample\b/i);
+    expect(prompt).not.toMatch(/instead of refusing/i);
+    expect(prompt).not.toMatch(/not financial advice/i);
+  });
+
+  it("buildOptionsScreenerPrompt contains no disclaimer directive", () => {
+    const prompt = buildOptionsScreenerPrompt(makeOptionsResolution());
+    expect(prompt).not.toMatch(/standard disclaimer/i);
+    expect(prompt).not.toMatch(/\bdisclaimer\b/i);
+    expect(prompt).not.toMatch(/not financial advice/i);
+  });
+
+  it("buildCompareAssetsPrompt contains no disclaimer directive", () => {
+    const prompt = buildCompareAssetsPrompt(compareResolution);
+    expect(prompt).not.toMatch(/standard disclaimer/i);
+    expect(prompt).not.toMatch(/\bdisclaimer\b/i);
+    expect(prompt).not.toMatch(/not financial advice/i);
+  });
+});
