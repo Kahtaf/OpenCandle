@@ -7,6 +7,8 @@ import type {
   RouterLlmClient,
   RouterOutput,
 } from "../../../src/routing/router-types.js";
+import { buildAssumptionsBlockFromRouter } from "../../../src/prompts/workflow-prompts.js";
+import { PromptContextBuilder, buildFallbackPlaybook } from "../../../src/prompts/context-builder.js";
 
 interface RouterFixture {
   input: string;
@@ -68,4 +70,98 @@ describe("Router deterministic fixtures", () => {
       expect(stripReasoning(result)).toEqual(stripReasoning(data.expectedRouterOutput));
     });
   }
+});
+
+describe("Router fixtures drive prompt assembly correctly", () => {
+  // Beyond JSON round-trip: each fixture's slots must produce an Assumptions
+  // block that distributes slot sources into the canonical sections, and
+  // fallback-route fixtures must produce a fallback playbook that carries the
+  // block and the ask_user directive when missing_required is non-empty.
+  const fixtures = loadFixtures();
+
+  for (const { name, data } of fixtures) {
+    const { slots } = data.expectedRouterOutput;
+    const hasSlots = Object.keys(slots).length > 0;
+
+    if (hasSlots) {
+      it(`fixture ${name} Assumptions block places each slot under the right source section`, () => {
+        const block = buildAssumptionsBlockFromRouter(slots);
+        const sectionForLabel = (line: string) => {
+          if (line.startsWith("  User-specified:")) return "user";
+          if (line.startsWith("  From saved preferences:")) return "preference";
+          if (line.startsWith("  Defaults:")) return "default";
+          return null;
+        };
+        const sectionContents: Record<string, string> = { user: "", preference: "", default: "" };
+        let currentSection: string | null = null;
+        for (const line of block.split("\n")) {
+          const s = sectionForLabel(line);
+          if (s) {
+            currentSection = s;
+            sectionContents[s] += line;
+          } else if (currentSection) {
+            sectionContents[currentSection] += " " + line;
+          }
+        }
+        for (const [key, slot] of Object.entries(slots)) {
+          expect(sectionContents[slot.source]).toContain(`${key} (`);
+        }
+      });
+    }
+
+    if (data.expectedRouterOutput.route === "fallback") {
+      it(`fixture ${name} fallback playbook embeds the Assumptions block and ask_user directive`, () => {
+        const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
+        const playbook = buildFallbackPlaybook({
+          assumptionsBlock,
+          missingRequired: data.expectedRouterOutput.missing_required,
+          extraContext:
+            data.expectedRouterOutput.entities.symbols.length > 0
+              ? `Router-extracted symbols: ${data.expectedRouterOutput.entities.symbols.join(", ")}.`
+              : undefined,
+        });
+        if (hasSlots) {
+          // The playbook must carry the block verbatim.
+          expect(playbook).toContain(assumptionsBlock);
+        }
+        if (data.expectedRouterOutput.missing_required.length > 0) {
+          expect(playbook).toMatch(/ask_user/);
+          for (const slot of data.expectedRouterOutput.missing_required) {
+            expect(playbook).toContain(slot);
+          }
+        }
+        // Universal: no refusal vocabulary anywhere in the playbook.
+        expect(playbook).not.toMatch(/not financial advice/i);
+        expect(playbook).not.toMatch(/consult a qualified/i);
+        expect(playbook).not.toMatch(/I cannot/i);
+      });
+    }
+  }
+
+  it("full system prompt assembled for a fallback fixture contains analyst stance + playbook + assumptions", () => {
+    const fallback = fixtures.find((f) => f.data.expectedRouterOutput.route === "fallback");
+    expect(fallback, "need at least one fallback fixture").toBeDefined();
+    const { slots, missing_required, entities } = fallback!.data.expectedRouterOutput;
+    const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      fallbackContext: {
+        assumptionsBlock,
+        missingRequired: missing_required,
+        extraContext:
+          entities.symbols.length > 0
+            ? `Router-extracted symbols: ${entities.symbols.join(", ")}.`
+            : undefined,
+      },
+    });
+    const prompt = builder.build();
+    // Analyst stance from change A (universal).
+    expect(prompt.toLowerCase()).toContain("analyst");
+    expect(prompt.toLowerCase()).toContain("invalidation");
+    // Fallback playbook marker.
+    expect(prompt).toContain("## Fallback Playbook");
+    // No refusal vocabulary from any section.
+    expect(prompt).not.toMatch(/not financial advice/i);
+    expect(prompt).not.toMatch(/consult a qualified/i);
+  });
 });
