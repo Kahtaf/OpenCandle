@@ -106,10 +106,20 @@ export function buildAssumptionsBlockFromRouter(
   const slotValues: Record<string, unknown> = {};
   const slotSources: Record<string, SlotSource | undefined> = {};
   for (const [key, slot] of Object.entries(slots)) {
-    slotValues[key] = slot.value;
+    slotValues[key] = formatSlotValue(slot.value);
     slotSources[key] = slot.source;
   }
   return buildDisclosureBlock(slotValues, slotSources, workflowConstraints);
+}
+
+// Router slot values are `unknown` and may include arrays (e.g. symbols)
+// or nested objects. Default `${val}` coercion renders arrays as "a,b"
+// (no space) and objects as "[object Object]" — normalize here so the
+// shared disclosure renderer sees readable strings.
+function formatSlotValue(value: unknown): string {
+  if (Array.isArray(value)) return value.map((v) => formatSlotValue(v)).join(", ");
+  if (value !== null && typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }
 
 export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>): string {

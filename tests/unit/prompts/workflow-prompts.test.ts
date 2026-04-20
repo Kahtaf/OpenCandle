@@ -355,3 +355,43 @@ describe("workflow prompts — no disclaimer / refusal directives", () => {
     expect(prompt).not.toMatch(/not financial advice/i);
   });
 });
+
+describe("buildAssumptionsBlockFromRouter", () => {
+  it("renders string[] slot values as ', '-joined strings, not 'a,b'", async () => {
+    const { buildAssumptionsBlockFromRouter } = await import(
+      "../../../src/prompts/workflow-prompts.js"
+    );
+    const block = buildAssumptionsBlockFromRouter({
+      symbols: { value: ["AAPL", "MSFT", "NVDA"], source: "user", confidence: "high" },
+    });
+    expect(block).toContain("symbols (AAPL, MSFT, NVDA)");
+    expect(block).not.toContain("AAPL,MSFT");
+  });
+
+  it("renders scalar slot values unchanged", async () => {
+    const { buildAssumptionsBlockFromRouter } = await import(
+      "../../../src/prompts/workflow-prompts.js"
+    );
+    const block = buildAssumptionsBlockFromRouter({
+      budget: { value: 25_000, source: "user", confidence: "high" },
+      horizon: { value: "6mo", source: "preference", confidence: "medium" },
+    });
+    expect(block).toContain("budget (25000)");
+    expect(block).toContain("horizon (6mo)");
+  });
+
+  it("renders plain-object slot values as JSON, not '[object Object]'", async () => {
+    const { buildAssumptionsBlockFromRouter } = await import(
+      "../../../src/prompts/workflow-prompts.js"
+    );
+    const block = buildAssumptionsBlockFromRouter({
+      range: {
+        value: { min: 60, max: 80 },
+        source: "default",
+        confidence: "low",
+      },
+    });
+    expect(block).toContain('range ({"min":60,"max":80})');
+    expect(block).not.toContain("[object Object]");
+  });
+});
