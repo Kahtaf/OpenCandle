@@ -65,4 +65,23 @@ describe("buildOptionsScreenerWorkflow", () => {
     const followUp = workflow.followUps[0];
     expect(followUp).toContain("30 lines");
   });
+
+  // Regression test for a live-run failure where get_option_chain returned
+  // "⚠ Options chain unavailable for SPY (fetch failed)" for some expirations
+  // and the LLM ended the turn with empty text (no Assumptions block, no
+  // narrative). The rank_and_present step now explicitly instructs the model
+  // to always produce a text response and to degrade gracefully on partial
+  // fetch failure — matching the "continue with remaining tools and label
+  // unavailable metrics" rule in src/prompts/context-builder.ts SAFETY_RULES.
+  it("follow-up prompt instructs graceful degradation on partial fetch failure", () => {
+    const workflow = buildOptionsScreenerWorkflow(makeResolution());
+    const followUp = workflow.followUps[0];
+    // Must explicitly forbid ending the turn with only tool calls.
+    expect(followUp.toLowerCase()).toContain("never end this turn with only tool calls");
+    // Must reference the unavailable sentinel shape so the LLM maps the
+    // tool-result text to the degrade-gracefully branch.
+    expect(followUp).toContain("Options chain unavailable");
+    // Must tell the LLM to still produce a text response in the no-data case.
+    expect(followUp.toLowerCase()).toContain("still produce a text response");
+  });
 });
