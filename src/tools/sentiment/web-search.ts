@@ -2,6 +2,8 @@ import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { searchWeb } from "../../providers/web-search.js";
 import type { WebSearchEnvelope } from "../../types/sentiment.js";
+import { hasCredential } from "../../onboarding/providers.js";
+import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Search query — ticker, topic, or question" }),
@@ -33,6 +35,48 @@ function escapeMd(text: string): string {
 function safeUrl(url: string): string {
   if (url.startsWith("https://") || url.startsWith("http://")) return url;
   return `https://${url}`;
+}
+
+/**
+ * Build soft-degradation tags for search providers whose credentials are
+ * missing at call time. Returns an empty string when nothing is degraded, or
+ * a newline-terminated block of `[OPENCANDLE_SOFT_DEGRADED ...]` tags ready to
+ * prepend to the tool result content. The extension's `tool_result` handler
+ * records these into the per-turn degradation accumulator; the system prompt
+ * instructs the LLM to surface them in a `**Data gaps**` section.
+ *
+ * Emission rules:
+ *   - Brave: if `hasCredential("brave") === false` AND the envelope's
+ *     provider is not `"brave"`, the cascade fell back from Brave.
+ *   - Exa:   if `hasCredential("exa") === false` AND the envelope's provider
+ *     is `"exa"`, the Exa provider used the keyless MCP path instead of the
+ *     keyed API. Envelopes served by `ddg` are NOT tagged for Exa (Exa was
+ *     tried first and failed for a reason unrelated to credentials).
+ */
+function buildSoftDegradedPrefix(data: WebSearchEnvelope): string {
+  const tags: string[] = [];
+
+  if (!hasCredential("brave") && data.provider !== "brave") {
+    tags.push(
+      buildSoftDegradedTag({
+        provider: "brave",
+        fallback: data.provider === "exa" ? "exa" : "ddg",
+        remediation: "run /connect search to enable Brave",
+      }),
+    );
+  }
+
+  if (!hasCredential("exa") && data.provider === "exa") {
+    tags.push(
+      buildSoftDegradedTag({
+        provider: "exa",
+        fallback: "keyless-mcp",
+        remediation: "run /connect search to enable keyed Exa",
+      }),
+    );
+  }
+
+  return tags.length === 0 ? "" : `${tags.join("\n")}\n\n`;
 }
 
 export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
@@ -69,8 +113,14 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
     const data = result.data;
 
     if (data.resultCount === 0) {
+      const zeroPrefix = buildSoftDegradedPrefix(data);
       return {
-        content: [{ type: "text", text: `No results found for "${query}" (${category}, past ${freshness}).` }],
+        content: [
+          {
+            type: "text",
+            text: `${zeroPrefix}No results found for "${query}" (${category}, past ${freshness}).`,
+          },
+        ],
         details: data,
       };
     }
@@ -78,6 +128,8 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
     const stalePrefix = result.stale
       ? `⚠ Using cached data from ${result.timestamp}\n\n`
       : "";
+
+    const softDegradedPrefix = buildSoftDegradedPrefix(data);
 
     const header = `**Web Search** — ${data.resultCount} results for "${query}" (${category}, past ${freshness}, via ${data.provider})`;
     const items = data.results.map((r) => {
@@ -88,7 +140,7 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
       return `• [${title}](${url}) — ${r.source}\n  ${snippet}\n  ${pub}`;
     });
 
-    const text = `${stalePrefix}${header}\n\n${items.join("\n\n")}`;
+    const text = `${softDegradedPrefix}${stalePrefix}${header}\n\n${items.join("\n\n")}`;
 
     return {
       content: [{ type: "text", text }],

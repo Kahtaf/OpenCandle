@@ -3,6 +3,7 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { getOverview } from "../../providers/alpha-vantage.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
+import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
 export interface CompsMetric {
@@ -96,11 +97,8 @@ export const compsTool: AgentTool<typeof params> = {
     "Compare 2-6 companies side-by-side on key valuation and financial metrics: P/E, Forward P/E, EPS, Profit Margin, Revenue Growth, Dividend Yield, Beta. Identifies the cheapest and most expensive on each metric.",
   parameters: params,
   async execute(toolCallId, args) {
+    return withCredentialCheck("alpha_vantage", async () => {
     const config = getConfig();
-    if (!config.alphaVantageApiKey) {
-      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
-    }
-
     const symbols = args.symbols.map((s) => s.toUpperCase());
 
     const results = await Promise.all(
@@ -153,5 +151,6 @@ export const compsTool: AgentTool<typeof params> = {
     const text = [header, "", symHeader, ...rows, ...noteLines].join("\n");
 
     return { content: [{ type: "text", text }], details: result };
+    });
   },
 };

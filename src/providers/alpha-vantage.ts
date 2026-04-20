@@ -1,11 +1,26 @@
-import { httpGet } from "../infra/http-client.js";
+import { httpGet, HttpError } from "../infra/http-client.js";
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 import type { CompanyOverview, EarningsData, FinancialStatement } from "../types/fundamentals.js";
 import type { StockQuote, OHLCV } from "../types/market.js";
 
 const BASE_URL = "https://www.alphavantage.co/query";
 const MISSING_OVERVIEW_TTL = 15 * 60_000;
+
+/**
+ * Detects authentication failures in HTTP errors and re-throws them as a
+ * typed `ProviderCredentialError` so the tool layer can convert them into
+ * a `[OPENCANDLE_CREDENTIAL_REQUIRED ...]` tagged content block.
+ *
+ * Call from every catch block in this module BEFORE any stale-cache fallback
+ * so that a real 401/403 does not silently get masked by cached data.
+ */
+function throwIfAuthError(error: unknown): void {
+  if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+    throw new ProviderCredentialError("alpha_vantage", "stale", error.status);
+  }
+}
 
 function buildUrl(fn: string, params: Record<string, string>, apiKey: string): string {
   const qs = new URLSearchParams({ function: fn, ...params, apikey: apiKey });
@@ -58,6 +73,7 @@ export async function getOverview(
     cache.set(cacheKey, result, TTL.FUNDAMENTALS);
     return result;
   } catch (error) {
+    throwIfAuthError(error);
     const stale = cache.getStale<CompanyOverview>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
     if (stale) return stale.value;
     throw error;
@@ -90,6 +106,7 @@ export async function getEarnings(
     cache.set(cacheKey, result, TTL.FUNDAMENTALS);
     return result;
   } catch (error) {
+    throwIfAuthError(error);
     const stale = cache.getStale<EarningsData>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
     if (stale) return stale.value;
     throw error;
@@ -151,6 +168,7 @@ export async function getFinancials(
     cache.set(cacheKey, statements, TTL.FUNDAMENTALS);
     return statements;
   } catch (error) {
+    throwIfAuthError(error);
     const stale = cache.getStale<FinancialStatement[]>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
     if (stale) return stale.value;
     throw error;
@@ -203,6 +221,7 @@ export async function getGlobalQuote(
     cache.set(cacheKey, result, TTL.QUOTE);
     return result;
   } catch (error) {
+    throwIfAuthError(error);
     const stale = cache.getStale<StockQuote>(cacheKey, STALE_LIMIT.QUOTE);
     if (stale) return stale.value;
     throw error;
@@ -247,6 +266,7 @@ export async function getDailyHistory(
     cache.set(cacheKey, ohlcv, TTL.HISTORY);
     return ohlcv;
   } catch (error) {
+    throwIfAuthError(error);
     const stale = cache.getStale<OHLCV[]>(cacheKey, STALE_LIMIT.HISTORY);
     if (stale) return stale.value;
     throw error;

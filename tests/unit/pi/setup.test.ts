@@ -5,9 +5,6 @@ vi.mock("../../../src/infra/open-url.js", async () => ({
 }));
 
 import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { getLlmSetupRequirement, runOpenCandleSetup } from "../../../src/pi/setup.js";
 
 function createUi(overrides: Partial<any> = {}) {
@@ -32,6 +29,11 @@ describe("OpenCandle setup", () => {
     vi.restoreAllMocks();
   });
 
+  // NOTE: The finance-setup tests that used to live in this file covered the
+  // `runFinanceSetup` flow that has been removed. New conversational-provider-setup
+  // tests will land in Task Group 14 (auto-model-select) and Task Group 17 (e2e
+  // for the full just-in-time flow).
+
   it("requires auth when there is no usable model", () => {
     const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
@@ -47,14 +49,16 @@ describe("OpenCandle setup", () => {
     expect(getLlmSetupRequirement({ model: undefined, modelRegistry })).toBe("select_model");
   });
 
-  it("writes an API key to Pi auth and selects a model during manual setup", async () => {
+  it("writes an API key to Pi auth and auto-activates the default model without opening a picker", async () => {
+    // 14.1 — with a defaultModelId that's available in getAvailable(), setModel should be
+    // called exactly once without the model picker opening. The UI should receive only two
+    // `select` calls total (choose entry method, choose provider).
     const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
     const ui = createUi();
     ui.select
       .mockResolvedValueOnce("Paste API key")
-      .mockResolvedValueOnce("Google Gemini API")
-      .mockResolvedValueOnce("google/gemini-2.5-flash");
+      .mockResolvedValueOnce("Google Gemini API");
     ui.input.mockResolvedValueOnce("test-google-key");
 
     const setModel = vi.fn().mockResolvedValue(true);
@@ -69,202 +73,202 @@ describe("OpenCandle setup", () => {
     const result = await runOpenCandleSetup(
       { setModel } as any,
       ctx as any,
-      { mode: "manual", forceFinancePrompt: false },
+      { mode: "manual" },
     );
 
     expect(result).toBe("ready");
     expect(authStorage.get("google")).toEqual({ type: "api_key", key: "test-google-key" });
-    expect(setModel).toHaveBeenCalled();
+    expect(setModel).toHaveBeenCalledTimes(1);
+    const activated = setModel.mock.calls[0]?.[0];
+    expect(activated?.provider).toBe("google");
+    expect(activated?.id).toBe("gemini-2.5-flash");
+    // Only the entry-method and provider pickers — no model picker.
+    expect(ui.select).toHaveBeenCalledTimes(2);
   });
 
-  it("writes finance keys to ~/.opencandle/config.json after setup", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
-    process.env.OPENCANDLE_HOME = tempDir;
-    process.chdir(tempDir);
-
-    const authStorage = AuthStorage.inMemory({
-      google: { type: "api_key", key: "test-google-key" },
-    } as any);
+  it("falls back to the model picker when no default model is available for the provider", async () => {
+    // 14.2 — if the registry lookup for (provider, defaultModelId) fails, the existing
+    // picker path should still open. We force this by registering a fake provider that
+    // has no default in our DEFAULT_LLM_MODELS map.
+    const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
-    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
+    // Register a throwaway provider with a single model whose id is NOT in our defaults.
+    modelRegistry.registerProvider("custom-llm", {
+      api: "openai-completions",
+      baseUrl: "https://example.test/v1",
+      apiKey: "fake",
+      models: [
+        {
+          id: "custom-mystery-model",
+          name: "Custom Mystery",
+          reasoning: false,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: 4096,
+          maxTokens: 1024,
+        },
+      ],
+    });
+    authStorage.set("custom-llm" as any, { type: "api_key", key: "fake" });
+    modelRegistry.refresh();
+
     const ui = createUi();
-    ui.select.mockResolvedValueOnce("Yes");
-    ui.input.mockResolvedValueOnce("alpha-key").mockResolvedValueOnce("fred-key");
+    // Directly invoke the picker path by starting from the "select_model" requirement.
+    ui.select.mockResolvedValueOnce("custom-llm/custom-mystery-model");
 
     const setModel = vi.fn().mockResolvedValue(true);
     const ctx = {
       hasUI: true,
       ui,
       modelRegistry,
-      model: currentModel,
+      model: undefined,
       shutdown: vi.fn(),
     };
 
-    await runOpenCandleSetup(
+    const result = await runOpenCandleSetup(
       { setModel } as any,
       ctx as any,
-      { mode: "manual", forceFinancePrompt: true },
+      { mode: "startup" },
     );
 
-    expect(readFileSync(join(tempDir, "config.json"), "utf-8")).toContain("alpha-key");
-    expect(readFileSync(join(tempDir, "config.json"), "utf-8")).toContain("fred-key");
-    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
-
-    rmSync(tempDir, { recursive: true, force: true });
+    expect(result).toBe("ready");
+    expect(setModel).toHaveBeenCalledTimes(1);
+    // The select call was the model picker, not a setup entry.
+    expect(ui.select.mock.calls[0]?.[0]).toBe("Choose a model");
   });
 
-  it("opens signup pages in the browser during finance setup", async () => {
-    const { openInBrowser } = await import("../../../src/infra/open-url.js");
-    const mockOpen = vi.mocked(openInBrowser);
-    mockOpen.mockClear();
-
-    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
-    process.env.OPENCANDLE_HOME = tempDir;
-    process.chdir(tempDir);
-
-    const authStorage = AuthStorage.inMemory({
-      google: { type: "api_key", key: "test-google-key" },
-    } as any);
+  it("first-run startup shows only LLM sign-in screens (no data-provider prompts)", async () => {
+    // 14.3 — regression guard: after the finance-setup phase was removed, startup with
+    // no model configured must not emit any data-provider picker. The first select call
+    // must be the LLM entry-method picker.
+    const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
-    const currentModel = modelRegistry.getAvailable().find((m) => m.provider === "google");
-    const ui = createUi();
-    ui.select.mockResolvedValueOnce("Yes");
-    ui.input.mockResolvedValueOnce("alpha-key").mockResolvedValueOnce("fred-key");
-
+    const ui = createUi({ select: vi.fn().mockResolvedValue("Exit setup") });
     const ctx = {
       hasUI: true,
       ui,
       modelRegistry,
-      model: currentModel,
+      model: undefined,
       shutdown: vi.fn(),
     };
 
     await runOpenCandleSetup(
-      { setModel: vi.fn().mockResolvedValue(true) } as any,
+      { setModel: vi.fn() } as any,
       ctx as any,
-      { mode: "manual", forceFinancePrompt: true },
-    );
-
-    expect(mockOpen).toHaveBeenCalledWith("https://www.alphavantage.co/support/#api-key");
-    expect(mockOpen).toHaveBeenCalledWith("https://fredaccount.stlouisfed.org/apikeys");
-
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it("skips finance setup when both provider keys come from env", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
-    process.env.OPENCANDLE_HOME = tempDir;
-    process.chdir(tempDir);
-    process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
-    process.env.FRED_API_KEY = "fred-env";
-
-    const authStorage = AuthStorage.inMemory({
-      google: { type: "api_key", key: "test-google-key" },
-    } as any);
-    const modelRegistry = ModelRegistry.inMemory(authStorage);
-    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
-    const ui = createUi();
-
-    await runOpenCandleSetup(
-      { setModel: vi.fn().mockResolvedValue(true) } as any,
-      {
-        hasUI: true,
-        ui,
-        modelRegistry,
-        model: currentModel,
-        shutdown: vi.fn(),
-      } as any,
       { mode: "startup" },
     );
 
-    expect(ui.select).not.toHaveBeenCalled();
-    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
-
-    delete process.env.ALPHA_VANTAGE_API_KEY;
-    delete process.env.FRED_API_KEY;
-    rmSync(tempDir, { recursive: true, force: true });
+    // The first select call should be the LLM entry-method question.
+    const firstSelectCall = ui.select.mock.calls[0];
+    expect(String(firstSelectCall?.[0] ?? "")).toContain("Welcome to OpenCandle");
+    // No prompt labeled with "finance", "data provider", "Alpha Vantage", or "FRED".
+    for (const call of ui.select.mock.calls) {
+      const label = String(call?.[0] ?? "");
+      expect(label.toLowerCase()).not.toContain("finance");
+      expect(label.toLowerCase()).not.toContain("alpha vantage");
+      expect(label.toLowerCase()).not.toContain("fred");
+    }
   });
 
-  it("skips finance setup when readiness is split across env and config", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
-    process.env.OPENCANDLE_HOME = tempDir;
-    process.chdir(tempDir);
-    process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
-
-    const authStorage = AuthStorage.inMemory({
-      google: { type: "api_key", key: "test-google-key" },
-    } as any);
+  it("subsequent startup with LLM already configured shows zero setup screens", async () => {
+    // 14.4 — when getLlmSetupRequirement returns "ready" and mode === "startup",
+    // runOpenCandleSetup should short-circuit without touching ctx.ui at all.
+    const authStorage = AuthStorage.inMemory();
+    authStorage.set("google", { type: "api_key", key: "pre-existing" });
     const modelRegistry = ModelRegistry.inMemory(authStorage);
-    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
-    const ui = createUi();
-
-    const configJson = JSON.stringify({
-      providers: {
-        fred: { apiKey: "fred-file" },
-      },
-    });
-    await import("node:fs").then(({ writeFileSync }) =>
-      writeFileSync(join(tempDir, "config.json"), `${configJson}\n`, "utf-8"),
+    const models = modelRegistry.getAvailable();
+    const seeded = models.find(
+      (m) => m.provider === "google" && m.id === "gemini-2.5-flash",
     );
+    expect(seeded).toBeDefined();
 
-    await runOpenCandleSetup(
-      { setModel: vi.fn().mockResolvedValue(true) } as any,
-      {
-        hasUI: true,
-        ui,
-        modelRegistry,
-        model: currentModel,
-        shutdown: vi.fn(),
-      } as any,
+    const ui = createUi();
+    const setModel = vi.fn();
+    const ctx = {
+      hasUI: true,
+      ui,
+      modelRegistry,
+      model: seeded,
+      shutdown: vi.fn(),
+    };
+
+    const result = await runOpenCandleSetup(
+      { setModel } as any,
+      ctx as any,
       { mode: "startup" },
     );
 
+    expect(result).toBe("ready");
     expect(ui.select).not.toHaveBeenCalled();
-    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
-
-    delete process.env.ALPHA_VANTAGE_API_KEY;
-    rmSync(tempDir, { recursive: true, force: true });
+    expect(ui.input).not.toHaveBeenCalled();
+    expect(ui.notify).not.toHaveBeenCalled();
+    expect(setModel).not.toHaveBeenCalled();
   });
 
-  it("prompts only for providers missing from the effective config", async () => {
-    const { openInBrowser } = await import("../../../src/infra/open-url.js");
-    const mockOpen = vi.mocked(openInBrowser);
-    mockOpen.mockClear();
-
-    const tempDir = mkdtempSync(join(tmpdir(), "opencandle-setup-"));
-    process.env.OPENCANDLE_HOME = tempDir;
-    process.chdir(tempDir);
-    process.env.ALPHA_VANTAGE_API_KEY = "alpha-env";
-
-    const authStorage = AuthStorage.inMemory({
-      google: { type: "api_key", key: "test-google-key" },
-    } as any);
+  it("uses OpenCandle-voiced input flow for API keys without rendering LoginDialogComponent", async () => {
+    // 15.1 + 15.2 — API-key path must use ctx.ui.input directly and never render
+    // LoginDialogComponent (which is instantiated inside ctx.ui.custom). The copy
+    // surfaced to the user must reference OpenCandle so users understand where
+    // the key is stored.
+    const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
-    const currentModel = modelRegistry.getAvailable().find((model) => model.provider === "google");
     const ui = createUi();
-    ui.select.mockResolvedValueOnce("Yes");
-    ui.input.mockResolvedValueOnce("fred-key");
+    ui.select
+      .mockResolvedValueOnce("Paste API key")
+      .mockResolvedValueOnce("Anthropic API");
+    ui.input.mockResolvedValueOnce("sk-ant-test-abc");
 
-    await runOpenCandleSetup(
-      { setModel: vi.fn().mockResolvedValue(true) } as any,
-      {
-        hasUI: true,
-        ui,
-        modelRegistry,
-        model: currentModel,
-        shutdown: vi.fn(),
-      } as any,
-      { mode: "manual", forceFinancePrompt: true },
+    const setModel = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      hasUI: true,
+      ui,
+      modelRegistry,
+      model: undefined,
+      shutdown: vi.fn(),
+    };
+
+    const result = await runOpenCandleSetup(
+      { setModel } as any,
+      ctx as any,
+      { mode: "manual" },
     );
 
-    expect(mockOpen).toHaveBeenCalledTimes(1);
-    expect(mockOpen).toHaveBeenCalledWith("https://fredaccount.stlouisfed.org/apikeys");
-    expect(readFileSync(join(tempDir, "config.json"), "utf-8")).toContain("fred-key");
-    expect(readFileSync(join(tempDir, "config.json"), "utf-8")).not.toContain("alpha-env");
-    expect(readFileSync(join(tempDir, "onboarding.json"), "utf-8")).toContain("completed");
+    expect(result).toBe("ready");
+    // 15.1 — LoginDialogComponent is only invoked via ctx.ui.custom. API-key path
+    // must never touch that surface.
+    expect(ui.custom).not.toHaveBeenCalled();
+    // 15.2 — OpenCandle-voiced copy surfaces the brand name in the notify/input
+    // strings so users know where their key is being stored.
+    const notifyStrings = ui.notify.mock.calls.map((call: any[]) => String(call[0] ?? ""));
+    const inputStrings = ui.input.mock.calls.map((call: any[]) => String(call[0] ?? ""));
+    const allCopy = [...notifyStrings, ...inputStrings].join("\n").toLowerCase();
+    expect(allCopy).toContain("opencandle");
+  });
 
-    delete process.env.ALPHA_VANTAGE_API_KEY;
-    rmSync(tempDir, { recursive: true, force: true });
+  it("does not call ctx.ui.setHeader or setStatus anywhere in the setup flow", async () => {
+    // 15.5 — renderSetupHeader / setSetupChrome / clearSetupChrome were deleted,
+    // so the UI surface should never receive a header or a per-setup status string.
+    const authStorage = AuthStorage.inMemory();
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+    const ui = createUi();
+    ui.select
+      .mockResolvedValueOnce("Paste API key")
+      .mockResolvedValueOnce("Google Gemini API");
+    ui.input.mockResolvedValueOnce("test-google-key-2");
+
+    const setModel = vi.fn().mockResolvedValue(true);
+    const ctx = {
+      hasUI: true,
+      ui,
+      modelRegistry,
+      model: undefined,
+      shutdown: vi.fn(),
+    };
+
+    await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" });
+
+    expect(ui.setHeader).not.toHaveBeenCalled();
+    expect(ui.setStatus).not.toHaveBeenCalled();
   });
 
   it("exits startup setup cleanly when the user declines LLM setup", async () => {

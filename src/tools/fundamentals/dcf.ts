@@ -4,6 +4,7 @@ import { getOverview, getFinancials } from "../../providers/alpha-vantage.js";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
+import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 export interface DCFResult {
@@ -148,12 +149,9 @@ export const dcfTool: AgentTool<typeof params> = {
     "Compute a Discounted Cash Flow (DCF) intrinsic value estimate for a stock. Uses free cash flow, growth projections, and a discount rate to estimate what the stock is worth. Returns intrinsic value per share, margin of safety vs current price, and a sensitivity table.",
   parameters: params,
   async execute(toolCallId, args) {
+    return withCredentialCheck("alpha_vantage", async () => {
     const symbol = args.symbol.toUpperCase();
     const config = getConfig();
-
-    if (!config.alphaVantageApiKey) {
-      throw new Error("Alpha Vantage API key not configured. Set ALPHA_VANTAGE_API_KEY or add ~/.opencandle/config.json.");
-    }
 
     const [overviewResult, financialsResult, quoteResult] = await Promise.all([
       wrapProvider("alphavantage", () => getOverview(symbol, config.alphaVantageApiKey!)),
@@ -244,6 +242,7 @@ export const dcfTool: AgentTool<typeof params> = {
       content: [{ type: "text", text: lines.join("\n") }],
       details: { ...result, currentPrice: quote.price, marginOfSafety, upside },
     };
+    });
   },
 };
 

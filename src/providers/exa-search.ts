@@ -1,6 +1,7 @@
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { getConfig } from "../config.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 import type { WebSearchResult, WebSearchEnvelope } from "../types/sentiment.js";
 import type { WebSearchOpts } from "./web-search.js";
 
@@ -304,6 +305,9 @@ async function exaApiSearch(
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new ProviderCredentialError("exa", "stale", response.status);
+    }
     const body = await response.text().catch(() => "");
     throw new Error(`Exa API HTTP ${response.status}: ${body.slice(0, 300)}`);
   }
@@ -348,6 +352,9 @@ export async function exaSearch(
     // Re-throw abort errors immediately
     if (error instanceof Error && error.name === "AbortError") throw error;
     if (error instanceof DOMException && error.name === "TimeoutError") throw error;
+    // Re-throw credential errors so the tool layer can convert them to the
+    // tagged content block. Stale cache must not mask a real auth failure.
+    if (error instanceof ProviderCredentialError) throw error;
 
     const stale = cache.getStale<WebSearchEnvelope>(key, STALE_LIMIT.WEB_SEARCH);
     if (stale) return stale.value;

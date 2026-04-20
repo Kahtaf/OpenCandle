@@ -16,6 +16,23 @@ import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
 import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
+import {
+  getProvider,
+  type ProviderId,
+} from "../onboarding/providers.js";
+import {
+  loadOnboardingState,
+  saveOnboardingState,
+  markProviderSnoozed,
+  markProviderNeverAsk,
+  markWelcomeShown,
+  shouldShowWelcome,
+} from "../onboarding/state.js";
+import { parseToolTag, buildSkippedTag, buildConnectedTag } from "../onboarding/tool-tags.js";
+import { resolveCredentialRequired } from "../onboarding/credential-interceptor.js";
+import { createDegradationAccumulator } from "../onboarding/degradation-accumulator.js";
+import { promptUser } from "../onboarding/prompt-user.js";
+import { runProviderConnect } from "../onboarding/connect.js";
 import type { AskUserHandler } from "../types/index.js";
 
 export interface OpenCandleExtensionOptions {
@@ -24,6 +41,23 @@ export interface OpenCandleExtensionOptions {
 
 export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
   const coordinator = new SessionCoordinator();
+
+  // Credential-interception state. Lifetime:
+  //   `sessionPromptedSet` — cleared on session_start, persists across turns
+  //      within a session so users don't get re-prompted after picking
+  //      "continue without".
+  //   `hardPromptFiredInWorkflow` — reset on turn_start (the nearest clean
+  //      boundary for a single user request). Enforces the "at most one hard
+  //      prompt per workflow" cap.
+  //   `degradationAccumulator` — per-turn record of soft-tier providers that
+  //      fell back to their keyless alternative. Reset on turn_start; flushed
+  //      on turn_end via `pi.appendEntry("opencandle-turn-gap", ...)` for
+  //      session observability. Does NOT pause the workflow or mutate tool
+  //      results inline — soft-degraded tags remain visible to the LLM so its
+  //      final answer can surface them in a **Data gaps** section.
+  const sessionPromptedSet = new Set<ProviderId>();
+  let hardPromptFiredInWorkflow = false;
+  const degradationAccumulator = createDegradationAccumulator();
 
   // Register tools
   for (const tool of getOpenCandleToolDefinitions()) {
@@ -46,30 +80,340 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     },
   });
 
-  // /setup command
+  // /setup command — reconfigure the OpenCandle AI model (sign-in / API key).
+  // Data providers are configured separately via `/connect`.
   pi.registerCommand("setup", {
-    description: "Run OpenCandle setup for your AI model and market data providers",
+    description: "Reconfigure the OpenCandle AI model (sign-in or API key)",
     handler: async (_args, ctx) => {
-      const result = await coordinator.runSetup(pi, ctx, { mode: "manual", forceFinancePrompt: true });
+      const result = await coordinator.runSetup(pi, ctx, { mode: "manual" });
       if (result === "ready") {
         ctx.ui.notify("OpenCandle setup complete.", "info");
       }
     },
   });
 
+  // /connect command — reconfigurable sectioned setup for data providers.
+  // `/connect` with no args opens a picker listing all providers.
+  // `/connect <alias|id|category>` routes to a specific provider (or a
+  // sub-picker for multi-provider categories like "search").
+  pi.registerCommand("connect", {
+    description: "Connect a data provider (Alpha Vantage, FRED, Finnhub, Brave, Exa)",
+    handler: async (args, ctx) => {
+      const { listAllProviders, resolveProviderFromArgument, hasCredential } = await import(
+        "../onboarding/providers.js"
+      );
+
+      const formatState = (id: ProviderId): string => {
+        const state = loadOnboardingState().providers[id];
+        if (state?.status === "completed") return "Configured";
+        if (state?.status === "snoozed") {
+          return `Snoozed until ${state.snoozeUntil.slice(0, 10)}`;
+        }
+        if (state?.status === "never_ask") return "Never-ask";
+        if (hasCredential(id)) return "Configured (via env)";
+        return "Not configured";
+      };
+
+      const pickProvider = async (
+        providers: readonly ReturnType<typeof getProvider>[],
+      ): Promise<ProviderId | undefined> => {
+        const labels = providers.map(
+          (p) => `${p.displayName} — ${p.unlocks.slice(0, 2).join(", ")} [${formatState(p.id)}]`,
+        );
+        const choice = await ctx.ui.select("Which provider would you like to connect?", labels);
+        if (choice === undefined) return undefined;
+        const index = labels.indexOf(choice);
+        return providers[index]?.id;
+      };
+
+      const trimmed = args.trim();
+      let targetId: ProviderId | undefined;
+
+      if (trimmed === "") {
+        // Bare /connect → full picker.
+        targetId = await pickProvider(listAllProviders());
+      } else {
+        const resolved = resolveProviderFromArgument(trimmed);
+        if (!resolved) {
+          const all = listAllProviders()
+            .map((p) => `  ${p.displayName} (${p.aliases.join(", ")})`)
+            .join("\n");
+          ctx.ui.notify(
+            `Unknown provider: "${trimmed}". Available:\n${all}`,
+            "warning",
+          );
+          return;
+        }
+        if (Array.isArray(resolved)) {
+          // Multi-provider category — show a sub-picker.
+          targetId = await pickProvider(resolved as readonly ReturnType<typeof getProvider>[]);
+        } else {
+          targetId = (resolved as ReturnType<typeof getProvider>).id;
+        }
+      }
+
+      if (!targetId) {
+        ctx.ui.notify("Connect cancelled.", "info");
+        return;
+      }
+
+      const result = await runProviderConnect(ctx, targetId);
+      if (result.status === "connected") {
+        ctx.ui.notify(`${getProvider(targetId).displayName} is now connected.`, "info");
+      } else if (result.status === "cancelled") {
+        ctx.ui.notify("Connect cancelled.", "info");
+      }
+      // "blocked_by_env" already notifies from inside runProviderConnect.
+    },
+  });
+
   // Session start
   pi.on("session_start", async (_event, ctx) => {
     coordinator.initSession(ctx.sessionManager.getSessionId());
+    sessionPromptedSet.clear();
+    hardPromptFiredInWorkflow = false;
 
     if (!ctx.hasUI) return;
     const result = await coordinator.runSetup(pi, ctx, { mode: "startup" });
     if (result === "shutdown") {
       return;
     }
-    ctx.ui.notify(
-      "OpenCandle finance mode. Try /analyze NVDA or ask for quotes, options, macro, or portfolio analysis.",
-      "info",
-    );
+
+    // One-shot welcome on the very first session (gated on welcomeShownAt).
+    // Uses `pi.sendMessage` with `display: true` so the welcome lands in the
+    // chat transcript (persistent, scrollable) rather than a transient
+    // `ctx.ui.notify` banner.
+    const state = loadOnboardingState();
+    if (shouldShowWelcome(state, ctx.hasUI)) {
+      const WELCOME_BODY =
+        "Welcome to OpenCandle. I'm your AI copilot for market analysis.\n\n" +
+        "Try something like:\n" +
+        "  • analyze NVDA          — full deep-dive on a ticker\n" +
+        "  • quote TSLA            — just the price and daily move\n" +
+        "  • how's bitcoin?        — crypto\n" +
+        "  • what's r/wallstreetbets saying about META?   — social sentiment\n\n" +
+        "You're running with just an LLM right now, which covers most of what\n" +
+        "people want. For fundamentals, economic data, or premium news you'll\n" +
+        "need a few free API keys — I'll offer to help when they'd actually\n" +
+        "make a difference, or run /connect anytime.";
+
+      pi.sendMessage({
+        customType: "opencandle-welcome",
+        content: [{ type: "text", text: WELCOME_BODY }],
+        display: true,
+      });
+      saveOnboardingState(markWelcomeShown(state));
+    } else {
+      ctx.ui.notify(
+        "OpenCandle ready. Try /analyze NVDA or /connect to add data providers.",
+        "info",
+      );
+    }
+  });
+
+  // Reset the per-workflow prompt cap AND the degradation accumulator on each
+  // new turn. One user request = one workflow invocation = at most one hard
+  // prompt and one combined soft-degradation annotation.
+  pi.on("turn_start", async () => {
+    hardPromptFiredInWorkflow = false;
+    degradationAccumulator.reset();
+  });
+
+  // At turn_end, flush the soft-degradation accumulator to a session entry so
+  // downstream consumers (UI renderers, debug inspectors, later turns) can see
+  // which soft providers fell back during this turn. The LLM has already
+  // emitted its answer by the time this fires, so the per-tool-result
+  // soft-degraded tags remain the primary carrier for the in-turn gap note.
+  pi.on("turn_end", async () => {
+    if (degradationAccumulator.isEmpty()) return;
+    const state = loadOnboardingState();
+    const annotation = degradationAccumulator.buildCombinedAnnotation(state);
+    if (annotation !== null) {
+      pi.appendEntry("opencandle-turn-gap", { annotation });
+    }
+    degradationAccumulator.reset();
+  });
+
+  // Intercept tool results for credential-required and soft-degraded tags.
+  pi.on("tool_result", async (event, ctx) => {
+    // First pass: record any soft-degradation tags in the per-turn accumulator
+    // WITHOUT mutating the tool result (the inline tag stays visible to the
+    // LLM so it can surface the gap in its final answer). Multiple tags per
+    // tool-result block are deduplicated by the accumulator's Set.
+    for (const block of event.content) {
+      if (block.type !== "text") continue;
+      const parsed = parseToolTag(block.text);
+      if (parsed?.kind === "soft_degraded") {
+        degradationAccumulator.record(parsed.provider);
+      }
+    }
+
+    // Second pass: look for a credential-required tag; on match, run the
+    // interception decision and either replace the tool result or prompt
+    // the user. Only the first credential_required tag in the content list
+    // is acted on — subsequent hard-tier prompts are silenced by the
+    // per-workflow cap at the decision-function level.
+    for (const block of event.content) {
+      if (block.type !== "text") continue;
+      const parsed = parseToolTag(block.text);
+      if (!parsed || parsed.kind !== "credential_required") continue;
+
+      const state = loadOnboardingState();
+      const action = resolveCredentialRequired({
+        provider: parsed.provider,
+        reason: parsed.reason,
+        state,
+        sessionPromptedSet,
+        hardPromptFiredInWorkflow,
+        now: new Date(),
+      });
+
+      if (action.action === "skip") {
+        // Replace content with a skipped placeholder so the LLM sees a
+        // neutral gap note instead of the credential-required tag.
+        const descriptor = getProvider(parsed.provider);
+        const remediation = action.silenced
+          ? `${action.remediation} (silenced)`
+          : action.remediation;
+        const tag = buildSkippedTag({
+          provider: parsed.provider,
+          reason: "credential_not_provided",
+          remediation,
+          silenced: action.silenced,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `${tag}\n\n${descriptor.displayName} data was not fetched for this request. ` +
+                (action.silenced
+                  ? `You previously asked not to be reminded about this provider.`
+                  : `To unlock ${descriptor.unlocks.join(", ")}, ${action.remediation}.`),
+            },
+          ],
+        };
+      }
+
+      // action === "prompt": pause and ask the user via promptUser.
+      const descriptor = getProvider(parsed.provider);
+      const connectLabel = `Connect now — ${descriptor.instructionsHint}`;
+      const continueLabel =
+        descriptor.fallbackDescription
+          ? `Continue with ${descriptor.fallbackDescription} for this run`
+          : `Continue without ${descriptor.displayName} for this run`;
+      const snoozeLabel = `Snooze ${descriptor.snoozeDurationDays} days`;
+      const neverLabel = `Never ask again`;
+      const questionBody =
+        `${descriptor.displayName} unlocks ${descriptor.unlocks.join(", ")}. ` +
+        `Free signup takes about 30 seconds. How would you like to proceed?`;
+
+      // Mark that a hard-tier prompt has now fired in this workflow (for the cap).
+      if (descriptor.tier === "hard") {
+        hardPromptFiredInWorkflow = true;
+      }
+      sessionPromptedSet.add(parsed.provider);
+
+      const promptResult = await promptUser(
+        ctx,
+        {
+          question: questionBody,
+          questionType: "select",
+          options: [connectLabel, continueLabel, snoozeLabel, neverLabel],
+        },
+        options?.askUserHandler,
+      );
+
+      if (promptResult.cancelled) {
+        // Treat cancel like "continue without".
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `${buildSkippedTag({
+                  provider: parsed.provider,
+                  reason: "credential_not_provided",
+                  remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
+                })}\n\nPrompt was cancelled.`,
+            },
+          ],
+        };
+      }
+
+      const answer = promptResult.answer ?? "";
+
+      if (answer.startsWith("Connect")) {
+        const connectResult = await runProviderConnect(ctx, parsed.provider);
+        if (connectResult.status === "connected") {
+          // Pi has no tool re-dispatch API — emit a CONNECTED placeholder so
+          // the LLM knows the key was just saved and can retry on the next
+          // turn (or use whatever partial data is in context).
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `${buildConnectedTag({ provider: parsed.provider })}\n\n` +
+                  `${descriptor.displayName} was just connected. Please re-run the previous request to fetch the data now that the credential is available.`,
+              },
+            ],
+          };
+        }
+        // Cancelled, blocked-by-env, or invalid_key: fall through to skipped
+        // with a result-specific explanation so the LLM can describe what
+        // just happened in its final answer.
+        const connectOutcomeDescription =
+          connectResult.status === "blocked_by_env"
+            ? "blocked by an existing environment variable"
+            : connectResult.status === "invalid_key"
+              ? `rejected by ${descriptor.displayName} (the key was invalid and nothing was saved)`
+              : "cancelled";
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `${buildSkippedTag({
+                  provider: parsed.provider,
+                  reason: "credential_not_provided",
+                  remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
+                })}\n\n${descriptor.displayName} connect was ${connectOutcomeDescription}.`,
+            },
+          ],
+        };
+      }
+
+      if (answer.startsWith("Snooze")) {
+        saveOnboardingState(
+          markProviderSnoozed(state, parsed.provider, descriptor.snoozeDurationDays),
+        );
+      } else if (answer.startsWith("Never")) {
+        saveOnboardingState(markProviderNeverAsk(state, parsed.provider));
+      }
+      // "Continue" / fallthrough: no state mutation, just skip.
+      const silenced = answer.startsWith("Never");
+      const remediation = silenced
+        ? `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock (silenced)`
+        : `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`;
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation,
+                silenced,
+              })}\n\n${descriptor.displayName} data was omitted per your choice.`,
+          },
+        ],
+      };
+    }
+
+    // No OpenCandle tag in this tool result — pass through.
+    return undefined;
   });
 
   // Input handling — classify intent and dispatch workflows

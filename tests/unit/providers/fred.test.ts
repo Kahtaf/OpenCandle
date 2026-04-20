@@ -77,4 +77,47 @@ describe("fred provider", () => {
     await getSeries("FEDFUNDS", "test-key", 30);
     expect(fetch).toHaveBeenCalledTimes(2); // 2 calls for first request (meta + obs), 0 for second
   });
+
+  it("throws ProviderCredentialError with reason=stale on 401", async () => {
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      text: () => Promise.resolve("Unauthorized"),
+    });
+
+    try {
+      await getSeries("FEDFUNDS", "bad-key", 30);
+      throw new Error("expected ProviderCredentialError");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ProviderCredentialError);
+      const credErr = err as InstanceType<typeof ProviderCredentialError>;
+      expect(credErr.provider).toBe("fred");
+      expect(credErr.reason).toBe("stale");
+      expect(credErr.httpStatus).toBe(401);
+    }
+  });
+
+  it("does NOT treat 400 as a credential error (FRED returns 400 for bad series ids)", async () => {
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: () => Promise.resolve('{"error_message":"Bad Request.  Variable series_id is not valid"}'),
+    });
+
+    try {
+      await getSeries("NOT_A_SERIES", "test-key", 30);
+      throw new Error("expected some error to be thrown");
+    } catch (err) {
+      // Must NOT be misclassified — 400 is a bad-series-id error, not credentials.
+      expect(err).not.toBeInstanceOf(ProviderCredentialError);
+    }
+  });
 });

@@ -4,20 +4,6 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
-import {
-  getFinanceProviderReadiness,
-  loadFileConfig,
-  saveFileConfig,
-  type FinanceProviderReadiness,
-  type OpenCandleFileConfig,
-} from "../config.js";
-import { openInBrowser } from "../infra/open-url.js";
-import { ONBOARDING_VERSION, loadOnboardingState, saveOnboardingState } from "../onboarding/state.js";
-
-const SETUP_STATUS_KEY = "opencandle-setup";
-
-const ALPHA_VANTAGE_SIGNUP_URL = "https://www.alphavantage.co/support/#api-key";
-const FRED_SIGNUP_URL = "https://fredaccount.stlouisfed.org/apikeys";
 
 type SetupMode = "startup" | "manual";
 type SetupRequirement = "ready" | "select_model" | "connect_auth";
@@ -25,31 +11,33 @@ type ApiKeyProviderId = "google" | "openai" | "anthropic";
 type OAuthProviderChoice = "google-gemini-cli" | "openai-codex" | "anthropic" | "advanced";
 type SetupResult = "ready" | "shutdown" | "cancelled";
 
-function renderSetupHeader(title: string, body: string[]) {
-  return (_tui: unknown, theme: { bold(text: string): string; fg(name: string, text: string): string }) => ({
-    render(): string[] {
-      return [
-        "",
-        theme.bold(theme.fg("accent", "OpenCandle Setup")),
-        theme.fg("muted", title),
-        "",
-        ...body.map((line) => theme.fg("dim", line)),
-        "",
-      ];
-    },
-    invalidate() {},
-  });
-}
+/**
+ * Registry of "fast default" models for each LLM auth provider. After a fresh
+ * sign-in we try to activate the default without opening a picker, falling back
+ * to the picker if the registry doesn't have a match available. Keys are auth
+ * provider ids (as passed to `authStorage.set`); values are `{ provider, id }`
+ * tuples matching `Model.provider` / `Model.id` fields in the Pi model registry.
+ *
+ * Models here are intentionally mid-tier (flash/haiku/mini) — the goal is a
+ * quick-to-respond first chat, not the flagship. Users can swap models later
+ * via Pi's built-in model picker.
+ */
+const DEFAULT_LLM_MODELS: Record<string, { provider: string; id: string }> = {
+  // API-key providers
+  google: { provider: "google", id: "gemini-2.5-flash" },
+  openai: { provider: "openai", id: "gpt-5-mini" },
+  anthropic: { provider: "anthropic", id: "claude-haiku-4-5" },
+  // OAuth providers
+  "google-gemini-cli": { provider: "google-gemini-cli", id: "gemini-2.5-flash" },
+  "openai-codex": { provider: "openai-codex", id: "gpt-5.1-codex-mini" },
+};
 
-function setSetupChrome(ctx: ExtensionContext, title: string, body: string[]): void {
-  ctx.ui.setHeader(renderSetupHeader(title, body));
-  ctx.ui.setStatus(SETUP_STATUS_KEY, title);
-}
-
-function clearSetupChrome(ctx: ExtensionContext): void {
-  ctx.ui.setHeader(undefined);
-  ctx.ui.setStatus(SETUP_STATUS_KEY, undefined);
-}
+/** Human-readable labels for the three API-key providers, used in preamble copy. */
+const API_KEY_PROVIDER_LABELS: Record<ApiKeyProviderId, string> = {
+  google: "Google Gemini",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+};
 
 function sortModels(models: Model<any>[], preferredProvider?: string): Model<any>[] {
   return [...models].sort((a, b) => {
@@ -197,7 +185,12 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
 }
 
 async function runApiKeySetup(ctx: ExtensionContext, provider: ApiKeyProviderId): Promise<boolean> {
-  const key = await ctx.ui.input("Paste your API key", "sk-...");
+  const label = API_KEY_PROVIDER_LABELS[provider];
+  ctx.ui.notify(
+    `OpenCandle stores your ${label} API key locally and only sends it to ${label}.`,
+    "info",
+  );
+  const key = await ctx.ui.input(`Paste your ${label} API key for OpenCandle`, "sk-...");
   const trimmed = key?.trim();
   if (!trimmed) {
     ctx.ui.notify("No API key entered.", "warning");
@@ -205,7 +198,43 @@ async function runApiKeySetup(ctx: ExtensionContext, provider: ApiKeyProviderId)
   }
   ctx.modelRegistry.authStorage.set(provider, { type: "api_key", key: trimmed });
   ctx.modelRegistry.refresh();
-  ctx.ui.notify("API key saved.", "info");
+  ctx.ui.notify(`${label} API key saved to OpenCandle.`, "info");
+  return true;
+}
+
+/**
+ * Attempt to activate the registered default model for `authProviderId`.
+ * Returns `true` on success, `false` if no default is registered, the default
+ * isn't currently available in `getAvailable()`, or `api.setModel` fails (in
+ * which case the caller should fall through to the model picker).
+ */
+async function activateDefaultModel(
+  api: ExtensionAPI,
+  ctx: ExtensionContext,
+  authProviderId: string,
+): Promise<boolean> {
+  const defaultModel = DEFAULT_LLM_MODELS[authProviderId];
+  if (!defaultModel) {
+    return false;
+  }
+
+  ctx.modelRegistry.refresh();
+  const match = ctx.modelRegistry
+    .getAvailable()
+    .find(
+      (candidate) =>
+        candidate.provider === defaultModel.provider && candidate.id === defaultModel.id,
+    );
+  if (!match) {
+    return false;
+  }
+
+  const ok = await api.setModel(match);
+  if (!ok) {
+    return false;
+  }
+
+  ctx.ui.notify(`Model selected: ${match.provider}/${match.id}`, "info");
   return true;
 }
 
@@ -249,10 +278,6 @@ async function runLlmSetup(
     }
 
     if (requirement === "select_model") {
-      setSetupChrome(ctx, "Choose an AI model", [
-        "You already have at least one Pi-connected provider.",
-        "Pick the model OpenCandle should use for chat and analysis.",
-      ]);
       const selected = await selectModel(api, ctx);
       if (selected) {
         return "ready";
@@ -269,16 +294,10 @@ async function runLlmSetup(
       continue;
     }
 
-    setSetupChrome(ctx, "Connect an AI model", [
-      "Welcome to OpenCandle.",
-      "Choose sign-in or paste an API key to enable chat and analysis.",
-    ]);
-
-    const choice = await ctx.ui.select("Welcome to OpenCandle", [
-      "Sign in",
-      "Paste API key",
-      "Exit setup",
-    ]);
+    const choice = await ctx.ui.select(
+      "Welcome to OpenCandle — sign in or paste an API key to start chatting",
+      ["Sign in", "Paste API key", "Exit setup"],
+    );
 
     if (choice !== "Sign in" && choice !== "Paste API key") {
       if (mode === "startup") {
@@ -306,6 +325,11 @@ async function runLlmSetup(
         continue;
       }
 
+      // Try the registered default for the provider we just signed into —
+      // this is the fast path that avoids the model picker entirely.
+      if (await activateDefaultModel(api, ctx, providerId)) {
+        return "ready";
+      }
       const selected = await selectModel(api, ctx, providerId);
       if (selected) {
         return "ready";
@@ -323,6 +347,10 @@ async function runLlmSetup(
       continue;
     }
 
+    // Try the registered default for the provider we just pasted a key for.
+    if (await activateDefaultModel(api, ctx, provider)) {
+      return "ready";
+    }
     const selected = await selectModel(api, ctx, provider);
     if (selected) {
       return "ready";
@@ -330,107 +358,14 @@ async function runLlmSetup(
   }
 }
 
-function hasFinanceKeys(readiness: FinanceProviderReadiness): boolean {
-  return readiness.hasAlphaVantage && readiness.hasFred;
-}
-
-function upsertFinanceKey(
-  config: OpenCandleFileConfig,
-  provider: "alphaVantage" | "fred",
-  apiKey: string,
-): OpenCandleFileConfig {
-  return {
-    ...config,
-    providers: {
-      ...config.providers,
-      [provider]: {
-        ...(config.providers?.[provider] ?? {}),
-        apiKey,
-      },
-    },
-  };
-}
-
-async function runFinanceSetup(ctx: ExtensionContext, forcePrompt: boolean): Promise<void> {
-  const fileConfig = loadFileConfig();
-  const readiness = getFinanceProviderReadiness();
-  if (hasFinanceKeys(readiness)) {
-    saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: "completed" });
-    return;
-  }
-
-  const onboardingState = loadOnboardingState();
-  if (
-    !forcePrompt &&
-    (onboardingState.financeSetupStatus === "dismissed" ||
-      onboardingState.financeSetupStatus === "completed")
-  ) {
-    return;
-  }
-
-  setSetupChrome(ctx, "Connect market data providers", [
-    "Alpha Vantage unlocks fundamentals, earnings, and DCF.",
-    "FRED unlocks interest rates, inflation, and macro data.",
-  ]);
-
-  const choice = await ctx.ui.select("Connect market data providers (optional)", [
-    "Yes",
-    "Skip for now",
-  ]);
-
-  if (choice !== "Yes") {
-    saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: "dismissed" });
-    return;
-  }
-
-  let nextConfig = fileConfig;
-  let nextReadiness = readiness;
-
-  if (!nextReadiness.hasAlphaVantage) {
-    await openInBrowser(ALPHA_VANTAGE_SIGNUP_URL).catch(() => {});
-    ctx.ui.notify("Opening Alpha Vantage signup in your browser...", "info");
-    const alphaKey = await ctx.ui.input("Alpha Vantage API key (optional)", "Enter key or leave blank");
-    const trimmed = alphaKey?.trim();
-    if (trimmed) {
-      nextConfig = upsertFinanceKey(nextConfig, "alphaVantage", trimmed);
-      nextReadiness = { ...nextReadiness, hasAlphaVantage: true };
-    }
-  }
-
-  if (!nextReadiness.hasFred) {
-    await openInBrowser(FRED_SIGNUP_URL).catch(() => {});
-    ctx.ui.notify("Opening FRED API key page in your browser...", "info");
-    const fredKey = await ctx.ui.input("FRED API key (optional)", "Enter key or leave blank");
-    const trimmed = fredKey?.trim();
-    if (trimmed) {
-      nextConfig = upsertFinanceKey(nextConfig, "fred", trimmed);
-      nextReadiness = { ...nextReadiness, hasFred: true };
-    }
-  }
-
-  if (nextConfig !== fileConfig) {
-    saveFileConfig(nextConfig);
-  }
-
-  const status = hasFinanceKeys(nextReadiness) ? "completed" : "dismissed";
-  saveOnboardingState({ version: ONBOARDING_VERSION, financeSetupStatus: status });
-}
-
 export async function runOpenCandleSetup(
   api: ExtensionAPI,
   ctx: ExtensionContext,
-  options: { mode: SetupMode; forceFinancePrompt?: boolean } = { mode: "startup" },
+  options: { mode: SetupMode } = { mode: "startup" },
 ): Promise<SetupResult> {
   const initialRequirement = getLlmSetupRequirement(ctx);
   if (initialRequirement !== "ready" || options.mode === "manual") {
-    const result = await runLlmSetup(api, ctx, options.mode);
-    if (result === "shutdown" || result === "cancelled") {
-      clearSetupChrome(ctx);
-      return result;
-    }
+    return runLlmSetup(api, ctx, options.mode);
   }
-
-  await runFinanceSetup(ctx, options.forceFinancePrompt ?? options.mode === "manual");
-  clearSetupChrome(ctx);
   return "ready";
 }

@@ -106,7 +106,7 @@ export class SessionCoordinator {
   async runSetup(
     pi: ExtensionAPI,
     ctx: ExtensionContext | ExtensionCommandContext,
-    options: { mode: "startup" | "manual"; forceFinancePrompt?: boolean },
+    options: { mode: "startup" | "manual" },
   ): Promise<"ready" | "shutdown" | "cancelled"> {
     return runOpenCandleSetup(pi, ctx, options);
   }

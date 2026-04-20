@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { promptUser } from "../../onboarding/prompt-user.js";
 import type { AskUserHandler } from "../../types/index.js";
 
 interface AskUserDetails {
@@ -26,36 +27,6 @@ const AskUserParams = Type.Object({
   ),
 });
 
-function cancelledResult(question: string, questionType: string): {
-  content: { type: "text"; text: string }[];
-  details: AskUserDetails;
-} {
-  return {
-    content: [{ type: "text", text: "User cancelled the selection. Proceed with your best judgment and disclose your assumption." }],
-    details: { question, questionType, answer: null, cancelled: true },
-  };
-}
-
-function answerResult(question: string, questionType: string, answer: string): {
-  content: { type: "text"; text: string }[];
-  details: AskUserDetails;
-} {
-  return {
-    content: [{ type: "text", text: `User answered: ${answer}` }],
-    details: { question, questionType, answer, cancelled: false },
-  };
-}
-
-function noUiResult(question: string, questionType: string): {
-  content: { type: "text"; text: string }[];
-  details: AskUserDetails;
-} {
-  return {
-    content: [{ type: "text", text: "UI not available (non-interactive mode). Proceed with your best judgment and clearly disclose your assumption." }],
-    details: { question, questionType, answer: null, cancelled: true },
-  };
-}
-
 export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHandler): void {
   pi.registerTool({
     name: "ask_user",
@@ -69,58 +40,42 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const { question, question_type: questionType } = params;
 
-      // Priority: injected handler > UI > no-UI fallback
-      if (askUserHandler) {
-        const result = await askUserHandler({
+      // Preserve the pre-refactor error message for the specific misuse case
+      // where the model asks a select question with no options — this is a
+      // model/caller bug, not a cancellation.
+      if (questionType === "select" && (!params.options || params.options.length === 0)) {
+        return {
+          content: [{ type: "text", text: "Error: No options provided for select question. Provide options or use text type instead." }],
+          details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
+        };
+      }
+
+      const result = await promptUser(
+        ctx!,
+        {
           question,
           questionType,
           options: params.options,
           placeholder: params.placeholder,
           reason: params.reason,
-        });
-        if (result.cancelled) return cancelledResult(question, questionType);
-        return answerResult(question, questionType, result.answer!);
+        },
+        askUserHandler,
+      );
+
+      if (result.cancelled) {
+        const text = !askUserHandler && !ctx?.hasUI
+          ? "UI not available (non-interactive mode). Proceed with your best judgment and clearly disclose your assumption."
+          : "User cancelled the selection. Proceed with your best judgment and disclose your assumption.";
+        return {
+          content: [{ type: "text", text }],
+          details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
+        };
       }
 
-      if (!ctx?.hasUI) {
-        return noUiResult(question, questionType);
-      }
-
-      switch (questionType) {
-        case "select": {
-          const options = params.options ?? [];
-          if (options.length === 0) {
-            return {
-              content: [{ type: "text", text: "Error: No options provided for select question. Provide options or use text type instead." }],
-              details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
-            };
-          }
-          const choice = await ctx.ui.select(question, options);
-          if (choice === undefined) {
-            return cancelledResult(question, questionType);
-          }
-          return answerResult(question, questionType, choice);
-        }
-
-        case "text": {
-          const input = await ctx.ui.input(question, params.placeholder ?? "");
-          if (input === undefined || input.trim() === "") {
-            return cancelledResult(question, questionType);
-          }
-          return answerResult(question, questionType, input.trim());
-        }
-
-        case "confirm": {
-          const confirmed = await ctx.ui.confirm(question, params.reason ?? "");
-          return answerResult(question, questionType, confirmed ? "Yes" : "No");
-        }
-
-        default:
-          return {
-            content: [{ type: "text", text: `Unknown question type: ${questionType}. Use select, text, or confirm.` }],
-            details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
-          };
-      }
+      return {
+        content: [{ type: "text", text: `User answered: ${result.answer}` }],
+        details: { question, questionType, answer: result.answer, cancelled: false } as AskUserDetails,
+      };
     },
   });
 }

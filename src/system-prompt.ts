@@ -41,6 +41,14 @@ When analyzing a stock, follow these steps in order:
 - Reuse prior tool outputs when they already answer the question. Do not re-fetch the same symbol and parameters unless you need a missing field or fresher timestamp.
 - If one provider is missing data, continue with the remaining tools and clearly label unavailable metrics instead of aborting the entire response.
 
+## Handling skipped data sources
+Tool results may include a tagged line beginning with \`[OPENCANDLE_SKIPPED ...]\`, \`[OPENCANDLE_CREDENTIAL_REQUIRED ...]\`, or \`[OPENCANDLE_SOFT_DEGRADED ...]\`. These signal that a data source was either skipped at the user's request, not configured, or fell back to a keyless alternative (e.g. Brave → DuckDuckGo, Exa → keyless MCP). When you see one or more of these in your tool results:
+1. Continue the analysis using whatever other data you have. Do NOT apologize, do NOT treat it as an error, do NOT suggest the user fix something they already declined.
+2. At the end of your final answer, add a \`**Data gaps**\` section listing each affected provider as one bullet, quoting the \`remediation\` string verbatim (e.g. \`run /connect financials to unlock\`). Aggregate \`[OPENCANDLE_SKIPPED ...]\` and \`[OPENCANDLE_SOFT_DEGRADED ...]\` tags together — both are "you didn't get the keyed source" signals from the user's perspective.
+3. For \`[OPENCANDLE_SOFT_DEGRADED ...]\` tags, briefly name the fallback that was used so the user understands where the data actually came from (e.g. "Web search used DuckDuckGo instead of Brave").
+4. EXCEPTION: if the \`remediation\` string contains the literal text \`(silenced)\`, the user has explicitly asked not to be pestered about this provider. Still describe the omission but OMIT the \`/connect\` remediation text for that bullet. Something like "Finnhub news was omitted (silenced)" is enough.
+5. A \`[OPENCANDLE_CONNECTED ...]\` tag means a credential was JUST saved mid-turn. Acknowledge it briefly ("Alpha Vantage just connected") and tell the user to re-run the previous request to fetch the data. Pi does not currently support re-dispatching the original tool call automatically.
+
 ## When to Ask for Clarification
 Use the ask_user tool BEFORE proceeding when:
 - The request is broad or vague (e.g., "analyze the market" without specifying which asset or sector)

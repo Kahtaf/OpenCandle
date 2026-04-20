@@ -76,13 +76,35 @@ describe("getCompanyNews", () => {
     expect(articles).toEqual([]);
   });
 
-  it("throws descriptive error on 401 (invalid key)", async () => {
+  it("throws ProviderCredentialError with reason=stale on 401", async () => {
     const { getCompanyNews } = await import("../../../src/providers/finnhub.js");
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
     mockedHttpGet.mockRejectedValueOnce(new HttpError(401, "Unauthorized"));
+
+    try {
+      await getCompanyNews("AAPL", "2026-04-10", "2026-04-11", "bad-key");
+      throw new Error("expected ProviderCredentialError to be thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ProviderCredentialError);
+      const credErr = err as InstanceType<typeof ProviderCredentialError>;
+      expect(credErr.provider).toBe("finnhub");
+      expect(credErr.reason).toBe("stale");
+      expect(credErr.httpStatus).toBe(401);
+    }
+  });
+
+  it("throws ProviderCredentialError with reason=stale on 403", async () => {
+    const { getCompanyNews } = await import("../../../src/providers/finnhub.js");
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
+    mockedHttpGet.mockRejectedValueOnce(new HttpError(403, "Forbidden"));
 
     await expect(
       getCompanyNews("AAPL", "2026-04-10", "2026-04-11", "bad-key"),
-    ).rejects.toThrow(/invalid/i);
+    ).rejects.toBeInstanceOf(ProviderCredentialError);
   });
 
   it("throws on 429 (rate limited)", async () => {

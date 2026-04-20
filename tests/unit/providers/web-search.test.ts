@@ -348,13 +348,23 @@ describe("braveSearch", () => {
     expect(result.results[0].category).toBe("general");
   });
 
-  it("throws descriptive error on 401", async () => {
+  it("throws ProviderCredentialError with reason=stale on 401", async () => {
     const { HttpError } = await import("../../../src/infra/http-client.js") as any;
+    const { ProviderCredentialError } = await import(
+      "../../../src/providers/provider-credential-error.js"
+    );
     mockedHttpGet.mockRejectedValue(new HttpError(401, "Unauthorized", ""));
 
-    await expect(
-      braveSearch("test", { category: "news", freshness: "day", limit: 10 }, "bad-key"),
-    ).rejects.toThrow(/[Bb]rave.*API key/);
+    try {
+      await braveSearch("test", { category: "news", freshness: "day", limit: 10 }, "bad-key");
+      throw new Error("expected ProviderCredentialError to be thrown");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ProviderCredentialError);
+      const credErr = err as InstanceType<typeof ProviderCredentialError>;
+      expect(credErr.provider).toBe("brave");
+      expect(credErr.reason).toBe("stale");
+      expect(credErr.httpStatus).toBe(401);
+    }
   });
 
   it("throws on 429 for cascade fallback", async () => {

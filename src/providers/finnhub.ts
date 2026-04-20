@@ -1,6 +1,7 @@
 import { httpGet, HttpError } from "../infra/http-client.js";
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 
@@ -112,8 +113,8 @@ export async function getCompanyNews(
     cache.set(key, filtered, TTL.FINNHUB_NEWS);
     return filtered;
   } catch (error) {
-    if (error instanceof HttpError && error.status === 401) {
-      throw new Error("Finnhub API key may be invalid or expired. Check FINNHUB_API_KEY.");
+    if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+      throw new ProviderCredentialError("finnhub", "stale", error.status);
     }
 
     const stale = cache.getStale<FinnhubArticle[]>(key, STALE_LIMIT.FINNHUB_NEWS);

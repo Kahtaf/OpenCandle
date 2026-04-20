@@ -8,10 +8,23 @@ vi.mock("../../../src/providers/web-search.js", () => ({
   searchWeb: vi.fn(),
 }));
 
+// Mock hasCredential so we can drive the soft-degraded tag branches in the
+// tool directly without touching process.env or the on-disk config file.
+vi.mock("../../../src/onboarding/providers.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/onboarding/providers.js")>();
+  return {
+    ...actual,
+    hasCredential: vi.fn(() => true),
+  };
+});
+
 import { searchWeb } from "../../../src/providers/web-search.js";
+import { hasCredential } from "../../../src/onboarding/providers.js";
 import { webSearchTool } from "../../../src/tools/sentiment/web-search.js";
 
 const mockedSearchWeb = vi.mocked(searchWeb);
+const mockedHasCredential = vi.mocked(hasCredential);
 
 const successEnvelope: WebSearchEnvelope = {
   query: "AAPL stock news",
@@ -54,6 +67,7 @@ describe("search_web tool", () => {
   beforeEach(() => {
     cache.clear();
     vi.clearAllMocks();
+    mockedHasCredential.mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -173,6 +187,97 @@ describe("search_web tool", () => {
 
     expect(result.content[0].text).toContain("⚠");
     expect(result.content[0].text).toMatch(/cached/i);
+  });
+
+  it("emits [OPENCANDLE_SOFT_DEGRADED provider=brave ...] when Brave credential is missing and the cascade fell back", async () => {
+    // 7.6/7.7 — Brave is the clearest soft-degraded case: if the user has no
+    // Brave key, the cascade silently skipped Brave and the result comes from
+    // DDG (or Exa keyless-MCP). The tool's content should include a
+    // [OPENCANDLE_SOFT_DEGRADED provider=brave ...] tag so the degradation
+    // accumulator (in the extension) can surface a Data gaps note in the
+    // final answer.
+    mockedHasCredential.mockImplementation((id) => id !== "brave");
+    const ddgEnvelope: WebSearchEnvelope = { ...successEnvelope, provider: "ddg" };
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: ddgEnvelope,
+      timestamp: ddgEnvelope.fetchedAt,
+      provider: "ddg",
+    });
+
+    const result = await webSearchTool.execute("call-1", { query: "AAPL" });
+    const text = result.content[0].text;
+    expect(text).toContain("[OPENCANDLE_SOFT_DEGRADED");
+    expect(text).toContain("provider=brave");
+    expect(text).toContain("fallback=ddg");
+  });
+
+  it("emits [OPENCANDLE_SOFT_DEGRADED provider=exa ...] when Exa credential is missing", async () => {
+    // Exa always returns `provider: "exa"` in the envelope whether the keyed
+    // API or the keyless MCP path was used. The tool infers the degraded
+    // state from `hasCredential("exa") === false` — the Exa provider used the
+    // keyless MCP fallback.
+    mockedHasCredential.mockImplementation((id) => id !== "exa");
+    const exaEnvelope: WebSearchEnvelope = { ...successEnvelope, provider: "exa" };
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: exaEnvelope,
+      timestamp: exaEnvelope.fetchedAt,
+      provider: "exa",
+    });
+
+    const result = await webSearchTool.execute("call-1", { query: "AAPL" });
+    const text = result.content[0].text;
+    expect(text).toContain("[OPENCANDLE_SOFT_DEGRADED");
+    expect(text).toContain("provider=exa");
+    expect(text).toContain("fallback=keyless-mcp");
+  });
+
+  it("does NOT emit a soft-degraded tag when the Brave result came from Brave itself", async () => {
+    // Having a Brave key + getting a Brave-provided result is the happy path
+    // — no degradation to report. The envelope's `provider` field is the
+    // short name "brave" (the cascade entry is called "brave_search" but the
+    // envelope itself uses the canonical id).
+    mockedHasCredential.mockImplementation(() => true);
+    const braveEnvelope: WebSearchEnvelope = {
+      ...successEnvelope,
+      provider: "brave",
+    };
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: braveEnvelope,
+      timestamp: braveEnvelope.fetchedAt,
+      provider: "brave_search",
+    });
+
+    const result = await webSearchTool.execute("call-1", { query: "AAPL" });
+    expect(result.content[0].text).not.toContain("OPENCANDLE_SOFT_DEGRADED");
+  });
+
+  it("emits tags for BOTH brave and exa when both credentials are missing", async () => {
+    mockedHasCredential.mockImplementation(() => false);
+    const exaEnvelope: WebSearchEnvelope = { ...successEnvelope, provider: "exa" };
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: exaEnvelope,
+      timestamp: exaEnvelope.fetchedAt,
+      provider: "exa",
+    });
+
+    const result = await webSearchTool.execute("call-1", { query: "AAPL" });
+    const text = result.content[0].text;
+    const braveOccurrences = text.match(/\[OPENCANDLE_SOFT_DEGRADED provider=brave /g) ?? [];
+    const exaOccurrences = text.match(/\[OPENCANDLE_SOFT_DEGRADED provider=exa /g) ?? [];
+    expect(braveOccurrences).toHaveLength(1);
+    expect(exaOccurrences).toHaveLength(1);
+  });
+
+  it("does not emit soft-degraded tags when the provider returned unavailable", async () => {
+    mockedHasCredential.mockImplementation(() => false);
+    mockedSearchWeb.mockResolvedValue(unavailableResult());
+
+    const result = await webSearchTool.execute("call-1", { query: "AAPL" });
+    expect(result.content[0].text).not.toContain("OPENCANDLE_SOFT_DEGRADED");
   });
 
   it("handles zero results gracefully", async () => {
