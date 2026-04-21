@@ -1,6 +1,6 @@
 {
   "passRate": 1.0,
-  "fixtureCount": 12,
+  "fixtureCount": 18,
   "recordedAt": "2026-04-20",
-  "notes": "Seeded 12 of ~50 planned fixtures. More to be added incrementally from sampled real turns. Deterministic suite mocks the LLM and asserts against expectedRouterOutput."
+  "notes": "18 fixtures total: 001-012 single-turn seed set + 013-018 synthesized multi-turn fixtures covering the six required classes from the router-evals spec (coreference, carried-context, topic-shift, correction, preference-conflict, dollar-phrase-preservation). Multi-turn fixtures carry the `synthetic-multi-turn` tag for later replacement with sampled real sessions. Deterministic suite mocks the LLM and asserts against expectedRouterOutput."
 }

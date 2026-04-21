@@ -1,0 +1,25 @@
+{
+  "input": "make it aggressive",
+  "priorTurns": [
+    { "role": "user", "text": "build me a portfolio for $20k" }
+  ],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "portfolio_builder",
+    "entities": {
+      "symbols": [],
+      "budget": 20000,
+      "riskProfile": "aggressive"
+    },
+    "slots": {
+      "risk_profile": { "value": "aggressive", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [
+      { "key": "risk_profile", "value": "aggressive", "confidence": "high", "source": "inferred" }
+    ],
+    "missing_required": [],
+    "reasoning": "budget carried from prior turn lives in entities only (no budget slot); risk_profile from the current turn becomes a user-sourced slot and a high-confidence inferred preference write"
+  },
+  "tags": ["multi-turn-carried-context", "portfolio_builder", "synthetic-multi-turn"]
+}

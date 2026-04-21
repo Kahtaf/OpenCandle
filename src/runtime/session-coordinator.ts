@@ -1,5 +1,13 @@
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, SessionEntry } from "@mariozechner/pi-coding-agent";
 import { initDefaultDatabase, MemoryStorage } from "../memory/index.js";
+
+/**
+ * Alias for the session-manager handle extensions receive via
+ * `ExtensionContext`. `ReadonlySessionManager` is defined inside pi-coding-
+ * agent but is not re-exported from the package's `.` entry, so we derive
+ * the shape we need from the public `ExtensionContext` type.
+ */
+type ReadonlySessionManager = ExtensionContext["sessionManager"];
 import { MemoryManager } from "../memory/manager.js";
 import { extractPreferences } from "../memory/preference-extractor.js";
 import { runOpenCandleSetup } from "../pi/setup.js";
@@ -155,10 +163,71 @@ export class SessionCoordinator {
   }
 
   /**
+   * Extract the last `max` user/assistant turns from the session branch as
+   * `{role, text}` pairs, oldest→newest. Walks `sessionManager.getBranch()`
+   * (root→leaf order) and filters per the intent-routing spec:
+   *
+   * - Keep only `type === "message"` entries whose `message.role` is
+   *   `"user"` or `"assistant"`. Compaction, branch_summary, custom, label,
+   *   thinking_level_change, model_change, and session_info entries are
+   *   skipped. Tool-result messages (`role === "toolResult"`) are skipped.
+   * - Extract concatenated text-block content. User `content` may be a
+   *   plain string; assistant `content` is always an array of blocks, from
+   *   which only `type === "text"` blocks contribute.
+   * - Drop entries whose resulting text is empty or whitespace-only
+   *   (handles aborted assistant turns and tool-only assistant turns).
+   * - Slice to the last `max` qualifying entries.
+   *
+   * Privacy note: conversational text in priorTurns is NOT filtered by
+   * `NEVER_TRUST_FROM_MEMORY` (which governs structured memory keys). A
+   * future `/forget` command is the designated scrubbing primitive — see
+   * `openspec/changes/router-context-and-observability/` for the follow-up.
+   */
+  buildPriorTurns(
+    sessionManager: ReadonlySessionManager,
+    max = 5,
+  ): Array<{ role: "user" | "assistant"; text: string }> {
+    const branch = sessionManager.getBranch();
+    const turns: Array<{ role: "user" | "assistant"; text: string }> = [];
+
+    for (const entry of branch) {
+      if (entry.type !== "message") continue;
+      const msg = (entry as SessionEntry & { type: "message" }).message;
+      if (!msg || typeof msg !== "object") continue;
+      const role = (msg as { role?: unknown }).role;
+      if (role !== "user" && role !== "assistant") continue;
+
+      const rawContent = (msg as { content?: unknown }).content;
+      let text = "";
+      if (typeof rawContent === "string") {
+        text = rawContent;
+      } else if (Array.isArray(rawContent)) {
+        for (const block of rawContent) {
+          if (
+            block &&
+            typeof block === "object" &&
+            (block as { type?: unknown }).type === "text" &&
+            typeof (block as { text?: unknown }).text === "string"
+          ) {
+            text += (block as { text: string }).text;
+          }
+        }
+      }
+
+      if (text.trim().length === 0) continue;
+      turns.push({ role, text });
+    }
+
+    return turns.slice(-max);
+  }
+
+  /**
    * Expose prior turns + recent runs + profile snapshot for the router
    * input context. Fixed-window per design.md §7 (last 5 turns, 3 runs).
+   * `priorTurns` is derived from the session branch at call time; see
+   * `buildPriorTurns` for the filter rules.
    */
-  buildRouterContextBase(): {
+  buildRouterContextBase(sessionManager: ReadonlySessionManager): {
     profileSnapshot: Record<string, unknown>;
     recentWorkflowRuns: Array<{
       workflowType: string;
@@ -166,9 +235,11 @@ export class SessionCoordinator {
       resolvedSlots?: Record<string, unknown>;
       createdAt: string;
     }>;
+    priorTurns: Array<{ role: "user" | "assistant"; text: string }>;
   } {
+    const priorTurns = this.buildPriorTurns(sessionManager);
     if (!this.storage) {
-      return { profileSnapshot: {}, recentWorkflowRuns: [] };
+      return { profileSnapshot: {}, recentWorkflowRuns: [], priorTurns };
     }
     const prefs = this.storage.getPreferencesByNamespace("global");
     const profileSnapshot: Record<string, unknown> = {};
@@ -189,7 +260,7 @@ export class SessionCoordinator {
       resolvedSlots: parseMaybeJson(r.resolved_slots_json),
       createdAt: String(r.created_at ?? ""),
     }));
-    return { profileSnapshot, recentWorkflowRuns: runs };
+    return { profileSnapshot, recentWorkflowRuns: runs, priorTurns };
   }
 
   /** Build system prompt using composable sections. */

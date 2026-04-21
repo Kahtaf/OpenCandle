@@ -1,6 +1,17 @@
 import type { RouterInputContext } from "./router-types.js";
 
 /**
+ * Privacy note — priorTurns rendering:
+ * Conversational text rendered into the router prompt via `priorTurns` is NOT
+ * filtered by `src/memory/types.ts::NEVER_TRUST_FROM_MEMORY` (which governs
+ * structured market-sensitive memory keys such as `stock_price` and
+ * `target_price`). A future `/forget` command is the designated scrubbing
+ * primitive for removing or masking matching entries from the session branch
+ * so they no longer reach the router. See
+ * `openspec/changes/router-context-and-observability/` for the follow-up.
+ */
+
+/**
  * List of workflows the router may emit. Keep this in sync with
  * `WorkflowType` in `src/routing/types.ts` minus the `unclassified` sentinel.
  */

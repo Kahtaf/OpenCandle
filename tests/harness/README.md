@@ -81,8 +81,37 @@ interface AgentTrace {
   finalText: string;
   toolSequence: string[];
   durationMs: number;
+  /** OpenCandle extension-authored custom entries (see below). */
+  customEntries?: Array<{
+    customType: string;
+    data: unknown;
+    timestamp: string;
+  }>;
 }
 ```
+
+### `customEntries`
+
+`manual-run.ts` drains every session entry whose `type === "custom"` and
+`customType` starts with `opencandle-` into `trace.json.customEntries` after
+the agent has settled, preserving append order. These entries are appended
+by the OpenCandle Pi extension via `pi.appendEntry(...)` and are **not**
+emitted as `AgentSessionEvent`s, so subscribing to the session is not enough
+— the harness reads them directly from `session.sessionManager.getEntries()`.
+
+Currently-emitted `customType`s:
+
+| `customType`                       | Purpose                                                                 |
+|------------------------------------|-------------------------------------------------------------------------|
+| `opencandle-router`                | LLM-router output for a turn (in router mode).                          |
+| `opencandle-router-error`          | Router client/parse error for a turn.                                   |
+| `opencandle-router-prefs-dropped`  | Low-confidence preference updates that were discarded.                  |
+| `opencandle-disclaimer`            | Disclaimer text appended after each final assistant turn.               |
+| `opencandle-turn-gap`              | Soft-degradation annotation flushed at `turn_end` when tools degraded.  |
+| `opencandle-workflow`              | Workflow dispatch record (rule-mode classifier or router workflow path).|
+
+The capture is wildcard (`opencandle-*`), so new extension-authored entry
+types appear in `customEntries` automatically without harness edits.
 
 ## Troubleshooting
 

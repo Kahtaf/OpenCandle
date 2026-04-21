@@ -493,6 +493,12 @@ describe("opencandle extension", () => {
       reasoning: "",
     };
 
+    // Router mode reads priorTurns from `ctx.sessionManager.getBranch()`, so
+    // input-handler ctxs used in these tests must carry a minimal session
+    // manager stub. An empty branch is the right default — these fixtures
+    // simulate a fresh turn, not a multi-turn conversation.
+    const emptySessionManager = { getBranch: () => [], getSessionId: () => "sid" };
+
     it("returns {action: 'handled'} when router dispatches a workflow", async () => {
       const fake = createFakeApi();
       openCandleExtension(fake.api, { routerLlmClient: mockClient(workflowOutput) });
@@ -505,7 +511,12 @@ describe("opencandle extension", () => {
       );
 
       const inputHandler = fake.handlers.get("input")?.[0];
-      const ctx = { isIdle: () => true, ui: { notify: vi.fn() }, model: { id: "m" } };
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
 
       const result = await inputHandler!(
         { type: "input", text: "invest $10k", source: "interactive" },
@@ -526,7 +537,12 @@ describe("opencandle extension", () => {
       );
 
       const inputHandler = fake.handlers.get("input")?.[0];
-      const ctx = { isIdle: () => true, ui: { notify: vi.fn() }, model: { id: "m" } };
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
 
       const result = await inputHandler!(
         { type: "input", text: "Give me entry levels on ASTS for a 6 month horizon", source: "interactive" },
@@ -551,7 +567,12 @@ describe("opencandle extension", () => {
       // Deliberately skip session_start — storage stays null.
 
       const inputHandler = fake.handlers.get("input")?.[0];
-      const ctx = { isIdle: () => true, ui: { notify: vi.fn() }, model: { id: "m" } };
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
 
       await inputHandler!(
         { type: "input", text: "maybe aggressive", source: "interactive" },
