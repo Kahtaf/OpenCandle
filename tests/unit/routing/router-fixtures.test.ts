@@ -54,6 +54,14 @@ describe("Router deterministic fixtures", () => {
     expect(fixtures.length).toBeGreaterThan(0);
   });
 
+  it("suite contains at least one multi-turn fixture (priorTurns.length > 0)", () => {
+    const multiTurn = fixtures.filter(({ data }) => data.priorTurns.length > 0);
+    expect(
+      multiTurn.length,
+      "expected at least one fixture with priorTurns.length > 0 — see router-evals spec 'Multi-Turn Fixture Presence Guard'",
+    ).toBeGreaterThan(0);
+  });
+
   for (const { name, data } of fixtures) {
     it(`fixture ${name} passes with mocked LLM output`, async () => {
       const client = mockClient(data.expectedRouterOutput);

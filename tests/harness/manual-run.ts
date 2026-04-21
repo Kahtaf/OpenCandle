@@ -152,9 +152,28 @@ await new Promise<void>((resolve) => {
   void session.prompt(prompt);
 });
 
+// Drain opencandle-* custom entries the extension appended to the session.
+// These (opencandle-router, opencandle-router-error, opencandle-router-prefs-dropped,
+// opencandle-disclaimer, opencandle-turn-gap, opencandle-workflow, …) are not
+// surfaced through AgentSessionEvent, so the only way to observe them is to
+// read the session manager after settle. See
+// openspec/changes/router-context-and-observability/design.md Decision 6.
+const customEntries = session.sessionManager
+  .getEntries()
+  .filter((e) => e.type === "custom" && e.customType.startsWith("opencandle-"))
+  .map((e) => {
+    // Narrow to CustomEntry (filter guarantees type === "custom").
+    const entry = e as Extract<typeof e, { type: "custom" }>;
+    return {
+      customType: entry.customType,
+      data: entry.data,
+      timestamp: entry.timestamp,
+    };
+  });
+
 // Write final trace
 const classification = classifyIntent(prompt);
-const trace = { prompt, classification, toolCalls, askUserTranscript, text };
+const trace = { prompt, classification, toolCalls, askUserTranscript, text, customEntries };
 writeFileSync(join(ipcDir, "trace.json"), JSON.stringify(trace, null, 2), "utf-8");
 setStatus("done");
 console.log("Session complete. Trace written.");

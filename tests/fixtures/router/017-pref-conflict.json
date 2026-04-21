@@ -1,0 +1,25 @@
+{
+  "input": "I've been getting more cautious lately, I'm thinking conservative now",
+  "priorTurns": [
+    { "role": "assistant", "text": "Got it — based on your profile I've been sizing positions aggressively." }
+  ],
+  "profileSnapshot": {
+    "risk_profile": "aggressive"
+  },
+  "expectedRouterOutput": {
+    "route": "fallback",
+    "entities": {
+      "symbols": [],
+      "riskProfile": "conservative"
+    },
+    "slots": {
+      "risk_profile": { "value": "conservative", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [
+      { "key": "risk_profile", "value": "conservative", "confidence": "high", "source": "inferred" }
+    ],
+    "missing_required": [],
+    "reasoning": "current-turn risk signal conflicts with profile; router emits a high-confidence inferred preference update so persistence layer can overwrite the stale 'aggressive' value"
+  },
+  "tags": ["preference-conflict", "fallback", "synthetic-multi-turn"]
+}

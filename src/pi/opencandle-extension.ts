@@ -532,12 +532,12 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
   ): Promise<boolean> {
     const storage = coordinator.getStorage();
-    const { profileSnapshot, recentWorkflowRuns } = coordinator.buildRouterContextBase();
+    const { profileSnapshot, recentWorkflowRuns, priorTurns } =
+      coordinator.buildRouterContextBase(ctx.sessionManager);
+    // priorTurns is not scrubbed for /forget — tracked in proposal.md follow-ups.
     const input: RouterInputContext = {
       text,
-      // Prior-turn history is not wired in v1 — needs Pi session-manager
-      // integration. Router still functions with an empty window.
-      priorTurns: [],
+      priorTurns,
       profileSnapshot,
       recentWorkflowRuns,
     };

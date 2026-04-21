@@ -20,6 +20,19 @@ export interface InteractionTrace {
   answer: string | null;
 }
 
+/** Custom session entry captured from the session manager after settle.
+ * Populated from entries where `type === "custom"` and `customType` starts
+ * with `opencandle-` (e.g. opencandle-router, opencandle-router-error,
+ * opencandle-router-prefs-dropped, opencandle-disclaimer, opencandle-turn-gap,
+ * opencandle-workflow). Drain occurs in `tests/harness/manual-run.ts` before
+ * `trace.json` is written. See
+ * openspec/changes/router-context-and-observability/design.md Decision 6. */
+export interface CustomEntryTrace {
+  customType: string;
+  data: unknown;
+  timestamp: string;
+}
+
 export interface AgentTrace {
   prompt: string;
   turns: TurnTrace[];
@@ -27,4 +40,6 @@ export interface AgentTrace {
   finalText: string;
   toolSequence: string[];
   durationMs: number;
+  /** OpenCandle extension-authored custom entries, in append order. */
+  customEntries?: CustomEntryTrace[];
 }

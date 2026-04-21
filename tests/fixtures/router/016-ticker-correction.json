@@ -1,0 +1,21 @@
+{
+  "input": "I meant TSLAQ",
+  "priorTurns": [
+    { "role": "user", "text": "analyze TSLA" }
+  ],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "single_asset_analysis",
+    "entities": {
+      "symbols": ["TSLAQ"]
+    },
+    "slots": {
+      "symbol": { "value": "TSLAQ", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "user correction — the current turn explicitly replaces the prior ticker; corrected symbol is from the current turn so it populates both entities and a user-sourced slot"
+  },
+  "tags": ["multi-turn-correction", "synthetic-multi-turn"]
+}
