@@ -1,0 +1,6 @@
+{
+  "passRate": 1.0,
+  "fixtureCount": 12,
+  "recordedAt": "2026-04-20",
+  "notes": "Seeded 12 of ~50 planned fixtures. More to be added incrementally from sampled real turns. Deterministic suite mocks the LLM and asserts against expectedRouterOutput."
+}

@@ -27,6 +27,12 @@ interface WorkflowRunInput {
   resolvedSlotsJson: string;
   defaultsUsedJson: string;
   outputSummary?: string;
+  /**
+   * Router route verbatim. One of `"workflow"` or `"fallback"`. Defaults to
+   * `"workflow"` at the schema layer so legacy callers (rules-mode cascade)
+   * don't need to pass anything. Router-mode callers MUST pass this explicitly.
+   */
+  turnType?: "workflow" | "fallback";
 }
 
 interface RecommendationInput {
@@ -131,8 +137,8 @@ export class MemoryStorage {
     const now = new Date().toISOString();
     const result = this.db
       .prepare(
-        `INSERT INTO workflow_runs (session_id, workflow_type, input_slots_json, resolved_slots_json, defaults_used_json, output_summary, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO workflow_runs (session_id, workflow_type, input_slots_json, resolved_slots_json, defaults_used_json, output_summary, created_at, turn_type)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.sessionId,
@@ -142,6 +148,7 @@ export class MemoryStorage {
         input.defaultsUsedJson,
         input.outputSummary ?? null,
         now,
+        input.turnType ?? "workflow",
       );
     return Number(result.lastInsertRowid);
   }

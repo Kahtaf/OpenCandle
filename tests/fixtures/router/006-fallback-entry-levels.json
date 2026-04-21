@@ -1,0 +1,20 @@
+{
+  "input": "Give me entry levels on ASTS for a 6 month horizon",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "fallback",
+    "entities": {
+      "symbols": ["ASTS"],
+      "timeHorizon": "6mo"
+    },
+    "slots": {
+      "symbol": { "value": "ASTS", "source": "user", "confidence": "high" },
+      "time_horizon": { "value": "6mo", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "entry-levels query outside workflow taxonomy; fallback with populated entities"
+  },
+  "tags": ["fallback-entry-levels", "asts"]
+}

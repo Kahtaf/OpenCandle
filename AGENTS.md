@@ -105,3 +105,6 @@ Run `npx tsx tests/harness/manual-run.ts <ipc-dir> "<prompt>"` in background. Po
 ## RUNTIME STATE
 - Pi config: `.pi/` and `~/.pi/agent/` — do not move into OpenCandle storage.
 - OpenCandle user state: `~/.opencandle/` — CLI must not depend on repo-local `.pi/extensions/`.
+
+## ENV FLAGS
+- `OPENCANDLE_ROUTER_MODE`: `rules` (default) or `llm`. `llm` uses the LLM router; flip only after deterministic fixtures and opt-in live eval are green.

@@ -1,0 +1,17 @@
+{
+  "input": "what does DCF stand for?",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "general_finance_qa",
+    "entities": {
+      "symbols": []
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "definitional question — general_finance_qa"
+  },
+  "tags": ["general_finance_qa"]
+}

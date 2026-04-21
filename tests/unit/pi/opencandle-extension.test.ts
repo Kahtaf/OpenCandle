@@ -4,6 +4,8 @@ import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestra
 import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
+import { resetConfigCache } from "../../../src/config.js";
+import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
@@ -168,7 +170,11 @@ describe("opencandle extension", () => {
     // Composable prompt sections now build the system prompt
     expect(result.systemPrompt).toContain("OpenCandle");
     expect(result.systemPrompt).toContain("Available Tools");
-    expect(result.systemPrompt).toContain("Disclaimer");
+    // Analyst stance replaces the Disclaimer block — verify committal posture
+    // is present and refusal vocabulary is not.
+    expect(result.systemPrompt.toLowerCase()).toContain("analyst");
+    expect(result.systemPrompt.toLowerCase()).toContain("invalidation");
+    expect(result.systemPrompt).not.toMatch(/\bnot financial advice\b/i);
   });
 
   it("routes portfolio-builder prompts through the deterministic workflow", async () => {
@@ -244,6 +250,66 @@ describe("opencandle extension", () => {
 
     expect(result).toEqual({ action: "handled" });
     expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+  });
+
+  it("records a per-turn disclaimer entry (non-LLM-context) on final assistant turns", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const turnEndHandler = fake.handlers.get("turn_end")?.[0];
+    expect(turnEndHandler).toBeDefined();
+
+    await turnEndHandler!(
+      {
+        type: "turn_end",
+        turnIndex: 0,
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "committal response" }],
+          stopReason: "stop",
+        },
+        toolResults: [],
+      },
+      {},
+    );
+
+    const appendCall = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "opencandle-disclaimer",
+    );
+    expect(appendCall).toBeDefined();
+    const text = (appendCall![1] as { text: string }).text;
+    expect(text.length).toBeGreaterThan(0);
+    expect(text.toLowerCase()).toMatch(/research|analyst|not .*fiduciary|informational/);
+    // MUST NOT go via sendMessage (Pi maps CustomMessage → role:"user" in LLM context).
+    const sent = (fake.api.sendMessage as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0]?.customType === "opencandle-disclaimer",
+    );
+    expect(sent).toBeUndefined();
+  });
+
+  it("does not record a disclaimer entry on intermediate tool-use turns", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const turnEndHandler = fake.handlers.get("turn_end")?.[0];
+    await turnEndHandler!(
+      {
+        type: "turn_end",
+        turnIndex: 0,
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "x", name: "get_stock_quote", input: {} }],
+          stopReason: "toolUse",
+        },
+        toolResults: [],
+      },
+      {},
+    );
+
+    const appendCall = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "opencandle-disclaimer",
+    );
+    expect(appendCall).toBeUndefined();
   });
 
   describe("memory integration", () => {
@@ -374,6 +440,130 @@ describe("opencandle extension", () => {
     expect(calls).not.toContain(getComprehensiveAnalysisPrompts("NVDA")[1]);
     // The AAPL follow-ups should proceed
     expect(calls).toContain(getComprehensiveAnalysisPrompts("AAPL")[1]);
+  });
+
+  describe("llm router mode dispatch signal", () => {
+    // Regression guard: in llm mode, when the router dispatches a workflow,
+    // the input handler MUST return {action: "handled"} so Pi does not also
+    // forward the original user turn to the main agent (which would cause
+    // double-dispatch alongside the workflow runner's queued prompts).
+    // Fallback turns, by contrast, MUST return undefined so the main agent
+    // runs on the user turn under the router-supplied fallback context.
+
+    beforeEach(() => {
+      vi.stubEnv("OPENCANDLE_ROUTER_MODE", "llm");
+      resetConfigCache();
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      resetConfigCache();
+    });
+
+    function mockClient(output: RouterOutput): RouterLlmClient {
+      return {
+        async complete() {
+          return JSON.stringify(output);
+        },
+      };
+    }
+
+    const workflowOutput: RouterOutput = {
+      route: "workflow",
+      workflow: "portfolio_builder",
+      entities: { symbols: [], budget: 10_000 },
+      slots: {
+        budget: { value: 10_000, source: "user", confidence: "high" },
+        riskProfile: { value: "balanced", source: "default", confidence: "high" },
+      },
+      preference_updates: [],
+      missing_required: [],
+      reasoning: "",
+    };
+
+    const fallbackOutput: RouterOutput = {
+      route: "fallback",
+      entities: { symbols: ["ASTS"], timeHorizon: "6mo" },
+      slots: {
+        symbols: { value: ["ASTS"], source: "user", confidence: "high" },
+        timeHorizon: { value: "6mo", source: "user", confidence: "high" },
+      },
+      preference_updates: [],
+      missing_required: [],
+      reasoning: "",
+    };
+
+    it("returns {action: 'handled'} when router dispatches a workflow", async () => {
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(workflowOutput) });
+
+      // Init session so storage is available for pref writes.
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = { isIdle: () => true, ui: { notify: vi.fn() }, model: { id: "m" } };
+
+      const result = await inputHandler!(
+        { type: "input", text: "invest $10k", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toEqual({ action: "handled" });
+    });
+
+    it("returns undefined for fallback turns so the main agent runs", async () => {
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(fallbackOutput) });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = { isIdle: () => true, ui: { notify: vi.fn() }, model: { id: "m" } };
+
+      const result = await inputHandler!(
+        { type: "input", text: "Give me entry levels on ASTS for a 6 month horizon", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("logs dropped medium/low-confidence preferences even when no storage is available", async () => {
+      // Regression guard: observability must not silently drop when storage
+      // is absent — task 8.2 logs `opencandle-router-prefs-dropped` on any
+      // path where a low/medium-confidence extraction would have been skipped.
+      const outputWithDrops: RouterOutput = {
+        ...fallbackOutput,
+        preference_updates: [
+          { key: "risk_profile", value: "aggressive", confidence: "medium", source: "inferred" },
+        ],
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(outputWithDrops) });
+      // Deliberately skip session_start — storage stays null.
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = { isIdle: () => true, ui: { notify: vi.fn() }, model: { id: "m" } };
+
+      await inputHandler!(
+        { type: "input", text: "maybe aggressive", source: "interactive" },
+        ctx,
+      );
+
+      const call = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === "opencandle-router-prefs-dropped",
+      );
+      expect(call).toBeDefined();
+      expect((call![1] as { dropped: unknown[] }).dropped).toHaveLength(1);
+    });
   });
 
   describe("soft-degradation accumulator wiring", () => {

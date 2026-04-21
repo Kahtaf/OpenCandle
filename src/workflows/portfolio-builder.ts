@@ -25,10 +25,10 @@ export function buildPortfolioWorkflowDefinition(resolution: SlotResolution<Port
       }),
       promptStep("synthesize", "Present final portfolio draft", `Present the final portfolio draft as a structured summary:
 - State all assumptions at the top (which parameters were defaults vs user-specified vs saved preferences).
-- Present an allocation table: symbol, allocation %, dollar amount ($${s.budget.toLocaleString("en-US")} total), and one-line rationale per position.
-- Include overall portfolio risk summary: estimated volatility, diversification quality, largest single risk.
+- Commit to the allocation: concrete percentages per position, not ranges.
+- Present an allocation table: symbol, allocation %, dollar amount ($${s.budget.toLocaleString("en-US")} total), and one-line analyst rationale per position.
+- Include overall portfolio risk summary: estimated volatility, diversification quality, largest single risk. State an invalidation condition for the draft.
 - Suggest what to change for more growth or more safety.
-- End with the standard disclaimer.
 
 Length constraints:
 - Max 1 sentence of rationale per position in the allocation table.

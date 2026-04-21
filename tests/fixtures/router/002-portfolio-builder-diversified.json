@@ -1,0 +1,20 @@
+{
+  "input": "invest $50k diversified",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "portfolio_builder",
+    "entities": {
+      "symbols": [],
+      "budget": 50000
+    },
+    "slots": {
+      "budget": { "value": 50000, "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "portfolio_builder matches on budget + invest verb"
+  },
+  "tags": ["portfolio_builder", "diversified"]
+}

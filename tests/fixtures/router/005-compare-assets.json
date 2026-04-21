@@ -1,0 +1,19 @@
+{
+  "input": "Compare AAPL and MSFT",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": ["AAPL", "MSFT"]
+    },
+    "slots": {
+      "symbols": { "value": ["AAPL", "MSFT"], "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "reasoning": "explicit compare verb + two tickers"
+  },
+  "tags": ["compare_assets"]
+}

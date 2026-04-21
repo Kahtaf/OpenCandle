@@ -91,10 +91,19 @@ const toolCalls: Array<{ name: string; args: unknown; result?: unknown }> = [];
 const pendingTools = new Map<string, { name: string; args: unknown }>();
 
 // Multi-turn workflow detection: if the prompt matches the comprehensive
-// analysis pattern (e.g., "analyze AAPL"), the extension runs a multi-step
-// workflow with follow-up prompts. Use a longer settle grace for these.
+// analysis pattern or routes to any multi-step workflow
+// (options_screener / portfolio_builder / compare_assets are dispatched via
+// SessionCoordinator.executeWorkflow with multiple prompt steps), use a
+// longer settle grace so between-step gaps don't truncate the trace.
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
-const isMultiTurn = isAnalysisRequest(prompt).match;
+const MULTI_STEP_WORKFLOWS = new Set([
+  "options_screener",
+  "portfolio_builder",
+  "compare_assets",
+]);
+const isMultiTurn =
+  isAnalysisRequest(prompt).match ||
+  MULTI_STEP_WORKFLOWS.has(classifyIntent(prompt).workflow);
 const SETTLE_GRACE_MS = isMultiTurn ? 30_000 : 3_000;
 
 await new Promise<void>((resolve) => {

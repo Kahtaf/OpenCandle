@@ -1,0 +1,23 @@
+{
+  "input": "I only want ETFs in my portfolio, budget is $20k",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "workflow",
+    "workflow": "portfolio_builder",
+    "entities": {
+      "symbols": [],
+      "budget": 20000
+    },
+    "slots": {
+      "budget": { "value": 20000, "source": "user", "confidence": "high" },
+      "asset_scope": { "value": "etf_focused", "source": "user", "confidence": "high" }
+    },
+    "preference_updates": [
+      { "key": "asset_scope", "value": "etf_focused", "confidence": "high", "source": "inferred" }
+    ],
+    "missing_required": [],
+    "reasoning": "user strongly expressed etf-only scope"
+  },
+  "tags": ["portfolio_builder", "high-confidence-pref-write", "asset_scope"]
+}

@@ -1,0 +1,16 @@
+{
+  "input": "what's the latest news on that one semiconductor stock",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "route": "fallback",
+    "entities": {
+      "symbols": []
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": ["symbol"],
+    "reasoning": "ambiguous reference, no ticker; fallback + ask_user"
+  },
+  "tags": ["fallback", "needs-clarification-missing-symbol"]
+}

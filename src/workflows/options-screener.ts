@@ -15,13 +15,18 @@ export function buildOptionsScreenerWorkflowDefinition(resolution: SlotResolutio
         requiredInputs: ["symbol"],
         expectedOutputs: ["option_chain"],
       }),
-      promptStep("rank_and_present", "Rank and present top contracts", `Now rank and present the top ${contractType} for ${s.symbol}:
-1. From the option chain data, select the top 3-5 contracts matching: ${s.moneynessPreference} strikes, DTE near ${s.dteTarget}, with ${s.liquidityMinimum}.
+      promptStep("rank_and_present", "Rank and present top contracts", `Now rank and present the top ${contractType} for ${s.symbol}. You MUST produce a final text response — never end this turn with only tool calls.
+
+1. From the option chain data already fetched, select the top 3-5 contracts matching: ${s.moneynessPreference} strikes, DTE near ${s.dteTarget}, with ${s.liquidityMinimum}.
 2. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.
 3. Present a table: strike, expiry, premium, delta, IV, open interest, bid-ask spread.
 4. Explain why the #1 pick is ranked highest.
 5. State all assumptions used (which were defaults vs user-specified vs saved preferences).
 6. Include risk caveats: max loss = premium, IV crush risk, time decay (theta).
+
+If some or all of the option chain fetches returned "⚠ Options chain unavailable" or similar gaps, do NOT abort. Instead:
+- Rank and present whatever contracts you did retrieve from the successful fetches, even if fewer than 3.
+- If no chain data is usable at all, still produce a text response: reproduce the Assumptions block, state which expirations failed, and commit to a next step (e.g. "retry nearest monthly expiration", "use price/technicals instead"). Never end the turn with only tool calls.
 
 Length constraints:
 - Max 1 sentence explaining the #1 pick.

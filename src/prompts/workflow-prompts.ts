@@ -5,6 +5,7 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
+import type { RouterOutput } from "../routing/router-types.js";
 import { parseDteTarget } from "../routing/defaults.js";
 
 function tag(source: string | undefined): string {
@@ -92,6 +93,35 @@ export function buildDisclosureBlock(
   return lines.join("\n");
 }
 
+/**
+ * Render the Assumptions block directly from router output. Workflow and
+ * fallback routes both call this so provenance labels render consistently.
+ * Matches `buildDisclosureBlock` labels verbatim (`User-specified` /
+ * `From saved preferences` / `Defaults`).
+ */
+export function buildAssumptionsBlockFromRouter(
+  slots: RouterOutput["slots"],
+  workflowConstraints?: string[],
+): string {
+  const slotValues: Record<string, unknown> = {};
+  const slotSources: Record<string, SlotSource | undefined> = {};
+  for (const [key, slot] of Object.entries(slots)) {
+    slotValues[key] = formatSlotValue(slot.value);
+    slotSources[key] = slot.source;
+  }
+  return buildDisclosureBlock(slotValues, slotSources, workflowConstraints);
+}
+
+// Router slot values are `unknown` and may include arrays (e.g. symbols)
+// or nested objects. Default `${val}` coercion renders arrays as "a,b"
+// (no space) and objects as "[object Object]" — normalize here so the
+// shared disclosure renderer sees readable strings.
+function formatSlotValue(value: unknown): string {
+  if (Array.isArray(value)) return value.map((v) => formatSlotValue(v)).join(", ");
+  if (value !== null && typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>): string {
   const { resolved: s, sources } = resolution;
   const isEtfOnly = s.assetScope.toLowerCase().startsWith("etf");
@@ -136,11 +166,10 @@ ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- This is an educational sample allocation request. Build the draft portfolio and include the standard disclaimer instead of refusing.
-- Present an allocation table: symbol, allocation %, dollar amount, and rationale for each position.
-- Include a risk summary (portfolio volatility, diversification quality).
-- Suggest what to change for more growth or more safety.
-- Include the standard disclaimer.`;
+- Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
+- Present an allocation table: symbol, allocation %, dollar amount, and a one-line analyst rationale for each position (what the data showed).
+- Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
+- Suggest what to change for more growth or more safety.`;
 }
 
 export function buildOptionsScreenerPrompt(resolution: SlotResolution<OptionsScreenerSlots>): string {
