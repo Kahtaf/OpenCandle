@@ -55,7 +55,7 @@ export function CatalogOverlay({
         handleLabel="Catalog"
         className="bg-card p-0"
       >
-        <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
           {selection ? (
             <BuilderHeader
               selection={selection}
