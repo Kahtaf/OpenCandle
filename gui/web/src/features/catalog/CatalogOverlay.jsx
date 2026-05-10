@@ -354,6 +354,9 @@ function BuilderBody({ selection, catalog, send, setToast, startChatRun, fillCom
 
 function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToast, lookupSymbol }) {
   const schema = schemaForWorkflow(workflow.id);
+  const [values, setValues] = useState(() => (schema ? defaultValuesFor(schema.fields) : {}));
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
   if (!schema) {
     return (
       <div className="p-6">
@@ -364,8 +367,6 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
       </div>
     );
   }
-  const [values, setValues] = useState(() => defaultValuesFor(schema.fields));
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const setField = useCallback((name, value) => setValues((prev) => ({ ...prev, [name]: value })), []);
   const issues = validateRequired(schema.fields, values);
   const prompt = useMemo(() => safeBuildPrompt(schema, values), [schema, values]);
@@ -381,7 +382,7 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
   };
 
   return (
-    <div className="grid gap-5 px-4 py-4 sm:px-5">
+    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
       <p className="text-sm leading-5 text-muted-foreground">{schema.description}</p>
       <div className="grid gap-3.5">
         {baseFields.map((field) => (
@@ -434,7 +435,7 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
   };
 
   return (
-    <div className="grid gap-5 px-4 py-4 sm:px-5">
+    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
       <p className="text-sm leading-5 text-muted-foreground">{tool.description}</p>
       {schema.length === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-secondary px-3 py-2.5 text-xs text-muted-foreground">
@@ -449,7 +450,7 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
       )}
       <PromptPreview prompt={promptText} title="Chat preview" />
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="ghost" size="sm" onClick={() => submit("draft")}>Send to chat</Button>
+        <Button variant="bordered" size="sm" onClick={() => submit("draft")}>Send to chat</Button>
         <Button variant="brand" size="sm" prefixIcon={Play} onClick={() => submit("run")}>Run now</Button>
       </div>
     </div>
@@ -473,7 +474,7 @@ function ProviderBuilder({ provider, send, setToast }) {
   };
 
   return (
-    <div className="grid gap-5 px-4 py-4 sm:px-5">
+    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
       <div className="grid gap-1.5">
         <div className="flex items-center gap-2">
           <ProviderStatusDot status={status} />

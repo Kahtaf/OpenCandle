@@ -7,7 +7,7 @@
 //   npx tsx tests/screenshots/capture.ts <phase> [--viewport=desktop|mobile|both]
 //
 // The phase becomes the output subdirectory (e.g. "baseline", "post-sheet").
-import { createReadStream, existsSync, mkdirSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { extname, join, resolve } from "node:path";
@@ -102,6 +102,10 @@ async function startStaticServer(): Promise<{ server: Server; baseUrl: string }>
   });
 }
 
+// Read the mock-ws shim once. Re-reading from disk on every page in addInitScript
+// adds noticeable latency for full screenshot runs.
+const MOCK_WS_SOURCE = readFileSync(resolve(__dirname, "mock-ws.js"), "utf8");
+
 async function installMocks(page: Page, overrides: Record<string, unknown> = {}): Promise<void> {
   const payload = {
     catalog: overrides.catalog ?? SAMPLE_CATALOG,
@@ -110,11 +114,10 @@ async function installMocks(page: Page, overrides: Record<string, unknown> = {})
     entries: overrides.entries ?? [],
     modelSetup: overrides.modelSetup ?? { requirement: "ready", providers: [], availableModels: [] },
   };
-  // Stash the payload before mock-ws.js runs.
   await page.addInitScript((mockPayload) => {
     (window as unknown as { __MOCK_PAYLOAD: unknown }).__MOCK_PAYLOAD = mockPayload;
   }, payload);
-  await page.addInitScript({ path: resolve(__dirname, "mock-ws.js") });
+  await page.addInitScript({ content: MOCK_WS_SOURCE });
 }
 
 interface Capture {
@@ -205,58 +208,57 @@ const CAPTURES: Capture[] = [
   {
     name: "11-context-drawer",
     setup: async (page) => {
-      // Desktop: sidebar Context button. Mobile: aria-label="Open context".
-      const mobileBtn = page.locator("button[aria-label='Open context']").first();
       const sidebarBtn = page.locator("aside button:has-text('Context')").first();
-      if (await mobileBtn.count()) await mobileBtn.click().catch(() => {});
-      else await sidebarBtn.click().catch(() => {});
+      const mobileBtn = page.locator("button[aria-label='Open context']:visible").first();
+      if (await sidebarBtn.isVisible().catch(() => false)) await sidebarBtn.click({ timeout: 2000 }).catch(() => {});
+      else await mobileBtn.click({ timeout: 2000 }).catch(() => {});
       await page.waitForTimeout(300);
     },
   },
 ];
 
 async function openCatalog(page: Page): Promise<void> {
-  // Mobile header has aria-label="Open catalog"; desktop sidebar has a "Catalog" button.
-  const mobileBtn = page.locator("button[aria-label='Open catalog']").first();
+  // Mobile header is `md:hidden` — its DOM nodes still exist on desktop, so
+  // count() matches there too. Filter by visibility before clicking.
   const sidebarCatalog = page.locator("aside button:has-text('Catalog')").first();
-  if (await mobileBtn.count()) {
-    await mobileBtn.click().catch(() => {});
-  } else if (await sidebarCatalog.count()) {
-    await sidebarCatalog.click().catch(() => {});
+  const mobileBtn = page.locator("button[aria-label='Open catalog']:visible").first();
+  if (await sidebarCatalog.isVisible().catch(() => false)) {
+    await sidebarCatalog.click({ timeout: 2000 }).catch(() => {});
+  } else if (await mobileBtn.count()) {
+    await mobileBtn.click({ timeout: 2000 }).catch(() => {});
   } else {
     await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
   }
-  await page.waitForSelector("[role='dialog']", { timeout: 4000 }).catch(() => {});
-  await page.waitForTimeout(350);
+  await page.waitForSelector("[role='dialog']", { timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(280);
 }
 
 async function captureViewport(browser: Browser, baseUrl: string, viewport: ViewportKey, phase: string): Promise<void> {
   const dir = resolve(outRoot, phase, viewport);
   mkdirSync(dir, { recursive: true });
-  // Reuse a single context per viewport — shaves seconds per capture vs a fresh context each time.
-  const context = await browser.newContext({ viewport: VIEWPORTS[viewport] });
-  try {
-    for (const capture of CAPTURES) {
-      const page = await context.newPage();
-      try {
-        await installMocks(page);
-        await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-        await page.waitForFunction(
-          () => Boolean((window as unknown as { __mockReady?: boolean }).__mockReady),
-          undefined,
-          { timeout: 5000 },
-        );
-        await page.waitForTimeout(200);
-        await capture.setup(page);
-        await page.waitForTimeout(200);
-        await page.screenshot({ path: resolve(dir, `${capture.name}.png`), fullPage: false });
-        process.stdout.write(`  [${viewport}] ${capture.name}.png\n`);
-      } finally {
-        await page.close();
-      }
+  for (const capture of CAPTURES) {
+    const start = Date.now();
+    const context = await browser.newContext({ viewport: VIEWPORTS[viewport] });
+    // Block external font CDN — without this Playwright's screenshot blocks on
+    // document.fonts.ready for ~30s waiting for Google Fonts that never resolve.
+    await context.route(/(fonts\.googleapis\.com|fonts\.gstatic\.com)/, (route) => route.abort());
+    const page = await context.newPage();
+    try {
+      await installMocks(page);
+      await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+      await page.waitForFunction(
+        () => Boolean((window as unknown as { __mockReady?: boolean }).__mockReady),
+        undefined,
+        { timeout: 4000 },
+      );
+      await page.waitForTimeout(150);
+      await capture.setup(page);
+      await page.waitForTimeout(180);
+      await page.screenshot({ path: resolve(dir, `${capture.name}.png`), fullPage: false, animations: "disabled", caret: "hide", timeout: 5000 });
+      process.stdout.write(`  [${viewport}] ${capture.name}.png (${Date.now() - start}ms)\n`);
+    } finally {
+      await context.close();
     }
-  } finally {
-    await context.close();
   }
 }
 
