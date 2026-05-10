@@ -10,3 +10,4 @@ tests/evals/runs/*
 .agents/
 .claude/skills/
 skills-lock.json
+tests/screenshots/out/

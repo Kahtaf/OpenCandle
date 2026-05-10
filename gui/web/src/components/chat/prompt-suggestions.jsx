@@ -1,0 +1,56 @@
+import { BookOpen } from "lucide-react";
+import { Button } from "../ui/button.jsx";
+import { Kbd } from "../ui/kbd.jsx";
+
+export const DEFAULT_PROMPTS = [
+  ["Analyze NVDA", "/analyze NVDA"],
+  ["Build portfolio", "Build me a portfolio for long-term growth"],
+  ["Options chain for NVDA", "Show options chain for NVDA"],
+  ["Compare NVDA and AMD", "Compare NVDA and AMD using latest quotes."],
+];
+
+export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog }) {
+  return (
+    <div className="mx-auto grid w-full max-w-[760px] animate-fade-in-once justify-items-center gap-6 px-2 pb-20 pt-16 text-center sm:pt-24">
+      <div className="grid gap-2">
+        <h1 className="m-0 text-3xl font-semibold leading-tight tracking-tight text-foreground">
+          What are we watching?
+        </h1>
+        <p className="m-0 max-w-[520px] text-sm leading-relaxed text-muted-foreground">
+          Ask for quotes, filings, macro data, options chains, or a full research workflow.
+        </p>
+      </div>
+      <PromptSuggestions prompts={prompts} onPrompt={onPrompt} />
+      {onOpenCatalog ? (
+        <button
+          type="button"
+          onClick={() => onOpenCatalog()}
+          className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
+          Browse workflows, tools, and providers
+          <Kbd className="hidden sm:inline-flex">⌘K</Kbd>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt }) {
+  return (
+    <div className="flex w-full flex-wrap justify-center gap-2">
+      {prompts.map(([label, prompt]) => (
+        <Button
+          key={label}
+          variant="bordered"
+          size="sm"
+          rounded="full"
+          className="font-normal text-muted-foreground"
+          onClick={() => onPrompt(prompt)}
+        >
+          {label}
+        </Button>
+      ))}
+    </div>
+  );
+}
