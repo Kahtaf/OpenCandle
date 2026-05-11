@@ -7,14 +7,16 @@ import { Button } from "../../components/ui/button.jsx";
 import { textContent } from "../../rendering/text.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
+import { eventsToLiveEntries } from "./live-entries.js";
 
-export function ChatPanel({ entries, modelSetup, role, runState, lastPrompt, catalog, send, startChatRun, stopRun, retryRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext }) {
+export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, lastPrompt, catalog, send, startChatRun, stopRun, retryRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
-  const visibleEntries = useMemo(() => compactDuplicateUserMessages(entries.filter(isVisibleEntry)), [entries]);
+  const liveEntries = useMemo(() => eventsToLiveEntries(liveEvents), [liveEvents]);
+  const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
   const canStop = runState === "connecting" || runState === "streaming";
   const canRetry = runState === "failed" || (runState === "ready" && lastPrompt);
@@ -103,6 +105,15 @@ function MessageRow({ entry, catalog }) {
   if (message.role === "toolResult") return <ToolResultCard message={message} catalog={catalog} />;
   if (message.role === "assistant") {
     const toolCalls = message.content?.filter?.((part) => part.type === "toolCall") || [];
+    const text = textContent(message.content);
+    if (toolCalls.length && text) {
+      return (
+        <div className="grid gap-3">
+          <AssistantMessage content={message.content} />
+          <ToolCallMessage toolCalls={toolCalls} />
+        </div>
+      );
+    }
     if (toolCalls.length) return <ToolCallMessage toolCalls={toolCalls} />;
     return <AssistantMessage content={message.content} />;
   }

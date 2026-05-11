@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
-export function useChatRun({ setToast }) {
+export function useChatRun({ setToast, onEvent, onRunStart }) {
   const abortRef = useRef(null);
   const [runState, setRunState] = useState("ready");
   const [lastPrompt, setLastPrompt] = useState("");
@@ -11,6 +11,7 @@ export function useChatRun({ setToast }) {
     setLastPrompt(trimmed);
     setRunState("connecting");
     setToast("");
+    onRunStart?.();
     const abort = new AbortController();
     abortRef.current = abort;
 
@@ -27,6 +28,7 @@ export function useChatRun({ setToast }) {
       }
       setRunState("streaming");
       await drainSse(response, (event) => {
+        onEvent?.(event);
         if (event.type === "run.failed") {
           setRunState("failed");
           setToast(event.error?.message || "Run failed");
@@ -45,7 +47,7 @@ export function useChatRun({ setToast }) {
     } finally {
       abortRef.current = null;
     }
-  }, [runState, setToast]);
+  }, [runState, setToast, onEvent, onRunStart]);
 
   const stopRun = useCallback(() => {
     abortRef.current?.abort();

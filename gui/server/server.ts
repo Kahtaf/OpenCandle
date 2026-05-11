@@ -20,6 +20,7 @@ import { parseGuiPromptIntent } from "./prompt-intent.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
+import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 
 const cwd = process.cwd();
@@ -397,24 +398,38 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
   const beforeEntries = sessionManager.getEntries();
   const beforeCount = beforeEntries.length;
   writeSse(res, { type: "run.started", runId, sessionId, seq: seq++ });
+  res.flushHeaders?.();
+  const liveStartSeq = seq;
+  const liveAdapter = createLiveChatEventAdapter({
+    runId,
+    sessionId,
+    startSeq: seq,
+    emit: (event) => writeSse(res, event),
+  });
+  const unsubscribeLive = session.subscribe((event) => liveAdapter.handle(event));
 
   try {
     await handlePrompt(prompt);
-    const newEntries = sessionManager.getEntries().slice(beforeCount);
-    const events = sessionEntriesToChatEvents(newEntries, {
-      sessionId,
-      updatedAt: new Date().toISOString(),
-      startSeq: seq,
-    });
-    for (const event of events) {
-      writeSse(res, event);
-      seq = event.seq + 1;
+    seq = liveAdapter.nextSeq();
+    if (seq === liveStartSeq) {
+      const newEntries = sessionManager.getEntries().slice(beforeCount);
+      const events = sessionEntriesToChatEvents(newEntries, {
+        sessionId,
+        updatedAt: new Date().toISOString(),
+        startSeq: seq,
+      });
+      for (const event of events) {
+        writeSse(res, event);
+        seq = event.seq + 1;
+      }
     }
     writeSse(res, { type: "run.completed", runId, seq });
   } catch (error) {
+    seq = liveAdapter.nextSeq();
     const message = error instanceof Error ? error.message : String(error);
     writeSse(res, { type: "run.failed", runId, error: { message }, seq });
   } finally {
+    unsubscribeLive();
     res.end();
   }
 }

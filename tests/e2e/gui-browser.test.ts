@@ -155,6 +155,59 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("dialog", { name: "Catalog" }).waitFor({ state: "detached" });
     await mocked.close();
   }, 30_000);
+
+  it("streams assistant text incrementally and keeps specialized tool cards", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+    await mocked.addInitScript(() => {
+      window.fetch = () => {
+        const encoder = new TextEncoder();
+        let releaseRemainder;
+        window.__releaseSseRemainder = () => releaseRemainder?.();
+        const stream = new ReadableStream({
+          async start(controller) {
+            const send = (payload) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            send({ type: "run.started", runId: "mock-run", sessionId: "mock-session", seq: 1 });
+            send({ type: "message.created", messageId: "assistant-live", role: "assistant", seq: 2 });
+            send({ type: "message.delta", messageId: "assistant-live", text: "First chunk", seq: 3 });
+            await new Promise((resolve) => { releaseRemainder = resolve; });
+            send({ type: "message.delta", messageId: "assistant-live", text: " second chunk", seq: 4 });
+            send({ type: "tool.started", toolCallId: "call-1", messageId: "assistant-live", name: "get_stock_quote", input: { symbol: "NVDA" }, seq: 5 });
+            send({
+              type: "tool.completed",
+              toolCallId: "call-1",
+              output: {
+                content: [{ type: "text", text: "NVDA quote" }],
+                details: { symbol: "NVDA", price: 185.25, changePercent: 1.2, volume: 123456 },
+                isError: false,
+              },
+              seq: 6,
+            });
+            send({ type: "message.completed", messageId: "assistant-live", content: [{ type: "text", text: "First chunk second chunk" }, { type: "tool", toolCallId: "call-1" }], seq: 7 });
+            send({ type: "run.completed", runId: "mock-run", seq: 8 });
+            controller.close();
+          },
+        });
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await mocked.getByLabel("Message OpenCandle").fill("Mock streaming prompt");
+    await mocked.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(mocked.getByText("First chunk"));
+    await expect(mocked.getByText("second chunk").count()).resolves.toBe(0);
+
+    await mocked.evaluate(() => window.__releaseSseRemainder?.());
+    await expectVisible(mocked.getByText("second chunk"));
+    await expectVisible(mocked.getByText("Stock Quote").first());
+    await expectVisible(mocked.getByText("NVDA").first());
+    await mocked.close();
+  }, 30_000);
 });
 
 async function submitPrompt(page: Page, prompt: string): Promise<void> {

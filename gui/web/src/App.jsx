@@ -15,7 +15,16 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useRouterState({ select: (state) => state.location });
   const gui = useGuiConnection();
-  const chatRun = useChatRun({ setToast: gui.setToast });
+  const [liveEvents, setLiveEvents] = useState([]);
+  const [liveBaseEntryCount, setLiveBaseEntryCount] = useState(0);
+  const chatRun = useChatRun({
+    setToast: gui.setToast,
+    onRunStart: useCallback(() => {
+      setLiveBaseEntryCount(gui.entries.length);
+      setLiveEvents([]);
+    }, [gui.entries.length]),
+    onEvent: useCallback((event) => setLiveEvents((current) => [...current, event]), []),
+  });
   const activeDrawer = location.search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
   const sessionsOpen = activeDrawer === "history" || location.pathname === "/history";
@@ -52,6 +61,11 @@ export function AppShell() {
     const session = gui.sessions.find((candidate) => candidate.id === routeSessionId);
     if (session) gui.send("session.open", { path: session.path });
   }, [gui, routeSessionId]);
+
+  useEffect(() => {
+    if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;
+    if (gui.entries.length > liveBaseEntryCount) setLiveEvents([]);
+  }, [chatRun.runState, gui.entries.length, liveBaseEntryCount, liveEvents.length]);
 
   const openCatalog = useCallback((target = "catalog") => {
     loadCatalogOverlay();
@@ -108,6 +122,7 @@ export function AppShell() {
         <SessionSidebar {...sidebarProps} />
         <ChatPanel
           entries={gui.entries}
+          liveEvents={liveEvents}
           modelSetup={gui.modelSetup}
           role={gui.role}
           runState={chatRun.runState}
