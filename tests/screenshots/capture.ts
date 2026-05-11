@@ -116,6 +116,103 @@ const RICH_DASHBOARD = {
   },
 };
 
+// Sample tool-result entries for rendering the chat thread. Each entry mirrors
+// the shape Pi's session emits: a toolResult message with `content` (text) and
+// `details` (typed payload) plus a stable id and timestamp.
+function toolResultEntry(id: string, toolName: string, text: string, details: unknown, args: unknown = {}) {
+  return {
+    type: "message",
+    id,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "toolResult",
+      toolName,
+      content: [{ type: "text", text }],
+      details: { ...(details as Record<string, unknown>), args },
+    },
+  };
+}
+
+const SENTIMENT_SUMMARY_TEXT = `[OPENCANDLE_SOFT_DEGRADED provider=finnhub fallback=other-sentiment-sources remediation="run /connect news to enable Finnhub company news"]
+
+**Sentiment summary for "NVDA"** (last 24h):
+
+| Source | Score | Count | Signal |
+|--------|-------|-------|--------|
+| Reddit | +0.90 | 5 | Bullish |
+| Web/News | +0.20 | 5 | Leaning Bullish |
+
+**Aggregate:** +0.55 (Bullish)
+
+⚠ DIVERGENCE: Retail sentiment (+0.90) vs news sentiment (+0.20) — gap of 0.70.
+
+⚠ Twitter: No Twitter session found.`;
+
+// Synthetic but realistic indicator series for a chart with shape.
+const SAMPLE_PRICES = (() => {
+  const base = 200;
+  const out: number[] = [];
+  for (let i = 0; i < 200; i++) {
+    const drift = (Math.sin(i / 18) + Math.sin(i / 7) * 0.4) * 12 + i * 0.08;
+    out.push(base + drift);
+  }
+  return out;
+})();
+const SAMPLE_SMA = (window: number) => SAMPLE_PRICES.map((_, i) => {
+  if (i < window - 1) return null as unknown as number;
+  let sum = 0;
+  for (let j = i - window + 1; j <= i; j++) sum += SAMPLE_PRICES[j];
+  return sum / window;
+}).filter((v) => Number.isFinite(v)) as number[];
+const SAMPLE_RSI = SAMPLE_PRICES.map((_, i) => 50 + 22 * Math.sin(i / 11) + 7 * Math.sin(i / 3));
+const SAMPLE_MACD = SAMPLE_PRICES.map((_, i) => {
+  const macd = 2.4 * Math.sin(i / 14);
+  const signal = 2.0 * Math.sin((i - 3) / 14);
+  return { macd, signal, histogram: macd - signal };
+});
+const SAMPLE_BB = SAMPLE_PRICES.slice(19).map((_, i) => {
+  const slice = SAMPLE_PRICES.slice(i, i + 20);
+  const mean = slice.reduce((a, b) => a + b, 0) / 20;
+  const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / 20;
+  const sd = Math.sqrt(variance);
+  return { upper: mean + 2 * sd, middle: mean, lower: mean - 2 * sd };
+});
+
+const TOOL_THREAD_ENTRIES = [
+  {
+    type: "message",
+    id: "user-1",
+    timestamp: new Date().toISOString(),
+    message: { role: "user", content: [{ type: "text", text: "Sentiment summary on NVDA last 24h" }] },
+  },
+  toolResultEntry("tool-sentiment-1", "get_sentiment_summary", SENTIMENT_SUMMARY_TEXT, {
+    score: 0.55,
+    sources: { reddit: { score: 0.90, count: 5 }, web: { score: 0.20, count: 5 } },
+  }, { query: "NVDA", hours: 24 }),
+  {
+    type: "message",
+    id: "user-2",
+    timestamp: new Date().toISOString(),
+    message: { role: "user", content: [{ type: "text", text: "Technical indicators for NVDA" }] },
+  },
+  toolResultEntry("tool-tech-1", "get_technical_indicators",
+    "**NVDA Technical Analysis** (2025-01-01 to 2025-12-31)\nPrice: $215.22\n\nSMA(20): $210.40 | SMA(50): $204.12\nRSI(14): 62.4 (Neutral)\nMACD: 0.92 | Signal: 0.58 | Histogram: 0.34\nBollinger Bands: Upper $222.10 | Mid $210.40 | Lower $198.70\n\nSignals: Price above SMA(20) — short-term bullish | Golden cross pattern (SMA20 > SMA50) | MACD bullish (histogram positive)",
+    {
+      symbol: "NVDA",
+      range: "1y",
+      prices: SAMPLE_PRICES,
+      sma20: SAMPLE_SMA(20),
+      sma50: SAMPLE_SMA(50),
+      rsi: SAMPLE_RSI,
+      macd: SAMPLE_MACD,
+      bb: SAMPLE_BB,
+      obv: [],
+      vwap: [],
+    },
+    { symbol: "NVDA", range: "1y" },
+  ),
+];
+
 async function startStaticServer(): Promise<{ server: Server; baseUrl: string }> {
   if (!existsSync(webDist)) {
     throw new Error(`gui/web/dist missing — run 'npm run gui:web:build' first.`);
@@ -164,6 +261,8 @@ interface Capture {
   setup: (page: Page) => Promise<void>;
   // Override the dashboard / catalog / etc. for this capture only.
   overrides?: Record<string, unknown>;
+  // When true, capture the full scrollable page (useful for tall tool cards).
+  fullPage?: boolean;
 }
 
 const CAPTURES: Capture[] = [
@@ -260,7 +359,31 @@ const CAPTURES: Capture[] = [
     overrides: { dashboard: { ...RICH_DASHBOARD, watchlist: [], activeAnalyses: [], recentResearch: [] } },
     setup: async (page) => { await openContext(page); },
   },
+  {
+    name: "14-tool-output-sentiment-summary",
+    overrides: { entries: [TOOL_THREAD_ENTRIES[0], TOOL_THREAD_ENTRIES[1]] },
+    setup: async (page) => {
+      await scrollChatToBottom(page);
+    },
+  },
+  {
+    name: "15-tool-output-technical-indicators",
+    overrides: { entries: [TOOL_THREAD_ENTRIES[2], TOOL_THREAD_ENTRIES[3]] },
+    setup: async (page) => {
+      await scrollChatToBottom(page);
+    },
+  },
 ];
+
+// Pin the chat scroll container to the bottom so tall tool cards are
+// fully in view before screenshotting.
+async function scrollChatToBottom(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const containers = document.querySelectorAll("section .overflow-y-auto");
+    containers.forEach((el) => { (el as HTMLElement).scrollTop = (el as HTMLElement).scrollHeight; });
+  });
+  await page.waitForTimeout(180);
+}
 
 async function openContext(page: Page): Promise<void> {
   const sidebarBtn = page.locator("aside button:has-text('Context')").first();
@@ -308,7 +431,7 @@ async function captureViewport(browser: Browser, baseUrl: string, viewport: View
       await page.waitForTimeout(150);
       await capture.setup(page);
       await page.waitForTimeout(180);
-      await page.screenshot({ path: resolve(dir, `${capture.name}.png`), fullPage: false, animations: "disabled", caret: "hide", timeout: 5000 });
+      await page.screenshot({ path: resolve(dir, `${capture.name}.png`), fullPage: capture.fullPage === true, animations: "disabled", caret: "hide", timeout: 5000 });
       process.stdout.write(`  [${viewport}] ${capture.name}.png (${Date.now() - start}ms)\n`);
     } finally {
       await context.close();
