@@ -77,6 +77,45 @@ const SAMPLE_DASHBOARD = {
   dataQuality: { softGaps: [], hardSkips: [] },
 };
 
+// Realistic in-flight session — workflow running, prior research, several gaps.
+// Mirrors what the projector would emit after a few minutes of usage so the
+// context drawer can be audited in a non-empty state.
+const NOW = Date.now();
+const minutesAgo = (n: number): string => new Date(NOW - n * 60_000).toISOString();
+const RICH_DASHBOARD = {
+  watchlist: [
+    { symbol: "NVDA", quote: { price: 215.22, changePercent: 1.77, dayHigh: 218.40, dayLow: 211.80, marketCap: 5.32e12 }, lastSeen: minutesAgo(2) },
+    { symbol: "AAPL", quote: { price: 218.04, changePercent: -0.31, dayHigh: 219.30, dayLow: 216.10, marketCap: 3.31e12 }, lastSeen: minutesAgo(8) },
+    { symbol: "TSLA", quote: { price: 318.74, changePercent: -2.14, dayHigh: 326.80, dayLow: 316.20, marketCap: 1.02e12 }, lastSeen: minutesAgo(14) },
+    { symbol: "META", quote: { price: 612.51, changePercent: 0.42, dayHigh: 614.20, dayLow: 608.10, marketCap: 1.55e12 }, lastSeen: minutesAgo(22) },
+    { symbol: "BTC-USD", quote: { price: 96420.18, changePercent: 3.12, dayHigh: 97200, dayLow: 93800, marketCap: 1.91e12 }, lastSeen: minutesAgo(31) },
+  ],
+  activeAnalyses: [
+    { workflowId: "wf-1", workflow: "comprehensive_analysis", symbol: "NVDA", analystsTotal: 5, analystsDone: 3, startedAt: minutesAgo(4) },
+  ],
+  recentResearch: [
+    { sessionId: "s1", workflow: "options_screener", symbol: "AAPL", completedAt: minutesAgo(18) },
+    { sessionId: "s1", workflow: "compare_assets", symbol: "NVDA, AMD", completedAt: minutesAgo(46) },
+    { sessionId: "s1", workflow: "comprehensive_analysis", symbol: "TSLA", completedAt: minutesAgo(95) },
+  ],
+  dataQuality: {
+    // Multiple repeats to exercise dedup
+    softGaps: [
+      { provider: "brave", lastSeen: minutesAgo(7) },
+      { provider: "exa", lastSeen: minutesAgo(12) },
+      { provider: "brave", lastSeen: minutesAgo(20) },
+      { provider: "finnhub", lastSeen: minutesAgo(35) },
+    ],
+    hardSkips: [
+      { provider: "fred", lastSeen: minutesAgo(1) },
+      { provider: "fred", lastSeen: minutesAgo(9) },
+      { provider: "fred", lastSeen: minutesAgo(17) },
+      { provider: "alpha_vantage", lastSeen: minutesAgo(25) },
+      { provider: "alpha_vantage", lastSeen: minutesAgo(50) },
+    ],
+  },
+};
+
 async function startStaticServer(): Promise<{ server: Server; baseUrl: string }> {
   if (!existsSync(webDist)) {
     throw new Error(`gui/web/dist missing — run 'npm run gui:web:build' first.`);
@@ -123,6 +162,8 @@ async function installMocks(page: Page, overrides: Record<string, unknown> = {})
 interface Capture {
   name: string;
   setup: (page: Page) => Promise<void>;
+  // Override the dashboard / catalog / etc. for this capture only.
+  overrides?: Record<string, unknown>;
 }
 
 const CAPTURES: Capture[] = [
@@ -206,16 +247,29 @@ const CAPTURES: Capture[] = [
     },
   },
   {
-    name: "11-context-drawer",
-    setup: async (page) => {
-      const sidebarBtn = page.locator("aside button:has-text('Context')").first();
-      const mobileBtn = page.locator("button[aria-label='Open context']:visible").first();
-      if (await sidebarBtn.isVisible().catch(() => false)) await sidebarBtn.click({ timeout: 2000 }).catch(() => {});
-      else await mobileBtn.click({ timeout: 2000 }).catch(() => {});
-      await page.waitForTimeout(300);
-    },
+    name: "11-context-drawer-empty",
+    setup: async (page) => { await openContext(page); },
+  },
+  {
+    name: "12-context-drawer-rich",
+    overrides: { dashboard: RICH_DASHBOARD },
+    setup: async (page) => { await openContext(page); },
+  },
+  {
+    name: "13-context-drawer-gaps-only",
+    overrides: { dashboard: { ...RICH_DASHBOARD, watchlist: [], activeAnalyses: [], recentResearch: [] } },
+    setup: async (page) => { await openContext(page); },
   },
 ];
+
+async function openContext(page: Page): Promise<void> {
+  const sidebarBtn = page.locator("aside button:has-text('Context')").first();
+  const mobileBtn = page.locator("button[aria-label='Open context']:visible").first();
+  if (await sidebarBtn.isVisible().catch(() => false)) await sidebarBtn.click({ timeout: 2000 }).catch(() => {});
+  else await mobileBtn.click({ timeout: 2000 }).catch(() => {});
+  await page.waitForSelector("[role='dialog']", { timeout: 3000 }).catch(() => {});
+  await page.waitForTimeout(280);
+}
 
 async function openCatalog(page: Page): Promise<void> {
   // Mobile header is `md:hidden` — its DOM nodes still exist on desktop, so
@@ -244,7 +298,7 @@ async function captureViewport(browser: Browser, baseUrl: string, viewport: View
     await context.route(/(fonts\.googleapis\.com|fonts\.gstatic\.com)/, (route) => route.abort());
     const page = await context.newPage();
     try {
-      await installMocks(page);
+      await installMocks(page, capture.overrides ?? {});
       await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
       await page.waitForFunction(
         () => Boolean((window as unknown as { __mockReady?: boolean }).__mockReady),

@@ -126,7 +126,16 @@ export function AppShell() {
         />
       </div>
       <SessionDrawer open={sessionsOpen} {...sidebarProps} onClose={closeDrawer} />
-      <FinancialContextDrawer open={contextOpen} state={gui.dashboard} onClose={closeDrawer} />
+      <FinancialContextDrawer
+        open={contextOpen}
+        state={gui.dashboard}
+        catalog={gui.catalog}
+        onClose={closeDrawer}
+        onConfigureProvider={() => {
+          closeDrawer();
+          openCatalog("providers");
+        }}
+      />
       <Suspense fallback={null}>
         {catalogOpen ? (
           <CatalogOverlay
