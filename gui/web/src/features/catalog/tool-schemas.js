@@ -55,8 +55,8 @@ export const TOOL_SCHEMAS = {
   calculate_dcf: [
     SYMBOL(),
     { name: "growth_rate", kind: "percent", label: "FCF growth rate", helper: "Annual. Estimated from history if blank." },
-    { name: "discount_rate", kind: "percent", label: "Discount rate (WACC)", default: 0.10 },
-    { name: "terminal_growth", kind: "percent", label: "Terminal growth", default: 0.03 },
+    { name: "discount_rate", kind: "percent", label: "Discount rate (WACC)", default: 0.10, helper: "Default 10%." },
+    { name: "terminal_growth", kind: "percent", label: "Terminal growth", default: 0.03, helper: "Default 3%." },
     { name: "projection_years", kind: "number-chips", label: "Projection years", default: 5, presets: [
       { value: 3, label: "3y" }, { value: 5, label: "5y" }, { value: 7, label: "7y" }, { value: 10, label: "10y" },
     ], suffix: "yrs" },

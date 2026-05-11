@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, ChevronLeft, ExternalLink, KeyRound, Play, Search, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
@@ -30,6 +30,10 @@ export function CatalogOverlay({
   const [tab, setTab] = useState(initialTab ?? INITIAL_TAB);
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState(null); // { kind: 'tool'|'workflow'|'provider', id }
+  // Body container ref so we can rewind scrollTop when the user pushes/pops
+  // between list and builder views — otherwise a list scroll position carries
+  // over and hides the builder header on mobile.
+  const bodyRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
@@ -37,6 +41,10 @@ export function CatalogOverlay({
     setQuery("");
     setSelection(null);
   }, [open, initialTab]);
+
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [selection, tab]);
 
   const close = useCallback(() => {
     setSelection(null);
@@ -77,7 +85,7 @@ export function CatalogOverlay({
               }}
             />
           )}
-          <div className="min-h-0 overflow-y-auto overscroll-contain">
+          <div ref={bodyRef} className="min-h-0 overflow-y-auto overscroll-contain">
             {selection ? (
               <BuilderBody
                 selection={selection}
@@ -111,8 +119,8 @@ export function CatalogOverlay({
 function ListHeader({ tab, setTab, query, setQuery, onClose, counts }) {
   return (
     <div className="border-b border-border">
-      <div className="flex items-center justify-between gap-2 px-3 pt-2 sm:px-4">
-        <div className="inline-flex items-center gap-0.5 rounded-md bg-secondary p-0.5">
+      <div className="flex items-center gap-2 px-3 pt-2 sm:px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 rounded-md bg-secondary p-0.5">
           {TABS.map((entry) => {
             const Icon = entry.icon;
             const selected = tab === entry.id;
@@ -123,14 +131,14 @@ function ListHeader({ tab, setTab, query, setQuery, onClose, counts }) {
                 onClick={() => setTab(entry.id)}
                 aria-pressed={selected}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-[5px] px-2.5 text-xs font-medium transition-colors",
+                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition-colors sm:flex-initial sm:px-2.5",
                   selected ? "bg-card text-foreground shadow-subtle-xs" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                {entry.label}
+                <Icon className="hidden h-3.5 w-3.5 sm:inline" aria-hidden="true" />
+                <span className="truncate">{entry.label}</span>
                 <span className={cn(
-                  "rounded-full px-1.5 text-[10px] tabular-nums",
+                  "hidden rounded-full px-1.5 text-[10px] tabular-nums sm:inline",
                   selected ? "bg-secondary text-muted-foreground" : "text-muted-foreground/70",
                 )}>
                   {counts[entry.id] ?? 0}
@@ -139,7 +147,7 @@ function ListHeader({ tab, setTab, query, setQuery, onClose, counts }) {
             );
           })}
         </div>
-        <Button variant="ghost" size="icon-sm" aria-label="Close catalog" onClick={onClose}>
+        <Button variant="ghost" size="icon-sm" className="shrink-0" aria-label="Close catalog" onClick={onClose}>
           <X />
         </Button>
       </div>
@@ -203,13 +211,13 @@ function ListBody({ tab, query, catalog, onSelect }) {
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
   return (
-    <div>
-      {sortedDomains.map((domain) => (
-        <section key={domain}>
-          <h4 className="sticky top-0 z-10 border-b border-border bg-card px-4 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="grid">
+      {sortedDomains.map((domain, index) => (
+        <section key={domain} className={cn(index === 0 ? "" : "mt-2")}>
+          <h4 className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {DOMAIN_LABELS[domain] ?? domain}
           </h4>
-          <ul className="grid divide-y divide-border">
+          <ul className="grid divide-y divide-border border-y border-border">
             {grouped.get(domain).map((tool) => (
               <ToolRow key={tool.name} tool={tool} onSelect={onSelect} />
             ))}
@@ -257,7 +265,7 @@ function ToolRow({ tool, onSelect }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground">{tool.label || prettyToolName(tool.name)}</span>
-            <code className="text-[11px] tabular-nums text-muted-foreground/70">{tool.name}</code>
+            <code className="hidden truncate text-[11px] tabular-nums text-muted-foreground/70 sm:inline">{tool.name}</code>
             {disabled ? <Badge variant="outline" className="h-5 px-1.5 text-[10px]">disabled</Badge> : null}
           </div>
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{tool.description}</p>
@@ -406,7 +414,7 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
       ) : null}
       <PromptPreview prompt={prompt} />
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="bordered" onClick={() => submit("draft")} disabled={!prompt}>Send to chat</Button>
+        <Button variant="bordered" onClick={() => submit("draft")} disabled={!prompt}>Edit in chat</Button>
         <Button variant="brand" onClick={() => submit("send")} disabled={!prompt} prefixIcon={Play}>Run workflow</Button>
       </div>
     </div>
@@ -450,7 +458,7 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
       )}
       <PromptPreview prompt={promptText} title="Chat preview" />
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="bordered" size="sm" onClick={() => submit("draft")}>Send to chat</Button>
+        <Button variant="bordered" size="sm" onClick={() => submit("draft")}>Edit in chat</Button>
         <Button variant="brand" size="sm" prefixIcon={Play} onClick={() => submit("run")}>Run now</Button>
       </div>
     </div>
