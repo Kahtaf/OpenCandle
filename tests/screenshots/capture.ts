@@ -178,40 +178,85 @@ const SAMPLE_BB = SAMPLE_PRICES.slice(19).map((_, i) => {
   return { upper: mean + 2 * sd, middle: mean, lower: mean - 2 * sd };
 });
 
-const TOOL_THREAD_ENTRIES = [
-  {
+// Bars fixture for stock-history card. 105 15-minute bars with a realistic
+// shape (slow drift up, a step around bar 35, mild noise).
+const SAMPLE_HISTORY_BARS = (() => {
+  const bars: Array<{ date: string; open: number; high: number; low: number; close: number; volume: number }> = [];
+  const start = Date.parse("2025-05-04T13:30:00Z");
+  let price = 199.5;
+  for (let i = 0; i < 105; i++) {
+    const drift = i < 35 ? -0.02 : i < 60 ? 0.18 : 0.04;
+    const noise = (Math.sin(i * 0.7) + Math.cos(i * 1.3)) * 0.4;
+    const close = price + drift + noise;
+    const high = close + Math.abs(noise) * 0.6 + 0.3;
+    const low = close - Math.abs(noise) * 0.6 - 0.3;
+    bars.push({
+      date: new Date(start + i * 15 * 60_000).toISOString(),
+      open: price,
+      high,
+      low,
+      close,
+      volume: 6_000_000 + Math.round(Math.abs(noise) * 2_000_000),
+    });
+    price = close;
+  }
+  return bars;
+})();
+
+function userEntry(id: string, text: string) {
+  return {
     type: "message",
-    id: "user-1",
+    id,
     timestamp: new Date().toISOString(),
-    message: { role: "user", content: [{ type: "text", text: "Sentiment summary on NVDA last 24h" }] },
-  },
-  toolResultEntry("tool-sentiment-1", "get_sentiment_summary", SENTIMENT_SUMMARY_TEXT, {
-    score: 0.55,
-    sources: { reddit: { score: 0.90, count: 5 }, web: { score: 0.20, count: 5 } },
-  }, { query: "NVDA", hours: 24 }),
-  {
-    type: "message",
-    id: "user-2",
-    timestamp: new Date().toISOString(),
-    message: { role: "user", content: [{ type: "text", text: "Technical indicators for NVDA" }] },
-  },
-  toolResultEntry("tool-tech-1", "get_technical_indicators",
-    "**NVDA Technical Analysis** (2025-01-01 to 2025-12-31)\nPrice: $215.22\n\nSMA(20): $210.40 | SMA(50): $204.12\nRSI(14): 62.4 (Neutral)\nMACD: 0.92 | Signal: 0.58 | Histogram: 0.34\nBollinger Bands: Upper $222.10 | Mid $210.40 | Lower $198.70\n\nSignals: Price above SMA(20) — short-term bullish | Golden cross pattern (SMA20 > SMA50) | MACD bullish (histogram positive)",
+    message: { role: "user", content: [{ type: "text", text }] },
+  };
+}
+
+const TOOL_PAIRS = {
+  sentiment: [
+    userEntry("u-sentiment", "Sentiment summary on NVDA last 24h"),
+    toolResultEntry("tr-sentiment", "get_sentiment_summary", SENTIMENT_SUMMARY_TEXT, {
+      score: 0.55,
+      sources: { reddit: { score: 0.90, count: 5 }, web: { score: 0.20, count: 5 } },
+    }, { query: "NVDA", hours: 24 }),
+  ],
+  history: [
+    userEntry("u-history", "Stock history NVDA 4d 15m"),
     {
-      symbol: "NVDA",
-      range: "1y",
-      prices: SAMPLE_PRICES,
-      sma20: SAMPLE_SMA(20),
-      sma50: SAMPLE_SMA(50),
-      rsi: SAMPLE_RSI,
-      macd: SAMPLE_MACD,
-      bb: SAMPLE_BB,
-      obv: [],
-      vwap: [],
+      type: "message",
+      id: "tr-history",
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "toolResult",
+        toolName: "get_stock_history",
+        content: [{ type: "text", text: `**${SAMPLE_HISTORY_BARS[SAMPLE_HISTORY_BARS.length - 1].close.toFixed(2)}** over ${SAMPLE_HISTORY_BARS.length} bars.` }],
+        // The HistoryCard accepts an array directly OR a `{bars}` wrapper.
+        // We pass the bars array as `details` directly since spreading would
+        // turn it into an indexed object.
+        details: SAMPLE_HISTORY_BARS,
+      },
     },
-    { symbol: "NVDA", range: "1y" },
-  ),
-];
+  ],
+  technical: [
+    userEntry("u-tech", "Technical indicators for NVDA"),
+    toolResultEntry("tr-tech", "get_technical_indicators",
+      "**NVDA Technical Analysis** (2025-01-01 to 2025-12-31)\nPrice: $215.22\n\nSMA(20): $210.40 | SMA(50): $204.12\nRSI(14): 62.4 (Neutral)\nMACD: 0.92 | Signal: 0.58 | Histogram: 0.34\nBollinger Bands: Upper $222.10 | Mid $210.40 | Lower $198.70\n\nSignals: Price above SMA(20) — short-term bullish | Golden cross pattern (SMA20 > SMA50) | MACD bullish (histogram positive)",
+      {
+        symbol: "NVDA",
+        range: "1y",
+        prices: SAMPLE_PRICES,
+        sma20: SAMPLE_SMA(20),
+        sma50: SAMPLE_SMA(50),
+        rsi: SAMPLE_RSI,
+        macd: SAMPLE_MACD,
+        bb: SAMPLE_BB,
+        obv: [],
+        vwap: [],
+      },
+      { symbol: "NVDA", range: "1y" },
+    ),
+  ],
+};
 
 async function startStaticServer(): Promise<{ server: Server; baseUrl: string }> {
   if (!existsSync(webDist)) {
@@ -361,16 +406,30 @@ const CAPTURES: Capture[] = [
   },
   {
     name: "14-tool-output-sentiment-summary",
-    overrides: { entries: [TOOL_THREAD_ENTRIES[0], TOOL_THREAD_ENTRIES[1]] },
-    setup: async (page) => {
-      await scrollChatToBottom(page);
-    },
+    overrides: { entries: TOOL_PAIRS.sentiment },
+    setup: async (page) => { await scrollChatToBottom(page); },
   },
   {
     name: "15-tool-output-technical-indicators",
-    overrides: { entries: [TOOL_THREAD_ENTRIES[2], TOOL_THREAD_ENTRIES[3]] },
+    overrides: { entries: TOOL_PAIRS.technical },
+    setup: async (page) => { await scrollChatToBottom(page); },
+  },
+  {
+    name: "16-tool-output-stock-history",
+    overrides: { entries: TOOL_PAIRS.history },
+    setup: async (page) => { await scrollChatToBottom(page); },
+  },
+  {
+    name: "17-tool-output-stock-history-hover",
+    overrides: { entries: TOOL_PAIRS.history },
     setup: async (page) => {
       await scrollChatToBottom(page);
+      const chart = page.locator("svg[aria-label='Price history chart']").first();
+      const box = await chart.boundingBox({ timeout: 2000 }).catch(() => null);
+      if (box) {
+        await page.mouse.move(box.x + box.width * 0.65, box.y + box.height * 0.4);
+        await page.waitForTimeout(120);
+      }
     },
   },
 ];
