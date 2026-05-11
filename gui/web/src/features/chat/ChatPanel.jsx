@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CandlestickChart, Menu } from "lucide-react";
+import { BarChart3, BookOpen, CandlestickChart, Menu, PanelLeftOpen } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
@@ -9,7 +9,7 @@ import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { eventsToLiveEntries } from "./live-entries.js";
 
-export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, lastPrompt, catalog, send, startChatRun, stopRun, retryRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext }) {
+export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
@@ -18,8 +18,6 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, las
   const liveEntries = useMemo(() => eventsToLiveEntries(liveEvents), [liveEvents]);
   const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const canStop = runState === "connecting" || runState === "streaming";
-  const canRetry = runState === "failed" || (runState === "ready" && lastPrompt);
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
@@ -28,23 +26,14 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, las
     void startChatRun(prompt);
   };
 
-  const copyLastAssistant = () => {
-    const assistant = [...entries].reverse().find((entry) => entry.type === "message" && entry.message?.role === "assistant");
-    const text = assistant ? textContent(assistant.message.content) : "";
-    if (!text) {
-      setToast("No assistant response to copy.");
-      return;
-    }
-    navigator.clipboard?.writeText(text).then(() => setToast("Copied latest response.")).catch(() => setToast("Copy failed."));
-  };
-
   const placeholder = role === "follower"
     ? "Follower mode: take over this session to send"
     : "Ask anything";
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background" data-run-state={runState}>
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenContext={onOpenContext} onOpenCatalog={() => onOpenCommandPalette?.("catalog")} />
+      {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
@@ -62,15 +51,20 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, las
         disabled={role === "follower"}
         placeholder={placeholder}
         canSend={Boolean(draft.trim()) && role !== "follower"}
-        canStop={canStop}
-        canRetry={canRetry}
         onSubmit={() => submit()}
-        onStop={stopRun}
-        onRetry={retryRun}
-        onCopy={copyLastAssistant}
         onOpenCommandPalette={onOpenCommandPalette}
       />
     </section>
+  );
+}
+
+function DesktopSidebarRestore({ onExpandSidebar }) {
+  return (
+    <div className="hidden h-12 shrink-0 items-center border-b border-border bg-background px-3 md:flex">
+      <Button variant="ghost" size="icon-sm" aria-label="Expand sidebar" onClick={onExpandSidebar}>
+        <PanelLeftOpen />
+      </Button>
+    </div>
   );
 }
 

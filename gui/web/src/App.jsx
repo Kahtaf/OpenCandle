@@ -32,6 +32,7 @@ export function AppShell() {
   const routeSessionId = sessionIdFromPath(location.pathname);
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const openDrawer = useCallback((drawer) => {
     void navigate({ search: (current) => ({ ...current, drawer }) });
@@ -92,6 +93,7 @@ export function AppShell() {
 
   const openSession = useCallback((session) => {
     gui.send("session.open", { path: session.path });
+    setSidebarCollapsed(false);
     void navigate({
       to: "/sessions/$sessionId",
       params: { sessionId: session.id },
@@ -102,6 +104,8 @@ export function AppShell() {
   const sidebarProps = {
     sessions: gui.sessions,
     currentSessionId: gui.currentSessionId,
+    collapsed: sidebarCollapsed,
+    onCollapse: () => setSidebarCollapsed(true),
     onOpenSession: openSession,
     onNewSession: newSession,
     onOpenCatalog: () => openCatalog("catalog"),
@@ -138,6 +142,8 @@ export function AppShell() {
           onOpenCommandPalette={openCatalog}
           onOpenSidebar={() => openDrawer("history")}
           onOpenContext={() => openDrawer("context")}
+          sidebarCollapsed={sidebarCollapsed}
+          onExpandSidebar={() => setSidebarCollapsed(false)}
         />
       </div>
       <SessionDrawer open={sessionsOpen} {...sidebarProps} onClose={closeDrawer} />

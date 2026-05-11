@@ -102,7 +102,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
-  it("supports stop, retry failed run, copy, and keyboard catalog controls", async () => {
+  it("keeps the composer focused on send and supports keyboard catalog controls", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
       entries: [
@@ -114,40 +114,12 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
         },
       ],
     });
-    await mocked.addInitScript(() => {
-      Object.defineProperty(navigator, "clipboard", {
-        configurable: true,
-        value: {
-          writeText(value) {
-            window.__copiedText = value;
-            return Promise.resolve();
-          },
-        },
-      });
-      window.fetch = (_input, init) => new Promise((resolve, reject) => {
-        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
-        window.__resolveRunFetch = () => resolve(new Response("data: {\"type\":\"run.failed\",\"runId\":\"mock\",\"error\":{\"message\":\"Mock failure\"},\"seq\":1}\n\n", {
-          status: 200,
-          headers: { "content-type": "text/event-stream" },
-        }));
-      });
-    });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    await mocked.getByLabel("Message OpenCandle").fill("Mock slow prompt");
-    await mocked.getByRole("button", { name: "Send" }).click();
-    await expectVisible(mocked.getByText("Connecting").first());
-    await mocked.getByRole("button", { name: "Stop response" }).click();
-    await expectVisible(mocked.getByText(/Stopped response/));
-
-    await mocked.getByLabel("Message OpenCandle").fill("Mock failed prompt");
-    await mocked.getByRole("button", { name: "Send" }).click();
-    await mocked.evaluate(() => window.__resolveRunFetch?.());
-    await expectVisible(mocked.getByText("Failed").first());
-    await expectVisible(mocked.getByRole("button", { name: "Retry last prompt" }));
-
-    await mocked.getByRole("button", { name: "Copy latest assistant response" }).click();
-    await mocked.waitForFunction(() => window.__copiedText === "Reusable assistant text");
+    await expectVisible(mocked.getByRole("button", { name: "Send message" }));
+    await expect(mocked.getByRole("button", { name: "Stop response" }).count()).resolves.toBe(0);
+    await expect(mocked.getByRole("button", { name: "Retry last prompt" }).count()).resolves.toBe(0);
+    await expect(mocked.getByRole("button", { name: "Copy latest assistant response" }).count()).resolves.toBe(0);
 
     await mocked.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
     await expectVisible(mocked.getByRole("dialog", { name: "Catalog" }));
@@ -155,6 +127,20 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("dialog", { name: "Catalog" }).waitFor({ state: "detached" });
     await mocked.close();
   }, 30_000);
+
+  it("collapses and restores the desktop sidebar", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await mocked.getByRole("button", { name: "Collapse sidebar" }).click();
+    await mocked.getByRole("button", { name: "New chat" }).waitFor({ state: "detached" });
+    await expectVisible(mocked.getByRole("button", { name: "Expand sidebar" }));
+    await mocked.getByRole("button", { name: "Expand sidebar" }).click();
+    await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await mocked.close();
+  });
 
   it("streams assistant text incrementally and keeps specialized tool cards", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
@@ -223,8 +209,8 @@ async function expectVisible(locator: Locator, timeout = 5_000): Promise<void> {
 
 async function waitForRunIdle(page: Page): Promise<void> {
   await page.waitForFunction(() => {
-    const stop = document.querySelector("button[aria-label='Stop response']");
-    return stop instanceof HTMLButtonElement && stop.disabled;
+    const panel = document.querySelector("[data-run-state]");
+    return panel?.getAttribute("data-run-state") === "ready";
   }, null, { timeout: 45_000 });
 }
 

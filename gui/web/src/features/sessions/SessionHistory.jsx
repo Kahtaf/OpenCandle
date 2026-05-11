@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CandlestickChart, PanelLeft, Pin, Plus, Search, X } from "lucide-react";
+import { BarChart3, BookOpen, CandlestickChart, PanelLeft, Plus, Search, X } from "lucide-react";
 import { HistoryItem } from "../../components/chat/history-item.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
@@ -7,10 +7,11 @@ import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function SessionSidebar(props) {
+export function SessionSidebar({ collapsed, onCollapse, ...props }) {
+  if (collapsed) return null;
   return (
     <aside className="hidden h-full w-[260px] shrink-0 overflow-hidden border-r border-border bg-secondary md:block">
-      <SidebarBody {...props} />
+      <SidebarBody {...props} onClose={onCollapse} closeLabel="Collapse sidebar" closeIcon={PanelLeft} />
     </aside>
   );
 }
@@ -27,7 +28,7 @@ export function SessionDrawer({ open, onClose, ...rest }) {
   );
 }
 
-function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, onOpenCatalog, onOpenContext, onClose }) {
+function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, onOpenCatalog, onOpenContext, onClose, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
   const groups = groupSessions(sessions);
 
   return (
@@ -36,8 +37,8 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, 
         <CandlestickChart className="h-4 w-4 shrink-0 text-foreground" strokeWidth={2.5} aria-hidden="true" />
         <span className="text-sm font-semibold tracking-tight text-foreground">OpenCandle</span>
         {onClose ? (
-          <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="Close sidebar" onClick={onClose}>
-            <X />
+          <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={closeLabel} onClick={onClose}>
+            <CloseIcon />
           </Button>
         ) : (
           <PanelLeft className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -51,7 +52,6 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, 
       <SearchField />
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
-        <PinnedSection />
         <ThreadGroup label="Today" sessions={groups.today} currentSessionId={currentSessionId} onOpenSession={onOpenSession} />
         <ThreadGroup label="Yesterday" sessions={groups.yesterday} currentSessionId={currentSessionId} onOpenSession={onOpenSession} />
         <ThreadGroup label="Earlier" sessions={groups.earlier} currentSessionId={currentSessionId} onOpenSession={onOpenSession} />
@@ -88,17 +88,6 @@ function SectionLabel({ icon: Icon, children }) {
     <div className="flex items-center gap-1.5 px-2 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
       {Icon ? <Icon className="h-3 w-3 shrink-0" aria-hidden="true" /> : null}
       {children}
-    </div>
-  );
-}
-
-function PinnedSection() {
-  return (
-    <div className="flex flex-col gap-1">
-      <SectionLabel icon={Pin}>Pinned</SectionLabel>
-      <div className="mx-1 rounded-md border border-dashed border-border px-3 py-3 text-center text-xs text-muted-foreground">
-        No pinned threads
-      </div>
     </div>
   );
 }
