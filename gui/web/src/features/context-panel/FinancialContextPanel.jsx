@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowRight, Activity, AlertTriangle, CheckCircle2, KeyRound, RefreshCcw, Settings2, X } from "lucide-react";
+import { Activity, CheckCircle2, KeyRound, RefreshCcw, Settings2 } from "lucide-react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
@@ -20,7 +20,7 @@ export function FinancialContextDrawer({ open, state, catalog, onClose, onConfig
   return (
     <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <SheetContent width="sm" handleLabel="Context" className="bg-card p-0">
-        <Header state={state} onClose={onClose} />
+        <Header state={state} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           <Watchlist rows={state?.watchlist ?? []} />
           <Analyses rows={state?.activeAnalyses ?? []} />
@@ -37,32 +37,29 @@ export function FinancialContextDrawer({ open, state, catalog, onClose, onConfig
 // status pill that reflects whatever's most actionable right now.
 // ---------------------------------------------------------------------------
 
-function Header({ state, onClose }) {
+function Header({ state }) {
   const pill = useMemo(() => summarize(state), [state]);
   return (
-    <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
+    <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
       <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Context</span>
-      <div className="inline-flex items-center gap-2">
-        {pill ? (
+      {pill ? (
+        <span className={cn(
+          "inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-[11px] font-medium tabular-nums",
+          pill.tone === "success" && "text-success",
+          pill.tone === "warning" && "text-warning",
+          pill.tone === "info" && "text-info",
+          pill.tone === "muted" && "text-muted-foreground",
+        )}>
           <span className={cn(
-            "inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-[11px] font-medium tabular-nums",
-            pill.tone === "success" && "text-success",
-            pill.tone === "warning" && "text-warning",
-            pill.tone === "info" && "text-info",
-            pill.tone === "muted" && "text-muted-foreground",
-          )}>
-            <span className={cn(
-              "inline-block h-1.5 w-1.5 rounded-full",
-              pill.tone === "success" && "bg-success",
-              pill.tone === "warning" && "bg-warning",
-              pill.tone === "info" && "bg-info",
-              pill.tone === "muted" && "bg-muted-foreground/40",
-            )} />
-            {pill.label}
-          </span>
-        ) : null}
-        <Button variant="ghost" size="icon-sm" aria-label="Close context" onClick={onClose}><X /></Button>
-      </div>
+            "inline-block h-1.5 w-1.5 rounded-full",
+            pill.tone === "success" && "bg-success",
+            pill.tone === "warning" && "bg-warning",
+            pill.tone === "info" && "bg-info",
+            pill.tone === "muted" && "bg-muted-foreground/40",
+          )} />
+          {pill.label}
+        </span>
+      ) : null}
     </div>
   );
 }

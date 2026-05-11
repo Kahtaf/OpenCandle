@@ -69,7 +69,6 @@ export function CatalogOverlay({
               selection={selection}
               catalog={catalog}
               onBack={() => setSelection(null)}
-              onClose={close}
             />
           ) : (
             <ListHeader
@@ -77,7 +76,6 @@ export function CatalogOverlay({
               setTab={setTab}
               query={query}
               setQuery={setQuery}
-              onClose={close}
               counts={{
                 workflows: catalog?.workflows?.length ?? 0,
                 tools: catalog?.tools?.length ?? 0,
@@ -116,11 +114,11 @@ export function CatalogOverlay({
 // List view
 // ---------------------------------------------------------------------------
 
-function ListHeader({ tab, setTab, query, setQuery, onClose, counts }) {
+function ListHeader({ tab, setTab, query, setQuery, counts }) {
   return (
     <div className="border-b border-border">
-      <div className="flex items-center gap-2 px-3 pt-2 sm:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 rounded-md bg-secondary p-0.5">
+      <div className="px-3 pt-2 sm:px-4">
+        <div className="flex w-full items-center gap-0.5 rounded-md bg-secondary p-0.5">
           {TABS.map((entry) => {
             const Icon = entry.icon;
             const selected = tab === entry.id;
@@ -131,7 +129,7 @@ function ListHeader({ tab, setTab, query, setQuery, onClose, counts }) {
                 onClick={() => setTab(entry.id)}
                 aria-pressed={selected}
                 className={cn(
-                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition-colors sm:flex-initial sm:px-2.5",
+                  "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition-colors",
                   selected ? "bg-card text-foreground shadow-subtle-xs" : "text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -147,9 +145,6 @@ function ListHeader({ tab, setTab, query, setQuery, onClose, counts }) {
             );
           })}
         </div>
-        <Button variant="ghost" size="icon-sm" className="shrink-0" aria-label="Close catalog" onClick={onClose}>
-          <X />
-        </Button>
       </div>
       <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
         <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -318,7 +313,7 @@ function EmptyState({ query, kind }) {
 // Detail / builder view
 // ---------------------------------------------------------------------------
 
-function BuilderHeader({ selection, catalog, onBack, onClose }) {
+function BuilderHeader({ selection, catalog, onBack }) {
   const entity = resolveSelection(selection, catalog);
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2 sm:px-4">
@@ -334,9 +329,6 @@ function BuilderHeader({ selection, catalog, onBack, onClose }) {
           <Badge variant="outline" className="hidden h-5 px-1.5 text-[10px] sm:inline-flex">{DOMAIN_LABELS[entity.domain] ?? entity.domain}</Badge>
         ) : null}
       </div>
-      <Button variant="ghost" size="icon-sm" aria-label="Close catalog" onClick={onClose}>
-        <X />
-      </Button>
     </div>
   );
 }
