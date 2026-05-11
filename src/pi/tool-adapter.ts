@@ -1,7 +1,9 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import { getAllTools } from "../tools/index.js";
+import { getDefaults } from "../memory/tool-defaults.js";
+import { wrapWithDefaults } from "../runtime/tool-defaults-wrapper.js";
 
 export function agentToolToPiTool<TParams extends TSchema, TDetails>(
   tool: AgentTool<TParams, TDetails>,
@@ -19,5 +21,16 @@ export function agentToolToPiTool<TParams extends TSchema, TDetails>(
 }
 
 export function getOpenCandleToolDefinitions(): ToolDefinition[] {
-  return getAllTools().map((tool) => agentToolToPiTool(tool));
+  return getAllTools()
+    .map((tool) => ({ tool, defaults: safeGetDefaults(tool.name) }))
+    .filter(({ defaults }) => defaults.__enabled !== false)
+    .map(({ tool, defaults }) => agentToolToPiTool(wrapWithDefaults(tool, defaults)));
+}
+
+function safeGetDefaults(toolName: string): Record<string, unknown> {
+  try {
+    return getDefaults(toolName);
+  } catch {
+    return {};
+  }
 }

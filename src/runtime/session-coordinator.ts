@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, SessionEntry } from "@mariozechner/pi-coding-agent";
-import { initDefaultDatabase, MemoryStorage } from "../memory/index.js";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
  * Alias for the session-manager handle extensions receive via
@@ -287,7 +287,12 @@ export class SessionCoordinator {
       fallbackContext,
     });
 
-    return `${basePrompt}\n\n${builder.build()}`;
+    const toolDefaults = formatToolDefaultsForPrompt();
+    const defaultsSection = toolDefaults.length > 0
+      ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}`
+      : "";
+
+    return `${basePrompt}\n\n${builder.build()}${defaultsSection}`;
   }
 
   /**
@@ -363,4 +368,39 @@ export class SessionCoordinator {
     clearRunContext();
     this.runner?.cancel();
   }
+}
+
+function formatToolDefaultsForPrompt(): string[] {
+  try {
+    return [...getAllDefaults()]
+      .filter(([, defaults]) => Object.keys(defaults).some((key) => key !== "__enabled"))
+      .map(([toolName, defaults]) => {
+        const pairs = flattenDefaults(defaults)
+          .filter(([key]) => key !== "__enabled")
+          .map(([key, value]) => `${key}: ${String(value)}`);
+        return `- User has set defaults for \`${toolName}\` (${pairs.join(", ")}). You may override when the user's request requires it.`;
+      });
+  } catch {
+    return [];
+  }
+}
+
+function flattenDefaults(
+  defaults: Record<string, unknown>,
+  prefix = "",
+): Array<[string, unknown]> {
+  const out: Array<[string, unknown]> = [];
+  for (const [key, value] of Object.entries(defaults)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isPlainObject(value)) {
+      out.push(...flattenDefaults(value, path));
+    } else {
+      out.push([path, value]);
+    }
+  }
+  return out;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

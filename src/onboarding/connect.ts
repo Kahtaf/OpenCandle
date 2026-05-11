@@ -17,7 +17,7 @@
 // the key so they aren't blocked on a provider outage — the next real tool
 // call will surface any lingering issue via the credential-required tag.
 
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { openInBrowser } from "../infra/open-url.js";
 import {
   loadFileConfig,
@@ -61,6 +61,34 @@ function writeNested(
     next[head] = writeNested(child, rest, value);
   }
   return next;
+}
+
+/**
+ * Persist an already-validated provider credential.
+ *
+ * Writes the key into `~/.opencandle/config.json` (preserving sibling fields),
+ * refreshes the cached `Config` so the next tool call sees the new value, and
+ * marks the provider as completed in the onboarding state.
+ *
+ * Shared by the TUI `/connect` flow (`runProviderConnect`) and the GUI
+ * provider-setup form. Validation is the caller's responsibility — both
+ * call sites run `validateCredential` before invoking this helper.
+ */
+export function persistProviderCredential(
+  providerId: ProviderId,
+  key: string,
+): void {
+  const descriptor = getProvider(providerId);
+  const existing = loadFileConfig() as unknown as Record<string, unknown>;
+  const updated = writeNested(
+    existing,
+    descriptor.configPath,
+    key,
+  ) as OpenCandleFileConfig;
+  saveFileConfig(updated);
+  loadConfig();
+  const state = loadOnboardingState();
+  saveOnboardingState(markProviderCompleted(state, providerId));
 }
 
 /**
@@ -145,22 +173,7 @@ export async function runProviderConnect(
     // Fall through to persist.
   }
 
-  // Persist to file config. Merge into the existing structure, preserving
-  // any unrelated fields.
-  const existing = loadFileConfig() as unknown as Record<string, unknown>;
-  const updated = writeNested(
-    existing,
-    descriptor.configPath,
-    trimmed,
-  ) as OpenCandleFileConfig;
-  saveFileConfig(updated);
-
-  // Refresh the cached Config so the next tool call sees the new value.
-  loadConfig();
-
-  // Update onboarding state to completed.
-  const state = loadOnboardingState();
-  saveOnboardingState(markProviderCompleted(state, providerId));
+  persistProviderCredential(providerId, trimmed);
 
   ctx.ui.notify(
     `${descriptor.displayName} connected. Your key has been saved.`,

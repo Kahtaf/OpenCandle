@@ -64,8 +64,14 @@ const mockedSearchWeb = vi.mocked(searchWeb);
 const mockedGetCompanyNews = vi.mocked(getCompanyNews);
 const mockedGetConfig = vi.mocked(getConfig);
 
-beforeEach(() => { cache.clear(); });
-afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks(); });
+beforeEach(() => {
+  cache.clear();
+  vi.clearAllMocks();
+  mockedGetConfig.mockReturnValue({ finnhubApiKey: undefined } as any);
+});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe("get_sentiment_summary tool", () => {
   it("has correct tool name", () => {

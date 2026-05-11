@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildRouterPrompt } from "../../../src/routing/router-prompt.js";
-import type { ExtensionContext, SessionEntry } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 import type { RouterLlmClient } from "../../../src/routing/router-types.js";
 

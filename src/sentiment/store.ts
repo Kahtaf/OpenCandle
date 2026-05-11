@@ -1,4 +1,6 @@
 import Database from "better-sqlite3";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type { SentinelRecord, SentimentSource, TrendBucket } from "./types.js";
 
 const SCHEMA_VERSION = 1;
@@ -66,6 +68,9 @@ export class SentimentStore {
   private db: Database.Database;
 
   constructor(pathOrMemory: string) {
+    if (pathOrMemory !== ":memory:") {
+      mkdirSync(dirname(pathOrMemory), { recursive: true });
+    }
     this.db = new Database(pathOrMemory);
     if (pathOrMemory !== ":memory:") {
       this.db.pragma("journal_mode = WAL");

@@ -11,7 +11,7 @@ import {
   createAgentSessionServices,
   getAgentDir,
   initTheme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "./pi/session.js";
 import { loadEnv } from "./config.js";
 
@@ -138,6 +138,7 @@ async function main(): Promise<void> {
       });
       const result = await createOpenCandleSession({
         cwd: opts.cwd,
+        agentDir: opts.agentDir,
         settingsManager,
         authStorage,
         modelRegistry,

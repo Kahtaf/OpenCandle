@@ -32,7 +32,7 @@ describe("recordPrediction", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("saves a prediction with required fields", () => {

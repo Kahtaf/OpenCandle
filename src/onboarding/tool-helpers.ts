@@ -11,7 +11,7 @@
 // Non-credential errors (network timeouts, parse errors, etc.) are re-thrown
 // unchanged so existing error handling in `wrapProvider` continues to work.
 
-import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import { ProviderCredentialError } from "../providers/provider-credential-error.js";
 import { getProvider, hasCredential, type ProviderId } from "./providers.js";
 import {

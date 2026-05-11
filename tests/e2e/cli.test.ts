@@ -4,8 +4,8 @@
  *
  * Usage: npx tsx tests/e2e/cli.test.ts
  */
-import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

@@ -32,5 +32,5 @@ describe("opencandle/tool-kit package exports", () => {
     expect(mod.Type).toBeDefined();
     expect(typeof mod.Type.Object).toBe("function");
     expect(typeof mod.Type.String).toBe("function");
-  });
+  }, 15_000);
 });

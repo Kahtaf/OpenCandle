@@ -88,9 +88,9 @@ This replaces the current ad-hoc throw sites (`finnhub.ts:116`, `web-search.ts:2
   details: { credentialRequired: { provider: "alpha_vantage", reason: "missing" } },
 }
 ```
-The tagged text block is the *LLM-facing contract*. It is what Pi provider adapters serialize into the model's conversation (confirmed in `@mariozechner/pi-ai/dist/providers/openai-completions.js:551`, `.../google-shared.js:179`, `.../anthropic.js:657`). The `details` field is auxiliary UI/test metadata only — the model does not see it.
+The tagged text block is the *LLM-facing contract*. It is what Pi provider adapters serialize into the model's conversation (confirmed in `@earendil-works/pi-ai/dist/providers/openai-completions.js:551`, `.../google-shared.js:179`, `.../anthropic.js:657`). The `details` field is auxiliary UI/test metadata only — the model does not see it.
 
-**Layer D — Extension `tool_result` hook (`src/pi/opencandle-extension.ts`).** The OpenCandle extension registers a handler on Pi's `tool_result` event (`pi.on("tool_result", handler)`, see `@mariozechner/pi-coding-agent/dist/core/extensions/types.d.ts:726`). The handler inspects every tool result from every tool — including OpenCandle's own and any add-on tools — looking for the `[OPENCANDLE_CREDENTIAL_REQUIRED ...]` tag in content, or the structured `credentialRequired` field in `details` as a backup. When detected, it runs the decision logic (see Decision 3) and either replaces the result with a skipped placeholder or pauses and prompts.
+**Layer D — Extension `tool_result` hook (`src/pi/opencandle-extension.ts`).** The OpenCandle extension registers a handler on Pi's `tool_result` event (`pi.on("tool_result", handler)`, see `@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts:726`). The handler inspects every tool result from every tool — including OpenCandle's own and any add-on tools — looking for the `[OPENCANDLE_CREDENTIAL_REQUIRED ...]` tag in content, or the structured `credentialRequired` field in `details` as a backup. When detected, it runs the decision logic (see Decision 3) and either replaces the result with a skipped placeholder or pauses and prompts.
 
 **Rationale:** Codex's review surfaced that the SessionCoordinator at `src/runtime/session-coordinator.ts:164` only queues user prompts for workflows — it never sees tool outputs. Pi already exposes a *real* tool-result interception hook at the extension level, which runs inside Pi's agent runtime (`runner.js:427`), seeing every tool result uniformly. Building a parallel interception point inside SessionCoordinator would be both technically wrong (wrong layer) and redundant with an existing Pi surface.
 
@@ -225,7 +225,7 @@ The system prompt (`src/system-prompt.ts`) gains exactly one instruction:
 
 **Never-ask remediation suppression:** If the user has picked "never ask again" for a provider, the skipped placeholder's `remediation` string includes a trailing `(silenced)` marker. The system-prompt instruction tells the model to omit the `/connect` link for silenced entries. This avoids the "stop asking me — also here's a /connect suggestion forever" paper cut that Codex flagged.
 
-**Rationale:** Codex verified that Pi provider adapters serialize `content` to the LLM, not `details` (see `@mariozechner/pi-ai/dist/providers/openai-completions.js:551` and siblings). A JSON envelope in `details` is invisible to the model, so the previous design's `{ status: "skipped", ... }` object would have silently failed to drive the gap note. The tagged text block is the correct LLM-facing contract.
+**Rationale:** Codex verified that Pi provider adapters serialize `content` to the LLM, not `details` (see `@earendil-works/pi-ai/dist/providers/openai-completions.js:551` and siblings). A JSON envelope in `details` is invisible to the model, so the previous design's `{ status: "skipped", ... }` object would have silently failed to drive the gap note. The tagged text block is the correct LLM-facing contract.
 
 **Alternatives considered:**
 - *Inject the gap into the system prompt before each turn.* Rejected — requires a turn-boundary hook and couples gap reporting to prompt assembly, which is messier than letting the tool result speak for itself.
@@ -299,7 +299,7 @@ Missing `providers[id]` (or an absent `providers` map) is the implicit "never pr
 
 ### Decision 10: Welcome message is seeded via `ctx.sendMessage({ display: true, ... })` with a `welcomeShownAt` gate
 
-**Choice:** Pi's `ExtensionContext.sendMessage` exists and accepts `{ customType, content, display, details }` (confirmed at `@mariozechner/pi-coding-agent/dist/core/extensions/types.d.ts:749`). The extension seeds the welcome by calling:
+**Choice:** Pi's `ExtensionContext.sendMessage` exists and accepts `{ customType, content, display, details }` (confirmed at `@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts:749`). The extension seeds the welcome by calling:
 ```
 ctx.sendMessage({
   customType: "opencandle-welcome",

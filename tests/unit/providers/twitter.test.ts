@@ -6,6 +6,15 @@ import tweetFixture from "../../fixtures/twitter/search-tweets.json";
 
 // Mock node:fs — must be module-level for ESM
 const mockExistsSync = vi.fn().mockReturnValue(false);
+function createMockCookieDatabase() {
+  return {
+    prepare: () => ({
+      all: (..._args: any[]) => cookieFixture,
+    }),
+    close: vi.fn(),
+  };
+}
+
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, existsSync: (...args: any[]) => mockExistsSync(...args) };
@@ -119,7 +128,7 @@ describe("getTwitterSentiment", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("throws when no auth cookies exist", async () => {
@@ -144,18 +153,14 @@ describe("getTwitterSentiment", () => {
         })(),
       ),
     };
-    vi.mocked(Scraper).mockImplementation(() => mockScraper as any);
+    vi.mocked(Scraper).mockImplementation(function () {
+      return mockScraper;
+    } as any);
 
     const Database = (await import("better-sqlite3")).default;
-    vi.mocked(Database).mockImplementation(
-      () =>
-        ({
-          prepare: () => ({
-            all: (..._args: any[]) => cookieFixture,
-          }),
-          close: vi.fn(),
-        }) as any,
-    );
+    vi.mocked(Database).mockImplementation(function () {
+      return createMockCookieDatabase();
+    } as any);
 
     const result = await getTwitterSentiment("AAPL", 50, 24 * 365);
     expect(result.tweets.length).toBeGreaterThan(0);
@@ -178,18 +183,14 @@ describe("getTwitterSentiment", () => {
         })(),
       ),
     };
-    vi.mocked(Scraper).mockImplementation(() => mockScraper as any);
+    vi.mocked(Scraper).mockImplementation(function () {
+      return mockScraper;
+    } as any);
 
     const Database = (await import("better-sqlite3")).default;
-    vi.mocked(Database).mockImplementation(
-      () =>
-        ({
-          prepare: () => ({
-            all: (..._args: any[]) => cookieFixture,
-          }),
-          close: vi.fn(),
-        }) as any,
-    );
+    vi.mocked(Database).mockImplementation(function () {
+      return createMockCookieDatabase();
+    } as any);
 
     const result1 = await getTwitterSentiment("AAPL", 50, 24);
     const result2 = await getTwitterSentiment("AAPL", 50, 24);
@@ -208,18 +209,14 @@ describe("getTwitterSentiment", () => {
       setCookies: vi.fn(),
       isLoggedIn: vi.fn().mockResolvedValue(false),
     };
-    vi.mocked(Scraper).mockImplementation(() => mockScraper as any);
+    vi.mocked(Scraper).mockImplementation(function () {
+      return mockScraper;
+    } as any);
 
     const Database = (await import("better-sqlite3")).default;
-    vi.mocked(Database).mockImplementation(
-      () =>
-        ({
-          prepare: () => ({
-            all: (..._args: any[]) => cookieFixture,
-          }),
-          close: vi.fn(),
-        }) as any,
-    );
+    vi.mocked(Database).mockImplementation(function () {
+      return createMockCookieDatabase();
+    } as any);
 
     await expect(getTwitterSentiment("TSLA")).rejects.toThrow(
       "session expired",

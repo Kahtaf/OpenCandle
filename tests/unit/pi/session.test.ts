@@ -4,8 +4,9 @@ import {
   ModelRegistry,
   SessionManager,
   SettingsManager,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../../src/pi/session.js";
+import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 
 describe("createOpenCandleSession", () => {
   const originalEnv = { ...process.env };
@@ -33,8 +34,8 @@ describe("createOpenCandleSession", () => {
     expect(result.session.getActiveToolNames()).not.toContain("bash");
     expect(result.session.getActiveToolNames()).toContain("get_stock_quote");
     expect(result.session.getActiveToolNames()).toContain("manage_watchlist");
-    expect(result.session.getActiveToolNames()).toHaveLength(29);
-    expect(result.session.getAllTools().some((tool) => tool.name === "read")).toBe(true);
+    expect(result.session.getActiveToolNames()).toHaveLength(getOpenCandleToolDefinitions().length);
+    expect(result.session.getAllTools().some((tool) => tool.name === "read")).toBe(false);
     if (result.modelFallbackMessage) {
       expect(result.modelFallbackMessage).toContain("No models available");
     }

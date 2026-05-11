@@ -60,12 +60,12 @@ const [
   { createOpenCandleSession },
   { cache },
 ] = await Promise.all([
-  import("@mariozechner/pi-coding-agent"),
+  import("@earendil-works/pi-coding-agent"),
   import("../../src/index.js"),
   import("../../src/infra/cache.js"),
 ]);
-type AgentSessionEvent = import("@mariozechner/pi-coding-agent").AgentSessionEvent;
-type AgentSession = import("@mariozechner/pi-coding-agent").AgentSession;
+type AgentSessionEvent = import("@earendil-works/pi-coding-agent").AgentSessionEvent;
+type AgentSession = import("@earendil-works/pi-coding-agent").AgentSession;
 type AskUserHandler = import("../../src/types/index.js").AskUserHandler;
 
 // -----------------------------------------------------------------------------

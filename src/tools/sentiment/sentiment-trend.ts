@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { SentimentStore } from "../../sentiment/store.js";
 import { getSentimentStore } from "../../sentiment/index.js";
 import { computeTrend } from "../../sentiment/trends.js";

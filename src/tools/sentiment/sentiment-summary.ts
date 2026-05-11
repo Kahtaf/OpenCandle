@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getSubredditPosts, getPostComments } from "../../providers/reddit.js";
 import { getTwitterSentiment } from "../../providers/twitter.js";
 import { searchWeb } from "../../providers/web-search.js";

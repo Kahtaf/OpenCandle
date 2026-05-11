@@ -1,4 +1,4 @@
-import { completeSimple, type Model } from "@mariozechner/pi-ai";
+import { completeSimple, type Model } from "@earendil-works/pi-ai";
 import type { RouterLlmClient } from "./router-types.js";
 
 /**

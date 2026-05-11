@@ -34,7 +34,7 @@ describe("watchlistTool", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("has correct tool metadata", () => {

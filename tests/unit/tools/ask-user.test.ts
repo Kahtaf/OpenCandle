@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerAskUserTool } from "../../../src/tools/interaction/ask-user.js";
 import type { AskUserHandler } from "../../../src/types/index.js";
 

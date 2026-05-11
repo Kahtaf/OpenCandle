@@ -1,0 +1,5 @@
+{
+  "name": "@opencandle/gui-server",
+  "private": true,
+  "type": "module"
+}

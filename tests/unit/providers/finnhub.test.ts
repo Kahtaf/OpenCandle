@@ -11,8 +11,13 @@ vi.mock("../../../src/infra/http-client.js", async (importOriginal) => {
 const mockedHttpGet = vi.mocked(httpGet);
 
 const originalFetch = globalThis.fetch;
-beforeEach(() => { cache.clear(); });
-afterEach(() => { globalThis.fetch = originalFetch; vi.restoreAllMocks(); });
+beforeEach(() => {
+  cache.clear();
+  vi.clearAllMocks();
+});
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
 
 describe("finnhubDateRange", () => {
   it("returns today for 'hours' freshness", async () => {
