@@ -7,6 +7,7 @@
  *   const data = await StealthBrowser.fetchJson<MyType>(url);
  *   const result = await StealthBrowser.evaluate(url, () => document.title);
  */
+import "./node-version.js";
 import { Camoufox } from "camoufox-js";
 import type { Browser, Page } from "playwright-core";
 

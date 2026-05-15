@@ -17,6 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.clearAllMocks();
 });
 
 describe("finnhubDateRange", () => {

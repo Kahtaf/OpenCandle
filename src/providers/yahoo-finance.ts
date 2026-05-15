@@ -196,32 +196,59 @@ export async function getOptionsChain(
   const dateParam = expiration ? `&date=${expiration}` : "";
   const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
 
-  let res = await fetch(url, {
-    headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
-  });
+  let res: Response | null = null;
+  let fetchError: unknown;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
+    });
+  } catch (error) {
+    fetchError = error;
+  }
 
   // On 401 or 429, refresh crumb and retry once
-  if (res.status === 401 || res.status === 429) {
-    clearCrumbCache();
-    const fresh = await getYahooCrumb();
-    const retryUrl = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(fresh.crumb)}${dateParam}`;
-    res = await fetch(retryUrl, {
-      headers: { "User-Agent": BROWSER_UA, Cookie: fresh.cookie },
-    });
+  if (res?.status === 401 || res?.status === 429) {
+    try {
+      clearCrumbCache();
+      const fresh = await getYahooCrumb();
+      const retryUrl = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(fresh.crumb)}${dateParam}`;
+      res = await fetch(retryUrl, {
+        headers: { "User-Agent": BROWSER_UA, Cookie: fresh.cookie },
+      });
+    } catch (error) {
+      fetchError = error;
+      res = null;
+    }
   }
 
   // If still failing, fall back to stealth browser (bypasses TLS fingerprinting)
-  if (!res.ok) {
-    const browserData = await fetchOptionsViaBrowser(symbol, expiration);
-    if (browserData) {
-      const chain = parseOptionsResponse(symbol, browserData);
-      cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
-      return chain;
+  if (!res?.ok) {
+    let browserError: unknown;
+    try {
+      const browserData = await fetchOptionsViaBrowser(symbol, expiration);
+      if (browserData) {
+        const chain = parseOptionsResponse(symbol, browserData);
+        cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
+        return chain;
+      }
+    } catch (error) {
+      browserError = error;
     }
     // All fetches failed — try stale cache before giving up
     const stale = cache.getStale<OptionsChain>(cacheKey, STALE_LIMIT.OPTIONS_CHAIN);
     if (stale) return stale.value;
-    throw new Error(`Yahoo Finance options: HTTP ${res.status}`);
+    if (res) {
+      const message = `Yahoo Finance options: HTTP ${res.status}`;
+      if (browserError instanceof Error) {
+        throw new Error(`${message}; browser fallback failed: ${browserError.message}`);
+      }
+      throw new Error(message);
+    }
+    if (browserError instanceof Error) {
+      const message = fetchError instanceof Error ? fetchError.message : "Yahoo Finance options: fetch failed";
+      throw new Error(`${message}; browser fallback failed: ${browserError.message}`);
+    }
+    throw fetchError instanceof Error ? fetchError : new Error("Yahoo Finance options: fetch failed");
   }
 
   const data: YahooOptionsResponse = await res.json();
@@ -311,27 +338,30 @@ async function fetchOptionsViaBrowser(
   expiration?: number,
 ): Promise<YahooOptionsResponse | null> {
   try {
-    // Establish Yahoo session in browser
-    await StealthBrowser.initSession("https://finance.yahoo.com");
-
-    // Get crumb + fetch options from within the browser context
+    // Avoid loading the script-heavy Yahoo Finance homepage: Playwright 1.60
+    // can crash on some pageerror payloads emitted by finance.yahoo.com.
+    // Navigating directly to Yahoo's JSON endpoints still uses the browser's
+    // cookies/TLS fingerprint without requiring cross-origin fetch from page JS.
     const dateParam = expiration ? `&date=${expiration}` : "";
-    const data = await StealthBrowser.run(async (page) => {
-      return page.evaluate(async (params: { symbol: string; dateParam: string }) => {
-        const crumbRes = await fetch(
-          "https://query2.finance.yahoo.com/v1/test/getcrumb",
-          { credentials: "include" },
-        );
-        const crumb = await crumbRes.text();
-        const url = `https://query1.finance.yahoo.com/v7/finance/options/${params.symbol}?crumb=${encodeURIComponent(crumb)}${params.dateParam}`;
-        const res = await fetch(url, { credentials: "include" });
-        if (!res.ok) return null;
-        return res.json();
-      }, { symbol, dateParam });
-    });
+    return await StealthBrowser.run(async (page) => {
+      await page.goto("https://query2.finance.yahoo.com/v1/test/getcrumb", {
+        waitUntil: "domcontentloaded",
+        timeout: 15000,
+      });
+      const crumb = (await page.locator("body").innerText()).trim();
+      if (!crumb) return null;
 
-    return data as YahooOptionsResponse | null;
-  } catch {
-    return null;
+      const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
+      const response = await page.goto(url, {
+        waitUntil: "domcontentloaded",
+        timeout: 15000,
+      });
+      if (!response?.ok()) return null;
+
+      const text = (await page.locator("body").innerText()).trim();
+      return JSON.parse(text) as YahooOptionsResponse;
+    });
+  } catch (error) {
+    throw error instanceof Error ? error : new Error(String(error));
   }
 }

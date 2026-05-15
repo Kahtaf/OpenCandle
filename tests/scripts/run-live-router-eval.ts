@@ -36,6 +36,7 @@ interface RouterFixture {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const FIXTURE_DIR = join(__dirname, "..", "fixtures", "router");
+const DEFAULT_PROVIDER = process.env.OPENCANDLE_ROUTER_PROVIDER ?? "anthropic";
 const DEFAULT_MODEL_ID = process.env.OPENCANDLE_ROUTER_MODEL ?? "claude-haiku-4-5";
 
 function loadFixtures(): Array<{ name: string; data: RouterFixture }> {
@@ -88,7 +89,7 @@ function percentile(values: number[], p: number): number {
 
 async function main(): Promise<void> {
   registerBuiltInApiProviders();
-  const model = getModel("anthropic", DEFAULT_MODEL_ID as "claude-haiku-4-5");
+  const model = getModel(DEFAULT_PROVIDER as "anthropic", DEFAULT_MODEL_ID as "claude-haiku-4-5");
   const client = createPiAiRouterClient(model);
 
   const fixtures = loadFixtures();

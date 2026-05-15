@@ -4,7 +4,7 @@ import { cache } from "../../../src/infra/cache.js";
 import { clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
 
-function mockCrumbAndOptions() {
+function mockCrumbAndOptions(fixture: typeof optionsFixture = optionsFixture) {
   globalThis.fetch = vi.fn().mockImplementation((url: string) => {
     if (typeof url === "string" && url.includes("fc.yahoo.com")) {
       return Promise.resolve({
@@ -21,7 +21,7 @@ function mockCrumbAndOptions() {
     }
     return Promise.resolve({
       ok: true,
-      json: () => Promise.resolve(optionsFixture),
+      json: () => Promise.resolve(fixture),
     });
   });
 }
@@ -79,5 +79,30 @@ describe("get_option_chain tool", () => {
     const text = (result.content[0] as any).text;
     expect(text).toContain("**CALLS**");
     expect(text).not.toContain("**PUTS**");
+  });
+
+  it("shows long-dated available expirations instead of hiding them behind a count", async () => {
+    const fixture = structuredClone(optionsFixture);
+    fixture.optionChain.result[0].expirationDates = [
+      1778803200, // 2026-05-15
+      1779408000, // 2026-05-22
+      1780012800, // 2026-05-29
+      1780617600, // 2026-06-05
+      1781222400, // 2026-06-12
+      1781740800, // 2026-06-18
+      1782432000, // 2026-06-26
+      1797552000, // 2026-12-18
+      1800057600, // 2027-01-15
+      1813190400, // 2027-06-17
+      1832025600, // 2028-01-21
+    ];
+    mockCrumbAndOptions(fixture);
+
+    const result = await optionChainTool.execute("call-5", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text;
+
+    expect(text).toContain("2027-06-17");
+    expect(text).toContain("2028-01-21");
+    expect(text).not.toContain("+5 more");
   });
 });

@@ -23,7 +23,7 @@ export function parseDteTarget(dteTarget: string): { minDays: number; maxDays: n
   const plusMatch = dteTarget.match(/^(\d+)_plus_days$/);
   if (plusMatch) {
     const min = parseInt(plusMatch[1], 10);
-    return { minDays: min, maxDays: min + 180 };
+    return { minDays: min, maxDays: Math.max(min, 1095) };
   }
   return null;
 }

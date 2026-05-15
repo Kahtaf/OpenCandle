@@ -21,11 +21,9 @@ vi.mock("node:fs", async (importOriginal) => {
 });
 
 // Mock better-sqlite3
-vi.mock("better-sqlite3", () => {
-  return {
-    default: vi.fn(),
-  };
-});
+vi.mock("better-sqlite3", () => ({
+  default: vi.fn(function Database() {}),
+}));
 
 // Mock @the-convocation/twitter-scraper
 vi.mock("@the-convocation/twitter-scraper", () => {
@@ -124,7 +122,9 @@ describe("scoreTwitterSentiment", () => {
 
 describe("getTwitterSentiment", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     cache.clear();
+    mockExistsSync.mockReturnValue(false);
   });
 
   afterEach(() => {

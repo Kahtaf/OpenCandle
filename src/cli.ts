@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./infra/node-version.js";
 import { parseArgs } from "node:util";
 import {
   AuthStorage,
@@ -143,6 +144,7 @@ async function main(): Promise<void> {
         authStorage,
         modelRegistry,
         sessionManager: opts.sessionManager,
+        bindExtensions: false,
       });
       return {
         ...result,

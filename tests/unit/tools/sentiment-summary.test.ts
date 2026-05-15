@@ -71,6 +71,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.clearAllMocks();
 });
 
 describe("get_sentiment_summary tool", () => {
