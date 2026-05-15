@@ -210,11 +210,12 @@ export function StackBar({ left, right, leftLabel, rightLabel, leftClass = "bg-s
 
 export function RawDetails({ message, details, text }) {
   return (
-    <details className="border-t border-border pt-2">
-      <summary className="flex min-h-9 cursor-pointer items-center rounded-md text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card">
-        Raw input and output
+    <details className="group">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-sm text-[10.5px] uppercase tracking-wider text-muted-foreground/80 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">›</span>
+        <span>Raw input · output</span>
       </summary>
-      <pre className="m-0 whitespace-pre-wrap break-words pt-2 text-xs text-muted-foreground">
+      <pre className="mt-1.5 max-h-72 overflow-auto rounded-md border border-border bg-secondary/50 p-2 text-[11px] leading-relaxed text-muted-foreground">
         {JSON.stringify({ input: message?.details?.args || null, details, text }, null, 2)}
       </pre>
     </details>

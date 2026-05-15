@@ -1,4 +1,5 @@
 import { Badge } from "../../../components/ui/badge.jsx";
+import { Favicon } from "../../../components/ui/favicon.jsx";
 import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard, extractDetails, formatDateShort, formatLargeNumber, formatPercent, formatPrice, relativeTime } from "./_shared.jsx";
 
 export function PortfolioCard({ message, header, text }) {
@@ -220,7 +221,7 @@ export function SECFilingsCard({ message, header, text }) {
         {entity ? <span> · {entity}</span> : null}
         <span> · {filings.length} filing{filings.length === 1 ? "" : "s"}</span>
       </div>
-      <ul>
+      <ul className="grid gap-0.5">
         {filings.slice(0, 10).map((f, i) => {
           const filed = f.filedDate || f.filedAt || f.filingDate || f.acceptedAt;
           const form = f.formType || f.form || f.type;
@@ -229,19 +230,20 @@ export function SECFilingsCard({ message, header, text }) {
           const accession = f.accessionNumber;
           const Tag = url ? "a" : "div";
           return (
-            <li key={accession || `${form}-${filed}-${i}`} className="border-b border-border last:border-b-0">
+            <li key={accession || `${form}-${filed}-${i}`}>
               <Tag
                 href={url || undefined}
                 target={url ? "_blank" : undefined}
                 rel={url ? "noreferrer" : undefined}
-                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-sm px-1 py-2 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                className="grid grid-cols-[20px_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
               >
-                <Badge variant="outline" className="font-mono">{form || "—"}</Badge>
+                <Favicon url="https://www.sec.gov" size="sm" />
+                <Badge variant="outline" size="sm" className="font-mono">{form || "—"}</Badge>
                 <div className="min-w-0">
-                  <div className="truncate text-sm text-foreground">{period ? `Period ${period}` : (f.title || f.description || f.primaryDocument || "Filing")}</div>
-                  {accession ? <div className="truncate font-mono text-[11px] text-muted-foreground">{accession}</div> : null}
+                  <div className="truncate text-[12.5px] text-foreground">{period ? `Period ${period}` : (f.title || f.description || f.primaryDocument || "Filing")}</div>
+                  {accession ? <div className="truncate font-mono text-[10.5px] text-muted-foreground">{accession}</div> : null}
                 </div>
-                <span className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground">
+                <span className="whitespace-nowrap text-[10.5px] tabular-nums text-muted-foreground">
                   {filed ? relativeTime(filed) : "—"}
                 </span>
               </Tag>

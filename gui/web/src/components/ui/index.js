@@ -7,5 +7,6 @@ export { Kbd } from "./kbd.jsx";
 export { Textarea } from "./textarea.jsx";
 export { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from "./command.jsx";
 export { Dialog, DialogClose, DialogContent, DialogOverlay, DialogTrigger } from "./dialog.jsx";
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "./popover.jsx";
 export { Sheet, SheetClose, SheetContent, SheetHandle, SheetTrigger } from "./sheet.jsx";
 export { Tooltip, TooltipContent, TooltipProvider, TooltipRoot, TooltipTrigger } from "./tooltip.jsx";

@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ChatPanel } from "./features/chat/ChatPanel.jsx";
+import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
+import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
 import { useChatRun } from "./hooks/useChatRun.jsx";
@@ -108,8 +110,6 @@ export function AppShell() {
     onCollapse: () => setSidebarCollapsed(true),
     onOpenSession: openSession,
     onNewSession: newSession,
-    onOpenCatalog: () => openCatalog("catalog"),
-    onOpenContext: () => openDrawer("context"),
   };
 
   const initialCatalogTab = activeDrawer === "tools"
@@ -121,7 +121,7 @@ export function AppShell() {
         : "workflows";
 
   return (
-    <>
+    <ToolDrawerProvider>
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ChatPanel
@@ -145,7 +145,9 @@ export function AppShell() {
           sidebarCollapsed={sidebarCollapsed}
           onExpandSidebar={() => setSidebarCollapsed(false)}
         />
+        <ToolDrawerInline />
       </div>
+      <ToolDrawerOverlay />
       <SessionDrawer open={sessionsOpen} {...sidebarProps} onClose={closeDrawer} />
       <FinancialContextDrawer
         open={contextOpen}
@@ -171,7 +173,7 @@ export function AppShell() {
           />
         ) : null}
       </Suspense>
-    </>
+    </ToolDrawerProvider>
   );
 }
 

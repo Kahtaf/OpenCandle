@@ -1,4 +1,6 @@
 import { Badge } from "../../../components/ui/badge.jsx";
+import { Favicon, hostFrom } from "../../../components/ui/favicon.jsx";
+import { SourcePill } from "../../../components/ui/source-pill.jsx";
 import { MoneyTile, PlainOutput, Sparkline, StackBar, ToolCard, extractDetails, formatDateShort, formatLargeNumber, relativeTime } from "./_shared.jsx";
 
 export function WebSearchCard({ message, header, text }) {
@@ -10,23 +12,43 @@ export function WebSearchCard({ message, header, text }) {
   return (
     <ToolCard>
       {header}
-      <div className="text-xs text-muted-foreground">
-        {d.query ? <>“<span className="text-foreground">{d.query}</span>” · </> : null}
-        {results.length} result{results.length === 1 ? "" : "s"}
-        {d.provider ? <> · via {d.provider}</> : null}
+      {(d.query || results.length) ? (
+        <div className="text-xs text-muted-foreground">
+          {d.query ? <>“<span className="text-foreground">{d.query}</span>” · </> : null}
+          {results.length} result{results.length === 1 ? "" : "s"}
+          {d.provider ? <> · via {d.provider}</> : null}
+        </div>
+      ) : null}
+      {/* Favicon chip row for at-a-glance source overview. Hover reveals title/snippet. */}
+      <div className="flex flex-wrap gap-1.5">
+        {results.slice(0, 12).map((r, i) => (
+          <SourcePill
+            key={`pill-${r.url || r.title || i}`}
+            url={r.url}
+            title={r.title}
+            snippet={r.snippet}
+          />
+        ))}
       </div>
-      <ul className="grid gap-2.5">
+      {/* Detailed result rows below */}
+      <ul className="grid gap-1.5">
         {results.slice(0, 8).map((r, i) => (
-          <li key={`${r.url || r.title || i}`} className="rounded-md border border-border bg-card px-3 py-2.5 hover:bg-secondary transition-colors">
-            <a href={r.url} target="_blank" rel="noreferrer" className="grid gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card rounded-sm">
-              <div className="flex flex-wrap items-baseline gap-2">
-                <span className="line-clamp-2 text-sm font-medium text-foreground">{r.title}</span>
-              </div>
-              {r.snippet ? <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">{r.snippet}</p> : null}
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                {r.source ? <span className="font-medium text-foreground">{r.source}</span> : null}
-                {r.published ? <span>· {relativeTime(r.published)}</span> : null}
-                {r.category && r.category !== "general" ? <Badge variant="outline">{r.category}</Badge> : null}
+          <li key={`row-${r.url || r.title || i}`}>
+            <a
+              href={r.url || undefined}
+              target={r.url ? "_blank" : undefined}
+              rel={r.url ? "noreferrer" : undefined}
+              className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+            >
+              <Favicon url={r.url} size="sm" className="mt-0.5" />
+              <div className="min-w-0">
+                <div className="line-clamp-1 text-[13px] font-medium text-foreground">{r.title}</div>
+                {r.snippet ? <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground">{r.snippet}</p> : null}
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                  <span className="truncate">{hostFrom(r.url) || r.source}</span>
+                  {r.published ? <span>· {relativeTime(r.published)}</span> : null}
+                  {r.category && r.category !== "general" ? <Badge variant="outline" size="sm">{r.category}</Badge> : null}
+                </div>
               </div>
             </a>
           </li>
@@ -85,18 +107,31 @@ export function SocialSentimentCard({ message, header, text, sourceLabel }) {
         <div className="rounded-md border border-border">
           <div className="border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Top items</div>
           <ul>
-            {items.map((it, i) => (
-              <li key={it.id || i} className="grid gap-1 border-b border-border px-3 py-2 last:border-b-0">
-                <p className="line-clamp-2 text-xs leading-relaxed text-foreground">{it.title || it.text}</p>
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  {it.author ? <span>{it.author}</span> : null}
-                  {Number.isFinite(it.score) ? <span>· {formatLargeNumber(it.score)} pts</span> : null}
-                  {Number.isFinite(it.likes) ? <span>· ❤ {formatLargeNumber(it.likes)}</span> : null}
-                  {Number.isFinite(it.comments) ? <span>· 💬 {formatLargeNumber(it.comments)}</span> : null}
-                  {it.created ? <span>· {relativeTime(it.created)}</span> : null}
-                </div>
-              </li>
-            ))}
+            {items.map((it, i) => {
+              const url = it.url || it.permalink;
+              return (
+                <li key={it.id || i} className="border-b border-border last:border-b-0">
+                  <a
+                    href={url || undefined}
+                    target={url ? "_blank" : undefined}
+                    rel={url ? "noreferrer" : undefined}
+                    className="grid grid-cols-[20px_minmax(0,1fr)] items-start gap-2 px-3 py-2 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+                  >
+                    <Favicon url={url} size="sm" className="mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-xs leading-relaxed text-foreground">{it.title || it.text}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                        {it.author ? <span>{it.author}</span> : null}
+                        {Number.isFinite(it.score) ? <span>· {formatLargeNumber(it.score)} pts</span> : null}
+                        {Number.isFinite(it.likes) ? <span>· {formatLargeNumber(it.likes)} likes</span> : null}
+                        {Number.isFinite(it.comments) ? <span>· {formatLargeNumber(it.comments)} comments</span> : null}
+                        {it.created ? <span>· {relativeTime(it.created)}</span> : null}
+                      </div>
+                    </div>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ) : null}
@@ -139,39 +174,46 @@ export function WebSentimentCard({ message, header, text }) {
         neutralLabel={`Neutral ${records.length - bullish - bearish}`}
       />
       {trendValues && trendValues.length > 1 ? <Sparkline values={trendValues} height={48} /> : null}
-      <div className="rounded-md border border-border">
-        <div className="border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          Top results
-        </div>
-        <ul>
-          {records.slice(0, 6).map((r, i) => {
-            const score = r.sentiment?.score;
-            const tone = !Number.isFinite(score) ? "text-muted-foreground" : score > 0.15 ? "text-success" : score < -0.15 ? "text-destructive" : "text-muted-foreground";
-            const Tag = r.url ? "a" : "div";
-            return (
-              <li key={r.id || r.url || i} className="border-b border-border last:border-b-0">
-                <Tag
-                  href={r.url || undefined}
-                  target={r.url ? "_blank" : undefined}
-                  rel={r.url ? "noreferrer" : undefined}
-                  className="grid gap-1 px-3 py-2 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card rounded-sm"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="line-clamp-1 text-sm text-foreground">{r.title}</span>
-                    <span className={`shrink-0 text-xs tabular-nums ${tone}`}>
-                      {Number.isFinite(score) ? `${score >= 0 ? "+" : "−"}${Math.abs(score).toFixed(2)}` : "—"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+      {/* Source pill row above the detailed list */}
+      <div className="flex flex-wrap gap-1.5">
+        {records.slice(0, 10).map((r, i) => (
+          <SourcePill
+            key={`wp-${r.url || r.id || i}`}
+            url={r.url}
+            title={r.title}
+            snippet={r.snippet || r.summary}
+          />
+        ))}
+      </div>
+      <ul className="grid gap-1">
+        {records.slice(0, 6).map((r, i) => {
+          const score = r.sentiment?.score;
+          const scoreTone = !Number.isFinite(score) ? "text-muted-foreground" : score > 0.15 ? "text-success" : score < -0.15 ? "text-destructive" : "text-muted-foreground";
+          const Tag = r.url ? "a" : "div";
+          return (
+            <li key={r.id || r.url || i}>
+              <Tag
+                href={r.url || undefined}
+                target={r.url ? "_blank" : undefined}
+                rel={r.url ? "noreferrer" : undefined}
+                className="grid grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-2.5 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
+              >
+                <Favicon url={r.url} size="sm" className="mt-0.5" />
+                <div className="min-w-0">
+                  <div className="line-clamp-1 text-[12.5px] text-foreground">{r.title}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
                     {r.author ? <span>{r.author}</span> : null}
                     {r.published ? <span>· {relativeTime(r.published)}</span> : null}
                   </div>
-                </Tag>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+                </div>
+                <span className={`shrink-0 text-[11px] tabular-nums ${scoreTone}`}>
+                  {Number.isFinite(score) ? `${score >= 0 ? "+" : "−"}${Math.abs(score).toFixed(2)}` : "—"}
+                </span>
+              </Tag>
+            </li>
+          );
+        })}
+      </ul>
     </ToolCard>
   );
 }

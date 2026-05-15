@@ -120,6 +120,41 @@
     color: hsl(var(--tw-foreground));
     font-weight: 600;
   }
+
+  /* TextShimmer: a static muted base with a moving foreground stripe. When the
+     `.tool-shimmer` modifier is removed (e.g. after a step completes), the
+     animation stops and the label settles to the muted base. Respects
+     prefers-reduced-motion via the global rule below. */
+  .tool-shimmer-base {
+    color: hsl(var(--tw-muted-foreground));
+  }
+  .tool-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--tw-muted-foreground)) 0%,
+      hsl(var(--tw-muted-foreground)) 40%,
+      hsl(var(--tw-foreground)) 50%,
+      hsl(var(--tw-muted-foreground)) 60%,
+      hsl(var(--tw-muted-foreground)) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: tool-shimmer-sweep 1.6s linear infinite;
+  }
+  @keyframes tool-shimmer-sweep {
+    0% { background-position: 120% 0; }
+    100% { background-position: -120% 0; }
+  }
+
+  /* Tooltip transitions for SourcePill hover previews (Radix data-state).
+     The `data-state=delayed-open` selector matches when the tooltip just
+     opened after its delay; `closed` matches the unmount. */
+  .tt-anim {
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

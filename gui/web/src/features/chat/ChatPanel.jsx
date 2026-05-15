@@ -1,13 +1,16 @@
-import { BarChart3, BookOpen, CandlestickChart, Menu, PanelLeftOpen } from "lucide-react";
-import { useMemo, useState } from "react";
+import { CandlestickChart, Menu, PanelLeftOpen } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
-import { AssistantMessage, CustomMessage, ToolCallMessage, UserMessage } from "../../components/chat/thread-message.jsx";
+import { AssistantMessage, CustomMessage, UserMessage } from "../../components/chat/thread-message.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { textContent } from "../../rendering/text.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { eventsToLiveEntries } from "./live-entries.js";
+import { groupToolRuns } from "./tool-run-grouper.js";
+import { StepsCard } from "./steps-card.jsx";
+import { useToolDrawer } from "./tool-drawer-context.jsx";
 
 export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
@@ -17,6 +20,14 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
   const setDraft = setDraftProp ?? setLocalDraft;
   const liveEntries = useMemo(() => eventsToLiveEntries(liveEvents), [liveEvents]);
   const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
+  const groupedEntries = useMemo(() => groupToolRuns(visibleEntries), [visibleEntries]);
+  const drawer = useToolDrawer();
+  // Keep the open drawer in sync as the active run streams in new steps.
+  useEffect(() => {
+    if (!drawer.run) return;
+    const latest = groupedEntries.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
+    if (latest && latest !== drawer.run) drawer.open(latest);
+  }, [groupedEntries, drawer]);
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
 
   const submit = (value = draft) => {
@@ -32,7 +43,7 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background" data-run-state={runState}>
-      <MobileHeader onOpenSidebar={onOpenSidebar} onOpenContext={onOpenContext} onOpenCatalog={() => onOpenCommandPalette?.("catalog")} />
+      <MobileHeader onOpenSidebar={onOpenSidebar} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
@@ -41,7 +52,7 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
           <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} />
         ) : (
           <div className="mx-auto flex max-w-[760px] flex-col gap-6">
-            {visibleEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
+            {groupedEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
           </div>
         )}
       </div>
@@ -52,7 +63,11 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
         placeholder={placeholder}
         canSend={Boolean(draft.trim()) && role !== "follower"}
         onSubmit={() => submit()}
-        onOpenCommandPalette={onOpenCommandPalette}
+        onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
+        onOpenContext={onOpenContext}
+        modelSetup={modelSetup}
+        send={send}
+        setToast={setToast}
       />
     </section>
   );
@@ -68,7 +83,7 @@ function DesktopSidebarRestore({ onExpandSidebar }) {
   );
 }
 
-function MobileHeader({ onOpenSidebar, onOpenContext, onOpenCatalog }) {
+function MobileHeader({ onOpenSidebar }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-2 md:hidden">
       <Button variant="ghost" size="icon-sm" aria-label="Open sidebar" onClick={onOpenSidebar}>
@@ -78,37 +93,24 @@ function MobileHeader({ onOpenSidebar, onOpenContext, onOpenCatalog }) {
         <CandlestickChart className="h-4 w-4 text-foreground" strokeWidth={2.5} aria-hidden="true" />
         OpenCandle
       </div>
-      <div className="ml-auto flex items-center">
-        <Button variant="ghost" size="icon-sm" aria-label="Open catalog" onClick={onOpenCatalog}>
-          <BookOpen />
-        </Button>
-        <Button variant="ghost" size="icon-sm" aria-label="Open context" onClick={onOpenContext}>
-          <BarChart3 />
-        </Button>
-      </div>
     </header>
   );
 }
 
 function MessageRow({ entry, catalog }) {
+  if (entry.type === "tool_run") {
+    return <StepsCard run={entry} />;
+  }
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;
   }
   const message = entry.message;
+  if (!message) return null;
   if (message.role === "user") return <UserMessage content={message.content} />;
   if (message.role === "toolResult") return <ToolResultCard message={message} catalog={catalog} />;
   if (message.role === "assistant") {
-    const toolCalls = message.content?.filter?.((part) => part.type === "toolCall") || [];
-    const text = textContent(message.content);
-    if (toolCalls.length && text) {
-      return (
-        <div className="grid gap-3">
-          <AssistantMessage content={message.content} />
-          <ToolCallMessage toolCalls={toolCalls} />
-        </div>
-      );
-    }
-    if (toolCalls.length) return <ToolCallMessage toolCalls={toolCalls} />;
+    // After grouping, assistant entries here are pure-text (their tool calls
+    // were absorbed into the surrounding tool_run). Render only the text part.
     return <AssistantMessage content={message.content} />;
   }
   return <div className="rounded-lg border border-border bg-card p-4 text-sm">{JSON.stringify(message)}</div>;

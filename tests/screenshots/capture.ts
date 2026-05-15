@@ -212,6 +212,36 @@ function userEntry(id: string, text: string) {
   };
 }
 
+function assistantToolCallEntry(id: string, toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>) {
+  return {
+    type: "message",
+    id,
+    timestamp: new Date().toISOString(),
+    message: {
+      role: "assistant",
+      content: toolCalls.map((tc) => ({ type: "toolCall", id: tc.id, name: tc.name, arguments: tc.arguments })),
+    },
+  };
+}
+
+function assistantTextEntry(id: string, text: string) {
+  return {
+    type: "message",
+    id,
+    timestamp: new Date().toISOString(),
+    message: { role: "assistant", content: [{ type: "text", text }] },
+  };
+}
+
+const WEB_SEARCH_RESULTS = [
+  { title: "Apple unveils next-generation M-series chips at WWDC", url: "https://www.theverge.com/2025/06/12/apple-m4-chip-wwdc", snippet: "Apple announced its next-generation M-series silicon at WWDC 2025, with notable gains in neural engine throughput and 35% better single-threaded performance.", source: "The Verge", published: "2025-06-12T17:30:00Z", category: "tech" },
+  { title: "Apple Q3 earnings beat estimates as services revenue surges", url: "https://www.bloomberg.com/news/articles/2025-08-01/apple-earnings", snippet: "Apple reported third-quarter earnings that exceeded Wall Street estimates, driven by strong services growth.", source: "Bloomberg", published: "2025-08-01T20:14:00Z", category: "earnings" },
+  { title: "Why Warren Buffett trimmed Berkshire's Apple position again", url: "https://www.cnbc.com/2025/05/04/berkshire-apple-stake", snippet: "Berkshire Hathaway sold roughly $20 billion in Apple shares in Q1, continuing a divestment trend that began in 2024.", source: "CNBC", published: "2025-05-04T13:00:00Z", category: "investing" },
+  { title: "iPhone shipments rebound in China for first time in a year", url: "https://www.reuters.com/technology/iphone-china-2025-07", snippet: "Apple's iPhone shipments in China rose 3% YoY, the first quarterly increase since early 2024.", source: "Reuters", published: "2025-07-15T09:21:00Z", category: "markets" },
+  { title: "Apple's services business hits a $100B annual run rate", url: "https://www.wsj.com/articles/apple-services-revenue", snippet: "Services revenue including App Store, iCloud and Apple TV+ crossed $100B in trailing-twelve-months for the first time.", source: "WSJ", published: "2025-08-02T11:00:00Z", category: "business" },
+  { title: "Apple Vision Pro 2 leaked: lighter, cheaper, M5 powered", url: "https://9to5mac.com/2025/09/01/vision-pro-2-leak", snippet: "Apple's next mixed-reality headset will ship with the rumored M5 chip and target a $2,499 price.", source: "9to5Mac", published: "2025-09-01T08:00:00Z", category: "tech" },
+];
+
 const TOOL_PAIRS = {
   sentiment: [
     userEntry("u-sentiment", "Sentiment summary on NVDA last 24h"),
@@ -255,6 +285,33 @@ const TOOL_PAIRS = {
       },
       { symbol: "NVDA", range: "1y" },
     ),
+  ],
+  websearch: [
+    userEntry("u-web", "Latest Apple news this week"),
+    assistantToolCallEntry("a-web-call", [{ id: "tc-web-1", name: "search_web", arguments: { query: "Apple AAPL latest news" } }]),
+    toolResultEntry("tr-web", "search_web", `**Web search results for "Apple AAPL latest news"** — 6 results`, {
+      query: "Apple AAPL latest news",
+      provider: "exa",
+      results: WEB_SEARCH_RESULTS,
+    }, { query: "Apple AAPL latest news" }),
+    assistantTextEntry("a-final", "Here's a roundup of Apple news this week: the M-series chip refresh at WWDC, Q3 services revenue blow-out, Buffett trimming Berkshire's stake, an iPhone rebound in China, and the leaked Vision Pro 2 spec sheet."),
+  ],
+  multistep: [
+    userEntry("u-multi", "Pull AAPL quote + sentiment + recent filings"),
+    assistantToolCallEntry("a-multi-1", [{ id: "tc-quote", name: "get_stock_quote", arguments: { symbol: "AAPL" } }]),
+    toolResultEntry("tr-quote", "get_stock_quote", "AAPL quote retrieved", { symbol: "AAPL", price: 218.04, change: -0.68, changePercent: -0.31, previousClose: 218.72, open: 218.90, high: 219.30, low: 216.10, volume: 41_800_000, marketCap: 3.31e12, pe: 33.6, week52High: 235.10, week52Low: 164.20, timestamp: new Date().toISOString() }, { symbol: "AAPL" }),
+    assistantToolCallEntry("a-multi-2", [{ id: "tc-sent", name: "get_sentiment_summary", arguments: { query: "AAPL", hours: 24 } }]),
+    toolResultEntry("tr-sent", "get_sentiment_summary", "AAPL sentiment over 24h", { score: 0.18, sources: { reddit: { score: 0.32, count: 14 }, web: { score: 0.04, count: 18 } } }, { query: "AAPL" }),
+    assistantToolCallEntry("a-multi-3", [{ id: "tc-sec", name: "get_sec_filings", arguments: { symbol: "AAPL" } }]),
+    toolResultEntry("tr-sec", "get_sec_filings", "AAPL filings", {
+      symbol: "AAPL",
+      filings: [
+        { formType: "10-Q", filedDate: "2025-08-01T20:00:00Z", periodOfReport: "2025-06-29", accessionNumber: "0000320193-25-000077", url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000077/0000320193-25-000077-index.htm" },
+        { formType: "8-K", filedDate: "2025-07-24T18:00:00Z", periodOfReport: "2025-07-24", accessionNumber: "0000320193-25-000075", url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000075/0000320193-25-000075-index.htm" },
+        { formType: "DEF 14A", filedDate: "2025-01-10T16:30:00Z", periodOfReport: "2025-03-01", accessionNumber: "0000320193-25-000010", url: "https://www.sec.gov/Archives/edgar/data/320193/000032019325000010/0000320193-25-000010-index.htm" },
+      ],
+    }, { symbol: "AAPL" }),
+    assistantTextEntry("a-multi-final", "**AAPL snapshot**: trading around $218 (-0.31%), neutral-positive sentiment (+0.18 aggregate), and a clean recent filing trail with last 10-Q on Aug 1. Nothing alarming in the data; Reddit chatter is slightly more bullish than press coverage."),
   ],
 };
 
@@ -432,6 +489,41 @@ const CAPTURES: Capture[] = [
       }
     },
   },
+  {
+    name: "18-tool-drawer-stock-history",
+    overrides: { entries: TOOL_PAIRS.history },
+    setup: async (page) => { await openStepsDrawer(page); },
+  },
+  {
+    name: "19-tool-drawer-sentiment-summary",
+    overrides: { entries: TOOL_PAIRS.sentiment },
+    setup: async (page) => { await openStepsDrawer(page); },
+  },
+  {
+    name: "20-tool-drawer-technical-indicators",
+    overrides: { entries: TOOL_PAIRS.technical },
+    setup: async (page) => { await openStepsDrawer(page); },
+  },
+  {
+    name: "21-tool-output-websearch",
+    overrides: { entries: TOOL_PAIRS.websearch },
+    setup: async (page) => { await scrollChatToBottom(page); },
+  },
+  {
+    name: "22-tool-drawer-websearch",
+    overrides: { entries: TOOL_PAIRS.websearch },
+    setup: async (page) => { await openStepsDrawer(page); },
+  },
+  {
+    name: "23-tool-output-multistep",
+    overrides: { entries: TOOL_PAIRS.multistep },
+    setup: async (page) => { await scrollChatToBottom(page); },
+  },
+  {
+    name: "24-tool-drawer-multistep",
+    overrides: { entries: TOOL_PAIRS.multistep },
+    setup: async (page) => { await openStepsDrawer(page); },
+  },
 ];
 
 // Pin the chat scroll container to the bottom so tall tool cards are
@@ -442,6 +534,14 @@ async function scrollChatToBottom(page: Page): Promise<void> {
     containers.forEach((el) => { (el as HTMLElement).scrollTop = (el as HTMLElement).scrollHeight; });
   });
   await page.waitForTimeout(180);
+}
+
+async function openStepsDrawer(page: Page): Promise<void> {
+  await scrollChatToBottom(page);
+  const stepsButton = page.locator("button[aria-expanded]:has-text('step')").first();
+  await stepsButton.click({ timeout: 3000 }).catch(() => {});
+  // Desktop slide-in is ~200ms; mobile vaul sheet animates in similarly.
+  await page.waitForTimeout(280);
 }
 
 async function openContext(page: Page): Promise<void> {

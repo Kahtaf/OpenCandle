@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CandlestickChart, PanelLeft, Plus, Search, X } from "lucide-react";
+import { CandlestickChart, PanelLeft, Plus, Search, X } from "lucide-react";
 import { HistoryItem } from "../../components/chat/history-item.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
@@ -28,7 +28,7 @@ export function SessionDrawer({ open, onClose, ...rest }) {
   );
 }
 
-function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, onOpenCatalog, onOpenContext, onClose, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
+function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, onClose, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
   const groups = groupSessions(sessions);
 
   return (
@@ -58,15 +58,6 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, 
         {sessions.length === 0 ? (
           <p className="px-3 text-xs text-muted-foreground">Current local session</p>
         ) : null}
-      </div>
-
-      <div className="flex flex-col gap-1 border-t border-border pt-2">
-        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-2" onClick={onOpenContext}>
-          <BarChart3 /> Context
-        </Button>
-        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-2" onClick={onOpenCatalog}>
-          <BookOpen /> Catalog
-        </Button>
       </div>
     </div>
   );

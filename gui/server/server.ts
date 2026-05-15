@@ -16,7 +16,6 @@ import { buildModelSetupState, findPreferredModel, modelSetupProviders } from ".
 import { projectDashboard } from "./projector.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
 import { invokeToolFromUi } from "./invoke-tool.js";
-import { parseGuiPromptIntent } from "./prompt-intent.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
@@ -206,30 +205,7 @@ async function handlePrompt(prompt: string): Promise<void> {
     return;
   }
 
-  const promptIntent = parseGuiPromptIntent(prompt);
-  if (promptIntent.type === "stock_quote" || promptIntent.type === "stock_quote_compare") {
-    sessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
-    broadcastState();
-    const tool = getAllTools().find((candidate) => candidate.name === "get_stock_quote");
-    if (!tool) throw new Error("Stock quote tool is not available");
-    if (promptIntent.type === "stock_quote") {
-      await invokeToolFromUi(sessionManager, tool, { symbol: promptIntent.symbol }, "ui");
-    } else {
-      const quotes = [];
-      for (const symbol of promptIntent.symbols) {
-        const result = await invokeToolFromUi(sessionManager, tool, { symbol }, "ui");
-        const quote = asStockQuote(result.result.details);
-        if (quote) quotes.push(quote);
-      }
-      if (quotes.length >= 2) appendQuoteComparison(quotes);
-    }
-  } else if (promptIntent.type === "tool_prompt") {
-    sessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
-    broadcastState();
-    const tool = getAllTools().find((candidate) => candidate.name === promptIntent.toolName);
-    if (!tool) throw new Error(`Tool is not available: ${promptIntent.toolName}`);
-    await invokeToolFromUi(sessionManager, tool, promptIntent.args, "ui");
-  } else if (prompt.trim().startsWith("/analyze")) {
+  if (prompt.trim().startsWith("/analyze")) {
     sessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
     broadcastState();
     const symbol = prompt.trim().split(/\s+/)[1]?.toUpperCase() ?? "NVDA";
@@ -533,51 +509,6 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function asStockQuote(value: unknown): { symbol: string; price: number; changePercent: number; volume: number } | undefined {
-  const record = asRecord(value);
-  if (
-    typeof record.symbol !== "string" ||
-    typeof record.price !== "number" ||
-    typeof record.changePercent !== "number" ||
-    typeof record.volume !== "number"
-  ) {
-    return undefined;
-  }
-  return {
-    symbol: record.symbol,
-    price: record.price,
-    changePercent: record.changePercent,
-    volume: record.volume,
-  };
-}
-
-function appendQuoteComparison(quotes: Array<{ symbol: string; price: number; changePercent: number; volume: number }>): void {
-  const strongest = [...quotes].sort((a, b) => b.changePercent - a.changePercent)[0];
-  const lines = [
-    "| Symbol | Price | Day Change | Volume |",
-    "| --- | ---: | ---: | ---: |",
-    ...quotes.map((quote) => `| ${quote.symbol} | $${quote.price.toFixed(2)} | ${formatSignedPercent(quote.changePercent)} | ${quote.volume.toLocaleString()} |`),
-    "",
-    `Strongest day move: ${strongest.symbol} at ${formatSignedPercent(strongest.changePercent)}.`,
-    "Key risk: quote-only comparisons are short-term snapshots; use full analysis before making a trade.",
-  ];
-  sessionManager.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: lines.join("\n") }],
-    api: "openai-responses",
-    provider: "opencandle",
-    model: "gui-local",
-    usage: emptyUsage(),
-    stopReason: "stop",
-    timestamp: Date.now(),
-  });
-}
-
-function formatSignedPercent(value: number): string {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
 }
 
 function emptyUsage() {

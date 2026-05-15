@@ -44,6 +44,71 @@ describe("sessionEntriesToChatEvents", () => {
     });
   });
 
+  it("preserves final assistant prose after a normal Pi tool turn", () => {
+    const events = sessionEntriesToChatEvents([
+      messageEntry("u1", { role: "user", content: "Show options chain for AAPL", timestamp: Date.now() } as Message),
+      messageEntry("a1", {
+        role: "assistant",
+        content: [{ type: "toolCall", id: "call-1", name: "get_option_chain", arguments: { symbol: "AAPL" } }],
+        api: "google-generative-ai",
+        provider: "google",
+        model: "test",
+        usage: usage(),
+        stopReason: "toolUse",
+        timestamp: Date.now(),
+      } as Message),
+      messageEntry("t1", {
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "get_option_chain",
+        content: [{ type: "text", text: "AAPL options chain" }],
+        details: {
+          symbol: "AAPL",
+          underlyingPrice: 293.32,
+          calls: [],
+          puts: [],
+        },
+        isError: false,
+        timestamp: Date.now(),
+      } as Message),
+      messageEntry("a2", {
+        role: "assistant",
+        content: [{ type: "text", text: "AAPL has near-dated options available around the current spot price." }],
+        api: "google-generative-ai",
+        provider: "google",
+        model: "test",
+        usage: usage(),
+        stopReason: "stop",
+        timestamp: Date.now(),
+      } as Message),
+    ], { sessionId: "s1", startSeq: 1 });
+
+    expect(events.map((event) => event.type)).toEqual([
+      "session.updated",
+      "message.created",
+      "message.completed",
+      "message.created",
+      "tool.started",
+      "message.completed",
+      "tool.completed",
+      "message.created",
+      "message.completed",
+    ]);
+    expect(events.find((event) => event.type === "tool.completed")).toMatchObject({
+      toolCallId: "call-1",
+      output: {
+        details: {
+          symbol: "AAPL",
+          underlyingPrice: 293.32,
+        },
+      },
+    });
+    expect(events.at(-1)).toMatchObject({
+      type: "message.completed",
+      content: [{ type: "text", text: "AAPL has near-dated options available around the current spot price." }],
+    });
+  });
+
   it("creates synthetic tool start events for orphan UI tool results", () => {
     const events = sessionEntriesToChatEvents([
       messageEntry("t1", {
