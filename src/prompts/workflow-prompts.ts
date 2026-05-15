@@ -199,6 +199,14 @@ Ranking constraints:
 - Do NOT rank ultra-cheap near-zero-delta contracts as "best."
 `
     : "";
+  const longDatedInstructions = s.dteTarget === "180_plus_days"
+    ? `
+For LEAPS / long-dated options:
+- First call get_option_chain without an expiration to inspect available expirations.
+- Choose available expirations inside the target window, then call get_option_chain again with explicit \`expiration\` dates before ranking contracts.
+- Do not rank the nearest-expiration chain as a LEAPS result.
+`
+    : "";
 
   const disclosureBlock = buildDisclosureBlock(
     {
@@ -229,6 +237,7 @@ Steps:
 3. Filter contracts matching: ${s.direction === "bullish" ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
 4. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
+${longDatedInstructions}
 ${rankingConstraints}
 ${disclosureBlock}
 

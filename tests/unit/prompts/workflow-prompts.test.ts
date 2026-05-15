@@ -183,6 +183,14 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("get_option_chain");
   });
 
+  it("tells LEAPS workflows to fetch explicit long-dated expirations", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution({ dteTarget: "180_plus_days" }, { dteTarget: "user" }),
+    );
+    expect(prompt).toContain("For LEAPS / long-dated options");
+    expect(prompt).toContain("call get_option_chain again with explicit `expiration`");
+  });
+
   // Fix 3: Date grounding
   it("includes current date and expiration window", () => {
     const prompt = buildOptionsScreenerPrompt(makeOptionsResolution());

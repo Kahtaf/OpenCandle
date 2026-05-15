@@ -44,7 +44,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     const lines: string[] = [
       `**${chain.symbol} Options Chain** — Expiry: ${chain.expirationDate}`,
       `Underlying: $${chain.underlyingPrice.toFixed(2)}`,
-      `Available expirations: ${chain.expirationDates.slice(0, 6).join(", ")}${chain.expirationDates.length > 6 ? ` (+${chain.expirationDates.length - 6} more)` : ""}`,
+      `Available expirations: ${formatAvailableExpirations(chain.expirationDates)}`,
       "",
     ];
 
@@ -79,6 +79,10 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
 
 function sortByVolume(contracts: OptionContract[]): OptionContract[] {
   return [...contracts].sort((a, b) => b.volume - a.volume);
+}
+
+function formatAvailableExpirations(expirationDates: string[]): string {
+  return expirationDates.join(", ");
 }
 
 function formatContract(c: OptionContract): string {

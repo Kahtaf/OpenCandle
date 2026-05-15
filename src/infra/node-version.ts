@@ -1,10 +1,19 @@
-const SUPPORTED_NODE_MAJOR = 22;
+const SUPPORTED_NODE_RANGE = "20.19+, 22.12+, or 24.x-26.x";
+
+function isSupportedNodeVersion(version: string): boolean {
+  const [majorRaw, minorRaw] = version.split(".");
+  const major = Number(majorRaw);
+  const minor = Number(minorRaw);
+
+  if (major === 20) return minor >= 19;
+  if (major === 22) return minor >= 12;
+  return major >= 24 && major < 27;
+}
 
 export function getUnsupportedNodeVersionMessage(version: string = process.versions.node): string | null {
-  const major = Number(version.split(".")[0]);
-  if (major === SUPPORTED_NODE_MAJOR) return null;
+  if (isSupportedNodeVersion(version)) return null;
 
-  return `OpenCandle requires Node ${SUPPORTED_NODE_MAJOR}.x. Current Node is ${version}. Run \`nvm use\` from the repo root, then reinstall dependencies with \`npm install\`.`;
+  return `OpenCandle supports Node ${SUPPORTED_NODE_RANGE}. Current Node is ${version}. Use Node ${SUPPORTED_NODE_RANGE}; the repo default is Node 22.22.0 via \`nvm use\`. After switching Node versions, reinstall dependencies under the active Node with \`npm install\` or rebuild native modules with \`npm rebuild better-sqlite3\`.`;
 }
 
 export function assertSupportedNodeVersion(version?: string): void {
