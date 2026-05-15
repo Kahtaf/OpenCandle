@@ -20,6 +20,7 @@ describe("watchlistTool", () => {
   const openCandleHome = "/tmp/opencandle-watchlist-test";
 
   beforeEach(() => {
+    vi.clearAllMocks();
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
@@ -34,7 +35,7 @@ describe("watchlistTool", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("has correct tool metadata", () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getOptionsChain, getYahooCrumb, clearCrumbCache, computeTimeToExpiry } from "../../../src/providers/yahoo-finance.js";
 import { cache } from "../../../src/infra/cache.js";
+import { StealthBrowser } from "../../../src/infra/browser.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
 
 describe("computeTimeToExpiry", () => {
@@ -166,6 +167,58 @@ describe("yahoo-finance options provider", () => {
         (c: any[]) => typeof c[0] === "string" && c[0].includes("/v7/finance/options/"),
       );
       expect(optionsCalls.length).toBe(1);
+    });
+
+    it("falls back to the stealth browser when direct options fetch fails", async () => {
+      vi.spyOn(StealthBrowser, "run").mockResolvedValue(optionsFixture as any);
+
+      globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === "string" && url.includes("fc.yahoo.com")) {
+          return Promise.resolve({
+            ok: true,
+            headers: new Headers({ "set-cookie": "A3=d=testcookie; Path=/" }),
+            text: () => Promise.resolve(""),
+          });
+        }
+        if (typeof url === "string" && url.includes("getcrumb")) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve("testCrumb"),
+          });
+        }
+        return Promise.reject(new Error("fetch failed"));
+      });
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(chain.symbol).toBe("AAPL");
+      expect(chain.calls.length).toBeGreaterThan(0);
+    });
+
+    it("includes the stealth browser failure when every options fetch path fails", async () => {
+      vi.spyOn(StealthBrowser, "run").mockRejectedValue(new Error("browser launch failed"));
+
+      globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+        if (typeof url === "string" && url.includes("fc.yahoo.com")) {
+          return Promise.resolve({
+            ok: true,
+            headers: new Headers({ "set-cookie": "A3=d=testcookie; Path=/" }),
+            text: () => Promise.resolve(""),
+          });
+        }
+        if (typeof url === "string" && url.includes("getcrumb")) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve("testCrumb"),
+          });
+        }
+        return Promise.resolve({ ok: false, status: 429 });
+      });
+
+      await expect(getOptionsChain("AAPL")).rejects.toThrow(
+        "Yahoo Finance options: HTTP 429; browser fallback failed: browser launch failed",
+      );
     });
   });
 });

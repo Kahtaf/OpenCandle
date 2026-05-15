@@ -1,7 +1,9 @@
+import "../infra/node-version.js";
 import {
   type AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
+  getAgentDir,
   type ModelRegistry,
   type CreateAgentSessionResult,
   type SettingsManager,
@@ -13,11 +15,13 @@ import type { AskUserHandler } from "../types/index.js";
 
 export interface CreateOpenCandleSessionOptions {
   cwd?: string;
+  agentDir?: string;
   authStorage?: AuthStorage;
   modelRegistry?: ModelRegistry;
   settingsManager?: SettingsManager;
   sessionManager?: SessionManager;
   useInlineExtension?: boolean;
+  bindExtensions?: boolean;
   askUserHandler?: AskUserHandler;
 }
 
@@ -27,10 +31,12 @@ export async function createOpenCandleSession(
   loadEnv();
 
   const cwd = options.cwd ?? process.cwd();
+  const agentDir = options.agentDir ?? getAgentDir();
   const useInlineExtension = options.useInlineExtension ?? true;
   const resourceLoader = useInlineExtension
     ? new DefaultResourceLoader({
         cwd,
+        agentDir,
         settingsManager: options.settingsManager,
         extensionFactories: [(pi) => openCandleExtension(pi, { askUserHandler: options.askUserHandler })],
       })
@@ -40,13 +46,19 @@ export async function createOpenCandleSession(
     await resourceLoader.reload();
   }
 
-  return createAgentSession({
+  const result = await createAgentSession({
     cwd,
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
     sessionManager: options.sessionManager,
     settingsManager: options.settingsManager,
     resourceLoader,
-    tools: [],
+    noTools: "builtin",
   });
+
+  if (options.bindExtensions !== false) {
+    await result.session.bindExtensions({});
+  }
+
+  return result;
 }

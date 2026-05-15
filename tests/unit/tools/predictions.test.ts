@@ -19,6 +19,7 @@ describe("recordPrediction", () => {
   const openCandleHome = "/tmp/opencandle-predictions-test";
 
   beforeEach(() => {
+    vi.clearAllMocks();
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
@@ -32,7 +33,7 @@ describe("recordPrediction", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("saves a prediction with required fields", () => {
