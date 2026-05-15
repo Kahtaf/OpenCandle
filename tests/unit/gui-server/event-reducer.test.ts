@@ -99,6 +99,22 @@ describe("chat event reducer", () => {
     expect(state.tools.size).toBe(outputs.length);
     expect([...state.tools.values()].every((tool) => tool.output != null)).toBe(true);
   });
+
+  it("tracks streaming thinking text for an active run", () => {
+    const state = reduceChatEvents([
+      { type: "run.started", runId: "r1", sessionId: "s1", seq: 1 },
+      { type: "thinking.delta", runId: "r1", text: "Checking expirations", seq: 2 },
+      { type: "thinking.delta", runId: "r1", text: " and filtering LEAPS.", seq: 3 },
+      { type: "thinking.completed", runId: "r1", text: "Checking expirations and filtering LEAPS.", seq: 4 },
+      { type: "run.completed", runId: "r1", seq: 5 },
+    ]);
+
+    expect(state.thinking.get("r1")).toEqual({
+      runId: "r1",
+      status: "completed",
+      text: "Checking expirations and filtering LEAPS.",
+    });
+  });
 });
 
 function quoteOutput(symbol: string): ToolOutput {

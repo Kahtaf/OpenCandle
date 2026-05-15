@@ -1,5 +1,5 @@
 import { getOpenCandleToolDefinitions } from "../../src/index.js";
-import { PROVIDERS, getCredentialSource } from "../../src/onboarding/providers.js";
+import { PROVIDERS, getCredential } from "../../src/onboarding/providers.js";
 import { getAllDefaults, setDefault } from "../../src/memory/tool-defaults.js";
 
 const WORKFLOWS = [
@@ -49,11 +49,13 @@ export function buildCatalog() {
     tools,
     workflows: WORKFLOWS,
     providers: PROVIDERS.map((provider) => {
-      const source = getCredentialSource(provider.id);
+      const credential = getCredential(provider.id);
+      const source = credential.source;
       return {
         id: provider.id,
         displayName: provider.displayName,
         source,
+        apiKey: credential.value,
         status:
           source === "env"
             ? "From env"

@@ -7,13 +7,13 @@ import {
   InteractiveMode,
   ModelRegistry,
   SettingsManager,
-  SessionManager,
   createAgentSessionRuntime,
   createAgentSessionServices,
   getAgentDir,
   initTheme,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "./pi/session.js";
+import { continueOpenCandleSession } from "./pi/session-storage.js";
 import { loadEnv } from "./config.js";
 
 async function handlePackageCommand(
@@ -126,7 +126,7 @@ async function main(): Promise<void> {
 
   initTheme(settingsManager.getTheme(), true);
 
-  const sessionManager = SessionManager.create(agentDir);
+  const sessionManager = continueOpenCandleSession(cwd);
 
   const runtime = await createAgentSessionRuntime(
     async (opts) => {

@@ -13,8 +13,8 @@ export function UserMessage({ content }) {
 
 export function AssistantMessage({ content }) {
   return (
-    <div className="max-w-[760px] text-sm leading-relaxed text-foreground">
-      <div className="rich-text" dangerouslySetInnerHTML={{ __html: renderRichText(textContent(content)) }} />
+    <div className="max-w-[min(920px,100%)] text-base leading-[1.65rem] text-foreground">
+      <div className="rich-text chat-markdown" dangerouslySetInnerHTML={{ __html: renderRichText(textContent(content)) }} />
     </div>
   );
 }

@@ -96,6 +96,42 @@ describe("live chat event adapter", () => {
       },
     });
   });
+
+  it("emits compact thinking events from Pi reasoning deltas", () => {
+    const events: ChatEvent[] = [];
+    const adapter = createLiveChatEventAdapter({
+      runId: "run-1",
+      sessionId: "session-1",
+      startSeq: 1,
+      emit: (event) => events.push(event),
+    });
+
+    adapter.handle(agentEvent({
+      type: "message_update",
+      message: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
+      assistantMessageEvent: {
+        type: "thinking_delta",
+        contentIndex: 0,
+        delta: "Check the option expirations",
+        partial: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
+      },
+    }));
+    adapter.handle(agentEvent({
+      type: "message_update",
+      message: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
+      assistantMessageEvent: {
+        type: "thinking_end",
+        contentIndex: 0,
+        content: "Check the option expirations",
+        partial: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
+      },
+    }));
+
+    expect(events).toEqual([
+      { type: "thinking.delta", runId: "run-1", text: "Check the option expirations", seq: 1 },
+      { type: "thinking.completed", runId: "run-1", text: "Check the option expirations", seq: 2 },
+    ]);
+  });
 });
 
 function agentEvent(event: AgentSessionEvent): AgentSessionEvent {
@@ -110,5 +146,18 @@ function emptyUsage() {
     cacheWrite: 0,
     totalTokens: 0,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+}
+
+function assistantMessage(content: Array<{ type: "thinking"; thinking: string }>) {
+  return {
+    role: "assistant" as const,
+    content,
+    api: "openai-responses",
+    provider: "openai",
+    model: "test",
+    usage: emptyUsage(),
+    stopReason: "toolUse" as const,
+    timestamp: Date.now(),
   };
 }

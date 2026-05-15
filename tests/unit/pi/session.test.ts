@@ -1,4 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   AuthStorage,
   ModelRegistry,
@@ -56,5 +60,56 @@ describe("createOpenCandleSession", () => {
     expect(available.some((model) => model.provider === "google")).toBe(true);
     expect(available.some((model) => model.provider === "openai")).toBe(true);
     expect(available.some((model) => model.provider === "anthropic")).toBe(true);
+  });
+
+  it("prefers the saved Pi default model over a resumed session model", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-model-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-model-sessions-"));
+    try {
+      const previous = SessionManager.create(cwd, sessionDir);
+      previous.appendModelChange("google", "gemini-2.5-flash");
+      previous.appendMessage({ role: "user", content: "old prompt" });
+      previous.appendMessage({
+        role: "assistant",
+        content: [{ type: "text", text: "old response" }],
+        api: "google-generative-ai",
+        provider: "google",
+        model: "gemini-2.5-flash",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: Date.now(),
+      });
+
+      const authStorage = AuthStorage.inMemory();
+      authStorage.set("google", { type: "api_key", key: "test-key" });
+      const modelRegistry = ModelRegistry.inMemory(authStorage);
+      const settingsManager = SettingsManager.inMemory({
+        defaultProvider: "google",
+        defaultModel: "gemini-3.1-pro-preview",
+      });
+
+      const result = await createOpenCandleSession({
+        cwd,
+        authStorage,
+        modelRegistry,
+        settingsManager,
+        sessionManager: SessionManager.continueRecent(cwd, sessionDir),
+      });
+
+      expect(result.session.model?.provider).toBe("google");
+      expect(result.session.model?.id).toBe("gemini-3.1-pro-preview");
+
+      result.session.dispose();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
   });
 });

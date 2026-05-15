@@ -28,7 +28,7 @@ export function SessionDrawer({ open, onClose, ...rest }) {
   );
 }
 
-function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, onClose, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
+function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSession, onDeleteSession, onNewSession, onClose, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
   const groups = groupSessions(sessions);
 
   return (
@@ -52,9 +52,9 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onNewSession, 
       <SearchField />
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
-        <ThreadGroup label="Today" sessions={groups.today} currentSessionId={currentSessionId} onOpenSession={onOpenSession} />
-        <ThreadGroup label="Yesterday" sessions={groups.yesterday} currentSessionId={currentSessionId} onOpenSession={onOpenSession} />
-        <ThreadGroup label="Earlier" sessions={groups.earlier} currentSessionId={currentSessionId} onOpenSession={onOpenSession} />
+        <ThreadGroup label="Today" sessions={groups.today} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
+        <ThreadGroup label="Yesterday" sessions={groups.yesterday} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
+        <ThreadGroup label="Earlier" sessions={groups.earlier} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         {sessions.length === 0 ? (
           <p className="px-3 text-xs text-muted-foreground">Current local session</p>
         ) : null}
@@ -83,13 +83,20 @@ function SectionLabel({ icon: Icon, children }) {
   );
 }
 
-function ThreadGroup({ label, sessions, currentSessionId, onOpenSession }) {
+function ThreadGroup({ label, sessions, currentSessionId, onOpenSession, onRenameSession, onDeleteSession }) {
   if (!sessions?.length) return null;
   return (
     <div className="flex flex-col gap-0.5">
       <SectionLabel>{label}</SectionLabel>
       {sessions.map((session) => (
-        <HistoryItem key={session.path} session={session} active={session.id === currentSessionId} onOpen={onOpenSession} />
+        <HistoryItem
+          key={session.path}
+          session={session}
+          active={session.id === currentSessionId}
+          onOpen={onOpenSession}
+          onRename={onRenameSession}
+          onDelete={onDeleteSession}
+        />
       ))}
     </div>
   );

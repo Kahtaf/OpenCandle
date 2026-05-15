@@ -99,11 +99,14 @@
     font-weight: 600;
     color: hsl(var(--tw-foreground));
   }
-  .rich-text table {
+  .rich-text .rich-table {
     display: block;
     width: 100%;
     max-width: 100%;
     overflow-x: auto;
+  }
+  .rich-text table {
+    width: 100%;
     border-collapse: collapse;
     font-size: 13px;
     font-variant-numeric: tabular-nums;
@@ -119,6 +122,81 @@
     background: hsl(var(--tw-secondary));
     color: hsl(var(--tw-foreground));
     font-weight: 600;
+  }
+  .chat-markdown {
+    color: hsl(var(--tw-foreground) / 0.86);
+    font-size: 1rem;
+    line-height: 1.65rem;
+  }
+  .chat-markdown > * + * { margin-top: 1.25rem; }
+  .chat-markdown p,
+  .chat-markdown ul { margin: 0; }
+  .chat-markdown ul {
+    color: hsl(var(--tw-foreground) / 0.82);
+    list-style: disc;
+    padding-left: 1.75rem;
+  }
+  .chat-markdown p + ul { margin-top: 1.5rem; }
+  .chat-markdown ul + p { margin-top: 2rem; }
+  .chat-markdown .rich-table + p { margin-top: 2.25rem; }
+  .chat-markdown li {
+    line-height: 1.65rem;
+    padding-left: 0.375rem;
+  }
+  .chat-markdown li + li { margin-top: 0.75rem; }
+  .chat-markdown li::marker {
+    color: hsl(var(--tw-muted-foreground));
+  }
+  .chat-markdown strong {
+    color: hsl(var(--tw-foreground));
+    font-weight: 500;
+  }
+  .chat-markdown h3,
+  .chat-markdown h4,
+  .chat-markdown h5 {
+    margin: 1.5rem 0 0.5rem;
+    color: hsl(var(--tw-foreground));
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  .chat-markdown h3 { font-size: 1.125rem; }
+  .chat-markdown h4,
+  .chat-markdown h5 { font-size: 1rem; }
+  .chat-markdown code {
+    border-color: hsl(var(--tw-border));
+    background: hsl(var(--tw-secondary));
+    color: hsl(var(--tw-foreground));
+    border-radius: 0.5rem;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+  .chat-markdown .rich-table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid hsl(var(--tw-border));
+    background: hsl(var(--tw-background));
+  }
+  .chat-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1rem;
+    line-height: 1.55rem;
+  }
+  .chat-markdown th,
+  .chat-markdown td {
+    border: 1px solid hsl(var(--tw-border));
+    padding: 0.875rem 1rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .chat-markdown th {
+    background: hsl(var(--tw-tertiary));
+    color: hsl(var(--tw-muted-foreground));
+    font-size: 0.875rem;
+    font-weight: 500;
   }
 
   /* TextShimmer: a static muted base with a moving foreground stripe. When the

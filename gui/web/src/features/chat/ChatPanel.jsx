@@ -4,6 +4,10 @@ import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import { AssistantMessage, CustomMessage, UserMessage } from "../../components/chat/thread-message.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { StatusDot } from "../../components/ui/status-dot.jsx";
+import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
+import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
+import { cn } from "../../lib/utils.js";
 import { textContent } from "../../rendering/text.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
@@ -18,9 +22,11 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
   const [localDraft, setLocalDraft] = useState("");
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
+  const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
   const liveEntries = useMemo(() => eventsToLiveEntries(liveEvents), [liveEvents]);
   const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
   const groupedEntries = useMemo(() => groupToolRuns(visibleEntries), [visibleEntries]);
+  const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
   const drawer = useToolDrawer();
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
@@ -48,11 +54,12 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
-        ) : visibleEntries.length === 0 ? (
+        ) : visibleEntries.length === 0 && !activity ? (
           <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} />
         ) : (
-          <div className="mx-auto flex max-w-[760px] flex-col gap-6">
+          <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
             {groupedEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
+            {activity ? <AgentActivity activity={activity} /> : null}
           </div>
         )}
       </div>
@@ -70,6 +77,31 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
         setToast={setToast}
       />
     </section>
+  );
+}
+
+function AgentActivity({ activity }) {
+  const hasThinking = Boolean(activity.thinkingText);
+
+  return (
+    <div className="max-w-[760px]">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <StatusDot status={activity.status} />
+        <TextShimmer active={activity.status === "pending"}>{hasThinking ? "Analyzing" : "Working"}</TextShimmer>
+      </div>
+      {hasThinking ? (
+        <div className="border-l border-dashed border-border pl-4 text-sm leading-relaxed text-muted-foreground">
+          <div
+            className={cn(
+              "whitespace-pre-wrap",
+              activity.status === "pending" && "max-h-32 overflow-hidden",
+            )}
+          >
+            {compactThinkingText(activity.thinkingText)}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -126,6 +158,29 @@ function isBackgroundToolEntry(message) {
   if (message?.role === "toolResult") return message.details?.source === "background";
   if (message?.role !== "assistant") return false;
   return Boolean(message.content?.some?.((part) => part.type === "toolCall" && String(part.id || "").startsWith("background-")));
+}
+
+function buildAgentActivity(liveState, runState) {
+  const isActive = runState === "connecting" || runState === "streaming";
+  if (!isActive) return null;
+
+  const runs = [...liveState.runs.values()];
+  const activeRun = runs.find((run) => run.status === "running") || runs.at(-1);
+  const thinking = activeRun ? liveState.thinking.get(activeRun.id) : undefined;
+  const activeTool = [...liveState.tools.values()].some((tool) => tool.status === "running");
+  const assistantText = liveState.messages.some((message) => message.role === "assistant" && message.text.trim());
+
+  if (!thinking?.text && (activeTool || assistantText)) return null;
+  return {
+    status: thinking?.status === "completed" ? "completed" : "pending",
+    thinkingText: thinking?.text || "",
+  };
+}
+
+function compactThinkingText(text) {
+  const normalized = String(text || "").trim().replace(/\n{3,}/g, "\n\n");
+  if (normalized.length <= 700) return normalized;
+  return `${normalized.slice(0, 700).trimEnd()}...`;
 }
 
 function compactDuplicateUserMessages(entries) {

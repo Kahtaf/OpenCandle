@@ -32,6 +32,20 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
       next.session = { ...next.session, id: event.sessionId };
       break;
 
+    case "thinking.delta": {
+      const thinking = ensureThinking(next, event.runId);
+      thinking.status = "streaming";
+      thinking.text += event.text;
+      break;
+    }
+
+    case "thinking.completed": {
+      const thinking = ensureThinking(next, event.runId);
+      thinking.status = "completed";
+      if (event.text !== undefined) thinking.text = event.text;
+      break;
+    }
+
     case "message.created":
       ensureMessage(next, event.messageId, event.role);
       break;
@@ -150,9 +164,18 @@ function cloneState(state: ChatRenderState): ChatRenderState {
       chunks: [...tool.chunks],
     }])),
     runs: new Map([...state.runs].map(([id, run]) => [id, { ...run }])),
+    thinking: new Map([...state.thinking].map(([id, thinking]) => [id, { ...thinking }])),
     session: state.session ? { ...state.session } : undefined,
     gaps: [...state.gaps],
   };
+}
+
+function ensureThinking(state: ChatRenderState, runId: string) {
+  const existing = state.thinking.get(runId);
+  if (existing) return existing;
+  const thinking = { runId, status: "streaming" as const, text: "" };
+  state.thinking.set(runId, thinking);
+  return thinking;
 }
 
 function contentText(content: MessageContent[]): string {

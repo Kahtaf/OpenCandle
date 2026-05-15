@@ -57,9 +57,25 @@ export async function createOpenCandleSession(
     noTools: "builtin",
   });
 
+  await applySavedDefaultModel(result);
+
   if (options.bindExtensions !== false) {
     await result.session.bindExtensions({});
   }
 
   return result;
+}
+
+async function applySavedDefaultModel(result: CreateAgentSessionResult): Promise<void> {
+  const provider = result.session.settingsManager.getDefaultProvider();
+  const modelId = result.session.settingsManager.getDefaultModel();
+  if (!provider || !modelId) return;
+
+  const savedDefault = result.session.modelRegistry.find(provider, modelId);
+  if (!savedDefault || !result.session.modelRegistry.hasConfiguredAuth(savedDefault)) return;
+
+  const current = result.session.model;
+  if (current?.provider === savedDefault.provider && current.id === savedDefault.id) return;
+
+  await result.session.setModel(savedDefault);
 }

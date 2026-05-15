@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ChevronLeft, ExternalLink, KeyRound, Play, Search, Sparkles, Wrench, X } from "lucide-react";
+import { ArrowRight, ChevronLeft, ExternalLink, Eye, EyeOff, KeyRound, Play, Search, Sparkles, Wrench, X } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { Button } from "../../components/ui/button.jsx";
@@ -458,11 +458,17 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
 }
 
 function ProviderBuilder({ provider, send, setToast }) {
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(provider.apiKey || "");
+  const [showApiKey, setShowApiKey] = useState(false);
   const status = providerStatus(provider);
   const envBlocked = status === "env";
   const trimmed = apiKey.trim();
   const canSave = !envBlocked && trimmed.length > 0;
+
+  useEffect(() => {
+    setApiKey(provider.apiKey || "");
+    setShowApiKey(false);
+  }, [provider.id, provider.apiKey]);
 
   const save = () => {
     if (envBlocked) { setToast?.(`${provider.displayName} is set via ${provider.envVar}. Unset it to override here.`); return; }
@@ -502,19 +508,35 @@ function ProviderBuilder({ provider, send, setToast }) {
         </ul>
       </div>
 
-      <label className="grid gap-2">
-        <span className="text-xs font-medium text-foreground">API key</span>
-        <Input
-          type="password"
-          value={envBlocked ? "" : apiKey}
-          onChange={(event) => setApiKey(event.target.value)}
-          placeholder={envBlocked ? `Set via ${provider.envVar}` : `Paste your ${provider.displayName} key`}
-          disabled={envBlocked}
-          autoCapitalize="none"
-          autoComplete="off"
-          spellCheck={false}
-          onKeyDown={(event) => { if (event.key === "Enter" && canSave) { event.preventDefault(); save(); } }}
-        />
+      <div className="grid gap-2">
+        <label htmlFor={`provider-api-key-${provider.id}`} className="text-xs font-medium text-foreground">API key</label>
+        <div className="relative">
+          <Input
+            id={`provider-api-key-${provider.id}`}
+            type={showApiKey ? "text" : "password"}
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            placeholder={`Paste your ${provider.displayName} key`}
+            disabled={envBlocked}
+            className="pr-10 font-mono"
+            autoCapitalize="none"
+            autoComplete="off"
+            spellCheck={false}
+            onKeyDown={(event) => { if (event.key === "Enter" && canSave) { event.preventDefault(); save(); } }}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+            aria-label={showApiKey ? "Hide API key" : "Show API key"}
+            tooltip={showApiKey ? "Hide API key" : "Show API key"}
+            onClick={() => setShowApiKey((showing) => !showing)}
+            disabled={!apiKey}
+          >
+            {showApiKey ? <EyeOff /> : <Eye />}
+          </Button>
+        </div>
         <p className="text-[11px] leading-4 text-muted-foreground">
           {envBlocked
             ? `Currently set via ${provider.envVar}. Unset that variable to manage the key here.`
@@ -522,7 +544,7 @@ function ProviderBuilder({ provider, send, setToast }) {
               ? `Saved to ~/.opencandle/config.json. Paste a new key to replace.`
               : provider.instructionsHint || "Saved to ~/.opencandle/config.json."}
         </p>
-      </label>
+      </div>
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
         {provider.signupUrl ? (

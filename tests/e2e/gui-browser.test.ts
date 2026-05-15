@@ -142,6 +142,86 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
+  it("prefills provider config keys masked and can reveal them", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      catalog: {
+        tools: [],
+        workflows: [],
+        providers: [{
+          id: "fred",
+          displayName: "FRED",
+          source: "file",
+          status: "Configured",
+          apiKey: "fred-file-key",
+          envVar: "FRED_API_KEY",
+          unlocks: ["interest rates"],
+          fallbackDescription: null,
+          signupUrl: "https://fredaccount.stlouisfed.org/apikeys",
+          instructionsHint: "Free, about 30 seconds",
+        }],
+      },
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await mocked.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
+    await mocked.getByRole("button", { name: /Providers/ }).click();
+    await mocked.getByRole("button", { name: /FRED/ }).click();
+
+    const input = mocked.getByRole("textbox", { name: "API key" });
+    await expect(input.inputValue()).resolves.toBe("fred-file-key");
+    await expect(input.getAttribute("type")).resolves.toBe("password");
+
+    await mocked.getByRole("button", { name: "Show API key" }).click();
+    await expect(input.getAttribute("type")).resolves.toBe("text");
+    await mocked.getByRole("button", { name: "Hide API key" }).click();
+    await expect(input.getAttribute("type")).resolves.toBe("password");
+    await mocked.close();
+  });
+
+  it("opens session context menu and sends rename/delete actions", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      sessions: [{
+        id: "session-1",
+        path: "/tmp/opencandle-session-1.jsonl",
+        name: "DRAM options",
+        firstMessage: "DRAM options",
+        modified: new Date().toISOString(),
+      }],
+    });
+    await mocked.addInitScript(() => {
+      window.confirm = () => true;
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const row = mocked.getByRole("button", { name: "DRAM options", exact: true });
+    await row.hover();
+    await mocked.getByRole("button", { name: "Session options for DRAM options" }).click();
+    await mocked.getByRole("menuitem", { name: "Rename" }).click();
+    await mocked.getByRole("textbox", { name: "Rename session" }).fill("DRAM LEAPS");
+    await mocked.keyboard.press("Enter");
+    await expectVisible(mocked.getByRole("button", { name: "DRAM LEAPS", exact: true }));
+
+    const renamedRow = mocked.getByRole("button", { name: "DRAM LEAPS", exact: true });
+    await renamedRow.hover();
+    await mocked.getByRole("button", { name: "Session options for DRAM LEAPS" }).click();
+    await mocked.getByRole("menuitem", { name: "Delete chat" }).click();
+    await renamedRow.waitFor({ state: "detached" });
+
+    const messages = await mocked.evaluate(() => window.__wsMessages);
+    expect(messages).toContainEqual({
+      type: "session.rename",
+      path: "/tmp/opencandle-session-1.jsonl",
+      name: "DRAM LEAPS",
+    });
+    expect(messages).toContainEqual({
+      type: "session.delete",
+      path: "/tmp/opencandle-session-1.jsonl",
+    });
+    await mocked.close();
+  });
+
   it("streams assistant text incrementally and keeps specialized tool cards", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
@@ -154,11 +234,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
           async start(controller) {
             const send = (payload) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
             send({ type: "run.started", runId: "mock-run", sessionId: "mock-session", seq: 1 });
-            send({ type: "message.created", messageId: "assistant-live", role: "assistant", seq: 2 });
-            send({ type: "message.delta", messageId: "assistant-live", text: "First chunk", seq: 3 });
+            send({ type: "thinking.delta", runId: "mock-run", text: "Checking option expirations", seq: 2 });
+            send({ type: "message.created", messageId: "assistant-live", role: "assistant", seq: 3 });
+            send({ type: "message.delta", messageId: "assistant-live", text: "First chunk", seq: 4 });
             await new Promise((resolve) => { releaseRemainder = resolve; });
-            send({ type: "message.delta", messageId: "assistant-live", text: " second chunk", seq: 4 });
-            send({ type: "tool.started", toolCallId: "call-1", messageId: "assistant-live", name: "get_stock_quote", input: { symbol: "NVDA" }, seq: 5 });
+            send({ type: "thinking.completed", runId: "mock-run", text: "Checking option expirations", seq: 5 });
+            send({ type: "message.delta", messageId: "assistant-live", text: " second chunk", seq: 6 });
+            await new Promise((resolve) => setTimeout(resolve, 25));
+            send({ type: "tool.started", toolCallId: "call-1", messageId: "assistant-live", name: "get_stock_quote", input: { symbol: "NVDA" }, seq: 7 });
             send({
               type: "tool.completed",
               toolCallId: "call-1",
@@ -167,10 +250,10 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
                 details: { symbol: "NVDA", price: 185.25, changePercent: 1.2, volume: 123456 },
                 isError: false,
               },
-              seq: 6,
+              seq: 8,
             });
-            send({ type: "message.completed", messageId: "assistant-live", content: [{ type: "text", text: "First chunk second chunk" }, { type: "tool", toolCallId: "call-1" }], seq: 7 });
-            send({ type: "run.completed", runId: "mock-run", seq: 8 });
+            send({ type: "message.completed", messageId: "assistant-live", content: [{ type: "text", text: "First chunk second chunk" }, { type: "tool", toolCallId: "call-1" }], seq: 9 });
+            send({ type: "run.completed", runId: "mock-run", seq: 10 });
             controller.close();
           },
         });
@@ -186,12 +269,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Send" }).click();
 
     await expectVisible(mocked.getByText("First chunk"));
+    await expectVisible(mocked.getByText("Analyzing"));
+    await expectVisible(mocked.getByText("Checking option expirations"));
     await expect(mocked.getByText("second chunk").count()).resolves.toBe(0);
 
     await mocked.evaluate(() => window.__releaseSseRemainder?.());
     await expectVisible(mocked.getByText("second chunk"));
-    await expectVisible(mocked.getByText("Stock Quote").first());
-    await expectVisible(mocked.getByText("NVDA").first());
+    await expectVisible(mocked.getByText("Market lookup").first());
+    await expectVisible(mocked.getByText("1 of 1 step").first());
     await mocked.close();
   }, 30_000);
 });
@@ -226,9 +311,11 @@ async function installMockSocket(page: Page, overrides: Record<string, unknown> 
       onmessage = null;
       onclose = null;
       onerror = null;
+      sessions = [];
 
       constructor() {
         super();
+        this.sessions = [...(mockOverrides.sessions ?? [])];
         queueMicrotask(() => {
           this.onopen?.(new Event("open"));
           this.emit({
@@ -245,11 +332,25 @@ async function installMockSocket(page: Page, overrides: Record<string, unknown> 
             entries: mockOverrides.entries ?? [],
             events: [],
           });
-          this.emit({ type: "sessions", sessions: mockOverrides.sessions ?? [] });
+          this.emit({ type: "sessions", sessions: this.sessions });
         });
       }
 
-      send() {}
+      send(message) {
+        window.__wsMessages = window.__wsMessages || [];
+        const parsed = JSON.parse(message);
+        window.__wsMessages.push(parsed);
+        if (parsed.type === "session.rename") {
+          this.sessions = this.sessions.map((session) => (
+            session.path === parsed.path ? { ...session, name: parsed.name } : session
+          ));
+          this.emit({ type: "sessions", sessions: this.sessions });
+        }
+        if (parsed.type === "session.delete") {
+          this.sessions = this.sessions.filter((session) => session.path !== parsed.path);
+          this.emit({ type: "sessions", sessions: this.sessions });
+        }
+      }
 
       close() {
         this.readyState = MockWebSocket.CLOSED;

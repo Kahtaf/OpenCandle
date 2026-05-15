@@ -103,12 +103,25 @@ export function AppShell() {
     });
   }, [gui, navigate]);
 
+  const renameSession = useCallback((session, name) => {
+    gui.send("session.rename", { path: session.path, name });
+  }, [gui]);
+
+  const deleteSession = useCallback((session) => {
+    gui.send("session.delete", { path: session.path });
+    if (session.id === gui.currentSessionId) {
+      void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
+    }
+  }, [gui, navigate]);
+
   const sidebarProps = {
     sessions: gui.sessions,
     currentSessionId: gui.currentSessionId,
     collapsed: sidebarCollapsed,
     onCollapse: () => setSidebarCollapsed(true),
     onOpenSession: openSession,
+    onRenameSession: renameSession,
+    onDeleteSession: deleteSession,
     onNewSession: newSession,
   };
 

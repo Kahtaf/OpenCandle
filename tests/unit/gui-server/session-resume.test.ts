@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
+import { continueOpenCandleSession } from "../../../src/pi/session-storage.js";
 
 describe("GUI and TUI session resume", () => {
   it("lists TUI-created sessions and replays them as GUI chat events", async () => {
@@ -64,6 +65,32 @@ describe("GUI and TUI session resume", () => {
       expect(tui.getSessionId()).toBe(gui.getSessionId());
       expect(tui.getSessionFile()).toBe(sessionPath);
       expect(tui.getEntries().some((entry) => entry.type === "message")).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("stores TUI sessions under the project cwd that the GUI lists", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-gui-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-gui-sessions-"));
+    try {
+      const tui = continueOpenCandleSession(cwd, sessionDir);
+      tui.appendMessage({ role: "user", content: "TUI DRAM prompt" });
+      tui.appendMessage({
+        role: "assistant",
+        content: [{ type: "text", text: "TUI DRAM response" }],
+        api: "openai-responses",
+        provider: "test",
+        model: "test",
+        usage: emptyUsage(),
+        stopReason: "stop",
+        timestamp: Date.now(),
+      });
+
+      const listed = await SessionManager.list(cwd, sessionDir);
+      expect(listed.map((session) => session.id)).toContain(tui.getSessionId());
+      expect(tui.getCwd()).toBe(cwd);
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });

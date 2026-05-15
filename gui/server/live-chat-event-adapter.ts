@@ -78,6 +78,20 @@ export function createLiveChatEventAdapter(options: LiveChatEventAdapterOptions)
               text: update.delta,
             });
           }
+          if (update.type === "thinking_delta") {
+            emit({
+              type: "thinking.delta",
+              runId: options.runId,
+              text: update.delta,
+            });
+          }
+          if (update.type === "thinking_end") {
+            emit({
+              type: "thinking.completed",
+              runId: options.runId,
+              text: update.content,
+            });
+          }
           return;
         }
 

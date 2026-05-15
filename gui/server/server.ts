@@ -4,6 +4,7 @@ import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession, getOpenCandleToolDefinitions } from "../../src/index.js";
+import { continueOpenCandleSession } from "../../src/pi/session-storage.js";
 import { getAllTools } from "../../src/tools/index.js";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
 import {
@@ -17,6 +18,7 @@ import { projectDashboard } from "./projector.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
 import { invokeToolFromUi } from "./invoke-tool.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
+import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
@@ -28,7 +30,7 @@ const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
-const sessionManager = SessionManager.continueRecent(cwd);
+const sessionManager = continueOpenCandleSession(cwd);
 const sessionDir = sessionManager.getSessionDir();
 const lockResult = await acquireWriterLock(sessionDir, "gui");
 const { session } = await createOpenCandleSession({ cwd, sessionManager });
@@ -56,7 +58,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
     writeJson(res, {
       currentSessionId: sessionManager.getSessionId(),
       role: lockResult.role,
-      sessions: await SessionManager.list(cwd),
+      sessions: await SessionManager.list(cwd, sessionDir),
     });
     return;
   }
@@ -167,6 +169,16 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         broadcastState();
         broadcastSessions();
         break;
+      case "session.rename":
+        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
+        await handleRenameSession(String(data.path ?? ""), String(data.name ?? ""));
+        broadcastState();
+        broadcastSessions();
+        break;
+      case "session.delete":
+        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
+        await handleDeleteSession(client, String(data.path ?? ""));
+        break;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -232,10 +244,31 @@ async function handlePrompt(prompt: string): Promise<void> {
 }
 
 async function handleOpenSession(path: string): Promise<void> {
-  const sessions = await SessionManager.list(cwd);
+  const sessions = await SessionManager.list(cwd, sessionDir);
   const match = sessions.find((candidate) => candidate.path === path);
   if (!match) throw new Error("Unknown saved session");
   sessionManager.setSessionFile(match.path);
+}
+
+async function handleRenameSession(path: string, name: string): Promise<void> {
+  const nextName = name.trim();
+  if (!nextName) throw new Error("Session name cannot be empty");
+  if (sessionManager.getSessionFile() === path) {
+    sessionManager.appendSessionInfo(nextName);
+    return;
+  }
+  await renameSessionFile(cwd, sessionDir, path, nextName);
+}
+
+async function handleDeleteSession(client: WsClient, path: string): Promise<void> {
+  const deletingCurrent = sessionManager.getSessionFile() === path;
+  await deleteSessionFile(cwd, sessionDir, path);
+  if (deletingCurrent) {
+    sessionManager.newSession();
+    sendBoot(client);
+    broadcastState();
+  }
+  broadcastSessions();
 }
 
 async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -256,6 +289,7 @@ async function handleSaveModelApiKey(providerId: string, apiKey: string): Promis
   }
 
   await session.setModel(model);
+  await session.settingsManager.flush();
   sessionManager.appendCustomMessageEntry(
     "opencandle-model-setup",
     `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
@@ -311,6 +345,7 @@ async function handleSelectModel(provider: string, modelId: string): Promise<voi
   const model = session.modelRegistry.find(provider, modelId);
   if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
   await session.setModel(model);
+  await session.settingsManager.flush();
 }
 
 async function handleToolInvoke(toolName: string, args: Record<string, unknown>): Promise<void> {
@@ -335,7 +370,7 @@ function sendBoot(client: WsClient): void {
     type: "state.snapshot",
     ...snapshot,
   });
-  void SessionManager.list(cwd).then((sessions) => client.send({ type: "sessions", sessions }));
+  void SessionManager.list(cwd, sessionDir).then((sessions) => client.send({ type: "sessions", sessions }));
 }
 
 function broadcastModelSetup(): void {
@@ -429,7 +464,7 @@ function currentChatEvents(entries = sessionManager.getEntries()): ChatEvent[] {
 }
 
 function broadcastSessions(): void {
-  void SessionManager.list(cwd).then((sessions) => broadcast({ type: "sessions", sessions }));
+  void SessionManager.list(cwd, sessionDir).then((sessions) => broadcast({ type: "sessions", sessions }));
 }
 
 function buildCurrentModelSetupState() {

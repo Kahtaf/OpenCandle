@@ -46,6 +46,8 @@ export interface Usage {
 
 export type ChatEvent =
   | { type: "run.started"; runId: string; sessionId: string; seq: number }
+  | { type: "thinking.delta"; runId: string; text: string; seq: number }
+  | { type: "thinking.completed"; runId: string; text?: string; seq: number }
   | { type: "message.created"; messageId: string; role: ChatRole; seq: number }
   | { type: "message.delta"; messageId: string; text: string; seq: number }
   | { type: "message.completed"; messageId: string; content: MessageContent[]; seq: number }
@@ -76,6 +78,12 @@ export interface RenderToolCall {
   error?: ToolError;
 }
 
+export interface RenderThinking {
+  runId: string;
+  status: "streaming" | "completed";
+  text: string;
+}
+
 export interface ChatRunState {
   id: string;
   sessionId?: string;
@@ -91,6 +99,7 @@ export interface ChatRenderState {
   messageById: Map<string, RenderMessage>;
   tools: Map<string, RenderToolCall>;
   runs: Map<string, ChatRunState>;
+  thinking: Map<string, RenderThinking>;
   session?: { id: string; title?: string; updatedAt?: string };
   gaps: Array<{ expected: number; received: number }>;
 }
@@ -103,6 +112,7 @@ export function createChatRenderState(): ChatRenderState {
     messageById: new Map(),
     tools: new Map(),
     runs: new Map(),
+    thinking: new Map(),
     gaps: [],
   };
 }
