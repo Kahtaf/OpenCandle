@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./infra/node-version.js";
 import { parseArgs } from "node:util";
 import {
   AuthStorage,
@@ -138,10 +139,12 @@ async function main(): Promise<void> {
       });
       const result = await createOpenCandleSession({
         cwd: opts.cwd,
+        agentDir: opts.agentDir,
         settingsManager,
         authStorage,
         modelRegistry,
         sessionManager: opts.sessionManager,
+        bindExtensions: false,
       });
       return {
         ...result,

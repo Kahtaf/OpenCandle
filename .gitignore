@@ -9,4 +9,5 @@ tests/evals/runs/*
 !tests/evals/runs/.gitkeep
 .agents/
 .claude/skills/
+.claude/scheduled_tasks.lock
 skills-lock.json

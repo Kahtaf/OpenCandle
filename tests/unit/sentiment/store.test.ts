@@ -167,8 +167,15 @@ describe("SentimentStore", () => {
 
   describe("prune", () => {
     it("deletes records older than N days, retains newer ones", () => {
-      const old = makeRecord({ fetchedAt: "2026-03-01T12:00:00Z", text: "old record about AAPL" });
-      const recent = makeRecord({ fetchedAt: "2026-04-10T12:00:00Z", text: "recent record about AAPL" });
+      const dayMs = 24 * 60 * 60 * 1000;
+      const old = makeRecord({
+        fetchedAt: new Date(Date.now() - 40 * dayMs).toISOString(),
+        text: "old record about AAPL",
+      });
+      const recent = makeRecord({
+        fetchedAt: new Date(Date.now() - 5 * dayMs).toISOString(),
+        text: "recent record about AAPL",
+      });
       store.insert([old, recent]);
       store.prune(30);
       const results = store.search("AAPL");
