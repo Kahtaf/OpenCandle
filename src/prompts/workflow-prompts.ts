@@ -251,6 +251,11 @@ Response format:
 export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAssetsSlots>): string {
   const symbols = resolution.resolved.symbols;
   const symbolList = symbols.join(", ");
+  const includeSentiment = resolution.resolved.metrics?.includes("sentiment") ?? false;
+  const sentimentStep = includeSentiment
+    ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
+    : "";
+  const sentimentMetric = includeSentiment ? ", sentiment score/summary" : "";
 
   const disclosureBlock = buildDisclosureBlock(
     { symbols: symbolList },
@@ -266,13 +271,13 @@ Steps:
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
 3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [${symbolList}] to check diversification.
+5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}
 
 ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown.
+- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
 - Highlight which asset is stronger on each metric.
 - Provide a summary verdict: which is most attractive and why.
 - Note any caveats (different sectors, market cap disparity, unavailable fundamentals, etc.).`;

@@ -15,6 +15,7 @@ export interface ExtractedEntities {
   riskProfile?: string;
   direction?: "bullish" | "bearish";
   dteHint?: string;
+  compareMetrics?: string[];
 }
 
 export interface ClassificationResult {

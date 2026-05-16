@@ -54,19 +54,41 @@ Claude:
 
 The best near-term improvement is router coverage for competitive financial prompts. This is more valuable than prompt polish because the generic agents' weakness is not wording; it is lack of fresh, domain-specific data. OpenCandle only gets that advantage when the router sends the prompt to a workflow that can call quote, options, SEC, sentiment, backtest, macro, or portfolio tools.
 
+## Loop 1: Sentiment Comparison Evidence
+
+Issue found after the first routing fix: `Compare AAPL and MSFT sentiment` routed to `compare_assets`, but the compare workflow only fetched quote, fundamentals, technicals, risk, and correlation. It did not fetch sentiment data, so OC still did not have concrete evidence generic agents lacked.
+
+Fix:
+- Extract `compareMetrics: ["sentiment"]` from prompts that mention sentiment.
+- Carry that focus into `compare_assets` workflow resolution.
+- Add `get_sentiment_summary` instructions for each compared symbol when the comparison asks for sentiment.
+- Preserve more-specific options and multi-symbol compare routing before the generic sentiment rule.
+
+Focused benchmark prompt: `Compare AAPL and MSFT sentiment`
+
+| Agent | Evidence gathered | Answer quality signal |
+|---|---|---|
+| OpenCandle | Classified as `compare_assets`; called `get_stock_quote`, `compare_companies`, `get_technical_indicators`, `analyze_risk`, `analyze_correlation`, and `get_sentiment_summary` for both symbols. | Produced current prices and aggregate sentiment scores: AAPL `-0.50 (Bearish)`, MSFT `-0.07 (Leaning Bearish)`, with source-availability caveats. |
+| Codex no-tool baseline | No fresh data. | Explicitly said current market/news/social sentiment was unavailable and gave a general non-current view. |
+| Claude no-tool baseline | No fresh data. | Explicitly said no live data and gave an August 2025-stale view. |
+
+Conclusion: for this prompt OC now works better than generic agents in the concrete way that matters for the product: it investigates with fresh tool-backed sentiment evidence while generic agents can only provide stale frameworks.
+
 ## Implemented Fix
 
 - Route bull/bear single-stock prompts to `single_asset_analysis`.
 - Route existing-holdings risk prompts before multi-symbol compare routing.
 - Route backtest, sentiment, and rate-cut prompts to the tool-backed general finance path.
 - Stop extracting `SEC` as a ticker in natural-language filing prompts.
+- Add sentiment-focused compare workflow instructions when a multi-asset comparison asks for sentiment.
 - Pin all 10 competitive prompts in `tests/unit/routing/classify-intent.test.ts`.
 
 ## Validation
 
 - Red test: the new targeted routing cases initially failed for prompts 5, 6, 7, 8, and 10.
 - Green test: `./node_modules/.bin/vitest run tests/unit/routing/classify-intent.test.ts` passes with 54 tests.
-- Full unit suite: `npm test` passes with 120 files and 1257 tests.
+- Full unit suite: `npm test` passes with 120 files and 1259 tests.
 - Build: `npm run build` passes.
 - Runtime smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-runtime-smoke 'Give me the bull and bear case for PLTR, then force yourself to pick a side.'` completed and wrote a trace with `single_asset_analysis` classification plus tool calls.
 - Review smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-review-smoke 'Compare AAPL and MSFT sentiment'` completed and wrote a trace with `compare_assets` classification plus compare workflow tool calls.
+- Loop 1 smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-loop1-smoke 'Compare AAPL and MSFT sentiment'` completed and wrote a trace with `compare_assets`, `compareMetrics: ["sentiment"]`, and two `get_sentiment_summary` calls.

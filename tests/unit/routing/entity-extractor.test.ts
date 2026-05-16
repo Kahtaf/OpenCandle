@@ -159,6 +159,13 @@ describe("extractEntities", () => {
       expect(result.timeHorizon).toBeUndefined();
     });
   });
+
+  describe("compare focus extraction", () => {
+    it("detects sentiment focus", () => {
+      const result = extractEntities("Compare AAPL and MSFT sentiment");
+      expect(result.compareMetrics).toEqual(["sentiment"]);
+    });
+  });
 });
 
 describe("extractBudget (exported for clarification parsing)", () => {

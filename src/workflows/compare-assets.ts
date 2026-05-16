@@ -8,6 +8,9 @@ export function buildCompareAssetsWorkflowDefinition(
   resolution: SlotResolution<CompareAssetsSlots>,
 ): WorkflowDefinition {
   const symbols = resolution.resolved.symbols.join(", ");
+  const evidenceList = resolution.resolved.metrics?.includes("sentiment")
+    ? "price, technical, risk, and sentiment data"
+    : "price, technical, and risk data";
 
   return {
     workflowType: "compare_assets",
@@ -18,7 +21,7 @@ export function buildCompareAssetsWorkflowDefinition(
       }),
       promptStep("compare_and_present", "Present side-by-side comparison", `Now present the side-by-side comparison for ${symbols}:
 - Keep any unavailable fundamentals marked as unavailable instead of retrying the same failed provider calls.
-- Use the price, technical, and risk data you already fetched to finish the comparison even if some fundamentals are missing.
+- Use the ${evidenceList} you already fetched to finish the comparison even if some fundamentals are missing.
 - End with a concise verdict on which asset looks strongest right now and why.`, {
         requiredInputs: ["asset_data"],
         expectedOutputs: ["comparison_summary"],

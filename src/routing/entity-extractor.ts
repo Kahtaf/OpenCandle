@@ -30,6 +30,7 @@ export function extractEntities(input: string): ExtractedEntities {
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
     timeHorizon: extractTimeHorizon(input),
+    compareMetrics: extractCompareMetrics(input),
   };
 }
 
@@ -139,4 +140,11 @@ function extractTimeHorizon(input: string): string | undefined {
   if (/\bshort[\s-]*term\b/.test(lower) || /\bday[\s-]*trad/i.test(lower)) return "short";
   if (/\blong[\s-]*term\b/.test(lower) || /\bbuy[\s-]*and[\s-]*hold\b/.test(lower)) return "long";
   return undefined;
+}
+
+function extractCompareMetrics(input: string): string[] | undefined {
+  const lower = input.toLowerCase();
+  const metrics: string[] = [];
+  if (/\bsentiment\b/.test(lower)) metrics.push("sentiment");
+  return metrics.length > 0 ? metrics : undefined;
 }

@@ -31,4 +31,11 @@ describe("buildCompareAssetsWorkflow", () => {
     expect(workflow.followUps[0]).toContain("unavailable fundamentals");
     expect(workflow.followUps[0]).toContain("price, technical, and risk data");
   });
+
+  it("adds sentiment tool instructions when the comparison asks for sentiment", () => {
+    const workflow = buildCompareAssetsWorkflow(makeResolution({ metrics: ["sentiment"] }));
+    expect(workflow.initialPrompt).toContain("get_sentiment_summary");
+    expect(workflow.initialPrompt).toContain("sentiment");
+    expect(workflow.followUps[0]).toContain("sentiment");
+  });
 });
