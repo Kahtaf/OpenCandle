@@ -39,7 +39,7 @@ Useful environment variables:
 - `OPENCANDLE_COMPETITIVE_PROVIDER`: model provider for prompt generation, generic baseline, and judging. Defaults to a configured provider, preferring Google when available.
 - `OPENCANDLE_COMPETITIVE_MODEL`: model id. Defaults to `gemini-2.5-flash` when using configured Google auth; otherwise uses the first configured model.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `30000` in this loop.
-- `OPENCANDLE_ROUTER_MODE`: choose `rules` or `llm` for the OpenCandle run.
+- `OPENCANDLE_ROUTER_MODE`: defaults to `llm`; set `rules` to compare against legacy keyword routing.
 
 ## Reading Results
 

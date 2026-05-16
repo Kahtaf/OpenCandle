@@ -19,9 +19,9 @@ export interface Config {
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
   /**
-   * Intent-router rollout flag. `"rules"` (default) runs the legacy regex
-   * `classifyIntent` + `extractPreferences` path. `"llm"` runs the LLM router
-   * ahead of prompt assembly. Controlled by `OPENCANDLE_ROUTER_MODE`.
+   * Intent-router mode. `"llm"` (default) runs the LLM router ahead of prompt
+   * assembly. `"rules"` runs the legacy regex `classifyIntent` +
+   * `extractPreferences` path. Controlled by `OPENCANDLE_ROUTER_MODE`.
    */
   routerMode: RouterMode;
   sentiment?: SentimentConfig;
@@ -86,10 +86,10 @@ const SENTIMENT_DEFAULTS: SentimentConfig = {
 
 function resolveRouterMode(): RouterMode {
   const raw = process.env.OPENCANDLE_ROUTER_MODE;
-  if (raw === undefined || raw === "") return "rules";
+  if (raw === undefined || raw === "") return "llm";
   if (raw === "rules" || raw === "llm") return raw;
   throw new Error(
-    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "rules" (default) or "llm".`,
+    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "llm" (default) or "rules".`,
   );
 }
 

@@ -113,4 +113,4 @@ Run `npx tsx tests/harness/manual-run.ts <ipc-dir> "<prompt>"` in background. Po
 - GUI writer/follower: one process holds `writer.lock` per Pi session; followers are read-only and poll/re-render session entries.
 
 ## ENV FLAGS
-- `OPENCANDLE_ROUTER_MODE`: `rules` (default) or `llm`. `llm` uses the LLM router; flip only after deterministic fixtures and opt-in live eval are green.
+- `OPENCANDLE_ROUTER_MODE`: `llm` (default) or `rules`. `rules` uses the legacy keyword router for fallback comparison.
