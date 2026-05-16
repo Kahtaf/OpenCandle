@@ -14,6 +14,7 @@ export function useGuiConnection() {
   const [sessions, setSessions] = useState([]);
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
+  const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
   const [modelSetup, setModelSetup] = useState({ requirement: "unknown", providers: [], availableModels: [] });
@@ -32,6 +33,7 @@ export function useGuiConnection() {
         if (message.type === "boot") {
           setRole(message.role);
           setCurrentSessionId(message.sessionId);
+          setAskUserPrompts(message.askUserPrompts || []);
           startTransition(() => {
             setCatalog(message.catalog);
             setModelSetup(message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
@@ -49,6 +51,8 @@ export function useGuiConnection() {
             setDashboard(message.state || EMPTY_DASHBOARD);
             setEvents(message.events || []);
           });
+        } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
+          setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
         } else if (message.type === "error") {
           setToast(message.message);
         }
@@ -82,11 +86,19 @@ export function useGuiConnection() {
     sessions,
     entries,
     events,
+    askUserPrompts,
     dashboard,
     currentSessionId,
     modelSetup,
     toast,
     setToast,
     send,
-  }), [role, catalog, sessions, entries, events, dashboard, currentSessionId, modelSetup, toast, send]);
+  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, toast, send]);
+}
+
+function upsertPrompt(current, prompt) {
+  if (!prompt?.id) return current;
+  const next = current.filter((item) => item.id !== prompt.id);
+  next.push(prompt);
+  return next;
 }

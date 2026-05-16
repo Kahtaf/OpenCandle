@@ -12,7 +12,6 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
-import { continueOpenCandleSession } from "../../src/pi/session-storage.js";
 import { getAllTools } from "../../src/tools/index.js";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
 import {
@@ -31,6 +30,8 @@ import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./write
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import { BackgroundQuoteRefreshes } from "./background-quotes.js";
+import { createAskUserBridge } from "./ask-user-bridge.js";
+import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 
 const cwd = process.cwd();
@@ -43,10 +44,11 @@ const agentDir = getAgentDir();
 const authStorage = AuthStorage.create();
 const modelRegistry = ModelRegistry.create(authStorage);
 const settingsManager = SettingsManager.create(cwd, agentDir);
-const initialSessionManager = continueOpenCandleSession(cwd);
+const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const lockResult = await acquireWriterLock(sessionDir, "gui");
+const askUserBridge = createAskUserBridge({ broadcast });
 const runtime = await createAgentSessionRuntime(
   async (opts) => {
     const services = await createAgentSessionServices({
@@ -63,6 +65,7 @@ const runtime = await createAgentSessionRuntime(
       modelRegistry,
       settingsManager,
       sessionManager: opts.sessionManager,
+      askUserHandler: askUserBridge.ask,
     });
     return { ...result, services, diagnostics: services.diagnostics };
   },
@@ -169,6 +172,12 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
       case "chat.prompt":
         await handlePrompt(String(data.prompt ?? ""));
         break;
+      case "ask_user.answer":
+        await handleAskUserAnswer(String(data.id ?? ""), data.answer);
+        break;
+      case "ask_user.cancel":
+        await handleAskUserCancel(String(data.id ?? ""));
+        break;
       case "tool.invoke":
         await handleToolInvoke(String(data.toolName ?? ""), asRecord(data.args));
         break;
@@ -254,6 +263,18 @@ async function handlePrompt(prompt: string): Promise<void> {
 
   await session.prompt(prompt);
   broadcastState();
+}
+
+async function handleAskUserAnswer(id: string, value: unknown): Promise<void> {
+  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
+  const answer = String(value ?? "").trim();
+  if (!answer) throw new Error("Answer cannot be empty");
+  if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
+}
+
+async function handleAskUserCancel(id: string): Promise<void> {
+  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
+  if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
 }
 
 async function handleNewSession(): Promise<void> {
@@ -384,6 +405,7 @@ function sendBoot(client: WsClient): void {
     sessionId: sessionManager.getSessionId(),
     catalog: buildCatalog(),
     modelSetup: buildCurrentModelSetupState(),
+    askUserPrompts: askUserBridge.getPrompts(),
   });
   client.send({
     type: "state.snapshot",
