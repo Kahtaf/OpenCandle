@@ -184,6 +184,12 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("options_screener");
       expect(result.entities.symbols).toEqual(["SPY"]);
     });
+
+    it("keeps option prompts on options_screener when sentiment is mentioned", () => {
+      const result = classifyIntent("Find TSLA options sentiment");
+      expect(result.workflow).toBe("options_screener");
+      expect(result.entities.symbols).toEqual(["TSLA"]);
+    });
   });
 
   describe("compare_assets", () => {
@@ -202,6 +208,12 @@ describe("classifyIntent", () => {
 
     it("matches 'AAPL vs MSFT'", () => {
       const result = classifyIntent("AAPL vs MSFT");
+      expect(result.workflow).toBe("compare_assets");
+      expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
+    });
+
+    it("keeps multi-symbol sentiment comparisons on compare_assets", () => {
+      const result = classifyIntent("Compare AAPL and MSFT sentiment");
       expect(result.workflow).toBe("compare_assets");
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
     });

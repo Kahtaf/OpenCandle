@@ -65,7 +65,8 @@ The best near-term improvement is router coverage for competitive financial prom
 ## Validation
 
 - Red test: the new targeted routing cases initially failed for prompts 5, 6, 7, 8, and 10.
-- Green test: `./node_modules/.bin/vitest run tests/unit/routing/classify-intent.test.ts` passes with 52 tests.
-- Full unit suite: `npm test` passes with 120 files and 1255 tests.
+- Green test: `./node_modules/.bin/vitest run tests/unit/routing/classify-intent.test.ts` passes with 54 tests.
+- Full unit suite: `npm test` passes with 120 files and 1257 tests.
 - Build: `npm run build` passes.
 - Runtime smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-runtime-smoke 'Give me the bull and bear case for PLTR, then force yourself to pick a side.'` completed and wrote a trace with `single_asset_analysis` classification plus tool calls.
+- Review smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-review-smoke 'Compare AAPL and MSFT sentiment'` completed and wrote a trace with `compare_assets` classification plus compare workflow tool calls.

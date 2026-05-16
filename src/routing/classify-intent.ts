@@ -74,8 +74,22 @@ const RULES: Rule[] = [
   {
     workflow: "general_finance_qa",
     confidence: 0.9,
-    test: (input) => {
+    test: (input, entities) => {
       const lower = input.toLowerCase();
+      const hasOptionKeywords =
+        /\bcalls?\b/.test(lower) ||
+        /\bputs?\b/.test(lower) ||
+        /\boption(?:s)?\s*chain\b/.test(lower) ||
+        /\boptions?\b/.test(lower);
+      const hasCompareKeywords =
+        /\bcompare\b/.test(lower) ||
+        /\bvs\.?\b/.test(lower) ||
+        /\bversus\b/.test(lower) ||
+        /\bwhich\s+is\s+better\b/.test(lower);
+
+      if (hasOptionKeywords && entities.symbols.length >= 1) return false;
+      if (hasCompareKeywords && entities.symbols.length >= 2) return false;
+
       return (
         /\bbacktest\b/.test(lower) ||
         /\bsentiment\b/.test(lower) ||
