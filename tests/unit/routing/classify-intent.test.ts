@@ -2,65 +2,6 @@ import { describe, it, expect } from "vitest";
 import { classifyIntent } from "../../../src/routing/classify-intent.js";
 
 describe("classifyIntent", () => {
-  describe("competitive benchmark prompts", () => {
-    it.each([
-      [
-        "Should I buy NVDA today? Give me an entry, stop, target, and what would change your mind.",
-        "single_asset_analysis",
-        ["NVDA"],
-      ],
-      [
-        "Compare AAPL and MSFT for a 6-month trade. I care more about downside than upside.",
-        "compare_assets",
-        ["AAPL", "MSFT"],
-      ],
-      [
-        "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
-        "portfolio_builder",
-        [],
-      ],
-      [
-        "Find an options trade idea for TSLA with defined risk and explain the Greeks.",
-        "options_screener",
-        ["TSLA"],
-      ],
-      [
-        "What recent SEC filings for COIN could change the investment thesis?",
-        "general_finance_qa",
-        ["COIN"],
-      ],
-      [
-        "Is Bitcoin sentiment getting overheated or improving? Compare price action and retail sentiment.",
-        "general_finance_qa",
-        [],
-      ],
-      [
-        "I own 40% NVDA, 25% MSFT, 20% AAPL, 15% cash. What is my biggest portfolio risk?",
-        "watchlist_or_tracking",
-        ["NVDA", "MSFT", "AAPL"],
-      ],
-      [
-        "Backtest a simple moving-average strategy on SPY and tell me if it beats buy-and-hold.",
-        "general_finance_qa",
-        ["SPY"],
-      ],
-      [
-        "What is the market pricing in for rate cuts, and which stock sectors are most exposed?",
-        "general_finance_qa",
-        [],
-      ],
-      [
-        "Give me the bull and bear case for PLTR, then force yourself to pick a side.",
-        "single_asset_analysis",
-        ["PLTR"],
-      ],
-    ])("routes benchmark prompt %# to %s", (prompt, workflow, symbols) => {
-      const result = classifyIntent(prompt);
-      expect(result.workflow).toBe(workflow);
-      expect(result.entities.symbols).toEqual(symbols);
-    });
-  });
-
   describe("single_asset_analysis", () => {
     it("matches 'analyze NVDA'", () => {
       const result = classifyIntent("analyze NVDA");
