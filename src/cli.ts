@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import "./infra/node-version.js";
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
   DefaultPackageManager,
@@ -15,6 +19,9 @@ import {
 import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
 import { loadEnv } from "./config.js";
+
+const require = createRequire(import.meta.url);
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 async function handlePackageCommand(
   args: string[],
@@ -108,10 +115,38 @@ async function handlePackageCommand(
   return false;
 }
 
+async function handleGuiCommand(args: string[], cwd: string): Promise<boolean> {
+  if (args[0] !== "gui") return false;
+
+  const tsxCli = require.resolve("tsx/cli");
+  const serverPath = resolve(packageRoot, "gui/server/server.ts");
+  const child = spawn(process.execPath, [tsxCli, serverPath, ...args.slice(1)], {
+    cwd,
+    env: process.env,
+    stdio: "inherit",
+  });
+
+  const exitCode = await new Promise<number>((resolveExit) => {
+    child.on("close", (code, signal) => {
+      if (signal) {
+        resolveExit(1);
+      } else {
+        resolveExit(code ?? 0);
+      }
+    });
+  });
+  process.exitCode = exitCode;
+  return true;
+}
+
 async function main(): Promise<void> {
   const { positionals } = parseArgs({ allowPositionals: true, strict: false });
   const cwd = process.cwd();
   const agentDir = getAgentDir();
+
+  if (await handleGuiCommand(positionals, cwd)) {
+    return;
+  }
 
   if (await handlePackageCommand(positionals, cwd, agentDir)) {
     return;

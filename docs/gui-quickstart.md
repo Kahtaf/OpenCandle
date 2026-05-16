@@ -1,7 +1,7 @@
 # OpenCandle GUI Quickstart
 
 1. Install dependencies from the repo root with `npm install`.
-2. Start the local GUI with `npm run gui`.
+2. Start the local GUI with `npm run gui` from a checkout, or `opencandle gui` from an installed package.
 3. Open `http://127.0.0.1:14567`.
 4. Start with `/analyze NVDA` or use the empty-state action cards.
 5. Open the catalog with `⌘K` or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
@@ -18,7 +18,7 @@ tailscale serve --bg http://127.0.0.1:14567
 
 Depending on your Tailscale setup, the shared URL is shown by `tailscale serve status`.
 
-If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,"role":"writer"}`.
+If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` or `opencandle gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,"role":"writer"}`.
 
 ## UI Structure
 
