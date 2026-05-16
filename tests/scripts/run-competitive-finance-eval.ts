@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
@@ -42,10 +42,18 @@ interface CompetitorRunner {
   label: string;
   provider: string;
   model: string;
-  run(prompt: string): string;
+  run(prompt: string): CompetitorRunResult;
+}
+
+interface CompetitorRunResult {
+  answer: string;
+  provider: string;
+  model: string;
 }
 
 loadEnv();
+
+const DEFAULT_ACPX_COMMAND = join(process.cwd(), "node_modules", ".bin", "acpx");
 
 const asOfDate = new Date().toISOString().slice(0, 10);
 const promptCount = numberFromEnv("COMPETITIVE_PROMPT_COUNT", 5);
@@ -80,15 +88,15 @@ for (const prompt of prompts.slice(0, promptCount)) {
   const competitorAnswers = [];
   for (const competitor of competitors) {
     console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
-    const answer = competitor.run(
+    const result = competitor.run(
       buildGenericAgentPrompt(prompt.prompt, { agentName: competitor.label, asOfDate }),
     );
     competitorAnswers.push({
       id: competitor.id,
       label: competitor.label,
-      provider: competitor.provider,
-      model: competitor.model,
-      answer,
+      provider: result.provider,
+      model: result.model,
+      answer: result.answer,
     });
   }
   const judgmentText = await completeText(
@@ -188,71 +196,84 @@ function preflightCompetitors(competitors: CompetitorRunner[]): void {
   if (process.env.OPENCANDLE_COMPETITIVE_PREFLIGHT === "0") return;
   for (const competitor of competitors) {
     console.log(`Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
-    const response = competitor.run("Reply exactly: OK");
-    if (!response.trim()) {
+    const result = competitor.run("Reply exactly: OK");
+    if (!result.answer.trim()) {
       throw new Error(`${competitor.label} baseline returned an empty preflight response`);
     }
   }
 }
 
-function runClaudeCli(prompt: string): string {
-  const command = process.env.OPENCANDLE_COMPETITIVE_CLAUDE_COMMAND;
-  if (command) {
-    return runCli(command, ["-p"], { input: prompt, timeout: 900_000 });
+function runClaudeOrGeminiAcp(prompt: string): CompetitorRunResult {
+  try {
+    const answer = runAcpx("claude", prompt);
+    return { answer, provider: "acpx/claude", model: "subscription" };
+  } catch (error) {
+    console.warn(`Claude baseline failed, falling back to Gemini: ${error instanceof Error ? error.message : String(error)}`);
+    const answer = runAcpx("gemini", prompt, {
+      env: { GEMINI_CLI_TRUST_WORKSPACE: "true", TERM: "xterm-256color" },
+    });
+    return { answer, provider: "acpx/gemini", model: "subscription" };
   }
-
-  if (commandExists("claude")) {
-    return runCli("claude", ["-p"], { input: prompt, timeout: 900_000 });
-  }
-
-  const localClaude = join(process.env.HOME ?? "", ".local", "bin", "claude");
-  if (existsSync(localClaude)) {
-    return runCli(localClaude, ["-p"], { input: prompt, timeout: 900_000 });
-  }
-
-  return runCli("npx", ["-y", "@anthropic-ai/claude-code", "-p"], { input: prompt, timeout: 900_000 });
 }
 
-function runCodexCli(prompt: string): string {
-  const cwd = mkdtempSync(join(tmpdir(), "oc-codex-baseline-"));
-  try {
-    return runCli(
-      process.env.OPENCANDLE_COMPETITIVE_CODEX_COMMAND ?? "codex",
-      [
-        "exec",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "read-only",
-        "--ephemeral",
-        "--ignore-rules",
-        "-C",
-        cwd,
-        "-m",
-        process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark",
-        "-c",
-        'model_reasoning_effort="medium"',
-        "-",
-      ],
-      { input: prompt, timeout: 900_000, ignoreStderr: true },
-    );
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
+function runCodexAcp(prompt: string): CompetitorRunResult {
+  const model = process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium";
+  const answer = runAcpx("codex", prompt, { model });
+  return { answer, provider: "acpx/codex", model };
+}
+
+function runAcpx(
+  agent: "claude" | "codex" | "gemini",
+  prompt: string,
+  options: { env?: Record<string, string>; model?: string } = {},
+): string {
+  const command = process.env.OPENCANDLE_COMPETITIVE_ACPX_COMMAND ?? DEFAULT_ACPX_COMMAND;
+  const args = [
+    "--format",
+    "quiet",
+    "--deny-all",
+    "--non-interactive-permissions",
+    "fail",
+    "--allowed-tools",
+    "",
+    "--timeout",
+    String(numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS", 900)),
+  ];
+  if (options.model) args.push("--model", options.model);
+  args.push(agent, "exec");
+  return runCli(command, args, {
+    input: prompt,
+    timeout: numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
+    env: options.env,
+  });
 }
 
 function runCli(
   command: string,
   args: string[],
-  options: { input?: string; timeout: number; ignoreStderr?: boolean },
+  options: {
+    cwd?: string;
+    env?: Record<string, string>;
+    input?: string;
+    timeout: number;
+    ignoreStderr?: boolean;
+  },
 ): string {
   const result = spawnSync(command, args, {
-    cwd: process.cwd(),
+    cwd: options.cwd ?? process.cwd(),
     input: options.input,
     timeout: options.timeout,
     encoding: "utf-8",
     env: {
       ...process.env,
-      PATH: `${join(process.env.HOME ?? "", ".local", "bin")}:${process.env.PATH ?? ""}`,
+      PATH: [
+        join(process.cwd(), "node_modules", ".bin"),
+        join(process.env.HOME ?? "", ".local", "bin"),
+        "/Users/kahtaf/.nvm/versions/node/v22.22.0/bin",
+        "/opt/homebrew/bin",
+        process.env.PATH ?? "",
+      ].join(":"),
+      ...options.env,
     },
     maxBuffer: 20 * 1024 * 1024,
   });
@@ -266,21 +287,6 @@ function runCli(
     throw new Error(`${command} ${args.slice(0, 2).join(" ")} failed: ${message}`);
   }
   return result.stdout.trim();
-}
-
-function commandExists(command: string): boolean {
-  try {
-    execFileSync("which", [command], {
-      stdio: "ignore",
-      env: {
-        ...process.env,
-        PATH: `${join(process.env.HOME ?? "", ".local", "bin")}:${process.env.PATH ?? ""}`,
-      },
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function summarize(results: CompetitiveRunResult[]): {
@@ -321,17 +327,17 @@ function resolveCompetitors(): CompetitorRunner[] {
   return [
     {
       id: "claude",
-      label: "Claude",
-      provider: "claude-cli",
-      model: process.env.OPENCANDLE_COMPETITIVE_CLAUDE_MODEL ?? "subscription",
-      run: runClaudeCli,
+      label: "Claude/Gemini",
+      provider: "acpx/claude|acpx/gemini",
+      model: "subscription",
+      run: runClaudeOrGeminiAcp,
     },
     {
       id: "codex",
       label: "Codex",
-      provider: "codex-cli",
-      model: process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark",
-      run: runCodexCli,
+      provider: "acpx/codex",
+      model: process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium",
+      run: runCodexAcp,
     },
   ];
 }

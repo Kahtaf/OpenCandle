@@ -130,12 +130,15 @@
     "@sinclair/typebox": "*"
   },
   "devDependencies": {
+    "@agentclientprotocol/claude-agent-acp": "^0.31.0",
     "@mariozechner/pi-agent-core": "^0.73.1",
     "@mariozechner/pi-ai": "^0.73.1",
     "@mariozechner/pi-coding-agent": "^0.73.1",
     "@sinclair/typebox": "^0.34.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.19",
+    "@zed-industries/codex-acp": "^0.12.0",
+    "acpx": "^0.8.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.11",
     "vitest": "^4.1.6",

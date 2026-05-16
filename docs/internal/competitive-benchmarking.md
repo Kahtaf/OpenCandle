@@ -38,14 +38,17 @@ Useful environment variables:
 - `COMPETITIVE_PROMPT_SEED`: text seed for varying or reproducing prompt generation.
 - `OPENCANDLE_COMPETITIVE_PROVIDER`: model provider for prompt generation and judging. Defaults to a configured provider, preferring Google when available.
 - `OPENCANDLE_COMPETITIVE_MODEL`: model id for prompt generation and judging. Defaults to `gemini-2.5-flash` when using configured Google auth; otherwise uses the first configured model.
-- Claude baseline runs through `claude -p` using the local Claude subscription. If `claude` is not on PATH, the runner falls back to `npx -y @anthropic-ai/claude-code -p`.
-- `OPENCANDLE_COMPETITIVE_CLAUDE_COMMAND`: optional Claude CLI command override.
-- Codex baseline runs through `codex exec` in an empty read-only temp directory.
-- `OPENCANDLE_COMPETITIVE_CODEX_COMMAND`: optional Codex CLI command override. Defaults to `codex`.
-- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex CLI baseline model. Defaults to `gpt-5.3-codex-spark`.
+- Claude/Gemini baseline runs through `acpx claude exec`; if Claude auth fails, it falls back to `acpx gemini exec`.
+- Codex baseline runs through `acpx codex exec`.
+- `OPENCANDLE_COMPETITIVE_ACPX_COMMAND`: optional acpx command override. Defaults to the repo-local `node_modules/.bin/acpx`.
+- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.3-codex-spark/medium`.
+- `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS`: acpx timeout in seconds for each baseline call. Defaults to `900`.
+- `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout in milliseconds for each baseline call. Defaults to `900000`.
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip the one-time Claude/Codex CLI smoke call before running OpenCandle. Defaults to enabled so auth failures happen early.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `30000` in this loop.
 - `OPENCANDLE_ROUTER_MODE`: defaults to `llm`; set `rules` to compare against legacy keyword routing.
+
+`acpx` requires its ACP adapter binaries to be available on PATH. The repo carries `acpx`, `@zed-industries/codex-acp`, and `@agentclientprotocol/claude-agent-acp` as dev dependencies so `npm run test:evals:competitive` can use the structured ACP path instead of raw CLI/PTTY scraping. Local smoke status: `acpx codex exec` works, `acpx gemini exec` works with `GEMINI_CLI_TRUST_WORKSPACE=true`, and `acpx claude exec` currently reaches Claude but fails on local Claude auth with a 401.
 
 ## Reading Results
 
