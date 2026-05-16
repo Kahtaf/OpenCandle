@@ -11,27 +11,39 @@ export interface GeneratedFinancePrompt {
 export interface PromptGenerationOptions {
   count: number;
   seed?: string;
+  asOfDate: string;
+}
+
+export interface CompetitorAnswer {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
+  answer: string;
 }
 
 export interface ComparisonJudgeInput {
   prompt: GeneratedFinancePrompt;
+  asOfDate: string;
   openCandleTrace: EvalTrace;
-  genericAnswer: string;
+  competitorAnswers: CompetitorAnswer[];
 }
 
 export interface ComparisonJudgment {
-  winner: "opencandle" | "generic" | "tie";
+  winner: string;
   openCandleScore: number;
-  genericScore: number;
+  competitorScores: Record<string, number>;
   reason: string;
   openCandleDidBetter: string[];
-  genericDidBetter: string[];
+  competitorsDidBetter: Record<string, string[]>;
   openCandleImprovementIdeas: string[];
 }
 
 export function buildPromptGenerationPrompt(options: PromptGenerationOptions): string {
   const seedLine = options.seed ? `Use this run seed to vary the prompt set: ${options.seed}` : "Invent a fresh prompt set.";
-  return `Generate ${options.count} realistic finance prompts for comparing OpenCandle against a generic no-tool finance agent.
+  return `Generate ${options.count} realistic finance prompts for comparing OpenCandle against Claude and Codex as generic no-tool finance agents.
+
+Current date for this benchmark run: ${options.asOfDate}
 
 ${seedLine}
 
@@ -39,7 +51,7 @@ The set must cover general finance, investing, portfolio construction, market st
 
 Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
 - OpenCandle may be better because it can gather evidence or run tools.
-- A generic agent may be better because the prompt mainly needs synthesis, explanation, or judgment.
+- Claude or Codex may be better because the prompt mainly needs synthesis, explanation, or judgment.
 - The winner is ambiguous and the comparison should reveal what OpenCandle needs to improve.
 
 Return JSON only:
@@ -56,8 +68,13 @@ Return JSON only:
 }`;
 }
 
-export function buildGenericAgentPrompt(prompt: string): string {
-  return `You are a general finance assistant without live tools, browsing, private data, or market-data APIs.
+export function buildGenericAgentPrompt(
+  prompt: string,
+  options: { agentName: string; asOfDate: string },
+): string {
+  return `You are ${options.agentName}, acting as a general finance assistant without live tools, browsing, private data, or market-data APIs.
+
+Current date: ${options.asOfDate}
 
 Answer the user's prompt as well as you can. Be explicit when current data would be needed and you cannot verify it. Do not pretend to have live prices, filings, options chains, sentiment, or macro probabilities.
 
@@ -70,7 +87,17 @@ export function buildComparisonJudgePrompt(input: ComparisonJudgeInput): string 
     name: call.name,
     args: call.args,
   }));
-  return `Compare OpenCandle against a generic no-tool finance agent for the same user prompt.
+  const competitorAnswers = input.competitorAnswers
+    .map((competitor) => `Agent: ${competitor.label} (${competitor.id}, ${competitor.provider}/${competitor.model})
+Answer:
+${competitor.answer}`)
+    .join("\n\n---\n\n");
+  const winnerOptions = ["opencandle", ...input.competitorAnswers.map((competitor) => competitor.id), "tie"].join("|");
+  const scoreShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, 0]));
+  const didBetterShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, ["..."]]));
+  return `Compare OpenCandle against Claude and Codex as generic no-tool finance agents for the same user prompt.
+
+Current date: ${input.asOfDate}
 
 User prompt:
 ${input.prompt.prompt}
@@ -87,19 +114,19 @@ ${JSON.stringify(toolCalls, null, 2)}
 OpenCandle answer:
 ${input.openCandleTrace.text}
 
-Generic no-tool answer:
-${input.genericAnswer}
+Generic no-tool agent answers:
+${competitorAnswers}
 
-Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for the generic agent to win. When it does, explain why and what OpenCandle should improve.
+Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for Claude or Codex to win. When either does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
 
 Return JSON only:
 {
-  "winner": "opencandle|generic|tie",
+  "winner": "${winnerOptions}",
   "openCandleScore": 0,
-  "genericScore": 0,
+  "competitorScores": ${JSON.stringify(scoreShape)},
   "reason": "short explanation",
   "openCandleDidBetter": ["..."],
-  "genericDidBetter": ["..."],
+  "competitorsDidBetter": ${JSON.stringify(didBetterShape)},
   "openCandleImprovementIdeas": ["..."]
 }`;
 }
@@ -120,17 +147,15 @@ export function parseComparisonJudgment(raw: string): ComparisonJudgment {
   if (!isRecord(value)) throw new Error("Comparison judgment must be a JSON object");
 
   const winner = stringValue(value.winner);
-  if (winner !== "opencandle" && winner !== "generic" && winner !== "tie") {
-    throw new Error(`Invalid comparison winner: ${winner}`);
-  }
+  if (!winner) throw new Error("Comparison judgment winner is required");
 
   return {
     winner,
     openCandleScore: numberValue(value.openCandleScore),
-    genericScore: numberValue(value.genericScore),
+    competitorScores: numberRecord(value.competitorScores),
     reason: stringValue(value.reason),
     openCandleDidBetter: stringArray(value.openCandleDidBetter),
-    genericDidBetter: stringArray(value.genericDidBetter),
+    competitorsDidBetter: stringArrayRecord(value.competitorsDidBetter),
     openCandleImprovementIdeas: stringArray(value.openCandleImprovementIdeas),
   };
 }
@@ -180,4 +205,19 @@ function numberValue(value: unknown): number {
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function numberRecord(value: unknown): Record<string, number> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])),
+  );
+}
+
+function stringArrayRecord(value: unknown): Record<string, string[]> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).map(([key, arrayValue]) => [key, stringArray(arrayValue)]),
+  );
 }
