@@ -196,6 +196,7 @@ describe("opencandle extension", () => {
       symbols: [],
       budget: 10_000,
       riskProfile: "balanced",
+      assetScope: "etf_focused",
     }));
 
     expect(result).toEqual({ action: "handled" });

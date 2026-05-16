@@ -158,6 +158,18 @@ describe("extractEntities", () => {
       const result = extractEntities("analyze NVDA");
       expect(result.timeHorizon).toBeUndefined();
     });
+
+    it("detects explicit multi-year horizon", () => {
+      const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      expect(result.timeHorizon).toBe("3_years");
+    });
+  });
+
+  describe("asset scope extraction", () => {
+    it("detects ETF-only scope", () => {
+      const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      expect(result.assetScope).toBe("etf_focused");
+    });
   });
 
   describe("compare focus extraction", () => {

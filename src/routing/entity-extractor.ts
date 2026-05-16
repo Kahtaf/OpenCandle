@@ -30,6 +30,7 @@ export function extractEntities(input: string): ExtractedEntities {
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
     timeHorizon: extractTimeHorizon(input),
+    assetScope: extractAssetScope(input),
     compareMetrics: extractCompareMetrics(input),
   };
 }
@@ -137,8 +138,16 @@ function extractDteHint(input: string): string | undefined {
 
 function extractTimeHorizon(input: string): string | undefined {
   const lower = input.toLowerCase();
+  const explicitYears = lower.match(/\b(\d+)\s*(?:year|years|yr|yrs)\b/);
+  if (explicitYears) return `${explicitYears[1]}_years`;
   if (/\bshort[\s-]*term\b/.test(lower) || /\bday[\s-]*trad/i.test(lower)) return "short";
   if (/\blong[\s-]*term\b/.test(lower) || /\bbuy[\s-]*and[\s-]*hold\b/.test(lower)) return "long";
+  return undefined;
+}
+
+function extractAssetScope(input: string): string | undefined {
+  const lower = input.toLowerCase();
+  if (/\betfs?\b/.test(lower)) return "etf_focused";
   return undefined;
 }
 

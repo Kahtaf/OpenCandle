@@ -12,6 +12,7 @@ export interface ExtractedEntities {
   budget?: number;
   maxPremium?: number;
   timeHorizon?: string;
+  assetScope?: string;
   riskProfile?: string;
   direction?: "bullish" | "bearish";
   dteHint?: string;

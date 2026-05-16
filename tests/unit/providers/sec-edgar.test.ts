@@ -114,8 +114,8 @@ describe("sec-edgar provider", () => {
     const dupeResponse = {
       hits: {
         hits: [
-          { _id: "a:1", _source: { file_date: "2024-01-01", form: "10-K", adsh: "SAME-ACCESSION", display_names: ["TEST CO"], period_ending: "2024-01-01", ciks: ["123"] } },
-          { _id: "a:2", _source: { file_date: "2024-01-01", form: "10-K", adsh: "SAME-ACCESSION", display_names: ["TEST CO"], period_ending: "2024-01-01", ciks: ["123"] } },
+          { _id: "a:1", _source: { file_date: "2024-01-01", form: "10-K", adsh: "SAME-ACCESSION", display_names: ["TEST CO  (TEST)  (CIK 0000000123)"], period_ending: "2024-01-01", ciks: ["123"] } },
+          { _id: "a:2", _source: { file_date: "2024-01-01", form: "10-K", adsh: "SAME-ACCESSION", display_names: ["TEST CO  (TEST)  (CIK 0000000123)"], period_ending: "2024-01-01", ciks: ["123"] } },
         ],
       },
     };
@@ -126,5 +126,45 @@ describe("sec-edgar provider", () => {
 
     const filings = await searchFilings("TEST", ["10-K"]);
     expect(filings).toHaveLength(1);
+  });
+
+  it("filters text-search decoys to the requested ticker", async () => {
+    const response = {
+      hits: {
+        hits: [
+          {
+            _id: "decoy:1",
+            _source: {
+              file_date: "2026-01-01",
+              form: "8-K",
+              adsh: "0001682149-26-000001",
+              display_names: ["Datavault AI Inc.  (DVLT)  (CIK 0001682149)"],
+              period_ending: "2025-12-31",
+              ciks: ["0001682149"],
+            },
+          },
+          {
+            _id: "coin:1",
+            _source: {
+              file_date: "2026-02-01",
+              form: "10-K",
+              adsh: "0001679788-26-000001",
+              display_names: ["Coinbase Global, Inc.  (COIN)  (CIK 0001679788)"],
+              period_ending: "2025-12-31",
+              ciks: ["0001679788"],
+            },
+          },
+        ],
+      },
+    };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(response),
+    });
+
+    const filings = await searchFilings("COIN", ["10-K", "8-K"]);
+    expect(filings).toHaveLength(1);
+    expect(filings[0].entityName).toBe("Coinbase Global, Inc.");
+    expect(filings[0].url).toContain("0001679788");
   });
 });

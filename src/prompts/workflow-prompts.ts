@@ -243,7 +243,7 @@ ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, IV, OI, bid-ask spread.
+- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread.
 - Explain why the top pick is ranked #1.
 - Include risk caveats (max loss = premium, IV crush risk, time decay).`;
 }
