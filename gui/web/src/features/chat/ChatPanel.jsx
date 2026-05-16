@@ -1,5 +1,6 @@
-import { CandlestickChart, Menu, PanelLeftOpen } from "lucide-react";
+import { Menu, PanelLeftOpen } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import { AssistantMessage, CustomMessage, UserMessage } from "../../components/chat/thread-message.jsx";
@@ -122,7 +123,7 @@ function MobileHeader({ onOpenSidebar }) {
         <Menu />
       </Button>
       <div className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
-        <CandlestickChart className="h-4 w-4 text-foreground" strokeWidth={2.5} aria-hidden="true" />
+        <OpenCandleLogo />
         OpenCandle
       </div>
     </header>

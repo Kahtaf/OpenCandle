@@ -19,6 +19,8 @@ export type AcquireResult =
   | { role: "writer"; lock: WriterLock }
   | { role: "follower"; lock: WriterLock };
 
+const DEFAULT_STALE_GRACE_MS = 15_000;
+
 export async function acquireWriterLock(
   sessionDir: string,
   processKind: ProcessKind,
@@ -26,19 +28,19 @@ export async function acquireWriterLock(
 ): Promise<AcquireResult> {
   mkdirSync(sessionDir, { recursive: true });
   const pid = options.pid ?? process.pid;
-  const staleGraceMs = options.staleGraceMs ?? 2000;
+  const staleGraceMs = options.staleGraceMs ?? DEFAULT_STALE_GRACE_MS;
 
   const created = tryCreate(sessionDir, processKind, pid);
   if (created) return { role: "writer", lock: created };
 
   const existing = readWriterLock(sessionDir);
-  if (existing && isPidAlive(existing.pid)) {
+  if (existing && isLockCurrent(existing, staleGraceMs)) {
     return { role: "follower", lock: existing };
   }
 
   await sleep(staleGraceMs);
   const afterGrace = readWriterLock(sessionDir);
-  if (afterGrace && isPidAlive(afterGrace.pid)) {
+  if (afterGrace && isLockCurrent(afterGrace, staleGraceMs)) {
     return { role: "follower", lock: afterGrace };
   }
 
@@ -100,6 +102,11 @@ function isPidAlive(pid: number): boolean {
   } catch {
     return false;
   }
+}
+
+function isLockCurrent(lock: WriterLock, staleGraceMs: number): boolean {
+  const heartbeat = Date.parse(lock.lastHeartbeat);
+  return isPidAlive(lock.pid) && Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs;
 }
 
 function lockPath(sessionDir: string): string {

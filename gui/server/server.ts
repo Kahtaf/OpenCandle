@@ -2,8 +2,16 @@ import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { createOpenCandleSession, getOpenCandleToolDefinitions } from "../../src/index.js";
+import {
+  AuthStorage,
+  createAgentSessionRuntime,
+  createAgentSessionServices,
+  getAgentDir,
+  ModelRegistry,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { createOpenCandleSession } from "../../src/index.js";
 import { continueOpenCandleSession } from "../../src/pi/session-storage.js";
 import { getAllTools } from "../../src/tools/index.js";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
@@ -22,6 +30,7 @@ import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
+import { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 
 const cwd = process.cwd();
@@ -30,17 +39,48 @@ const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
-const sessionManager = continueOpenCandleSession(cwd);
+const agentDir = getAgentDir();
+const authStorage = AuthStorage.create();
+const modelRegistry = ModelRegistry.create(authStorage);
+const settingsManager = SettingsManager.create(cwd, agentDir);
+const initialSessionManager = continueOpenCandleSession(cwd);
+let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const lockResult = await acquireWriterLock(sessionDir, "gui");
-const { session } = await createOpenCandleSession({ cwd, sessionManager });
+const runtime = await createAgentSessionRuntime(
+  async (opts) => {
+    const services = await createAgentSessionServices({
+      cwd: opts.cwd,
+      agentDir: opts.agentDir,
+      authStorage,
+      settingsManager,
+      modelRegistry,
+    });
+    const result = await createOpenCandleSession({
+      cwd: opts.cwd,
+      agentDir: opts.agentDir,
+      authStorage,
+      modelRegistry,
+      settingsManager,
+      sessionManager: opts.sessionManager,
+    });
+    return { ...result, services, diagnostics: services.diagnostics };
+  },
+  { cwd, agentDir, sessionManager },
+);
+let session = runtime.session;
 const clients = new Set<WsClient>();
 const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
+const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 let poller: NodeJS.Timeout | null = null;
+let quotePollInFlight = false;
 
-session.subscribe((event) => {
-  broadcast({ type: "session.event", event });
-  broadcastState();
+let unsubscribeSession = subscribeToSessionEvents();
+runtime.setRebindSession(async (nextSession) => {
+  unsubscribeSession();
+  session = nextSession;
+  sessionManager = nextSession.sessionManager;
+  unsubscribeSession = subscribeToSessionEvents();
 });
 
 const server = createServer((req, res) => {
@@ -133,6 +173,7 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         await handleToolInvoke(String(data.toolName ?? ""), asRecord(data.args));
         break;
       case "tool.enabled":
+        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
         setToolEnabled(String(data.toolName), Boolean(data.enabled));
         broadcast({ type: "catalog", catalog: buildCatalog(), restartRequired: true });
         break;
@@ -157,7 +198,7 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         break;
       case "session.new":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        sessionManager.newSession();
+        await handleNewSession();
         sendBoot(client);
         broadcastState();
         broadcastSessions();
@@ -182,13 +223,6 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    sessionManager.appendCustomMessageEntry(
-      "opencandle-gui-error",
-      `GUI agent error: ${message}`,
-      true,
-      { source: "gui", message },
-    );
-    broadcastState();
     client.send({
       type: "error",
       message,
@@ -200,7 +234,8 @@ async function handlePrompt(prompt: string): Promise<void> {
   if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
 
   const modelSetup = buildCurrentModelSetupState();
-  if (modelSetup.requirement !== "ready") {
+  const trimmedPrompt = prompt.trim();
+  if (!trimmedPrompt.startsWith("/") && modelSetup.requirement !== "ready") {
     sessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
     broadcastState();
     const message =
@@ -217,37 +252,21 @@ async function handlePrompt(prompt: string): Promise<void> {
     return;
   }
 
-  if (prompt.trim().startsWith("/analyze")) {
-    sessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
-    broadcastState();
-    const symbol = prompt.trim().split(/\s+/)[1]?.toUpperCase() ?? "NVDA";
-    sessionManager.appendCustomEntry("opencandle-workflow", {
-      workflow: "comprehensive_analysis",
-      resolvedSlots: { symbol },
-      analystsTotal: 3,
-    });
-    await sleep(150);
-    sessionManager.appendMessage({
-      role: "assistant",
-      content: [{ type: "text", text: `Started local analysis workflow for ${symbol}.` }],
-      api: "openai-responses",
-      provider: "openai",
-      model: "gui-local",
-      usage: emptyUsage(),
-      stopReason: "stop",
-      timestamp: Date.now(),
-    });
-  } else {
-    await session.sendUserMessage(prompt);
-  }
+  await session.prompt(prompt);
   broadcastState();
+}
+
+async function handleNewSession(): Promise<void> {
+  const result = await runtime.newSession();
+  if (result.cancelled) throw new Error("Session switch cancelled");
 }
 
 async function handleOpenSession(path: string): Promise<void> {
   const sessions = await SessionManager.list(cwd, sessionDir);
   const match = sessions.find((candidate) => candidate.path === path);
   if (!match) throw new Error("Unknown saved session");
-  sessionManager.setSessionFile(match.path);
+  const result = await runtime.switchSession(match.path);
+  if (result.cancelled) throw new Error("Session switch cancelled");
 }
 
 async function handleRenameSession(path: string, name: string): Promise<void> {
@@ -264,7 +283,7 @@ async function handleDeleteSession(client: WsClient, path: string): Promise<void
   const deletingCurrent = sessionManager.getSessionFile() === path;
   await deleteSessionFile(cwd, sessionDir, path);
   if (deletingCurrent) {
-    sessionManager.newSession();
+    await handleNewSession();
     sendBoot(client);
     broadcastState();
   }
@@ -450,7 +469,7 @@ function buildStateSnapshot() {
   const entries = sessionManager.getEntries();
   return {
     sessionId,
-    state: projectDashboard(entries, sessionId),
+    state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
     entries,
     events: currentChatEvents(entries),
   };
@@ -475,6 +494,13 @@ function broadcast(message: unknown): void {
   for (const client of clients) client.send(message);
 }
 
+function subscribeToSessionEvents(): () => void {
+  return session.subscribe((event) => {
+    broadcast({ type: "session.event", event });
+    broadcastState();
+  });
+}
+
 function updatePoller(): void {
   if (clients.size > 0 && !poller) {
     poller = setInterval(() => void pollVisibleQuotes(), 30000);
@@ -486,27 +512,35 @@ function updatePoller(): void {
 }
 
 async function pollVisibleQuotes(): Promise<void> {
-  const state = projectDashboard(sessionManager.getEntries(), sessionManager.getSessionId());
-  const tool = getAllTools().find((candidate) => candidate.name === "get_stock_quote");
-  if (!tool) return;
-  for (const row of state.watchlist.filter((item) => item.pinned || item.quote)) {
-    const result = await invokeToolFromUi(
-      sessionManager,
-      tool,
-      { symbol: row.symbol },
-      "background",
-      { recordTranscript: false },
-    );
-    sessionManager.appendCustomEntry("opencandle-quote-refresh", {
-      symbol: row.symbol,
-      toolName: tool.name,
-      args: { symbol: row.symbol },
-      value: result.result.details,
-      content: result.result.content,
-      isError: result.isError,
-    });
+  if (quotePollInFlight) return;
+  quotePollInFlight = true;
+  try {
+    const state = projectDashboard(sessionManager.getEntries(), sessionManager.getSessionId());
+    const tool = getAllTools().find((candidate) => candidate.name === "get_stock_quote");
+    if (!tool) return;
+    for (const row of state.watchlist.filter((item) => item.pinned || item.quote)) {
+      const result = await invokeToolFromUi(
+        sessionManager,
+        tool,
+        { symbol: row.symbol },
+        "background",
+        { recordTranscript: false },
+      );
+      backgroundQuoteRefreshes.upsert({
+        symbol: row.symbol,
+        toolName: tool.name,
+        args: { symbol: row.symbol },
+        value: result.result.details,
+        content: result.result.content,
+        isError: result.isError,
+      });
+    }
+    broadcastState();
+  } catch (error) {
+    console.warn(`Background quote refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    quotePollInFlight = false;
   }
-  broadcastState();
 }
 
 function writeJson(res: ServerResponse, value: unknown): void {
@@ -535,6 +569,8 @@ function contentType(path: string): string {
       return "text/css; charset=utf-8";
     case ".js":
       return "text/javascript; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
     default:
       return "application/octet-stream";
   }
@@ -546,25 +582,11 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function emptyUsage() {
-  return {
-    input: 0,
-    output: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    totalTokens: 0,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-  };
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function shutdown(): void {
   clearInterval(heartbeat);
   if (poller) clearInterval(poller);
   releaseWriterLock(sessionDir);
-  session.dispose();
-  server.close(() => process.exit(0));
+  void runtime.dispose().finally(() => {
+    server.close(() => process.exit(0));
+  });
 }

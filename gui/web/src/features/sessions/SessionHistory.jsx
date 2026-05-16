@@ -1,9 +1,11 @@
-import { CandlestickChart, PanelLeft, Plus, Search, X } from "lucide-react";
+import { PanelLeft, Plus, Search, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { HistoryItem } from "../../components/chat/history-item.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
-import { Kbd } from "../../components/ui/kbd.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
+import { filterSessions } from "./session-search.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -21,40 +23,48 @@ export function SessionDrawer({ open, onClose, ...rest }) {
     <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <SheetContent width="sm" handleLabel="Sessions" className="bg-secondary p-0">
         <div className="flex h-full min-h-0 flex-col">
-          <SidebarBody {...rest} onClose={onClose} />
+          <SidebarBody {...rest} showHeader={false} />
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSession, onDeleteSession, onNewSession, onClose, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
-  const groups = groupSessions(sessions);
+function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSession, onDeleteSession, onNewSession, onClose, showHeader = true, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
+  const [query, setQuery] = useState("");
+  const filteredSessions = useMemo(() => filterSessions(sessions, query), [sessions, query]);
+  const groups = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
+  const hasQuery = query.trim().length > 0;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-3">
-      <div className="flex items-center gap-2 px-1">
-        <CandlestickChart className="h-4 w-4 shrink-0 text-foreground" strokeWidth={2.5} aria-hidden="true" />
-        <span className="text-sm font-semibold tracking-tight text-foreground">OpenCandle</span>
-        {onClose ? (
-          <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={closeLabel} onClick={onClose}>
-            <CloseIcon />
-          </Button>
-        ) : (
-          <PanelLeft className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        )}
-      </div>
+      {showHeader ? (
+        <div className="flex items-center gap-2 px-1">
+          <OpenCandleLogo />
+          <span className="text-sm font-semibold tracking-tight text-foreground">OpenCandle</span>
+          {onClose ? (
+            <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={closeLabel} onClick={onClose}>
+              <CloseIcon />
+            </Button>
+          ) : (
+            <PanelLeft className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          )}
+        </div>
+      ) : null}
 
       <Button variant="bordered" className="w-full justify-center gap-2" onClick={onNewSession}>
         <Plus /> New chat
       </Button>
 
-      <SearchField />
+      <SearchField value={query} onChange={setQuery} />
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
         <ThreadGroup label="Today" sessions={groups.today} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <ThreadGroup label="Yesterday" sessions={groups.yesterday} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <ThreadGroup label="Earlier" sessions={groups.earlier} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
+        {hasQuery && filteredSessions.length === 0 ? (
+          <p className="px-3 py-2 text-sm text-muted-foreground">No matching chats</p>
+        ) : null}
         {sessions.length === 0 ? (
           <p className="px-3 text-xs text-muted-foreground">Current local session</p>
         ) : null}
@@ -63,13 +73,19 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSessio
   );
 }
 
-function SearchField() {
+function SearchField({ value, onChange }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 transition-colors focus-within:border-foreground/40">
       <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       <label className="sr-only" htmlFor="session-search">Search</label>
-      <Input variant="ghost" id="session-search" placeholder="Search" className="h-9 px-0 text-sm shadow-none" />
-      <Kbd className="hidden sm:inline-flex">⌘K</Kbd>
+      <Input
+        variant="ghost"
+        id="session-search"
+        placeholder="Search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 px-0 text-sm shadow-none"
+      />
     </div>
   );
 }
