@@ -29,7 +29,21 @@ const RULES: Rule[] = [
         entities.symbols.length === 1 &&
         (/\bis\s+\S+\s+(?:attractive|undervalued|overvalued|cheap|expensive)/i.test(lower) ||
           /\bshould\s+i\s+buy\s+\$?[a-z]{1,5}\b/i.test(lower) ||
-          /\bwhat\s+do\s+you\s+think\s+(?:of|about)\s+\$?[a-z]{1,5}\b/i.test(lower))
+          /\bwhat\s+do\s+you\s+think\s+(?:of|about)\s+\$?[a-z]{1,5}\b/i.test(lower) ||
+          /\bbull\s+(?:and|or)\s+bear\s+case\b/i.test(lower))
+      );
+    },
+  },
+  // Portfolio risk for existing holdings must route before multi-symbol compare.
+  {
+    workflow: "watchlist_or_tracking",
+    confidence: 0.9,
+    test: (input, entities) => {
+      const lower = input.toLowerCase();
+      return (
+        entities.symbols.length >= 1 &&
+        (/\bi\s+own\b/.test(lower) || /\bmy\s+holdings\b/.test(lower)) &&
+        (/\bportfolio\s+risk\b/.test(lower) || /\bbiggest\s+risk\b/.test(lower) || /\bconcentration\b/.test(lower))
       );
     },
   },
@@ -54,6 +68,19 @@ const RULES: Rule[] = [
         /\bexport/.test(lower) ||
         /\bupdate\b/.test(lower);
       return hasNewsKeyword;
+    },
+  },
+  // Tool-backed finance tasks that are not a structured multi-step workflow.
+  {
+    workflow: "general_finance_qa",
+    confidence: 0.9,
+    test: (input) => {
+      const lower = input.toLowerCase();
+      return (
+        /\bbacktest\b/.test(lower) ||
+        /\bsentiment\b/.test(lower) ||
+        /\brate\s+cuts?\b/.test(lower)
+      );
     },
   },
   // Options: symbol + option keyword
@@ -90,7 +117,7 @@ const RULES: Rule[] = [
     confidence: 0.85,
     test: (input) => {
       const lower = input.toLowerCase();
-      return /\bcompare\s+[a-z]{1,5}(?:\s*,?\s*(?:and\s+)?[a-z]{1,5})+/.test(lower);
+      return /\bcompare\s+[a-z]{1,5}\b(?:\s*,?\s*(?:and\s+)?[a-z]{1,5}\b)+/.test(lower);
     },
   },
   // Compare: 2+ uppercase symbols without explicit keyword

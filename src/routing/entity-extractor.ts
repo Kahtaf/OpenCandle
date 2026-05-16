@@ -12,6 +12,8 @@ const COMMON_WORDS = new Set([
   "SMA", "EMA", "RSI", "MACD", "OBV", "ATR", "ADX", "VWAP",
   // Fundamental analysis acronyms
   "DCF", "FCF", "ROE", "ROA", "ROI", "EPS", "NAV", "WACC", "EBIT",
+  // Regulatory / source acronyms that are not tickers in natural language
+  "SEC",
   "BEST", "WHAT", "WITH", "THAT", "THIS", "FROM", "HAVE", "BEEN", "SOME",
   "THEM", "THAN", "LIKE", "JUST", "OVER", "ALSO", "BACK", "MUCH", "MOST",
   "ONLY", "VERY", "WHEN", "COME", "MAKE", "FIND", "HERE", "KNOW", "TAKE",
