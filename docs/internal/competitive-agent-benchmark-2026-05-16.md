@@ -181,7 +181,8 @@ Conclusion: OC works better when it preserves the full computed result, not just
 - Red test: the new targeted routing cases initially failed for prompts 5, 6, 7, 8, and 10.
 - Green test: `./node_modules/.bin/vitest run tests/unit/routing/classify-intent.test.ts` passes with 54 tests.
 - Targeted regression set: `./node_modules/.bin/vitest run tests/unit/providers/sec-edgar.test.ts tests/unit/routing/entity-extractor.test.ts tests/unit/routing/slot-resolver.test.ts tests/unit/prompts/context-builder.test.ts tests/unit/prompts/workflow-prompts.test.ts tests/unit/workflows/compare-assets.test.ts tests/unit/routing/classify-intent.test.ts` passes with 7 files and 175 tests.
-- Full unit suite: `npm test` passes with 120 files and 1266 tests.
+- Options GUI follow-up regression: `./node_modules/.bin/vitest run tests/unit/workflows/options-screener.test.ts tests/unit/prompts/workflow-prompts.test.ts tests/unit/pi/opencandle-extension.test.ts` passes with 3 files and 67 tests.
+- Full unit suite: `npm test` passes with 120 files and 1267 tests.
 - Build: `npm run build` passes.
 - Diff hygiene: `git diff --check` passes.
 - Runtime smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-runtime-smoke 'Give me the bull and bear case for PLTR, then force yourself to pick a side.'` completed and wrote a trace with `single_asset_analysis` classification plus tool calls.
@@ -192,3 +193,10 @@ Conclusion: OC works better when it preserves the full computed result, not just
 - Loop 4 smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-loop4-rates 'What is the market pricing in for rate cuts, and which stock sectors are most exposed?'` completed and wrote a trace with `FEDFUNDS` plus CME FedWatch / Federal Funds futures searches.
 - Loop 5 smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-loop5-options 'Find an options trade idea for TSLA with defined risk and explain the Greeks.'` completed and wrote a trace with stock quote, option-chain calls, and full Greeks columns.
 - Loop 6 smoke: `perl -e 'alarm 240; exec @ARGV' npx tsx tests/harness/manual-run.ts /private/tmp/oc-loop6-backtest 'Backtest a simple moving-average strategy on SPY and tell me if it beats buy-and-hold.'` completed and wrote a trace with `backtest_strategy`, returns, trade count, win rate, and max drawdown.
+- GUI validation: `npm run gui` was run locally at `http://127.0.0.1:14567`, and each benchmark loop prompt was submitted through the browser chat UI with screenshots/text evidence in `/tmp/opencandle-ui-evidence/`.
+- GUI Loop 1: `Compare AAPL and MSFT sentiment` rendered the compare workflow, called sentiment tooling, and displayed AAPL/MSFT sentiment scores in the final comparison.
+- GUI Loop 2: `What recent SEC filings for COIN could change the investment thesis?` displayed Coinbase/COIN SEC evidence with CIK/accessions under `0001679788`.
+- GUI Loop 3: `Build a $25000 ETF portfolio for a conservative investor over 3 years.` displayed `time horizon (3_years)`, `asset scope (etf_focused)`, ETF-only allocations, and risk/correlation review.
+- GUI Loop 4: `What is the market pricing in for rate cuts, and which stock sectors are most exposed?` displayed `FEDFUNDS`, `3.64`, CME FedWatch / futures-pricing evidence, and rate-sensitive sectors.
+- GUI Loop 5 found and fixed one UI-only issue: the options follow-up prompt still asked for a final table with only delta/IV/OI/spread. After the fix, the GUI final TSLA table displayed Delta, Gamma, Theta, Vega, Rho, IV, Open Interest, and Bid-Ask.
+- GUI Loop 6: `Backtest a simple moving-average strategy on SPY and tell me if it beats buy-and-hold.` displayed strategy return, buy-and-hold return, outperformance, trade count, win rate, and max drawdown.
