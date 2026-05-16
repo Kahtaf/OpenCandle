@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getFearGreedIndex } from "../../providers/fear-greed.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { FearGreedData } from "../../types/sentiment.js";

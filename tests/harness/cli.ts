@@ -7,7 +7,7 @@
  *   npx tsx tests/harness/cli.ts answer --ipc <dir> --value "..."
  *   npx tsx tests/harness/cli.ts trace  --ipc <dir>
  */
-import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

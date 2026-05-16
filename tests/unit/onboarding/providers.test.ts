@@ -7,6 +7,7 @@ import {
   getProvidersByTier,
   hasCredential,
   getCredentialSource,
+  getCredential,
   resolveProviderFromArgument,
   listAllProviders,
   type ProviderId,
@@ -183,6 +184,29 @@ describe("provider registry — credential helpers", () => {
     // Mock loadFileConfig to return empty so we don't hit disk.
     vi.spyOn(configModule, "loadFileConfig").mockReturnValue({});
     expect(getCredentialSource("alpha_vantage")).toBe("absent");
+  });
+
+  it("getCredential returns the configured file key so local GUI forms can prefill it masked", () => {
+    vi.spyOn(configModule, "loadFileConfig").mockReturnValue({
+      providers: { fred: { apiKey: "fred-file-key" } },
+    });
+
+    expect(getCredential("fred")).toEqual({
+      source: "file",
+      value: "fred-file-key",
+    });
+  });
+
+  it("getCredential prefers environment values over file config", () => {
+    process.env.FRED_API_KEY = "fred-env-key";
+    vi.spyOn(configModule, "loadFileConfig").mockReturnValue({
+      providers: { fred: { apiKey: "fred-file-key" } },
+    });
+
+    expect(getCredential("fred")).toEqual({
+      source: "env",
+      value: "fred-env-key",
+    });
   });
 });
 

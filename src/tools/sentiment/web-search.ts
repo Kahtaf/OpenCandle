@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { searchWeb } from "../../providers/web-search.js";
 import type { WebSearchEnvelope } from "../../types/sentiment.js";
 import { hasCredential } from "../../onboarding/providers.js";

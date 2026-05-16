@@ -29,8 +29,8 @@ describe("initDatabase", () => {
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 3", () => {
-    expect(getSchemaVersion(db)).toBe(3);
+  it("sets schema version to 4", () => {
+    expect(getSchemaVersion(db)).toBe(4);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -105,7 +105,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(3);
+    expect(getSchemaVersion(resetDb)).toBe(4);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
@@ -218,7 +218,7 @@ describe("v2 → v3 additive migration", () => {
     // Run the migration.
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(3);
+    expect(getSchemaVersion(migrated)).toBe(4);
 
     // (a) zero row loss
     const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;

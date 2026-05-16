@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getHistory } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { OHLCV } from "../../types/market.js";
@@ -100,7 +100,13 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
 
     return {
       content: [{ type: "text", text: lines.join("\n") }],
-      details: { sma20, sma50, rsi, macd, bb, obv, vwap },
+      details: {
+        symbol,
+        range,
+        prices: closes,
+        dates: bars.map((b) => b.date),
+        sma20, sma50, rsi, macd, bb, obv, vwap,
+      },
     };
   },
 };

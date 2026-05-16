@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { IpcChannel } from "../../harness/ipc.js";
 import { createTraceCollector } from "../../harness/trace-collector.js";
 import { createIpcAskHandler } from "../../harness/ipc-ask-handler.js";

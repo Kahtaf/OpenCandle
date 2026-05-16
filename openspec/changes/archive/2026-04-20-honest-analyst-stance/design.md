@@ -28,7 +28,7 @@ A coherent, well-understood alternative exists: the **research analyst** posture
 - **Chosen**: (c), but the mechanism is deliberately left open to be resolved by a spike in task 1.
 - **Why**: model-instructions and user-facing text should be decoupled. Softening wording (a) still puts refusal-adjacent language in the model's context and the current failure mode shows that's enough to trip refusals. Removal (b) loses a user-visible cue that may matter for trust.
 - **Mechanism options** (to be decided by the spike):
-  1. **Post-response Pi hook** — if `@mariozechner/pi-coding-agent` exposes an extension point that can mutate assistant text before display (e.g., a `message_after` or equivalent), append the footer there. Verify by reading `node_modules/@mariozechner/pi-coding-agent/dist/core/extensions/`.
+  1. **Post-response Pi hook** — if `@earendil-works/pi-coding-agent` exposes an extension point that can mutate assistant text before display (e.g., a `message_after` or equivalent), append the footer there. Verify by reading `node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/`.
   2. **Custom display message** — have the extension call `pi.sendMessage({customType: "opencandle-disclaimer", display: true, ...})` after every assistant turn. Keeps the disclaimer a first-class transcript entry without mutating model output.
   3. **Marker-and-strip fallback** — instruct the model to emit a `<<<OC_FOOTER>>>` marker at the end of every response. The extension intercepts the output, strips the marker, and replaces it with the canonical disclaimer block. Works even if Pi has no post-response mutation hook. The marker approach reintroduces a minor instruction in the LLM context, but it's a single structural token, not behavioral steering.
 - **Default preference**: option 2 if viable (cleanest separation), falling back to 1, then 3 only if neither 1 nor 2 is workable. The spec is written to allow any of these so the spec doesn't have to change based on the spike outcome.
@@ -66,12 +66,12 @@ A coherent, well-understood alternative exists: the **research analyst** posture
 - **[Risk]** Model commits to clearly wrong numbers. **Mitigation**: confidence bands + invalidation levels make wrongness falsifiable; the existing "tool-first, no guessing financial numbers" guideline stays.
 - **[Risk]** Users interpret committal analyst output as fiduciary advice. **Mitigation**: footer disclaimer + stance wording that uses "our read", "analyst view", "based on the data we pulled" — not "recommended for your situation." Stance must explicitly forbid fiduciary framing.
 - **[Risk]** Tests asserting on refusal wording break. **Mitigation**: identify and update them as part of this change.
-- **[Risk]** Pi extension API doesn't expose a post-response hook. **Mitigation**: fallback marker-and-strip approach; verified during implementation by reading `@mariozechner/pi-coding-agent` source.
+- **[Risk]** Pi extension API doesn't expose a post-response hook. **Mitigation**: fallback marker-and-strip approach; verified during implementation by reading `@earendil-works/pi-coding-agent` source.
 - **[Trade-off]** Accepting more responsibility for committal output in exchange for being useful. The product stays non-fiduciary; it becomes honest.
 
 ## Migration Plan
 
-1. Read `node_modules/@mariozechner/pi-coding-agent/dist/core/extensions/` to confirm a post-response text hook exists. If not, design the marker-and-strip fallback.
+1. Read `node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/` to confirm a post-response text hook exists. If not, design the marker-and-strip fallback.
 2. Rewrite `src/system-prompt.ts` and the relevant section bodies in `src/prompts/context-builder.ts` to adopt the analyst stance.
 3. Move the disclaimer out of `OUTPUT_FORMAT` into the harness footer path.
 4. Update tests asserting on refusal phrasing; add tests asserting on commit behavior for representative prompts (include the ASTS entry-levels case).

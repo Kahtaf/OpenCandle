@@ -10,7 +10,7 @@
  * ordering.
  */
 import { describe, it, expect } from "vitest";
-import { SessionManager } from "@mariozechner/pi-coding-agent";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 
 /**
  * Apply the same drain logic that manual-run.ts uses.

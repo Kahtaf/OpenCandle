@@ -169,11 +169,11 @@ describe("SentimentStore", () => {
     it("deletes records older than N days, retains newer ones", () => {
       const dayMs = 24 * 60 * 60 * 1000;
       const old = makeRecord({
-        fetchedAt: new Date(Date.now() - 40 * dayMs).toISOString(),
+        fetchedAt: new Date(Date.now() - 45 * dayMs).toISOString(),
         text: "old record about AAPL",
       });
       const recent = makeRecord({
-        fetchedAt: new Date(Date.now() - 5 * dayMs).toISOString(),
+        fetchedAt: new Date(Date.now() - 10 * dayMs).toISOString(),
         text: "recent record about AAPL",
       });
       store.insert([old, recent]);

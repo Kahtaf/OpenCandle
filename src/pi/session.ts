@@ -3,12 +3,12 @@ import {
   type AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
   type ModelRegistry,
   type CreateAgentSessionResult,
   type SettingsManager,
   type SessionManager,
-} from "@mariozechner/pi-coding-agent";
+  getAgentDir,
+} from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../config.js";
 import openCandleExtension from "./opencandle-extension.js";
 import type { AskUserHandler } from "../types/index.js";
@@ -48,6 +48,7 @@ export async function createOpenCandleSession(
 
   const result = await createAgentSession({
     cwd,
+    agentDir,
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
     sessionManager: options.sessionManager,
@@ -56,9 +57,25 @@ export async function createOpenCandleSession(
     noTools: "builtin",
   });
 
+  await applySavedDefaultModel(result);
+
   if (options.bindExtensions !== false) {
     await result.session.bindExtensions({});
   }
 
   return result;
+}
+
+async function applySavedDefaultModel(result: CreateAgentSessionResult): Promise<void> {
+  const provider = result.session.settingsManager.getDefaultProvider();
+  const modelId = result.session.settingsManager.getDefaultModel();
+  if (!provider || !modelId) return;
+
+  const savedDefault = result.session.modelRegistry.find(provider, modelId);
+  if (!savedDefault || !result.session.modelRegistry.hasConfiguredAuth(savedDefault)) return;
+
+  const current = result.session.model;
+  if (current?.provider === savedDefault.provider && current.id === savedDefault.id) return;
+
+  await result.session.setModel(savedDefault);
 }

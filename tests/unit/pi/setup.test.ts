@@ -4,7 +4,7 @@ vi.mock("../../../src/infra/open-url.js", async () => ({
   openInBrowser: vi.fn(async () => {}),
 }));
 
-import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { getLlmSetupRequirement, runOpenCandleSetup } from "../../../src/pi/setup.js";
 
 function createUi(overrides: Partial<any> = {}) {

@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --tw-background: 0 0% 100%;
+  --tw-foreground: 240 6% 10%;
+  --tw-secondary: 240 5% 96%;
+  --tw-secondary-foreground: 240 6% 10%;
+  --tw-tertiary: 240 5% 92%;
+  --tw-tertiary-foreground: 240 6% 10%;
+  --tw-card: 0 0% 100%;
+  --tw-card-foreground: 240 6% 10%;
+  --tw-popover: 0 0% 100%;
+  --tw-popover-foreground: 240 6% 10%;
+  --tw-muted: 240 5% 96%;
+  --tw-muted-foreground: 240 4% 46%;
+  --tw-accent: 142 71% 35%;
+  --tw-accent-foreground: 0 0% 100%;
+  --tw-brand: 240 6% 10%;
+  --tw-brand-foreground: 0 0% 100%;
+  --tw-destructive: 0 84% 60%;
+  --tw-destructive-foreground: 0 0% 100%;
+  --tw-success: 142 71% 35%;
+  --tw-warning: 35 92% 45%;
+  --tw-info: 217 91% 60%;
+  --tw-border: 240 6% 90%;
+  --tw-soft: 240 5% 96%;
+  --tw-hard: 240 5% 84%;
+  --tw-input: 240 6% 90%;
+  --tw-ring: 240 6% 10%;
+  --shadow-subtle-xs: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-subtle-sm: 0 4px 12px rgba(15, 15, 15, 0.06);
+  --shadow-subtle-md: 0 16px 32px rgba(15, 15, 15, 0.08);
+  --radius: 8px;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html, body { height: 100dvh; overflow: hidden; }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: hsl(var(--tw-background));
+    color: hsl(var(--tw-foreground));
+    -webkit-tap-highlight-color: hsl(var(--tw-foreground) / 0.08);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root { height: 100dvh; }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; touch-action: manipulation; }
+  button:disabled { cursor: not-allowed; }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--tw-foreground));
+    outline-offset: 2px;
+  }
+
+  code {
+    border: 1px solid hsl(var(--tw-border));
+    background: hsl(var(--tw-secondary));
+    color: hsl(var(--tw-foreground));
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+@layer components {
+  .rich-text > * + * { margin-top: 0.5rem; }
+  .rich-text p,
+  .rich-text ul { margin: 0; }
+  .rich-text ul { padding-left: 1.125rem; }
+  .rich-text li + li { margin-top: 0.25rem; }
+  .rich-text h3,
+  .rich-text h4,
+  .rich-text h5 {
+    margin: 0.25rem 0 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: hsl(var(--tw-foreground));
+  }
+  .rich-text .rich-table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .rich-text table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+  .rich-text th,
+  .rich-text td {
+    border: 1px solid hsl(var(--tw-border));
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .rich-text th {
+    background: hsl(var(--tw-secondary));
+    color: hsl(var(--tw-foreground));
+    font-weight: 600;
+  }
+  .chat-markdown {
+    color: hsl(var(--tw-foreground) / 0.86);
+    font-size: 0.8125rem;
+    line-height: 1.375rem;
+  }
+  .chat-markdown > * + * { margin-top: 1.25rem; }
+  .chat-markdown p,
+  .chat-markdown ul { margin: 0; }
+  .chat-markdown ul {
+    color: hsl(var(--tw-foreground) / 0.82);
+    list-style: disc;
+    padding-left: 1.75rem;
+  }
+  .chat-markdown p + ul { margin-top: 1.5rem; }
+  .chat-markdown ul + p { margin-top: 2rem; }
+  .chat-markdown .rich-table + p { margin-top: 2.25rem; }
+  .chat-markdown li {
+    line-height: 1.375rem;
+    padding-left: 0.375rem;
+  }
+  .chat-markdown li + li { margin-top: 0.75rem; }
+  .chat-markdown li::marker {
+    color: hsl(var(--tw-muted-foreground));
+  }
+  .chat-markdown strong {
+    color: hsl(var(--tw-foreground));
+    font-weight: 500;
+  }
+  .chat-markdown h3,
+  .chat-markdown h4,
+  .chat-markdown h5 {
+    margin: 1.5rem 0 0.5rem;
+    color: hsl(var(--tw-foreground));
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  .chat-markdown h3 { font-size: 1rem; }
+  .chat-markdown h4,
+  .chat-markdown h5 { font-size: 0.875rem; }
+  .chat-markdown code {
+    border-color: hsl(var(--tw-border));
+    background: hsl(var(--tw-secondary));
+    color: hsl(var(--tw-foreground));
+    border-radius: 0.5rem;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 400;
+  }
+  .chat-markdown .rich-table {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid hsl(var(--tw-border));
+    background: hsl(var(--tw-background));
+  }
+  .chat-markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    line-height: 1.375rem;
+  }
+  .chat-markdown th,
+  .chat-markdown td {
+    border: 1px solid hsl(var(--tw-border));
+    padding: 0.625rem 0.75rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .chat-markdown th {
+    background: hsl(var(--tw-tertiary));
+    color: hsl(var(--tw-muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* TextShimmer: a static muted base with a moving foreground stripe. When the
+     `.tool-shimmer` modifier is removed (e.g. after a step completes), the
+     animation stops and the label settles to the muted base. Respects
+     prefers-reduced-motion via the global rule below. */
+  .tool-shimmer-base {
+    color: hsl(var(--tw-muted-foreground));
+  }
+  .tool-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--tw-muted-foreground)) 0%,
+      hsl(var(--tw-muted-foreground)) 40%,
+      hsl(var(--tw-foreground)) 50%,
+      hsl(var(--tw-muted-foreground)) 60%,
+      hsl(var(--tw-muted-foreground)) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    animation: tool-shimmer-sweep 1.6s linear infinite;
+  }
+  @keyframes tool-shimmer-sweep {
+    0% { background-position: 120% 0; }
+    100% { background-position: -120% 0; }
+  }
+
+  /* Tooltip transitions for SourcePill hover previews (Radix data-state).
+     The `data-state=delayed-open` selector matches when the tooltip just
+     opened after its delay; `closed` matches the unmount. */
+  .tt-anim {
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}

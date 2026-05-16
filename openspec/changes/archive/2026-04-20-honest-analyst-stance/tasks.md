@@ -1,6 +1,6 @@
 ## 1. Spike: decide disclaimer surface mechanism
 
-- [x] 1.1 Read `node_modules/@mariozechner/pi-coding-agent/dist/core/extensions/` and the Pi docs to identify which of these paths is viable: (a) a post-response hook that can mutate or append to final assistant text, (b) a `pi.sendMessage({customType: "opencandle-disclaimer", display: true})` pattern invoked from a `turn_end` or equivalent event, (c) marker-and-strip at render time
+- [x] 1.1 Read `node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/` and the Pi docs to identify which of these paths is viable: (a) a post-response hook that can mutate or append to final assistant text, (b) a `pi.sendMessage({customType: "opencandle-disclaimer", display: true})` pattern invoked from a `turn_end` or equivalent event, (c) marker-and-strip at render time
 - [x] 1.2 Pick the mechanism in order of preference: custom display message > post-response hook > marker-and-strip. Document the decision in a short note under the change dir before writing any code
 - [x] 1.3 If marker-and-strip is the only option, define the marker token and the strip/replace implementation point explicitly
 

@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getSeries } from "../../providers/fred.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";

@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -54,6 +54,14 @@ const CURRENT_SCHEMA = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_workflow_events_run_id ON workflow_events(run_id);
+
+  CREATE TABLE IF NOT EXISTS tool_defaults (
+    tool_name TEXT NOT NULL,
+    param_path TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    set_at TEXT NOT NULL,
+    PRIMARY KEY (tool_name, param_path)
+  );
 `;
 
 export function initDatabase(path: string): Database.Database {
@@ -82,9 +90,15 @@ function ensureCurrentSchema(db: Database.Database): void {
     return;
   }
 
-  // Additive v2 → v3 migration: add turn_type column without dropping data.
+  if (currentVersion === 3) {
+    migrateV3ToV4(db);
+    return;
+  }
+
+  // Additive v2 → v3 → v4 migration without dropping data.
   if (currentVersion === 2) {
     migrateV2ToV3(db);
+    migrateV3ToV4(db);
     return;
   }
 
@@ -104,6 +118,13 @@ function migrateV2ToV3(db: Database.Database): void {
   }
 
   // Ensure any tables or indexes added between versions are present.
+  db.exec(CURRENT_SCHEMA);
+
+  db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(3);
+}
+
+function migrateV3ToV4(db: Database.Database): void {
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();
@@ -129,6 +150,7 @@ function resetSchema(db: Database.Database): void {
     DROP TABLE IF EXISTS recommendations;
     DROP TABLE IF EXISTS workflow_runs;
     DROP TABLE IF EXISTS user_preferences;
+    DROP TABLE IF EXISTS tool_defaults;
     DROP TABLE IF EXISTS schema_version;
   `);
   db.exec(CURRENT_SCHEMA);

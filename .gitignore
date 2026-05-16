@@ -11,3 +11,4 @@ tests/evals/runs/*
 .claude/skills/
 .claude/scheduled_tasks.lock
 skills-lock.json
+tests/screenshots/out/

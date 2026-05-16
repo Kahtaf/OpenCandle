@@ -7,7 +7,7 @@
 // a tool now" API), and the headless harness's `askUserHandler` injection
 // point is preserved for automated flows.
 
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { AskUserHandler } from "../types/index.js";
 
 export interface PromptOptions {

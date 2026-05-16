@@ -6,8 +6,8 @@
  * Usage: npx tsx tests/e2e/audit-fixes.test.ts
  */
 import assert from "node:assert";
-import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 

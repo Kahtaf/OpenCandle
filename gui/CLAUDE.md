@@ -1,0 +1,1 @@
+@gui/AGENTS.md

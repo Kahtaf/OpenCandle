@@ -19,7 +19,7 @@ Every tool is an `AgentTool` with Typebox parameters:
 
 ```ts
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL)" }),

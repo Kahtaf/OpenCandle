@@ -3,8 +3,8 @@
  * Writes questions to ipc/question.json, polls for ipc/answer.json.
  * An external agent reads questions, writes answers, and drives the session.
  */
-import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
-import { SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

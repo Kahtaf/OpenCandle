@@ -6,6 +6,7 @@ Integrates Yahoo Finance, AlphaVantage, FRED, CoinGecko, Reddit, SEC EDGAR.
 ## COMMANDS
 ```bash
 npm start                      # run agent (tsx src/index.ts)
+npm run gui                    # run local browser GUI at 127.0.0.1:14567
 npm test                       # unit tests (vitest run)
 npm run test:watch             # vitest in watch mode
 npm run test:e2e               # e2e tool tests
@@ -30,6 +31,9 @@ src/
 ├── config.ts     # Env + file config loading
 ├── system-prompt.ts
 └── index.ts      # Entry point
+gui/
+├── server/       # local HTTP/WebSocket GUI server, session projector, writer lock
+└── web/          # React + Tailwind browser app served by gui/server
 tests/            → see tests/AGENTS.md
 ```
 
@@ -43,6 +47,7 @@ tests/            → see tests/AGENTS.md
 | Type definitions | `src/types/<domain>.ts` | One file per domain |
 | Memory / persistence | `src/memory/` | SQLite-backed |
 | Pi shell integration | `src/pi/` | Extension, session, tool adapter |
+| Local GUI | `gui/` | Server owns writer lock; browser renders chat/catalog/dashboard |
 | Add-on tool package | `docs/build-a-tool.md` | Guide for building tools as separate npm packages |
 
 ## CODE STYLE
@@ -105,6 +110,7 @@ Run `npx tsx tests/harness/manual-run.ts <ipc-dir> "<prompt>"` in background. Po
 ## RUNTIME STATE
 - Pi config: `.pi/` and `~/.pi/agent/` — do not move into OpenCandle storage.
 - OpenCandle user state: `~/.opencandle/` — CLI must not depend on repo-local `.pi/extensions/`.
+- GUI writer/follower: one process holds `writer.lock` per Pi session; followers are read-only and poll/re-render session entries.
 
 ## ENV FLAGS
 - `OPENCANDLE_ROUTER_MODE`: `rules` (default) or `llm`. `llm` uses the LLM router; flip only after deterministic fixtures and opt-in live eval are green.

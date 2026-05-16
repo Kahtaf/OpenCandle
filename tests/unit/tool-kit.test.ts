@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { createTool, getAddonToolDescriptions, registerTools } from "../../src/tool-kit.js";
 
 function makeTool(name: string, description = "Test description"): AgentTool<any> {

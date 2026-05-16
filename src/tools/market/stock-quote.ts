@@ -1,5 +1,5 @@
 import { Type } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import { getGlobalQuote } from "../../providers/alpha-vantage.js";
 import { withFallback } from "../../providers/with-fallback.js";

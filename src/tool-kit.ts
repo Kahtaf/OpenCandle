@@ -1,6 +1,6 @@
 import type { TSchema } from "@sinclair/typebox";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { agentToolToPiTool } from "./pi/tool-adapter.js";
 
 // Re-exports for tool authors — import from "opencandle/tool-kit"
@@ -9,8 +9,8 @@ export { rateLimiter, RateLimiter } from "./infra/rate-limiter.js";
 export { httpGet, HttpError, type HttpClientOptions } from "./infra/http-client.js";
 export { agentToolToPiTool } from "./pi/tool-adapter.js";
 export { Type } from "@sinclair/typebox";
-export type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-export type { AgentTool } from "@mariozechner/pi-agent-core";
+export type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+export type { AgentTool } from "@earendil-works/pi-agent-core";
 
 // Module-level registry — all extensions run in the same Node.js process,
 // so keep a deduped index keyed by tool name.

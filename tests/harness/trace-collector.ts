@@ -2,7 +2,7 @@
  * Subscribes to session events and builds an AgentTrace.
  * Optionally streams events to a JSONL file.
  */
-import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { appendFileSync, writeFileSync } from "node:fs";
 import type { AgentTrace, InteractionTrace, ToolCallTrace, TurnTrace } from "./types.js";
 

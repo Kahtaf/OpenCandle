@@ -217,19 +217,25 @@ describe("exaSearch (MCP path)", () => {
   });
 
   it("calls MCP endpoint and parses SSE response", async () => {
-    globalThis.fetch = mockFetchResponse(sseFixture, { contentType: "text/event-stream" });
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-04-15T00:00:00Z").getTime());
+    rateLimiter.configure("exa", 100, 100);
+    try {
+      globalThis.fetch = mockFetchResponse(sseFixture, { contentType: "text/event-stream" });
 
-    const result = await exaSearch("AAPL stock news", { category: "news", freshness: "month", limit: 10 });
+      const result = await exaSearch("AAPL stock news", { category: "news", freshness: "month", limit: 10 });
 
-    expect(result.provider).toBe("exa");
-    expect(result.resultCount).toBe(3);
-    expect(result.results[0].source).toBe("proactiveinvestors.com");
-    expect(result.results[0].category).toBe("news");
-    // Verify fetch was called with MCP URL
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://mcp.exa.ai/mcp",
-      expect.objectContaining({ method: "POST" }),
-    );
+      expect(result.provider).toBe("exa");
+      expect(result.resultCount).toBe(3);
+      expect(result.results[0].source).toBe("proactiveinvestors.com");
+      expect(result.results[0].category).toBe("news");
+      // Verify fetch was called with MCP URL
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://mcp.exa.ai/mcp",
+        expect.objectContaining({ method: "POST" }),
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("parses plain JSON response (Content-Type: application/json)", async () => {
@@ -373,21 +379,27 @@ describe("exaSearch (API path)", () => {
   });
 
   it("calls direct API when EXA_API_KEY is set", async () => {
-    globalThis.fetch = mockFetchResponse(JSON.stringify(apiResponseFixture), {
-      contentType: "application/json",
-    });
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-04-15T00:00:00Z").getTime());
+    rateLimiter.configure("exa", 100, 100);
+    try {
+      globalThis.fetch = mockFetchResponse(JSON.stringify(apiResponseFixture), {
+        contentType: "application/json",
+      });
 
-    const result = await exaSearch("AAPL", { category: "news", freshness: "month", limit: 5 });
+      const result = await exaSearch("AAPL", { category: "news", freshness: "month", limit: 5 });
 
-    expect(result.provider).toBe("exa");
-    expect(result.resultCount).toBe(2);
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "https://api.exa.ai/search",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({ Authorization: "Bearer test-exa-key" }),
-      }),
-    );
+      expect(result.provider).toBe("exa");
+      expect(result.resultCount).toBe(2);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://api.exa.ai/search",
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({ Authorization: "Bearer test-exa-key" }),
+        }),
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("sends startPublishedDate computed from Date.now()", async () => {

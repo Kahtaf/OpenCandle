@@ -1,9 +1,9 @@
-import type { Model } from "@mariozechner/pi-ai";
+import type { Model } from "@earendil-works/pi-ai";
 import {
   LoginDialogComponent,
   type ExtensionAPI,
   type ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 type SetupMode = "startup" | "manual";
 type SetupRequirement = "ready" | "select_model" | "connect_auth";

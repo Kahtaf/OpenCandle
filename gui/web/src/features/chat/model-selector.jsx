@@ -1,0 +1,110 @@
+import { Check, ChevronDown, Plus, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Button } from "../../components/ui/button.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover.jsx";
+import { cn } from "../../lib/utils.js";
+import { ModelSetupDialog } from "../onboarding/ModelSetupDialog.jsx";
+
+const PROVIDER_LABEL = {
+  google: "Google",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+};
+
+export function ModelSelector({ modelSetup, send, setToast, disabled }) {
+  const [open, setOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const availableModels = modelSetup?.availableModels || [];
+  const currentModel = modelSetup?.currentModel || "";
+  const triggerLabel = formatModelLabel(currentModel) || "Connect a model";
+
+  const onSelect = (model) => {
+    send?.("model.setup.select_model", { provider: model.provider, modelId: model.id });
+    setOpen(false);
+  };
+
+  const openSetup = () => {
+    setOpen(false);
+    setSetupOpen(true);
+  };
+
+  return (
+    <div className="relative inline-block">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="bordered"
+            size="xs"
+            disabled={disabled}
+            suffixIcon={ChevronDown}
+            className="gap-1.5"
+          >
+            <span className="truncate max-w-[160px]">{triggerLabel}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" side="top" className="w-[280px] p-1">
+          <div className="max-h-[280px] overflow-y-auto py-1">
+            {availableModels.length > 0 ? (
+              <>
+                <div className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Models</div>
+                {availableModels.map((model) => {
+                  const value = `${model.provider}/${model.id}`;
+                  const selected = value === currentModel;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={selected}
+                      onClick={() => onSelect(model)}
+                      className={cn(
+                        "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        selected && "bg-secondary",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-medium">{formatModelLabel(value)}</div>
+                        <div className="truncate text-xs text-muted-foreground">{PROVIDER_LABEL[model.provider] ?? model.provider}</div>
+                      </div>
+                      {selected ? <Check className="mt-1 h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden="true" /> : null}
+                    </button>
+                  );
+                })}
+              </>
+            ) : (
+              <div className="px-2 py-3 text-xs text-muted-foreground">
+                No models connected. Add an API key to get started.
+              </div>
+            )}
+          </div>
+          <div className="border-t border-border p-1">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={openSetup}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" strokeWidth={2} />
+              <span>Connect more models</span>
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      <ModelSetupDialog
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        modelSetup={modelSetup}
+        send={send}
+        setToast={setToast}
+      />
+    </div>
+  );
+}
+
+function formatModelLabel(value) {
+  if (!value) return "";
+  const [provider, ...rest] = value.split("/");
+  const modelId = rest.join("/");
+  if (!modelId) return value;
+  return modelId;
+}

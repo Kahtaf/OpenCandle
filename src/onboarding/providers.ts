@@ -247,16 +247,22 @@ export function hasCredential(id: ProviderId): boolean {
 export function getCredentialSource(
   id: ProviderId,
 ): "env" | "file" | "absent" {
+  return getCredential(id).source;
+}
+
+export function getCredential(
+  id: ProviderId,
+): { source: "env" | "file"; value: string } | { source: "absent"; value?: undefined } {
   const descriptor = getProvider(id);
   const envValue = process.env[descriptor.envVar];
-  if (envValue && envValue.length > 0) return "env";
+  if (envValue && envValue.length > 0) return { source: "env", value: envValue };
 
   // Lazy file-config read — only invoked when env is absent.
   const fileConfig = loadFileConfig() as unknown as Record<string, unknown>;
   const fileValue = readConfigValueByPath(fileConfig, descriptor.configPath);
-  if (fileValue) return "file";
+  if (fileValue) return { source: "file", value: fileValue };
 
-  return "absent";
+  return { source: "absent" };
 }
 
 // -----------------------------------------------------------------------------
