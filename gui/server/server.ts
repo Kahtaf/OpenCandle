@@ -48,7 +48,10 @@ const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const lockResult = await acquireWriterLock(sessionDir, "gui");
-const askUserBridge = createAskUserBridge({ broadcast });
+const askUserBridge = createAskUserBridge({
+  broadcast,
+  getSessionId: () => sessionManager.getSessionId(),
+});
 const runtime = await createAgentSessionRuntime(
   async (opts) => {
     const services = await createAgentSessionServices({

@@ -39,6 +39,9 @@ export function AppShell() {
     runState: chatRun.runState,
     liveBaseEntryCount,
   });
+  const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
+    !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
+  );
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -175,7 +178,7 @@ export function AppShell() {
         <ChatPanel
           entries={sessionView.entries}
           liveEvents={liveEvents}
-          askUserPrompts={gui.askUserPrompts}
+          askUserPrompts={visibleAskUserPrompts}
           modelSetup={gui.modelSetup}
           role={gui.role}
           runState={chatRun.runState}

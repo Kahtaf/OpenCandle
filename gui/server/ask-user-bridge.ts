@@ -5,6 +5,7 @@ type AskUserResult = Awaited<ReturnType<AskUserHandler>>;
 
 export interface GuiAskUserPrompt extends AskUserParams {
   id: string;
+  sessionId: string;
   status: "pending" | "answered" | "cancelled";
   answer: string | null;
 }
@@ -16,8 +17,10 @@ interface PendingPrompt {
 
 export function createAskUserBridge({
   broadcast,
+  getSessionId,
 }: {
   broadcast: (message: unknown) => void;
+  getSessionId: () => string;
 }): {
   ask: AskUserHandler;
   answer: (id: string, answer: string) => boolean;
@@ -32,6 +35,7 @@ export function createAskUserBridge({
     const id = `ask-user-${Date.now()}-${nextId++}`;
     const prompt: GuiAskUserPrompt = {
       id,
+      sessionId: getSessionId(),
       question: params.question,
       questionType: params.questionType,
       options: params.options,
