@@ -91,7 +91,7 @@ describe("OpenCandle harness runner helpers", () => {
     expect(trace.askUserTranscript).toEqual([
       { question: "Which metric matters most?", answer: "growth" },
     ]);
-    expect(trace.text).toBe("First pass.Final pass.");
+    expect(trace.text).toBe("Final pass.");
     expect(trace.customEntries).toHaveLength(1);
   });
 });

@@ -38,7 +38,7 @@ export async function route(
   let firstError: string | undefined;
   try {
     const raw = await client.complete(prompt);
-    return validateRouterOutput(raw);
+    return enrichRouterOutput(input.text, validateRouterOutput(raw));
   } catch (err) {
     firstError = err instanceof Error ? err.message : String(err);
   }
@@ -47,7 +47,7 @@ export async function route(
   try {
     const retryPrompt = `${prompt}\n\n(Your previous response failed validation: ${firstError}. Return a valid JSON object conforming to RouterOutput. Nothing else.)`;
     const raw = await client.complete(retryPrompt);
-    return validateRouterOutput(raw);
+    return enrichRouterOutput(input.text, validateRouterOutput(raw));
   } catch {
     // Persistent failure — return a minimal fallback with regex-extracted symbols.
     return minimalFallback(input.text);
@@ -124,7 +124,21 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
+  const compareMetrics = validateStringArray(e.compareMetrics, "entities.compareMetrics");
+  if (compareMetrics.length > 0) out.compareMetrics = compareMetrics;
   return out;
+}
+
+function enrichRouterOutput(text: string, output: RouterOutput): RouterOutput {
+  const extracted = extractEntities(text);
+  return {
+    ...output,
+    entities: {
+      ...output.entities,
+      timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
+      compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+    },
+  };
 }
 
 function validateSlots(raw: unknown): Record<string, RouterSlot> {

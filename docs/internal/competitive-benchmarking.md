@@ -26,6 +26,22 @@ The runner:
 
 Reports are ignored by git. Commit reusable code and benchmark design, not one-off run transcripts or screenshots.
 
+## Recording Improvement History
+
+Raw JSON reports under `tests/evals/runs/` are local evidence only and are ignored by git. When a competitive run leads to a product or harness change, record a compact, committed summary in `docs/internal/competitive-benchmark-history.md`.
+
+Add one row per improvement loop with:
+
+- date
+- prompt id and prompt text
+- before report filename and winner/scores
+- after report filename and winner/scores
+- the relevant failure or gap
+- the code or harness changes made
+- remaining follow-up ideas that were intentionally not fixed
+
+Do not paste full agent transcripts into the history file. Keep it readable enough for a future agent to see whether OpenCandle improved against generic Claude/Codex/Gemini baselines and why.
+
 ## Configuration
 
 ```bash
@@ -85,6 +101,7 @@ When OpenCandle loses, or wins with obvious quality gaps, treat the result as th
 3. Add a targeted test for the reusable behavior when possible. Examples: preserve useful baseline output even if a CLI exits non-zero, avoid leaking fallback assumptions as user-visible scaffolding, or convert raw macro series into interpretable rates.
 4. Rerun the exact prompt by setting `OPENCANDLE_COMPETITIVE_PROMPT` and the optional fixed-prompt metadata variables. Compare the new report against the prior report before broadening the change.
 5. Only generalize after the rerun shows the target behavior improved, or after the failure recurs across multiple generated prompts.
+6. If the loop caused any committed change, update `docs/internal/competitive-benchmark-history.md` before finishing.
 
 Example rerun:
 

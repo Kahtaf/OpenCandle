@@ -11,6 +11,12 @@ vi.mock("../../../src/providers/web-search.js", () => ({
   searchWeb: vi.fn(),
 }));
 
+// Mock reddit provider calls that are not reached through wrapProvider in this tool.
+vi.mock("../../../src/providers/reddit.js", () => ({
+  getSubredditPosts: vi.fn(),
+  getPostComments: vi.fn(async () => []),
+}));
+
 // Mock the twitter provider to avoid scraper initialization
 vi.mock("../../../src/providers/twitter.js", () => ({
   getTwitterSentiment: vi.fn(),
@@ -136,6 +142,8 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Aggregate");
     expect(text).toContain("Source");
     expect(text).toContain("Score");
+    expect(text).toMatch(/\bsource-coverage risk\b/i);
+    expect(text).toMatch(/\bsentiment can be noisy\b/i);
   });
 
   it("handles all sources unavailable", async () => {

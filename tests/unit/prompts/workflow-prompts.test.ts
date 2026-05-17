@@ -255,6 +255,42 @@ describe("buildCompareAssetsPrompt", () => {
     const prompt = buildCompareAssetsPrompt(resolution);
     expect(prompt).toMatch(/Current date: \d{4}-\d{2}-\d{2}/);
   });
+
+  it("adapts comparison guidance to a user-specified six-month horizon", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["AAPL", "MSFT"], timeHorizon: "6mo" },
+      sources: { symbols: "user", timeHorizon: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toContain("Time horizon: 6mo");
+    expect(prompt).toMatch(/near-term catalysts/i);
+    expect(prompt).toMatch(/earnings|guidance/i);
+    expect(prompt).toMatch(/sentiment/i);
+    expect(prompt).toMatch(/forward-looking/i);
+    expect(prompt).toMatch(/should compare/i);
+  });
+
+  it("specializes comparison guidance for macro hedge decisions", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["BTC", "GLD"], timeHorizon: "6mo", metrics: ["macro_hedge"] },
+      sources: { symbols: "user", timeHorizon: "user", metrics: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toMatch(/macro hedge/i);
+    expect(prompt).toMatch(/real yields/i);
+    expect(prompt).toMatch(/correlation regime/i);
+    expect(prompt).toMatch(/capital preservation/i);
+    expect(prompt).toMatch(/scenario map/i);
+    expect(prompt).toMatch(/stagflation/i);
+    expect(prompt).toMatch(/liquidity crunch/i);
+    expect(prompt).not.toMatch(/Highlight which asset is stronger on each metric/i);
+  });
 });
 
 describe("buildDisclosureBlock", () => {

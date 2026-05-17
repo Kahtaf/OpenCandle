@@ -8,6 +8,7 @@ import {
   extractNumbersFromObject,
 } from "../../evals/scorers/data-faithfulness.js";
 import { scoreRiskDisclosure } from "../../evals/scorers/risk-disclosure.js";
+import { DISCLAIMER_TEXT } from "../../../src/prompts/disclaimer.js";
 import type { EvalTrace } from "../../evals/types.js";
 
 function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
@@ -242,6 +243,23 @@ describe("scoreRiskDisclosure", () => {
     const result = scoreRiskDisclosure(trace, ["risk factors"]);
     expect(result.passed).toBe(false);
     expect(result.message).toContain("Missing required");
+  });
+
+  it("checks custom responseContains patterns against OpenCandle disclaimer entries", () => {
+    const trace = makeTrace({
+      text: "AAPL looks strong based on the current analysis.",
+      customEntries: [
+        {
+          customType: "opencandle-disclaimer",
+          data: { text: DISCLAIMER_TEXT },
+          timestamp: "2026-05-17T00:00:00.000Z",
+        },
+      ],
+    });
+    const result = scoreRiskDisclosure(trace, [
+      /not\s+financial\s+advice|consult\s+.*(?:advisor|professional)|disclaimer/i,
+    ]);
+    expect(result.passed).toBe(true);
   });
 
   it("checks custom responseNotContains patterns", () => {

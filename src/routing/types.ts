@@ -52,6 +52,7 @@ export interface OptionsScreenerSlots {
 
 export interface CompareAssetsSlots {
   symbols: string[];
+  timeHorizon?: string;
   metrics?: string[];
 }
 

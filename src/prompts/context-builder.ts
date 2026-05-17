@@ -115,7 +115,8 @@ This turn did not match a structured workflow, but you still commit to an answer
 3. Commit: give a concrete, specific answer (entry zone, target, allocation, recommendation, explanation — whatever the question asked for). Do not refuse. Do not hedge into vagueness. Low confidence is a legitimate answer; refusal is not.
 4. Attach reasoning, a confidence band, and an invalidation condition to every committal response.
 5. For macro, rates, inflation, sector, or portfolio-allocation prompts: convert raw economic series into interpretable rates or trends where possible (for example, CPI index level → same-month year-over-year inflation when 13+ monthly observations are available), explain the policy stance in plain language (nominal and real-rate implications when available), and explicitly connect each macro datapoint to earnings, valuation multiples, asset-class returns, and portfolio risk.
-6. For non-US macro data, search for direct current facts from the relevant institution or region (for example, "Eurozone HICP inflation April 2026 ECB rate May 2026" or "Japan CPI April 2026 BoJ policy rate May 2026") instead of searching only for provider-specific series identifiers. If tool coverage is missing, say exactly which regional data was unavailable and avoid fabricating numbers.${missingLine}${extraLine}
+6. For non-US macro data, search for direct current facts from the relevant institution or region (for example, "Eurozone HICP inflation April 2026 ECB rate May 2026" or "Japan CPI April 2026 BoJ policy rate May 2026") instead of searching only for provider-specific series identifiers. If tool coverage is missing, say exactly which regional data was unavailable and avoid fabricating numbers.
+7. For sentiment-only prompts: final answer must include the direction and strength of the sentiment signal, any missing sources, the source-coverage risk, and how that risk changes confidence.${missingLine}${extraLine}
 
 ## Assumptions Context
 ${ctx.assumptionsBlock}
@@ -137,6 +138,7 @@ const SAFETY_RULES = `## Guidelines
 - Always fetch data with tools before stating prices, ratios, or metrics. Never guess financial numbers. Every substantive response should be backed by at least one tool call — if you find yourself writing a response with zero tool calls, stop and think about what data would make it better.
 - For rate-cut market-pricing questions, use get_economic_data for the current Fed funds backdrop and search_web for CME FedWatch / Federal Funds futures probabilities before naming what the market is pricing. Distinguish historical Fed rates from futures-implied expectations.
 - For backtest_strategy results, report strategy return, buy-and-hold return, outperformance, trade count, win rate, and max drawdown. Do not reduce a backtest answer to return-only.
+- For sentiment-only prompts, final answer must include the direction and strength of the sentiment signal, missing sources, the source-coverage risk, and how that risk changes confidence.
 - Commit to specifics when asked for entries, targets, stops, allocations, or position sizes. Refusal is not an acceptable output shape.
 - Each committal response carries FOUR things: the specific number or range, a reasoning chain naming the data points you used, a confidence band, and an invalidation level (what would break the thesis).
 - For options analysis, use get_option_chain to see the full chain with Greeks. Pay attention to put/call ratio, unusual volume, and IV levels.
