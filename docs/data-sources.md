@@ -15,9 +15,9 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Crypto | `get_crypto_price`, `get_crypto_history` | CoinGecko |
 | Options | `get_option_chain` with Greeks computed inside the result | Yahoo Finance plus local calculations |
 | Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage |
-| Macro | `get_economic_data`, `get_fear_greed` | FRED, alternative.me |
+| Macro | `get_economic_data`, `get_fear_greed` | FRED, alternative.me crypto Fear & Greed |
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
-| Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | Reddit JSON API, Twitter/X, Finnhub, DuckDuckGo, Brave, Exa |
+| Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | Reddit JSON API, Twitter/X local browser session, Finnhub, DuckDuckGo, Brave, Exa |
 | Filings | `get_sec_filings` | SEC EDGAR |
 | Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `track_prediction` | Local state plus market providers |
 
@@ -30,7 +30,7 @@ Keyless by default:
 - Reddit JSON API
 - SEC EDGAR
 - DuckDuckGo search
-- Fear & Greed
+- alternative.me crypto Fear & Greed
 
 Optional keys:
 
@@ -39,7 +39,7 @@ Optional keys:
 - `BRAVE_API_KEY` enables Brave as a web search fallback.
 - `EXA_API_KEY` enables Exa web search.
 - `FINNHUB_API_KEY` enables Finnhub company news in sentiment summaries.
-- Search and social providers can degrade based on available credentials, login state, and provider health.
+- Search and social providers can degrade based on available credentials, local browser login state, and provider health. Twitter/X sentiment requires a local browser session.
 
 ## Caching and Degradation
 

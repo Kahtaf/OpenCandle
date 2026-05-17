@@ -8,12 +8,16 @@ const outDir = join(root, "website/dist");
 const sourcePages = [
   { source: "docs/index.md", output: "docs/index.html", section: "Docs" },
   { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Use" },
+  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Use" },
+  { source: "docs/tui.md", output: "docs/tui.html", section: "Use" },
   { source: "docs/investigation-recipes.md", output: "docs/investigation-recipes.html", section: "Use" },
   { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Use" },
+  { source: "docs/configuration.md", output: "docs/configuration.html", section: "Use" },
   { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Use" },
   { source: "docs/system-architecture.md", output: "docs/system-architecture.html", section: "Build" },
   { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
+  { source: "docs/benchmarking.md", output: "docs/benchmarking.html", section: "Build" },
   { source: "CONTRIBUTING.md", output: "docs/contributing.html", section: "Project" },
   { source: "SECURITY.md", output: "docs/security.html", section: "Project" },
 ];

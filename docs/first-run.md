@@ -1,0 +1,72 @@
+---
+title: First Run
+description: Get from a fresh OpenCandle install to a successful first market answer in about five minutes.
+---
+
+# First Run
+
+This path assumes you want the fastest successful run: connect one AI model, ask a keyless market-data prompt, and only add data-provider keys when OpenCandle tells you they would improve the answer.
+
+Model credentials and market-data provider keys are separate. OpenCandle needs a model before chat can start. A keyless market-data prompt means the market data source does not need an OpenCandle provider key; it does not mean the agent can run without model access.
+
+## Five-Minute Path
+
+1. Install and start OpenCandle.
+
+```bash
+npx opencandle@latest
+```
+
+From a source checkout, use:
+
+```bash
+npm install
+npm start
+```
+
+2. Connect an AI model when the setup prompt opens.
+
+Choose sign-in or paste an API key. OpenCandle needs a model before chat can start. After a successful connection, it selects a fast default model when one is available; otherwise it asks you to choose a model.
+
+3. Start with a keyless market-data prompt.
+
+```text
+What is AAPL trading at?
+Compare BTC and ETH over the last month
+What's r/wallstreetbets saying about META?
+```
+
+Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index work without OpenCandle-specific provider keys.
+
+4. Add provider keys only when needed.
+
+If an answer says a provider is missing or degraded, follow the suggested `/connect ...` command. Common examples:
+
+```text
+/connect financials
+/connect economy
+/connect search
+```
+
+## What Success Looks Like
+
+A good first answer should show that OpenCandle gathered evidence before synthesizing. For a quote prompt, expect a current price, daily move, timestamp or source context, and any caveats about availability. For a comparison prompt, expect per-asset data plus a short synthesis. If a provider was unavailable, the answer should say what was missing instead of pretending the data was complete.
+
+OpenCandle is research software, not a financial advisor. Treat warnings, stale-data notes, and data gaps as part of the output.
+
+## Model Setup Expectations
+
+OpenCandle uses Pi for model credentials and model selection. You can connect with sign-in or with an API key for a supported model provider. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
+
+Use `/setup` later if you want to reconnect auth or choose a different model setup path. Use `/model` when you only want to switch among models that are already available.
+
+## Common Setup Failures
+
+| Symptom | What to do |
+| --- | --- |
+| Setup exits before chat starts | Start OpenCandle again and complete model setup. Chat requires a connected model. |
+| No models appear after adding a key | Check that the key matches the selected provider, then rerun `/setup`. |
+| A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
+| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell. Environment variables override `~/.opencandle/config.json`. |
+| Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
+| The GUI is open but not updating | Use the terminal session that owns the writer lock, or restart the GUI and reopen `http://127.0.0.1:14567`. |

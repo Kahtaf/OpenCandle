@@ -476,7 +476,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       return dispatched ? { action: "handled" } : undefined;
     }
 
-    // --- rules mode (default) ---
+    // --- rules mode ---
     // Extract and persist user preferences (legacy regex path)
     coordinator.extractAndStorePreferences(event.text);
     const storage = coordinator.getStorage();

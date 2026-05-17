@@ -1,3 +1,8 @@
+---
+title: Build a Tool
+description: Add first-party OpenCandle tools or publish Pi-compatible finance tool packages.
+---
+
 # Build an OpenCandle Investigation Tool
 
 Add a new data tool to OpenCandle by submitting a PR. A good OpenCandle tool behaves like an investigator's instrument: it fetches evidence, preserves source/freshness context, formats the result clearly, and leaves synthesis to the model.
