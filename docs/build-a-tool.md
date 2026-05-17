@@ -1,6 +1,6 @@
-# Build an OpenCandle Tool
+# Build an OpenCandle Investigation Tool
 
-Add a new data tool to OpenCandle by submitting a PR. This guide covers the tool contract, where files go, and how to test.
+Add a new data tool to OpenCandle by submitting a PR. A good OpenCandle tool behaves like an investigator's instrument: it fetches evidence, preserves source/freshness context, formats the result clearly, and leaves synthesis to the model.
 
 For a working reference, see `src/tools/sentiment/reddit-sentiment.ts`.
 
@@ -97,7 +97,7 @@ That's it — the tool is now available to the agent.
 ### HTTP Client
 
 ```ts
-import { httpGet } from "../infra/http-client.js";
+import { httpGet } from "../../infra/http-client.js";
 
 const data = await httpGet<MyApiResponse>("https://api.example.com/data", {
   headers: { Authorization: `Bearer ${apiKey}` },
@@ -107,7 +107,7 @@ const data = await httpGet<MyApiResponse>("https://api.example.com/data", {
 ### Caching
 
 ```ts
-import { cache, TTL } from "../infra/cache.js";
+import { cache, TTL } from "../../infra/cache.js";
 
 const cached = cache.get<MyData>("my-tool:AAPL");
 if (cached) return cached;
@@ -119,7 +119,7 @@ cache.set("my-tool:AAPL", fresh, TTL.MINUTES_15);
 For providers that may fail intermittently, use `cache.getStale()` to return the last known value within a longer window:
 
 ```ts
-import { STALE_LIMIT } from "../infra/cache.js";
+import { STALE_LIMIT } from "../../infra/cache.js";
 
 const stale = cache.getStale<MyData>("my-tool:AAPL", STALE_LIMIT.SENTIMENT);
 if (stale) return stale.value; // serve stale data while provider is down
@@ -128,7 +128,7 @@ if (stale) return stale.value; // serve stale data while provider is down
 ### Rate Limiting
 
 ```ts
-import { rateLimiter } from "../infra/rate-limiter.js";
+import { rateLimiter } from "../../infra/rate-limiter.js";
 
 await rateLimiter.acquire("my-api", { maxPerMinute: 30 });
 ```
@@ -138,7 +138,7 @@ await rateLimiter.acquire("my-api", { maxPerMinute: 30 });
 Use `wrapProvider()` for circuit-breaking and error handling:
 
 ```ts
-import { wrapProvider } from "../providers/wrap-provider.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 
 const result = await wrapProvider("my-source", () => fetchFromMyApi(symbol));
 if (result.status === "unavailable") {
@@ -212,3 +212,12 @@ Pi discovers it automatically when installed. For Pi extension lifecycle details
 - [ ] Uses `cache` and `rateLimiter` for external API calls
 - [ ] Tests mock `globalThis.fetch` with fixtures
 - [ ] Tool registered in `src/tools/index.ts`
+
+## Investigation Quality Checklist
+
+- [ ] The tool reports source/provider identity in structured details when useful
+- [ ] Missing credentials produce a clear setup path instead of a vague failure
+- [ ] Stale or partial data is labeled in the user-facing content
+- [ ] The tool avoids advice language such as "buy", "sell", or "safe"
+- [ ] Downside or data-quality caveats are preserved for the analyst prompt
+- [ ] Fixture data is realistic enough to catch formatting and parsing regressions

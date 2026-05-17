@@ -20,9 +20,19 @@ Depending on your Tailscale setup, the shared URL is shown by `tailscale serve s
 
 If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` or `opencandle gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,"role":"writer"}`.
 
-## UI Structure
+## Investigator Workflow
 
-The revamped GUI follows llmchat's package shape where it helps OpenCandle: small UI primitives, composable chat pieces, and thin feature modules.
+The GUI is a local investigation workbench. It keeps the transcript, tool catalog, provider setup, session history, and financial context close together so the user can see what evidence the agent is using.
+
+- Chat carries the question, tool calls, and synthesis.
+- Catalog exposes workflows, individual tools, and provider setup without guessing prompt syntax.
+- Session history keeps prior investigations reachable through Pi session state.
+- Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
+- Writer/follower locking keeps one local process responsible for mutating a session.
+
+## Code Structure
+
+The GUI follows a small feature-module shape: reusable UI primitives, composable chat pieces, and product-specific feature modules.
 
 - `gui/web/tailwind.config.cjs` and `gui/web/postcss.config.cjs` enable the Tailwind pipeline.
 - `gui/web/src/components/ui/` owns reusable primitives such as buttons, badges, inputs, cards, textareas, keyboard hints, and checkboxes.
@@ -35,7 +45,7 @@ The revamped GUI follows llmchat's package shape where it helps OpenCandle: smal
 - `catalog/` owns tools, workflows, and providers.
 - `renderers/` owns first-class financial tool cards plus raw inspection.
 
-The visual/primitives reference is llmchat's UI package:
+The historical visual/primitives reference was llmchat's UI package:
 `https://github.com/trendy-design/llmchat/tree/main/packages/ui`
 
 That package is inspiration only. OpenCandle does not depend on llmchat and does not copy its persistence/runtime model.

@@ -1,11 +1,16 @@
 # OpenCandle
 
-OpenCandle is a terminal-first financial data agent built with TypeScript and Pi. It fetches market, macro, options, fundamentals, sentiment, and portfolio data from real providers, then lets the model synthesize that data into an answer.
+OpenCandle is an open source financial investigator built with TypeScript and Pi. It fetches market, macro, options, fundamentals, filings, sentiment, and portfolio data from real providers, then lets the model synthesize that evidence into an answer.
 
 This repository is useful in two ways:
 
 - Run `opencandle` as an interactive CLI for market research
+- Open the local GUI for chat, tool discovery, provider status, and session history
 - Extend OpenCandle with new tools, providers, or Pi-compatible add-on packages
+
+## Why OpenCandle?
+
+Financial research gets messy when evidence is scattered across quote pages, filings, macro dashboards, sentiment feeds, and ad hoc spreadsheets. OpenCandle gives the agent explicit tools, provider boundaries, and local state so research stays inspectable: gather the data first, show the gaps, then synthesize without pretending uncertainty disappeared.
 
 ## What You Can Use It For
 
@@ -21,7 +26,7 @@ OpenCandle is designed to fetch and format data. The model handles synthesis. To
 
 ## Install And Run
 
-Requires Node.js 20+.
+Requires Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0 <27`.
 
 ### CLI
 
@@ -54,8 +59,11 @@ Model access comes from Pi. Market data providers are optional and additive.
 | `ANTHROPIC_API_KEY` | No | Anthropic models through Pi |
 | `ALPHA_VANTAGE_API_KEY` | No | Fundamentals, earnings, financial statements |
 | `FRED_API_KEY` | No | Macro series such as rates, CPI, GDP, unemployment |
+| `BRAVE_API_KEY` | No | Brave web search fallback |
+| `EXA_API_KEY` | No | Exa web search |
+| `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
 
-Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, and Fear & Greed data do not require keys.
+Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and Fear & Greed data do not require keys.
 
 OpenCandle stores its own user state in `~/.opencandle/` by default. Pi configuration stays in `.pi/` and `~/.pi/agent/`. The CLI should not depend on repo-local `.pi/extensions/`.
 
@@ -69,6 +77,15 @@ Provider keys can also be stored in `~/.opencandle/config.json`:
     },
     "fred": {
       "apiKey": "..."
+    },
+    "brave": {
+      "apiKey": "..."
+    },
+    "exa": {
+      "apiKey": "..."
+    },
+    "finnhub": {
+      "apiKey": "..."
     }
   }
 }
@@ -78,7 +95,7 @@ Environment variables override values from `~/.opencandle/config.json`. Set `OPE
 
 ## Basic Usage
 
-OpenCandle runs inside Pi's interactive terminal UI.
+OpenCandle runs inside Pi's interactive terminal UI. The local GUI can be started with `opencandle gui` from an installed package or `npm run gui` from a checkout.
 
 Useful commands:
 
@@ -104,11 +121,12 @@ Run risk analysis on SPY
 
 | Area | Examples | Source |
 | --- | --- | --- |
-| Market data | quotes, history, ticker search, crypto price/history | Yahoo Finance, CoinGecko |
+| Market data | quotes, history, ticker search, crypto price/history | Yahoo Finance, Alpha Vantage fallback when configured, CoinGecko |
 | Options | chains, open interest, IV, Greeks | Yahoo Finance plus local calculations |
 | Fundamentals | overview, financials, earnings, DCF, company comparison | Alpha Vantage |
 | Macro | economic series, Fear & Greed | FRED, alternative.me |
-| Sentiment | Reddit, Twitter/X, and web sentiment with cross-source pipeline | Reddit JSON API, Twitter/X, DuckDuckGo, Brave |
+| Technical | indicators, strategy backtests | Local calculations over market history |
+| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment with cross-source pipeline | Reddit JSON API, Twitter/X, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | watchlist, prediction tracking, correlation, risk | Local state plus market data |
 
@@ -133,6 +151,8 @@ src/
 
 ```bash
 npm start
+npm run gui
+npm run docs:site:build
 npm test
 npm run test:watch
 npm run test:e2e
@@ -159,6 +179,8 @@ Besides the CLI, the package exposes pieces for engineers building on top of Ope
 - `opencandle/infra`
 - `opencandle/types`
 - `opencandle/providers`
+- `opencandle/tools`
+- `opencandle/workflows`
 
 If you want to add a new tool or publish an add-on package, start with [docs/build-a-tool.md](./docs/build-a-tool.md).
 
@@ -174,9 +196,27 @@ The harness writes status and trace files into the IPC directory. See [tests/har
 
 ## Project Docs
 
+- [docs/index.md](./docs/index.md)
+- [docs/getting-started.md](./docs/getting-started.md)
+- [docs/investigation-recipes.md](./docs/investigation-recipes.md)
+- [docs/data-sources.md](./docs/data-sources.md)
+- [docs/system-architecture.md](./docs/system-architecture.md)
+- [docs/gui-quickstart.md](./docs/gui-quickstart.md)
+- [docs/testing-and-evals.md](./docs/testing-and-evals.md)
 - [CONTRIBUTING.md](./CONTRIBUTING.md)
 - [docs/build-a-tool.md](./docs/build-a-tool.md)
 - [tests/harness/README.md](./tests/harness/README.md)
 - [CHANGELOG.md](./CHANGELOG.md)
 - [SECURITY.md](./SECURITY.md)
 - [LICENSE](./LICENSE)
+
+## Website
+
+The static website lives in [website/](./website/). It builds a product landing page plus the public Markdown docs into `website/dist/`.
+
+```bash
+npm run docs:site:build
+npm run docs:site:serve
+```
+
+GitHub Pages can publish the generated artifact through the included Pages workflow.

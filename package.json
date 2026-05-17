@@ -85,6 +85,8 @@
     "prestart": "npm run check:node",
     "start": "tsx src/cli.ts",
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
+    "docs:site:build": "node website/build.mjs",
+    "docs:site:serve": "node website/serve.mjs",
     "gui": "tsx gui/server/server.ts",
     "gui:dev": "tsx gui/server/server.ts",
     "pretest": "npm run check:node",
