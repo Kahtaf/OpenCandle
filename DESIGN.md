@@ -198,8 +198,8 @@ The palette is a restrained light system: white paper, zinc-like grays, deep ink
 
 ## 3. Typography
 
-**Display Font:** DM Sans with system sans fallbacks.  
-**Body Font:** DM Sans with system sans fallbacks.  
+**Display Font:** DM Sans with system sans fallbacks.
+**Body Font:** DM Sans with system sans fallbacks.
 **Label/Mono Font:** SFMono-Regular, Menlo, Consolas, monospace.
 
 **Character:** DM Sans gives the homepage a direct, modern, product-native voice without becoming ornamental. The mono stack is only for structural labels, provider names, code, tickers, and data snippets.
