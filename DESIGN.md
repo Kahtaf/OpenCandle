@@ -1,266 +1,298 @@
 ---
-version: alpha
-name: OpenCandle Console
-description: Minimal local financial research console. Light surface, single ink for primary actions, sans-serif everywhere, no decoration.
+name: OpenCandle Research Surface
+description: Light evidence-first financial research UI for the homepage, docs, and GUI.
 colors:
-  primary: "#18181B"
-  secondary: "#71717A"
-  surface: "#FFFFFF"
-  surface-subtle: "#F4F4F5"
-  surface-sunk: "#EBEBEC"
-  border: "#E4E4E7"
-  border-strong: "#D4D4D8"
-  on-primary: "#FFFFFF"
+  ink: "#18181B"
+  body: "#303633"
+  muted: "#71717A"
+  paper: "#FFFFFF"
+  paper-soft: "#F4F4F5"
+  paper-sunk: "#EBEBEC"
+  line: "#E4E4E7"
+  line-strong: "#D4D4D8"
+  brand: "#34474E"
+  accent: "#87A188"
   success: "#15803D"
   warning: "#B45309"
   danger: "#DC2626"
   info: "#2563EB"
+  code-dark: "#202523"
+  code-dark-border: "#111412"
+  code-light: "#F5F1E5"
+  chrome-dot: "#9FA7A2"
 typography:
-  body-md:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 0.875rem
+  display:
+    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "5.25rem"
+    fontWeight: 600
+    lineHeight: 1.05
+    letterSpacing: "0"
+  headline:
+    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "3.5rem"
+    fontWeight: 600
+    lineHeight: 1.05
+    letterSpacing: "0"
+  title:
+    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "1.625rem"
+    fontWeight: 600
+    lineHeight: 1.15
+    letterSpacing: "0"
+  body:
+    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "1rem"
     fontWeight: 400
     lineHeight: 1.5
-    letterSpacing: 0em
-  body-sm:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 0.8125rem
+    letterSpacing: "0"
+  lede:
+    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "1.25rem"
     fontWeight: 400
     lineHeight: 1.45
-    letterSpacing: 0em
-  display:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 2.5rem
-    fontWeight: 600
-    lineHeight: 1.1
-    letterSpacing: -0.025em
-  heading-lg:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 1.875rem
-    fontWeight: 600
-    lineHeight: 1.2
-    letterSpacing: -0.02em
-  heading-md:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 1rem
-    fontWeight: 600
+    letterSpacing: "0"
+  label:
+    fontFamily: "SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "0.75rem"
+    fontWeight: 700
     lineHeight: 1.4
-    letterSpacing: -0.005em
-  label-caps:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 0.6875rem
-    fontWeight: 500
-    lineHeight: 1.2
-    letterSpacing: 0.06em
-  label-sm:
-    fontFamily: Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif
-    fontSize: 0.75rem
-    fontWeight: 500
-    lineHeight: 1.25
-    letterSpacing: 0em
-  data-sm:
-    fontFamily: JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace
-    fontSize: 0.75rem
+    letterSpacing: "0"
+  code:
+    fontFamily: "SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "0.8125rem"
     fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: 0em
+    lineHeight: 1.5
+    letterSpacing: "0"
     fontFeature: "tnum"
 rounded:
-  sm: 4px
-  md: 6px
-  lg: 8px
-  xl: 12px
-  full: 9999px
+  xs: "5px"
+  sm: "7px"
+  md: "8px"
+  lg: "10px"
+  xl: "12px"
+  frame: "14px"
+  tile: "24px"
+  full: "9999px"
 spacing:
-  xxs: 4px
-  xs: 8px
-  sm: 12px
-  md: 16px
-  lg: 24px
-  xl: 32px
-  xxl: 48px
-  touch: 44px
-  sidebar-width: 260px
-  composer-max-width: 760px
-  mobile-surface-inline: 8px
+  xxs: "6px"
+  xs: "8px"
+  sm: "12px"
+  md: "18px"
+  lg: "24px"
+  xl: "36px"
+  xxl: "52px"
+  section-y: "92px"
+  hero-top: "150px"
+  docs-top: "98px"
+  content-max: "780px"
+  page-max: "1320px"
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.md}"
-    height: 36px
-    padding: 12px
+    backgroundColor: "{colors.brand}"
+    textColor: "{colors.paper}"
+    typography: "{typography.body}"
+    rounded: "{rounded.lg}"
+    height: "54px"
+    padding: "0 24px"
   button-secondary:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    border: "{colors.border}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.md}"
-    height: 36px
-    padding: 12px
-  button-ghost:
-    backgroundColor: transparent
-    textColor: "{colors.secondary}"
-    backgroundColor-hover: "{colors.surface-subtle}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.md}"
-    height: 36px
-    padding: 12px
-  button-icon:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    border: "{colors.border}"
-    rounded: "{rounded.md}"
-    height: 36px
-    width: 36px
-  input:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    border: "{colors.border}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.md}"
-    height: 36px
-    padding: 12px
-  composer:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    border: "{colors.border}"
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.brand}"
+    typography: "{typography.body}"
     rounded: "{rounded.lg}"
-    padding: 16px
-  message-assistant:
-    backgroundColor: transparent
-    textColor: "{colors.primary}"
-    typography: "{typography.body-md}"
-  message-user:
-    backgroundColor: "{colors.surface-subtle}"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.xl}"
-    padding: "10px 16px"
+    height: "54px"
+    padding: "0 24px"
+  nav-button:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.brand}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    height: "40px"
+    padding: "0 16px"
+  nav-button-active:
+    backgroundColor: "{colors.brand}"
+    textColor: "{colors.paper}"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    height: "40px"
+    padding: "0 16px"
   panel:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    border: "{colors.border}"
-    rounded: "{rounded.lg}"
-    padding: 12px
-  selected-row:
-    backgroundColor: "{colors.surface-sunk}"
-    textColor: "{colors.primary}"
-    typography: "{typography.body-sm}"
-    rounded: "{rounded.md}"
-    padding: "8px 12px"
-  divider:
-    backgroundColor: "{colors.border}"
-    height: 1px
-  badge:
-    backgroundColor: "{colors.surface-subtle}"
-    textColor: "{colors.secondary}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.md}"
-    height: 22px
-    padding: 8px
-  status-success:
-    textColor: "{colors.success}"
-    backgroundColor: "{colors.success}/0.10"
-    border: "{colors.success}/0.30"
-  status-warning:
-    textColor: "{colors.warning}"
-    backgroundColor: "{colors.warning}/0.10"
-    border: "{colors.warning}/0.30"
-  status-danger:
-    textColor: "{colors.danger}"
-    backgroundColor: "{colors.danger}/0.10"
-    border: "{colors.danger}/0.30"
-  status-info:
-    textColor: "{colors.info}"
-    backgroundColor: "{colors.info}/0.10"
-    border: "{colors.info}/0.30"
-  mobile-sheet:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.xl}"
-    padding: 0
+    padding: "18px"
+  docs-content:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+    padding: "34px"
+  floating-tile:
+    backgroundColor: "{colors.paper-soft}"
+    textColor: "{colors.brand}"
+    typography: "{typography.label}"
+    rounded: "{rounded.tile}"
+    height: "96px"
+    width: "96px"
+  code-block:
+    backgroundColor: "{colors.code-dark}"
+    textColor: "{colors.code-light}"
+    typography: "{typography.code}"
+    rounded: "{rounded.md}"
+    padding: "16px"
+  screenshot-frame:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.frame}"
+    padding: "0"
 ---
 
-## Overview
+# Design System: OpenCandle Research Surface
 
-OpenCandle is a minimal financial research console. Light paper background, dark ink for primary actions, sans-serif everywhere, and no ornament. The product is meant to feel like a desk tool — fast to read, easy to scan, honest about what it can and cannot do.
+## 1. Overview
 
-The layout is two columns: a sessions sidebar on the left and the chat reading column in the middle. Mobile collapses the sidebar into a sheet. There is no global topbar — the brand sits in the sidebar, and the chat area starts straight at the messages.
+**Creative North Star: "The Research Desk."**
 
-## Colors
+OpenCandle should feel like a precise research desk: bright surface, visible instruments, quiet chrome, and strong evidence hierarchy. The current homepage is the source of truth for the static site and the direction for the GUI. It uses a light workspace, DM Sans, dark ink text, green-gray primary actions, and restrained panels that make the real product screenshot feel central.
 
-The palette is built around the Zinc neutral ramp plus four state colors. The single primary action color is dark ink (#18181B); we treat it as the only "loud" color in the product. Every other surface is a step on the same neutral ramp.
+This system is calm, exacting, and useful. It rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, and hidden capabilities. The interface can be visually memorable through scale, grid, and product evidence, but it should never feel like a trading game or a generic AI landing page.
 
-- **Primary (#18181B):** Dark ink. Used for primary actions (Send, Save key, Open setup link), focus rings, and high-emphasis text.
-- **Secondary (#71717A):** Muted text — captions, metadata, timestamps, placeholders, and inactive icons.
-- **Surface (#FFFFFF):** The page foundation, cards, drawers, dialogs, and the composer chrome.
-- **Surface-subtle (#F4F4F5):** The sidebar background, the user message bubble, hover-secondary fills, fact tiles inside tool cards.
-- **Surface-sunk (#EBEBEC):** Selected rows, deeper nested fills.
-- **Border (#E4E4E7), Border-strong (#D4D4D8):** Hairline dividers and stronger separators for grouped regions.
-- **Semantic state:** success #15803D (green), warning #B45309 (ochre), danger #DC2626 (red), info #2563EB (blue). Reserved for state — never decoration.
+**Key Characteristics:**
 
-The single-accent rule is load-bearing: there is exactly one primary action color, and it is dark ink. State colors only ever appear on badges, status text, and percent-change values — not on chrome.
+- Light research surface with subtle gray page wash.
+- Dark ink text and one green-gray primary action.
+- Large, confident homepage typography; quieter Markdown typography in docs and GUI.
+- Thin borders, small radii, and only a few purposeful shadows.
+- Real product evidence, especially screenshots and tool output, carries the visual story.
 
-## Typography
+## 2. Colors
 
-A single sans stack: Inter with a system fallback. Inter is unfussy at small sizes, has clear glyphs, and renders predictably across browsers. The only mono presence is in tiny structural snippets (`code` elements, tool argument JSON, ticker-like fragments) — JetBrains Mono there.
+The palette is a restrained light system: white paper, zinc-like grays, deep ink, and a muted green-gray brand action.
 
-- **display:** 2.5rem / 600 / -0.025em — empty-state headlines.
-- **heading-lg:** 1.875rem / 600 — onboarding heads.
-- **heading-md:** 1rem / 600 — modal titles, panel titles.
-- **body-md:** 0.875rem / 400 / 1.5 — message text, descriptions.
-- **body-sm:** 0.8125rem / 400 — controls and dense rows.
-- **label-caps:** 0.6875rem / 500 / 0.06em tracking — section heads, badges.
-- **label-sm:** 0.75rem / 500 — metadata labels.
-- **data-sm:** 0.75rem / 400 / `tnum` on — prices, percentages, volumes, dates.
+### Primary
 
-All financial facts (prices, percentages, volumes, dates) render with `font-variant-numeric: tabular-nums` so columns line up. Body and headings share the same family — switching to a second sans for headlines would feel decorative and break the calm.
+- **Research Ink** (`#18181B`): Main text, high-emphasis headings, hover state for primary actions, and the darkest UI state.
+- **Candle Slate** (`#34474E`): Primary action color. Use it for Install, Run, selected docs nav, active GUI actions, and focus rings.
+- **Sage Evidence** (`#87A188`): Soft brand accent. Use sparingly for background tints, generated image accents, and subtle visual association with the logo.
 
-## Layout
+### Neutral
 
-Two-column desktop shell: 260px sidebar on the left, chat as the remaining column. At md (≤820px) the sidebar collapses into a bottom sheet, opened by a hamburger button in a thin mobile top bar.
+- **White Paper** (`#FFFFFF`): Main page surface, panels, nav, content cards, and screenshot frames.
+- **Soft Paper** (`#F4F4F5`): Page wash, code inline backgrounds, nav hover fills, browser chrome strips, and secondary tonal layers.
+- **Sunk Paper** (`#EBEBEC`): Selected rows, deeper GUI surfaces, and low emphasis state fills.
+- **Hairline** (`#E4E4E7`): Default border, dividers, table rules, and panel outlines.
+- **Strong Hairline** (`#D4D4D8`): Hover border and stronger separation when a surface needs a clearer edge.
+- **Muted Graphite** (`#71717A`): Secondary copy, metadata, nav labels, captions, and inactive states.
+- **Body Graphite** (`#303633`): Long-form Markdown body text, GUI prose, and dense readable copy.
 
-The chat reading column is capped at ~760px regardless of viewport width, mirrored on the composer. Tool output and dashboard panels can be denser. For wide tables in assistant output, prefer horizontal overflow inside the message rather than page-level overflow.
+### Semantic
 
-The dashboard (Watchlist / Active analyses / Recent research / Data quality) lives in a sheet, opened from the sidebar bottom or the mobile top bar, never as a permanent third column.
+- **Success Green** (`#15803D`): Positive status, configured providers, successful checks, and positive market values with text labels.
+- **Warning Ochre** (`#B45309`): Missing keys, stale data, partial results, and caveats.
+- **Danger Red** (`#DC2626`): Failed providers, destructive actions, and negative states.
+- **Info Blue** (`#2563EB`): Informational statuses, links where the brand action color would imply commitment, and neutral success logs.
 
-Spacing follows a 4px-derived scale: 4 / 8 / 12 / 16 / 24 / 32 / 48px. Use gap-based layouts. Mobile sheets share metrics: 8px side inset, 12px top radius, visible drag handle, safe-area-aware bottom padding.
+### Named Rules
 
-The page itself does not scroll — `html`, `body`, and `#root` are height-locked to `100dvh` with `overflow: hidden`. The chat-messages container and the sidebar threads list each scroll independently within their own panes.
+**The One Action Color Rule.** Candle Slate is the only primary action color. Semantic colors communicate state; they do not decorate layout.
 
-## Elevation & Depth
+**The Paper First Rule.** White Paper is the default surface. Soft Paper and Sunk Paper create depth before shadows do.
 
-Depth is carried by tonal layers (surface → surface-subtle → surface-sunk) and 1px borders, not stacked shadows. The composer is a borderless card on the page; modals and bottom sheets get a subtle shadow plus a 1px border. Drawers use a translucent foreground overlay with a 2px backdrop blur — just enough to focus attention without theatre.
+## 3. Typography
 
-Glassmorphism, decorative blurs, and gradient washes are out of scope. Don't increase shadow intensity to solve hierarchy problems — clearer spacing or a stronger label is the right move.
+**Display Font:** DM Sans with system sans fallbacks.  
+**Body Font:** DM Sans with system sans fallbacks.  
+**Label/Mono Font:** SFMono-Regular, Menlo, Consolas, monospace.
 
-## Shapes
+**Character:** DM Sans gives the homepage a direct, modern, product-native voice without becoming ornamental. The mono stack is only for structural labels, provider names, code, tickers, and data snippets.
 
-The shape language is tight. Controls and inputs use 6px corners; cards, messages, panels, modals use 8px; user message bubbles use 12px (their slightly rounder corners distinguish them from utility cards); badges are 6px or full pills; mobile sheets get 12px top radius. Icon-only buttons keep fixed square dimensions.
+### Hierarchy
 
-Avoid mixing 16-24px "pillowy" radii with the 6-8px control vocabulary.
+- **Display** (600, `5.25rem`, 1.05): Homepage hero headline. Use only for the first viewport brand message.
+- **Headline** (600, `3.5rem`, 1.05): Homepage sections and major static-site section headings.
+- **Docs Title** (600, `3.25rem`, 1.05): Markdown `h1` inside docs content.
+- **Title** (600, `1.625rem`, 1.15): Markdown `h2`, GUI panel titles, and dense product page section heads.
+- **Body** (400, `1rem`, 1.5): Markdown prose, GUI descriptions, and normal UI copy. Keep long-form text between 65 and 75 characters per line.
+- **Lede** (400, `1.25rem`, 1.45): Homepage supporting copy and major static-site intros.
+- **Label** (700, `0.75rem`, 1.4): Section kickers, terminal labels, provider labels, and compact metadata. Keep letter spacing at 0.
+- **Code** (400, `0.8125rem`, 1.5): Code blocks, terminal snippets, tickers, provider IDs, and structured tool output. Use tabular numbers.
 
-## Components
+### Named Rules
 
-- **Buttons:** `brand` is the dark-ink primary action — exactly one per region. `bordered` is the white-with-hairline-border secondary; `ghost` is the low-emphasis row used in sidebar bottom actions and composer action bars. Icon variants are 36×36 desktop and 44×44 mobile. Every icon-only button needs an `aria-label`.
-- **Inputs and Textareas:** White surface on the page, 6px radius, 1px border. Visible labels for durable data. Placeholders may show examples but cannot be the only label for non-obvious fields.
-- **Sidebar:** Brand row at top, full-width "+ New chat" button, search field with `⌘K` hint, threads grouped by Pinned / Today / Yesterday / Earlier (empty groups hide), Context + Settings buttons at the bottom.
-- **Messages:** User messages are right-aligned `surface-subtle` pills with 12px radius. Assistant messages are plain prose — no card, no border, no role label. Tool calls and tool results use lightweight cards with key facts up top and raw JSON behind a `<details>` summary.
-- **Composer:** A single rounded card sitting at the bottom of the chat. The textarea spans the top with an "Ask anything" placeholder; a slim action row underneath holds stop / retry / copy on the left and the send arrow on the right.
-- **Catalog (Workflows / Tools / Providers):** Centered modal on desktop (Radix `Dialog`, fade + zoom-in animation) and a bottom-anchored sheet on mobile (vaul `Drawer`, drag handle to dismiss). The `Sheet` primitive owns this responsive switch so consumers stay viewport-agnostic. ESC + overlay click close on both; the drag bar handles mobile dismiss. No X button — close affordances are implicit. The sheet uses a list ↔ builder push-pop flow: a tabbed list of Workflows / Tools / Providers up top, tap a row and the same sheet replaces its body with a builder form (back arrow at top-left, sticky action bar at the bottom). Builder primitives are explicit form fields (segmented controls, chip presets, ticker/symbols inputs, percent/money fields) rather than free-text guessing. Primary action is "Run workflow" / "Run now" in dark ink; the secondary action is "Edit in chat", which pre-fills the composer with the rendered prompt and focuses it so the user can adjust before sending. Provider cards expose a status dot (success / info / warning) plus the env-var name and signup URL. The full bundle is reachable via the sidebar "Catalog" entry, the mobile header BookOpen icon, ⌘K, and a `Browse workflows, tools, and providers` affordance under the empty thread suggestions.
-- **Dashboard sheet:** Section labels with hairline rows for Watchlist / Active analyses / Recent research / Data quality. No nested cards.
-- **Badges:** `surface-subtle` pills with secondary text by default; success/warning/danger/info variants override only the foreground for state.
+**The No Decorative Type Rule.** Do not introduce another display family. The difference between homepage, docs, and GUI comes from scale, density, and layout, not font switching.
 
-## Do's and Don'ts
+**The Flat Tracking Rule.** Letter spacing is 0 across the system. Uppercase labels can use weight and mono structure, not tracking, for authority.
 
-- **Do** keep OpenCandle dense, calm, and honest — it's a console, not a brochure.
-- **Do** reserve dark-ink primary for one action per screen.
-- **Do** rely on tonal layers and 1px borders for hierarchy, not shadow.
-- **Do** preserve WCAG AA contrast for text, placeholders, icons, and component boundaries.
-- **Do** use `tabular-nums` on every financial fact.
-- **Don't** introduce gradients, glass surfaces, or background ornament. The system is flat on purpose.
-- **Don't** add a second sans family for UI labels or data. Inter carries everything; JetBrains Mono only for inline code.
-- **Don't** mix the dark-ink primary with a second decorative accent; the single-accent rule is load-bearing.
-- **Don't** use modals when an inline panel, drawer, command palette, or progressive disclosure would fit the workflow.
-- **Don't** rely on hover-only affordances; every action must work with keyboard and touch.
+## 4. Elevation
+
+OpenCandle uses tonal layering first and shadows second. Most surfaces sit flat with a 1px Hairline border. Shadows appear only on the homepage screenshot frame, the CTA panel, and rare overlays where the surface needs to read as physically above the page.
+
+### Shadow Vocabulary
+
+- **Product Frame Shadow** (`0 24px 90px rgba(52, 71, 78, 0.12)`): Use for the real GUI screenshot frame and large proof surfaces.
+- **CTA Shadow** (`0 18px 70px rgba(52, 71, 78, 0.10)`): Use for the final homepage call-to-action or a similarly rare elevated static-site surface.
+- **Tile Shadow** (`inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 22px 70px rgba(48, 57, 52, 0.14)`): Use only for homepage floating provider tiles, not for GUI panels.
+
+### Named Rules
+
+**The Flat Product Rule.** GUI surfaces, docs panels, tool cards, tables, and sidebars are flat by default. Use borders and tonal layers before adding shadow.
+
+**The Evidence Frame Rule.** Large shadow belongs to evidence: the product screenshot, an important workflow panel, or a focused overlay. Never use it for decorative card grids.
+
+## 5. Components
+
+### Buttons
+
+- **Shape:** 8px for nav buttons, 10px for large homepage actions, 6px to 8px for compact GUI actions.
+- **Primary:** Candle Slate background, White Paper text, 54px height for homepage actions, 40px height for nav actions.
+- **Hover / Focus:** Hover shifts primary to Research Ink. Focus uses a 2px Candle Slate outline with a 3px offset.
+- **Secondary:** White Paper background, Hairline border, Candle Slate text. Hover uses Soft Paper and Strong Hairline.
+- **GUI adaptation:** Keep one primary action per region. Use compact heights when density matters.
+
+### Navigation
+
+- **Homepage and docs navbar:** Fixed top bar, 66px minimum height, White Paper at high opacity, Hairline bottom rule, 14px blur, 52px desktop horizontal padding, 18px mobile padding.
+- **Brand lockup:** Logo at 26px, 8px radius, Hairline border, 10px gap to wordmark, 700 weight.
+- **Docs navigation:** Left sidebar and right table of contents use the same panel treatment as static site cards. Active nav is Candle Slate with White Paper text.
+- **GUI adaptation:** Sidebars should keep the same paper, border, and active-row vocabulary. Do not make the GUI darker than the static site unless the whole product explicitly supports a dark mode.
+
+### Cards / Containers
+
+- **Panels:** White Paper or 86 percent white over the page wash, 1px Hairline border, 12px radius, 18px to 34px internal padding.
+- **Docs content:** White Paper panel, 12px radius, 34px desktop padding, Markdown rendered directly without a separate hero.
+- **Homepage evidence cards:** Use panels for proof, provider grids, terminal panels, code windows, and open-source tiles. Avoid nested cards.
+- **Floating tiles:** 96px square, 24px radius, Soft Paper gradient, one provider abbreviation or logo. They are homepage-specific decoration, not a GUI primitive.
+
+### Code, Tables, and Data
+
+- **Inline code:** Soft Paper fill, Hairline border, 5px radius, mono stack, tabular numbers.
+- **Code blocks:** Code Dark background, Code Light text, 8px radius, 16px padding.
+- **Tables:** White Paper background, Hairline border, 8px radius, horizontal overflow inside the table, Soft Paper header row.
+- **Financial data:** Always use tabular numbers. Do not rely on color alone for positive, negative, warning, stale, or partial states.
+
+### Product Screenshot / GUI Frame
+
+- **Frame:** White Paper, Hairline border, 14px radius, Product Frame Shadow.
+- **Chrome strip:** 42px desktop, 36px mobile, Soft Paper fill, Hairline bottom rule.
+- **Window dots:** Neutral gray only. No red/yellow/green traffic-light dots because the brand is quieter than a browser mockup.
+- **Image:** Use real product screenshots with explicit width and height. Do not fabricate GUI captures.
+
+### Markdown Surfaces
+
+- **Docs layout:** Sidebar, content, and table-of-contents panels in a three-column grid. Content max width is 780px.
+- **Docs rhythm:** Markdown starts directly with its `h1`. No docs hero. `h2` sections get a top border, 22px top padding, and 42px top margin.
+- **Mobile docs:** Stack sidebar above content, hide table of contents, reduce content padding to 18px, and keep nav accessible without horizontal overflow.
+
+## 6. Do's and Don'ts
+
+- **Do** use the homepage as the source of truth for the static site and the visual direction for the GUI.
+- **Do** keep the system light, precise, and evidence-led.
+- **Do** use DM Sans for static-site and GUI typography unless a platform constraint prevents it.
+- **Do** reserve Candle Slate for committed actions and active navigation.
+- **Do** rely on White Paper, Soft Paper, Hairline borders, and radius before adding shadow.
+- **Do** render Markdown plainly in docs pages; nav can be designed, docs content should remain readable documentation.
+- **Do** make provider state, data freshness, and warnings explicit in text.
+- **Don't** return to dark T3-style styling for OpenCandle.
+- **Don't** introduce purple AI gradients, navy-and-gold finance cliches, glass panels, or stock-photo gloss.
+- **Don't** use decorative shadows on ordinary GUI cards.
+- **Don't** fabricate product screenshots or UI states.
+- **Don't** communicate market status through color alone.
+- **Don't** add a second display font, negative tracking, or ornamental letter spacing.

@@ -14,10 +14,12 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 ┌─────────────────────────────────────────────────────────────────────┐
 │  ROUTING (src/routing/)                                             │
 │                                                                     │
-│  classify-intent.ts  →  rule-based pattern matching                 │
+│  classify-intent.ts  →  default rule-based pattern matching         │
 │                         "analyze AAPL" → single_asset_analysis      │
 │                         news keywords  → general_finance_qa         │
 │                         "compare X Y"  → compare_assets             │
+│  router.ts           →  optional LLM router when                     │
+│                         OPENCANDLE_ROUTER_MODE=llm                  │
 │                                                                     │
 │  entity-extractor.ts →  pulls symbols, budget, direction            │
 │  slot-resolver.ts    →  fills workflow params from entities          │
@@ -41,15 +43,15 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 │  ├─ macro/ ───────────────────────────────────────────────────────┤ │
 │  │  fred_data, fear_greed                                         │ │
 │  ├─ options/ ─────────────────────────────────────────────────────┤ │
-│  │  option_chain, greeks                                          │ │
+│  │  option_chain with computed Greeks                             │ │
 │  ├─ portfolio/ ───────────────────────────────────────────────────┤ │
 │  │  tracker, risk_analysis, watchlist, correlation, predictions   │ │
 │  └─ sentiment/ ───────────────────────────────────────────────────┘ │
-│     search_web          → raw web search (Exa → Brave cascade)     │
+│     search_web          → raw web search (Exa → Brave → DDG)       │
 │     get_web_sentiment   → web search + keyword scoring pipeline     │
 │     get_reddit_sentiment                                            │
 │     get_twitter_sentiment                                           │
-│     get_sentiment_summary → cross-source (Twitter+Reddit+Web)       │
+│     get_sentiment_summary → cross-source summary, including Finnhub  │
 │     get_sentiment_trend   → historical from local SQLite store      │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │
@@ -63,6 +65,7 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 │  fred.ts           ←── fred-data                                    │
 │  reddit.ts         ←── reddit-sentiment, sentiment-summary          │
 │  twitter.ts        ←── twitter-sentiment, sentiment-summary         │
+│  finnhub.ts        ←── sentiment-summary                            │
 │  sec-edgar.ts      ←── sec-filings                                  │
 │  fear-greed.ts     ←── fear-greed                                   │
 │  web-search.ts     ←── search-web, web-sentiment, sentiment-summary │
@@ -73,13 +76,13 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 ┌─────────────────────────────────────────────────────────────────────┐
 │  INFRA (src/infra/)                                                 │
 │                                                                     │
-│  http-client.ts   — all external HTTP goes through here             │
+│  http-client.ts   — shared helper for many provider calls           │
 │  cache.ts         — TTL cache with stale fallback                   │
 │  rate-limiter.ts  — per-provider token bucket                       │
 │                                                                     │
-│  CROSS-CUTTING:                                                     │
+│  CROSS-CUTTING PROVIDER HELPERS (src/providers/):                   │
 │  with-fallback.ts — cascade orchestrator (try providers in order)   │
-│  wrap-provider.ts — circuit breaker + failure tracking               │
+│  wrap-provider.ts — circuit breaker + failure tracking              │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -96,7 +99,11 @@ The unified sentiment pipeline (src/sentiment/) normalizes data from multiple so
 │  │ Adapter  │   │ Adapter  │   │ Adapter  │    normalize to        │
 │  └────┬─────┘   └────┬─────┘   └────┬─────┘    SentinelRecord     │
 │       │              │              │                               │
-│       └──────────┬───┘──────────────┘                               │
+│       │          ┌──────────┐        │                               │
+│       │          │ Finnhub  │        │                               │
+│       │          │ Adapter  │        │                               │
+│       │          └────┬─────┘        │                               │
+│       └──────────┬───┴──────────────┘                               │
 │                  ▼                                                   │
 │  ┌──────────────────────────────┐                                   │
 │  │  scorer.ts (keyword-based)   │  scores each record               │
@@ -122,10 +129,12 @@ The unified sentiment pipeline (src/sentiment/) normalizes data from multiple so
 The web search provider (`src/providers/web-search.ts`) uses a fallback cascade. Each member is tried in order; the first success wins. Circuit breakers skip providers that recently failed.
 
 ```
-Exa (MCP or API key) ──fail──▶ Brave (API key) ──fail──▶ unavailable
+Exa (MCP or API key) ──fail──▶ Brave (API key) ──fail──▶ DuckDuckGo
 ```
 
 Used by three tools: `search_web`, `get_web_sentiment`, `get_sentiment_summary`.
+
+Provider overrides can force `exa`, `brave`, or `ddg` for a single request. The default cascade tries Exa first, uses Brave when configured, and keeps DuckDuckGo as the keyless final fallback.
 
 ## Key Design Principles
 
@@ -133,4 +142,5 @@ Used by three tools: `search_web`, `get_web_sentiment`, `get_sentiment_summary`.
 - **Adapters normalize.** Each sentiment source has an adapter that maps to `SentinelRecord`.
 - **Pipeline is source-agnostic.** Scorer, store, and trends work on `SentinelRecord[]` regardless of origin.
 - **Cascade with circuit breakers.** `withFallback()` + `wrapProvider()` handle provider failures gracefully.
-- **Stale cache as safety net.** Every provider falls back to expired cache data before throwing.
+- **Stale cache as safety net.** Providers and tools that opt into stale cache can return the last known value with clear degraded-state metadata.
+- **Evidence before confidence.** Runtime records and tool details should make source, freshness, and degradation visible before the assistant synthesizes.
