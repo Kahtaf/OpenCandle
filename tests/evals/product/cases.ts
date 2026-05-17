@@ -4,7 +4,7 @@ const directAnswer: ProductEvalDimension = {
   id: "direct_answer",
   description: "Answers the user's actual decision or request directly.",
   requiredPatterns: [
-    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus)\b/i,
+    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight)\b/i,
   ],
   mandatory: true,
 };

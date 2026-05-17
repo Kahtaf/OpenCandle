@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { PRODUCT_EVAL_CASES } from "../evals/product/cases.js";
+import { productEvalExitCode } from "../evals/product/reporting.js";
 import { buildProductEvalReport, scoreProductEvalCase } from "../evals/product/scorer.js";
 import type { ProductEvalCase, PromptFamily } from "../evals/product/types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
@@ -35,6 +36,7 @@ console.log(`Aggregate: ${formatPct(report.aggregate)}`);
 console.log(`Passed: ${report.passed}`);
 console.log(`Failed: ${report.failed}`);
 console.log(`Report: ${outputPath}`);
+process.exitCode = productEvalExitCode(report);
 
 function selectCases(cases: ProductEvalCase[]): ProductEvalCase[] {
   const id = process.env.PRODUCT_EVAL_CASE?.trim();

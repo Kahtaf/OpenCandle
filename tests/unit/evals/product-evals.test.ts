@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { EvalTrace } from "../../evals/types.js";
 import type { ProductEvalCase } from "../../evals/product/types.js";
 import { PRODUCT_EVAL_CASES, PRODUCT_SCENARIO_TEMPLATES } from "../../evals/product/cases.js";
+import { productEvalExitCode } from "../../evals/product/reporting.js";
 import { scoreProductEvalCase, summarizeProductEvalResults } from "../../evals/product/scorer.js";
 
 function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
@@ -113,6 +114,27 @@ describe("product eval scoring", () => {
     expect(summary.byFamily.single_asset.caseCount).toBe(1);
     expect(summary.byDimension.horizon_fit.passed).toBe(1);
     expect(summary.byDimension.horizon_fit.failed).toBe(1);
+  });
+
+  it("passes a direct decision answer that uses hold/prefer language", () => {
+    const singleAssetCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "single-asset-nvda-recommendation");
+    if (!singleAssetCase) throw new Error("missing single asset eval case");
+
+    const result = scoreProductEvalCase(singleAssetCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "single_asset_analysis" },
+      toolCalls: [{ name: "get_stock_quote", args: { symbol: "NVDA" } }],
+      text:
+        "Hold NVDA rather than add aggressively here. Price momentum and earnings evidence are mixed, " +
+        "so I would prefer waiting for a better entry while watching downside risk.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(true);
+    expect(result.passed).toBe(true);
+  });
+
+  it("maps failed product eval reports to a failing process exit code", () => {
+    expect(productEvalExitCode({ failed: 0 })).toBe(0);
+    expect(productEvalExitCode({ failed: 1 })).toBe(1);
   });
 });
 
