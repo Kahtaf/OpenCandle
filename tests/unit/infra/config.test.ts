@@ -259,6 +259,39 @@ describe("loadConfig", () => {
     expect(config.debate).toBe(false);
   });
 
+  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is unset", () => {
+    delete process.env.OPENCANDLE_ROUTER_MODE;
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.routerMode).toBe("llm");
+  });
+
+  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is blank", () => {
+    process.env.OPENCANDLE_ROUTER_MODE = "";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.routerMode).toBe("llm");
+  });
+
+  it("routerMode can use rules when OPENCANDLE_ROUTER_MODE is rules", () => {
+    process.env.OPENCANDLE_ROUTER_MODE = "rules";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.routerMode).toBe("rules");
+  });
+
+  it("routerMode rejects invalid OPENCANDLE_ROUTER_MODE values", () => {
+    process.env.OPENCANDLE_ROUTER_MODE = "regex";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    expect(() => loadConfig()).toThrowError(
+      'Invalid OPENCANDLE_ROUTER_MODE="regex". Allowed values: "llm" (default) or "rules".',
+    );
+  });
+
   it("loads braveApiKey from BRAVE_API_KEY env var", () => {
     process.env.BRAVE_API_KEY = "brave-env-key";
     mockedExistsSync.mockReturnValue(false);

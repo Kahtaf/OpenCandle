@@ -19,7 +19,7 @@ export function buildOptionsScreenerWorkflowDefinition(resolution: SlotResolutio
 
 1. From the option chain data already fetched, select the top 3-5 contracts matching: ${s.moneynessPreference} strikes, DTE near ${s.dteTarget}, with ${s.liquidityMinimum}.
 2. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.
-3. Present a table: strike, expiry, premium, delta, IV, open interest, bid-ask spread.
+3. Present a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, open interest, bid-ask spread.
 4. Explain why the #1 pick is ranked highest.
 5. State all assumptions used (which were defaults vs user-specified vs saved preferences).
 6. Include risk caveats: max loss = premium, IV crush risk, time decay (theta).

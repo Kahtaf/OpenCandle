@@ -68,7 +68,7 @@ export function resolvePortfolioSlots(
   sources.timeHorizon = horizon.source;
   if (horizon.source === "default") defaultsUsed.push("timeHorizon");
 
-  const scope = resolve(undefined, preferences.assetScope, PORTFOLIO_DEFAULTS.assetScope);
+  const scope = resolve(entities.assetScope, preferences.assetScope, PORTFOLIO_DEFAULTS.assetScope);
   sources.assetScope = scope.source;
   if (scope.source === "default") defaultsUsed.push("assetScope");
 

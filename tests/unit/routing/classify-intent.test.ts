@@ -39,6 +39,12 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("single_asset_analysis");
       expect(result.entities.symbols).toEqual(["AAPL"]);
     });
+
+    it("matches bull/bear case prompts for a single symbol", () => {
+      const result = classifyIntent("Give me the bull and bear case for PLTR, then force yourself to pick a side.");
+      expect(result.workflow).toBe("single_asset_analysis");
+      expect(result.entities.symbols).toEqual(["PLTR"]);
+    });
   });
 
   describe("portfolio_builder", () => {
@@ -66,6 +72,13 @@ describe("classifyIntent", () => {
     it("matches 'what should I invest in' without budget", () => {
       const result = classifyIntent("what should I invest in?");
       expect(result.workflow).toBe("portfolio_builder");
+    });
+
+    it("matches ETF portfolio prompts with explicit budget and risk profile", () => {
+      const result = classifyIntent("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      expect(result.workflow).toBe("portfolio_builder");
+      expect(result.entities.budget).toBe(25_000);
+      expect(result.entities.riskProfile).toBe("conservative");
     });
 
     it("matches 'build me a portfolio'", () => {
@@ -112,6 +125,12 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("options_screener");
       expect(result.entities.symbols).toEqual(["SPY"]);
     });
+
+    it("keeps option prompts on options_screener when sentiment is mentioned", () => {
+      const result = classifyIntent("Find TSLA options sentiment");
+      expect(result.workflow).toBe("options_screener");
+      expect(result.entities.symbols).toEqual(["TSLA"]);
+    });
   });
 
   describe("compare_assets", () => {
@@ -133,6 +152,12 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("compare_assets");
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
     });
+
+    it("keeps multi-symbol sentiment comparisons on compare_assets", () => {
+      const result = classifyIntent("Compare AAPL and MSFT sentiment");
+      expect(result.workflow).toBe("compare_assets");
+      expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
+    });
   });
 
   describe("watchlist_or_tracking", () => {
@@ -150,6 +175,12 @@ describe("classifyIntent", () => {
     it("matches 'show my portfolio'", () => {
       const result = classifyIntent("show my portfolio");
       expect(result.workflow).toBe("watchlist_or_tracking");
+    });
+
+    it("matches owned-holdings portfolio risk prompts before compare routing", () => {
+      const result = classifyIntent("I own 40% NVDA, 25% MSFT, 20% AAPL, 15% cash. What is my biggest portfolio risk?");
+      expect(result.workflow).toBe("watchlist_or_tracking");
+      expect(result.entities.symbols).toEqual(["NVDA", "MSFT", "AAPL"]);
     });
   });
 
@@ -173,6 +204,24 @@ describe("classifyIntent", () => {
     it("matches 'how does options pricing work?'", () => {
       const result = classifyIntent("how does options pricing work?");
       expect(result.workflow).toBe("general_finance_qa");
+    });
+
+    it("matches SEC filing thesis prompts without treating SEC as a compared ticker", () => {
+      const result = classifyIntent("What recent SEC filings for COIN could change the investment thesis?");
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual(["COIN"]);
+    });
+
+    it("matches backtest strategy prompts for the tool-backed general path", () => {
+      const result = classifyIntent("Backtest a simple moving-average strategy on SPY and tell me if it beats buy-and-hold.");
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual(["SPY"]);
+    });
+
+    it("matches single-asset sentiment/price prompts for the tool-backed general path", () => {
+      const result = classifyIntent("Is Bitcoin sentiment getting overheated or improving? Compare price action and retail sentiment.");
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual([]);
     });
   });
 

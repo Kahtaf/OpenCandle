@@ -8,7 +8,7 @@
 - Demo GIF shows a real TUI session with at least 2 distinct queries
 - Demo GIF is under 5MB
 - README displays logo centered, badges below, demo GIF in or near the intro
-- README images use absolute GitHub raw content URLs (`https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/...`) so they render on both GitHub and npmjs.com
+- README images use absolute GitHub raw content URLs (`https://raw.githubusercontent.com/opencandle/opencandle/main/assets/...`) so they render on both GitHub and npmjs.com
 - `assets/` is NOT included in the npm tarball — `package.json` `files` remains `["dist"]`
 
 ### Acceptance

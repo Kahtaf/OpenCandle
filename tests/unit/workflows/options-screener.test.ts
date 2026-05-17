@@ -60,6 +60,15 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp).toContain("0.20");
   });
 
+  it("follow-up prompt preserves full Greeks in the final ranking table", () => {
+    const workflow = buildOptionsScreenerWorkflow(makeResolution());
+    const followUp = workflow.followUps[0];
+    expect(followUp).toContain("gamma");
+    expect(followUp).toContain("theta");
+    expect(followUp).toContain("vega");
+    expect(followUp).toContain("rho");
+  });
+
   it("follow-up prompt includes length constraints", () => {
     const workflow = buildOptionsScreenerWorkflow(makeResolution());
     const followUp = workflow.followUps[0];

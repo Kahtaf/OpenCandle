@@ -60,6 +60,7 @@ export async function searchFilings(
     const src = hit._source;
     const accession = src.adsh;
     if (!accession || seen.has(accession)) continue;
+    if (!matchesTicker(src.display_names, ticker)) continue;
     seen.add(accession);
 
     const cik = src.ciks?.[0] ?? "";
@@ -81,6 +82,20 @@ export async function searchFilings(
 
   cache.set(cacheKey, filings, TTL.FUNDAMENTALS);
   return filings;
+}
+
+function matchesTicker(displayNames: string[] | undefined, ticker: string): boolean {
+  const normalized = ticker.toUpperCase();
+  return (displayNames ?? []).some((name) => {
+    const tickerGroups = name.match(/\(([^)]*)\)/g) ?? [];
+    return tickerGroups.some((group) =>
+      group
+        .slice(1, -1)
+        .split(",")
+        .map((part) => part.trim().toUpperCase())
+        .includes(normalized),
+    );
+  });
 }
 
 function buildEdgarUrl(cik: string, accession: string): string {

@@ -94,6 +94,19 @@ describe("resolvePortfolioSlots", () => {
     expect(result.sources.timeHorizon).toBe("user");
     expect(result.defaultsUsed).not.toContain("timeHorizon");
   });
+
+  it("uses asset scope from entities", () => {
+    const entities: ExtractedEntities = {
+      symbols: [],
+      budget: 25_000,
+      assetScope: "etf_focused",
+    };
+    const result = resolvePortfolioSlots(entities);
+
+    expect(result.resolved.assetScope).toBe("etf_focused");
+    expect(result.sources.assetScope).toBe("user");
+    expect(result.defaultsUsed).not.toContain("assetScope");
+  });
 });
 
 describe("resolveOptionsScreenerSlots", () => {

@@ -8,6 +8,7 @@ import {
   Building2,
   Calculator,
   CandlestickChart,
+  CircleHelp,
   Coins,
   FileText,
   Gauge,
@@ -71,6 +72,9 @@ const TOOL_META = {
   analyze_correlation: { icon: Network, label: "Correlation", group: "portfolio" },
   manage_watchlist: { icon: ListChecks, label: "Watchlist", group: "portfolio" },
   track_prediction: { icon: Target, label: "Predictions", group: "portfolio" },
+
+  // Interaction
+  ask_user: { icon: CircleHelp, label: "Question", group: "interaction" },
 };
 
 export function toolMeta(name) {
@@ -121,6 +125,7 @@ export function summarizeRunTitle(toolNames) {
     return "Research";
   }
   if (groups.has("portfolio")) return "Portfolio analysis";
+  if (groups.has("interaction")) return "Question";
   if (groups.has("fundamentals")) return "Fundamental analysis";
   if (groups.has("technical")) return "Technical analysis";
   if (groups.has("macro")) return "Macro lookup";

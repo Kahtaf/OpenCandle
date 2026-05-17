@@ -12,6 +12,8 @@ const COMMON_WORDS = new Set([
   "SMA", "EMA", "RSI", "MACD", "OBV", "ATR", "ADX", "VWAP",
   // Fundamental analysis acronyms
   "DCF", "FCF", "ROE", "ROA", "ROI", "EPS", "NAV", "WACC", "EBIT",
+  // Regulatory / source acronyms that are not tickers in natural language
+  "SEC",
   "BEST", "WHAT", "WITH", "THAT", "THIS", "FROM", "HAVE", "BEEN", "SOME",
   "THEM", "THAN", "LIKE", "JUST", "OVER", "ALSO", "BACK", "MUCH", "MOST",
   "ONLY", "VERY", "WHEN", "COME", "MAKE", "FIND", "HERE", "KNOW", "TAKE",
@@ -28,6 +30,8 @@ export function extractEntities(input: string): ExtractedEntities {
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
     timeHorizon: extractTimeHorizon(input),
+    assetScope: extractAssetScope(input),
+    compareMetrics: extractCompareMetrics(input),
   };
 }
 
@@ -134,7 +138,22 @@ function extractDteHint(input: string): string | undefined {
 
 function extractTimeHorizon(input: string): string | undefined {
   const lower = input.toLowerCase();
+  const explicitYears = lower.match(/\b(\d+)\s*(?:year|years|yr|yrs)\b/);
+  if (explicitYears) return `${explicitYears[1]}_years`;
   if (/\bshort[\s-]*term\b/.test(lower) || /\bday[\s-]*trad/i.test(lower)) return "short";
   if (/\blong[\s-]*term\b/.test(lower) || /\bbuy[\s-]*and[\s-]*hold\b/.test(lower)) return "long";
   return undefined;
+}
+
+function extractAssetScope(input: string): string | undefined {
+  const lower = input.toLowerCase();
+  if (/\betfs?\b/.test(lower)) return "etf_focused";
+  return undefined;
+}
+
+function extractCompareMetrics(input: string): string[] | undefined {
+  const lower = input.toLowerCase();
+  const metrics: string[] = [];
+  if (/\bsentiment\b/.test(lower)) metrics.push("sentiment");
+  return metrics.length > 0 ? metrics : undefined;
 }

@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Competitive finance benchmark loop** — `npm run test:evals:competitive` compares OpenCandle against generic no-tool Claude, Codex, and Gemini baselines through `acpx`, generates broad finance prompts at runtime, supports fixed-prompt reruns, judges results with a configured model, and writes ignored JSON reports under `tests/evals/runs/`. The loop is documented in `docs/internal/competitive-benchmarking.md`, including the iteration pattern for turning generic-agent wins or OC quality gaps into targeted product fixes.
+- **Shared in-process OpenCandle test harness** — `tests/harness/opencandle-runner.ts` runs OpenCandle sessions without driving the TTY, captures tool calls, `ask_user` interactions, router/workflow custom entries, and eval traces, and is now reused by eval suites and the competitive benchmark runner.
+- **GUI `ask_user` bridge** — the local GUI now renders pending clarification prompts, accepts text/select/confirm answers, supports cancellation, scopes prompts to the active session, and broadcasts prompt state to connected browser clients.
+- **Session routing helpers for the GUI** — browser routes now hide stale transcript entries during session switches, start a fresh home session when appropriate, and keep pending `ask_user` prompts tied to the correct session.
+
+### Changed
+
+- **LLM routing is now the default** — `OPENCANDLE_ROUTER_MODE` defaults to `llm`, with `rules` retained for fallback comparison.
+- **Fallback prompt behavior** — fallback-route assumptions are now internal routing context instead of user-visible scaffolding; macro/rates/portfolio prompts ask the agent to convert raw economic series into interpretable rates or trends and to search for direct regional macro facts before declaring data unavailable.
+- **Competitive runner portability** — the benchmark runner no longer contains user-specific executable or Node paths, resolves Claude from `CLAUDE_CODE_EXECUTABLE` or `PATH`, prefers useful stdout answers over stderr diagnostics on non-zero adapter exits, and keeps unavailable baselines in `skippedCompetitors` unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
+- **Finance routing and workflow evidence** — rule fallback coverage now preserves specific options/compare routes while routing sentiment, backtest, rate-cut, SEC filing, bull/bear, and owned-holdings risk prompts to more useful tool-backed paths. Compare workflows can request sentiment evidence; options screener output now includes full Greeks in the final table.
+- **Open-source hygiene** — package metadata, license text, and archived OpenSpec examples no longer contain personal repository URLs or local home-directory paths.
+
+### Fixed
+
+- Exact SEC filing lookups now filter EDGAR search results to the requested company instead of accepting text-search decoys.
+- Portfolio slot resolution now honors ETF-focused scope and explicit multi-year horizons from the user prompt.
+- GUI options follow-up prompts no longer drop gamma, theta, vega, and rho from the ranked contract table.
+
 ## [0.4.0] - 2026-05-16
 
 ### Added

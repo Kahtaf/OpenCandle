@@ -507,7 +507,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
 
     if (classification.workflow === "compare_assets" && classification.entities.symbols.length >= 2) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
-        resolved: { symbols: classification.entities.symbols },
+        resolved: { symbols: classification.entities.symbols, metrics: classification.entities.compareMetrics },
         sources: { symbols: "user" },
         defaultsUsed: [],
         missingRequired: [],
@@ -661,7 +661,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     }
     if (workflow === "compare_assets" && output.entities.symbols.length >= 2) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
-        resolved: { symbols: output.entities.symbols },
+        resolved: { symbols: output.entities.symbols, metrics: output.entities.compareMetrics },
         sources: { symbols: "user" },
         defaultsUsed: [],
         missingRequired: [],

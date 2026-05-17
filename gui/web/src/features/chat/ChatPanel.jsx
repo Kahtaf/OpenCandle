@@ -1,10 +1,11 @@
-import { Menu, PanelLeftOpen } from "lucide-react";
+import { CircleHelp, Menu, PanelLeftOpen, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import { AssistantMessage, CustomMessage, UserMessage } from "../../components/chat/thread-message.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { Input } from "../../components/ui/input.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
@@ -17,7 +18,7 @@ import { groupToolRuns } from "./tool-run-grouper.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 
-export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
+export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup, role, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
@@ -60,6 +61,9 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
         ) : (
           <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
             {groupedEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
+            {askUserPrompts.map((prompt) => (
+              <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
+            ))}
             {activity ? <AgentActivity activity={activity} /> : null}
           </div>
         )}
@@ -78,6 +82,116 @@ export function ChatPanel({ entries, liveEvents, modelSetup, role, runState, cat
         setToast={setToast}
       />
     </section>
+  );
+}
+
+function AskUserPromptCard({ prompt, role, send }) {
+  const [draft, setDraft] = useState("");
+  const pending = prompt.status === "pending";
+  const disabled = role === "follower" || !pending;
+  const submit = (answer) => {
+    const value = String(answer ?? draft).trim();
+    if (!value || disabled) return;
+    send("ask_user.answer", { id: prompt.id, answer: value });
+    setDraft("");
+  };
+  const cancel = () => {
+    if (!disabled) send("ask_user.cancel", { id: prompt.id });
+  };
+
+  return (
+    <div className="max-w-[760px]">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+        <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{pending ? "Question" : prompt.status === "answered" ? "Answered" : "Cancelled"}</span>
+      </div>
+      <div className="rounded-lg border border-border bg-card px-3 py-3 shadow-subtle-xs">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-amber-700/40 bg-amber-100/70 text-amber-800 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-300"
+          >
+            <CircleHelp className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium leading-relaxed text-foreground">{prompt.question}</div>
+            {prompt.reason ? (
+              <div className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{prompt.reason}</div>
+            ) : null}
+            {prompt.status === "answered" ? (
+              <div className="mt-2 rounded-md bg-secondary px-2 py-1.5 text-[12px] text-foreground">
+                Answer: <span className="font-medium">{prompt.answer}</span>
+              </div>
+            ) : prompt.status === "cancelled" ? (
+              <div className="mt-2 text-[12px] text-muted-foreground">The question was cancelled.</div>
+            ) : (
+              <AskUserPromptControls
+                prompt={prompt}
+                draft={draft}
+                setDraft={setDraft}
+                disabled={disabled}
+                onSubmit={submit}
+                onCancel={cancel}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AskUserPromptControls({ prompt, draft, setDraft, disabled, onSubmit, onCancel }) {
+  if (prompt.questionType === "confirm") {
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" disabled={disabled} onClick={() => onSubmit("Yes")}>Yes</Button>
+        <Button size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit("No")}>No</Button>
+        <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
+          <X />
+        </Button>
+      </div>
+    );
+  }
+
+  if (prompt.questionType === "select") {
+    const options = Array.isArray(prompt.options) ? prompt.options : [];
+    return (
+      <div className="mt-3 flex flex-wrap gap-2">
+        {options.map((option) => (
+          <Button key={option} size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit(option)}>
+            {option}
+          </Button>
+        ))}
+        <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
+          <X />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      className="mt-3 flex gap-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(draft);
+      }}
+    >
+      <Input
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        disabled={disabled}
+        placeholder={prompt.placeholder || "Type an answer"}
+        aria-label={prompt.question}
+      />
+      <Button type="submit" size="icon" disabled={disabled || !draft.trim()} aria-label="Send answer">
+        <Send />
+      </Button>
+      <Button type="button" variant="ghost" size="icon" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
+        <X />
+      </Button>
+    </form>
   );
 }
 

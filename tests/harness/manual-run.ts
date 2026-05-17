@@ -104,7 +104,9 @@ const MULTI_STEP_WORKFLOWS = new Set([
 const isMultiTurn =
   isAnalysisRequest(prompt).match ||
   MULTI_STEP_WORKFLOWS.has(classifyIntent(prompt).workflow);
-const SETTLE_GRACE_MS = isMultiTurn ? 30_000 : 3_000;
+const SETTLE_GRACE_MS = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS
+  ? Number(process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS)
+  : isMultiTurn ? 30_000 : 3_000;
 
 await new Promise<void>((resolve) => {
   let settleTimer: ReturnType<typeof setTimeout> | null = null;

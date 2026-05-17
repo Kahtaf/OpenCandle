@@ -136,6 +136,25 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("get_reddit_sentiment");
   });
 
+  it("instructs rate-cut market-pricing questions to use futures/FedWatch search", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("CME FedWatch");
+    expect(result).toContain("Federal Funds futures");
+  });
+
+  it("requires full backtest metric reporting", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("backtest_strategy");
+    expect(result).toContain("win rate");
+    expect(result).toContain("max drawdown");
+  });
+
   it("assembled prompt contains no refusal / fiduciary-advisor vocabulary", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({

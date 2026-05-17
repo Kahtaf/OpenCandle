@@ -72,11 +72,15 @@ function createFakeApi() {
 
 describe("opencandle extension", () => {
   beforeEach(() => {
+    vi.stubEnv("OPENCANDLE_ROUTER_MODE", "rules");
+    resetConfigCache();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
+    resetConfigCache();
     vi.restoreAllMocks();
   });
 
@@ -196,6 +200,7 @@ describe("opencandle extension", () => {
       symbols: [],
       budget: 10_000,
       riskProfile: "balanced",
+      assetScope: "etf_focused",
     }));
 
     expect(result).toEqual({ action: "handled" });
@@ -452,11 +457,6 @@ describe("opencandle extension", () => {
 
     beforeEach(() => {
       vi.stubEnv("OPENCANDLE_ROUTER_MODE", "llm");
-      resetConfigCache();
-    });
-
-    afterEach(() => {
-      vi.unstubAllEnvs();
       resetConfigCache();
     });
 

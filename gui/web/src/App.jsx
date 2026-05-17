@@ -1,10 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ChatPanel } from "./features/chat/ChatPanel.jsx";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
+import { routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
 
@@ -31,10 +32,20 @@ export function AppShell() {
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
   const sessionsOpen = activeDrawer === "history" || location.pathname === "/history";
   const contextOpen = activeDrawer === "context";
-  const routeSessionId = sessionIdFromPath(location.pathname);
+  const sessionView = routeSessionView({
+    pathname: location.pathname,
+    currentSessionId: gui.currentSessionId,
+    entries: gui.entries,
+    runState: chatRun.runState,
+    liveBaseEntryCount,
+  });
+  const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
+    !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
+  );
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const homeResetSessionRef = useRef("");
 
   const openDrawer = useCallback((drawer) => {
     void navigate({ search: (current) => ({ ...current, drawer }) });
@@ -60,10 +71,26 @@ export function AppShell() {
   }, [closeDrawer, openDrawer]);
 
   useEffect(() => {
-    if (!routeSessionId || routeSessionId === gui.currentSessionId || gui.sessions.length === 0) return;
-    const session = gui.sessions.find((candidate) => candidate.id === routeSessionId);
+    if (!sessionView.routeSessionId || sessionView.routeSessionId === gui.currentSessionId || gui.sessions.length === 0) return;
+    const session = gui.sessions.find((candidate) => candidate.id === sessionView.routeSessionId);
     if (session) gui.send("session.open", { path: session.path });
-  }, [gui, routeSessionId]);
+  }, [gui.currentSessionId, gui.sessions, gui.send, sessionView.routeSessionId]);
+
+  useEffect(() => {
+    if (location.pathname !== "/") {
+      homeResetSessionRef.current = "";
+      return;
+    }
+    if (!shouldStartFreshHomeSession({
+      pathname: location.pathname,
+      role: gui.role,
+      currentSessionId: gui.currentSessionId,
+      entryCount: gui.entries.length,
+      lastResetSessionId: homeResetSessionRef.current,
+    })) return;
+    homeResetSessionRef.current = gui.currentSessionId;
+    gui.send("session.new");
+  }, [location.pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send]);
 
   useEffect(() => {
     if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;
@@ -87,6 +114,18 @@ export function AppShell() {
       }
     }, 220);
   }, []);
+
+  const startRoutedChatRun = useCallback((prompt) => {
+    const activeSessionId = gui.currentSessionId;
+    if (location.pathname === "/" && activeSessionId) {
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId: activeSessionId },
+        search: (current) => ({ ...current, drawer: undefined }),
+      });
+    }
+    void chatRun.startChatRun(prompt);
+  }, [chatRun.startChatRun, gui.currentSessionId, location.pathname, navigate]);
 
   const newSession = useCallback(() => {
     gui.send("session.new");
@@ -116,7 +155,7 @@ export function AppShell() {
 
   const sidebarProps = {
     sessions: gui.sessions,
-    currentSessionId: gui.currentSessionId,
+    currentSessionId: sessionView.activeSessionId,
     collapsed: sidebarCollapsed,
     onCollapse: () => setSidebarCollapsed(true),
     onOpenSession: openSession,
@@ -132,21 +171,21 @@ export function AppShell() {
       : activeDrawer === "workflows"
         ? "workflows"
         : "workflows";
-
   return (
     <ToolDrawerProvider>
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ChatPanel
-          entries={gui.entries}
+          entries={sessionView.entries}
           liveEvents={liveEvents}
+          askUserPrompts={visibleAskUserPrompts}
           modelSetup={gui.modelSetup}
           role={gui.role}
           runState={chatRun.runState}
           lastPrompt={chatRun.lastPrompt}
           catalog={gui.catalog}
           send={gui.send}
-          startChatRun={chatRun.startChatRun}
+          startChatRun={startRoutedChatRun}
           stopRun={chatRun.stopRun}
           retryRun={chatRun.retryRun}
           setToast={gui.setToast}
@@ -181,16 +220,11 @@ export function AppShell() {
             onClose={closeDrawer}
             send={gui.send}
             setToast={gui.setToast}
-            startChatRun={chatRun.startChatRun}
+            startChatRun={startRoutedChatRun}
             fillComposer={fillComposer}
           />
         ) : null}
       </Suspense>
     </ToolDrawerProvider>
   );
-}
-
-function sessionIdFromPath(pathname) {
-  const match = String(pathname || "").match(/^\/sessions\/([^/]+)$/);
-  return match ? decodeURIComponent(match[1]) : "";
 }

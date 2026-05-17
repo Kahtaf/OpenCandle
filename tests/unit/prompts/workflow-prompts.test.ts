@@ -209,6 +209,14 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("delta");
     expect(prompt).toContain("0.20");
   });
+
+  it("requires full Greeks in the ranked options table", () => {
+    const prompt = buildOptionsScreenerPrompt(makeOptionsResolution());
+    expect(prompt).toContain("gamma");
+    expect(prompt).toContain("theta");
+    expect(prompt).toContain("vega");
+    expect(prompt).toContain("rho");
+  });
 });
 
 describe("buildCompareAssetsPrompt", () => {
