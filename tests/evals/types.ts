@@ -1,4 +1,5 @@
 import type { ClassificationResult, WorkflowType } from "../../src/routing/types.js";
+import type { CustomEntryTrace } from "../harness/types.js";
 
 /** Shape of tool call data captured in a trace. */
 export interface TraceToolCall {
@@ -14,6 +15,7 @@ export interface EvalTrace {
   toolCalls: TraceToolCall[];
   askUserTranscript: Array<{ question: string; answer: string | null }>;
   text: string;
+  customEntries?: CustomEntryTrace[];
 }
 
 /** A single eval case definition. */

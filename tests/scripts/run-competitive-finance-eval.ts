@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
-import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
@@ -16,6 +16,8 @@ import {
   buildComparisonJudgePrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
+  extractUsableAnswerFromCliFailure,
+  fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   type ComparisonJudgment,
@@ -23,6 +25,7 @@ import {
   type GeneratedFinancePrompt,
 } from "../evals/competitive-finance.js";
 import type { EvalTrace } from "../evals/types.js";
+import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
 interface CompetitiveRunResult {
   prompt: GeneratedFinancePrompt;
@@ -51,9 +54,15 @@ interface CompetitorRunResult {
   model: string;
 }
 
+type AcpxAgent = "claude" | "codex" | "gemini";
+
 loadEnv();
 
 const DEFAULT_ACPX_COMMAND = join(process.cwd(), "node_modules", ".bin", "acpx");
+const DEFAULT_COMPETITOR_CWD = join(tmpdir(), "oc-competitive-agents");
+const DEFAULT_CLAUDE_AGENT_COMMAND = join(process.cwd(), "node_modules", ".bin", "claude-agent-acp");
+const DEFAULT_GEMINI_AGENT_COMMAND = "gemini --acp --skip-trust";
+const DEFAULT_CLAUDE_EXECUTABLE = "/Users/kahtaf/.local/bin/claude";
 
 const asOfDate = new Date().toISOString().slice(0, 10);
 const promptCount = numberFromEnv("COMPETITIVE_PROMPT_COUNT", 5);
@@ -61,6 +70,8 @@ const seed = process.env.COMPETITIVE_PROMPT_SEED ?? new Date().toISOString().sli
 const requestedProvider = process.env.OPENCANDLE_COMPETITIVE_PROVIDER;
 const requestedModelId = process.env.OPENCANDLE_COMPETITIVE_MODEL;
 const settleGraceMs = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS ?? "30000";
+const competitorCwd = process.env.OPENCANDLE_COMPETITIVE_AGENT_CWD ?? DEFAULT_COMPETITOR_CWD;
+mkdirSync(competitorCwd, { recursive: true });
 
 registerBuiltInApiProviders();
 const authStorage = AuthStorage.create();
@@ -70,34 +81,54 @@ const judgeModel = await resolveModelWithAuth(
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
-const competitors = resolveCompetitors();
-preflightCompetitors(competitors);
+const preflight = preflightCompetitors(resolveCompetitors());
+const competitors = preflight.active;
+if (competitors.length === 0) {
+  throw new Error("No competitive baseline agents are available after preflight");
+}
 
-const generatedPromptText = await completeText(
+const fixedPrompt = fixedPromptFromEnv(process.env);
+const prompts = fixedPrompt ? [fixedPrompt] : parseGeneratedPrompts(await completeText(
   judgeModel,
   buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate }),
   { temperature: 0.8, maxTokens: 3000 },
-);
-const prompts = parseGeneratedPrompts(generatedPromptText);
+));
 if (prompts.length === 0) throw new Error("Prompt generator returned no prompts");
 
 const results: CompetitiveRunResult[] = [];
 for (const prompt of prompts.slice(0, promptCount)) {
   console.log(`\n=== ${prompt.id}: ${prompt.prompt}`);
-  const openCandleTrace = runOpenCandle(prompt.prompt);
+  const openCandleTrace = await runOpenCandle(prompt.prompt);
   const competitorAnswers = [];
   for (const competitor of competitors) {
     console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
-    const result = competitor.run(
-      buildGenericAgentPrompt(prompt.prompt, { agentName: competitor.label, asOfDate }),
-    );
-    competitorAnswers.push({
-      id: competitor.id,
-      label: competitor.label,
-      provider: result.provider,
-      model: result.model,
-      answer: result.answer,
-    });
+    try {
+      const result = competitor.run(
+        buildGenericAgentPrompt(prompt.prompt, { agentName: competitor.label, asOfDate }),
+      );
+      competitorAnswers.push({
+        id: competitor.id,
+        label: competitor.label,
+        provider: result.provider,
+        model: result.model,
+        answer: result.answer,
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (process.env.OPENCANDLE_COMPETITIVE_REQUIRE_ALL === "1") {
+        throw new Error(`${competitor.label} baseline failed: ${reason}`);
+      }
+      console.warn(`${competitor.label} baseline failed for prompt ${prompt.id}: ${reason}`);
+      const usableAnswer = extractUsableAnswerFromCliFailure(reason);
+      competitorAnswers.push({
+        id: competitor.id,
+        label: competitor.label,
+        provider: competitor.provider,
+        model: competitor.model,
+        answer: usableAnswer ?? `${competitor.label} baseline failed before answering: ${reason}`,
+        error: reason,
+      });
+    }
   }
   const judgmentText = await completeText(
     judgeModel,
@@ -131,7 +162,9 @@ const report = {
     provider: competitor.provider,
     model: competitor.model,
   })),
+  skippedCompetitors: preflight.skipped,
   promptCount: results.length,
+  promptMode: fixedPrompt ? "fixed" : "generated",
   summary,
   results,
 };
@@ -174,46 +207,48 @@ async function completeText(
     .trim();
 }
 
-function runOpenCandle(prompt: string): EvalTrace {
-  const ipcDir = mkdtempSync(join(tmpdir(), "oc-competitive-"));
-  try {
-    execFileSync("npx", ["tsx", "tests/harness/manual-run.ts", ipcDir, prompt], {
-      cwd: process.cwd(),
-      timeout: 900_000,
-      stdio: "pipe",
-      env: {
-        ...process.env,
-        OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS: settleGraceMs,
-      },
-    });
-    return JSON.parse(readFileSync(join(ipcDir, "trace.json"), "utf-8")) as EvalTrace;
-  } finally {
-    rmSync(ipcDir, { recursive: true, force: true });
-  }
+async function runOpenCandle(prompt: string): Promise<EvalTrace> {
+  const parsedSettleGraceMs = Number(settleGraceMs);
+  const result = await runOpenCandleSession({
+    prompt,
+    settleGraceMs: Number.isFinite(parsedSettleGraceMs) ? parsedSettleGraceMs : undefined,
+    timeoutMs: 900_000,
+  });
+  return result.evalTrace;
 }
 
-function preflightCompetitors(competitors: CompetitorRunner[]): void {
-  if (process.env.OPENCANDLE_COMPETITIVE_PREFLIGHT === "0") return;
+function preflightCompetitors(competitors: CompetitorRunner[]): {
+  active: CompetitorRunner[];
+  skipped: Array<{ id: string; label: string; reason: string }>;
+} {
+  if (process.env.OPENCANDLE_COMPETITIVE_PREFLIGHT === "0") {
+    return { active: competitors, skipped: [] };
+  }
+  const active: CompetitorRunner[] = [];
+  const skipped: Array<{ id: string; label: string; reason: string }> = [];
   for (const competitor of competitors) {
     console.log(`Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
-    const result = competitor.run("Reply exactly: OK");
-    if (!result.answer.trim()) {
-      throw new Error(`${competitor.label} baseline returned an empty preflight response`);
+    try {
+      const result = competitor.run("Reply exactly: OK");
+      if (!result.answer.trim()) {
+        throw new Error(`${competitor.label} baseline returned an empty preflight response`);
+      }
+      active.push(competitor);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (process.env.OPENCANDLE_COMPETITIVE_REQUIRE_ALL === "1") {
+        throw new Error(`${competitor.label} baseline failed preflight: ${reason}`);
+      }
+      console.warn(`Skipping ${competitor.label} baseline after preflight failure: ${reason}`);
+      skipped.push({ id: competitor.id, label: competitor.label, reason });
     }
   }
+  return { active, skipped };
 }
 
-function runClaudeOrGeminiAcp(prompt: string): CompetitorRunResult {
-  try {
-    const answer = runAcpx("claude", prompt);
-    return { answer, provider: "acpx/claude", model: "subscription" };
-  } catch (error) {
-    console.warn(`Claude baseline failed, falling back to Gemini: ${error instanceof Error ? error.message : String(error)}`);
-    const answer = runAcpx("gemini", prompt, {
-      env: { GEMINI_CLI_TRUST_WORKSPACE: "true", TERM: "xterm-256color" },
-    });
-    return { answer, provider: "acpx/gemini", model: "subscription" };
-  }
+function runClaudeAcp(prompt: string): CompetitorRunResult {
+  const answer = runAcpx("claude", prompt);
+  return { answer, provider: "acpx/claude", model: "subscription" };
 }
 
 function runCodexAcp(prompt: string): CompetitorRunResult {
@@ -222,13 +257,23 @@ function runCodexAcp(prompt: string): CompetitorRunResult {
   return { answer, provider: "acpx/codex", model };
 }
 
+function runGeminiAcp(prompt: string): CompetitorRunResult {
+  const answer = runAcpx("gemini", prompt, {
+    env: { GEMINI_CLI_TRUST_WORKSPACE: "true", TERM: "xterm-256color" },
+  });
+  return { answer, provider: "acpx/gemini", model: "subscription" };
+}
+
 function runAcpx(
-  agent: "claude" | "codex" | "gemini",
+  agent: AcpxAgent,
   prompt: string,
   options: { env?: Record<string, string>; model?: string } = {},
 ): string {
   const command = process.env.OPENCANDLE_COMPETITIVE_ACPX_COMMAND ?? DEFAULT_ACPX_COMMAND;
+  const agentCommand = resolveAgentCommand(agent);
   const args = [
+    "--cwd",
+    competitorCwd,
     "--format",
     "quiet",
     "--deny-all",
@@ -240,12 +285,35 @@ function runAcpx(
     String(numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS", 900)),
   ];
   if (options.model) args.push("--model", options.model);
-  args.push(agent, "exec");
+  if (agentCommand) {
+    args.push("--agent", agentCommand, "exec");
+  } else {
+    args.push(agent, "exec");
+  }
   return runCli(command, args, {
+    cwd: competitorCwd,
     input: prompt,
     timeout: numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
-    env: options.env,
+    env: {
+      ...defaultAgentEnv(agent),
+      ...options.env,
+    },
   });
+}
+
+function resolveAgentCommand(agent: AcpxAgent): string | undefined {
+  const specific = process.env[`OPENCANDLE_COMPETITIVE_${agent.toUpperCase()}_AGENT_COMMAND`];
+  if (specific) return specific;
+  if (agent === "claude") return DEFAULT_CLAUDE_AGENT_COMMAND;
+  if (agent === "gemini") return DEFAULT_GEMINI_AGENT_COMMAND;
+  return undefined;
+}
+
+function defaultAgentEnv(agent: AcpxAgent): Record<string, string> {
+  if (agent === "claude" && !process.env.CLAUDE_CODE_EXECUTABLE) {
+    return { CLAUDE_CODE_EXECUTABLE: DEFAULT_CLAUDE_EXECUTABLE };
+  }
+  return {};
 }
 
 function runCli(
@@ -327,10 +395,10 @@ function resolveCompetitors(): CompetitorRunner[] {
   return [
     {
       id: "claude",
-      label: "Claude/Gemini",
-      provider: "acpx/claude|acpx/gemini",
+      label: "Claude",
+      provider: "acpx/claude",
       model: "subscription",
-      run: runClaudeOrGeminiAcp,
+      run: runClaudeAcp,
     },
     {
       id: "codex",
@@ -338,6 +406,13 @@ function resolveCompetitors(): CompetitorRunner[] {
       provider: "acpx/codex",
       model: process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium",
       run: runCodexAcp,
+    },
+    {
+      id: "gemini",
+      label: "Gemini",
+      provider: "acpx/gemini",
+      model: "subscription",
+      run: runGeminiAcp,
     },
   ];
 }

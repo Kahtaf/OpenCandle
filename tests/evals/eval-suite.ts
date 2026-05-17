@@ -76,7 +76,7 @@ export function registerEvalSuite(
       const evalCase = cases.find((c) => c.prompt === input);
       if (!evalCase) throw new Error(`No eval case found for prompt: ${input}`);
 
-      const trace = runEvalCase(evalCase);
+      const trace = await runEvalCase(evalCase);
       traceCache.set(input, { evalCase, trace });
 
       return {

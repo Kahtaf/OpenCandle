@@ -20,6 +20,7 @@ export interface CompetitorAnswer {
   provider: string;
   model: string;
   answer: string;
+  error?: string;
 }
 
 export interface ComparisonJudgeInput {
@@ -41,7 +42,7 @@ export interface ComparisonJudgment {
 
 export function buildPromptGenerationPrompt(options: PromptGenerationOptions): string {
   const seedLine = options.seed ? `Use this run seed to vary the prompt set: ${options.seed}` : "Invent a fresh prompt set.";
-  return `Generate ${options.count} realistic finance prompts for comparing OpenCandle against Claude and Codex as generic no-tool finance agents.
+  return `Generate ${options.count} realistic finance prompts for comparing OpenCandle against generic no-tool finance agents such as Claude, Codex, and Gemini.
 
 Current date for this benchmark run: ${options.asOfDate}
 
@@ -51,7 +52,7 @@ The set must cover general finance, investing, portfolio construction, market st
 
 Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
 - OpenCandle may be better because it can gather evidence or run tools.
-- Claude or Codex may be better because the prompt mainly needs synthesis, explanation, or judgment.
+- A generic agent may be better because the prompt mainly needs synthesis, explanation, or judgment.
 - The winner is ambiguous and the comparison should reveal what OpenCandle needs to improve.
 
 Return JSON only:
@@ -95,7 +96,7 @@ ${competitor.answer}`)
   const winnerOptions = ["opencandle", ...input.competitorAnswers.map((competitor) => competitor.id), "tie"].join("|");
   const scoreShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, 0]));
   const didBetterShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, ["..."]]));
-  return `Compare OpenCandle against Claude and Codex as generic no-tool finance agents for the same user prompt.
+  return `Compare OpenCandle against generic no-tool finance agents for the same user prompt.
 
 Current date: ${input.asOfDate}
 
@@ -117,7 +118,7 @@ ${input.openCandleTrace.text}
 Generic no-tool agent answers:
 ${competitorAnswers}
 
-Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for Claude or Codex to win. When either does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
+Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
 
 Return JSON only:
 {
@@ -158,6 +159,34 @@ export function parseComparisonJudgment(raw: string): ComparisonJudgment {
     competitorsDidBetter: stringArrayRecord(value.competitorsDidBetter),
     openCandleImprovementIdeas: stringArray(value.openCandleImprovementIdeas),
   };
+}
+
+export function fixedPromptFromEnv(env: Record<string, string | undefined>): GeneratedFinancePrompt | null {
+  const prompt = env.OPENCANDLE_COMPETITIVE_PROMPT?.trim();
+  if (!prompt) return null;
+
+  const complexity = env.OPENCANDLE_COMPETITIVE_PROMPT_COMPLEXITY?.trim();
+  return {
+    id: env.OPENCANDLE_COMPETITIVE_PROMPT_ID?.trim() || "fixed-prompt",
+    prompt,
+    topic: env.OPENCANDLE_COMPETITIVE_PROMPT_TOPIC?.trim() || "fixed prompt",
+    complexity: complexity === "simple" || complexity === "complex" ? complexity : "moderate",
+    evaluationFocus: env.OPENCANDLE_COMPETITIVE_PROMPT_FOCUS?.trim() ||
+      "Compare OpenCandle against generic agents on the same fixed prompt and identify concrete OpenCandle improvements.",
+  };
+}
+
+export function extractUsableAnswerFromCliFailure(message: string): string | null {
+  const match = /\bfailed:\s*/i.exec(message);
+  const candidate = (match ? message.slice(match.index + match[0].length) : message).trim();
+  if (!candidate) return null;
+  if (/^(Internal error|Error handling request|Gemini CLI ACP startup timed out|exit status)\b/i.test(candidate)) {
+    return null;
+  }
+  if (/Failed to authenticate|Invalid authentication credentials|Permission denied/i.test(candidate)) {
+    return null;
+  }
+  return candidate;
 }
 
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {

@@ -3,6 +3,8 @@ import {
   buildComparisonJudgePrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
+  extractUsableAnswerFromCliFailure,
+  fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
 } from "../../evals/competitive-finance.js";
@@ -15,7 +17,7 @@ describe("competitive finance benchmarking", () => {
     expect(prompt).toContain("Generate 4 realistic finance prompts");
     expect(prompt).toContain("Current date for this benchmark run: 2026-05-16");
     expect(prompt).toContain("Do not bias toward prompts where OpenCandle obviously has a tool advantage");
-    expect(prompt).toContain("Claude or Codex may be better");
+    expect(prompt).toContain("A generic agent may be better");
     expect(prompt).toContain("what OpenCandle needs to improve");
   });
 
@@ -44,7 +46,7 @@ describe("competitive finance benchmarking", () => {
     ]);
   });
 
-  it("compares OpenCandle with Claude and Codex no-tool answers", () => {
+  it("compares OpenCandle with generic no-tool answers", () => {
     const trace: EvalTrace = {
       prompt: "What recent filings matter for COIN?",
       classification: {
@@ -82,6 +84,13 @@ describe("competitive finance benchmarking", () => {
           model: "gpt-5.3-codex-spark",
           answer: "Codex answer",
         },
+        {
+          id: "gemini",
+          label: "Gemini",
+          provider: "google",
+          model: "gemini-cli",
+          answer: "Gemini answer",
+        },
       ],
     });
 
@@ -89,7 +98,8 @@ describe("competitive finance benchmarking", () => {
     expect(judgePrompt).toContain("Current date: 2026-05-16");
     expect(judgePrompt).toContain("Agent: Claude (claude, anthropic/claude-sonnet-4-5)");
     expect(judgePrompt).toContain("Agent: Codex (codex, openai-codex/gpt-5.3-codex-spark)");
-    expect(judgePrompt).toContain("It is acceptable for Claude or Codex to win");
+    expect(judgePrompt).toContain("Agent: Gemini (gemini, google/gemini-cli)");
+    expect(judgePrompt).toContain("It is acceptable for any generic agent to win");
     expect(judgePrompt).toContain("Treat dates on or before the current date as current or historical");
     expect(judgePrompt).toContain("get_sec_filings");
   });
@@ -112,5 +122,39 @@ describe("competitive finance benchmarking", () => {
       codex: ["better structure"],
     });
     expect(judgment.openCandleImprovementIdeas).toEqual(["summarize before listing tool output"]);
+  });
+
+  it("extracts usable agent text from non-zero CLI failures", () => {
+    const answer = extractUsableAnswerFromCliFailure(
+      "/repo/node_modules/.bin/acpx --cwd /tmp/oc failed: As of May 17, 2026, here is the analysis.\n\nDetails follow.",
+    );
+
+    expect(answer).toBe("As of May 17, 2026, here is the analysis.\n\nDetails follow.");
+  });
+
+  it("does not treat infrastructure failures as usable agent answers", () => {
+    expect(extractUsableAnswerFromCliFailure("failed: Internal error: bad auth")).toBeNull();
+    expect(extractUsableAnswerFromCliFailure("failed: Gemini CLI ACP startup timed out")).toBeNull();
+    expect(extractUsableAnswerFromCliFailure("failed: Error handling request { denied: true }")).toBeNull();
+  });
+
+  it("supports rerunning a fixed competitive prompt from env", () => {
+    expect(fixedPromptFromEnv({})).toBeNull();
+
+    const prompt = fixedPromptFromEnv({
+      OPENCANDLE_COMPETITIVE_PROMPT_ID: "macro-rerun",
+      OPENCANDLE_COMPETITIVE_PROMPT: "Analyze inflation and the 60/40 impact.",
+      OPENCANDLE_COMPETITIVE_PROMPT_TOPIC: "macro",
+      OPENCANDLE_COMPETITIVE_PROMPT_COMPLEXITY: "complex",
+      OPENCANDLE_COMPETITIVE_PROMPT_FOCUS: "Check whether OC improves after a prompt fix.",
+    });
+
+    expect(prompt).toEqual({
+      id: "macro-rerun",
+      prompt: "Analyze inflation and the 60/40 impact.",
+      topic: "macro",
+      complexity: "complex",
+      evaluationFocus: "Check whether OC improves after a prompt fix.",
+    });
   });
 });

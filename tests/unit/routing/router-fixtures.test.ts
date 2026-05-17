@@ -118,7 +118,7 @@ describe("Router fixtures drive prompt assembly correctly", () => {
     }
 
     if (data.expectedRouterOutput.route === "fallback") {
-      it(`fixture ${name} fallback playbook embeds the Assumptions block and ask_user directive`, () => {
+      it(`fixture ${name} fallback playbook embeds assumptions as context and ask_user directive`, () => {
         const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
         const playbook = buildFallbackPlaybook({
           assumptionsBlock,
@@ -129,8 +129,13 @@ describe("Router fixtures drive prompt assembly correctly", () => {
               : undefined,
         });
         if (hasSlots) {
-          // The playbook must carry the block verbatim.
+          // The playbook must carry the block as context, but should not tell
+          // the model to reproduce fallback assumptions verbatim in the answer.
           expect(playbook).toContain(assumptionsBlock);
+          expect(playbook).toContain("same-month year-over-year inflation");
+          expect(playbook).toContain("instead of searching only for provider-specific series identifiers");
+          expect(playbook).not.toContain("Start with the Assumptions block");
+          expect(playbook).not.toContain("Reproduce the block in your response exactly");
         }
         if (data.expectedRouterOutput.missing_required.length > 0) {
           expect(playbook).toMatch(/ask_user/);
@@ -168,6 +173,7 @@ describe("Router fixtures drive prompt assembly correctly", () => {
     expect(prompt.toLowerCase()).toContain("invalidation");
     // Fallback playbook marker.
     expect(prompt).toContain("## Fallback Playbook");
+    expect(prompt).not.toContain("Start your response with that block exactly as written");
     // No refusal vocabulary from any section.
     expect(prompt).not.toMatch(/not financial advice/i);
     expect(prompt).not.toMatch(/consult a qualified/i);

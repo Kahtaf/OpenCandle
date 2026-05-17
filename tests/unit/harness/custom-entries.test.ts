@@ -1,38 +1,15 @@
 /**
- * Verifies the opencandle-* custom-entry drain that `tests/harness/manual-run.ts`
- * performs before writing trace.json.
+ * Verifies the opencandle-* custom-entry drain used by the harness before
+ * writing trace.json.
  *
- * The drain lives inline in manual-run.ts (design Decision 6: "inline, wildcard
- * opencandle-*"). To keep this test focused and LLM-free, we pre-seed a real
+ * To keep this test focused and LLM-free, we pre-seed a real
  * SessionManager.inMemory() with representative custom entries — matching what
- * the opencandle extension writes at runtime — and replay the same filter + map
- * expression that manual-run.ts uses, then assert the resulting array shape and
- * ordering.
+ * the opencandle extension writes at runtime — then assert the resulting array
+ * shape and ordering.
  */
 import { describe, it, expect } from "vitest";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-
-/**
- * Apply the same drain logic that manual-run.ts uses.
- * Kept in this test file as a literal mirror of the inlined harness code so
- * that a divergence between harness and test would show up as a lint/diff flag
- * in review rather than a silent skip.
- */
-function drainOpenCandleEntries(
-  sessionManager: Pick<SessionManager, "getEntries">,
-): Array<{ customType: string; data: unknown; timestamp: string }> {
-  return sessionManager
-    .getEntries()
-    .filter((e) => e.type === "custom" && e.customType.startsWith("opencandle-"))
-    .map((e) => {
-      const entry = e as Extract<ReturnType<typeof sessionManager.getEntries>[number], { type: "custom" }>;
-      return {
-        customType: entry.customType,
-        data: entry.data,
-        timestamp: entry.timestamp,
-      };
-    });
-}
+import { drainOpenCandleCustomEntries } from "../../harness/opencandle-runner.js";
 
 describe("harness opencandle-* custom-entry drain", () => {
   it("captures opencandle-* entries with the documented shape", () => {
@@ -44,7 +21,7 @@ describe("harness opencandle-* custom-entry drain", () => {
     sm.appendCustomEntry("opencandle-router", { output: { intent: "general_qa" } });
     sm.appendCustomEntry("opencandle-disclaimer", { text: "Not financial advice." });
 
-    const entries = drainOpenCandleEntries(sm);
+    const entries = drainOpenCandleCustomEntries(sm);
 
     expect(entries).toHaveLength(2);
     expect(entries[0]).toMatchObject({
@@ -65,7 +42,7 @@ describe("harness opencandle-* custom-entry drain", () => {
     sm.appendCustomEntry("some-other-extension", { payload: "should be dropped" });
     sm.appendCustomEntry("opencandle-turn-gap", { annotation: "cred-soft-fallback" });
 
-    const entries = drainOpenCandleEntries(sm);
+    const entries = drainOpenCandleCustomEntries(sm);
     const customTypes = entries.map((e) => e.customType);
 
     expect(customTypes).toEqual(["opencandle-workflow", "opencandle-turn-gap"]);
@@ -79,7 +56,7 @@ describe("harness opencandle-* custom-entry drain", () => {
     sm.appendCustomEntry("opencandle-workflow", { step: 3 });
     sm.appendCustomEntry("opencandle-disclaimer", { step: 4 });
 
-    const entries = drainOpenCandleEntries(sm);
+    const entries = drainOpenCandleCustomEntries(sm);
 
     expect(entries.map((e) => (e.data as { step: number }).step)).toEqual([1, 2, 3, 4]);
   });
@@ -102,7 +79,7 @@ describe("harness opencandle-* custom-entry drain", () => {
       sm.appendCustomEntry(t, { marker: t });
     }
 
-    const entries = drainOpenCandleEntries(sm);
+    const entries = drainOpenCandleCustomEntries(sm);
     expect(entries.map((e) => e.customType)).toEqual(knownTypes);
   });
 
@@ -111,7 +88,7 @@ describe("harness opencandle-* custom-entry drain", () => {
     sm.appendMessage({ role: "user", content: "hi" });
     sm.appendCustomEntry("unrelated-ext", { foo: 1 });
 
-    expect(drainOpenCandleEntries(sm)).toEqual([]);
+    expect(drainOpenCandleCustomEntries(sm)).toEqual([]);
   });
 
   // Spec scenarios from
@@ -126,7 +103,7 @@ describe("harness opencandle-* custom-entry drain", () => {
       };
       sm.appendCustomEntry("opencandle-router", { output: routerOutput });
 
-      const [entry] = drainOpenCandleEntries(sm);
+      const [entry] = drainOpenCandleCustomEntries(sm);
       expect(entry.customType).toBe("opencandle-router");
       expect((entry.data as { output: unknown }).output).toEqual(routerOutput);
     });
@@ -139,7 +116,7 @@ describe("harness opencandle-* custom-entry drain", () => {
         resolved: { budget: 10_000, risk_profile: "moderate" },
       });
 
-      const [entry] = drainOpenCandleEntries(sm);
+      const [entry] = drainOpenCandleCustomEntries(sm);
       expect(entry.customType).toBe("opencandle-workflow");
       expect(entry.data).toEqual({
         workflow: "portfolio_builder",
@@ -156,7 +133,7 @@ describe("harness opencandle-* custom-entry drain", () => {
       sm.appendCustomEntry("opencandle-disclaimer", { text: "turn 1" });
       sm.appendCustomEntry("opencandle-disclaimer", { text: "turn 2" });
 
-      const disclaimers = drainOpenCandleEntries(sm).filter(
+      const disclaimers = drainOpenCandleCustomEntries(sm).filter(
         (e) => e.customType === "opencandle-disclaimer",
       );
       expect(disclaimers).toHaveLength(2);
@@ -168,7 +145,7 @@ describe("harness opencandle-* custom-entry drain", () => {
         annotation: { provider: "alpha_vantage", reason: "soft-fallback" },
       });
 
-      const [entry] = drainOpenCandleEntries(sm);
+      const [entry] = drainOpenCandleCustomEntries(sm);
       expect(entry.customType).toBe("opencandle-turn-gap");
       expect(entry.data).toEqual({
         annotation: { provider: "alpha_vantage", reason: "soft-fallback" },
@@ -182,7 +159,7 @@ describe("harness opencandle-* custom-entry drain", () => {
       sm.appendCustomEntry("open-candle", { spaced: "wrong prefix" });
       sm.appendCustomEntry("opencandleX", { close: "but no hyphen" });
 
-      expect(drainOpenCandleEntries(sm)).toEqual([]);
+      expect(drainOpenCandleCustomEntries(sm)).toEqual([]);
     });
   });
 });

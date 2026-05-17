@@ -105,7 +105,7 @@ export const cache = new Cache();
 
 ## TESTING OPENCANDLE AS AN AGENT
 
-Run `npx tsx tests/harness/manual-run.ts <ipc-dir> "<prompt>"` in background. Poll `<ipc-dir>/status` (`running`/`waiting`/`done`). When `waiting`, read `question.json`, write `{"value":"..."}` to `answer.json`, repeat until `done`. Final output in `trace.json`.
+Use `runOpenCandleSession()` from `tests/harness/opencandle-runner.ts` for scripted evals and competitive benchmarking. For external-agent/manual ask-user driving, run `npx tsx tests/harness/cli.ts run --prompt "<prompt>" --ipc <ipc-dir>` in background, poll with `npx tsx tests/harness/cli.ts wait --ipc <ipc-dir>`, answer pending questions with `npx tsx tests/harness/cli.ts answer --ipc <ipc-dir> --value "<answer>"`, and read the final trace with `npx tsx tests/harness/cli.ts trace --ipc <ipc-dir>`.
 
 ## RUNTIME STATE
 - Pi config: `.pi/` and `~/.pi/agent/` — do not move into OpenCandle storage.
