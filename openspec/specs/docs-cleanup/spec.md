@@ -2,7 +2,7 @@
 
 ### Requirements
 
-- No stale absolute paths (`/Users/kahtaf/...`) remain in any tracked `.md` file in the repo
+- No stale absolute paths (`/home/user/...`) remain in any tracked `.md` file in the repo
 - This includes files moved to `docs/internal/` — they are still tracked by git
 - Internal planning docs are in `docs/internal/`, not top-level `docs/`
 - Public-facing docs (`build-a-tool.md`, `production-plan.md`) remain in `docs/`
@@ -13,7 +13,7 @@
 
 ### Acceptance
 
-- [ ] `git grep '/Users/kahtaf' -- ':!openspec/'` returns no results (openspec change artifacts are excluded — they reference the path in examples)
+- [ ] `git grep '/home/user' -- ':!openspec/'` returns no results (openspec change artifacts are excluded — they reference the path in examples)
 - [ ] `docs/internal/` contains the 5 moved planning docs
 - [ ] `docs/build-a-tool.md` and `docs/production-plan.md` still exist at their current paths
 - [ ] `package.json` keywords array has 10+ entries including finance-relevant terms

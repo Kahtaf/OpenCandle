@@ -3,10 +3,12 @@ import {
   buildComparisonJudgePrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
+  buildPortableAgentPath,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  selectCliFailureMessage,
 } from "../../evals/competitive-finance.js";
 import type { EvalTrace } from "../../evals/types.js";
 
@@ -136,6 +138,33 @@ describe("competitive finance benchmarking", () => {
     expect(extractUsableAnswerFromCliFailure("failed: Internal error: bad auth")).toBeNull();
     expect(extractUsableAnswerFromCliFailure("failed: Gemini CLI ACP startup timed out")).toBeNull();
     expect(extractUsableAnswerFromCliFailure("failed: Error handling request { denied: true }")).toBeNull();
+  });
+
+  it("prefers stdout answers over stderr diagnostics on CLI failures", () => {
+    expect(selectCliFailureMessage({
+      stdout: "Useful model answer",
+      stderr: "warning: adapter exited non-zero",
+      status: 1,
+    })).toBe("Useful model answer");
+    expect(selectCliFailureMessage({
+      stdout: "",
+      stderr: "warning: adapter exited non-zero",
+      status: 1,
+    })).toBe("warning: adapter exited non-zero");
+  });
+
+  it("builds a portable agent PATH without user-specific toolchain paths", () => {
+    const path = buildPortableAgentPath({
+      cwd: "/repo",
+      HOME: "/home/alice",
+      PATH: "/usr/bin:/bin",
+      execPath: "/opt/node/bin/node",
+    });
+
+    expect(path).toContain("/repo/node_modules/.bin");
+    expect(path).toContain("/home/alice/.local/bin");
+    expect(path).toContain("/opt/node/bin");
+    expect(path).not.toContain("/Users/");
   });
 
   it("supports rerunning a fixed competitive prompt from env", () => {

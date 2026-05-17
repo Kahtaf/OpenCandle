@@ -16,10 +16,12 @@ import {
   buildComparisonJudgePrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
+  buildPortableAgentPath,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  selectCliFailureMessage,
   type ComparisonJudgment,
   type CompetitorAnswer,
   type GeneratedFinancePrompt,
@@ -62,7 +64,6 @@ const DEFAULT_ACPX_COMMAND = join(process.cwd(), "node_modules", ".bin", "acpx")
 const DEFAULT_COMPETITOR_CWD = join(tmpdir(), "oc-competitive-agents");
 const DEFAULT_CLAUDE_AGENT_COMMAND = join(process.cwd(), "node_modules", ".bin", "claude-agent-acp");
 const DEFAULT_GEMINI_AGENT_COMMAND = "gemini --acp --skip-trust";
-const DEFAULT_CLAUDE_EXECUTABLE = "/Users/kahtaf/.local/bin/claude";
 
 const asOfDate = new Date().toISOString().slice(0, 10);
 const promptCount = numberFromEnv("COMPETITIVE_PROMPT_COUNT", 5);
@@ -311,7 +312,8 @@ function resolveAgentCommand(agent: AcpxAgent): string | undefined {
 
 function defaultAgentEnv(agent: AcpxAgent): Record<string, string> {
   if (agent === "claude" && !process.env.CLAUDE_CODE_EXECUTABLE) {
-    return { CLAUDE_CODE_EXECUTABLE: DEFAULT_CLAUDE_EXECUTABLE };
+    const claudeExecutable = findExecutable("claude");
+    return claudeExecutable ? { CLAUDE_CODE_EXECUTABLE: claudeExecutable } : {};
   }
   return {};
 }
@@ -334,13 +336,11 @@ function runCli(
     encoding: "utf-8",
     env: {
       ...process.env,
-      PATH: [
-        join(process.cwd(), "node_modules", ".bin"),
-        join(process.env.HOME ?? "", ".local", "bin"),
-        "/Users/kahtaf/.nvm/versions/node/v22.22.0/bin",
-        "/opt/homebrew/bin",
-        process.env.PATH ?? "",
-      ].join(":"),
+      PATH: buildPortableAgentPath({
+        HOME: process.env.HOME,
+        PATH: process.env.PATH,
+        execPath: process.execPath,
+      }),
       ...options.env,
     },
     maxBuffer: 20 * 1024 * 1024,
@@ -349,12 +349,31 @@ function runCli(
     throw new Error(`${command} ${args.slice(0, 2).join(" ")} failed: ${result.error.message}`);
   }
   if (result.status !== 0) {
-    const message = (options.ignoreStderr ? "" : result.stderr.trim()) ||
-      result.stdout.trim() ||
-      `exit status ${result.status ?? "unknown"}`;
+    const message = selectCliFailureMessage({
+      stdout: result.stdout,
+      stderr: result.stderr,
+      status: result.status,
+      ignoreStderr: options.ignoreStderr,
+    });
     throw new Error(`${command} ${args.slice(0, 2).join(" ")} failed: ${message}`);
   }
   return result.stdout.trim();
+}
+
+function findExecutable(name: string): string | undefined {
+  const result = spawnSync("which", [name], {
+    encoding: "utf-8",
+    env: {
+      ...process.env,
+      PATH: buildPortableAgentPath({
+        HOME: process.env.HOME,
+        PATH: process.env.PATH,
+        execPath: process.execPath,
+      }),
+    },
+  });
+  if (result.status !== 0) return undefined;
+  return result.stdout.trim() || undefined;
 }
 
 function summarize(results: CompetitiveRunResult[]): {

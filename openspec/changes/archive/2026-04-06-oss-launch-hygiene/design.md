@@ -11,7 +11,7 @@ Ship as `assets/logo.svg` with a rasterized `assets/logo.png` for README embeddi
 README images must render on both GitHub and npmjs.com. Relative paths (e.g. `assets/logo.png`) work on GitHub but fail on npmjs.com because the npm tarball doesn't include `assets/`. Using absolute GitHub raw content URLs solves both:
 
 ```markdown
-![OpenCandle](https://raw.githubusercontent.com/Kahtaf/OpenCandle/main/assets/logo.png)
+![OpenCandle](https://raw.githubusercontent.com/opencandle/opencandle/main/assets/logo.png)
 ```
 
 This avoids bloating the tarball while rendering everywhere. The URLs are pinned to `main` branch so they stay current.
@@ -82,15 +82,15 @@ The `docs/internal/` directory stays in git (not gitignored) — these are fine 
 
 Three categories of stale absolute paths exist:
 
-1. **Public-facing docs** (CONTRIBUTING.md, docs/production-plan.md): Replace `/Users/kahtaf/.codex/worktrees/dc41/vantage/X` with relative repo paths (`./X` or `../X`).
+1. **Public-facing docs** (CONTRIBUTING.md, docs/production-plan.md): Replace `/path/to/opencandle/X` with relative repo paths (`./X` or `../X`).
 
-2. **Internal docs — this-repo references** (docs/claude-code-principles-for-opencandle.md lines referencing `/Users/kahtaf/Documents/workspace_kahtaf/opencandle/src/...`): Replace with relative paths from their new location in `docs/internal/` (e.g. `../../src/pi/opencandle-extension.ts`).
+2. **Internal docs — this-repo references** (docs/claude-code-principles-for-opencandle.md lines referencing `/path/to/opencandle/src/...`): Replace with relative paths from their new location in `docs/internal/` (e.g. `../../src/pi/opencandle-extension.ts`).
 
-3. **Internal docs — external-repo references** (docs/claude-code-principles-for-opencandle.md lines referencing `/Users/kahtaf/Documents/workspace_kahtaf/claude-code-working/src/...`): These are dead links to a local directory that doesn't exist for anyone else. Replace with descriptive text (e.g. just the file path without the link, or remove the link markup entirely). The line descriptions are still valuable as architectural references; only the link targets are broken.
+3. **Internal docs — external-repo references** (docs/claude-code-principles-for-opencandle.md lines referencing `/path/to/claude-code-working/src/...`): These are dead links to a local directory that doesn't exist for anyone else. Replace with descriptive text (e.g. just the file path without the link, or remove the link markup entirely). The line descriptions are still valuable as architectural references; only the link targets are broken.
 
-4. **Internal docs — old repo name references** (docs/e2e-handoff-real-usage-fixes.md referencing `/Users/kahtaf/Documents/workspace_kahtaf/vantage/src/...`): Same as #2 — these are this-repo paths from before it was renamed. Replace with relative paths.
+4. **Internal docs — old repo name references** (docs/e2e-handoff-real-usage-fixes.md referencing `/path/to/opencandle/src/...`): Same as #2 — these are this-repo paths from before it was renamed. Replace with relative paths.
 
-The acceptance criteria (`git grep '/Users/kahtaf' -- ':!openspec/'` returns no results) must hold across all tracked files outside of `openspec/`, which contains change artifacts that reference the path in examples and task descriptions.
+The acceptance criteria (`git grep '/home/user' -- ':!openspec/'` returns no results) must hold across all tracked files outside of `openspec/`, which contains change artifacts that reference the path in examples and task descriptions.
 
 ### CI hardening
 

@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import type { EvalTrace } from "./types.js";
 
 export interface GeneratedFinancePrompt {
@@ -187,6 +188,35 @@ export function extractUsableAnswerFromCliFailure(message: string): string | nul
     return null;
   }
   return candidate;
+}
+
+export function selectCliFailureMessage(options: {
+  stdout: string;
+  stderr: string;
+  status?: number | null;
+  ignoreStderr?: boolean;
+}): string {
+  const stdout = options.stdout.trim();
+  const stderr = options.stderr.trim();
+  if (stdout) return stdout;
+  if (!options.ignoreStderr && stderr) return stderr;
+  return `exit status ${options.status ?? "unknown"}`;
+}
+
+export function buildPortableAgentPath(env: {
+  PATH?: string;
+  HOME?: string;
+  execPath?: string;
+  cwd?: string;
+}): string {
+  const parts = [
+    `${env.cwd ?? process.cwd()}/node_modules/.bin`,
+    env.HOME ? `${env.HOME}/.local/bin` : "",
+    env.execPath ? dirname(env.execPath) : "",
+    "/opt/homebrew/bin",
+    env.PATH ?? "",
+  ];
+  return parts.filter(Boolean).join(":");
 }
 
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {
