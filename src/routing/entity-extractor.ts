@@ -138,6 +138,8 @@ function extractDteHint(input: string): string | undefined {
 
 function extractTimeHorizon(input: string): string | undefined {
   const lower = input.toLowerCase();
+  const explicitMonths = lower.match(/\b(\d+)\s*(?:month|months|mo|mos)\b/);
+  if (explicitMonths) return `${explicitMonths[1]}mo`;
   const explicitYears = lower.match(/\b(\d+)\s*(?:year|years|yr|yrs)\b/);
   if (explicitYears) return `${explicitYears[1]}_years`;
   if (/\bshort[\s-]*term\b/.test(lower) || /\bday[\s-]*trad/i.test(lower)) return "short";
@@ -155,5 +157,6 @@ function extractCompareMetrics(input: string): string[] | undefined {
   const lower = input.toLowerCase();
   const metrics: string[] = [];
   if (/\bsentiment\b/.test(lower)) metrics.push("sentiment");
+  if (/\b(?:macro\s*)?hedg(?:e|ing)\b/.test(lower)) metrics.push("macro_hedge");
   return metrics.length > 0 ? metrics : undefined;
 }

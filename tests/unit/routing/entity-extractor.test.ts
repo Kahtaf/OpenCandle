@@ -163,6 +163,11 @@ describe("extractEntities", () => {
       const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
       expect(result.timeHorizon).toBe("3_years");
     });
+
+    it("detects explicit month horizon", () => {
+      const result = extractEntities("For the next 6 months, should I use BTC or GLD?");
+      expect(result.timeHorizon).toBe("6mo");
+    });
   });
 
   describe("asset scope extraction", () => {
@@ -176,6 +181,11 @@ describe("extractEntities", () => {
     it("detects sentiment focus", () => {
       const result = extractEntities("Compare AAPL and MSFT sentiment");
       expect(result.compareMetrics).toEqual(["sentiment"]);
+    });
+
+    it("detects macro hedge focus", () => {
+      const result = extractEntities("For the next 6 months, should I use BTC or GLD as a macro hedge?");
+      expect(result.compareMetrics).toEqual(["macro_hedge"]);
     });
   });
 });

@@ -140,6 +140,7 @@ async function handleGuiCommand(args: string[], cwd: string): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
   const { positionals } = parseArgs({ allowPositionals: true, strict: false });
   const cwd = process.cwd();
   const agentDir = getAgentDir();
@@ -148,7 +149,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (await handlePackageCommand(positionals, cwd, agentDir)) {
+  if (await handlePackageCommand(rawArgs, cwd, agentDir)) {
     return;
   }
 

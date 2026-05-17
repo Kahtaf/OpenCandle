@@ -170,6 +170,8 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     const aggregate = totalCount > 0 ? totalScore / totalCount : 0;
     lines.push("");
     lines.push(`**Aggregate:** ${aggregate >= 0 ? "+" : ""}${aggregate.toFixed(2)} (${sentimentLabel(aggregate)})`);
+    lines.push("");
+    lines.push("Source-coverage risk: sentiment can be noisy and missing sources can skew the signal; treat this as supporting evidence, not a standalone buy/sell input.");
 
     // Divergence
     if (result.divergence && result.divergence.detected) {

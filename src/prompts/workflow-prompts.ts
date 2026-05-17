@@ -49,6 +49,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   moneynessPreference: "moneyness",
   liquidityMinimum: "liquidity",
   symbols: "symbols",
+  metrics: "metrics",
 };
 
 /**
@@ -251,34 +252,66 @@ Response format:
 export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAssetsSlots>): string {
   const symbols = resolution.resolved.symbols;
   const symbolList = symbols.join(", ");
+  const timeHorizon = resolution.resolved.timeHorizon;
   const includeSentiment = resolution.resolved.metrics?.includes("sentiment") ?? false;
+  const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
   const sentimentStep = includeSentiment
     ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
   const sentimentMetric = includeSentiment ? ", sentiment score/summary" : "";
+  const macroHedgeSteps = isMacroHedge
+    ? `
+macro hedge decision guidance:
+- Treat this as a hedge-role comparison, not a generic "which asset has better recent technicals" ranking.
+- Prioritize what each asset hedges: inflation, falling real yields, USD weakness, geopolitical/systemic shocks, liquidity stress, and risk-asset drawdowns.
+- Compare volatility, drawdown, and correlation regime stability. If a metric is unavailable for one asset, explain how that limits confidence instead of awarding the other asset by default.
+- Use current macro evidence where available: real yields or Fed-rate direction, inflation trend, USD/liquidity backdrop, and risk-on/risk-off conditions.
+- Include a compact scenario map for stagflation, rising real yields, liquidity crunch/risk-off, USD debasement, and geopolitical shock. State which asset is likely the better hedge in each scenario and why.
+- End with conditional guidance: prefer the steadier hedge for capital preservation; prefer the higher-volatility asset only for debasement/asymmetric-upside exposure.`
+    : "";
+  const tableInstruction = isMacroHedge
+    ? "- Present a comparison table with hedge-relevant columns: hedge role, macro drivers, volatility/drawdown evidence, correlation regime, liquidity/risk-on sensitivity, current data, and missing evidence."
+    : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
+- Highlight which asset is stronger on each metric.`;
+  const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";
+  const horizonSteps = timeHorizon
+    ? `
+6. Adapt the comparison to the ${timeHorizon} horizon: prioritize near-term catalysts, earnings/guidance, estimate revisions, sentiment, and forward-looking valuation evidence over long-term historical averages.
+7. Use historical risk and technical metrics as context, but explain what they do and do not imply over ${timeHorizon}.`
+    : "";
+  const horizonResponse = timeHorizon
+    ? `
+- Start the verdict by directly answering whether the assets should compare for a ${timeHorizon} horizon and why.
+- Prioritize the evidence that matters most over ${timeHorizon}: near-term catalysts, earnings/guidance, forward-looking valuation/estimates, sentiment, macro sensitivity, and company-specific risks.
+- Call out evidence that is missing or unavailable, especially forward-looking estimates or company-specific catalysts.`
+    : "";
 
   const disclosureBlock = buildDisclosureBlock(
-    { symbols: symbolList },
+    {
+      symbols: symbolList,
+      ...(timeHorizon ? { timeHorizon } : {}),
+      ...(resolution.resolved.metrics ? { metrics: resolution.resolved.metrics.join(", ") } : {}),
+    },
     resolution.sources as Record<string, SlotSource | undefined>,
   );
 
   return `Current date: ${todayStr()}
 
-Compare these assets side by side: ${symbolList}
+Compare these assets side by side: ${symbolList}${horizonLine}
 
 Steps:
 1. Use get_stock_quote for each of: ${symbolList}.
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
 3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}
+5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}${horizonSteps}
+${macroHedgeSteps}
 
 ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
-- Highlight which asset is stronger on each metric.
+${tableInstruction}
 - Provide a summary verdict: which is most attractive and why.
-- Note any caveats (different sectors, market cap disparity, unavailable fundamentals, etc.).`;
+- Note any caveats (different sectors, market cap disparity, unavailable fundamentals, etc.).${horizonResponse}`;
 }

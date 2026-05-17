@@ -507,8 +507,16 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
 
     if (classification.workflow === "compare_assets" && classification.entities.symbols.length >= 2) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
-        resolved: { symbols: classification.entities.symbols, metrics: classification.entities.compareMetrics },
-        sources: { symbols: "user" },
+        resolved: {
+          symbols: classification.entities.symbols,
+          metrics: classification.entities.compareMetrics,
+          timeHorizon: classification.entities.timeHorizon,
+        },
+        sources: {
+          symbols: "user",
+          ...(classification.entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
+          ...(classification.entities.compareMetrics ? { metrics: "user" as const } : {}),
+        },
         defaultsUsed: [],
         missingRequired: [],
       };
@@ -661,8 +669,16 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     }
     if (workflow === "compare_assets" && output.entities.symbols.length >= 2) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
-        resolved: { symbols: output.entities.symbols, metrics: output.entities.compareMetrics },
-        sources: { symbols: "user" },
+        resolved: {
+          symbols: output.entities.symbols,
+          metrics: output.entities.compareMetrics,
+          timeHorizon: output.entities.timeHorizon,
+        },
+        sources: {
+          symbols: "user",
+          ...(output.entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
+          ...(output.entities.compareMetrics ? { metrics: "user" as const } : {}),
+        },
         defaultsUsed: [],
         missingRequired: [],
       };

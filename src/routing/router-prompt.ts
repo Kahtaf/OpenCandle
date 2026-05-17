@@ -100,6 +100,7 @@ interface RouterOutput {
     riskProfile?: string;            // "conservative" | "balanced" | "aggressive"
     direction?: "bullish" | "bearish";
     dteHint?: string;
+    compareMetrics?: string[];        // optional compare focus tags, e.g. "sentiment", "macro_hedge"
   };
   slots: Record<string, {
     value: unknown;

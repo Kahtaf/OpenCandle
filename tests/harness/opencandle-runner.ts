@@ -138,7 +138,7 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
       question: interaction.question,
       answer: interaction.answer,
     })),
-    text: agentTrace.turns.map((turn) => turn.text).join(""),
+    text: agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join(""),
     customEntries: agentTrace.customEntries,
   };
 }

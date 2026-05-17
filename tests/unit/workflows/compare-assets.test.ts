@@ -38,4 +38,17 @@ describe("buildCompareAssetsWorkflow", () => {
     expect(workflow.initialPrompt).toContain("sentiment");
     expect(workflow.followUps[0]).toContain("sentiment");
   });
+
+  it("adds macro hedge synthesis guidance when the comparison asks for hedging", () => {
+    const workflow = buildCompareAssetsWorkflow(makeResolution({
+      symbols: ["BTC", "GLD"],
+      timeHorizon: "6mo",
+      metrics: ["macro_hedge"],
+    }));
+
+    expect(workflow.initialPrompt).toContain("macro hedge");
+    expect(workflow.initialPrompt).toContain("real yields");
+    expect(workflow.followUps[0]).toContain("hedge role");
+    expect(workflow.followUps[0]).toContain("conditions under which");
+  });
 });

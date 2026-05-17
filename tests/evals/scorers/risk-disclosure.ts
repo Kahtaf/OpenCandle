@@ -24,7 +24,7 @@ export function scoreRiskDisclosure(
   responseContains?: (string | RegExp)[],
   responseNotContains?: (string | RegExp)[],
 ): LayerDetail {
-  const text = trace.text;
+  const text = getUserVisibleText(trace);
   const issues: string[] = [];
   const hasCustomPatterns = (responseContains && responseContains.length > 0) ||
     (responseNotContains && responseNotContains.length > 0);
@@ -74,4 +74,21 @@ export function scoreRiskDisclosure(
     score: issues.length === 0 ? 1.0 : 0.0,
     message: issues.length > 0 ? issues.join("; ") : "Risk disclosure checks passed",
   };
+}
+
+function getUserVisibleText(trace: EvalTrace): string {
+  const disclaimerText = trace.customEntries
+    ?.filter((entry) => entry.customType === "opencandle-disclaimer")
+    .map((entry) => {
+      const data = entry.data;
+      if (isRecord(data) && typeof data.text === "string") return data.text;
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+  return disclaimerText ? `${trace.text}\n${disclaimerText}` : trace.text;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

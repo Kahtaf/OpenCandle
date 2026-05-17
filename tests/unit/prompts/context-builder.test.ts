@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PromptContextBuilder } from "../../../src/prompts/context-builder.js";
+import { PromptContextBuilder, buildFallbackPlaybook } from "../../../src/prompts/context-builder.js";
 import { truncateTobudget } from "../../../src/prompts/sections.js";
 
 describe("truncateTobudget", () => {
@@ -143,6 +143,25 @@ describe("PromptContextBuilder", () => {
     const result = builder.build();
     expect(result).toContain("CME FedWatch");
     expect(result).toContain("Federal Funds futures");
+  });
+
+  it("tells fallback sentiment answers to include source-coverage risk", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("sentiment-only");
+    expect(result).toContain("source-coverage risk");
+  });
+
+  it("includes sentiment source-coverage risk guidance in the standard prompt", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("sentiment-only");
+    expect(result).toContain("source-coverage risk");
   });
 
   it("requires full backtest metric reporting", () => {

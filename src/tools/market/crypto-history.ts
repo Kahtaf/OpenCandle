@@ -3,6 +3,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { getCryptoHistory } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { OHLCV } from "../../types/market.js";
+import { computeRiskMetrics } from "../portfolio/risk-analysis.js";
 
 const params = Type.Object({
   id: Type.String({
@@ -45,7 +46,22 @@ export const cryptoHistoryTool: AgentTool<typeof params, OHLCV[]> = {
       )
       .join("\n");
 
-    const text = [...summary, "", "Recent bars:", table].join("\n");
+    const riskLines = buildRiskLines(id, bars);
+    const text = [...summary, ...riskLines, "", "Recent bars:", table].join("\n");
     return { content: [{ type: "text", text }], details: bars };
   },
 };
+
+function buildRiskLines(id: string, bars: OHLCV[]): string[] {
+  if (bars.length < 30) return [];
+  const metrics = computeRiskMetrics(id.toUpperCase(), bars.map((bar) => bar.close));
+  return [
+    "",
+    "Risk metrics from crypto history:",
+    `Annualized Return: ${(metrics.annualizedReturn * 100).toFixed(2)}%`,
+    `Annualized Volatility: ${(metrics.annualizedVolatility * 100).toFixed(2)}%`,
+    `Sharpe Ratio: ${metrics.sharpeRatio.toFixed(2)}`,
+    `Max Drawdown: ${(metrics.maxDrawdown * 100).toFixed(2)}%`,
+    `Value at Risk (95%, daily): ${(metrics.var95 * 100).toFixed(2)}%`,
+  ];
+}

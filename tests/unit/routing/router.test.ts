@@ -35,6 +35,22 @@ describe("validateRouterOutput", () => {
     expect(out.entities.symbols).toEqual(["AAPL"]);
   });
 
+  it("accepts compare metrics emitted by the router", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["BTC", "GLD"], compareMetrics: ["macro_hedge"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.entities.compareMetrics).toEqual(["macro_hedge"]);
+  });
+
   it("rejects invalid route", () => {
     expect(() =>
       validateRouterOutput(
@@ -182,6 +198,24 @@ describe("route()", () => {
     expect(result.entities.symbols.sort()).toEqual(["AAPL", "MSFT"]);
     expect(result.missing_required).toEqual([]);
   });
+
+  it("enriches omitted compare focus from deterministic extraction", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "For the next 6 months, should I use BTC or GLD as a macro hedge?" },
+      fixedClient(JSON.stringify({
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["BTC", "GLD"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      })),
+    );
+
+    expect(result.entities.timeHorizon).toBe("6mo");
+    expect(result.entities.compareMetrics).toEqual(["macro_hedge"]);
+  });
 });
 
 describe("buildRouterPrompt", () => {
@@ -197,6 +231,12 @@ describe("buildRouterPrompt", () => {
     expect(prompt).toContain("options_screener");
     expect(prompt).toContain("compare_assets");
     expect(prompt).toContain("fallback");
+  });
+
+  it("asks the router to preserve compare metrics such as macro hedge intent", () => {
+    const prompt = buildRouterPrompt(BASE_INPUT);
+    expect(prompt).toContain("compareMetrics");
+    expect(prompt).toContain("macro_hedge");
   });
 
   it("renders profile snapshot and prior turns inline", () => {
