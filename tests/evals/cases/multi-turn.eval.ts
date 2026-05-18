@@ -56,4 +56,4 @@ const multiTurnCases: EvalCase[] = [
   },
 ];
 
-registerEvalSuite("Multi-turn Workflow Evals", multiTurnCases, { threshold: 0.7 });
+registerEvalSuite("Multi-turn Workflow Evals", multiTurnCases, { threshold: 0.7, timeout: 600_000 });

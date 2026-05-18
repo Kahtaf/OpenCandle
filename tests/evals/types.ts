@@ -8,10 +8,25 @@ export interface TraceToolCall {
   result?: unknown;
 }
 
+export interface RouterTelemetry {
+  routeKind?: string;
+  legacyRoute?: string;
+  workflow?: string;
+  missingRequired?: string[];
+  toolBundles?: string[];
+  activeToolNames?: string[];
+  memoryCategories?: string[];
+  memoryProvenance?: unknown[];
+  diagnostics?: unknown[];
+  toolScope?: unknown[];
+  toolScopeViolations?: unknown[];
+}
+
 /** Structured trace emitted by the test harness. */
 export interface EvalTrace {
   prompt: string;
   classification: ClassificationResult;
+  router?: RouterTelemetry;
   toolCalls: TraceToolCall[];
   askUserTranscript: Array<{ question: string; answer: string | null }>;
   text: string;

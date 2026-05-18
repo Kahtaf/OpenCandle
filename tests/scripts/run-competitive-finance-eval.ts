@@ -22,6 +22,7 @@ import {
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
+  selectDefaultCompetitiveModel,
   type ComparisonJudgment,
   type CompetitorAnswer,
   type GeneratedFinancePrompt,
@@ -212,6 +213,10 @@ async function runOpenCandle(prompt: string): Promise<EvalTrace> {
   const parsedSettleGraceMs = Number(settleGraceMs);
   const result = await runOpenCandleSession({
     prompt,
+    authStorage,
+    modelRegistry,
+    defaultProvider: judgeModel.model.provider,
+    defaultModel: judgeModel.model.id,
     settleGraceMs: Number.isFinite(parsedSettleGraceMs) ? parsedSettleGraceMs : undefined,
     timeoutMs: 900_000,
   });
@@ -470,7 +475,12 @@ function resolveModel(provider: string | undefined, modelId: string | undefined)
   }
 
   const available = modelRegistry.getAvailable();
-  if (available.length > 0) return available[0]!;
+  const selected = selectDefaultCompetitiveModel({
+    googleAuthConfigured: false,
+    googleModel: getModel("google", "gemini-2.5-flash") as Model<Api>,
+    available,
+  });
+  if (selected) return selected;
 
   throw new Error(
     "No configured model found.",

@@ -41,6 +41,14 @@ export interface ComparisonJudgment {
   openCandleImprovementIdeas: string[];
 }
 
+export interface CompetitiveModelCandidate {
+  provider: string;
+  id: string;
+  contextWindow?: number;
+}
+
+const PREFERRED_CONTEXT_WINDOW = 128_000;
+
 export function buildPromptGenerationPrompt(options: PromptGenerationOptions): string {
   const seedLine = options.seed ? `Use this run seed to vary the prompt set: ${options.seed}` : "Invent a fresh prompt set.";
   return `Generate ${options.count} realistic finance prompts for comparing OpenCandle against generic no-tool finance agents such as Claude, Codex, and Gemini.
@@ -109,6 +117,9 @@ ${input.prompt.evaluationFocus}
 
 OpenCandle classification:
 ${JSON.stringify(input.openCandleTrace.classification)}
+
+OpenCandle router telemetry:
+${JSON.stringify(input.openCandleTrace.router ?? {}, null, 2)}
 
 OpenCandle tool calls:
 ${JSON.stringify(toolCalls, null, 2)}
@@ -217,6 +228,16 @@ export function buildPortableAgentPath(env: {
     env.PATH ?? "",
   ];
   return parts.filter(Boolean).join(":");
+}
+
+export function selectDefaultCompetitiveModel<T extends CompetitiveModelCandidate>(options: {
+  googleAuthConfigured: boolean;
+  googleModel: T;
+  available: T[];
+}): T | undefined {
+  if (options.googleAuthConfigured) return options.googleModel;
+  return options.available.find((model) => (model.contextWindow ?? 0) >= PREFERRED_CONTEXT_WINDOW) ??
+    options.available[0];
 }
 
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {

@@ -9,6 +9,7 @@ import {
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
+  selectDefaultCompetitiveModel,
 } from "../../evals/competitive-finance.js";
 import type { EvalTrace } from "../../evals/types.js";
 
@@ -185,5 +186,16 @@ describe("competitive finance benchmarking", () => {
       complexity: "complex",
       evaluationFocus: "Check whether OC improves after a prompt fix.",
     });
+  });
+
+  it("prefers a large-context configured model over the first available model", () => {
+    const smallContext = { provider: "openai", id: "gpt-4", contextWindow: 8192 };
+    const largeContext = { provider: "openai", id: "gpt-4.1", contextWindow: 1_000_000 };
+
+    expect(selectDefaultCompetitiveModel({
+      googleAuthConfigured: false,
+      googleModel: { provider: "google", id: "gemini-2.5-flash", contextWindow: 1_000_000 },
+      available: [smallContext, largeContext],
+    })).toBe(largeContext);
   });
 });
