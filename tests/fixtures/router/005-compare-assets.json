@@ -3,17 +3,37 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
     "route": "workflow",
     "workflow": "compare_assets",
     "entities": {
-      "symbols": ["AAPL", "MSFT"]
+      "symbols": [
+        "AAPL",
+        "MSFT"
+      ]
     },
     "slots": {
-      "symbols": { "value": ["AAPL", "MSFT"], "source": "user", "confidence": "high" }
+      "symbols": {
+        "value": [
+          "AAPL",
+          "MSFT"
+        ],
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "explicit compare verb + two tickers"
   },
-  "tags": ["compare_assets"]
+  "tags": [
+    "compare_assets"
+  ]
 }

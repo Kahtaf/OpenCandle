@@ -1,19 +1,36 @@
 {
   "input": "what about at $500?",
   "priorTurns": [
-    { "role": "user", "text": "tell me about NVDA" },
-    { "role": "assistant", "text": "NVDA is trading around $450, up 1.2% today on AI-infrastructure flows." }
+    {
+      "role": "user",
+      "text": "tell me about NVDA"
+    },
+    {
+      "role": "assistant",
+      "text": "NVDA is trading around $450, up 1.2% today on AI-infrastructure flows."
+    }
   ],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "agent_task",
     "route": "fallback",
     "entities": {
-      "symbols": ["NVDA"]
+      "symbols": [
+        "NVDA"
+      ]
     },
     "slots": {},
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market"
+    ],
+    "diagnostics": [],
     "reasoning": "coreference — the 'what about' clause references the NVDA subject from the prior turn; NVDA is prior-turn-derived so it lands in entities, not slots"
   },
-  "tags": ["multi-turn-coreference", "fallback", "synthetic-multi-turn"]
+  "tags": [
+    "multi-turn-coreference",
+    "fallback",
+    "synthetic-multi-turn"
+  ]
 }

@@ -11,12 +11,14 @@ import {
   resolveOptionsScreenerSlots,
   resolvePortfolioSlots,
   route as routeLlm,
+  buildResolvedTurnContext,
 } from "../routing/index.js";
 import type {
   RouterInputContext,
   RouterLlmClient,
   RouterOutput,
 } from "../routing/router-types.js";
+import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
 import {
@@ -76,6 +78,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   const sessionPromptedSet = new Set<ProviderId>();
   let hardPromptFiredInWorkflow = false;
   const degradationAccumulator = createDegradationAccumulator();
+  let activeToolSnapshot: string[] | null = null;
+  let currentRouteToolContext: ResolvedTurnContext | null = null;
 
   // Register tools
   for (const tool of getOpenCandleToolDefinitions()) {
@@ -261,6 +265,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       msg.role === "assistant" && msg.stopReason === "stop";
     if (isFinalAssistantTurn) {
       pi.appendEntry("opencandle-disclaimer", { text: DISCLAIMER_TEXT });
+      restoreRouteToolScope();
     }
 
     if (degradationAccumulator.isEmpty()) return;
@@ -454,6 +459,29 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     return undefined;
   });
 
+  pi.on("tool_call", async (event) => {
+    if (!currentRouteToolContext) return undefined;
+    const allowed = new Set(currentRouteToolContext.activeToolNames);
+    if (allowed.has(event.toolName)) return undefined;
+
+    const diagnostic = {
+      routeKind: currentRouteToolContext.routeKind,
+      workflow: currentRouteToolContext.workflow,
+      toolName: event.toolName,
+      toolBundles: currentRouteToolContext.toolBundles,
+      activeToolNames: currentRouteToolContext.activeToolNames,
+    };
+    pi.appendEntry("opencandle-tool-scope-violation", diagnostic);
+
+    if (getConfig().toolScopeMode === "enforce") {
+      return {
+        block: true,
+        reason: `Tool ${event.toolName} is outside the route-selected OpenCandle tool bundle.`,
+      };
+    }
+    return undefined;
+  });
+
   // Input handling — branches on OPENCANDLE_ROUTER_MODE.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
@@ -571,7 +599,30 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       return false;
     }
 
+    const availableToolNames = safeGetAllToolNames();
+    const memory = coordinator.retrieveMemoryForRoute(
+      output.routeKind,
+      output.workflow,
+      Object.keys(output.slots),
+    );
+    const resolvedTurnContext = buildResolvedTurnContext(input, output, {
+      availableToolNames,
+      memoryEntries: memory.entries,
+      filteredMemory: memory.filtered.map(({ entry, reason }) => ({
+        category: entry.category,
+        key: entry.key,
+        source: entry.source,
+        recordedAt: entry.recordedAt,
+        confidence: entry.confidence,
+        filtered: true,
+        filterReason: reason,
+      })),
+    });
+
     pi.appendEntry("opencandle-router", { output });
+    pi.appendEntry("opencandle-route-context", resolvedTurnContext);
+    coordinator.setPendingResolvedTurnContext(resolvedTurnContext);
+    applyRouteToolScope(resolvedTurnContext);
 
     // Preference writes: HIGH-confidence only. Medium/low are logged for
     // observability even when no storage is available.
@@ -593,8 +644,12 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     }
 
     // Workflow dispatch for recognised workflows.
-    if (output.route === "workflow" && output.workflow) {
+    if (output.routeKind === "workflow_dispatch" && output.workflow) {
       return dispatchRouterWorkflow(output, ctx);
+    }
+
+    if (output.routeKind === "pass_through") {
+      return false;
     }
 
     // Fallback: record the turn and stash the fallback context for the
@@ -604,7 +659,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       output.entities,
       Object.fromEntries(Object.entries(output.slots).map(([k, v]) => [k, v.value])),
       [],
-      "fallback",
+      output.routeKind,
     );
 
     const assumptionsBlock = buildAssumptionsBlockFromRouter(output.slots);
@@ -613,6 +668,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       missingRequired: output.missing_required,
       extraContext: output.entities.symbols.length > 0
         ? `Router-extracted symbols: ${output.entities.symbols.join(", ")}.`
+          + ` Route kind: ${output.routeKind}. Tool bundles: ${output.tool_bundles.join(", ") || "(none)"}.`
         : undefined,
     });
     return false;
@@ -633,7 +689,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         output.entities,
         resolution.resolved,
         resolution.defaultsUsed,
-        "workflow",
+        output.routeKind,
       );
       pi.appendEntry("opencandle-workflow", {
         workflow: "portfolio_builder",
@@ -654,7 +710,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           output.entities,
           resolution.resolved,
           resolution.defaultsUsed,
-          "workflow",
+          output.routeKind,
         );
         pi.appendEntry("opencandle-workflow", {
           workflow: "options_screener",
@@ -687,7 +743,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         output.entities,
         resolution.resolved,
         [],
-        "workflow",
+        output.routeKind,
       );
       pi.appendEntry("opencandle-workflow", {
         workflow: "compare_assets",
@@ -706,7 +762,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       output.entities,
       Object.fromEntries(Object.entries(output.slots).map(([k, v]) => [k, v.value])),
       [],
-      "fallback",
+      output.routeKind,
     );
     const assumptionsBlock = buildAssumptionsBlockFromRouter(output.slots);
     coordinator.setPendingFallbackContext({
@@ -715,6 +771,76 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       extraContext: `Router classified as ${workflow} but declined to dispatch. Symbols: ${output.entities.symbols.join(", ") || "(none)"}.`,
     });
     return false;
+  }
+
+  function safeGetAllToolNames(): string[] {
+    try {
+      return pi.getAllTools().map((tool) => tool.name);
+    } catch {
+      return [];
+    }
+  }
+
+  function applyRouteToolScope(context: ResolvedTurnContext): void {
+    const mode = getConfig().toolScopeMode;
+    currentRouteToolContext = context;
+    pi.appendEntry("opencandle-tool-scope", {
+      mode,
+      routeKind: context.routeKind,
+      workflow: context.workflow,
+      toolBundles: context.toolBundles,
+      activeToolNames: context.activeToolNames,
+      enforced: false,
+    });
+
+    if (mode !== "enforce") return;
+    if (context.activeToolNames.length === 0) return;
+
+    try {
+      if (activeToolSnapshot === null) {
+        activeToolSnapshot = pi.getActiveTools();
+      }
+      pi.setActiveTools(context.activeToolNames);
+      pi.appendEntry("opencandle-tool-scope", {
+        mode,
+        routeKind: context.routeKind,
+        workflow: context.workflow,
+        toolBundles: context.toolBundles,
+        activeToolNames: context.activeToolNames,
+        enforced: true,
+      });
+    } catch (err) {
+      pi.appendEntry("opencandle-tool-scope", {
+        mode,
+        routeKind: context.routeKind,
+        workflow: context.workflow,
+        toolBundles: context.toolBundles,
+        activeToolNames: context.activeToolNames,
+        enforced: false,
+        diagnostic: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  function restoreRouteToolScope(): void {
+    currentRouteToolContext = null;
+    if (activeToolSnapshot === null) return;
+    try {
+      pi.setActiveTools(activeToolSnapshot);
+      pi.appendEntry("opencandle-tool-scope", {
+        mode: getConfig().toolScopeMode,
+        restored: true,
+        activeToolNames: activeToolSnapshot,
+      });
+    } catch (err) {
+      pi.appendEntry("opencandle-tool-scope", {
+        mode: getConfig().toolScopeMode,
+        restored: false,
+        diagnostic: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      activeToolSnapshot = null;
+    }
   }
 
   function resolveRouterLlmClient(
@@ -733,8 +859,14 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   // is pending (router-mode fallback turns), inject it into the prompt.
   pi.on("before_agent_start", async (event) => {
     const fallbackContext = coordinator.consumePendingFallbackContext() ?? undefined;
+    const resolvedTurnContext = coordinator.consumePendingResolvedTurnContext() ?? undefined;
     return {
-      systemPrompt: coordinator.buildSystemPrompt(event.systemPrompt, undefined, fallbackContext),
+      systemPrompt: coordinator.buildSystemPrompt(
+        event.systemPrompt,
+        undefined,
+        fallbackContext,
+        resolvedTurnContext,
+      ),
     };
   });
 }

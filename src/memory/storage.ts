@@ -28,11 +28,12 @@ interface WorkflowRunInput {
   defaultsUsedJson: string;
   outputSummary?: string;
   /**
-   * Router route verbatim. One of `"workflow"` or `"fallback"`. Defaults to
+   * Router route verbatim. Legacy rows contain `"workflow"` or `"fallback"`;
+   * typed-router rows may contain canonical route kinds. Defaults to
    * `"workflow"` at the schema layer so legacy callers (rules-mode cascade)
    * don't need to pass anything. Router-mode callers MUST pass this explicitly.
    */
-  turnType?: "workflow" | "fallback";
+  turnType?: string;
 }
 
 interface RecommendationInput {

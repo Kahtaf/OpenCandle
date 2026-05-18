@@ -19,6 +19,10 @@ import { PromptContextBuilder, type FallbackContext } from "../prompts/context-b
 import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
 import { toStepDefinitions, promptStepOutput } from "./prompt-step.js";
+import type { ResolvedTurnContext } from "../routing/turn-context.js";
+import type { RouterRouteKind } from "../routing/router-types.js";
+import type { MemoryEntry } from "../memory/types.js";
+import type { FilteredMemoryEntry } from "../memory/manager.js";
 import type Database from "better-sqlite3";
 
 const PROMPT_SETTLE_POLL_MS = 25;
@@ -150,7 +154,7 @@ export class SessionCoordinator {
     entities: object,
     resolved: object,
     defaultsUsed: unknown[],
-    turnType: "workflow" | "fallback" = "workflow",
+    turnType = "workflow",
   ): void {
     this.storage?.insertWorkflowRun({
       sessionId: this.sessionId,
@@ -263,11 +267,24 @@ export class SessionCoordinator {
     return { profileSnapshot, recentWorkflowRuns: runs, priorTurns };
   }
 
+  retrieveMemoryForRoute(
+    routeKind: RouterRouteKind,
+    workflowType?: string,
+    overriddenSlots?: string[],
+  ): { entries: MemoryEntry[]; filtered: FilteredMemoryEntry[] } {
+    if (!this.memoryManager) return { entries: [], filtered: [] };
+    return this.memoryManager.retrieveDetailed(
+      workflowType ?? routeKind,
+      overriddenSlots,
+    );
+  }
+
   /** Build system prompt using composable sections. */
   buildSystemPrompt(
     basePrompt: string,
     workflowType?: string,
     fallbackContext?: FallbackContext,
+    resolvedTurnContext?: ResolvedTurnContext,
   ): string {
     const builder = new PromptContextBuilder();
 
@@ -277,7 +294,9 @@ export class SessionCoordinator {
       : undefined;
 
     const memoryContext = this.memoryManager
-      ? this.memoryManager.buildContext(workflowType ?? "unclassified")
+      ? this.memoryManager.buildContext(
+        resolvedTurnContext?.workflow ?? workflowType ?? resolvedTurnContext?.routeKind ?? "unclassified",
+      )
       : undefined;
 
     builder.populateFromOptions({
@@ -285,6 +304,7 @@ export class SessionCoordinator {
       memoryContext: memoryContext || undefined,
       addonToolDescriptions: addonDescriptions,
       fallbackContext,
+      resolvedTurnContext,
     });
 
     const toolDefaults = formatToolDefaultsForPrompt();
@@ -301,14 +321,25 @@ export class SessionCoordinator {
    * subsequent turns do not inherit stale fallback directives.
    */
   private pendingFallbackContext: FallbackContext | null = null;
+  private pendingResolvedTurnContext: ResolvedTurnContext | null = null;
 
   setPendingFallbackContext(ctx: FallbackContext | null): void {
     this.pendingFallbackContext = ctx;
   }
 
+  setPendingResolvedTurnContext(ctx: ResolvedTurnContext | null): void {
+    this.pendingResolvedTurnContext = ctx;
+  }
+
   consumePendingFallbackContext(): FallbackContext | null {
     const ctx = this.pendingFallbackContext;
     this.pendingFallbackContext = null;
+    return ctx;
+  }
+
+  consumePendingResolvedTurnContext(): ResolvedTurnContext | null {
+    const ctx = this.pendingResolvedTurnContext;
+    this.pendingResolvedTurnContext = null;
     return ctx;
   }
 

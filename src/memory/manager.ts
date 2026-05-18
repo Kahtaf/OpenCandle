@@ -7,6 +7,16 @@ import {
   isStale,
 } from "./types.js";
 
+export interface FilteredMemoryEntry {
+  entry: MemoryEntry;
+  reason: "suppressed_by_user_slot" | "never_trust" | "stale" | "irrelevant_category";
+}
+
+export interface MemoryRetrievalResult {
+  entries: MemoryEntry[];
+  filtered: FilteredMemoryEntry[];
+}
+
 /** Slot name → preference key(s) mapping for suppression. */
 const SLOT_TO_PREF_KEYS: Record<string, string[]> = {
   riskProfile: ["risk_profile"],
@@ -36,6 +46,14 @@ export class MemoryManager {
     overriddenSlots?: string[],
     now: Date = new Date(),
   ): MemoryEntry[] {
+    return this.retrieveDetailed(workflowType, overriddenSlots, now).entries;
+  }
+
+  retrieveDetailed(
+    workflowType: string,
+    overriddenSlots?: string[],
+    now: Date = new Date(),
+  ): MemoryRetrievalResult {
     const relevantCategories = WORKFLOW_RELEVANT_CATEGORIES[workflowType] ??
       WORKFLOW_RELEVANT_CATEGORIES["unclassified"];
 
@@ -49,18 +67,14 @@ export class MemoryManager {
     }
 
     const entries: MemoryEntry[] = [];
+    const filtered: FilteredMemoryEntry[] = [];
 
     // Preferences as investor_profile entries
     if (relevantCategories.includes("investor_profile")) {
       const prefs = this.storage.getPreferencesByNamespace("global");
       for (const pref of prefs) {
         const key = String(pref.key);
-        if (suppressedKeys.has(key)) continue;
-        if (NEVER_TRUST_FROM_MEMORY.has(key)) continue;
-
         const category = KEY_TO_CATEGORY[key] ?? "investor_profile";
-        if (!relevantCategories.includes(category)) continue;
-
         const entry: MemoryEntry = {
           key,
           value: tryParseValue(String(pref.value_json ?? "")),
@@ -70,9 +84,23 @@ export class MemoryManager {
           source: pref.source != null ? String(pref.source) : undefined,
         };
 
-        if (!isStale(entry, now)) {
-          entries.push(entry);
+        if (suppressedKeys.has(key)) {
+          filtered.push({ entry, reason: "suppressed_by_user_slot" });
+          continue;
         }
+        if (NEVER_TRUST_FROM_MEMORY.has(key)) {
+          filtered.push({ entry, reason: "never_trust" });
+          continue;
+        }
+        if (!relevantCategories.includes(category)) {
+          filtered.push({ entry, reason: "irrelevant_category" });
+          continue;
+        }
+        if (isStale(entry, now)) {
+          filtered.push({ entry, reason: "stale" });
+          continue;
+        }
+        entries.push(entry);
       }
     }
 
@@ -97,13 +125,18 @@ export class MemoryManager {
           recordedAt,
         };
 
-        if (!isStale(entry, now)) {
-          entries.push(entry);
+        if (isStale(entry, now)) {
+          filtered.push({ entry, reason: "stale" });
+          continue;
         }
+        entries.push(entry);
       }
     }
 
-    return entries.slice(0, MAX_PREFERENCE_LINES + MAX_WORKFLOW_HISTORY_PER_TYPE * 4);
+    return {
+      entries: entries.slice(0, MAX_PREFERENCE_LINES + MAX_WORKFLOW_HISTORY_PER_TYPE * 4),
+      filtered,
+    };
   }
 
   /**

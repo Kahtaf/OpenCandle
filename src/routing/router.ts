@@ -1,12 +1,25 @@
-import { extractEntities } from "./entity-extractor.js";
+import { extractEntities, isAmbiguousConceptUsage } from "./entity-extractor.js";
+import { classifyIntent } from "./classify-intent.js";
 import { buildRouterPrompt } from "./router-prompt.js";
+import {
+  computeMissingRequiredSlots,
+  isDispatchableWorkflow,
+  isRouteKind,
+  isToolBundleName,
+  legacyRouteForRouteKind,
+  routeKindFromLegacyRoute,
+  selectToolBundles,
+} from "./route-manifest.js";
 import type {
+  RouterDiagnostic,
   RouterInputContext,
   RouterLlmClient,
   RouterOutput,
   RouterPreferenceUpdate,
   RouterRoute,
+  RouterRouteKind,
   RouterSlot,
+  ToolBundleName,
 } from "./router-types.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
@@ -19,7 +32,7 @@ const VALID_WORKFLOWS: ReadonlyArray<Exclude<WorkflowType, "unclassified">> = [
   "watchlist_or_tracking",
   "general_finance_qa",
 ];
-const VALID_SOURCES = new Set(["user", "preference", "default"]);
+const VALID_SOURCES = new Set(["user", "preference", "default", "prior_context", "memory"]);
 const VALID_CONFIDENCE = new Set(["high", "medium", "low"]);
 
 /**
@@ -38,7 +51,7 @@ export async function route(
   let firstError: string | undefined;
   try {
     const raw = await client.complete(prompt);
-    return enrichRouterOutput(input.text, validateRouterOutput(raw));
+    return postProcessRouterOutput(input.text, validateRouterOutput(raw));
   } catch (err) {
     firstError = err instanceof Error ? err.message : String(err);
   }
@@ -47,10 +60,10 @@ export async function route(
   try {
     const retryPrompt = `${prompt}\n\n(Your previous response failed validation: ${firstError}. Return a valid JSON object conforming to RouterOutput. Nothing else.)`;
     const raw = await client.complete(retryPrompt);
-    return enrichRouterOutput(input.text, validateRouterOutput(raw));
+    return postProcessRouterOutput(input.text, validateRouterOutput(raw));
   } catch {
     // Persistent failure — return a minimal fallback with regex-extracted symbols.
-    return minimalFallback(input.text);
+    return postProcessRouterOutput(input.text, minimalFallback(input.text));
   }
 }
 
@@ -62,33 +75,63 @@ export function validateRouterOutput(raw: string): RouterOutput {
   }
   const obj = parsed as Record<string, unknown>;
 
-  const route = obj.route;
-  if (typeof route !== "string" || !VALID_ROUTES.includes(route as RouterRoute)) {
-    throw new Error(`invalid route: ${JSON.stringify(route)}`);
+  const rawMissingRequired = validateStringArray(obj.missing_required, "missing_required");
+
+  const explicitRouteKind = obj.routeKind;
+  if (
+    explicitRouteKind !== undefined &&
+    (typeof explicitRouteKind !== "string" || !isRouteKind(explicitRouteKind))
+  ) {
+    throw new Error(`invalid routeKind: ${JSON.stringify(explicitRouteKind)}`);
+  }
+
+  const rawRoute = obj.route;
+  let route: RouterRoute;
+  if (typeof rawRoute === "string") {
+    if (!VALID_ROUTES.includes(rawRoute as RouterRoute)) {
+      throw new Error(`invalid route: ${JSON.stringify(rawRoute)}`);
+    }
+    route = rawRoute as RouterRoute;
+  } else if (typeof explicitRouteKind === "string" && isRouteKind(explicitRouteKind)) {
+    route = legacyRouteForRouteKind(explicitRouteKind);
+  } else {
+    throw new Error(`invalid route: ${JSON.stringify(rawRoute)}`);
   }
 
   let workflow: RouterOutput["workflow"];
-  if (route === "workflow") {
+  const routeKind: RouterRouteKind =
+    typeof explicitRouteKind === "string" && isRouteKind(explicitRouteKind)
+      ? explicitRouteKind
+      : routeKindFromLegacyRoute(route, rawMissingRequired);
+
+  if (route === "workflow" || routeKind === "workflow_dispatch") {
     if (typeof obj.workflow !== "string" || !VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)) {
       throw new Error(`workflow route requires a valid workflow; got ${JSON.stringify(obj.workflow)}`);
     }
+    workflow = obj.workflow as Exclude<WorkflowType, "unclassified">;
+  } else if (typeof obj.workflow === "string" && VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)) {
     workflow = obj.workflow as Exclude<WorkflowType, "unclassified">;
   }
 
   const entities = validateEntities(obj.entities);
   const slots = validateSlots(obj.slots);
   const preference_updates = validatePreferenceUpdates(obj.preference_updates);
-  const missing_required = validateStringArray(obj.missing_required, "missing_required");
+  const missing_required = rawMissingRequired;
+  const tool_bundles = validateToolBundles(obj.tool_bundles);
+  const diagnostics = validateDiagnostics(obj.diagnostics);
   const reasoning =
     typeof obj.reasoning === "string" ? obj.reasoning : "";
 
   return {
-    route: route as RouterRoute,
+    routeKind,
+    route: legacyRouteForRouteKind(routeKind),
     workflow,
     entities,
     slots,
     preference_updates,
     missing_required,
+    tool_bundles,
+    diagnostics,
     reasoning,
   };
 }
@@ -129,15 +172,104 @@ function validateEntities(raw: unknown): ExtractedEntities {
   return out;
 }
 
-function enrichRouterOutput(text: string, output: RouterOutput): RouterOutput {
+export function postProcessRouterOutput(text: string, output: RouterOutput): RouterOutput {
   const extracted = extractEntities(text);
-  return {
+  const deterministic = classifyIntent(text);
+  let diagnostics: RouterDiagnostic[] = [...output.diagnostics];
+  let next: RouterOutput = {
     ...output,
     entities: {
       ...output.entities,
+      symbols: output.entities.symbols.filter((symbol) =>
+        !isAmbiguousConceptUsage(text, symbol),
+      ),
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
     },
+    diagnostics,
+  };
+
+  if (
+    next.diagnostics.some((d) => d.code === "router_validation_failed") &&
+    deterministic.workflow !== "unclassified"
+  ) {
+    next = {
+      ...next,
+      routeKind: isDispatchableWorkflow(deterministic.workflow)
+        ? "workflow_dispatch"
+        : "agent_task",
+      route: isDispatchableWorkflow(deterministic.workflow) ? "workflow" : "fallback",
+      workflow: deterministic.workflow,
+      entities: {
+        ...deterministic.entities,
+        timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
+        compareMetrics: deterministic.entities.compareMetrics ?? extracted.compareMetrics,
+      },
+      diagnostics: [
+        ...diagnostics,
+        {
+          code: "deterministic_failure_recovery",
+          message: `deterministic classifier selected ${deterministic.workflow} after router validation failure`,
+        },
+      ],
+      reasoning: next.reasoning
+        ? `${next.reasoning}; deterministic classifier selected ${deterministic.workflow}`
+        : `deterministic classifier selected ${deterministic.workflow}`,
+    };
+    diagnostics = next.diagnostics;
+  }
+
+  if (next.routeKind === "workflow_dispatch" && !isDispatchableWorkflow(next.workflow)) {
+    diagnostics.push({
+      code: "route_kind_corrected_to_agent_task",
+      message: next.workflow
+        ? `${next.workflow} is not a dispatchable workflow`
+        : "workflow_dispatch requires a dispatchable workflow",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      diagnostics,
+    };
+  }
+
+  const missingRequired = computeMissingRequiredSlots(
+    next.workflow,
+    next.entities,
+    next.slots,
+    next.missing_required,
+  );
+  if (missingRequired.length > 0 && next.routeKind !== "pass_through") {
+    if (next.routeKind !== "clarification") {
+      diagnostics.push({
+        code: "route_kind_corrected_to_clarification",
+        message: `missing required slots: ${missingRequired.join(", ")}`,
+      });
+    }
+    next = {
+      ...next,
+      routeKind: "clarification",
+      route: "fallback",
+      missing_required: missingRequired,
+      diagnostics,
+    };
+  }
+
+  const selectedToolBundles = selectToolBundles(next);
+  const emittedUnsupported = next.tool_bundles.filter((bundle) => !selectedToolBundles.includes(bundle));
+  if (emittedUnsupported.length > 0) {
+    diagnostics.push({
+      code: "tool_bundles_corrected",
+      message: `unsupported emitted bundles dropped: ${emittedUnsupported.join(", ")}`,
+    });
+  }
+
+  return {
+    ...next,
+    route: legacyRouteForRouteKind(next.routeKind),
+    tool_bundles: selectedToolBundles,
+    diagnostics,
   };
 }
 
@@ -201,6 +333,34 @@ function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {
   });
 }
 
+function validateToolBundles(raw: unknown): ToolBundleName[] {
+  const bundles = validateStringArray(raw, "tool_bundles");
+  return bundles.filter(isToolBundleName);
+}
+
+function validateDiagnostics(raw: unknown): RouterDiagnostic[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("diagnostics must be an array");
+  }
+  return raw.map((item, idx) => {
+    if (!item || typeof item !== "object") {
+      throw new Error(`diagnostics[${idx}] must be an object`);
+    }
+    const diagnostic = item as Record<string, unknown>;
+    if (typeof diagnostic.code !== "string" || diagnostic.code.length === 0) {
+      throw new Error(`diagnostics[${idx}].code must be a non-empty string`);
+    }
+    if (typeof diagnostic.message !== "string") {
+      throw new Error(`diagnostics[${idx}].message must be a string`);
+    }
+    return {
+      code: diagnostic.code,
+      message: diagnostic.message,
+    };
+  });
+}
+
 function validateStringArray(raw: unknown, field: string): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
@@ -217,11 +377,19 @@ function validateStringArray(raw: unknown, field: string): string[] {
 function minimalFallback(text: string): RouterOutput {
   const entities = extractEntities(text);
   return {
+    routeKind: "agent_task",
     route: "fallback",
     entities: { symbols: entities.symbols },
     slots: {},
     preference_updates: [],
     missing_required: [],
+    tool_bundles: [],
+    diagnostics: [
+      {
+        code: "router_validation_failed",
+        message: "router validation failed persistently; emitted minimal fallback",
+      },
+    ],
     reasoning: "router validation failed; emitted minimal fallback",
   };
 }

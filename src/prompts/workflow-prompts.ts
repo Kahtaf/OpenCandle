@@ -63,6 +63,8 @@ export function buildDisclosureBlock(
 ): string {
   const userSpecified: string[] = [];
   const fromPreferences: string[] = [];
+  const fromPriorContext: string[] = [];
+  const fromMemory: string[] = [];
   const defaults: string[] = [];
 
   for (const [key, source] of Object.entries(slotSources)) {
@@ -76,6 +78,12 @@ export function buildDisclosureBlock(
       case "preference":
         fromPreferences.push(display);
         break;
+      case "prior_context":
+        fromPriorContext.push(display);
+        break;
+      case "memory":
+        fromMemory.push(display);
+        break;
       case "default":
         defaults.push(display);
         break;
@@ -86,6 +94,8 @@ export function buildDisclosureBlock(
   lines.push("Assumptions (reproduce this block exactly — do not relabel sources):");
   if (userSpecified.length > 0) lines.push(`  User-specified: ${userSpecified.join(", ")}`);
   if (fromPreferences.length > 0) lines.push(`  From saved preferences: ${fromPreferences.join(", ")}`);
+  if (fromPriorContext.length > 0) lines.push(`  From prior context: ${fromPriorContext.join(", ")}`);
+  if (fromMemory.length > 0) lines.push(`  From memory: ${fromMemory.join(", ")}`);
   if (defaults.length > 0) lines.push(`  Defaults: ${defaults.join(", ")}`);
   if (workflowConstraints && workflowConstraints.length > 0) {
     lines.push(`  Workflow constraints: ${workflowConstraints.join(", ")}`);

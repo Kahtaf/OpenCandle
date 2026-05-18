@@ -97,6 +97,29 @@ const RULES: Rule[] = [
       );
     },
   },
+  // Broad market / sector / macro research that should receive the general
+  // analyst fallback rather than disappearing into an unclassified turn.
+  {
+    workflow: "general_finance_qa",
+    confidence: 0.85,
+    test: (input) => {
+      const lower = input.toLowerCase();
+      const hasResearchVerb =
+        /\banaly[sz]e\b/.test(lower) ||
+        /\bdiscuss\b/.test(lower) ||
+        /\bpredict\b/.test(lower) ||
+        /\bassess\b/.test(lower);
+      const hasBroadFinanceTopic =
+        /\bmarket\s+structure\b/.test(lower) ||
+        /\b(?:sector|industry)\b/.test(lower) ||
+        /\bmonetary\s+policy\b/.test(lower) ||
+        /\bemerging\s+markets?\b/.test(lower) ||
+        /\bcapital\s+flows?\b/.test(lower) ||
+        /\bcurrency\s+fluctuations?\b/.test(lower) ||
+        /\binflation\b/.test(lower);
+      return hasResearchVerb && hasBroadFinanceTopic;
+    },
+  },
   // Options: symbol + option keyword
   {
     workflow: "options_screener",
@@ -202,6 +225,9 @@ const RULES: Rule[] = [
   },
 ];
 
+/**
+ * @deprecated Use the LLM router (`route`) for new classification paths; keep this only for rules-mode fallback and deterministic safety nets.
+ */
 export function classifyIntent(input: string): ClassificationResult {
   const trimmed = input.trim();
   if (!trimmed) {
