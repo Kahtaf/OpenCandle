@@ -1,19 +1,37 @@
 {
   "input": "same question for QQQ",
   "priorTurns": [
-    { "role": "user", "text": "I'm holding $500k-$1M in SPY — how's it positioned relative to the broad market?" },
-    { "role": "assistant", "text": "SPY tracks the S&P 500, so it is the broad market by construction; beta is ~1.0 by definition." }
+    {
+      "role": "user",
+      "text": "I'm holding $500k-$1M in SPY — how's it positioned relative to the broad market?"
+    },
+    {
+      "role": "assistant",
+      "text": "SPY tracks the S&P 500, so it is the broad market by construction; beta is ~1.0 by definition."
+    }
   ],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "agent_task",
     "route": "fallback",
     "entities": {
-      "symbols": ["QQQ", "SPY"]
+      "symbols": [
+        "QQQ",
+        "SPY"
+      ]
     },
     "slots": {},
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market"
+    ],
+    "diagnostics": [],
     "reasoning": "dollar-phrase preservation — the prior turn's $500k-$1M holding is a PII-bucketed balance, not a portfolio budget; it must not leak into a budget slot. QQQ is the current-turn subject; SPY is carried as prior context in entities only"
   },
-  "tags": ["dollar-phrase-preservation", "fallback", "synthetic-multi-turn"]
+  "tags": [
+    "dollar-phrase-preservation",
+    "fallback",
+    "synthetic-multi-turn"
+  ]
 }

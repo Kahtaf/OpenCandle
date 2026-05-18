@@ -46,6 +46,10 @@ export const WORKFLOW_RELEVANT_CATEGORIES: Record<string, MemoryCategory[]> = {
   comprehensive_analysis: ["investor_profile", "workflow_history"],
   single_asset_analysis: ["investor_profile"],
   general_finance_qa: ["investor_profile"],
+  workflow_dispatch: ["investor_profile", "workflow_history"],
+  agent_task: ["investor_profile", "workflow_history"],
+  clarification: ["investor_profile", "workflow_history"],
+  pass_through: [],
   unclassified: ["investor_profile"],
 };
 

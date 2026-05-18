@@ -21,6 +21,8 @@ const COMMON_WORDS = new Set([
   "NEXT", "SHOW", "LAST",
 ]);
 
+const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI"]);
+
 export function extractEntities(input: string): ExtractedEntities {
   return {
     symbols: extractSymbols(input),
@@ -77,6 +79,7 @@ function extractSymbols(input: string): string[] {
       cleaned === cleaned.toUpperCase() &&
       /^[A-Z]+$/.test(cleaned) &&
       !COMMON_WORDS.has(cleaned) &&
+      !isAmbiguousConceptUsage(input, cleaned) &&
       !symbols.includes(cleaned)
     ) {
       symbols.push(cleaned);
@@ -84,6 +87,20 @@ function extractSymbols(input: string): string[] {
   }
 
   return symbols;
+}
+
+function isAmbiguousConceptUsage(input: string, symbol: string): boolean {
+  if (!AMBIGUOUS_CONCEPT_TICKERS.has(symbol)) return false;
+  if (new RegExp(`\\$${symbol}\\b`).test(input)) return false;
+  if (
+    new RegExp(
+      `\\b(?:analyze|quote|ticker|stock|shares?|options?|calls?|puts?)\\s+${symbol}\\b|\\b${symbol}\\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\\b`,
+      "i",
+    ).test(input)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function extractMaxPremium(input: string): number | undefined {

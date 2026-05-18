@@ -1,5 +1,6 @@
 import type { PromptSection, SectionName } from "./sections.js";
 import { SECTION_ORDER, DEFAULT_BUDGETS, truncateTobudget } from "./sections.js";
+import type { ResolvedTurnContext } from "../routing/turn-context.js";
 
 /** Options for building prompt context. */
 export interface PromptContextOptions {
@@ -15,6 +16,7 @@ export interface PromptContextOptions {
    * if both are set, `workflowInstructions` wins (rule-path compatibility).
    */
   fallbackContext?: FallbackContext;
+  resolvedTurnContext?: ResolvedTurnContext;
 }
 
 export interface FallbackContext {
@@ -77,6 +79,11 @@ export class PromptContextBuilder {
     this.setSection("tool-catalog", buildToolCatalog(options.addonToolDescriptions));
     if (options.workflowInstructions) {
       this.setSection("workflow-instructions", options.workflowInstructions);
+    } else if (options.resolvedTurnContext) {
+      this.setSection(
+        "workflow-instructions",
+        buildRoutePlaybook(options.resolvedTurnContext),
+      );
     } else if (options.fallbackContext) {
       this.setSection(
         "workflow-instructions",
@@ -101,6 +108,62 @@ export class PromptContextBuilder {
  * are missing. Contains NO refusal or hedging language.
  */
 export function buildFallbackPlaybook(ctx: FallbackContext): string {
+  return buildAgentTaskPlaybook(ctx);
+}
+
+export function buildRoutePlaybook(ctx: ResolvedTurnContext): string {
+  const assumptionsBlock = buildResolvedAssumptionsBlock(ctx);
+  const fallbackContext: FallbackContext = {
+    assumptionsBlock,
+    missingRequired: ctx.missingRequired,
+    extraContext: ctx.entities.symbols.length > 0
+      ? `Router-extracted symbols: ${ctx.entities.symbols.join(", ")}. Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`
+      : `Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`,
+  };
+
+  if (ctx.routeKind === "clarification") {
+    return buildClarificationPlaybook(fallbackContext);
+  }
+  if (ctx.routeKind === "pass_through") {
+    return `## Pass-Through Playbook
+This turn is outside OpenCandle's finance task surface. Answer normally without invoking finance tools. If the user clarifies into an investment, trading, portfolio, macro, or market-data task, ask a concise follow-up or proceed under the analyst stance.
+
+## Assumptions Context
+${assumptionsBlock}`;
+  }
+  if (ctx.routeKind === "workflow_dispatch") {
+    return `## Workflow Dispatch Context
+The router selected workflow dispatch${ctx.workflow ? ` for ${ctx.workflow}` : ""}. Use the workflow instructions as authoritative when present, and use this context only for slot provenance and missing required fields.
+
+${ctx.missingRequired.length > 0 ? `## Missing Required Information\nThe following slots are required but not yet filled: ${ctx.missingRequired.join(", ")}. Call the \`ask_user\` tool before committing to analysis.\n\n` : ""}## Assumptions Context
+${assumptionsBlock}`;
+  }
+  return buildAgentTaskPlaybook(fallbackContext);
+}
+
+function buildClarificationPlaybook(ctx: FallbackContext): string {
+  const missing = ctx.missingRequired.join(", ") || "required information";
+  return `## Clarification Playbook
+The router found that analysis is blocked by missing required information: ${missing}. Call the \`ask_user\` tool before committing to financial analysis. Keep the question specific and collect only the missing slots.
+
+${ctx.extraContext ? `## Additional Context\n${ctx.extraContext}\n\n` : ""}## Assumptions Context
+${ctx.assumptionsBlock}`;
+}
+
+function buildResolvedAssumptionsBlock(ctx: ResolvedTurnContext): string {
+  const lines: string[] = [];
+  lines.push("Assumptions Context:");
+  if (Object.keys(ctx.slots).length === 0) {
+    lines.push("  (none)");
+    return lines.join("\n");
+  }
+  for (const [key, slot] of Object.entries(ctx.slots)) {
+    lines.push(`  ${key}: ${String(slot.value)} (${slot.source})`);
+  }
+  return lines.join("\n");
+}
+
+function buildAgentTaskPlaybook(ctx: FallbackContext): string {
   const missingLine =
     ctx.missingRequired.length > 0
       ? `\n## Missing Required Information\nThe following slots are required but not yet filled: ${ctx.missingRequired.join(", ")}. Call the \`ask_user\` tool to collect each one BEFORE committing to a final answer. Do not guess or assume these values.`
@@ -108,15 +171,19 @@ export function buildFallbackPlaybook(ctx: FallbackContext): string {
   const extraLine = ctx.extraContext ? `\n## Additional Context\n${ctx.extraContext}` : "";
 
   return `## Fallback Playbook
-This turn did not match a structured workflow, but you still commit to an answer under the analyst stance. Follow this playbook:
+This turn did not match a structured workflow, but you still commit to an answer under the analyst stance. Follow this playbook:${missingLine}${extraLine}
 
 1. Tool-first: fetch relevant data with your available tools before stating prices, levels, or metrics.
 2. Use the Assumptions Context below only as internal routing context. Do not quote it, label it, or start the answer with it unless the user explicitly asked for assumptions.
 3. Commit: give a concrete, specific answer (entry zone, target, allocation, recommendation, explanation — whatever the question asked for). Do not refuse. Do not hedge into vagueness. Low confidence is a legitimate answer; refusal is not.
 4. Attach reasoning, a confidence band, and an invalidation condition to every committal response.
 5. For macro, rates, inflation, sector, or portfolio-allocation prompts: convert raw economic series into interpretable rates or trends where possible (for example, CPI index level → same-month year-over-year inflation when 13+ monthly observations are available), explain the policy stance in plain language (nominal and real-rate implications when available), and explicitly connect each macro datapoint to earnings, valuation multiples, asset-class returns, and portfolio risk.
-6. For non-US macro data, search for direct current facts from the relevant institution or region (for example, "Eurozone HICP inflation April 2026 ECB rate May 2026" or "Japan CPI April 2026 BoJ policy rate May 2026") instead of searching only for provider-specific series identifiers. If tool coverage is missing, say exactly which regional data was unavailable and avoid fabricating numbers.
-7. For sentiment-only prompts: final answer must include the direction and strength of the sentiment signal, any missing sources, the source-coverage risk, and how that risk changes confidence.${missingLine}${extraLine}
+6. For industry or sector structure prompts: include a segmentation table covering the value chain, key company types, economics, bottlenecks, current demand drivers, and geopolitical exposure; then give 2-3 forward scenarios with explicit confidence levels, key indicators to watch, what would invalidate each scenario, and how major technology shifts change competitive advantage. Name concrete technologies where relevant (for semiconductors, examples include chiplets/advanced packaging, HBM/CXL memory bandwidth, silicon photonics, in-memory or near-memory compute, EDA/design automation, and AI accelerators) and map each technology to its likely value-chain impact.
+7. If web search returns no results, provider soft-degradation tags, or a validation error after a reasonable retry, continue with the best high-level analysis you can support from available tool output and general market knowledge. Label the live-data gap, lower confidence where appropriate, and name the specific current facts that would improve the answer. Do not stop with a tool-failure apology for broad conceptual, industry, sector, or education questions.
+8. When calling search_web, use only supported freshness values: hours, day, week, or month. For broad industry structure or non-breaking-news context, prefer category general with freshness month; never pass unsupported values such as all, year, 3mo, quarter, or custom date ranges.
+9. For macro-policy impact prompts: include a mechanism map from policy shift → currency moves → capital flows → inflation/financial conditions → asset-market impact, then name concrete country or region examples where available. If current data is missing, state that gap without fabricating numbers.
+10. For non-US macro data, search for direct current facts from the relevant institution or region (for example, "Eurozone HICP inflation April 2026 ECB rate May 2026" or "Japan CPI April 2026 BoJ policy rate May 2026") instead of searching only for provider-specific series identifiers. If tool coverage is missing, say exactly which regional data was unavailable and avoid fabricating numbers.
+11. For sentiment-only prompts: final answer must include the direction and strength of the sentiment signal, any missing sources, the source-coverage risk, and how that risk changes confidence.
 
 ## Assumptions Context
 ${ctx.assumptionsBlock}
@@ -174,7 +241,7 @@ const TOOL_CATALOG = `## Available Tools
 - **Technical Analysis**: get_technical_indicators, backtest_strategy — SMA, EMA, RSI, MACD, Bollinger Bands, OBV, VWAP computed from price data, plus simple strategy backtesting
 - **Macro**: get_economic_data, get_fear_greed — FRED economic indicators and market sentiment
 - **Sentiment**: get_reddit_sentiment, get_twitter_sentiment, get_web_sentiment, get_sentiment_trend, get_sentiment_summary — retail and news sentiment from Reddit, Twitter/X, and web sources with historical trends and cross-source divergence detection
-- **Web Search**: search_web — breaking news, earnings context, company events, regulatory developments. When a dedicated tool can answer the question (quotes, fundamentals, earnings, macro, SEC filings, sentiment), use that tool instead — do not add search_web as a supplementary source for data available through dedicated tools
+- **Web Search**: search_web — breaking news, earnings context, company events, regulatory developments. Supported freshness values are hours, day, week, and month; use category general with freshness month for broad industry context; never pass unsupported values such as all, year, 3mo, quarter, or custom date ranges. When a dedicated tool can answer the question (quotes, fundamentals, earnings, macro, SEC filings, sentiment), use that tool instead — do not add search_web as a supplementary source for data available through dedicated tools
 - **Options**: get_option_chain — full options chain with strikes, bids/asks, volume, OI, IV, and computed Greeks (delta, gamma, theta, vega, rho)
 - **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, and prediction tracking with accuracy scoring
 - **User Interaction**: ask_user — ask the user a clarification question when their request is ambiguous or missing key details`;

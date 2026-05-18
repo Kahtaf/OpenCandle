@@ -3,18 +3,32 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
-    "route": "workflow",
+    "routeKind": "clarification",
+    "route": "fallback",
     "workflow": "options_screener",
     "entities": {
       "symbols": [],
       "direction": "bullish"
     },
     "slots": {
-      "direction": { "value": "bullish", "source": "user", "confidence": "high" }
+      "direction": {
+        "value": "bullish",
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
-    "missing_required": ["symbol"],
+    "missing_required": [
+      "symbol"
+    ],
+    "tool_bundles": [
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "bullish options setup but no ticker given; ask_user needed"
   },
-  "tags": ["options_screener", "needs-clarification-missing-symbol"]
+  "tags": [
+    "options_screener",
+    "needs-clarification-missing-symbol"
+  ]
 }

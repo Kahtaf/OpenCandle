@@ -3,21 +3,47 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
     "route": "workflow",
     "workflow": "options_screener",
     "entities": {
-      "symbols": ["NVDA"],
+      "symbols": [
+        "NVDA"
+      ],
       "direction": "bullish",
       "dteHint": "month"
     },
     "slots": {
-      "symbol": { "value": "NVDA", "source": "user", "confidence": "high" },
-      "direction": { "value": "bullish", "source": "user", "confidence": "high" },
-      "dte_target": { "value": "25_to_45_days", "source": "user", "confidence": "high" }
+      "symbol": {
+        "value": "NVDA",
+        "source": "user",
+        "confidence": "high"
+      },
+      "direction": {
+        "value": "bullish",
+        "source": "user",
+        "confidence": "high"
+      },
+      "dte_target": {
+        "value": "25_to_45_days",
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "options",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "bullish calls + explicit DTE window on NVDA"
   },
-  "tags": ["options_screener", "calls", "nvda"]
+  "tags": [
+    "options_screener",
+    "calls",
+    "nvda"
+  ]
 }

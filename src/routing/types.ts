@@ -56,7 +56,7 @@ export interface CompareAssetsSlots {
   metrics?: string[];
 }
 
-export type SlotSource = "user" | "preference" | "default";
+export type SlotSource = "user" | "preference" | "default" | "prior_context" | "memory";
 
 export interface SlotResolution<T> {
   resolved: T;

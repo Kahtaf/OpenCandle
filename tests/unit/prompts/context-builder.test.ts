@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { PromptContextBuilder, buildFallbackPlaybook } from "../../../src/prompts/context-builder.js";
+import {
+  PromptContextBuilder,
+  buildFallbackPlaybook,
+  buildRoutePlaybook,
+} from "../../../src/prompts/context-builder.js";
 import { truncateTobudget } from "../../../src/prompts/sections.js";
+import type { ResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
 describe("truncateTobudget", () => {
   it("returns content unchanged when within budget", () => {
@@ -153,6 +158,112 @@ describe("PromptContextBuilder", () => {
 
     expect(result).toContain("sentiment-only");
     expect(result).toContain("source-coverage risk");
+  });
+
+  it("tells fallback sector research to include segmentation and scenario confidence", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("industry or sector structure");
+    expect(result).toContain("segmentation table");
+    expect(result).toContain("scenario");
+    expect(result).toContain("confidence");
+    expect(result).toContain("key indicators");
+    expect(result).toContain("geopolitical");
+    expect(result).toContain("technology shifts");
+    expect(result).toContain("silicon photonics");
+    expect(result).toContain("value-chain impact");
+  });
+
+  it("tells broad research to degrade gracefully after web search gaps", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("web search returns no results");
+    expect(result).toContain("continue with the best high-level analysis");
+    expect(result).toContain("Label the live-data gap");
+    expect(result).toContain("Do not stop with a tool-failure apology");
+  });
+
+  it("documents supported search freshness values and forbids unsupported ranges", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("Supported freshness values are hours, day, week, and month");
+    expect(result).toContain("category general with freshness month");
+    expect(result).toContain("never pass unsupported values such as all, year, 3mo");
+  });
+
+  it("tells fallback macro-policy research to map mechanisms and country examples", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("mechanism map");
+    expect(result).toContain("country");
+    expect(result).toContain("currency");
+    expect(result).toContain("capital flows");
+  });
+
+  it("renders clarification playbook from resolved route context", () => {
+    const result = buildRoutePlaybook({
+      userInput: "build me an options setup",
+      priorTurns: [],
+      routeKind: "clarification",
+      legacyRoute: "fallback",
+      workflow: "options_screener",
+      entities: { symbols: [] },
+      slots: {},
+      missingRequired: ["symbol"],
+      toolBundles: ["clarification"],
+      activeToolNames: ["ask_user"],
+      memoryQueryPlan: {
+        routeKind: "clarification",
+        workflow: "options_screener",
+        categories: ["investor_profile", "workflow_history"],
+        symbols: [],
+        slotKeys: [],
+      },
+      memoryProvenance: [],
+      promptPlaybook: "clarification",
+      diagnostics: [],
+    } satisfies ResolvedTurnContext);
+
+    expect(result).toContain("Clarification Playbook");
+    expect(result).toContain("symbol");
+    expect(result).toContain("ask_user");
+  });
+
+  it("renders pass-through playbook without finance tool instructions", () => {
+    const result = buildRoutePlaybook({
+      userInput: "write a haiku",
+      priorTurns: [],
+      routeKind: "pass_through",
+      legacyRoute: "fallback",
+      entities: { symbols: [] },
+      slots: {},
+      missingRequired: [],
+      toolBundles: [],
+      activeToolNames: [],
+      memoryQueryPlan: {
+        routeKind: "pass_through",
+        categories: [],
+        symbols: [],
+        slotKeys: [],
+      },
+      memoryProvenance: [],
+      promptPlaybook: "pass_through",
+      diagnostics: [],
+    } satisfies ResolvedTurnContext);
+
+    expect(result).toContain("Pass-Through Playbook");
+    expect(result).toContain("without invoking finance tools");
   });
 
   it("includes sentiment source-coverage risk guidance in the standard prompt", () => {

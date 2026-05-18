@@ -3,17 +3,39 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
-    "route": "workflow",
+    "routeKind": "agent_task",
+    "route": "fallback",
     "workflow": "single_asset_analysis",
     "entities": {
-      "symbols": ["TSLA"]
+      "symbols": [
+        "TSLA"
+      ]
     },
     "slots": {
-      "symbol": { "value": "TSLA", "source": "user", "confidence": "high" }
+      "symbol": {
+        "value": "TSLA",
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "options",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "route_kind_corrected_to_agent_task",
+        "message": "single_asset_analysis is not a dispatchable workflow"
+      }
+    ],
     "reasoning": "explicit analyze verb + single ticker"
   },
-  "tags": ["single_asset_analysis"]
+  "tags": [
+    "single_asset_analysis"
+  ]
 }

@@ -1,0 +1,22 @@
+{
+  "input": "write a haiku about rain",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "pass_through",
+    "route": "fallback",
+    "entities": {
+      "symbols": []
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [],
+    "diagnostics": [],
+    "reasoning": "Non-finance creative writing request."
+  },
+  "tags": [
+    "pass_through",
+    "non_finance"
+  ]
+}

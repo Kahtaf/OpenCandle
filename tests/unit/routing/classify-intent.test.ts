@@ -1,7 +1,15 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { classifyIntent } from "../../../src/routing/classify-intent.js";
 
 describe("classifyIntent", () => {
+  it("is marked deprecated because LLM routing is the default classifier", () => {
+    const source = readFileSync("src/routing/classify-intent.ts", "utf-8");
+    expect(source).toMatch(
+      /@deprecated\s+Use the LLM router \(`route`\) for new classification paths; keep this only for rules-mode fallback and deterministic safety nets\./,
+    );
+  });
+
   describe("single_asset_analysis", () => {
     it("matches 'analyze NVDA'", () => {
       const result = classifyIntent("analyze NVDA");
@@ -223,6 +231,28 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("general_finance_qa");
       expect(result.entities.symbols).toEqual([]);
     });
+
+    it("routes semiconductor market-structure research without treating AI as a ticker", () => {
+      const result = classifyIntent(
+        "Analyze the current market structure of the semiconductor industry and predict how emerging technologies like AI could reshape it over the next decade.",
+      );
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual([]);
+    });
+
+    it("routes US monetary policy impact research to the general path", () => {
+      const result = classifyIntent(
+        "What are the potential impacts of the recent shifts in U.S. monetary policy on emerging markets? Consider factors like currency fluctuations, capital flows, and inflation.",
+      );
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual([]);
+    });
+
+    it("keeps explicit AI ticker prompts as single-asset analysis", () => {
+      const result = classifyIntent("analyze AI");
+      expect(result.workflow).toBe("single_asset_analysis");
+      expect(result.entities.symbols).toEqual(["AI"]);
+    });
   });
 
   describe("news queries → general_finance_qa", () => {
@@ -230,6 +260,7 @@ describe("classifyIntent", () => {
       const result = classifyIntent("Any recent news about NVDA and AI chip exports?");
       expect(result.workflow).toBe("general_finance_qa");
       expect(result.confidence).toBeGreaterThanOrEqual(0.85);
+      expect(result.entities.symbols).toEqual(["NVDA"]);
     });
 
     it("matches 'what's the latest news on semiconductor tariffs'", () => {

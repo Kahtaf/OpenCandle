@@ -3,7 +3,8 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
-    "route": "workflow",
+    "routeKind": "agent_task",
+    "route": "fallback",
     "workflow": "general_finance_qa",
     "entities": {
       "symbols": []
@@ -11,7 +12,22 @@
     "slots": {},
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "route_kind_corrected_to_agent_task",
+        "message": "general_finance_qa is not a dispatchable workflow"
+      }
+    ],
     "reasoning": "definitional question — general_finance_qa"
   },
-  "tags": ["general_finance_qa"]
+  "tags": [
+    "general_finance_qa"
+  ]
 }

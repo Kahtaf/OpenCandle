@@ -3,18 +3,36 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "agent_task",
     "route": "fallback",
     "entities": {
-      "symbols": ["ASTS"],
+      "symbols": [
+        "ASTS"
+      ],
       "timeHorizon": "6mo"
     },
     "slots": {
-      "symbol": { "value": "ASTS", "source": "user", "confidence": "high" },
-      "time_horizon": { "value": "6mo", "source": "user", "confidence": "high" }
+      "symbol": {
+        "value": "ASTS",
+        "source": "user",
+        "confidence": "high"
+      },
+      "time_horizon": {
+        "value": "6mo",
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market"
+    ],
+    "diagnostics": [],
     "reasoning": "entry-levels query outside workflow taxonomy; fallback with populated entities"
   },
-  "tags": ["fallback-entry-levels", "asts"]
+  "tags": [
+    "fallback-entry-levels",
+    "asts"
+  ]
 }

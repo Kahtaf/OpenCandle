@@ -9,6 +9,7 @@ export interface SentimentConfig {
 }
 
 export type RouterMode = "rules" | "llm";
+export type ToolScopeMode = "observe" | "enforce";
 
 export interface Config {
   alphaVantageApiKey?: string;
@@ -24,6 +25,12 @@ export interface Config {
    * `extractPreferences` path. Controlled by `OPENCANDLE_ROUTER_MODE`.
    */
   routerMode: RouterMode;
+  /**
+   * Route-selected tool scope mode. `"observe"` (default) records selected
+   * bundles and active-tool candidates. `"enforce"` applies Pi active tools
+   * for the turn via `pi.setActiveTools`.
+   */
+  toolScopeMode: ToolScopeMode;
   sentiment?: SentimentConfig;
 }
 
@@ -93,6 +100,15 @@ function resolveRouterMode(): RouterMode {
   );
 }
 
+function resolveToolScopeMode(): ToolScopeMode {
+  const raw = process.env.OPENCANDLE_TOOL_SCOPE_MODE;
+  if (raw === undefined || raw === "") return "observe";
+  if (raw === "observe" || raw === "enforce") return raw;
+  throw new Error(
+    `Invalid OPENCANDLE_TOOL_SCOPE_MODE="${raw}". Allowed values: "observe" (default) or "enforce".`,
+  );
+}
+
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
   const debateEnv = process.env.OPENCANDLE_DEBATE;
   const fileSentiment = fileConfig.sentiment;
@@ -105,6 +121,7 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
     debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
     routerMode: resolveRouterMode(),
+    toolScopeMode: resolveToolScopeMode(),
     sentiment: {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,
