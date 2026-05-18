@@ -203,15 +203,33 @@ export function workflowRequiredSlots(
 export function computeMissingRequiredSlots(
   workflow: Exclude<WorkflowType, "unclassified"> | undefined,
   entities: ExtractedEntities,
+  slots: RouterOutput["slots"] = {},
   existingMissing: readonly string[] = [],
 ): string[] {
-  const missing = new Set(existingMissing);
+  const missing = new Set<string>();
+  const existing = new Set(existingMissing);
   for (const slot of workflowRequiredSlots(workflow)) {
-    if (slot === "budget" && entities.budget === undefined) missing.add("budget");
-    if (slot === "symbol" && entities.symbols.length === 0) missing.add("symbol");
-    if (slot === "symbols" && entities.symbols.length < 2) missing.add("symbols");
+    if (slot === "budget" && entities.budget === undefined && !slotHasValue(slots.budget)) {
+      missing.add("budget");
+    }
+    if (slot === "symbol" && entities.symbols.length === 0 && !slotHasValue(slots.symbol)) {
+      missing.add("symbol");
+    }
+    if (slot === "symbols" && entities.symbols.length < 2 && !slotHasValue(slots.symbols)) {
+      missing.add("symbols");
+    }
+    existing.delete(slot);
+  }
+  for (const slot of existing) {
+    if (!slotHasValue(slots[slot])) missing.add(slot);
   }
   return Array.from(missing);
+}
+
+function slotHasValue(slot: RouterOutput["slots"][string] | undefined): boolean {
+  if (!slot) return false;
+  if (Array.isArray(slot.value)) return slot.value.length > 0;
+  return slot.value !== undefined && slot.value !== null && slot.value !== "";
 }
 
 export function selectToolBundles(output: Pick<RouterOutput, "routeKind" | "workflow" | "entities">): ToolBundleName[] {

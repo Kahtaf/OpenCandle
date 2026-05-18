@@ -256,7 +256,7 @@ describe("route()", () => {
     expect(result.entities.compareMetrics).toEqual(["macro_hedge"]);
   });
 
-  it("keeps valid LLM agent-task fallback instead of deterministically upgrading it", async () => {
+  it("keeps valid LLM agent-task fallback but drops ambiguous concept symbols", async () => {
     const result = await route(
       {
         ...BASE_INPUT,
@@ -275,6 +275,25 @@ describe("route()", () => {
     expect(result.routeKind).toBe("agent_task");
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBeUndefined();
+    expect(result.entities.symbols).toEqual([]);
+  });
+
+  it("keeps ambiguous symbols when the user explicitly asks for the ticker", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Analyze AI stock",
+      },
+      fixedClient(JSON.stringify({
+        route: "fallback",
+        entities: { symbols: ["AI"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "single ticker request",
+      })),
+    );
+
     expect(result.entities.symbols).toEqual(["AI"]);
   });
 
@@ -314,6 +333,27 @@ describe("route()", () => {
 
     expect(result.routeKind).toBe("clarification");
     expect(result.missing_required).toEqual(["budget"]);
+  });
+
+  it("does not clarify when resolved slots supply the required budget", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "build me a portfolio like last time" },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {
+          budget: { value: 10_000, source: "preference", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "profile supplies budget",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.missing_required).toEqual([]);
+    expect(result.slots.budget?.source).toBe("preference");
   });
 
   it("does not clarify when prior context supplies the required symbol", async () => {

@@ -1,4 +1,4 @@
-import { extractEntities } from "./entity-extractor.js";
+import { extractEntities, isAmbiguousConceptUsage } from "./entity-extractor.js";
 import { classifyIntent } from "./classify-intent.js";
 import { buildRouterPrompt } from "./router-prompt.js";
 import {
@@ -180,6 +180,9 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     ...output,
     entities: {
       ...output.entities,
+      symbols: output.entities.symbols.filter((symbol) =>
+        !isAmbiguousConceptUsage(text, symbol),
+      ),
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
     },
@@ -234,6 +237,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
+    next.slots,
     next.missing_required,
   );
   if (missingRequired.length > 0 && next.routeKind !== "pass_through") {

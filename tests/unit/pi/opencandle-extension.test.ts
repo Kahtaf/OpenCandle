@@ -6,6 +6,7 @@ import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { resetConfigCache } from "../../../src/config.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
+import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
@@ -550,6 +551,45 @@ describe("opencandle extension", () => {
       );
 
       expect(result).toBeUndefined();
+    });
+
+    it("does not record pass-through turns as finance workflow history", async () => {
+      const passThroughOutput: RouterOutput = {
+        routeKind: "pass_through",
+        route: "fallback",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "non-finance request",
+        tool_bundles: [],
+        diagnostics: [],
+      };
+      const recordSpy = vi.spyOn(SessionCoordinator.prototype, "recordWorkflowRun");
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(passThroughOutput) });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "write a haiku", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(recordSpy).not.toHaveBeenCalled();
     });
 
     it("logs dropped medium/low-confidence preferences even when no storage is available", async () => {

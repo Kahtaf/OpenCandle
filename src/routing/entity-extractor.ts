@@ -89,7 +89,7 @@ function extractSymbols(input: string): string[] {
   return symbols;
 }
 
-function isAmbiguousConceptUsage(input: string, symbol: string): boolean {
+export function isAmbiguousConceptUsage(input: string, symbol: string): boolean {
   if (!AMBIGUOUS_CONCEPT_TICKERS.has(symbol)) return false;
   if (new RegExp(`\\$${symbol}\\b`).test(input)) return false;
   if (

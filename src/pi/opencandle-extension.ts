@@ -648,6 +648,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       return dispatchRouterWorkflow(output, ctx);
     }
 
+    if (output.routeKind === "pass_through") {
+      return false;
+    }
+
     // Fallback: record the turn and stash the fallback context for the
     // upcoming `before_agent_start` hook to render into the system prompt.
     coordinator.recordWorkflowRun(
