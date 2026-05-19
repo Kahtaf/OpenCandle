@@ -26,7 +26,18 @@ export function AppShell() {
       setLiveBaseEntryCount(gui.entries.length);
       setLiveEvents([]);
     }, [gui.entries.length]),
-    onEvent: useCallback((event) => setLiveEvents((current) => [...current, event]), []),
+    onEvent: useCallback((event) => {
+      setLiveEvents((current) => [...current, event]);
+      if (event.type !== "run.started" || !event.sessionId) return;
+      const sessionId = String(event.sessionId);
+      const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
+      if (location.pathname === sessionPath) return;
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId },
+        search: (current) => ({ ...current, drawer: undefined }),
+      });
+    }, [location.pathname, navigate]),
   });
   const activeDrawer = location.search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);

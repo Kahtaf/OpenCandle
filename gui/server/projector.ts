@@ -28,6 +28,16 @@ export interface DashboardState {
   };
 }
 
+const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
+  get_company_overview: "alpha_vantage",
+  get_financials: "alpha_vantage",
+  get_earnings: "alpha_vantage",
+  compute_dcf: "alpha_vantage",
+  compare_companies: "alpha_vantage",
+  get_economic_data: "fred",
+  get_twitter_sentiment: "twitter",
+};
+
 export function createEmptyDashboardState(): DashboardState {
   return {
     watchlist: [],
@@ -137,9 +147,14 @@ function projectToolResult(
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("\n");
+  for (const provider of parseSoftGapProviders(text)) {
+    state.dataQuality.softGaps.push({ provider, lastSeen: timestamp });
+  }
   for (const provider of parseCredentialRequiredProviders(text)) {
     state.dataQuality.hardSkips.push({ provider, lastSeen: timestamp });
   }
+  const provider = inferDirectToolGapProvider(message.toolName, text);
+  if (provider) state.dataQuality.softGaps.push({ provider, lastSeen: timestamp });
 }
 
 function projectQuote(
@@ -174,13 +189,22 @@ function parseCredentialRequiredProviders(text: string): string[] {
 }
 
 function parseSkippedProviders(text: string): string[] {
+  return parseSoftGapProviders(text);
+}
+
+function parseSoftGapProviders(text: string): string[] {
   const providers: string[] = [];
-  const re = /\[OPENCANDLE_SKIPPED[^\]]*provider=([a-z0-9_-]+)/gi;
+  const re = /\[OPENCANDLE_(?:SKIPPED|SOFT_DEGRADED)[^\]]*provider=([a-z0-9_-]+)/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     providers.push(match[1]);
   }
   return providers;
+}
+
+function inferDirectToolGapProvider(toolName: string | undefined, text: string): string | undefined {
+  if (!toolName || !/(?:⚠|unavailable|No .*data found|LOGIN_NEEDED)/i.test(text)) return undefined;
+  return DIRECT_TOOL_GAP_PROVIDERS[toolName];
 }
 
 function inferSymbolFromContent(content: ToolResultMessage["content"]): string | undefined {

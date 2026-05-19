@@ -234,6 +234,42 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    next.workflow === "compare_assets" &&
+    next.entities.symbols.length === 0 &&
+    isExplicitMacroDataRequest(text)
+  ) {
+    diagnostics.push({
+      code: "compare_route_corrected_to_macro_task",
+      message: "macro/source acronyms were not explicit tickers",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
+  if (
+    next.routeKind === "agent_task" &&
+    !next.workflow &&
+    next.entities.symbols.length === 0 &&
+    isExplicitMacroDataRequest(text)
+  ) {
+    diagnostics.push({
+      code: "macro_task_inferred_from_prompt",
+      message: "macro data terms were present without explicit tickers",
+    });
+    next = {
+      ...next,
+      workflow: "general_finance_qa",
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -271,6 +307,10 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     tool_bundles: selectedToolBundles,
     diagnostics,
   };
+}
+
+function isExplicitMacroDataRequest(text: string): boolean {
+  return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro)\b/i.test(text);
 }
 
 function validateSlots(raw: unknown): Record<string, RouterSlot> {

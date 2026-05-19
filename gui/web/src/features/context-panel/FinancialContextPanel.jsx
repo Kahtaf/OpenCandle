@@ -70,7 +70,7 @@ function summarize(state) {
   const softSet = new Set((state.dataQuality?.softGaps ?? []).map((g) => g.provider));
   if (hardSet.size > 0) return { tone: "warning", label: `${hardSet.size} provider${hardSet.size === 1 ? "" : "s"} need a key` };
   if ((state.activeAnalyses ?? []).length > 0) return { tone: "info", label: `${state.activeAnalyses.length} running` };
-  if (softSet.size > 0) return { tone: "muted", label: `${softSet.size} fallback${softSet.size === 1 ? "" : "s"} in use` };
+  if (softSet.size > 0) return { tone: "muted", label: `${softSet.size} data gap${softSet.size === 1 ? "" : "s"}` };
   if ((state.watchlist ?? []).length > 0) return { tone: "success", label: "All clear" };
   return null;
 }
@@ -264,13 +264,13 @@ function GapRow({ gap, onConfigure }) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">{gap.displayName}</span>
           <Badge variant={isHard ? "warning" : "outline"} className="h-4 px-1.5 text-[10px]">
-            {isHard ? "Missing key" : "Fallback"}
+            {isHard ? "Missing key" : "Data gap"}
           </Badge>
         </div>
         <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
           {isHard
             ? <>Skipped {gap.count}× — add an API key to unlock {gap.unlocks || "this provider's tools"}.</>
-            : <>Used keyless fallback {gap.count}× this session{gap.fallbackDescription ? ` — ${gap.fallbackDescription}` : ""}.</>}
+            : <>Reported a data gap {gap.count}× this session{gap.fallbackDescription ? ` — ${gap.fallbackDescription}` : ""}.</>}
           {gap.lastSeen ? <> · last {relativeTime(gap.lastSeen)}</> : null}
         </p>
       </div>

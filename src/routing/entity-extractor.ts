@@ -21,7 +21,7 @@ const COMMON_WORDS = new Set([
   "NEXT", "SHOW", "LAST",
 ]);
 
-const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI"]);
+const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
 
 export function extractEntities(input: string): ExtractedEntities {
   return {

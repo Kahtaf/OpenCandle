@@ -70,6 +70,12 @@ describe("extractEntities", () => {
       expect(result.symbols).not.toContain("I");
       expect(result.symbols).not.toContain("ETF");
     });
+
+    it("does not treat macro/source/UI acronyms as tickers unless explicit", () => {
+      expect(extractEntities("Use get_economic_data to show FRED CPI inflation data").symbols).toEqual([]);
+      expect(extractEntities("render the options widget if the GUI supports it").symbols).toEqual([]);
+      expect(extractEntities("analyze $CPI as a stock").symbols).toEqual(["CPI"]);
+    });
   });
 
   describe("direction extraction", () => {
