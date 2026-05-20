@@ -95,7 +95,7 @@ describe("buildOptionsScreenerWorkflow", () => {
   });
 
   it("follow-up prompt requires actionable guidance when no chain data is usable", () => {
-    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "ASTS", dteTarget: "7_to_14_days" }));
+    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "MSFT", dteTarget: "7_to_14_days" }));
     const followUp = workflow.followUps[0];
 
     expect(followUp.toLowerCase()).toContain("do not promise to retry later");
@@ -106,7 +106,7 @@ describe("buildOptionsScreenerWorkflow", () => {
 
   it("follow-up prompt prevents long-option max-loss framing for covered calls", () => {
     const workflow = buildOptionsScreenerWorkflow(
-      makeResolution({ optionStrategy: "covered_call", costBasis: 77 }),
+      makeResolution({ optionStrategy: "covered_call", costBasis: 123.45 }),
     );
     const followUp = workflow.followUps[0];
 

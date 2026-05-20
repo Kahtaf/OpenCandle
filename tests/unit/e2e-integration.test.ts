@@ -407,7 +407,7 @@ describe("E2E integration: full orchestration pipeline", () => {
 
     it("raw LLM router hint '1-2 weeks' → 7_to_14_days DTE", () => {
       const resolution = resolveOptionsScreenerSlots({
-        symbols: ["ASTS"],
+        symbols: ["MSFT"],
         direction: "bullish",
         dteHint: "1-2 weeks",
       });
@@ -417,15 +417,15 @@ describe("E2E integration: full orchestration pipeline", () => {
 
     it("covered call prompt carries strategy and cost basis into the options workflow", () => {
       const entities = extractEntities(
-        "looking to sell a covered call for asts since it recently ran up. Cost basis 77. Best return for something 1 or 2 weeks out?",
+        "Sell a covered call on MSFT. Cost basis 123.45. Best return for something 1 or 2 weeks out?",
       );
       const resolution = resolveOptionsScreenerSlots(entities);
       const plan = buildOptionsScreenerWorkflow(resolution);
 
       expect(resolution.resolved.optionStrategy).toBe("covered_call");
-      expect(resolution.resolved.costBasis).toBe(77);
+      expect(resolution.resolved.costBasis).toBe(123.45);
       expect(plan.initialPrompt).toContain("Option strategy: covered_call");
-      expect(plan.initialPrompt).toContain("Cost basis: $77");
+      expect(plan.initialPrompt).toContain("Cost basis: $123.45");
       expect(plan.initialPrompt.toLowerCase()).toContain("premium received");
       expect(plan.followUps[0].toLowerCase()).toContain("return-if-assigned");
     });
