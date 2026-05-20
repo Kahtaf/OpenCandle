@@ -24,13 +24,20 @@ const COMMON_WORDS = new Set([
 const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
 
 export function extractEntities(input: string): ExtractedEntities {
+  const symbols = extractSymbols(input);
+  const heldSymbol = extractHeldSymbol(input, symbols);
   return {
-    symbols: extractSymbols(input),
+    symbols,
     budget: extractBudget(input),
     maxPremium: extractMaxPremium(input),
+    costBasis: extractCostBasis(input),
     direction: extractDirection(input),
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
+    heldSymbol,
+    catalystSymbols: heldSymbol
+      ? symbols.filter((symbol) => symbol !== heldSymbol)
+      : undefined,
     timeHorizon: extractTimeHorizon(input),
     assetScope: extractAssetScope(input),
     compareMetrics: extractCompareMetrics(input),
@@ -124,6 +131,26 @@ function extractMaxPremium(input: string): number | undefined {
   return undefined;
 }
 
+function extractHeldSymbol(input: string, symbols: string[]): string | undefined {
+  const patterns = [
+    /\b(?:i\s+)?(?:have|own|hold|holding|long)\s+\$?([A-Za-z]{1,5})\b/i,
+    /\bmy\s+\$?([A-Za-z]{1,5})\s+(?:position|shares?|stock)\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = input.match(pattern);
+    const symbol = match?.[1]?.toUpperCase();
+    if (symbol && symbols.includes(symbol)) return symbol;
+  }
+  return undefined;
+}
+
+function extractCostBasis(input: string): number | undefined {
+  const match = input.match(/\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
+  if (!match) return undefined;
+  const value = parseFloat(match[1].replace(/,/g, ""));
+  return Number.isFinite(value) ? value : undefined;
+}
+
 function extractDirection(input: string): "bullish" | "bearish" | undefined {
   const lower = input.toLowerCase();
   if (/\bcalls?\b/.test(lower) || /\bbullish\b/.test(lower)) return "bullish";
@@ -147,6 +174,7 @@ function extractRiskProfile(input: string): string | undefined {
 
 function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
+  if (/\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(lower)) return "event_week";
   if (/\bleaps?\b/i.test(lower) || /\blong[\s-]*dated\b/.test(lower)) return "leaps";
   if (/\bmonth\b/.test(lower)) return "month";
   if (/\bweek(?:ly|s?)?\b/.test(lower)) return "week";

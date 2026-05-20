@@ -163,10 +163,16 @@ function validateEntities(raw: unknown): ExtractedEntities {
   const out: ExtractedEntities = { symbols };
   if (typeof e.budget === "number") out.budget = e.budget;
   if (typeof e.maxPremium === "number") out.maxPremium = e.maxPremium;
+  if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
   if (typeof e.timeHorizon === "string") out.timeHorizon = e.timeHorizon;
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
+  if (typeof e.heldSymbol === "string") out.heldSymbol = e.heldSymbol.toUpperCase();
+  const catalystSymbols = validateStringArray(e.catalystSymbols, "entities.catalystSymbols").map((s) =>
+    s.toUpperCase(),
+  );
+  if (catalystSymbols.length > 0) out.catalystSymbols = catalystSymbols;
   const compareMetrics = validateStringArray(e.compareMetrics, "entities.compareMetrics");
   if (compareMetrics.length > 0) out.compareMetrics = compareMetrics;
   return out;
@@ -185,9 +191,38 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       ),
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+      costBasis: output.entities.costBasis ?? extracted.costBasis,
+      heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
+      catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
+      dteHint: output.entities.dteHint ?? (output.workflow === "options_screener" ? extracted.dteHint : undefined),
     },
     diagnostics,
   };
+
+  if (next.workflow === "options_screener" && isCoveredCallRequest(text) && extracted.heldSymbol) {
+    const reorderedSymbols = [
+      extracted.heldSymbol,
+      ...mergeSymbols(next.entities.symbols, extracted.symbols).filter((symbol) => symbol !== extracted.heldSymbol),
+    ];
+    if (next.entities.symbols[0] !== extracted.heldSymbol) {
+      diagnostics.push({
+        code: "covered_call_underlying_corrected",
+        message: `using owned position ${extracted.heldSymbol} as the covered-call underlying`,
+      });
+    }
+    next = {
+      ...next,
+      entities: {
+        ...next.entities,
+        symbols: reorderedSymbols,
+        heldSymbol: extracted.heldSymbol,
+        catalystSymbols: reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol),
+        costBasis: extracted.costBasis ?? next.entities.costBasis,
+        dteHint: extracted.dteHint ?? next.entities.dteHint,
+      },
+      diagnostics,
+    };
+  }
 
   if (
     next.diagnostics.some((d) => d.code === "router_validation_failed") &&
@@ -204,6 +239,9 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         ...deterministic.entities,
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         compareMetrics: deterministic.entities.compareMetrics ?? extracted.compareMetrics,
+        costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
+        heldSymbol: deterministic.entities.heldSymbol ?? extracted.heldSymbol,
+        catalystSymbols: deterministic.entities.catalystSymbols ?? extracted.catalystSymbols,
       },
       diagnostics: [
         ...diagnostics,
@@ -301,16 +339,38 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     });
   }
 
-  return {
+  return omitUndefined({
     ...next,
     route: legacyRouteForRouteKind(next.routeKind),
     tool_bundles: selectedToolBundles,
     diagnostics,
-  };
+  });
 }
 
 function isExplicitMacroDataRequest(text: string): boolean {
   return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro)\b/i.test(text);
+}
+
+function isCoveredCallRequest(text: string): boolean {
+  return /\bcovered\s+calls?\b/i.test(text);
+}
+
+function mergeSymbols(primary: string[], secondary: string[]): string[] {
+  const merged: string[] = [];
+  for (const symbol of [...primary, ...secondary]) {
+    if (!merged.includes(symbol)) merged.push(symbol);
+  }
+  return merged;
+}
+
+function omitUndefined<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(omitUndefined) as T;
+  if (!value || typeof value !== "object") return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (entry !== undefined) out[key] = omitUndefined(entry);
+  }
+  return out as T;
 }
 
 function validateSlots(raw: unknown): Record<string, RouterSlot> {
@@ -419,7 +479,7 @@ function minimalFallback(text: string): RouterOutput {
   return {
     routeKind: "agent_task",
     route: "fallback",
-    entities: { symbols: entities.symbols },
+    entities,
     slots: {},
     preference_updates: [],
     missing_required: [],

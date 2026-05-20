@@ -217,6 +217,46 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("vega");
     expect(prompt).toContain("rho");
   });
+
+  it("treats covered-call catalyst tickers as context, not the option-chain underlying", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        {
+          symbol: "DRAM",
+          dteTarget: "0_to_7_days",
+          costBasis: 51,
+          catalystSymbols: ["NVDA"],
+        },
+        {
+          symbol: "user",
+          dteTarget: "user",
+          costBasis: "user",
+          catalystSymbols: "user",
+        },
+      ),
+    );
+
+    expect(prompt).toContain("Screen and rank options contracts for DRAM");
+    expect(prompt).toContain("Position cost basis: $51");
+    expect(prompt).toContain("Catalyst/context tickers: NVDA");
+    expect(prompt).toContain("Use get_option_chain for DRAM");
+    expect(prompt).toContain("Do not substitute catalyst/context tickers as the option-chain underlying");
+    expect(prompt).toContain("Treat this as selling covered calls against an existing DRAM share position");
+    expect(prompt).toContain("Do not describe max loss as the option premium paid");
+    expect(prompt).toContain("covered-call sale risks");
+    expect(prompt).toContain("closed_market_or_stale_quotes");
+    expect(prompt).toContain("recheck after regular options trading opens");
+    expect(prompt).toContain("Because the user phrased DRAM as an existing holding");
+    expect(prompt).toContain("briefly state that you are treating DRAM as the held ticker");
+    expect(prompt).toContain("If they meant memory exposure or a different ticker");
+    expect(prompt).toContain("Start with an Interpretation line");
+    expect(prompt).toContain("If you meant DRAM as memory exposure or another ticker");
+    expect(prompt).toContain("effective assignment sale price");
+    expect(prompt).toContain("compare it with the $51 cost basis");
+    expect(prompt).toContain("Verify bid/ask and open interest in the user's broker");
+    expect(prompt).toContain("Best action:");
+    expect(prompt).toContain("Conditional candidate:");
+  });
 });
 
 describe("buildCompareAssetsPrompt", () => {

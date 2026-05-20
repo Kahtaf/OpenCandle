@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getOptionsChain, getYahooCrumb, clearCrumbCache, computeTimeToExpiry } from "../../../src/providers/yahoo-finance.js";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { StealthBrowser } from "../../../src/infra/browser.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
 
@@ -56,6 +57,7 @@ describe("yahoo-finance options provider", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("getYahooCrumb", () => {
@@ -156,6 +158,48 @@ describe("yahoo-finance options provider", () => {
       expect(chain.totalCallVolume).toBeGreaterThanOrEqual(0);
       expect(chain.totalPutVolume).toBeGreaterThanOrEqual(0);
       expect(typeof chain.putCallRatio).toBe("number");
+    });
+
+    it("labels all-zero bid/ask outside regular options hours as closed-market stale quotes", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-05-20T12:26:00Z")); // 8:26 AM EDT
+      rateLimiter.configure("yahoo", 5, 5);
+      const fixture = structuredClone(optionsFixture);
+      for (const contract of fixture.optionChain.result[0].options[0].calls) {
+        contract.bid = 0;
+        contract.ask = 0;
+      }
+      for (const contract of fixture.optionChain.result[0].options[0].puts) {
+        contract.bid = 0;
+        contract.ask = 0;
+      }
+      mockCrumbAndOptions();
+      (fetch as any).mockImplementation((url: string) => {
+        if (typeof url === "string" && url.includes("fc.yahoo.com")) {
+          return Promise.resolve({
+            ok: true,
+            headers: new Headers({ "set-cookie": "A3=d=testcookie; Path=/" }),
+            text: () => Promise.resolve(""),
+          });
+        }
+        if (typeof url === "string" && url.includes("getcrumb")) {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve("testCrumb"),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(fixture),
+        });
+      });
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(chain.quoteStatus.marketSession).toBe("pre_market");
+      expect(chain.quoteStatus.bidAskState).toBe("closed_market_or_stale_quotes");
+      expect(chain.quoteStatus.warning).toContain("before regular options trading");
+      vi.useRealTimers();
     });
 
     it("caches options chain", async () => {

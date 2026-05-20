@@ -16,6 +16,9 @@ export interface ExtractedEntities {
   riskProfile?: string;
   direction?: "bullish" | "bearish";
   dteHint?: string;
+  heldSymbol?: string;
+  catalystSymbols?: string[];
+  costBasis?: number;
   compareMetrics?: string[];
 }
 
@@ -47,6 +50,8 @@ export interface OptionsScreenerSlots {
   liquidityMinimum: string;
   budget?: number;
   maxPremium?: number;
+  costBasis?: number;
+  catalystSymbols?: string[];
   ivPreference?: string;
 }
 

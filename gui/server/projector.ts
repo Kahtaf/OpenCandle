@@ -81,15 +81,15 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
       const annotation = stringValue(data.annotation);
       if (annotation) {
         for (const provider of parseSkippedProviders(annotation)) {
-          state.dataQuality.softGaps.push({ provider, lastSeen: entry.timestamp });
+          upsertProviderGap(state.dataQuality.softGaps, provider, entry.timestamp);
         }
       }
       for (const gap of asArray(data.softGaps)) {
         const provider = stringValue(asRecord(gap).provider);
-        if (provider) state.dataQuality.softGaps.push({ provider, lastSeen: entry.timestamp });
+        if (provider) upsertProviderGap(state.dataQuality.softGaps, provider, entry.timestamp);
       }
       const provider = stringValue(data.provider);
-      if (provider) state.dataQuality.softGaps.push({ provider, lastSeen: entry.timestamp });
+      if (provider) upsertProviderGap(state.dataQuality.softGaps, provider, entry.timestamp);
     }
 
     if (entry.type === "custom" && entry.customType === "opencandle-quote-refresh") {
@@ -148,13 +148,31 @@ function projectToolResult(
     .map((part) => part.text)
     .join("\n");
   for (const provider of parseSoftGapProviders(text)) {
-    state.dataQuality.softGaps.push({ provider, lastSeen: timestamp });
+    upsertProviderGap(state.dataQuality.softGaps, provider, timestamp);
   }
   for (const provider of parseCredentialRequiredProviders(text)) {
-    state.dataQuality.hardSkips.push({ provider, lastSeen: timestamp });
+    upsertProviderGap(state.dataQuality.hardSkips, provider, timestamp);
   }
   const provider = inferDirectToolGapProvider(message.toolName, text);
-  if (provider) state.dataQuality.softGaps.push({ provider, lastSeen: timestamp });
+  if (provider) upsertProviderGap(state.dataQuality.softGaps, provider, timestamp);
+}
+
+function upsertProviderGap(
+  gaps: Array<{ provider: string; lastSeen: string }>,
+  provider: string,
+  lastSeen: string,
+): void {
+  const existing = gaps.find((gap) => gap.provider === provider);
+  if (!existing) {
+    gaps.push({ provider, lastSeen });
+    return;
+  }
+
+  const existingTime = Date.parse(existing.lastSeen);
+  const nextTime = Date.parse(lastSeen);
+  if (!Number.isFinite(existingTime) || (Number.isFinite(nextTime) && nextTime > existingTime)) {
+    existing.lastSeen = lastSeen;
+  }
 }
 
 function projectQuote(

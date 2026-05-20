@@ -131,6 +131,28 @@ describe("projectDashboard", () => {
       "brave",
     ]);
   });
+
+  it("does not double count soft gaps that are present in tool results and turn sidecars", () => {
+    const state = projectDashboard([
+      messageEntry({
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "search_web",
+        content: [{
+          type: "text",
+          text: "[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation=\"run /connect search to enable Brave\"]\n\nWeb results",
+        }],
+        details: null,
+        isError: false,
+        timestamp: Date.now(),
+      }),
+      customEntry("opencandle-turn-gap", {
+        annotation: "[OPENCANDLE_SKIPPED provider=brave reason=credential_not_provided remediation=\"run /connect brave to unlock\"]",
+      }),
+    ]);
+
+    expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual(["brave"]);
+  });
 });
 
 function messageEntry(message: Message): SessionEntry {
