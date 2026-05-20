@@ -29,6 +29,8 @@ export function extractEntities(input: string): ExtractedEntities {
     direction: extractDirection(input),
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
+    optionStrategy: extractOptionStrategy(input),
+    costBasis: extractCostBasis(input),
     timeHorizon: extractTimeHorizon(input),
     assetScope: extractAssetScope(input),
     compareMetrics: extractCompareMetrics(input),
@@ -134,6 +136,19 @@ function extractDteHint(input: string): string | undefined {
   if (/\bmonth\b/.test(lower)) return "month";
   if (/\bweek(?:ly|s?)?\b/.test(lower)) return "week";
   return undefined;
+}
+
+function extractOptionStrategy(input: string): "covered_call" | undefined {
+  const lower = input.toLowerCase();
+  if (/\bcovered\s+calls?\b/.test(lower)) return "covered_call";
+  return undefined;
+}
+
+function extractCostBasis(input: string): number | undefined {
+  const match = input.match(/\bcost\s*basis\s*(?:is|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
+  if (!match) return undefined;
+  const parsed = parseFloat(match[1].replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function extractTimeHorizon(input: string): string | undefined {

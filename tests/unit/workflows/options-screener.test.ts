@@ -93,4 +93,27 @@ describe("buildOptionsScreenerWorkflow", () => {
     // Must tell the LLM to still produce a text response in the no-data case.
     expect(followUp.toLowerCase()).toContain("still produce a text response");
   });
+
+  it("follow-up prompt requires actionable guidance when no chain data is usable", () => {
+    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "ASTS", dteTarget: "7_to_14_days" }));
+    const followUp = workflow.followUps[0];
+
+    expect(followUp.toLowerCase()).toContain("do not promise to retry later");
+    expect(followUp.toLowerCase()).toContain("how to evaluate covered calls");
+    expect(followUp.toLowerCase()).toContain("return-if-assigned");
+    expect(followUp).toContain("7_to_14_days");
+  });
+
+  it("follow-up prompt prevents long-option max-loss framing for covered calls", () => {
+    const workflow = buildOptionsScreenerWorkflow(
+      makeResolution({ optionStrategy: "covered_call", costBasis: 77 }),
+    );
+    const followUp = workflow.followUps[0];
+
+    expect(followUp.toLowerCase()).toContain("do not say max loss = premium");
+    expect(followUp.toLowerCase()).toContain("covered call");
+    expect(followUp.toLowerCase()).toContain("upside is capped");
+    expect(followUp.toLowerCase()).toContain("premium received");
+    expect(followUp.toLowerCase()).toContain("return-if-assigned");
+  });
 });

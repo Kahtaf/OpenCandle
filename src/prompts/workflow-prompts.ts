@@ -48,6 +48,8 @@ const DISPLAY_NAMES: Record<string, string> = {
   objective: "objective",
   moneynessPreference: "moneyness",
   liquidityMinimum: "liquidity",
+  optionStrategy: "option strategy",
+  costBasis: "cost basis",
   symbols: "symbols",
   metrics: "metrics",
 };
@@ -217,6 +219,8 @@ For LEAPS / long-dated options:
       objective: s.objective,
       moneynessPreference: s.moneynessPreference,
       liquidityMinimum: s.liquidityMinimum,
+      ...(s.optionStrategy ? { optionStrategy: s.optionStrategy } : {}),
+      ...(s.costBasis !== undefined ? { costBasis: formatBudget(s.costBasis) } : {}),
     },
     sources as Record<string, SlotSource | undefined>,
     workflowConstraints,
@@ -230,7 +234,7 @@ Screen and rank options contracts for ${s.symbol}:
 - DTE target: ${s.dteTarget}${tag(sources.dteTarget)}
 - Objective: ${s.objective}${tag(sources.objective)}
 - Moneyness: ${s.moneynessPreference}${tag(sources.moneynessPreference)}
-- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
+- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.optionStrategy ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}` : ""}${s.costBasis !== undefined ? `\n- Cost basis: ${formatBudget(s.costBasis)}${tag(sources.costBasis)}` : ""}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
 
 Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.
@@ -238,6 +242,9 @@ Steps:
 3. Filter contracts matching: ${s.direction === "bullish" ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
 4. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
+${s.optionStrategy === "covered_call" ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
+` : ""}${s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
+` : ""}
 ${longDatedInstructions}
 ${rankingConstraints}
 ${disclosureBlock}
@@ -246,7 +253,7 @@ Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread.
 - Explain why the top pick is ranked #1.
-- Include risk caveats (max loss = premium, IV crush risk, time decay).`;
+- Include risk caveats that match the user's strategy; for covered calls, discuss assignment risk, capped upside, downside exposure in the shares, IV crush, and time decay.`;
 }
 
 export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAssetsSlots>): string {

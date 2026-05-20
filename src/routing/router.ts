@@ -124,6 +124,8 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
+  if (e.optionStrategy === "covered_call") out.optionStrategy = e.optionStrategy;
+  if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
   const compareMetrics = validateStringArray(e.compareMetrics, "entities.compareMetrics");
   if (compareMetrics.length > 0) out.compareMetrics = compareMetrics;
   return out;
@@ -137,6 +139,8 @@ function enrichRouterOutput(text: string, output: RouterOutput): RouterOutput {
       ...output.entities,
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+      optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
+      costBasis: output.entities.costBasis ?? extracted.costBasis,
     },
   };
 }
