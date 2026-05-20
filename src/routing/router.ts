@@ -169,11 +169,7 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
   if (e.optionStrategy === "covered_call") out.optionStrategy = e.optionStrategy;
-  if (typeof e.heldSymbol === "string") out.heldSymbol = e.heldSymbol.toUpperCase();
-  const catalystSymbols = validateStringArray(e.catalystSymbols, "entities.catalystSymbols").map((s) =>
-    s.toUpperCase(),
-  );
-  if (catalystSymbols.length > 0) out.catalystSymbols = catalystSymbols;
+  if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
   const compareMetrics = validateStringArray(e.compareMetrics, "entities.compareMetrics");
   if (compareMetrics.length > 0) out.compareMetrics = compareMetrics;
   return out;
@@ -194,9 +190,6 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
       costBasis: output.entities.costBasis ?? extracted.costBasis,
-      heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
-      catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
-      dteHint: output.entities.dteHint ?? (output.workflow === "options_screener" ? extracted.dteHint : undefined),
     },
     diagnostics,
   };

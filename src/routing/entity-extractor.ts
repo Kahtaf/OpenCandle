@@ -35,10 +35,7 @@ export function extractEntities(input: string): ExtractedEntities {
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
     optionStrategy: extractOptionStrategy(input),
-    heldSymbol,
-    catalystSymbols: heldSymbol
-      ? symbols.filter((symbol) => symbol !== heldSymbol)
-      : undefined,
+    costBasis: extractCostBasis(input),
     timeHorizon: extractTimeHorizon(input),
     assetScope: extractAssetScope(input),
     compareMetrics: extractCompareMetrics(input),
@@ -186,6 +183,13 @@ function extractOptionStrategy(input: string): "covered_call" | undefined {
   const lower = input.toLowerCase();
   if (/\bcovered\s+calls?\b/.test(lower)) return "covered_call";
   return undefined;
+}
+
+function extractCostBasis(input: string): number | undefined {
+  const match = input.match(/\bcost\s*basis\s*(?:is|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
+  if (!match) return undefined;
+  const parsed = parseFloat(match[1].replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function extractTimeHorizon(input: string): string | undefined {

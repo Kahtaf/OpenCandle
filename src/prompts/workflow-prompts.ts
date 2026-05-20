@@ -231,7 +231,6 @@ For LEAPS / long-dated options:
       liquidityMinimum: s.liquidityMinimum,
       ...(s.optionStrategy ? { optionStrategy: s.optionStrategy } : {}),
       ...(s.costBasis !== undefined ? { costBasis: formatBudget(s.costBasis) } : {}),
-      ...(s.catalystSymbols?.length ? { catalystSymbols: s.catalystSymbols.join(", ") } : {}),
     },
     sources as Record<string, SlotSource | undefined>,
     workflowConstraints,
@@ -268,7 +267,7 @@ Screen and rank options contracts for ${s.symbol}:
 - DTE target: ${s.dteTarget}${tag(sources.dteTarget)}
 - Objective: ${s.objective}${tag(sources.objective)}
 - Moneyness: ${s.moneynessPreference}${tag(sources.moneynessPreference)}
-- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}${coveredCallContext}
+- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.optionStrategy ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}` : ""}${s.costBasis !== undefined ? `\n- Cost basis: ${formatBudget(s.costBasis)}${tag(sources.costBasis)}` : ""}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
 
 Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.
@@ -288,9 +287,8 @@ Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : "State the interpretation only if the user's requested underlying is ambiguous."}
 - Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread.
-- Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.
-- Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.
-- Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;
+- Explain why the top pick is ranked #1.
+- Include risk caveats that match the user's strategy; for covered calls, discuss assignment risk, capped upside, downside exposure in the shares, IV crush, and time decay.`;
 }
 
 export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAssetsSlots>): string {

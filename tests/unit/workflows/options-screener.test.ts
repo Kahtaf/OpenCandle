@@ -95,7 +95,7 @@ describe("buildOptionsScreenerWorkflow", () => {
   });
 
   it("follow-up prompt requires actionable guidance when no chain data is usable", () => {
-    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "MSFT", dteTarget: "7_to_14_days" }));
+    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "ASTS", dteTarget: "7_to_14_days" }));
     const followUp = workflow.followUps[0];
 
     expect(followUp.toLowerCase()).toContain("do not promise to retry later");
@@ -106,7 +106,7 @@ describe("buildOptionsScreenerWorkflow", () => {
 
   it("follow-up prompt prevents long-option max-loss framing for covered calls", () => {
     const workflow = buildOptionsScreenerWorkflow(
-      makeResolution({ optionStrategy: "covered_call", costBasis: 123.45 }),
+      makeResolution({ optionStrategy: "covered_call", costBasis: 77 }),
     );
     const followUp = workflow.followUps[0];
 
@@ -115,38 +115,5 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp.toLowerCase()).toContain("upside is capped");
     expect(followUp.toLowerCase()).toContain("premium received");
     expect(followUp.toLowerCase()).toContain("return-if-assigned");
-  });
-
-  it("follow-up prompt gives a covered-call fallback when quotes are unusable", () => {
-    const workflow = buildOptionsScreenerWorkflow(
-      makeResolution({ symbol: "DRAM", costBasis: 51, catalystSymbols: ["NVDA"], dteTarget: "0_to_7_days" }),
-    );
-    const followUp = workflow.followUps[0];
-
-    expect(followUp).toContain("zero bid/ask");
-    expect(followUp.toLowerCase()).toContain("covered-call fallback");
-    expect(followUp).toContain("cost basis");
-    expect(followUp).toContain("catalyst");
-    expect(followUp).toContain("conditional limit");
-    expect(followUp).toContain("Best action:");
-    expect(followUp).toContain("Conditional candidate:");
-    expect(followUp).toContain("Do NOT conclude");
-    expect(followUp).toContain("overrides the normal ranking/table requirements");
-    expect(followUp).toContain("premium: use live broker bid/ask");
-    expect(followUp).toContain("Treat this as selling covered calls against an existing DRAM share position");
-    expect(followUp).toContain("premium collected");
-    expect(followUp).toContain("Do not describe max loss as the option premium paid");
-    expect(followUp).toContain("Reproduce the exact Assumptions block");
-    expect(followUp).toContain("do not shorten it to \"Assumptions:\"");
-    expect(followUp).toContain("Risk section: max 3 bullets");
-    expect(followUp).toContain("closed_market_or_stale_quotes");
-    expect(followUp).toContain("recheck after regular options trading opens");
-    expect(followUp).toContain("treating DRAM as the held ticker");
-    expect(followUp).toContain("If they meant memory exposure or a different ticker");
-    expect(followUp).toContain("Interpretation:");
-    expect(followUp).toContain("If you meant DRAM as memory exposure or another ticker");
-    expect(followUp).toContain("effective assignment sale price");
-    expect(followUp).toContain("compare it with the $51 cost basis");
-    expect(followUp).toContain("Verify bid/ask and open interest in the user's broker");
   });
 });
