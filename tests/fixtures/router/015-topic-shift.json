@@ -1,19 +1,36 @@
 {
   "input": "tell me about NVDA",
   "priorTurns": [
-    { "role": "user", "text": "what's bitcoin doing today?" },
-    { "role": "assistant", "text": "Bitcoin is around $68k, roughly flat on the day." }
+    {
+      "role": "user",
+      "text": "what's bitcoin doing today?"
+    },
+    {
+      "role": "assistant",
+      "text": "Bitcoin is around $68k, roughly flat on the day."
+    }
   ],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "agent_task",
     "route": "fallback",
     "entities": {
-      "symbols": ["NVDA"]
+      "symbols": [
+        "NVDA"
+      ]
     },
     "slots": {},
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market"
+    ],
+    "diagnostics": [],
     "reasoning": "topic shift — the current turn names NVDA and does not reference BTC; prior-turn crypto context must not leak into entities or slots"
   },
-  "tags": ["multi-turn-topic-shift", "fallback", "synthetic-multi-turn"]
+  "tags": [
+    "multi-turn-topic-shift",
+    "fallback",
+    "synthetic-multi-turn"
+  ]
 }

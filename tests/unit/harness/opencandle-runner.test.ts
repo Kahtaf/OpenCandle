@@ -1,10 +1,19 @@
-import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AuthStorage, ModelRegistry, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
   drainOpenCandleCustomEntries,
+  runOpenCandleSession,
   toEvalTrace,
 } from "../../harness/opencandle-runner.js";
 import type { AgentTrace } from "../../harness/types.js";
+
+const { createOpenCandleSessionMock } = vi.hoisted(() => ({
+  createOpenCandleSessionMock: vi.fn(),
+}));
+
+vi.mock("../../../src/index.js", () => ({
+  createOpenCandleSession: createOpenCandleSessionMock,
+}));
 
 describe("OpenCandle harness runner helpers", () => {
   it("drains only opencandle custom entries in append order", () => {
@@ -93,5 +102,64 @@ describe("OpenCandle harness runner helpers", () => {
     ]);
     expect(trace.text).toBe("Final pass.");
     expect(trace.customEntries).toHaveLength(1);
+  });
+});
+
+describe("runOpenCandleSession", () => {
+  const originalHome = process.env.OPENCANDLE_HOME;
+
+  beforeEach(() => {
+    createOpenCandleSessionMock.mockReset();
+  });
+
+  afterEach(() => {
+    if (originalHome === undefined) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalHome;
+    }
+  });
+
+  it("passes explicit auth and model registry into the isolated harness session", async () => {
+    const listeners: Array<(event: { type: string }) => void> = [];
+    const session = {
+      subscribe: vi.fn((listener: (event: { type: string }) => void) => {
+        listeners.push(listener);
+        return () => {};
+      }),
+      prompt: vi.fn(async () => {
+        queueMicrotask(() => {
+          for (const listener of listeners) listener({ type: "agent_end" });
+        });
+      }),
+      dispose: vi.fn(),
+      sessionManager: {
+        getEntries: () => [],
+      },
+    };
+    createOpenCandleSessionMock.mockResolvedValue({ session });
+
+    const authStorage = AuthStorage.inMemory({
+      google: { type: "api_key", key: "test-key" },
+    });
+    const modelRegistry = ModelRegistry.inMemory(authStorage);
+
+    await runOpenCandleSession({
+      prompt: "What is AAPL trading at?",
+      authStorage,
+      modelRegistry,
+      defaultProvider: "google",
+      defaultModel: "gemini-2.5-flash",
+      settleGraceMs: 0,
+      timeoutMs: 1000,
+    });
+
+    const options = createOpenCandleSessionMock.mock.calls[0]?.[0];
+    expect(options.authStorage).toBe(authStorage);
+    expect(options.modelRegistry).toBe(modelRegistry);
+    expect(options.useInlineExtension).toBe(true);
+    expect(options.settingsManager.getDefaultProvider()).toBe("google");
+    expect(options.settingsManager.getDefaultModel()).toBe("gemini-2.5-flash");
+    expect(process.env.OPENCANDLE_HOME).toBe(originalHome);
   });
 });

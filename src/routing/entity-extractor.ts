@@ -21,16 +21,24 @@ const COMMON_WORDS = new Set([
   "NEXT", "SHOW", "LAST",
 ]);
 
+const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
+
 export function extractEntities(input: string): ExtractedEntities {
+  const symbols = extractSymbols(input);
+  const heldSymbol = extractHeldSymbol(input, symbols);
   return {
-    symbols: extractSymbols(input),
+    symbols,
     budget: extractBudget(input),
     maxPremium: extractMaxPremium(input),
+    costBasis: extractCostBasis(input),
     direction: extractDirection(input),
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
     optionStrategy: extractOptionStrategy(input),
-    costBasis: extractCostBasis(input),
+    heldSymbol,
+    catalystSymbols: heldSymbol
+      ? symbols.filter((symbol) => symbol !== heldSymbol)
+      : undefined,
     timeHorizon: extractTimeHorizon(input),
     assetScope: extractAssetScope(input),
     compareMetrics: extractCompareMetrics(input),
@@ -79,6 +87,7 @@ function extractSymbols(input: string): string[] {
       cleaned === cleaned.toUpperCase() &&
       /^[A-Z]+$/.test(cleaned) &&
       !COMMON_WORDS.has(cleaned) &&
+      !isAmbiguousConceptUsage(input, cleaned) &&
       !symbols.includes(cleaned)
     ) {
       symbols.push(cleaned);
@@ -86,6 +95,20 @@ function extractSymbols(input: string): string[] {
   }
 
   return symbols;
+}
+
+export function isAmbiguousConceptUsage(input: string, symbol: string): boolean {
+  if (!AMBIGUOUS_CONCEPT_TICKERS.has(symbol)) return false;
+  if (new RegExp(`\\$${symbol}\\b`).test(input)) return false;
+  if (
+    new RegExp(
+      `\\b(?:analyze|quote|ticker|stock|shares?|options?|calls?|puts?)\\s+${symbol}\\b|\\b${symbol}\\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\\b`,
+      "i",
+    ).test(input)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function extractMaxPremium(input: string): number | undefined {
@@ -107,6 +130,26 @@ function extractMaxPremium(input: string): number | undefined {
   }
 
   return undefined;
+}
+
+function extractHeldSymbol(input: string, symbols: string[]): string | undefined {
+  const patterns = [
+    /\b(?:i\s+)?(?:have|own|hold|holding|long)\s+\$?([A-Za-z]{1,5})\b/i,
+    /\bmy\s+\$?([A-Za-z]{1,5})\s+(?:position|shares?|stock)\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = input.match(pattern);
+    const symbol = match?.[1]?.toUpperCase();
+    if (symbol && symbols.includes(symbol)) return symbol;
+  }
+  return undefined;
+}
+
+function extractCostBasis(input: string): number | undefined {
+  const match = input.match(/\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
+  if (!match) return undefined;
+  const value = parseFloat(match[1].replace(/,/g, ""));
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function extractDirection(input: string): "bullish" | "bearish" | undefined {
@@ -132,6 +175,7 @@ function extractRiskProfile(input: string): string | undefined {
 
 function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
+  if (/\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(lower)) return "event_week";
   if (/\bleaps?\b/i.test(lower) || /\blong[\s-]*dated\b/.test(lower)) return "leaps";
   if (/\bmonth\b/.test(lower)) return "month";
   if (/\bweek(?:ly|s?)?\b/.test(lower)) return "week";
@@ -142,13 +186,6 @@ function extractOptionStrategy(input: string): "covered_call" | undefined {
   const lower = input.toLowerCase();
   if (/\bcovered\s+calls?\b/.test(lower)) return "covered_call";
   return undefined;
-}
-
-function extractCostBasis(input: string): number | undefined {
-  const match = input.match(/\bcost\s*basis\s*(?:is|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
-  if (!match) return undefined;
-  const parsed = parseFloat(match[1].replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function extractTimeHorizon(input: string): string | undefined {

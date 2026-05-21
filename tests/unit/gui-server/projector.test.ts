@@ -100,6 +100,59 @@ describe("projectDashboard", () => {
     expect(state.dataQuality.softGaps[0].provider).toBe("brave");
     expect(state.dataQuality.hardSkips[0].provider).toBe("alpha_vantage");
   });
+
+  it("projects direct UI tool provider gaps into data quality", () => {
+    const state = projectDashboard([
+      messageEntry({
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "get_economic_data",
+        content: [{ type: "text", text: "⚠ FRED data unavailable for DGS10 (HTTP 400 )." }],
+        details: null,
+        isError: false,
+        timestamp: Date.now(),
+      }),
+      messageEntry({
+        role: "toolResult",
+        toolCallId: "call-2",
+        toolName: "search_web",
+        content: [{
+          type: "text",
+          text: "[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation=\"run /connect search to enable Brave\"]\n\nWeb results",
+        }],
+        details: null,
+        isError: false,
+        timestamp: Date.now(),
+      }),
+    ]);
+
+    expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual([
+      "fred",
+      "brave",
+    ]);
+  });
+
+  it("does not double count soft gaps that are present in tool results and turn sidecars", () => {
+    const state = projectDashboard([
+      messageEntry({
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "search_web",
+        content: [{
+          type: "text",
+          text: "[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation=\"run /connect search to enable Brave\"]\n\nWeb results",
+        }],
+        details: null,
+        isError: false,
+        timestamp: Date.now(),
+      }),
+      customEntry("opencandle-turn-gap", {
+        annotation: "[OPENCANDLE_SKIPPED provider=brave reason=credential_not_provided remediation=\"run /connect brave to unlock\"]",
+      }),
+    ]);
+
+    expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual(["brave"]);
+  });
 });
 
 function messageEntry(message: Message): SessionEntry {

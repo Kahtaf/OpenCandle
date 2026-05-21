@@ -5,6 +5,7 @@
     "risk_profile": "conservative"
   },
   "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
     "route": "workflow",
     "workflow": "portfolio_builder",
     "entities": {
@@ -12,12 +13,30 @@
       "budget": 30000
     },
     "slots": {
-      "budget": { "value": 30000, "source": "user", "confidence": "high" },
-      "risk_profile": { "value": "conservative", "source": "preference", "confidence": "high" }
+      "budget": {
+        "value": 30000,
+        "source": "user",
+        "confidence": "high"
+      },
+      "risk_profile": {
+        "value": "conservative",
+        "source": "preference",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "budget from turn, risk_profile from profile snapshot"
   },
-  "tags": ["portfolio_builder", "preference-source"]
+  "tags": [
+    "portfolio_builder",
+    "preference-source"
+  ]
 }

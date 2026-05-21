@@ -3,6 +3,7 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
     "route": "workflow",
     "workflow": "portfolio_builder",
     "entities": {
@@ -10,14 +11,38 @@
       "budget": 20000
     },
     "slots": {
-      "budget": { "value": 20000, "source": "user", "confidence": "high" },
-      "asset_scope": { "value": "etf_focused", "source": "user", "confidence": "high" }
+      "budget": {
+        "value": 20000,
+        "source": "user",
+        "confidence": "high"
+      },
+      "asset_scope": {
+        "value": "etf_focused",
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [
-      { "key": "asset_scope", "value": "etf_focused", "confidence": "high", "source": "inferred" }
+      {
+        "key": "asset_scope",
+        "value": "etf_focused",
+        "confidence": "high",
+        "source": "inferred"
+      }
     ],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "user strongly expressed etf-only scope"
   },
-  "tags": ["portfolio_builder", "high-confidence-pref-write", "asset_scope"]
+  "tags": [
+    "portfolio_builder",
+    "high-confidence-pref-write",
+    "asset_scope"
+  ]
 }

@@ -97,10 +97,18 @@ describe("Router fixtures drive prompt assembly correctly", () => {
         const sectionForLabel = (line: string) => {
           if (line.startsWith("  User-specified:")) return "user";
           if (line.startsWith("  From saved preferences:")) return "preference";
+          if (line.startsWith("  From prior context:")) return "prior_context";
+          if (line.startsWith("  From memory:")) return "memory";
           if (line.startsWith("  Defaults:")) return "default";
           return null;
         };
-        const sectionContents: Record<string, string> = { user: "", preference: "", default: "" };
+        const sectionContents: Record<string, string> = {
+          user: "",
+          preference: "",
+          prior_context: "",
+          memory: "",
+          default: "",
+        };
         let currentSection: string | null = null;
         for (const line of block.split("\n")) {
           const s = sectionForLabel(line);

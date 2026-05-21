@@ -3,6 +3,7 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
     "route": "workflow",
     "workflow": "portfolio_builder",
     "entities": {
@@ -10,11 +11,25 @@
       "budget": 50000
     },
     "slots": {
-      "budget": { "value": 50000, "source": "user", "confidence": "high" }
+      "budget": {
+        "value": 50000,
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "portfolio_builder matches on budget + invest verb"
   },
-  "tags": ["portfolio_builder", "diversified"]
+  "tags": [
+    "portfolio_builder",
+    "diversified"
+  ]
 }

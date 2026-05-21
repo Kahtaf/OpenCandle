@@ -1,3 +1,7 @@
+import {
+  ROUTE_CAPABILITY_MANIFEST,
+  WORKFLOW_CAPABILITY_MANIFEST,
+} from "./route-manifest.js";
 import type { RouterInputContext } from "./router-types.js";
 
 /**
@@ -11,48 +15,29 @@ import type { RouterInputContext } from "./router-types.js";
  * `openspec/changes/router-context-and-observability/` for the follow-up.
  */
 
-/**
- * List of workflows the router may emit. Keep this in sync with
- * `WorkflowType` in `src/routing/types.ts` minus the `unclassified` sentinel.
- */
-const WORKFLOW_CATALOG = [
-  {
-    name: "portfolio_builder",
-    when: "user asks to build/allocate a portfolio, invest a budget across positions",
-    required: ["budget"],
-  },
-  {
-    name: "options_screener",
-    when: "user asks for options trades / calls / puts on a specific ticker",
-    required: ["symbol"],
-  },
-  {
-    name: "compare_assets",
-    when: "user asks to compare two or more symbols (vs / versus / which is better)",
-    required: ["symbols (>=2)"],
-  },
-  {
-    name: "single_asset_analysis",
-    when: "user asks for a full analysis / deep dive / 'is X attractive' on ONE symbol",
-    required: ["symbol"],
-  },
-  {
-    name: "watchlist_or_tracking",
-    when: "user manages or asks about their saved watchlist / prediction history",
-    required: [],
-  },
-  {
-    name: "general_finance_qa",
-    when: "definitional / conceptual 'what is X', 'explain Y' questions",
-    required: [],
-  },
-];
-
 function renderCatalog(): string {
-  return WORKFLOW_CATALOG.map(
-    (w) =>
-      `- "${w.name}": ${w.when}${w.required.length > 0 ? ` [required: ${w.required.join(", ")}]` : ""}`,
-  ).join("\n");
+  const descriptions: Record<string, string> = {
+    portfolio_builder: "user asks to build/allocate a portfolio, invest a budget across positions",
+    options_screener: "user asks for options trades / calls / puts on a specific ticker",
+    compare_assets: "user asks to compare two or more symbols (vs / versus / which is better)",
+    single_asset_analysis: "user asks for a full analysis / deep dive / 'is X attractive' on ONE symbol",
+    watchlist_or_tracking: "user manages or asks about their saved watchlist / prediction history",
+    general_finance_qa: "definitional / conceptual questions plus broad market structure, sector, industry, monetary policy, and emerging markets research",
+  };
+
+  return Object.values(WORKFLOW_CAPABILITY_MANIFEST).map((w) => {
+    const required = w.requiredSlots.length > 0
+      ? ` [required: ${w.requiredSlots.join(", ")}]`
+      : "";
+    const mode = w.dispatchable ? "dispatchable workflow" : "agent-task workflow label";
+    return `- "${w.workflow}" (${mode}): ${descriptions[w.workflow]}${required}`;
+  }).join("\n");
+}
+
+function renderRouteKinds(): string {
+  return Object.values(ROUTE_CAPABILITY_MANIFEST)
+    .map((route) => `- "${route.routeKind}" -> legacy route "${route.legacyRoute}"`)
+    .join("\n");
 }
 
 function renderProfile(profile: Record<string, unknown>): string {
@@ -90,6 +75,7 @@ function renderRecentRuns(
 const SCHEMA_SPEC = `You MUST respond with a SINGLE JSON object and nothing else (no markdown fences, no prose outside the JSON). The object MUST conform to this TypeScript interface exactly:
 
 interface RouterOutput {
+  routeKind: "workflow_dispatch" | "agent_task" | "clarification" | "pass_through";
   route: "workflow" | "fallback";
   workflow?: "portfolio_builder" | "options_screener" | "compare_assets" | "single_asset_analysis" | "watchlist_or_tracking" | "general_finance_qa";
   entities: {
@@ -100,13 +86,15 @@ interface RouterOutput {
     riskProfile?: string;            // "conservative" | "balanced" | "aggressive"
     direction?: "bullish" | "bearish";
     dteHint?: string;
-    optionStrategy?: "covered_call";
-    costBasis?: number;
+    optionStrategy?: "covered_call";  // set when the user explicitly asks for a covered call
+    heldSymbol?: string;              // for covered calls: ticker the user owns/holds
+    catalystSymbols?: string[];        // tickers mentioned as event/catalyst context, not the option-chain underlying
+    costBasis?: number;                // per-share basis when user says "cost basis is $X"
     compareMetrics?: string[];        // optional compare focus tags, e.g. "sentiment", "macro_hedge"
   };
   slots: Record<string, {
     value: unknown;
-    source: "user" | "preference" | "default"; // user = stated this turn; preference = from profileSnapshot; default = workflow fallback
+    source: "user" | "preference" | "default" | "prior_context" | "memory";
     confidence: "high" | "medium" | "low";
   }>;
   preference_updates: Array<{
@@ -116,18 +104,26 @@ interface RouterOutput {
     source: "inferred";
   }>;
   missing_required: string[];         // required slot names the turn/profile/defaults did not fill
+  tool_bundles: Array<"core_market" | "options" | "macro" | "sentiment" | "sec" | "clarification">;
+  diagnostics: Array<{ code: string; message: string }>;
   reasoning: string;                  // one or two short sentences; used for debugging only
 }`;
 
 const ROUTING_RULES = `Routing rules:
-- Choose route = "workflow" ONLY when the turn clearly matches one of the workflows below AND required slots are filled (from the turn OR the profile snapshot).
-- Choose route = "fallback" for anything else — including simple data fetches like "AAPL quote", open-ended questions like "entry levels on ASTS for 6 months", or cases where required slots are missing.
-- DO NOT invent a "direct_tool" or "needs_clarification" route. Only "workflow" or "fallback" are valid.
-- If required slots are missing (e.g. options workflow needs a symbol, portfolio needs a budget), still pick the closest route but list the missing slot names in missing_required. The main agent will use ask_user to collect them.
+- Choose routeKind = "workflow_dispatch" ONLY when the turn clearly matches a dispatchable workflow (portfolio_builder, options_screener, or compare_assets) AND required slots are filled from the turn, trusted prior context, or profile snapshot.
+- For single_asset_analysis, watchlist_or_tracking, and general_finance_qa, set routeKind = "agent_task" even when you set the workflow label. These are workflow labels for prompt/tool policy, not structured workflow dispatch.
+- Choose routeKind = "agent_task" for in-scope finance work that should be answered by the main agent, including simple data fetches like "AAPL quote" and open-ended questions like "entry levels on ASTS for 6 months".
+- Choose routeKind = "clarification" when required slots are missing (e.g. options workflow needs a symbol, portfolio needs a budget). List specific slot names in missing_required. The main agent will use ask_user to collect them.
+- Choose routeKind = "pass_through" when the request is outside OpenCandle's finance task surface.
+- Set legacy route = "workflow" only for routeKind = "workflow_dispatch"; otherwise set legacy route = "fallback".
+- DO NOT invent a "direct_tool" route. Tool execution belongs to the main agent.
+- For covered call prompts, distinguish the owned underlying from catalyst tickers. Example: "NVDA earnings are today. If I have DRAM..." means symbols=["DRAM","NVDA"], heldSymbol="DRAM", catalystSymbols=["NVDA"], workflow="options_screener", and costBasis if stated.
 - Source attribution rules (per-slot source field):
   - source = "user": the value came from THIS turn's text.
   - source = "preference": the value came from profileSnapshot (not this turn).
   - source = "default": a sensible default was applied (workflow fallback).
+  - source = "prior_context": the value came from prior conversation turns.
+  - source = "memory": the value came from retrieved non-profile memory.
 - Preference updates:
   - Emit preference_updates ONLY for stable user-dispositions stated (or very strongly implied) in the current turn. E.g. "I'm aggressive" → risk_profile=aggressive, high.
   - Do NOT emit preference_updates that merely echo profileSnapshot.
@@ -136,6 +132,9 @@ const ROUTING_RULES = `Routing rules:
 
 export function buildRouterPrompt(input: RouterInputContext): string {
   return `You are OpenCandle's routing agent. Your job is to classify the user's turn into one of the known workflows (or fallback), extract entities + per-slot provenance, and surface any stable preferences the user expressed. Your output feeds the main analyst agent — it does NOT go to the user.
+
+ROUTE KINDS:
+${renderRouteKinds()}
 
 WORKFLOW CATALOG:
 ${renderCatalog()}

@@ -23,6 +23,9 @@ function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   const normalized = dteHint?.toLowerCase().trim();
   if (!normalized) return undefined;
 
+  if (normalized === "event_week") {
+    return "0_to_7_days";
+  }
   if (/\bleaps?\b/.test(normalized) || /\blong[\s-]*dated\b/.test(normalized)) {
     return "180_plus_days";
   }
@@ -152,6 +155,7 @@ export function resolveOptionsScreenerSlots(
 
   if (entities.optionStrategy) sources.optionStrategy = "user";
   if (entities.costBasis !== undefined) sources.costBasis = "user";
+  if (entities.catalystSymbols !== undefined) sources.catalystSymbols = "user";
 
   return {
     resolved: {
@@ -165,6 +169,7 @@ export function resolveOptionsScreenerSlots(
       maxPremium: entities.maxPremium,
       optionStrategy: entities.optionStrategy,
       costBasis: entities.costBasis,
+      catalystSymbols: entities.catalystSymbols,
     },
     sources,
     defaultsUsed,

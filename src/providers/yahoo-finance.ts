@@ -3,7 +3,7 @@ import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { StealthBrowser } from "../infra/browser.js";
 import type { StockQuote, OHLCV } from "../types/market.js";
-import type { OptionsChain, OptionContract } from "../types/options.js";
+import type { OptionsChain, OptionContract, OptionsMarketSession, OptionsQuoteStatus } from "../types/options.js";
 import { computeGreeks } from "../tools/options/greeks.js";
 
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -275,6 +275,72 @@ export function computeTimeToExpiry(expirationTs: number, nowMs: number = Date.n
   return Math.max(MIN_TIME_YEARS, remainingS / SECONDS_PER_YEAR);
 }
 
+export function getUsOptionsMarketSession(now: Date = new Date()): OptionsMarketSession {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const part = (type: string): string => parts.find((p) => p.type === type)?.value ?? "";
+  const weekday = part("weekday");
+  if (weekday === "Sat" || weekday === "Sun") return "closed";
+
+  const hour = Number(part("hour"));
+  const minute = Number(part("minute"));
+  const minutes = hour * 60 + minute;
+  if (minutes < 9 * 60 + 30) return "pre_market";
+  if (minutes < 16 * 60) return "regular";
+  return "after_hours";
+}
+
+export function buildOptionsQuoteStatus(
+  contracts: OptionContract[],
+  now: Date = new Date(),
+): OptionsQuoteStatus {
+  const marketSession = getUsOptionsMarketSession(now);
+  const totalContracts = contracts.length;
+  const zeroBidAskContracts = contracts.filter((c) => c.bid === 0 && c.ask === 0).length;
+  const allZeroBidAsk = totalContracts > 0 && zeroBidAskContracts === totalContracts;
+  const hasLiveBidAsk = contracts.some((c) => c.bid > 0 || c.ask > 0);
+
+  if (allZeroBidAsk && marketSession !== "regular") {
+    return {
+      marketSession,
+      bidAskState: "closed_market_or_stale_quotes",
+      zeroBidAskContracts,
+      totalContracts,
+      warning:
+        "All option contracts have $0.00/$0.00 bid/ask before regular options trading or outside market hours; treat bid/ask as closed-market or stale until the market opens.",
+    };
+  }
+
+  if (allZeroBidAsk) {
+    return {
+      marketSession,
+      bidAskState: "live_zero_bid_ask",
+      zeroBidAskContracts,
+      totalContracts,
+      warning:
+        "All option contracts have $0.00/$0.00 bid/ask during regular options trading hours; verify with a broker, but this may indicate live illiquidity.",
+    };
+  }
+
+  return {
+    marketSession,
+    bidAskState: hasLiveBidAsk ? "live_quotes" : "mixed_or_unknown",
+    zeroBidAskContracts,
+    totalContracts,
+    ...(marketSession !== "regular"
+      ? {
+          warning:
+            "Options bid/ask quotes may be stale outside regular options trading hours; verify live executable prices after the market opens.",
+        }
+      : {}),
+  };
+}
+
 function parseOptionsResponse(symbol: string, data: YahooOptionsResponse): OptionsChain {
   if (data.optionChain.error) {
     throw new Error(`Yahoo Finance options: ${JSON.stringify(data.optionChain.error)}`);
@@ -314,6 +380,7 @@ function parseOptionsResponse(symbol: string, data: YahooOptionsResponse): Optio
   const puts = (opts.puts ?? []).map((c: any) => mapContract(c, "put"));
   const totalCallVolume = calls.reduce((s, c) => s + c.volume, 0);
   const totalPutVolume = puts.reduce((s, c) => s + c.volume, 0);
+  const quoteStatus = buildOptionsQuoteStatus([...calls, ...puts]);
 
   return {
     symbol: result.underlyingSymbol,
@@ -325,6 +392,7 @@ function parseOptionsResponse(symbol: string, data: YahooOptionsResponse): Optio
     totalCallVolume,
     totalPutVolume,
     putCallRatio: totalCallVolume > 0 ? totalPutVolume / totalCallVolume : 0,
+    quoteStatus,
     fetchedAt: new Date().toISOString(),
   };
 }

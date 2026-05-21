@@ -28,6 +28,16 @@ export interface DashboardState {
   };
 }
 
+const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
+  get_company_overview: "alpha_vantage",
+  get_financials: "alpha_vantage",
+  get_earnings: "alpha_vantage",
+  compute_dcf: "alpha_vantage",
+  compare_companies: "alpha_vantage",
+  get_economic_data: "fred",
+  get_twitter_sentiment: "twitter",
+};
+
 export function createEmptyDashboardState(): DashboardState {
   return {
     watchlist: [],
@@ -71,15 +81,15 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
       const annotation = stringValue(data.annotation);
       if (annotation) {
         for (const provider of parseSkippedProviders(annotation)) {
-          state.dataQuality.softGaps.push({ provider, lastSeen: entry.timestamp });
+          upsertProviderGap(state.dataQuality.softGaps, provider, entry.timestamp);
         }
       }
       for (const gap of asArray(data.softGaps)) {
         const provider = stringValue(asRecord(gap).provider);
-        if (provider) state.dataQuality.softGaps.push({ provider, lastSeen: entry.timestamp });
+        if (provider) upsertProviderGap(state.dataQuality.softGaps, provider, entry.timestamp);
       }
       const provider = stringValue(data.provider);
-      if (provider) state.dataQuality.softGaps.push({ provider, lastSeen: entry.timestamp });
+      if (provider) upsertProviderGap(state.dataQuality.softGaps, provider, entry.timestamp);
     }
 
     if (entry.type === "custom" && entry.customType === "opencandle-quote-refresh") {
@@ -137,8 +147,31 @@ function projectToolResult(
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("\n");
+  for (const provider of parseSoftGapProviders(text)) {
+    upsertProviderGap(state.dataQuality.softGaps, provider, timestamp);
+  }
   for (const provider of parseCredentialRequiredProviders(text)) {
-    state.dataQuality.hardSkips.push({ provider, lastSeen: timestamp });
+    upsertProviderGap(state.dataQuality.hardSkips, provider, timestamp);
+  }
+  const provider = inferDirectToolGapProvider(message.toolName, text);
+  if (provider) upsertProviderGap(state.dataQuality.softGaps, provider, timestamp);
+}
+
+function upsertProviderGap(
+  gaps: Array<{ provider: string; lastSeen: string }>,
+  provider: string,
+  lastSeen: string,
+): void {
+  const existing = gaps.find((gap) => gap.provider === provider);
+  if (!existing) {
+    gaps.push({ provider, lastSeen });
+    return;
+  }
+
+  const existingTime = Date.parse(existing.lastSeen);
+  const nextTime = Date.parse(lastSeen);
+  if (!Number.isFinite(existingTime) || (Number.isFinite(nextTime) && nextTime > existingTime)) {
+    existing.lastSeen = lastSeen;
   }
 }
 
@@ -174,13 +207,22 @@ function parseCredentialRequiredProviders(text: string): string[] {
 }
 
 function parseSkippedProviders(text: string): string[] {
+  return parseSoftGapProviders(text);
+}
+
+function parseSoftGapProviders(text: string): string[] {
   const providers: string[] = [];
-  const re = /\[OPENCANDLE_SKIPPED[^\]]*provider=([a-z0-9_-]+)/gi;
+  const re = /\[OPENCANDLE_(?:SKIPPED|SOFT_DEGRADED)[^\]]*provider=([a-z0-9_-]+)/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     providers.push(match[1]);
   }
   return providers;
+}
+
+function inferDirectToolGapProvider(toolName: string | undefined, text: string): string | undefined {
+  if (!toolName || !/(?:⚠|unavailable|No .*data found|LOGIN_NEEDED)/i.test(text)) return undefined;
+  return DIRECT_TOOL_GAP_PROVIDERS[toolName];
 }
 
 function inferSymbolFromContent(content: ToolResultMessage["content"]): string | undefined {

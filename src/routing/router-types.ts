@@ -1,6 +1,19 @@
 import type { ExtractedEntities, SlotSource, WorkflowType } from "./types.js";
 
 export type RouterRoute = "workflow" | "fallback";
+export type RouterRouteKind =
+  | "workflow_dispatch"
+  | "agent_task"
+  | "clarification"
+  | "pass_through";
+
+export type ToolBundleName =
+  | "core_market"
+  | "options"
+  | "macro"
+  | "sentiment"
+  | "sec"
+  | "clarification";
 
 export type RouterConfidence = "high" | "medium" | "low";
 
@@ -17,6 +30,11 @@ export interface RouterPreferenceUpdate {
   source: "inferred";
 }
 
+export interface RouterDiagnostic {
+  code: string;
+  message: string;
+}
+
 /**
  * Structured output from the LLM router. Mirrors existing types
  * (`ClassificationResult`, `ExtractedEntities`, `SlotSource`) so downstream
@@ -26,12 +44,15 @@ export interface RouterPreferenceUpdate {
  * routes, `workflow_type` at the storage layer is the sentinel `"fallback"`.
  */
 export interface RouterOutput {
+  routeKind: RouterRouteKind;
   route: RouterRoute;
   workflow?: Exclude<WorkflowType, "unclassified">;
   entities: ExtractedEntities;
   slots: Record<string, RouterSlot>;
   preference_updates: RouterPreferenceUpdate[];
   missing_required: string[];
+  tool_bundles: ToolBundleName[];
+  diagnostics: RouterDiagnostic[];
   reasoning: string;
 }
 

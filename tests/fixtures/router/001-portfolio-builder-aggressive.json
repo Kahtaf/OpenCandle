@@ -3,24 +3,53 @@
   "priorTurns": [],
   "profileSnapshot": {},
   "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
     "route": "workflow",
     "workflow": "portfolio_builder",
     "entities": {
       "symbols": [],
       "budget": 25000,
-      "riskProfile": "aggressive",
-      "timeHorizon": "3y"
+      "timeHorizon": "3y",
+      "riskProfile": "aggressive"
     },
     "slots": {
-      "budget": { "value": 25000, "source": "user", "confidence": "high" },
-      "risk_profile": { "value": "aggressive", "source": "user", "confidence": "high" },
-      "time_horizon": { "value": "3y", "source": "user", "confidence": "high" }
+      "budget": {
+        "value": 25000,
+        "source": "user",
+        "confidence": "high"
+      },
+      "risk_profile": {
+        "value": "aggressive",
+        "source": "user",
+        "confidence": "high"
+      },
+      "time_horizon": {
+        "value": "3y",
+        "source": "user",
+        "confidence": "high"
+      }
     },
     "preference_updates": [
-      { "key": "risk_profile", "value": "aggressive", "confidence": "high", "source": "inferred" }
+      {
+        "key": "risk_profile",
+        "value": "aggressive",
+        "confidence": "high",
+        "source": "inferred"
+      }
     ],
     "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
     "reasoning": "explicit budget + aggressive self-identification + 3y horizon"
   },
-  "tags": ["portfolio_builder", "aggressive", "high-confidence-pref-write"]
+  "tags": [
+    "portfolio_builder",
+    "aggressive",
+    "high-confidence-pref-write"
+  ]
 }
