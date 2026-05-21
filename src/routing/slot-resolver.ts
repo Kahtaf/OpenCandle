@@ -20,9 +20,26 @@ interface Preferences {
 }
 
 function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
-  switch (dteHint) {
-    case "event_week":
-      return "0_to_7_days";
+  const normalized = dteHint?.toLowerCase().trim();
+  if (!normalized) return undefined;
+
+  if (normalized === "event_week") {
+    return "0_to_7_days";
+  }
+  if (/\bleaps?\b/.test(normalized) || /\blong[\s-]*dated\b/.test(normalized)) {
+    return "180_plus_days";
+  }
+  if (/\b(?:1|one)\s*(?:-|to|or)\s*(?:2|two)\s*weeks?\b/.test(normalized)) {
+    return "7_to_14_days";
+  }
+  if (/\b(?:week|weekly|weeks?)\b/.test(normalized)) {
+    return "7_to_14_days";
+  }
+  if (/\b(?:month|monthly|months?)\b/.test(normalized)) {
+    return "25_to_45_days";
+  }
+
+  switch (normalized) {
     case "week":
       return "7_to_14_days";
     case "month":
@@ -136,6 +153,7 @@ export function resolveOptionsScreenerSlots(
   sources.liquidityMinimum = liquidity.source;
   if (liquidity.source === "default") defaultsUsed.push("liquidityMinimum");
 
+  if (entities.optionStrategy) sources.optionStrategy = "user";
   if (entities.costBasis !== undefined) sources.costBasis = "user";
   if (entities.catalystSymbols !== undefined) sources.catalystSymbols = "user";
 
@@ -149,6 +167,7 @@ export function resolveOptionsScreenerSlots(
       liquidityMinimum: liquidity.value,
       budget: entities.budget,
       maxPremium: entities.maxPremium,
+      optionStrategy: entities.optionStrategy,
       costBasis: entities.costBasis,
       catalystSymbols: entities.catalystSymbols,
     },

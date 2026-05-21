@@ -405,6 +405,31 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(resolution.sources.dteTarget).toBe("user");
     });
 
+    it("raw LLM router hint '1-2 weeks' → 7_to_14_days DTE", () => {
+      const resolution = resolveOptionsScreenerSlots({
+        symbols: ["MSFT"],
+        direction: "bullish",
+        dteHint: "1-2 weeks",
+      });
+      expect(resolution.resolved.dteTarget).toBe("7_to_14_days");
+      expect(resolution.sources.dteTarget).toBe("user");
+    });
+
+    it("covered call prompt carries strategy and cost basis into the options workflow", () => {
+      const entities = extractEntities(
+        "Sell a covered call on MSFT. Cost basis 123.45. Best return for something 1 or 2 weeks out?",
+      );
+      const resolution = resolveOptionsScreenerSlots(entities);
+      const plan = buildOptionsScreenerWorkflow(resolution);
+
+      expect(resolution.resolved.optionStrategy).toBe("covered_call");
+      expect(resolution.resolved.costBasis).toBe(123.45);
+      expect(plan.initialPrompt).toContain("Option strategy: covered_call");
+      expect(plan.initialPrompt).toContain("Cost basis: $123.45");
+      expect(plan.initialPrompt.toLowerCase()).toContain("premium received");
+      expect(plan.followUps[0].toLowerCase()).toContain("return-if-assigned");
+    });
+
     it("'LEAPS on MSFT' → 180_plus_days DTE", () => {
       const classification = classifyIntent("LEAPS on MSFT");
       const resolution = resolveOptionsScreenerSlots(classification.entities);

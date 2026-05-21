@@ -16,6 +16,7 @@ export interface ExtractedEntities {
   riskProfile?: string;
   direction?: "bullish" | "bearish";
   dteHint?: string;
+  optionStrategy?: "covered_call";
   heldSymbol?: string;
   catalystSymbols?: string[];
   costBasis?: number;
@@ -50,6 +51,7 @@ export interface OptionsScreenerSlots {
   liquidityMinimum: string;
   budget?: number;
   maxPremium?: number;
+  optionStrategy?: "covered_call";
   costBasis?: number;
   catalystSymbols?: string[];
   ivPreference?: string;

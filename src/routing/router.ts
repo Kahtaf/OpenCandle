@@ -168,6 +168,7 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
+  if (e.optionStrategy === "covered_call") out.optionStrategy = e.optionStrategy;
   if (typeof e.heldSymbol === "string") out.heldSymbol = e.heldSymbol.toUpperCase();
   const catalystSymbols = validateStringArray(e.catalystSymbols, "entities.catalystSymbols").map((s) =>
     s.toUpperCase(),
@@ -191,6 +192,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       ),
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+      optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
       costBasis: output.entities.costBasis ?? extracted.costBasis,
       heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
       catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,

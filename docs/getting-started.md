@@ -36,6 +36,8 @@ npm start
 
 On first run, OpenCandle walks through model setup. You can rerun setup later from inside the agent with `/setup`.
 
+For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures.
+
 ## Run the Local GUI
 
 From a source checkout:
@@ -52,6 +54,8 @@ opencandle gui
 
 Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions through a writer/follower lock so only one process mutates a session at a time.
 
+See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and writer/follower behavior.
+
 ## Configure Providers
 
 Model credentials are handled by Pi. OpenCandle-specific provider keys can come from environment variables or `~/.opencandle/config.json`.
@@ -67,7 +71,7 @@ Model credentials are handled by Pi. OpenCandle-specific provider keys can come 
 | `EXA_API_KEY` | No | Exa web search |
 | `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
 
-Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and Fear & Greed data do not require keys.
+Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require keys.
 
 Example config:
 
@@ -95,6 +99,8 @@ Example config:
 
 Environment variables override `~/.opencandle/config.json`. Set `OPENCANDLE_HOME` to store OpenCandle state somewhere other than `~/.opencandle/`.
 
+See [Configuration](./configuration.md) for the complete env var list, config precedence, state files, and GUI host/port settings.
+
 ## First Investigations
 
 ```text
@@ -107,6 +113,8 @@ Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
 ```
 
 OpenCandle should tell you when a provider is unavailable, a key is missing, or a result is degraded. Treat those warnings as part of the answer.
+
+For slash commands, session behavior, and CLI-vs-GUI tradeoffs, see [TUI](./tui.md).
 
 ## Validate a Checkout
 

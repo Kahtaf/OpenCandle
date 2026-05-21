@@ -34,6 +34,7 @@ export function extractEntities(input: string): ExtractedEntities {
     direction: extractDirection(input),
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
+    optionStrategy: extractOptionStrategy(input),
     heldSymbol,
     catalystSymbols: heldSymbol
       ? symbols.filter((symbol) => symbol !== heldSymbol)
@@ -178,6 +179,12 @@ function extractDteHint(input: string): string | undefined {
   if (/\bleaps?\b/i.test(lower) || /\blong[\s-]*dated\b/.test(lower)) return "leaps";
   if (/\bmonth\b/.test(lower)) return "month";
   if (/\bweek(?:ly|s?)?\b/.test(lower)) return "week";
+  return undefined;
+}
+
+function extractOptionStrategy(input: string): "covered_call" | undefined {
+  const lower = input.toLowerCase();
+  if (/\bcovered\s+calls?\b/.test(lower)) return "covered_call";
   return undefined;
 }
 

@@ -1,3 +1,8 @@
+---
+title: System Architecture
+description: How OpenCandle routes prompts through workflows, tools, providers, and local runtime state.
+---
+
 # System Architecture
 
 How OpenCandle routes user requests to tools, providers, and the sentiment pipeline.
@@ -14,12 +19,14 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 ┌─────────────────────────────────────────────────────────────────────┐
 │  ROUTING (src/routing/)                                             │
 │                                                                     │
-│  classify-intent.ts  →  default rule-based pattern matching         │
+│  router.ts           →  default LLM router when                     │
+│                         OPENCANDLE_ROUTER_MODE is unset or "llm"    │
+│                         structured route, entities, slots, prefs    │
+│  classify-intent.ts  →  legacy rule-based pattern matching when     │
+│                         OPENCANDLE_ROUTER_MODE=rules                │
 │                         "analyze AAPL" → single_asset_analysis      │
 │                         news keywords  → general_finance_qa         │
 │                         "compare X Y"  → compare_assets             │
-│  router.ts           →  optional LLM router when                     │
-│                         OPENCANDLE_ROUTER_MODE=llm                  │
 │                                                                     │
 │  entity-extractor.ts →  pulls symbols, budget, direction            │
 │  slot-resolver.ts    →  fills workflow params from entities          │
@@ -41,7 +48,7 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 │  ├─ technical/ ───────────────────────────────────────────────────┤ │
 │  │  indicators, backtest                                          │ │
 │  ├─ macro/ ───────────────────────────────────────────────────────┤ │
-│  │  fred_data, fear_greed                                         │ │
+│  │  fred_data, crypto fear_greed                                  │ │
 │  ├─ options/ ─────────────────────────────────────────────────────┤ │
 │  │  option_chain with computed Greeks                             │ │
 │  ├─ portfolio/ ───────────────────────────────────────────────────┤ │
@@ -65,9 +72,10 @@ How OpenCandle routes user requests to tools, providers, and the sentiment pipel
 │  fred.ts           ←── fred-data                                    │
 │  reddit.ts         ←── reddit-sentiment, sentiment-summary          │
 │  twitter.ts        ←── twitter-sentiment, sentiment-summary         │
+│                         requires a local Twitter/X browser session  │
 │  finnhub.ts        ←── sentiment-summary                            │
 │  sec-edgar.ts      ←── sec-filings                                  │
-│  fear-greed.ts     ←── fear-greed                                   │
+│  fear-greed.ts     ←── alternative.me crypto Fear & Greed           │
 │  web-search.ts     ←── search-web, web-sentiment, sentiment-summary │
 │  exa-search.ts     ←── web-search.ts (cascade member)               │
 └───────────────────────────┬─────────────────────────────────────────┘
@@ -135,6 +143,24 @@ Exa (MCP or API key) ──fail──▶ Brave (API key) ──fail──▶ Duc
 Used by three tools: `search_web`, `get_web_sentiment`, `get_sentiment_summary`.
 
 Provider overrides can force `exa`, `brave`, or `ddg` for a single request. The default cascade tries Exa first, uses Brave when configured, and keeps DuckDuckGo as the keyless final fallback.
+
+## Runtime Configuration
+
+- `OPENCANDLE_ROUTER_MODE` defaults to `llm`. Set `OPENCANDLE_ROUTER_MODE=rules` to force the legacy regex router.
+- `OPENCANDLE_HOME` defaults to `~/.opencandle` and contains OpenCandle-owned state such as `config.json`, `onboarding.json`, watchlist/portfolio/prediction files, `state.db`, `sentinel.db`, and `browser-profile/`.
+- The local GUI defaults to `http://127.0.0.1:14567`; `/health` reports whether that process is the session `writer` or a read-only `follower`.
+
+## GUI Runtime
+
+The GUI server owns the local browser workbench. It serves the built `gui/web/dist` bundle, reads Pi session state, and publishes chat/session updates over HTTP, server-sent events, and WebSocket.
+
+- `GET /health` reports `{ ok, role }`, where `role` is `writer` or `follower`.
+- `GET /api/sessions` lists sessions and the current GUI session.
+- `GET /api/session/events` returns the current session's projected chat events.
+- `POST /api/chat/run` streams a chat run over SSE when the process is writer.
+- `GET /ws` upgrades to a WebSocket for boot, snapshot, setup, catalog, and session update messages.
+
+The browser is organized as reusable UI primitives plus product feature modules: chat, sessions, context panel, catalog, and tool-result renderers. Shared event contracts live under `gui/shared/` so server producers and browser consumers stay aligned.
 
 ## Key Design Principles
 

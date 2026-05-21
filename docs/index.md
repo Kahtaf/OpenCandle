@@ -12,12 +12,16 @@ It is built for investors, builders, and researchers who want the speed of an ag
 ## Start Here
 
 - [Getting Started](./getting-started.md) for install, setup, and first investigations.
+- [First Run](./first-run.md) for a five-minute path from install to a successful keyless market answer.
+- [TUI](./tui.md) for terminal usage, slash commands, sessions, and CLI-vs-GUI tradeoffs.
 - [Investigation Recipes](./investigation-recipes.md) for repeatable research paths.
 - [Data Sources](./data-sources.md) for provider coverage, optional keys, and local state.
+- [Configuration](./configuration.md) for env vars, file config, OpenCandle state files, and GUI runtime knobs.
 - [GUI Quickstart](./gui-quickstart.md) for the local browser workbench.
 - [System Architecture](./system-architecture.md) for routing, tools, providers, and runtime boundaries.
 - [Build a Tool](./build-a-tool.md) for adding first-party tools or external add-on packages.
 - [Testing and Evals](./testing-and-evals.md) for unit tests, harness traces, router fixtures, and live checks.
+- [Benchmarking](./benchmarking.md) for comparing OpenCandle against generic no-tool agents.
 
 ## What OpenCandle Investigates
 
@@ -26,8 +30,8 @@ It is built for investors, builders, and researchers who want the speed of an ag
 | Market data | Quotes, price history, ticker lookup, crypto price and history |
 | Options | Option chains, open interest, implied volatility, locally computed Greeks |
 | Fundamentals | Company overview, financial statements, earnings, DCF, comparable companies |
-| Macro | FRED series, rates, inflation, GDP, unemployment, Fear & Greed |
-| Sentiment | Reddit, Twitter/X, web search, cross-source sentiment summaries |
+| Macro | FRED series, rates, inflation, GDP, unemployment, crypto Fear & Greed |
+| Sentiment | Reddit, Twitter/X local browser session, web search, cross-source sentiment summaries |
 | Filings | SEC EDGAR filing search |
 | Portfolio | Watchlists, holdings, correlation, prediction tracking, risk analysis |
 
@@ -38,6 +42,12 @@ It is built for investors, builders, and researchers who want the speed of an ag
 - Provider gaps are visible. Missing keys, stale data, and degraded sources should be surfaced.
 - Local state stays local. OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set.
 - Contributions stay testable. Unit tests use fixtures and mocked fetch calls, not live APIs.
+
+## When To Use OpenCandle
+
+Use OpenCandle when a question needs current or inspectable financial evidence: quotes, price history, options chains, filings, macro data, sentiment, watchlists, portfolio state, or a visible trail of what data was missing.
+
+Use a generic agent when the question is purely educational, does not need current market data, and would be better served by a short conceptual explanation. OpenCandle is designed for auditable market research, not for pretending every finance question needs a tool call.
 
 ## Common Workflows
 

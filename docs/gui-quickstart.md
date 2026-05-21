@@ -1,12 +1,28 @@
+---
+title: GUI Quickstart
+description: Run the local OpenCandle browser workbench and understand writer/follower behavior.
+---
+
 # OpenCandle GUI Quickstart
 
 1. Install dependencies from the repo root with `npm install`.
 2. Start the local GUI with `npm run gui` from a checkout, or `opencandle gui` from an installed package.
 3. Open `http://127.0.0.1:14567`.
-4. Start with `/analyze NVDA` or use the empty-state action cards.
-5. Open the catalog with `⌘K` or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
+4. If the model setup panel appears, connect a model first. Chat cannot run without model access.
+5. Start with a keyless market-data prompt such as `What is AAPL trading at?`, then try `/analyze NVDA` or the empty-state action cards.
+6. Open the catalog with `⌘K` or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 
-The GUI is local-only in v1 and binds to `127.0.0.1`. It shares Pi sessions through a writer/follower lock so only one process mutates a session at a time.
+The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or Tailscale access.
+
+The GUI shares Pi sessions through a writer/follower lock so only one process mutates a session at a time. The writer can run chat, save provider/model setup, toggle tools, and manage sessions. Followers can serve the browser and read session state, but mutating actions return "Read-only follower mode".
+
+Check the running role with:
+
+```bash
+curl http://127.0.0.1:14567/health
+```
+
+`{"ok":true,"role":"writer"}` means this process owns the writer lock. `{"ok":true,"role":"follower"}` means the server is healthy but another live process owns the lock.
 
 ## Tailscale Access
 
@@ -18,7 +34,7 @@ tailscale serve --bg http://127.0.0.1:14567
 
 Depending on your Tailscale setup, the shared URL is shown by `tailscale serve status`.
 
-If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` or `opencandle gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,"role":"writer"}`.
+If the page returns `502`, the tunnel is up but the local GUI is not listening. Restart `npm run gui` or `opencandle gui` and verify `curl http://127.0.0.1:14567/health` returns `{"ok":true,...}`. If it returns `role:"follower"`, stop the existing writer or use the follower for read-only viewing.
 
 ## Investigator Workflow
 
@@ -30,41 +46,10 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 - Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
 - Writer/follower locking keeps one local process responsible for mutating a session.
 
-## Code Structure
+## When To Use The GUI
 
-The GUI follows a small feature-module shape: reusable UI primitives, composable chat pieces, and product-specific feature modules.
+Use the GUI when you want to inspect tool output visually, browse prior sessions, run an individual tool from the catalog, or see provider setup status without remembering command syntax.
 
-- `gui/web/tailwind.config.cjs` and `gui/web/postcss.config.cjs` enable the Tailwind pipeline.
-- `gui/web/src/components/ui/` owns reusable primitives such as buttons, badges, inputs, cards, textareas, keyboard hints, and checkboxes.
-- `gui/web/src/components/chat/` owns reusable chat pieces such as the composer, empty prompt suggestions, transcript message rows, and history rows.
-- `gui/web/src/features/` owns product behavior and wires those components to Pi session state.
+Use the TUI when you want the fastest keyboard loop, slash commands, or a plain terminal transcript. See [TUI](./tui.md).
 
-- `chat/` owns the transcript, composer, stream controls, and empty states.
-- `sessions/` owns desktop and mobile chat history.
-- `context-panel/` owns the financial context projection.
-- `catalog/` owns tools, workflows, and providers.
-- `renderers/` owns first-class financial tool cards plus raw inspection.
-
-The historical visual/primitives reference was llmchat's UI package:
-`https://github.com/trendy-design/llmchat/tree/main/packages/ui`
-
-That package is inspiration only. OpenCandle does not depend on llmchat and does not copy its persistence/runtime model.
-
-## Verification
-
-Before calling the GUI ready, run:
-
-```bash
-npm test
-npm --workspace @opencandle/gui-web run build
-```
-
-Then test the app in a browser at desktop and mobile widths. At minimum, send prompts that exercise stock quotes, quote comparison, options chain, SEC filings, macro/FRED data, and news/search so the corresponding tool cards and the financial context panel render from saved session state.
-
-With `npm run gui` already running, the repeatable browser smoke is:
-
-```bash
-npm run test:gui:browser
-```
-
-Set `OPENCANDLE_GUI_URL` to target a non-default local URL.
+For GUI internals, see [System Architecture](./system-architecture.md). For GUI validation, see [Testing and Evals](./testing-and-evals.md).

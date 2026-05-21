@@ -71,6 +71,7 @@ describe("sec-edgar provider", () => {
     expect(filings[0].periodOfReport).toBe("2024-09-28");
     expect(filings[0]).toHaveProperty("accessionNumber");
     expect(filings[0]).toHaveProperty("url");
+    expect(filings[0].primaryDocumentUrl).toContain("aapl-20240928.htm");
   });
 
   it("constructs accession-specific EDGAR archive URL", async () => {
@@ -84,6 +85,49 @@ describe("sec-edgar provider", () => {
     expect(filings[0].url).toContain("sec.gov");
     expect(filings[0].url).toContain("000032019324000123"); // accessionNoDash
     expect(filings[0].url).toContain("0000320193-24-000123"); // full accession
+    expect(filings[0].primaryDocumentUrl).toContain("000032019324000123/aapl-20240928.htm");
+  });
+
+  it("optionally fetches short filing evidence snippets from primary documents", async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          "0": { cik_str: 320193, ticker: "AAPL", title: "APPLE INC" },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          name: "APPLE INC",
+          tickers: ["AAPL"],
+          filings: {
+            recent: {
+              accessionNumber: ["0000320193-24-000123", "0000320193-24-000089"],
+              filingDate: ["2024-10-31", "2024-08-02"],
+              reportDate: ["2024-09-28", "2024-06-29"],
+              form: ["10-K", "10-Q"],
+              primaryDocument: ["aapl-20240928.htm", "aapl-20240629.htm"],
+              items: ["", ""],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(`<html><body>Table of Contents Page Item 1A. Risk Factors 43 Item 7. Management's Discussion 89 ${"filler ".repeat(80)} Later section: Risk Factors include regulatory uncertainty and litigation exposure from platform rules.</body></html>`),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve("<html><body>Management's Discussion notes revenue concentration and liquidity trends.</body></html>"),
+      });
+
+    const filings = await searchFilings("AAPL", ["10-K", "10-Q"], 2, { includeSnippets: true });
+    expect(filings[0].evidenceSnippets?.[0]).toContain("Risk Factors");
+    expect(filings[0].evidenceSnippets?.[0]).toContain("regulatory uncertainty");
+    expect(filings[0].evidenceSnippets?.[0]).not.toContain("Table of Contents");
+    expect(filings[1].evidenceSnippets?.[0]).toContain("Management's Discussion");
+    expect(filings[0].primaryDocumentUrl).toContain("aapl-20240928.htm");
   });
 
   it("caches results", async () => {

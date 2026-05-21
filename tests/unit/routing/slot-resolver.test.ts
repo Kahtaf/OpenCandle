@@ -172,6 +172,33 @@ describe("resolveOptionsScreenerSlots", () => {
     expect(result.sources.dteTarget).toBe("preference");
   });
 
+  it("maps natural short-dated router hints to 7_to_14_days", () => {
+    for (const dteHint of ["1-2 weeks", "one to two weeks", "1 or 2 weeks out"]) {
+      const result = resolveOptionsScreenerSlots({
+        symbols: ["MSFT"],
+        direction: "bullish",
+        dteHint,
+      });
+
+      expect(result.resolved.dteTarget).toBe("7_to_14_days");
+      expect(result.sources.dteTarget).toBe("user");
+    }
+  });
+
+  it("passes through covered-call strategy and cost basis", () => {
+    const result = resolveOptionsScreenerSlots({
+      symbols: ["MSFT"],
+      direction: "bullish",
+      optionStrategy: "covered_call",
+      costBasis: 123.45,
+    });
+
+    expect(result.resolved.optionStrategy).toBe("covered_call");
+    expect(result.sources.optionStrategy).toBe("user");
+    expect(result.resolved.costBasis).toBe(123.45);
+    expect(result.sources.costBasis).toBe("user");
+  });
+
   it("passes through extracted premium cap", () => {
     const entities: ExtractedEntities = {
       symbols: ["NVDA"],

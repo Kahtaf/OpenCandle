@@ -48,6 +48,8 @@ const DISPLAY_NAMES: Record<string, string> = {
   objective: "objective",
   moneynessPreference: "moneyness",
   liquidityMinimum: "liquidity",
+  optionStrategy: "option strategy",
+  costBasis: "cost basis",
   symbols: "symbols",
   metrics: "metrics",
 };
@@ -227,6 +229,7 @@ For LEAPS / long-dated options:
       objective: s.objective,
       moneynessPreference: s.moneynessPreference,
       liquidityMinimum: s.liquidityMinimum,
+      ...(s.optionStrategy ? { optionStrategy: s.optionStrategy } : {}),
       ...(s.costBasis !== undefined ? { costBasis: formatBudget(s.costBasis) } : {}),
       ...(s.catalystSymbols?.length ? { catalystSymbols: s.catalystSymbols.join(", ") } : {}),
     },
@@ -235,11 +238,12 @@ For LEAPS / long-dated options:
   );
 
   const coveredCallContext = [
-    s.costBasis !== undefined ? `\n- Position cost basis: ${formatBudget(s.costBasis)}${tag(sources.costBasis)}` : "",
+    s.optionStrategy ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}` : "",
+    s.costBasis !== undefined ? `\n- Cost basis: ${formatBudget(s.costBasis)} (Position cost basis: ${formatBudget(s.costBasis)})${tag(sources.costBasis)}` : "",
     s.catalystSymbols?.length ? `\n- Catalyst/context tickers: ${s.catalystSymbols.join(", ")}${tag(sources.catalystSymbols)}` : "",
   ].join("");
 
-  const isCoveredCallContext = s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
+  const isCoveredCallContext = s.optionStrategy === "covered_call" || s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
   const coveredCallInstructions = isCoveredCallContext
     ? `
 Covered-call sale guidance:
@@ -272,6 +276,9 @@ Steps:
 3. Filter contracts matching: ${s.direction === "bullish" ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
 4. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
+${s.optionStrategy === "covered_call" ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
+` : ""}${s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
+` : ""}
 ${longDatedInstructions}
 ${coveredCallInstructions}
 ${rankingConstraints}

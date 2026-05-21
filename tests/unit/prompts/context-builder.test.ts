@@ -157,6 +157,8 @@ describe("PromptContextBuilder", () => {
     });
 
     expect(result).toContain("sentiment-only");
+    expect(result).toContain("score scale");
+    expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
   });
 
@@ -167,14 +169,25 @@ describe("PromptContextBuilder", () => {
     });
 
     expect(result).toContain("industry or sector structure");
+    expect(result).toContain("lead with a 2-3 sentence thesis");
     expect(result).toContain("segmentation table");
+    expect(result).toContain("key company examples/types");
+    expect(result).toContain("technology or business-model timeline");
+    expect(result).toContain("likely winners/losers");
     expect(result).toContain("scenario");
     expect(result).toContain("confidence");
     expect(result).toContain("key indicators");
     expect(result).toContain("geopolitical");
-    expect(result).toContain("technology shifts");
-    expect(result).toContain("silicon photonics");
+    expect(result).toContain("technology impact");
+    expect(result).toContain("Infer the relevant technologies");
+    expect(result).toContain("constraints, moats, company strategies");
+    expect(result).toContain("fetched evidence");
+    expect(result).toContain("investor or strategic takeaways");
+    expect(result).toContain("not a generic follow-up offer");
     expect(result).toContain("value-chain impact");
+    expect(result).not.toContain("semiconductors");
+    expect(result).not.toContain("CUDA");
+    expect(result).not.toContain("silicon photonics");
   });
 
   it("tells broad research to degrade gracefully after web search gaps", () => {
@@ -187,6 +200,44 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("continue with the best high-level analysis");
     expect(result).toContain("Label the live-data gap");
     expect(result).toContain("Do not stop with a tool-failure apology");
+  });
+
+  it("tells filing thesis prompts to distinguish filing evidence from adjacent sources", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("SEC filing or thesis-change prompts");
+    expect(result).toContain("call get_sec_filings first");
+    expect(result).toContain("targeted search_web queries");
+    expect(result).toContain("risk factors");
+    expect(result).toContain("MD&A");
+    expect(result).toContain("litigation");
+    expect(result).toContain("regulatory disclosures");
+    expect(result).toContain("revenue concentration");
+    expect(result).toContain("Separate what came from filing metadata");
+    expect(result).toContain("If the full filing body was not parsed");
+    expect(result).toContain("thesis-changing deltas");
+  });
+
+  it("tells educational finance prompts to include behavioral and practical frameworks", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("conceptual or educational finance prompts");
+    expect(result).toContain("decision-framework shape");
+    expect(result).toContain("Bottom line");
+    expect(result).toContain("evidence/base-rate view");
+    expect(result).toContain("concrete study names or rough percentages");
+    expect(result).toContain("behavioral or implementation tradeoff");
+    expect(result).toContain("simple self-check questions");
+    expect(result).toContain("different investor profiles");
+    expect(result).toContain("practical middle-ground");
+    expect(result).toContain("Do not use \"Commitment\"");
+    expect(result).toContain("education rather than a trade");
   });
 
   it("documents supported search freshness values and forbids unsupported ranges", () => {
@@ -272,6 +323,8 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("sentiment-only");
+    expect(result).toContain("score scale");
+    expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
   });
 
@@ -283,6 +336,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("backtest_strategy");
     expect(result).toContain("win rate");
     expect(result).toContain("max drawdown");
+    expect(result).toContain("Sharpe or Sortino");
+    expect(result).toContain("trading costs/slippage");
   });
 
   it("assembled prompt contains no refusal / fiduciary-advisor vocabulary", () => {

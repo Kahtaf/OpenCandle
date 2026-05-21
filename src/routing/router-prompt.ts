@@ -86,6 +86,7 @@ interface RouterOutput {
     riskProfile?: string;            // "conservative" | "balanced" | "aggressive"
     direction?: "bullish" | "bearish";
     dteHint?: string;
+    optionStrategy?: "covered_call";  // set when the user explicitly asks for a covered call
     heldSymbol?: string;              // for covered calls: ticker the user owns/holds
     catalystSymbols?: string[];        // tickers mentioned as event/catalyst context, not the option-chain underlying
     costBasis?: number;                // per-share basis when user says "cost basis is $X"

@@ -161,6 +161,25 @@ describe("extractEntities", () => {
     });
   });
 
+  describe("option strategy extraction", () => {
+    it("detects covered calls", () => {
+      const result = extractEntities("Sell a covered call on MSFT");
+      expect(result.optionStrategy).toBe("covered_call");
+    });
+  });
+
+  describe("cost basis extraction", () => {
+    it("extracts a numeric cost basis", () => {
+      const result = extractEntities("Sell a covered call on MSFT with cost basis 123.45");
+      expect(result.costBasis).toBe(123.45);
+    });
+
+    it("extracts a dollar-prefixed cost basis", () => {
+      const result = extractEntities("covered call on AAPL; cost basis: $1,234.56");
+      expect(result.costBasis).toBe(1234.56);
+    });
+  });
+
   describe("time horizon extraction", () => {
     it("detects short term", () => {
       const result = extractEntities("short term trades");
