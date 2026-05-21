@@ -26,16 +26,21 @@ const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
 export function extractEntities(input: string): ExtractedEntities {
   const symbols = extractSymbols(input);
   const heldSymbol = extractHeldSymbol(input, symbols);
+  const catalystSymbols = heldSymbol
+    ? symbols.filter((symbol) => symbol !== heldSymbol)
+    : [];
   return {
     symbols,
     budget: extractBudget(input),
     maxPremium: extractMaxPremium(input),
     costBasis: extractCostBasis(input),
+    shareQuantity: extractShareQuantity(input),
     direction: extractDirection(input),
     riskProfile: extractRiskProfile(input),
     dteHint: extractDteHint(input),
     optionStrategy: extractOptionStrategy(input),
-    costBasis: extractCostBasis(input),
+    heldSymbol,
+    catalystSymbols: catalystSymbols.length > 0 ? catalystSymbols : undefined,
     timeHorizon: extractTimeHorizon(input),
     assetScope: extractAssetScope(input),
     compareMetrics: extractCompareMetrics(input),
@@ -131,6 +136,8 @@ function extractMaxPremium(input: string): number | undefined {
 
 function extractHeldSymbol(input: string, symbols: string[]): string | undefined {
   const patterns = [
+    /\b(?:i\s+)?(?:have|own|hold|holding|long)\s+\d+(?:,\d{3})*\s+shares?\s+(?:of\s+)?\$?([A-Za-z]{1,5})\b/i,
+    /\b(?:my\s+)?\d+(?:,\d{3})*\s+\$?([A-Za-z]{1,5})\s+shares?\b/i,
     /\b(?:i\s+)?(?:have|own|hold|holding|long)\s+\$?([A-Za-z]{1,5})\b/i,
     /\bmy\s+\$?([A-Za-z]{1,5})\s+(?:position|shares?|stock)\b/i,
   ];
@@ -140,6 +147,13 @@ function extractHeldSymbol(input: string, symbols: string[]): string | undefined
     if (symbol && symbols.includes(symbol)) return symbol;
   }
   return undefined;
+}
+
+function extractShareQuantity(input: string): number | undefined {
+  const match = input.match(/\b(\d{1,3}(?:,\d{3})*|\d{1,6})\s+shares?\b/i);
+  if (!match) return undefined;
+  const value = parseInt(match[1].replace(/,/g, ""), 10);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function extractCostBasis(input: string): number | undefined {
@@ -172,6 +186,8 @@ function extractRiskProfile(input: string): string | undefined {
 
 function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
+  const explicitDays = lower.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:dte|days?)\b/);
+  if (explicitDays) return `${explicitDays[1]}-${explicitDays[2]} days`;
   if (/\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(lower)) return "event_week";
   if (/\bleaps?\b/i.test(lower) || /\blong[\s-]*dated\b/.test(lower)) return "leaps";
   if (/\bmonth\b/.test(lower)) return "month";
@@ -179,9 +195,17 @@ function extractDteHint(input: string): string | undefined {
   return undefined;
 }
 
-function extractOptionStrategy(input: string): "covered_call" | undefined {
+function extractOptionStrategy(input: string): ExtractedEntities["optionStrategy"] | undefined {
   const lower = input.toLowerCase();
   if (/\bcovered\s+calls?\b/.test(lower)) return "covered_call";
+  if (/\b(?:protective|married)\s+puts?\b/.test(lower)) return "protective_put";
+  if (
+    /\b(?:hedge|protect|protection|insurance)\b/.test(lower) &&
+    /\bputs?\b/.test(lower) &&
+    /\b(?:own|hold|holding|long|shares?|position)\b/.test(lower)
+  ) {
+    return "protective_put";
+  }
   return undefined;
 }
 

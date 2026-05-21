@@ -29,6 +29,10 @@ function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   if (/\b(?:1|one)\s*(?:-|to|or)\s*(?:2|two)\s*weeks?\b/.test(normalized)) {
     return "7_to_14_days";
   }
+  const explicitDays = normalized.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:days?|dte)\b/);
+  if (explicitDays) {
+    return `${explicitDays[1]}_to_${explicitDays[2]}_days`;
+  }
   if (/\b(?:week|weekly|weeks?)\b/.test(normalized)) {
     return "7_to_14_days";
   }
@@ -129,8 +133,11 @@ export function resolveOptionsScreenerSlots(
     sources.symbol = "default";
   }
 
-  // Direction: default to bullish
-  const dir = resolve(entities.direction, undefined, "bullish" as const);
+  // Direction: default to bullish unless the user specified a protective put hedge.
+  const inferredDirection = entities.optionStrategy === "protective_put"
+    ? "bearish"
+    : entities.direction;
+  const dir = resolve(inferredDirection, undefined, "bullish" as const);
   sources.direction = dir.source;
   if (dir.source === "default") defaultsUsed.push("direction");
 
@@ -152,6 +159,8 @@ export function resolveOptionsScreenerSlots(
 
   if (entities.optionStrategy) sources.optionStrategy = "user";
   if (entities.costBasis !== undefined) sources.costBasis = "user";
+  if (entities.shareQuantity !== undefined) sources.shareQuantity = "user";
+  if (entities.catalystSymbols !== undefined) sources.catalystSymbols = "user";
 
   return {
     resolved: {
@@ -165,6 +174,8 @@ export function resolveOptionsScreenerSlots(
       maxPremium: entities.maxPremium,
       optionStrategy: entities.optionStrategy,
       costBasis: entities.costBasis,
+      shareQuantity: entities.shareQuantity,
+      catalystSymbols: entities.catalystSymbols,
     },
     sources,
     defaultsUsed,

@@ -166,6 +166,27 @@ describe("extractEntities", () => {
       const result = extractEntities("Sell a covered call on MSFT");
       expect(result.optionStrategy).toBe("covered_call");
     });
+
+    it("detects protective puts with share quantity and held underlying", () => {
+      const result = extractEntities(
+        "I own 200 shares of NVDA after a big rally. What's a reasonable protective put 30-45 days out that doesn't cost too much?",
+      );
+
+      expect(result.symbols).toEqual(["NVDA"]);
+      expect(result.optionStrategy).toBe("protective_put");
+      expect(result.direction).toBe("bearish");
+      expect(result.heldSymbol).toBe("NVDA");
+      expect(result.catalystSymbols).toBeUndefined();
+      expect(result.shareQuantity).toBe(200);
+      expect(result.dteHint).toBe("30-45 days");
+    });
+
+    it("detects protective puts from generic hedge language", () => {
+      const result = extractEntities("Need a put hedge to protect 500 shares of MSFT");
+
+      expect(result.optionStrategy).toBe("protective_put");
+      expect(result.shareQuantity).toBe(500);
+    });
   });
 
   describe("cost basis extraction", () => {

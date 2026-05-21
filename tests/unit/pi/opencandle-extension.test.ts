@@ -226,6 +226,7 @@ describe("opencandle extension", () => {
     const workflow = buildOptionsScreenerWorkflow(resolveOptionsScreenerSlots({
       symbols: ["AAPL"],
       direction: "bullish",
+      dteHint: "30 to 45 DTE",
     }));
 
     expect(result).toEqual({ action: "handled" });

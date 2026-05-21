@@ -275,6 +275,38 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Best action:");
     expect(prompt).toContain("Conditional candidate:");
   });
+
+  it("frames protective puts as hedges on existing shares", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        {
+          symbol: "NVDA",
+          direction: "bearish",
+          optionStrategy: "protective_put",
+          shareQuantity: 200,
+          dteTarget: "30_to_45_days",
+        },
+        {
+          symbol: "user",
+          direction: "user",
+          optionStrategy: "user",
+          shareQuantity: "user",
+          dteTarget: "user",
+        },
+      ),
+    );
+
+    expect(prompt).toContain("Screen and rank options contracts for NVDA");
+    expect(prompt).toContain("Option strategy: protective_put");
+    expect(prompt).toContain("Share quantity: 200 shares");
+    expect(prompt).toContain("Filter contracts matching: puts");
+    expect(prompt).toContain("buying puts to hedge an existing long NVDA share position");
+    expect(prompt).toContain("premium as a percent of the stock position");
+    expect(prompt).toContain("1 put contract per 100 shares");
+    expect(prompt).toContain("hedge floor");
+    expect(prompt).toContain("collar or put spread");
+    expect(prompt).toContain("Do not discuss short-option assignment risk");
+  });
 });
 
 describe("buildCompareAssetsPrompt", () => {

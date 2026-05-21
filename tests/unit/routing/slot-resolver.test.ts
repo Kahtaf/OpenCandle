@@ -201,6 +201,23 @@ describe("resolveOptionsScreenerSlots", () => {
     expect(result.sources.costBasis).toBe("user");
   });
 
+  it("infers bearish direction and share quantity for protective-put hedges", () => {
+    const result = resolveOptionsScreenerSlots({
+      symbols: ["NVDA"],
+      optionStrategy: "protective_put",
+      shareQuantity: 200,
+      dteHint: "30-45 days",
+    });
+
+    expect(result.resolved.direction).toBe("bearish");
+    expect(result.sources.direction).toBe("user");
+    expect(result.resolved.optionStrategy).toBe("protective_put");
+    expect(result.sources.optionStrategy).toBe("user");
+    expect(result.resolved.shareQuantity).toBe(200);
+    expect(result.sources.shareQuantity).toBe("user");
+    expect(result.resolved.dteTarget).toBe("30_to_45_days");
+  });
+
   it("passes through extracted premium cap", () => {
     const entities: ExtractedEntities = {
       symbols: ["NVDA"],

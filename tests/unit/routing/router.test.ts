@@ -57,6 +57,28 @@ describe("validateRouterOutput", () => {
     expect(out.entities.compareMetrics).toEqual(["macro_hedge"]);
   });
 
+  it("accepts protective-put strategy and share quantity emitted by the router", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        route: "workflow",
+        workflow: "options_screener",
+        entities: {
+          symbols: ["NVDA"],
+          direction: "bearish",
+          optionStrategy: "protective_put",
+          shareQuantity: 200,
+        },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.entities.optionStrategy).toBe("protective_put");
+    expect(out.entities.shareQuantity).toBe(200);
+  });
+
   it("rejects invalid route", () => {
     expect(() =>
       validateRouterOutput(
@@ -480,6 +502,33 @@ describe("route()", () => {
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "covered_call_underlying_corrected",
     }));
+  });
+
+  it("enriches omitted protective-put hedge context from deterministic extraction", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 200 shares of NVDA after a big rally. What's a reasonable protective put 30-45 days out that doesn't cost too much?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "options request",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["NVDA"]);
+    expect(result.entities.direction).toBe("bearish");
+    expect(result.entities.optionStrategy).toBe("protective_put");
+    expect(result.entities.shareQuantity).toBe(200);
+    expect(result.entities.heldSymbol).toBe("NVDA");
+    expect(result.entities.dteHint).toBe("30-45 days");
   });
 });
 

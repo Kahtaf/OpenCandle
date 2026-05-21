@@ -116,4 +116,58 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp.toLowerCase()).toContain("premium received");
     expect(followUp.toLowerCase()).toContain("return-if-assigned");
   });
+
+  it("follow-up prompt gives a covered-call fallback when quotes are unusable", () => {
+    const workflow = buildOptionsScreenerWorkflow(
+      makeResolution({ symbol: "DRAM", costBasis: 51, catalystSymbols: ["NVDA"], dteTarget: "0_to_7_days" }),
+    );
+    const followUp = workflow.followUps[0];
+
+    expect(followUp).toContain("zero bid/ask");
+    expect(followUp.toLowerCase()).toContain("covered-call fallback");
+    expect(followUp).toContain("cost basis");
+    expect(followUp).toContain("catalyst");
+    expect(followUp).toContain("conditional limit");
+    expect(followUp).toContain("Best action:");
+    expect(followUp).toContain("Conditional candidate:");
+    expect(followUp).toContain("Do NOT conclude");
+    expect(followUp).toContain("overrides the normal ranking/table requirements");
+    expect(followUp).toContain("premium: use live broker bid/ask");
+    expect(followUp).toContain("Treat this as selling covered calls against an existing DRAM share position");
+    expect(followUp).toContain("premium collected");
+    expect(followUp).toContain("Do not describe max loss as the option premium paid");
+    expect(followUp).toContain("Reproduce the exact Assumptions block");
+    expect(followUp).toContain("do not shorten it to \"Assumptions:\"");
+    expect(followUp).toContain("Risk section: max 3 bullets");
+    expect(followUp).toContain("closed_market_or_stale_quotes");
+    expect(followUp).toContain("recheck after regular options trading opens");
+    expect(followUp).toContain("treating DRAM as the held ticker");
+    expect(followUp).toContain("If they meant memory exposure or a different ticker");
+    expect(followUp).toContain("Interpretation:");
+    expect(followUp).toContain("If you meant DRAM as memory exposure or another ticker");
+    expect(followUp).toContain("effective assignment sale price");
+    expect(followUp).toContain("compare it with the $51 cost basis");
+    expect(followUp).toContain("Verify bid/ask and open interest in the user's broker");
+  });
+
+  it("follow-up prompt ranks protective puts as hedges instead of calls", () => {
+    const workflow = buildOptionsScreenerWorkflow(
+      makeResolution({
+        symbol: "NVDA",
+        direction: "bearish",
+        optionStrategy: "protective_put",
+        shareQuantity: 200,
+        dteTarget: "30_to_45_days",
+      }),
+    );
+    const followUp = workflow.followUps[0];
+
+    expect(followUp).toContain("top puts for NVDA");
+    expect(followUp).toContain("Protective-put requirements");
+    expect(followUp).toContain("hedge floor");
+    expect(followUp).toContain("premium as a percent of position value");
+    expect(followUp).toContain("1 put contract per 100 shares");
+    expect(followUp).toContain("collars or put spreads");
+    expect(followUp).toContain("Do not frame assignment risk like a short option sale");
+  });
 });

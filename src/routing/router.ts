@@ -164,12 +164,17 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.budget === "number") out.budget = e.budget;
   if (typeof e.maxPremium === "number") out.maxPremium = e.maxPremium;
   if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
+  if (typeof e.shareQuantity === "number") out.shareQuantity = e.shareQuantity;
   if (typeof e.timeHorizon === "string") out.timeHorizon = e.timeHorizon;
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
-  if (e.optionStrategy === "covered_call") out.optionStrategy = e.optionStrategy;
-  if (typeof e.costBasis === "number") out.costBasis = e.costBasis;
+  if (e.optionStrategy === "covered_call" || e.optionStrategy === "protective_put") out.optionStrategy = e.optionStrategy;
+  if (typeof e.heldSymbol === "string") out.heldSymbol = e.heldSymbol.toUpperCase();
+  const catalystSymbols = validateStringArray(e.catalystSymbols, "entities.catalystSymbols").map((s) =>
+    s.toUpperCase(),
+  );
+  if (catalystSymbols.length > 0) out.catalystSymbols = catalystSymbols;
   const compareMetrics = validateStringArray(e.compareMetrics, "entities.compareMetrics");
   if (compareMetrics.length > 0) out.compareMetrics = compareMetrics;
   return out;
@@ -188,8 +193,13 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       ),
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+      direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
       costBasis: output.entities.costBasis ?? extracted.costBasis,
+      shareQuantity: output.entities.shareQuantity ?? extracted.shareQuantity,
+      heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
+      catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
+      dteHint: output.entities.dteHint ?? (output.workflow === "options_screener" ? extracted.dteHint : undefined),
     },
     diagnostics,
   };
@@ -234,7 +244,9 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         ...deterministic.entities,
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         compareMetrics: deterministic.entities.compareMetrics ?? extracted.compareMetrics,
+        direction: deterministic.entities.direction ?? extracted.direction,
         costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
+        shareQuantity: deterministic.entities.shareQuantity ?? extracted.shareQuantity,
         heldSymbol: deterministic.entities.heldSymbol ?? extracted.heldSymbol,
         catalystSymbols: deterministic.entities.catalystSymbols ?? extracted.catalystSymbols,
       },

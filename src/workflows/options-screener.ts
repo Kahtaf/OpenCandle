@@ -6,8 +6,20 @@ import { promptStep } from "../runtime/prompt-step.js";
 
 export function buildOptionsScreenerWorkflowDefinition(resolution: SlotResolution<OptionsScreenerSlots>): WorkflowDefinition {
   const s = resolution.resolved;
-  const contractType = s.direction === "bullish" ? "calls" : "puts";
-  const coveredCallInstructions = s.optionStrategy === "covered_call"
+  const isProtectivePutContext = s.optionStrategy === "protective_put";
+  const contractType = s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts";
+  const isCoveredCallContext = s.optionStrategy === "covered_call" || s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
+  const rankingInstruction = isProtectivePutContext
+    ? "Rank by protection per dollar of premium, expiration fit, moneyness, hedge floor, live liquidity, and premium as a percent of the stock position."
+    : isCoveredCallContext
+    ? "Rank by premium collected, strike above cost basis, assignment risk, event risk, live liquidity, and probability of expiring out of the money."
+    : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.`;
+  const riskInstruction = isProtectivePutContext
+    ? "Include protective-put hedge risks: premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost. Long protective puts do not have short-option assignment risk."
+    : isCoveredCallContext
+    ? "Include covered-call sale risks: assignment risk, upside is capped at the strike plus premium, share-price downside in the owned stock less premium received, IV/event risk, and exit liquidity. Do not say max loss = premium or describe max loss as the option premium paid."
+    : "Include risk caveats: max loss = premium, IV crush risk, time decay (theta).";
+  const coveredCallFallback = isCoveredCallContext
     ? `
 Covered call requirements:
 - Treat the option premium as premium received, not premium paid.
@@ -15,6 +27,17 @@ Covered call requirements:
 ${s.costBasis !== undefined
   ? `- Use the user's ${s.costBasis} cost basis to calculate return-if-assigned: (strike - cost basis + premium received) / cost basis.`
   : "- If no cost basis is available, state that return-if-assigned needs the user's basis."}
+`
+    : "";
+  const protectivePutFallback = isProtectivePutContext
+    ? `
+Protective-put requirements:
+- Treat this as buying puts to hedge an existing long ${s.symbol} share position, not buying calls.
+- The final answer MUST discuss hedge floor, premium as a percent of position value, expiration fit, moneyness, and liquidity.
+- If share quantity is available, translate shares into approximate contract count using 1 put contract per 100 shares.
+- For cost-sensitive requests, explain the tradeoff between cheaper lower-strike puts and weaker protection.
+- Mention lower-cost alternatives such as collars or put spreads when outright put premium is high.
+- Do not frame assignment risk like a short option sale.
 `
     : "";
 
@@ -37,8 +60,10 @@ ${coveredCallInstructions}
 
 If some or all of the option chain fetches returned "⚠ Options chain unavailable" or similar gaps, do NOT abort. Instead:
 - Rank and present whatever contracts you did retrieve from the successful fetches, even if fewer than 3.
-- If no chain data is usable at all, still produce a text response: reproduce the Assumptions block, state which expirations failed, and give actionable fallback guidance for the requested DTE instead of ranking nonexistent contracts. Do not promise to retry later.
-- In that no-data fallback, explain how to evaluate covered calls when relevant: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned, and flag catalyst/IV-crush risk.
+- If no chain data is usable at all, still produce a text response: reproduce the Assumptions block, state which expirations failed, and give actionable fallback guidance for the requested DTE instead of ranking nonexistent contracts. Do not promise to retry later. Never end the turn with only tool calls.
+- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned, and flag catalyst/IV-crush risk.
+${coveredCallFallback}
+${protectivePutFallback}
 
 Length constraints:
 - Max 1 sentence explaining the #1 pick.
