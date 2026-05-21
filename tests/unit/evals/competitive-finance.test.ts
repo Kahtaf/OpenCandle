@@ -5,6 +5,7 @@ import {
   buildPromptGenerationPrompt,
   buildPortableAgentPath,
   competitiveBenchmarkExitCode,
+  competitivePreflightTimeoutMs,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
@@ -210,5 +211,11 @@ describe("competitive finance benchmarking", () => {
     expect(shouldRetryCompetitiveModelCall("ECONNRESET while reading response", 2, 3)).toBe(true);
     expect(shouldRetryCompetitiveModelCall("fetch failed", 3, 3)).toBe(false);
     expect(shouldRetryCompetitiveModelCall("invalid api key", 1, 3)).toBe(false);
+  });
+
+  it("keeps baseline preflight timeouts short", () => {
+    expect(competitivePreflightTimeoutMs({})).toBe(60_000);
+    expect(competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "120000" })).toBe(120_000);
+    expect(competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "0" })).toBe(60_000);
   });
 });

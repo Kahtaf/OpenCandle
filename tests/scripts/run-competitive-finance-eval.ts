@@ -18,6 +18,7 @@ import {
   buildPromptGenerationPrompt,
   buildPortableAgentPath,
   competitiveBenchmarkExitCode,
+  competitivePreflightTimeoutMs,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
@@ -50,13 +51,17 @@ interface CompetitorRunner {
   label: string;
   provider: string;
   model: string;
-  run(prompt: string): CompetitorRunResult;
+  run(prompt: string, options?: CompetitorRunOptions): CompetitorRunResult;
 }
 
 interface CompetitorRunResult {
   answer: string;
   provider: string;
   model: string;
+}
+
+interface CompetitorRunOptions {
+  timeout?: number;
 }
 
 type AcpxAgent = "claude" | "codex" | "gemini";
@@ -251,7 +256,7 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
   for (const competitor of competitors) {
     console.log(`Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
     try {
-      const result = competitor.run("Reply exactly: OK");
+      const result = competitor.run("Reply exactly: OK", { timeout: competitivePreflightTimeoutMs(process.env) });
       if (!result.answer.trim()) {
         throw new Error(`${competitor.label} baseline returned an empty preflight response`);
       }
@@ -268,19 +273,20 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
   return { active, skipped };
 }
 
-function runClaudeAcp(prompt: string): CompetitorRunResult {
-  const answer = runAcpx("claude", prompt);
+function runClaudeAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
+  const answer = runAcpx("claude", prompt, options);
   return { answer, provider: "acpx/claude", model: "subscription" };
 }
 
-function runCodexAcp(prompt: string): CompetitorRunResult {
+function runCodexAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
   const model = process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium";
-  const answer = runAcpx("codex", prompt, { model });
+  const answer = runAcpx("codex", prompt, { ...options, model });
   return { answer, provider: "acpx/codex", model };
 }
 
-function runGeminiAcp(prompt: string): CompetitorRunResult {
+function runGeminiAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
   const answer = runAcpx("gemini", prompt, {
+    ...options,
     env: { GEMINI_CLI_TRUST_WORKSPACE: "true", TERM: "xterm-256color" },
   });
   return { answer, provider: "acpx/gemini", model: "subscription" };
@@ -289,7 +295,7 @@ function runGeminiAcp(prompt: string): CompetitorRunResult {
 function runAcpx(
   agent: AcpxAgent,
   prompt: string,
-  options: { env?: Record<string, string>; model?: string } = {},
+  options: { env?: Record<string, string>; model?: string; timeout?: number } = {},
 ): string {
   const command = process.env.OPENCANDLE_COMPETITIVE_ACPX_COMMAND ?? DEFAULT_ACPX_COMMAND;
   const agentCommand = resolveAgentCommand(agent);
@@ -315,7 +321,7 @@ function runAcpx(
   return runCli(command, args, {
     cwd: competitorCwd,
     input: prompt,
-    timeout: numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
+    timeout: options.timeout ?? numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
     env: {
       ...defaultAgentEnv(agent),
       ...options.env,
