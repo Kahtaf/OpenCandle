@@ -158,11 +158,11 @@ describe("get_sentiment_summary tool", () => {
     mockedSearchWeb.mockResolvedValue({
       status: "ok",
       data: {
-        query: "META",
+        query: "XYZ",
         results: [{
-          title: "META bullish",
-          url: "https://example.com/meta",
-          snippet: "Meta stock bullish after strong ad demand.",
+          title: "XYZ bullish",
+          url: "https://example.com/xyz",
+          snippet: "XYZ stock bullish after strong demand.",
           source: "example.com",
           published: null,
           category: "news",
@@ -173,7 +173,7 @@ describe("get_sentiment_summary tool", () => {
       },
     } as any);
     mockedGetQuote.mockResolvedValue({
-      symbol: "META",
+      symbol: "XYZ",
       price: 625,
       change: -5,
       changePercent: -0.8,
@@ -187,13 +187,41 @@ describe("get_sentiment_summary tool", () => {
       week52Low: 450,
     } as any);
 
-    const result = await sentimentSummaryTool.execute("call-price", { query: "META" });
+    const result = await sentimentSummaryTool.execute("call-price", { query: "XYZ" });
     const text = result.content[0].text;
 
-    expect(mockedGetQuote).toHaveBeenCalledWith("META");
+    expect(mockedGetQuote).toHaveBeenCalledWith("XYZ");
     expect(text).toContain("Price context");
-    expect(text).toContain("META: $625.00 (-0.80%)");
+    expect(text).toContain("XYZ: $625.00 (-0.80%)");
     expect(text).toContain("sentiment diverges from price action");
+  });
+
+  it("does not add ticker price context for broad topic sentiment summaries", async () => {
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "semiconductor sector sentiment",
+        results: [{
+          title: "Semiconductor demand improves",
+          url: "https://example.com/semis",
+          snippet: "Semiconductor sector sentiment is improving after stronger orders.",
+          source: "example.com",
+          published: null,
+          category: "news",
+        }],
+        resultCount: 1,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-topic", { query: "semiconductor sector sentiment" });
+    const text = result.content[0].text;
+
+    expect(mockedGetQuote).not.toHaveBeenCalled();
+    expect(text).not.toContain("Price context");
+    expect(text).toContain("Source-coverage risk");
   });
 
   it("handles all sources unavailable", async () => {
