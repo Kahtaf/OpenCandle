@@ -13,6 +13,9 @@ const params = Type.Object({
   limit: Type.Optional(
     Type.Number({ description: "Maximum number of filings to return (default: 10)" }),
   ),
+  include_snippets: Type.Optional(
+    Type.Boolean({ description: "Include short filing-text evidence snippets for risk/MD&A/litigation themes. Default: true." }),
+  ),
 });
 
 export const secFilingsTool: AgentTool<typeof params> = {
@@ -25,8 +28,11 @@ export const secFilingsTool: AgentTool<typeof params> = {
     const symbol = args.symbol.toUpperCase();
     const formTypes = args.form_types ?? ["10-K", "10-Q", "8-K"];
     const limit = args.limit ?? 10;
+    const includeSnippets = args.include_snippets ?? true;
 
-    const result = await wrapProvider("sec-edgar", () => searchFilings(symbol, formTypes, limit));
+    const result = await wrapProvider("sec-edgar", () =>
+      searchFilings(symbol, formTypes, limit, { includeSnippets, snippetLimitPerFiling: 2 })
+    );
     if (result.status === "unavailable") {
       return {
         content: [{ type: "text", text: `⚠ SEC filings unavailable for ${symbol} (${result.reason}).` }],
@@ -51,6 +57,23 @@ export const secFilingsTool: AgentTool<typeof params> = {
       ``,
       `Links:`,
       ...filings.map((f) => `  ${f.formType} (${f.filedDate}): ${f.url}`),
+      ``,
+      `Primary documents:`,
+      ...filings.flatMap((f) => [
+        `  ${f.formType} (${f.filedDate}): ${f.primaryDocumentUrl ?? "N/A"}`,
+        ...(f.items?.length ? [`    8-K items: ${f.items.join(", ")}`] : []),
+      ]),
+      ...(includeSnippets
+        ? [
+          ``,
+          `Evidence snippets (short excerpts; review source filing for full context):`,
+          ...filings.flatMap((f) =>
+            (f.evidenceSnippets?.length
+              ? f.evidenceSnippets.map((snippet) => `  ${f.formType} ${f.filedDate}: ${snippet}`)
+              : [`  ${f.formType} ${f.filedDate}: No keyword snippet found in fetched primary document.`])
+          ),
+        ]
+        : []),
     ];
 
     return {
