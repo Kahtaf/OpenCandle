@@ -218,6 +218,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("revenue concentration");
     expect(result).toContain("Separate what came from filing metadata");
     expect(result).toContain("If the full filing body was not parsed");
+    expect(result).toContain("Do not treat search_web/news results as SEC filing evidence");
+    expect(result).toContain("Do not claim an Item 5.02, management change, risk-factor change, or thesis-changing event unless that fact appears in get_sec_filings output");
     expect(result).toContain("thesis-changing deltas");
   });
 
