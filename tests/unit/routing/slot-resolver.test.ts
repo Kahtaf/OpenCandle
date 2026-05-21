@@ -19,8 +19,10 @@ describe("resolvePortfolioSlots", () => {
     expect(result.sources.riskProfile).toBe("default");
     expect(result.resolved.timeHorizon).toBe("1y_plus");
     expect(result.sources.timeHorizon).toBe("default");
-    expect(result.resolved.positionCount).toBe(4);
+    expect(result.resolved.positionCount).toBe(6);
     expect(result.sources.positionCount).toBe("default");
+    expect(result.resolved.maxSinglePositionPct).toBe(20);
+    expect(result.sources.maxSinglePositionPct).toBe("default");
   });
 
   it("uses risk profile from entities when provided", () => {

@@ -15,9 +15,9 @@ function makePortfolioResolution(
     budget: 10_000,
     riskProfile: "balanced",
     timeHorizon: "1y_plus",
-    assetScope: "mixed_etf_and_large_cap_equities",
-    positionCount: 4,
-    maxSinglePositionPct: 35,
+    assetScope: "diversified_etf_building_blocks",
+    positionCount: 6,
+    maxSinglePositionPct: 20,
     ...overrides,
   };
   const sources: Record<keyof PortfolioSlots, "user" | "preference" | "default"> = {
@@ -86,11 +86,12 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("conservative");
   });
 
-  it("includes tool call instructions for mixed scope", () => {
+  it("includes tool call instructions for default fund-building-block scope", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
     expect(prompt).toContain("get_stock_quote");
-    expect(prompt).toContain("get_company_overview");
+    expect(prompt).not.toContain("get_company_overview");
     expect(prompt).toContain("analyze_risk");
+    expect(prompt).toContain("analyze_correlation");
   });
 
   it("includes response format instructions", () => {
@@ -151,9 +152,26 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("get_company_overview");
   });
 
-  it("includes get_company_overview for mixed scope (default)", () => {
+  it("does not include get_company_overview for diversified fund building-block scope", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
-    expect(prompt).toContain("get_company_overview");
+    expect(prompt).not.toContain("get_company_overview");
+    expect(prompt).toContain("diversified fund/ETF building-block candidates");
+  });
+
+  it("includes generic balanced portfolio guardrails", () => {
+    const prompt = buildPortfolioPrompt(makePortfolioResolution({ timeHorizon: "3y" }, { timeHorizon: "user" }));
+    expect(prompt).toContain("prefer diversified building blocks over individual-company concentration");
+    expect(prompt).toContain("core domestic equity");
+    expect(prompt).toContain("international equity");
+    expect(prompt).toContain("short-duration or cash-like stability");
+    expect(prompt).toContain("horizons under 5 years");
+    expect(prompt).toContain("current price used");
+    expect(prompt).toContain("role");
+    expect(prompt).toContain("do not paste company descriptions");
+    expect(prompt).toContain("Why this fits the horizon");
+    expect(prompt).toContain("rebalance cadence");
+    expect(prompt).toContain("low-cost/liquid implementation");
+    expect(prompt).toContain("tax/account caveats");
   });
 });
 
@@ -380,11 +398,11 @@ describe("buildDisclosureBlock", () => {
 
   it("uses human-readable display names", () => {
     const block = buildDisclosureBlock(
-      { positionCount: 4, maxSinglePositionPct: "35%" },
+      { positionCount: 6, maxSinglePositionPct: "20%" },
       { positionCount: "default", maxSinglePositionPct: "default" },
     );
-    expect(block).toContain("positions (4)");
-    expect(block).toContain("max single position (35%)");
+    expect(block).toContain("positions (6)");
+    expect(block).toContain("max single position (20%)");
     expect(block).not.toContain("positionCount");
     expect(block).not.toContain("maxSinglePositionPct");
   });

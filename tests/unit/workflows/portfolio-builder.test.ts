@@ -7,9 +7,9 @@ function makeResolution(overrides: Partial<PortfolioSlots> = {}): SlotResolution
     budget: 10_000,
     riskProfile: "balanced",
     timeHorizon: "1y_plus",
-    assetScope: "mixed_etf_and_large_cap_equities",
-    positionCount: 4,
-    maxSinglePositionPct: 35,
+    assetScope: "diversified_etf_building_blocks",
+    positionCount: 6,
+    maxSinglePositionPct: 20,
     ...overrides,
   };
   return {
@@ -63,6 +63,28 @@ describe("buildPortfolioWorkflow", () => {
     expect(presentFollowUp).toBeTruthy();
     expect(presentFollowUp).toContain("1 sentence");
     expect(presentFollowUp).toContain("3 bullet");
+  });
+
+  it("risk review asks the agent to address metrics that conflict with a holding role", () => {
+    const def = buildPortfolioWorkflowDefinition(makeResolution());
+    const riskReview = def.steps.find((s) => s.stepType === "risk_review");
+    expect(riskReview).toBeDefined();
+    expect(riskReview!.prompt).toContain("risk metrics undermine its intended role");
+    expect(riskReview!.prompt).toContain("lower its allocation");
+    expect(riskReview!.prompt).toContain("role-equivalent candidate");
+  });
+
+  it("synthesis table includes price, shares, role, and concise rationale guidance", () => {
+    const def = buildPortfolioWorkflowDefinition(makeResolution());
+    const synthesize = def.steps.find((s) => s.stepType === "synthesize");
+    expect(synthesize).toBeDefined();
+    expect(synthesize!.prompt).toContain("current price used");
+    expect(synthesize!.prompt).toContain("estimated shares");
+    expect(synthesize!.prompt).toContain("role");
+    expect(synthesize!.prompt).toContain("do not paste company descriptions");
+    expect(synthesize!.prompt).toContain("Why this fits the horizon");
+    expect(synthesize!.prompt).toContain("rebalance cadence");
+    expect(synthesize!.prompt).toContain("tax/account caveats");
   });
 
   it("synthesis step does not emit disclaimer directive", () => {

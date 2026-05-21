@@ -137,7 +137,8 @@ function formatSlotValue(value: unknown): string {
 
 export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>): string {
   const { resolved: s, sources } = resolution;
-  const isEtfOnly = s.assetScope.toLowerCase().startsWith("etf");
+  const normalizedScope = s.assetScope.toLowerCase();
+  const isFundBuildingBlocks = normalizedScope.includes("etf") || normalizedScope.includes("fund") || normalizedScope.includes("building_blocks");
 
   const disclosureBlock = buildDisclosureBlock(
     {
@@ -151,12 +152,14 @@ export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>)
     sources as Record<string, SlotSource | undefined>,
   );
 
-  const toolSteps = isEtfOnly
-    ? `1. Identify ${s.positionCount} diverse ETF candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
+  const toolSteps = isFundBuildingBlocks
+    ? `1. Identify ${s.positionCount} diversified fund/ETF building-block candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
+   Include distinct asset-class roles such as core domestic equity, international equity, fixed income, short-duration or cash-like stability, and inflation-sensitive ballast when appropriate.
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
 4. Use analyze_correlation across all candidates to check diversification.`
     : `1. Identify ${s.positionCount} diverse candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
+   Avoid over-concentration in individual equities unless the user explicitly asked for stock picks; use diversified funds where they better fit the requested horizon and risk profile.
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use get_company_overview for fundamentals on each candidate.
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
@@ -175,13 +178,21 @@ Build a draft portfolio under these parameters:
 Steps:
 ${toolSteps}
 
+Portfolio construction guardrails:
+- For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
+- For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
+- If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
+- Keep rationale tied to each holding's role in this portfolio; do not paste company descriptions or generic issuer background.
+
 ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
-- Present an allocation table: symbol, allocation %, dollar amount, and a one-line analyst rationale for each position (what the data showed).
+- Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
+- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff for the stated time horizon.
 - Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
+- Include practical implementation notes: rebalance cadence, low-cost/liquid implementation, and tax/account caveats where relevant.
 - Suggest what to change for more growth or more safety.`;
 }
 

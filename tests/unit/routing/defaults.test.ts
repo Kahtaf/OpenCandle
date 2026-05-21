@@ -10,16 +10,16 @@ describe("PORTFOLIO_DEFAULTS", () => {
     expect(PORTFOLIO_DEFAULTS.timeHorizon).toBe("1y_plus");
   });
 
-  it("has mixed ETF and large cap asset scope", () => {
-    expect(PORTFOLIO_DEFAULTS.assetScope).toBe("mixed_etf_and_large_cap_equities");
+  it("defaults to diversified ETF building blocks", () => {
+    expect(PORTFOLIO_DEFAULTS.assetScope).toBe("diversified_etf_building_blocks");
   });
 
-  it("has 4 positions", () => {
-    expect(PORTFOLIO_DEFAULTS.positionCount).toBe(4);
+  it("has 6 positions", () => {
+    expect(PORTFOLIO_DEFAULTS.positionCount).toBe(6);
   });
 
-  it("has 35% max single position", () => {
-    expect(PORTFOLIO_DEFAULTS.maxSinglePositionPct).toBe(35);
+  it("has 20% max single position", () => {
+    expect(PORTFOLIO_DEFAULTS.maxSinglePositionPct).toBe(20);
   });
 });
 
