@@ -17,12 +17,14 @@ import {
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
   buildPortableAgentPath,
+  competitiveBenchmarkExitCode,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
   selectDefaultCompetitiveModel,
+  shouldRetryCompetitiveModelCall,
   type ComparisonJudgment,
   type CompetitorAnswer,
   type GeneratedFinancePrompt,
@@ -179,34 +181,48 @@ for (const competitor of competitors) {
 }
 console.log(`Ties: ${summary.ties}`);
 console.log(`Report: ${outputPath}`);
+process.exit(competitiveBenchmarkExitCode());
 
 async function completeText(
   resolvedModel: ResolvedModel,
   prompt: string,
   options: { temperature: number; maxTokens: number },
 ): Promise<string> {
-  const response = await completeSimple(
-    resolvedModel.model,
-    {
-      messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
-      tools: [],
-    },
-    {
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-      reasoning: "minimal",
-      apiKey: resolvedModel.apiKey,
-      headers: resolvedModel.headers,
-    },
-  );
-  if (response.stopReason === "error" || response.stopReason === "aborted") {
-    throw new Error(response.errorMessage ?? `model call failed: ${response.stopReason}`);
+  const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_MODEL_ATTEMPTS", 3);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await completeSimple(
+      resolvedModel.model,
+      {
+        messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+        tools: [],
+      },
+      {
+        temperature: options.temperature,
+        maxTokens: options.maxTokens,
+        reasoning: "minimal",
+        apiKey: resolvedModel.apiKey,
+        headers: resolvedModel.headers,
+      },
+    );
+    if (response.stopReason !== "error" && response.stopReason !== "aborted") {
+      return response.content
+        .filter((content): content is { type: "text"; text: string } => content.type === "text")
+        .map((content) => content.text)
+        .join("")
+        .trim();
+    }
+    const message = response.errorMessage ?? `model call failed: ${response.stopReason}`;
+    if (!shouldRetryCompetitiveModelCall(message, attempt, maxAttempts)) {
+      throw new Error(message);
+    }
+    console.warn(`Model call failed on attempt ${attempt}/${maxAttempts}: ${message}. Retrying...`);
+    await sleep(1000 * attempt);
   }
-  return response.content
-    .filter((content): content is { type: "text"; text: string } => content.type === "text")
-    .map((content) => content.text)
-    .join("")
-    .trim();
+  throw new Error("model call failed after retries");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function runOpenCandle(prompt: string): Promise<EvalTrace> {

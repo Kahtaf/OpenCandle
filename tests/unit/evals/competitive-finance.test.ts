@@ -4,12 +4,14 @@ import {
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
   buildPortableAgentPath,
+  competitiveBenchmarkExitCode,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
   selectDefaultCompetitiveModel,
+  shouldRetryCompetitiveModelCall,
 } from "../../evals/competitive-finance.js";
 import type { EvalTrace } from "../../evals/types.js";
 
@@ -197,5 +199,16 @@ describe("competitive finance benchmarking", () => {
       googleModel: { provider: "google", id: "gemini-2.5-flash", contextWindow: 1_000_000 },
       available: [smallContext, largeContext],
     })).toBe(largeContext);
+  });
+
+  it("marks completed competitive runs as successful CLI exits", () => {
+    expect(competitiveBenchmarkExitCode()).toBe(0);
+  });
+
+  it("retries transient competitive model call failures", () => {
+    expect(shouldRetryCompetitiveModelCall("fetch failed", 1, 3)).toBe(true);
+    expect(shouldRetryCompetitiveModelCall("ECONNRESET while reading response", 2, 3)).toBe(true);
+    expect(shouldRetryCompetitiveModelCall("fetch failed", 3, 3)).toBe(false);
+    expect(shouldRetryCompetitiveModelCall("invalid api key", 1, 3)).toBe(false);
   });
 });
