@@ -33,6 +33,7 @@ interface EFTSResponse {
         display_names: string[];
         period_ending: string;
         ciks: string[];
+        items?: string[];
       };
     }>;
   };
