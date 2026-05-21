@@ -78,7 +78,7 @@ const promptCount = numberFromEnv("COMPETITIVE_PROMPT_COUNT", 5);
 const seed = process.env.COMPETITIVE_PROMPT_SEED ?? new Date().toISOString().slice(0, 10);
 const requestedProvider = process.env.OPENCANDLE_COMPETITIVE_PROVIDER;
 const requestedModelId = process.env.OPENCANDLE_COMPETITIVE_MODEL;
-const settleGraceMs = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS ?? "30000";
+const settleGraceMs = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS ?? "90000";
 const competitorCwd = process.env.OPENCANDLE_COMPETITIVE_AGENT_CWD ?? DEFAULT_COMPETITOR_CWD;
 mkdirSync(competitorCwd, { recursive: true });
 

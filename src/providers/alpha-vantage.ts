@@ -27,6 +27,23 @@ function buildUrl(fn: string, params: Record<string, string>, apiKey: string): s
   return `${BASE_URL}?${qs}`;
 }
 
+function throwIfApiMessage(data: unknown): void {
+  if (!data || typeof data !== "object") return;
+
+  const payload = data as Record<string, unknown>;
+  const message = payload.Note ?? payload.Information ?? payload["Error Message"];
+  if (typeof message !== "string" || message.length === 0) return;
+
+  const normalized = message.toLowerCase();
+  if (normalized.includes("api call frequency") || normalized.includes("rate limit")) {
+    throw new Error(`Alpha Vantage rate limited: ${message}`);
+  }
+  if (normalized.includes("invalid api")) {
+    throw new ProviderCredentialError("alpha_vantage", "stale");
+  }
+  throw new Error(`Alpha Vantage error: ${message}`);
+}
+
 export async function getOverview(
   symbol: string,
   apiKey: string,
@@ -44,6 +61,7 @@ export async function getOverview(
 
     const url = buildUrl("OVERVIEW", { symbol }, apiKey);
     const data = await httpGet<Record<string, string>>(url);
+    throwIfApiMessage(data);
 
     if (!data.Symbol) {
       cache.set(missingCacheKey, "missing", MISSING_OVERVIEW_TTL);
@@ -93,6 +111,7 @@ export async function getEarnings(
 
     const url = buildUrl("EARNINGS", { symbol }, apiKey);
     const data = await httpGet<{ quarterlyEarnings: any[] }>(url);
+    throwIfApiMessage(data);
 
     const quarterly = (data.quarterlyEarnings ?? []).slice(0, 8).map((e: any) => ({
       date: e.fiscalDateEnding,
@@ -178,7 +197,9 @@ export async function getFinancials(
 async function fetchStatement<T>(fn: string, symbol: string, apiKey: string): Promise<T> {
   await rateLimiter.acquire("alphavantage");
   const url = buildUrl(fn, { symbol }, apiKey);
-  return httpGet<T>(url);
+  const data = await httpGet<T>(url);
+  throwIfApiMessage(data);
+  return data;
 }
 
 export async function getGlobalQuote(
@@ -194,6 +215,7 @@ export async function getGlobalQuote(
 
     const url = buildUrl("GLOBAL_QUOTE", { symbol }, apiKey);
     const data = await httpGet<{ "Global Quote": Record<string, string> }>(url);
+    throwIfApiMessage(data);
     const gq = data["Global Quote"];
 
     if (!gq || !gq["05. price"]) {
@@ -245,6 +267,7 @@ export async function getDailyHistory(
     const outputsize = daysNeeded > 100 ? "full" : "compact";
     const url = buildUrl("TIME_SERIES_DAILY", { symbol, outputsize }, apiKey);
     const data = await httpGet<{ "Time Series (Daily)": Record<string, Record<string, string>> }>(url);
+    throwIfApiMessage(data);
 
     const timeSeries = data["Time Series (Daily)"];
     if (!timeSeries) {

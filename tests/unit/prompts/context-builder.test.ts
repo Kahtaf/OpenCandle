@@ -258,6 +258,22 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("thesis-changing deltas");
   });
 
+  it("tells single-asset recommendations to disclose data freshness and fallback valuation lenses", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("single-asset recommendation prompts");
+    expect(result).toContain("right now");
+    expect(result).toContain("state the quote or tool-output date");
+    expect(result).toContain("valuation model is unavailable or not meaningful");
+    expect(result).toContain("do not treat that absence as the valuation conclusion");
+    expect(result).toContain("relative multiples");
+    expect(result).toContain("growth-adjusted multiples");
+    expect(result).toContain("cash-flow quality");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
