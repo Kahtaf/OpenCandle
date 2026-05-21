@@ -342,6 +342,33 @@ describe("route()", () => {
     }));
   });
 
+  it("removes live tool bundles for no-symbol conceptual education", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Explain how to use valuation ratios without over relying on them.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: ["core_market", "macro"],
+        diagnostics: [],
+        reasoning: "conceptual education prompt",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.tool_bundles).toEqual([]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "conceptual_education_no_tools",
+    }));
+  });
+
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },

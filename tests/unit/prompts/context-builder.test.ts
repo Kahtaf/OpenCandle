@@ -125,6 +125,39 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("get_web_sentiment");
   });
 
+  it("hides finance tool catalog when resolved route has no active tools", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Explain how to use valuation ratios.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: [],
+        activeToolNames: [],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [{ code: "conceptual_education_no_tools", message: "no tools needed" }],
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("No finance tools are needed for this turn");
+    expect(result).not.toContain("compare_companies");
+    expect(result).not.toContain("compute_dcf");
+  });
+
   it("does not reference get_reddit_discussions", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});
@@ -233,15 +266,49 @@ describe("PromptContextBuilder", () => {
 
     expect(result).toContain("conceptual or educational finance prompts");
     expect(result).toContain("decision-framework shape");
+    expect(result).toContain("Do not fetch live data unless the user asks for current examples");
+    expect(result).toContain("do not mention OpenCandle tool names");
     expect(result).toContain("Bottom line");
+    expect(result).toContain("practical step-by-step workflow");
     expect(result).toContain("evidence/base-rate view");
     expect(result).toContain("concrete study names or rough percentages");
     expect(result).toContain("behavioral or implementation tradeoff");
     expect(result).toContain("simple self-check questions");
     expect(result).toContain("different investor profiles");
+    expect(result).toContain("common traps to avoid");
     expect(result).toContain("practical middle-ground");
+    expect(result).toContain("For \"how to use [metric] without over-relying\" prompts");
+    expect(result).toContain("the final answer must use these sections");
+    expect(result).toContain("the workflow section must be numbered question-driven application steps");
+    expect(result).toContain("not a second limitations list");
+    expect(result).toContain("final checklist should reinforce the decision framework");
+    expect(result).toContain("\"Practical workflow\"");
+    expect(result).toContain("\"Where it misleads\"");
+    expect(result).toContain("\"Cross-checks\"");
+    expect(result).toContain("\"Quick checklist\"");
+    expect(result).toContain("valuation-metric education");
+    expect(result).toContain("screening tool or question generator");
+    expect(result).toContain("short step-by-step checklist");
+    expect(result).toContain("compact cross-check table");
+    expect(result).toContain("metric/lens");
+    expect(result).toContain("when to use it");
+    expect(result).toContain("perfect\" multiple");
+    expect(result).toContain("cyclicals at peak/trough earnings");
+    expect(result).toContain("one-time or non-cash earnings");
+    expect(result).toContain("capital-structure differences");
+    expect(result).toContain("GAAP vs adjusted");
+    expect(result).toContain("free cash flow");
+    expect(result).toContain("interest-rate regime shifts");
+    expect(result).toContain("stock-based compensation");
+    expect(result).toContain("cyclically adjusted ratios such as Shiller/CAPE");
     expect(result).toContain("Do not use \"Commitment\"");
     expect(result).toContain("education rather than a trade");
+    expect(result).toContain("For conceptual education answers, use the educational section order above");
+    expect(result).toContain("keep tool names out of the final answer");
+    expect(result).toContain("Conceptual education prompts are not committal responses");
+    expect(result).toContain("Do not append \"Analyst View\"");
+    expect(result).toContain("explanation, definition, or learning framework");
+    expect(result).toContain("do not add analyst commitment/confidence/invalidation labels");
   });
 
   it("documents supported search freshness values and forbids unsupported ranges", () => {
@@ -366,6 +433,24 @@ describe("PromptContextBuilder", () => {
     expect(result.toLowerCase()).toContain("analyst");
     expect(result.toLowerCase()).toContain("invalidation");
     expect(result.toLowerCase()).toContain("confidence");
+  });
+
+  it("base role exempts conceptual education from analyst-view boilerplate", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+    const result = builder.build();
+    expect(result).toContain("For conceptual education questions");
+    expect(result).toContain("teach the concept directly");
+    expect(result).toContain("do not name tool functions");
+    expect(result).toContain("do not append analyst-view, confidence-band, or invalidation boilerplate");
+    expect(result).toContain("For valuation-metric education");
+    expect(result).toContain("start with \"Bottom line\"");
+    expect(result).toContain("heading exactly named \"Practical workflow\"");
+    expect(result).toContain("numbered question-driven application steps");
+    expect(result).toContain("cross-check table with why/when");
+    expect(result).toContain("trailing, forward, normalized, or cyclically adjusted variants");
+    expect(result).toContain("where the metric misleads");
+    expect(result).toContain("heading exactly named \"Quick checklist\"");
   });
 
   it("stance is present on every workflow type and the unclassified path", () => {

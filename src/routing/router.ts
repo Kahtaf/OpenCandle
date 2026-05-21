@@ -325,7 +325,15 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
-  const selectedToolBundles = selectToolBundles(next);
+  const selectedToolBundles = isConceptualEducationRequest(text, next)
+    ? []
+    : selectToolBundles(next);
+  if (selectedToolBundles.length === 0 && isConceptualEducationRequest(text, next)) {
+    diagnostics.push({
+      code: "conceptual_education_no_tools",
+      message: "conceptual education prompt does not need live finance tools",
+    });
+  }
   const emittedUnsupported = next.tool_bundles.filter((bundle) => !selectedToolBundles.includes(bundle));
   if (emittedUnsupported.length > 0) {
     diagnostics.push({
@@ -344,6 +352,15 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
 
 function isExplicitMacroDataRequest(text: string): boolean {
   return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro)\b/i.test(text);
+}
+
+function isConceptualEducationRequest(text: string, output: RouterOutput): boolean {
+  if (output.routeKind !== "agent_task") return false;
+  if (output.entities.symbols.length > 0) return false;
+  if (/\b(?:current|recent|today|right now|latest|news|sentiment|build|portfolio|buy|sell|allocate|compare)\b/i.test(text)) {
+    return false;
+  }
+  return /\b(?:explain|what is|define|how (?:do|should|to)|teach me|help me understand)\b/i.test(text);
 }
 
 function isCoveredCallRequest(text: string): boolean {
