@@ -4,6 +4,7 @@ import { getSubredditPosts, getPostComments } from "../../providers/reddit.js";
 import { getTwitterSentiment } from "../../providers/twitter.js";
 import { searchWeb } from "../../providers/web-search.js";
 import { getCompanyNews, finnhubDateRange } from "../../providers/finnhub.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getConfig } from "../../config.js";
 import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
@@ -170,6 +171,13 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     const aggregate = totalCount > 0 ? totalScore / totalCount : 0;
     lines.push("");
     lines.push(`**Aggregate:** ${aggregate >= 0 ? "+" : ""}${aggregate.toFixed(2)} (${sentimentLabel(aggregate)})`);
+
+    const priceContext = await buildPriceContext(candidateTickers[0], aggregate);
+    if (priceContext) {
+      lines.push("");
+      lines.push(priceContext);
+    }
+
     lines.push("");
     lines.push("Source-coverage risk: sentiment can be noisy and missing sources can skew the signal; treat this as supporting evidence, not a standalone buy/sell input.");
 
@@ -198,6 +206,22 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     return { content: [{ type: "text", text: output }], details: result };
   },
 };
+
+async function buildPriceContext(symbol: string | undefined, aggregateSentiment: number): Promise<string | null> {
+  if (!symbol) return null;
+  try {
+    const quote = await getQuote(symbol);
+    const sign = quote.changePercent >= 0 ? "+" : "";
+    const direction = quote.changePercent > 0 ? "positive" : quote.changePercent < 0 ? "negative" : "flat";
+    const sentimentDirection = aggregateSentiment > 0 ? "positive" : aggregateSentiment < 0 ? "negative" : "neutral";
+    const relationship = sentimentDirection === "neutral" || direction === "flat" || sentimentDirection === direction
+      ? "roughly aligns with price action"
+      : "sentiment diverges from price action";
+    return `Price context: ${quote.symbol}: $${quote.price.toFixed(2)} (${sign}${quote.changePercent.toFixed(2)}%). The ${sentimentDirection} sentiment signal ${relationship}.`;
+  } catch {
+    return null;
+  }
+}
 
 async function fetchRedditCrossSubreddit(
   query: string,

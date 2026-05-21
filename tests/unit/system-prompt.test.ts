@@ -79,4 +79,10 @@ describe("system prompt — analyst stance", () => {
     expect(prompt.toLowerCase()).toMatch(/calibrate|adapt/);
     expect(prompt.toLowerCase()).toMatch(/vocabulary|prior turn|sophisticated|beginner/);
   });
+
+  it("tells ticker sentiment answers to include price context", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
+    expect(prompt).toContain("whether sentiment diverges from price action");
+  });
 });

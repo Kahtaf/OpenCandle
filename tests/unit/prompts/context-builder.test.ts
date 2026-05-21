@@ -160,6 +160,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("score scale");
     expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
+    expect(result).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
+    expect(result).toContain("whether sentiment diverges from price action");
   });
 
   it("tells fallback sector research to include segmentation and scenario confidence", () => {
@@ -328,6 +330,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("score scale");
     expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
+    expect(result).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
+    expect(result).toContain("whether sentiment diverges from price action");
   });
 
   it("requires full backtest metric reporting", () => {
