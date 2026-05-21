@@ -8,6 +8,8 @@
 - **Shared in-process OpenCandle test harness** — `tests/harness/opencandle-runner.ts` runs OpenCandle sessions without driving the TTY, captures tool calls, `ask_user` interactions, router/workflow custom entries, and eval traces, and is now reused by eval suites and the competitive benchmark runner.
 - **GUI `ask_user` bridge** — the local GUI now renders pending clarification prompts, accepts text/select/confirm answers, supports cancellation, scopes prompts to the active session, and broadcasts prompt state to connected browser clients.
 - **Session routing helpers for the GUI** — browser routes now hide stale transcript entries during session switches, start a fresh home session when appropriate, and keep pending `ask_user` prompts tied to the correct session.
+- **Newcomer documentation revamp** — README, docs index, and the docs site now cover first run setup, TUI usage, GUI preview, configuration files, environment variables, benchmarking, evals, screenshots, and the difference between OpenCandle's finance-specific strengths and generic agents.
+- **SEC filing evidence snippets** — SEC filing search can now include primary document URLs, 8-K item metadata, ticker-to-CIK submissions feed lookup, and short evidence snippets for filing-thesis and risk prompts.
 
 ### Changed
 
@@ -16,10 +18,13 @@
 - **Competitive runner portability** — the benchmark runner no longer contains user-specific executable or Node paths, resolves Claude from `CLAUDE_CODE_EXECUTABLE` or `PATH`, prefers useful stdout answers over stderr diagnostics on non-zero adapter exits, and keeps unavailable baselines in `skippedCompetitors` unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 - **Finance routing and workflow evidence** — rule fallback coverage now preserves specific options/compare routes while routing sentiment, backtest, rate-cut, SEC filing, bull/bear, and owned-holdings risk prompts to more useful tool-backed paths. Compare workflows can request sentiment evidence; options screener output now includes full Greeks in the final table.
 - **Open-source hygiene** — package metadata, license text, and archived OpenSpec examples no longer contain personal repository URLs or local home-directory paths.
+- **Generic finance fallback playbooks** — fallback guidance now handles sector-structure, filing-thesis, sentiment, backtest, and educational prompts with source-gap, practicality, and evidence-use instructions instead of sector-specific tuning.
+- **Covered-call workflow context** — options screener prompts now preserve cost basis, owned-underlying context, catalyst tickers, natural-language DTE hints, stale quote caveats, and broker-verification guidance.
 
 ### Fixed
 
-- Exact SEC filing lookups now filter EDGAR search results to the requested company instead of accepting text-search decoys.
+- Exact SEC filing lookups now filter EDGAR search results to the requested company, resolve common tickers through the SEC submissions feed, and avoid text-search decoys.
+- Covered-call recommendations no longer use long-call premium-paid max-loss framing; weekly and `1-2 week` horizons normalize to 7-to-14-day expirations, and fallback guidance keeps usable candidates when option quotes are stale or incomplete.
 - Portfolio slot resolution now honors ETF-focused scope and explicit multi-year horizons from the user prompt.
 - GUI options follow-up prompts no longer drop gamma, theta, vega, and rho from the ranked contract table.
 
