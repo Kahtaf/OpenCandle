@@ -21,6 +21,22 @@ export interface OptionContract {
   greeks: Greeks;
 }
 
+export type OptionsMarketSession = "pre_market" | "regular" | "after_hours" | "closed";
+
+export type OptionsBidAskState =
+  | "live_quotes"
+  | "closed_market_or_stale_quotes"
+  | "live_zero_bid_ask"
+  | "mixed_or_unknown";
+
+export interface OptionsQuoteStatus {
+  marketSession: OptionsMarketSession;
+  bidAskState: OptionsBidAskState;
+  zeroBidAskContracts: number;
+  totalContracts: number;
+  warning?: string;
+}
+
 export interface OptionsChain {
   symbol: string;
   underlyingPrice: number;
@@ -31,5 +47,6 @@ export interface OptionsChain {
   totalCallVolume: number;
   totalPutVolume: number;
   putCallRatio: number;
+  quoteStatus: OptionsQuoteStatus;
   fetchedAt: string;
 }

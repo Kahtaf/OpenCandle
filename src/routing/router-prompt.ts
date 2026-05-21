@@ -86,6 +86,9 @@ interface RouterOutput {
     riskProfile?: string;            // "conservative" | "balanced" | "aggressive"
     direction?: "bullish" | "bearish";
     dteHint?: string;
+    heldSymbol?: string;              // for covered calls: ticker the user owns/holds
+    catalystSymbols?: string[];        // tickers mentioned as event/catalyst context, not the option-chain underlying
+    costBasis?: number;                // per-share basis when user says "cost basis is $X"
     compareMetrics?: string[];        // optional compare focus tags, e.g. "sentiment", "macro_hedge"
   };
   slots: Record<string, {
@@ -113,6 +116,7 @@ const ROUTING_RULES = `Routing rules:
 - Choose routeKind = "pass_through" when the request is outside OpenCandle's finance task surface.
 - Set legacy route = "workflow" only for routeKind = "workflow_dispatch"; otherwise set legacy route = "fallback".
 - DO NOT invent a "direct_tool" route. Tool execution belongs to the main agent.
+- For covered call prompts, distinguish the owned underlying from catalyst tickers. Example: "NVDA earnings are today. If I have DRAM..." means symbols=["DRAM","NVDA"], heldSymbol="DRAM", catalystSymbols=["NVDA"], workflow="options_screener", and costBasis if stated.
 - Source attribution rules (per-slot source field):
   - source = "user": the value came from THIS turn's text.
   - source = "preference": the value came from profileSnapshot (not this turn).

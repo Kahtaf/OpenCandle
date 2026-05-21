@@ -44,6 +44,10 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     const lines: string[] = [
       `**${chain.symbol} Options Chain** — Expiry: ${chain.expirationDate}`,
       `Underlying: $${chain.underlyingPrice.toFixed(2)}`,
+      `Quote status: ${chain.quoteStatus.marketSession} / ${chain.quoteStatus.bidAskState}`,
+      ...(chain.quoteStatus.warning
+        ? [`⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification.`]
+        : []),
       `Available expirations: ${formatAvailableExpirations(chain.expirationDates)}`,
       "",
     ];
@@ -53,7 +57,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
 
     if (showCalls && chain.calls.length > 0) {
       lines.push(`**CALLS** (${chain.calls.length} contracts, volume: ${chain.totalCallVolume.toLocaleString()})`);
-      lines.push("Strike | Bid/Ask | Last | Vol | OI | IV | Delta | Theta");
+      lines.push("Strike | Bid/Ask | Last | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
       const topCalls = sortByVolume(chain.calls).slice(0, 10);
       for (const c of topCalls) {
         lines.push(formatContract(c));
@@ -63,7 +67,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
 
     if (showPuts && chain.puts.length > 0) {
       lines.push(`**PUTS** (${chain.puts.length} contracts, volume: ${chain.totalPutVolume.toLocaleString()})`);
-      lines.push("Strike | Bid/Ask | Last | Vol | OI | IV | Delta | Theta");
+      lines.push("Strike | Bid/Ask | Last | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
       const topPuts = sortByVolume(chain.puts).slice(0, 10);
       for (const c of topPuts) {
         lines.push(formatContract(c));
@@ -87,5 +91,5 @@ function formatAvailableExpirations(expirationDates: string[]): string {
 
 function formatContract(c: OptionContract): string {
   const itm = c.inTheMoney ? "*" : " ";
-  return `${itm}$${c.strike.toFixed(2)} | $${c.bid.toFixed(2)}/$${c.ask.toFixed(2)} | $${c.lastPrice.toFixed(2)} | ${c.volume} | ${c.openInterest} | ${(c.impliedVolatility * 100).toFixed(1)}% | ${c.greeks.delta.toFixed(3)} | ${c.greeks.theta.toFixed(3)}`;
+  return `${itm}$${c.strike.toFixed(2)} | $${c.bid.toFixed(2)}/$${c.ask.toFixed(2)} | $${c.lastPrice.toFixed(2)} | ${c.volume} | ${c.openInterest} | ${(c.impliedVolatility * 100).toFixed(1)}% | ${c.greeks.delta.toFixed(3)} | ${c.greeks.gamma.toFixed(3)} | ${c.greeks.theta.toFixed(3)} | ${c.greeks.vega.toFixed(3)} | ${c.greeks.rho.toFixed(3)}`;
 }

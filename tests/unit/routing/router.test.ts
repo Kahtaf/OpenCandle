@@ -297,6 +297,51 @@ describe("route()", () => {
     expect(result.entities.symbols).toEqual(["AI"]);
   });
 
+  it("corrects macro data prompts misread as ticker comparisons", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Use get_economic_data to show FRED CPI inflation data",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["FRED", "CPI"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread source and macro acronym as tickers",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.entities.symbols).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "compare_route_corrected_to_macro_task",
+    }));
+  });
+
+  it("keeps macro tools in scope after router validation fallback", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Use get_economic_data to show FRED CPI inflation data",
+      },
+      fixedClient("not json"),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.entities.symbols).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "macro_task_inferred_from_prompt",
+    }));
+  });
+
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },
@@ -380,6 +425,35 @@ describe("route()", () => {
     expect(result.missing_required).toEqual([]);
     expect(result.slots.symbol?.source).toBe("prior_context");
   });
+
+  it("uses the owned underlying instead of a catalyst ticker for covered-call workflows", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "NVDA earnings are today. If I have DRAM, what is the best covered call to sell right now? Cost basis is $51.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread catalyst as underlying",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["DRAM", "NVDA"]);
+    expect(result.entities.heldSymbol).toBe("DRAM");
+    expect(result.entities.catalystSymbols).toEqual(["NVDA"]);
+    expect(result.entities.costBasis).toBe(51);
+    expect(result.entities.dteHint).toBe("event_week");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "covered_call_underlying_corrected",
+    }));
+  });
 });
 
 describe("buildRouterPrompt", () => {
@@ -402,6 +476,14 @@ describe("buildRouterPrompt", () => {
     const prompt = buildRouterPrompt(BASE_INPUT);
     expect(prompt).toContain("compareMetrics");
     expect(prompt).toContain("macro_hedge");
+  });
+
+  it("tells the router to distinguish covered-call underlyings from catalyst tickers", () => {
+    const prompt = buildRouterPrompt(BASE_INPUT);
+    expect(prompt).toContain("heldSymbol");
+    expect(prompt).toContain("catalystSymbols");
+    expect(prompt).toContain("costBasis");
+    expect(prompt).toContain("covered call");
   });
 
   it("describes broad sector and macro research as general finance QA", () => {

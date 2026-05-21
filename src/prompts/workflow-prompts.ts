@@ -227,10 +227,34 @@ For LEAPS / long-dated options:
       objective: s.objective,
       moneynessPreference: s.moneynessPreference,
       liquidityMinimum: s.liquidityMinimum,
+      ...(s.costBasis !== undefined ? { costBasis: formatBudget(s.costBasis) } : {}),
+      ...(s.catalystSymbols?.length ? { catalystSymbols: s.catalystSymbols.join(", ") } : {}),
     },
     sources as Record<string, SlotSource | undefined>,
     workflowConstraints,
   );
+
+  const coveredCallContext = [
+    s.costBasis !== undefined ? `\n- Position cost basis: ${formatBudget(s.costBasis)}${tag(sources.costBasis)}` : "",
+    s.catalystSymbols?.length ? `\n- Catalyst/context tickers: ${s.catalystSymbols.join(", ")}${tag(sources.catalystSymbols)}` : "",
+  ].join("");
+
+  const isCoveredCallContext = s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
+  const coveredCallInstructions = isCoveredCallContext
+    ? `
+Covered-call sale guidance:
+- Treat this as selling covered calls against an existing ${s.symbol} share position, not buying calls.
+- Treat ${s.symbol} as the option-chain underlying.
+- Because the user phrased ${s.symbol} as an existing holding, briefly state that you are treating ${s.symbol} as the held ticker. If they meant memory exposure or a different ticker, tell them to clarify and do not silently switch to another underlying.
+- Do not substitute catalyst/context tickers as the option-chain underlying.
+- Use catalyst/context tickers only to frame event risk, sympathy moves, and whether a nearer expiration is appropriate.
+- Rank by premium collected, strike above cost basis, assignment risk, event risk, and live liquidity.
+- Do not describe max loss as the option premium paid. Covered-call sale risks are assignment/capped upside, share-price downside in the owned stock, IV/event risk, and poor exit liquidity.
+- If the option-chain tool reports closed_market_or_stale_quotes, do not treat zero bid/ask as confirmed live illiquidity; say the chain was checked outside regular options trading and recheck after regular options trading opens.
+- If retrieved contracts have zero bid/ask, zero open interest, or otherwise unusable live quotes, the final answer MUST still include "Best action:" and "Conditional candidate:".
+- In that fallback, "Best action:" should be no trade unless the user's broker shows a real bid, and "Conditional candidate:" should be a strike above cost basis labeled conditional on live bid/ask.
+`
+    : "";
 
   return `Current date: ${dateStr}
 Do NOT invent or assume a different current date.${expirationSection}
@@ -240,7 +264,7 @@ Screen and rank options contracts for ${s.symbol}:
 - DTE target: ${s.dteTarget}${tag(sources.dteTarget)}
 - Objective: ${s.objective}${tag(sources.objective)}
 - Moneyness: ${s.moneynessPreference}${tag(sources.moneynessPreference)}
-- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
+- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}${coveredCallContext}
 
 Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.
@@ -249,14 +273,17 @@ Steps:
 4. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
 ${longDatedInstructions}
+${coveredCallInstructions}
 ${rankingConstraints}
 ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
+- ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : "State the interpretation only if the user's requested underlying is ambiguous."}
 - Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread.
-- Explain why the top pick is ranked #1.
-- Include risk caveats (max loss = premium, IV crush risk, time decay).`;
+- Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.
+- Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.
+- Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;
 }
 
 export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAssetsSlots>): string {

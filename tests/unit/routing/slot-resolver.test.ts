@@ -182,4 +182,23 @@ describe("resolveOptionsScreenerSlots", () => {
 
     expect(result.resolved.maxPremium).toBe(500);
   });
+
+  it("preserves covered-call cost basis, catalyst context, and event-week DTE", () => {
+    const entities: ExtractedEntities = {
+      symbols: ["DRAM", "NVDA"],
+      heldSymbol: "DRAM",
+      catalystSymbols: ["NVDA"],
+      direction: "bullish",
+      dteHint: "event_week",
+      costBasis: 51,
+    };
+    const result = resolveOptionsScreenerSlots(entities);
+
+    expect(result.resolved.symbol).toBe("DRAM");
+    expect(result.resolved.costBasis).toBe(51);
+    expect(result.resolved.catalystSymbols).toEqual(["NVDA"]);
+    expect(result.resolved.dteTarget).toBe("0_to_7_days");
+    expect(result.sources.costBasis).toBe("user");
+    expect(result.sources.catalystSymbols).toBe("user");
+  });
 });

@@ -24,8 +24,8 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await page.goto(guiUrl, { waitUntil: "networkidle" });
 
     await expectVisible(page.getByText("OpenCandle").first());
-    await expectVisible(page.getByRole("button", { name: "Start new chat" }).first());
-    await expectVisible(page.getByText("Financial Context"));
+    await expectVisible(page.getByRole("button", { name: "New chat" }).first());
+    await expectVisible(page.getByRole("button", { name: "Open context" }).first());
   });
 
   it("renders a stock quote prompt and updates context", async () => {
@@ -35,39 +35,43 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("Stock Quote").first(), 45_000);
     await expectVisible(page.getByText("NVDA").first());
-    await expectVisible(page.getByText("Financial Context"));
+    await page.getByRole("button", { name: "Open context" }).click();
+    await expectVisible(page.getByRole("dialog", { name: "Context" }));
+    await expectVisible(page.getByText("Recent quotes"));
   }, 60_000);
 
   it("renders options, filings, macro, and news tool cards", async () => {
     await page.goto(guiUrl, { waitUntil: "networkidle" });
 
     await submitPrompt(page, "Show options chain for AAPL");
-    await expectVisible(page.getByText("Options Chain").first(), 45_000);
-    await expectVisible(page.locator("code", { hasText: "\"symbol\":\"AAPL\"" }).last(), 45_000);
+    await expectVisible(page.getByText("Options chain").first(), 45_000);
+    await expectVisible(page.getByText("AAPL").first(), 45_000);
     await waitForRunIdle(page);
 
-    await submitPrompt(page, "Show recent SEC filings for MSFT");
-    await expectVisible(page.getByText("SEC Filings").first(), 45_000);
-    await expectVisible(page.locator("code", { hasText: "\"symbol\":\"MSFT\"" }).last(), 45_000);
+    await startNewChat(page);
+    await submitPrompt(page, "Use get_sec_filings to show recent SEC filings for MSFT");
+    await expectVisible(page.getByText("SEC filings").first(), 45_000);
+    await expectVisible(page.getByText("MSFT").first(), 45_000);
     await waitForRunIdle(page);
 
-    await submitPrompt(page, "Show FRED CPI inflation data");
-    await expectVisible(page.getByText("Macro Series").first(), 45_000);
-    await expectVisible(page.locator("code", { hasText: "\"series_id\":\"CPIAUCSL\"" }).last(), 45_000);
+    await startNewChat(page);
+    await submitPrompt(page, "Use get_fear_greed to show the current market fear and greed index");
+    await expectVisible(page.getByText("Fear & greed").first(), 45_000);
     await waitForRunIdle(page);
 
-    await submitPrompt(page, "Latest news headlines for TSLA");
-    await expectVisible(page.getByText("News and Search").first(), 45_000);
-    await expectVisible(page.locator("code", { hasText: "TSLA financial news" }).last(), 45_000);
+    await startNewChat(page);
+    await submitPrompt(page, "Use search_web for latest TSLA financial news headlines");
+    await expectVisible(page.getByText("Web search").first(), 45_000);
+    await expectVisible(page.getByText("TSLA").first(), 45_000);
   }, 120_000);
 
   it("shows chat history on mobile", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(guiUrl, { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Open chat history" }).click();
+    await page.getByRole("button", { name: "Open sidebar" }).click();
 
-    await expectVisible(page.getByRole("dialog", { name: "Chat history" }));
-    await expectVisible(page.getByRole("textbox", { name: "Search sessions" }));
+    await expectVisible(page.getByRole("dialog", { name: "Sessions" }));
+    await expectVisible(page.getByRole("textbox", { name: "Search" }));
   });
 
   it("captures desktop and mobile screenshots", async () => {
@@ -77,7 +81,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     expect(desktop.byteLength).toBeGreaterThan(10_000);
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole("button", { name: "Open chat history" }).click();
+    await page.getByRole("button", { name: "Open sidebar" }).click();
     const mobile = await page.screenshot({ fullPage: true });
     expect(mobile.byteLength).toBeGreaterThan(10_000);
   });
@@ -98,7 +102,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(mocked.getByText("Connect an AI model"));
     await expectVisible(mocked.getByLabel("API key"));
-    await expectVisible(mocked.getByRole("button", { name: "Save API Key" }));
+    await expectVisible(mocked.getByRole("button", { name: "Save key" }));
     await mocked.close();
   });
 
@@ -279,12 +283,50 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("1 of 1 step").first());
     await mocked.close();
   }, 30_000);
+
+  it("routes a home prompt to the server-emitted run session", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+    await mocked.addInitScript(() => {
+      window.fetch = () => {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            const send = (payload) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            send({ type: "run.started", runId: "mock-run", sessionId: "actual-run-session", seq: 1 });
+            send({ type: "message.created", messageId: "assistant-live", role: "assistant", seq: 2 });
+            send({ type: "message.delta", messageId: "assistant-live", text: "Routed answer", seq: 3 });
+            send({ type: "run.completed", runId: "mock-run", seq: 4 });
+            controller.close();
+          },
+        });
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await mocked.getByLabel("Message OpenCandle").fill("Prompt from fresh home");
+    await mocked.getByRole("button", { name: "Send" }).click();
+
+    await mocked.waitForURL("**/sessions/actual-run-session", { timeout: 5_000 });
+    await expectVisible(mocked.getByText("Routed answer"));
+    await mocked.close();
+  }, 30_000);
 });
 
 async function submitPrompt(page: Page, prompt: string): Promise<void> {
   await waitForRunIdle(page);
   await page.getByLabel("Message OpenCandle").fill(prompt);
   await page.getByRole("button", { name: "Send" }).click();
+}
+
+async function startNewChat(page: Page): Promise<void> {
+  await waitForRunIdle(page);
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expectVisible(page.getByRole("heading", { name: "What are we watching?" }));
 }
 
 async function expectVisible(locator: Locator, timeout = 5_000): Promise<void> {

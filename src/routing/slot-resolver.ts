@@ -21,6 +21,8 @@ interface Preferences {
 
 function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   switch (dteHint) {
+    case "event_week":
+      return "0_to_7_days";
     case "week":
       return "7_to_14_days";
     case "month":
@@ -134,6 +136,9 @@ export function resolveOptionsScreenerSlots(
   sources.liquidityMinimum = liquidity.source;
   if (liquidity.source === "default") defaultsUsed.push("liquidityMinimum");
 
+  if (entities.costBasis !== undefined) sources.costBasis = "user";
+  if (entities.catalystSymbols !== undefined) sources.catalystSymbols = "user";
+
   return {
     resolved: {
       symbol,
@@ -144,6 +149,8 @@ export function resolveOptionsScreenerSlots(
       liquidityMinimum: liquidity.value,
       budget: entities.budget,
       maxPremium: entities.maxPremium,
+      costBasis: entities.costBasis,
+      catalystSymbols: entities.catalystSymbols,
     },
     sources,
     defaultsUsed,

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { optionChainTool } from "../../../src/tools/options/option-chain.js";
 import { cache } from "../../../src/infra/cache.js";
 import { clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
 
 function mockCrumbAndOptions(fixture: typeof optionsFixture = optionsFixture) {
@@ -37,6 +38,7 @@ describe("get_option_chain tool", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("has correct tool metadata", () => {
@@ -51,6 +53,9 @@ describe("get_option_chain tool", () => {
     const text = (result.content[0] as any).text;
     expect(text).toContain("AAPL");
     expect(text).toContain("Delta");
+    expect(text).toContain("Gamma");
+    expect(text).toContain("Vega");
+    expect(text).toContain("Rho");
     expect(text).toContain("IV");
     expect(text).toContain("Put/Call");
   });
@@ -104,5 +109,28 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("2027-06-17");
     expect(text).toContain("2028-01-21");
     expect(text).not.toContain("+5 more");
+  });
+
+  it("warns that all-zero bid/ask quotes are stale before options market open", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-20T12:26:00Z")); // 8:26 AM EDT
+    rateLimiter.configure("yahoo", 5, 5);
+    const fixture = structuredClone(optionsFixture);
+    for (const contract of fixture.optionChain.result[0].options[0].calls) {
+      contract.bid = 0;
+      contract.ask = 0;
+    }
+    for (const contract of fixture.optionChain.result[0].options[0].puts) {
+      contract.bid = 0;
+      contract.ask = 0;
+    }
+    mockCrumbAndOptions(fixture);
+
+    const result = await optionChainTool.execute("call-6", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text;
+
+    expect(text).toContain("Quote status: pre_market");
+    expect(text).toContain("closed_market_or_stale_quotes");
+    expect(text).toContain("do not treat zero bid/ask as confirmed live illiquidity");
   });
 });

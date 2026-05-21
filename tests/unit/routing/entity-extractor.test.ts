@@ -70,6 +70,24 @@ describe("extractEntities", () => {
       expect(result.symbols).not.toContain("I");
       expect(result.symbols).not.toContain("ETF");
     });
+
+    it("does not treat macro/source/UI acronyms as tickers unless explicit", () => {
+      expect(extractEntities("Use get_economic_data to show FRED CPI inflation data").symbols).toEqual([]);
+      expect(extractEntities("render the options widget if the GUI supports it").symbols).toEqual([]);
+      expect(extractEntities("analyze $CPI as a stock").symbols).toEqual(["CPI"]);
+    });
+
+    it("identifies the owned underlying and cost basis in catalyst-driven covered-call prompts", () => {
+      const result = extractEntities(
+        "NVDA earnings are today. If I have DRAM, what is the best covered call to sell right now? Cost basis is $51.",
+      );
+
+      expect(result.symbols).toEqual(["NVDA", "DRAM"]);
+      expect((result as any).heldSymbol).toBe("DRAM");
+      expect((result as any).catalystSymbols).toEqual(["NVDA"]);
+      expect((result as any).costBasis).toBe(51);
+      expect(result.dteHint).toBe("event_week");
+    });
   });
 
   describe("direction extraction", () => {
