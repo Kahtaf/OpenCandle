@@ -40,6 +40,7 @@ describe("classifyIntent", () => {
     it("matches case insensitively", () => {
       const result = classifyIntent("ANALYZE nvda");
       expect(result.workflow).toBe("single_asset_analysis");
+      expect(result.entities.symbols).toEqual(["NVDA"]);
     });
 
     it("matches 'is AAPL attractive here?'", () => {

@@ -7,7 +7,7 @@ const COMMON_WORDS = new Set([
   "HIM", "HIS", "HOW", "ITS", "LET", "MAY", "NEW", "NOW", "OLD", "OUR", "OWN",
   "SAY", "SHE", "TOO", "USE", "WAY", "WHO", "BOY", "DID", "GET", "HAS", "HIM",
   "OUT", "PUT", "RUN", "SET", "TOP", "WHY", "BIG", "END", "FAR", "FEW",
-  "GOT", "LOW", "MAN", "OFF", "PAY", "TRY", "TWO", "BUY", "ETF", "ETFS",
+  "GOT", "LOW", "MAN", "OFF", "PAY", "TRY", "TWO", "BUY", "DOES", "ETF", "ETFS",
   // Technical analysis acronyms
   "SMA", "EMA", "RSI", "MACD", "OBV", "ATR", "ADX", "VWAP",
   // Fundamental analysis acronyms
@@ -48,9 +48,19 @@ export function extractEntities(input: string): ExtractedEntities {
 }
 
 export function extractBudget(input: string): number | undefined {
+  if (
+    /\b(?:at|above|below|under|over|near)\s+\$\s*[\d,]+(?:\.\d+)?\s*([kK])?\b/i.test(input) &&
+    !hasBudgetContext(input)
+  ) {
+    return undefined;
+  }
+
   // Match $10,000 or $10000 or $10k
   const dollarSign = input.match(/\$\s*([\d,]+(?:\.\d+)?)\s*([kK])?\b/);
   if (dollarSign) {
+    if (isPremiumAmount(input, dollarSign.index ?? 0, dollarSign[0].length)) {
+      return undefined;
+    }
     const base = parseFloat(dollarSign[1].replace(/,/g, ""));
     return dollarSign[2] ? base * 1000 : base;
   }
@@ -70,29 +80,56 @@ export function extractBudget(input: string): number | undefined {
   return undefined;
 }
 
+function hasBudgetContext(input: string): boolean {
+  return /\b(?:budget|invest|allocate|portfolio|cash|capital|with|have|spend|put\s+to\s+work)\b/i.test(input);
+}
+
+function isPremiumAmount(input: string, start: number, length: number): boolean {
+  const after = input.slice(start + length, start + length + 24);
+  return /^\s*(?:premium|max\s+premium)\b/i.test(after);
+}
+
 function extractSymbols(input: string): string[] {
   const symbols: string[] = [];
+  const addSymbol = (raw: string | undefined) => {
+    const symbol = raw?.toUpperCase();
+    if (
+      symbol &&
+      symbol.length >= 1 &&
+      symbol.length <= 5 &&
+      /^[A-Z]+$/.test(symbol) &&
+      !COMMON_WORDS.has(symbol) &&
+      !isAmbiguousConceptUsage(input, symbol) &&
+      !symbols.includes(symbol)
+    ) {
+      symbols.push(symbol);
+    }
+  };
 
   // Match $TICKER patterns
   const dollarTickers = input.matchAll(/\$([A-Za-z]{1,5})\b/g);
   for (const match of dollarTickers) {
-    symbols.push(match[1].toUpperCase());
+    addSymbol(match[1]);
+  }
+
+  // Match explicit lowercase ticker contexts without treating arbitrary short
+  // words as symbols.
+  const lowercaseCompare = input.match(/\bcompare\s+([a-z]{1,5})\s+(?:and|vs\.?|versus)\s+([a-z]{1,5})\b/i);
+  if (lowercaseCompare) {
+    addSymbol(lowercaseCompare[1]);
+    addSymbol(lowercaseCompare[2]);
+  }
+  const lowercaseTickerContext = input.matchAll(/\b(?:analy[sz]e|quote|ticker)\s+\$?([a-z]{1,5})\b|\b\$?([a-z]{1,5})\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\b/gi);
+  for (const match of lowercaseTickerContext) {
+    addSymbol(match[1] ?? match[2]);
   }
 
   // Match standalone uppercase tickers (1-5 chars, all caps)
   const words = input.split(/[\s,]+/);
   for (const word of words) {
     const cleaned = word.replace(/[^A-Za-z]/g, "");
-    if (
-      cleaned.length >= 1 &&
-      cleaned.length <= 5 &&
-      cleaned === cleaned.toUpperCase() &&
-      /^[A-Z]+$/.test(cleaned) &&
-      !COMMON_WORDS.has(cleaned) &&
-      !isAmbiguousConceptUsage(input, cleaned) &&
-      !symbols.includes(cleaned)
-    ) {
-      symbols.push(cleaned);
+    if (cleaned === cleaned.toUpperCase()) {
+      addSymbol(cleaned);
     }
   }
 
@@ -188,9 +225,9 @@ function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
   const explicitDays = lower.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:dte|days?)\b/);
   if (explicitDays) return `${explicitDays[1]}-${explicitDays[2]} days`;
+  if (/\bmonth\b/.test(lower)) return "month";
   if (/\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(lower)) return "event_week";
   if (/\bleaps?\b/i.test(lower) || /\blong[\s-]*dated\b/.test(lower)) return "leaps";
-  if (/\bmonth\b/.test(lower)) return "month";
   if (/\bweek(?:ly|s?)?\b/.test(lower)) return "week";
   return undefined;
 }

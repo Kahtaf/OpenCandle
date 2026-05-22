@@ -450,6 +450,28 @@ describe("route()", () => {
     expect(result.slots.budget?.source).toBe("preference");
   });
 
+  it("enriches omitted portfolio constraints from deterministic extraction", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Build a conservative ETF portfolio with $25k for 5 years" },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "portfolio request but omitted constraints",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("portfolio_builder");
+    expect(result.entities.budget).toBe(25_000);
+    expect(result.entities.riskProfile).toBe("conservative");
+    expect(result.entities.assetScope).toBe("etf_focused");
+    expect(result.entities.timeHorizon).toBe("5_years");
+  });
+
   it("does not clarify when prior context supplies the required symbol", async () => {
     const result = await route(
       {
@@ -473,6 +495,28 @@ describe("route()", () => {
     expect(result.routeKind).toBe("workflow_dispatch");
     expect(result.missing_required).toEqual([]);
     expect(result.slots.symbol?.source).toBe("prior_context");
+  });
+
+  it("enriches omitted option premium caps from deterministic extraction", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "MSFT puts under $500 premium" },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "options request but omitted cap",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["MSFT"]);
+    expect(result.entities.direction).toBe("bearish");
+    expect(result.entities.maxPremium).toBe(500);
+    expect(result.entities.budget).toBeUndefined();
   });
 
   it("uses the owned underlying instead of a catalyst ticker for covered-call workflows", async () => {
@@ -529,6 +573,37 @@ describe("route()", () => {
     expect(result.entities.shareQuantity).toBe(200);
     expect(result.entities.heldSymbol).toBe("NVDA");
     expect(result.entities.dteHint).toBe("30-45 days");
+  });
+
+  it("uses the owned underlying instead of a catalyst ticker for protective-put workflows", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread catalyst as underlying",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["AMD", "NVDA"]);
+    expect(result.entities.heldSymbol).toBe("AMD");
+    expect(result.entities.catalystSymbols).toEqual(["NVDA"]);
+    expect(result.entities.optionStrategy).toBe("protective_put");
+    expect(result.entities.direction).toBe("bearish");
+    expect(result.entities.shareQuantity).toBe(200);
+    expect(result.entities.dteHint).toBe("month");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "existing_position_underlying_corrected",
+    }));
   });
 });
 

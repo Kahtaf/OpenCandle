@@ -191,7 +191,11 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       symbols: output.entities.symbols.filter((symbol) =>
         !isAmbiguousConceptUsage(text, symbol),
       ),
+      budget: output.entities.budget ?? extracted.budget,
+      maxPremium: output.entities.maxPremium ?? extracted.maxPremium,
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
+      riskProfile: output.entities.riskProfile ?? extracted.riskProfile,
+      assetScope: output.entities.assetScope ?? extracted.assetScope,
       compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
@@ -204,15 +208,17 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     diagnostics,
   };
 
-  if (next.workflow === "options_screener" && isCoveredCallRequest(text) && extracted.heldSymbol) {
+  if (next.workflow === "options_screener" && isExistingPositionOptionRequest(text, extracted) && extracted.heldSymbol) {
     const reorderedSymbols = [
       extracted.heldSymbol,
       ...mergeSymbols(next.entities.symbols, extracted.symbols).filter((symbol) => symbol !== extracted.heldSymbol),
     ];
     if (next.entities.symbols[0] !== extracted.heldSymbol) {
       diagnostics.push({
-        code: "covered_call_underlying_corrected",
-        message: `using owned position ${extracted.heldSymbol} as the covered-call underlying`,
+        code: extracted.optionStrategy === "protective_put"
+          ? "existing_position_underlying_corrected"
+          : "covered_call_underlying_corrected",
+        message: `using owned position ${extracted.heldSymbol} as the option-chain underlying`,
       });
     }
     next = {
@@ -220,9 +226,12 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       entities: {
         ...next.entities,
         symbols: reorderedSymbols,
+        optionStrategy: extracted.optionStrategy ?? next.entities.optionStrategy,
+        direction: extracted.direction ?? next.entities.direction,
         heldSymbol: extracted.heldSymbol,
         catalystSymbols: reorderedSymbols.filter((symbol) => symbol !== extracted.heldSymbol),
         costBasis: extracted.costBasis ?? next.entities.costBasis,
+        shareQuantity: extracted.shareQuantity ?? next.entities.shareQuantity,
         dteHint: extracted.dteHint ?? next.entities.dteHint,
       },
       diagnostics,
@@ -242,7 +251,11 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       workflow: deterministic.workflow,
       entities: {
         ...deterministic.entities,
+        budget: deterministic.entities.budget ?? extracted.budget,
+        maxPremium: deterministic.entities.maxPremium ?? extracted.maxPremium,
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
+        riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
+        assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
         compareMetrics: deterministic.entities.compareMetrics ?? extracted.compareMetrics,
         direction: deterministic.entities.direction ?? extracted.direction,
         costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
@@ -377,6 +390,10 @@ function isConceptualEducationRequest(text: string, output: RouterOutput): boole
 
 function isCoveredCallRequest(text: string): boolean {
   return /\bcovered\s+calls?\b/i.test(text);
+}
+
+function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {
+  return isCoveredCallRequest(text) || extracted.optionStrategy === "protective_put";
 }
 
 function mergeSymbols(primary: string[], secondary: string[]): string[] {

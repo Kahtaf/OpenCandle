@@ -28,9 +28,20 @@ describe("extractEntities", () => {
       expect(result.budget).toBeUndefined();
     });
 
+    it("does not treat a quoted price level as an investment budget", () => {
+      const result = extractEntities("what about at $500?");
+      expect(result.budget).toBeUndefined();
+    });
+
+    it("does not treat downside price levels as investment budgets", () => {
+      const result = extractEntities("what if NVDA falls below $400?");
+      expect(result.budget).toBeUndefined();
+    });
+
     it("extracts max premium separately from general budget", () => {
       const result = extractEntities("MSFT call options under $500 premium");
       expect(result.maxPremium).toBe(500);
+      expect(result.budget).toBeUndefined();
     });
   });
 
@@ -50,6 +61,11 @@ describe("extractEntities", () => {
       expect(result.symbols).toEqual(["AAPL", "MSFT", "GOOGL"]);
     });
 
+    it("extracts lowercase tickers in explicit analysis and comparison contexts", () => {
+      expect(extractEntities("ANALYZE nvda").symbols).toEqual(["NVDA"]);
+      expect(extractEntities("Compare aapl and msft").symbols).toEqual(["AAPL", "MSFT"]);
+    });
+
     it("extracts tickers separated by commas", () => {
       const result = extractEntities("compare AAPL, MSFT, and GOOGL");
       expect(result.symbols).toEqual(["AAPL", "MSFT", "GOOGL"]);
@@ -63,6 +79,11 @@ describe("extractEntities", () => {
     it("returns empty array when no symbols", () => {
       const result = extractEntities("what should I invest in?");
       expect(result.symbols).toEqual([]);
+    });
+
+    it("does not infer lowercase finance nouns as ticker symbols", () => {
+      expect(extractEntities("what is the stock price").symbols).toEqual([]);
+      expect(extractEntities("show me the options chain").symbols).toEqual([]);
     });
 
     it("does not match common English words as tickers", () => {
@@ -87,6 +108,19 @@ describe("extractEntities", () => {
       expect((result as any).catalystSymbols).toEqual(["NVDA"]);
       expect((result as any).costBasis).toBe(51);
       expect(result.dteHint).toBe("event_week");
+    });
+
+    it("identifies the owned underlying in catalyst-driven protective-put prompts", () => {
+      const result = extractEntities(
+        "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?",
+      );
+
+      expect(result.symbols).toEqual(["NVDA", "AMD"]);
+      expect(result.heldSymbol).toBe("AMD");
+      expect(result.catalystSymbols).toEqual(["NVDA"]);
+      expect(result.optionStrategy).toBe("protective_put");
+      expect(result.shareQuantity).toBe(200);
+      expect(result.dteHint).toBe("month");
     });
   });
 
