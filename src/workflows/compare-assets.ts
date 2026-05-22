@@ -23,8 +23,8 @@ export function buildCompareAssetsWorkflowDefinition(
   const macroHedgeGuidance = isMacroHedge
     ? `
 - Treat this as a macro hedge decision: explain each asset's hedge role, correlation regime, volatility/drawdown profile, and sensitivity to real yields, USD/liquidity, geopolitical shocks, and risk-off drawdowns.
-- Do not let missing BTC or ETF-specific metrics turn into a shallow default winner. Explain what the missing metric would have shown and how that lowers confidence.
-- Give actionable conditional guidance: conditions under which GLD is the better capital-preservation hedge, and conditions under which BTC is only a higher-volatility debasement/asymmetric-upside sleeve.`
+- Do not let missing asset-specific metrics turn into a shallow default winner. Explain what each missing metric would have shown and how that lowers confidence.
+- Give actionable conditional guidance: conditions under which each asset is the better capital-preservation hedge, diversifier, inflation hedge, duration hedge, liquidity sleeve, or higher-volatility asymmetric-upside sleeve.`
     : "";
   const interestRateGuidance = isInterestRateSensitive
     ? `

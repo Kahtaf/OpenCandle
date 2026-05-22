@@ -22,6 +22,10 @@ const COMMON_WORDS = new Set([
 ]);
 
 const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
+const LOWERCASE_FINANCE_TERMS = new Set([
+  "bond", "bonds", "cash", "rate", "rates", "cuts", "gold", "oil", "stock", "stocks",
+  "fund", "funds", "etf", "etfs", "puts", "calls", "option", "options",
+]);
 
 export function extractEntities(input: string): ExtractedEntities {
   const symbols = extractSymbols(input);
@@ -58,7 +62,7 @@ export function extractBudget(input: string): number | undefined {
   // Match $10,000 or $10000 or $10k
   const dollarSign = input.match(/\$\s*([\d,]+(?:\.\d+)?)\s*([kK])?\b/);
   if (dollarSign) {
-    if (isPremiumAmount(input, dollarSign.index ?? 0, dollarSign[0].length)) {
+    if (isNonBudgetDollarAmount(input, dollarSign.index ?? 0, dollarSign[0].length)) {
       return undefined;
     }
     const base = parseFloat(dollarSign[1].replace(/,/g, ""));
@@ -84,15 +88,20 @@ function hasBudgetContext(input: string): boolean {
   return /\b(?:budget|invest|allocate|portfolio|cash|capital|with|have|spend|put\s+to\s+work)\b/i.test(input);
 }
 
-function isPremiumAmount(input: string, start: number, length: number): boolean {
+function isNonBudgetDollarAmount(input: string, start: number, length: number): boolean {
+  const before = input.slice(Math.max(0, start - 32), start);
   const after = input.slice(start + length, start + length + 24);
-  return /^\s*(?:premium|max\s+premium)\b/i.test(after);
+  return /\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*$/i.test(before) ||
+    /^\s*(?:premium|max\s+premium|cost\s*basis|basis|entry(?:\s*price)?)\b/i.test(after);
 }
 
 function extractSymbols(input: string): string[] {
   const symbols: string[] = [];
-  const addSymbol = (raw: string | undefined) => {
+  const addSymbol = (raw: string | undefined, options: { lowercaseContext?: boolean } = {}) => {
     const symbol = raw?.toUpperCase();
+    if (options.lowercaseContext && LOWERCASE_FINANCE_TERMS.has(String(raw || "").toLowerCase())) {
+      return;
+    }
     if (
       symbol &&
       symbol.length >= 1 &&
@@ -116,12 +125,19 @@ function extractSymbols(input: string): string[] {
   // words as symbols.
   const lowercaseCompare = input.match(/\bcompare\s+([a-z]{1,5})\s+(?:and|vs\.?|versus)\s+([a-z]{1,5})\b/i);
   if (lowercaseCompare) {
-    addSymbol(lowercaseCompare[1]);
-    addSymbol(lowercaseCompare[2]);
+    addSymbol(lowercaseCompare[1], { lowercaseContext: true });
+    addSymbol(lowercaseCompare[2], { lowercaseContext: true });
   }
   const lowercaseTickerContext = input.matchAll(/\b(?:analy[sz]e|quote|ticker)\s+\$?([a-z]{1,5})\b|\b\$?([a-z]{1,5})\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\b/gi);
   for (const match of lowercaseTickerContext) {
-    addSymbol(match[1] ?? match[2]);
+    addSymbol(match[1] ?? match[2], { lowercaseContext: true });
+  }
+  const lowercaseHeldPosition = input.matchAll(/\b(?:own|hold|holding|long|protect|hedge|have)\s+\d+(?:,\d{3})*\s+shares?\s+(?:of\s+)?\$?([a-z]{1,5})\b|\b\d+(?:,\d{3})*\s+shares?\s+of\s+\$?([a-z]{1,5})\b/gi);
+  for (const match of lowercaseHeldPosition) {
+    const raw = match[1] ?? match[2];
+    if (raw && raw !== raw.toUpperCase()) {
+      addSymbol(raw, { lowercaseContext: true });
+    }
   }
 
   // Match standalone uppercase tickers (1-5 chars, all caps)
@@ -194,7 +210,8 @@ function extractShareQuantity(input: string): number | undefined {
 }
 
 function extractCostBasis(input: string): number | undefined {
-  const match = input.match(/\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
+  const match = input.match(/\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i) ??
+    input.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(?:cost\s*basis|basis|entry(?:\s*price)?)\b/i);
   if (!match) return undefined;
   const value = parseFloat(match[1].replace(/,/g, ""));
   return Number.isFinite(value) ? value : undefined;

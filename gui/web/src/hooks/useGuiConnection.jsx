@@ -18,6 +18,7 @@ export function useGuiConnection() {
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
   const [modelSetup, setModelSetup] = useState({ requirement: "unknown", providers: [], availableModels: [] });
+  const [supportsSessionActions, setSupportsSessionActions] = useState(false);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function useGuiConnection() {
         const data = await response.json();
         const snapshot = data.snapshot || {};
         if (disposed) return;
+        setSupportsSessionActions(false);
         setRole(data.role || "writer");
         setCurrentSessionId(data.sessionId || snapshot.sessionId || "");
         setAskUserPrompts(data.askUserPrompts || []);
@@ -75,6 +77,7 @@ export function useGuiConnection() {
         if (message.type === "boot") {
           receivedBoot = true;
           window.clearTimeout(bootTimeout);
+          setSupportsSessionActions(true);
           setRole(message.role);
           setCurrentSessionId(message.sessionId);
           setAskUserPrompts(message.askUserPrompts || []);
@@ -104,6 +107,7 @@ export function useGuiConnection() {
       ws.onclose = () => {
         window.clearTimeout(bootTimeout);
         if (usingHttpFallback) return;
+        setSupportsSessionActions(false);
         setRole("disconnected");
         if (!disposed) reconnect = window.setTimeout(connect, 1000);
       };
@@ -137,10 +141,11 @@ export function useGuiConnection() {
     dashboard,
     currentSessionId,
     modelSetup,
+    supportsSessionActions,
     toast,
     setToast,
     send,
-  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, toast, send]);
+  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, toast, send]);
 }
 
 function upsertPrompt(current, prompt) {

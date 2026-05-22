@@ -53,6 +53,7 @@ export function AppShell() {
     entries: gui.entries,
     runState: chatRun.runState,
     liveBaseEntryCount,
+    canStartFreshHomeSession: gui.supportsSessionActions,
   });
   const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
     !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
@@ -104,10 +105,11 @@ export function AppShell() {
       currentSessionId: gui.currentSessionId,
       entryCount: gui.entries.length,
       lastResetSessionId: homeResetSessionRef.current,
+      canStartFreshHomeSession: gui.supportsSessionActions,
     })) return;
     homeResetSessionRef.current = gui.currentSessionId;
     gui.send("session.new");
-  }, [location.pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send]);
+  }, [location.pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send, gui.supportsSessionActions]);
 
   useEffect(() => {
     if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;

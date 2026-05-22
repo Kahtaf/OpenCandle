@@ -43,6 +43,12 @@ describe("extractEntities", () => {
       expect(result.maxPremium).toBe(500);
       expect(result.budget).toBeUndefined();
     });
+
+    it("does not treat cost basis as an investment budget", () => {
+      const result = extractEntities("I own AAPL with a $175 cost basis. What covered call should I sell?");
+      expect(result.costBasis).toBe(175);
+      expect(result.budget).toBeUndefined();
+    });
   });
 
   describe("symbol extraction", () => {
@@ -64,6 +70,11 @@ describe("extractEntities", () => {
     it("extracts lowercase tickers in explicit analysis and comparison contexts", () => {
       expect(extractEntities("ANALYZE nvda").symbols).toEqual(["NVDA"]);
       expect(extractEntities("Compare aapl and msft").symbols).toEqual(["AAPL", "MSFT"]);
+    });
+
+    it("does not extract lowercase asset-class or macro nouns as comparison tickers", () => {
+      expect(extractEntities("compare bonds and cash").symbols).toEqual([]);
+      expect(extractEntities("compare rates and cuts").symbols).toEqual([]);
     });
 
     it("extracts tickers separated by commas", () => {
@@ -213,6 +224,17 @@ describe("extractEntities", () => {
       expect(result.catalystSymbols).toBeUndefined();
       expect(result.shareQuantity).toBe(200);
       expect(result.dteHint).toBe("30-45 days");
+    });
+
+    it("detects lowercase held underlyings in protective-put prompts", () => {
+      const result = extractEntities(
+        "I own 200 shares of nvda after a big rally. What's a reasonable protective put 30-45 days out?",
+      );
+
+      expect(result.symbols).toEqual(["NVDA"]);
+      expect(result.heldSymbol).toBe("NVDA");
+      expect(result.optionStrategy).toBe("protective_put");
+      expect(result.shareQuantity).toBe(200);
     });
 
     it("detects protective puts from generic hedge language", () => {

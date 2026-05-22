@@ -40,6 +40,21 @@ describe("route session state", () => {
     expect(view.entries).toEqual([]);
   });
 
+  it("keeps the existing home transcript when session actions are unavailable", () => {
+    const entries = [{ type: "message", id: "existing-home-entry" }];
+    const view = routeSessionView({
+      pathname: "/",
+      currentSessionId: "session-with-history",
+      entries,
+      runState: "ready",
+      liveBaseEntryCount: 0,
+      canStartFreshHomeSession: false,
+    });
+
+    expect(view.pendingFreshHomeSession).toBe(false);
+    expect(view.entries).toBe(entries);
+  });
+
   it("keeps the existing live-entry de-dupe during streaming", () => {
     const view = routeSessionView({
       pathname: "/sessions/current-session",
@@ -83,6 +98,15 @@ describe("route session state", () => {
       currentSessionId: "fresh-session-after-reset",
       entryCount: 2,
       lastResetSessionId: "session-with-history",
+    })).toBe(false);
+
+    expect(shouldStartFreshHomeSession({
+      pathname: "/",
+      role: "writer",
+      currentSessionId: "session-with-history",
+      entryCount: 2,
+      lastResetSessionId: "",
+      canStartFreshHomeSession: false,
     })).toBe(false);
   });
 });

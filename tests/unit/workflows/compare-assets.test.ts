@@ -52,6 +52,18 @@ describe("buildCompareAssetsWorkflow", () => {
     expect(workflow.followUps[0]).toContain("conditions under which");
   });
 
+  it("keeps macro hedge follow-up guidance generic across symbols", () => {
+    const workflow = buildCompareAssetsWorkflow(makeResolution({
+      symbols: ["TLT", "IEF"],
+      timeHorizon: "6mo",
+      metrics: ["macro_hedge"],
+    }));
+
+    expect(workflow.followUps[0]).toContain("each asset");
+    expect(workflow.followUps[0]).not.toContain("BTC");
+    expect(workflow.followUps[0]).not.toContain("GLD");
+  });
+
   it("adds rate-scenario synthesis guidance for interest-rate comparisons", () => {
     const workflow = buildCompareAssetsWorkflow(makeResolution({
       symbols: ["SPY", "QQQ"],

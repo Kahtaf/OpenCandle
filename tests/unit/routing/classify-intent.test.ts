@@ -167,6 +167,12 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("compare_assets");
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
     });
+
+    it("does not route lowercase asset-class comparisons as ticker comparisons", () => {
+      const result = classifyIntent("compare bonds and cash");
+      expect(result.workflow).not.toBe("compare_assets");
+      expect(result.entities.symbols).toEqual([]);
+    });
   });
 
   describe("watchlist_or_tracking", () => {
