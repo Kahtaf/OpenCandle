@@ -247,4 +247,23 @@ describe("resolveOptionsScreenerSlots", () => {
     expect(result.sources.costBasis).toBe("user");
     expect(result.sources.catalystSymbols).toBe("user");
   });
+
+  it("uses the held symbol as the options underlying when catalyst tickers appear first", () => {
+    const entities: ExtractedEntities = {
+      symbols: ["NVDA", "AMD"],
+      heldSymbol: "AMD",
+      catalystSymbols: ["NVDA"],
+      optionStrategy: "protective_put",
+      shareQuantity: 200,
+      direction: "bearish",
+      dteHint: "month",
+    };
+    const result = resolveOptionsScreenerSlots(entities);
+
+    expect(result.resolved.symbol).toBe("AMD");
+    expect(result.resolved.catalystSymbols).toEqual(["NVDA"]);
+    expect(result.resolved.optionStrategy).toBe("protective_put");
+    expect(result.resolved.shareQuantity).toBe(200);
+    expect(result.resolved.dteTarget).toBe("25_to_45_days");
+  });
 });

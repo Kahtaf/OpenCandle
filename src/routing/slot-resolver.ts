@@ -125,8 +125,9 @@ export function resolveOptionsScreenerSlots(
 
   // Symbol: required, no default
   let symbol = "";
-  if (entities.symbols.length > 0) {
-    symbol = entities.symbols[0];
+  const requestedUnderlying = entities.heldSymbol ?? entities.symbols[0];
+  if (requestedUnderlying) {
+    symbol = requestedUnderlying;
     sources.symbol = "user";
   } else {
     missingRequired.push("symbol");
