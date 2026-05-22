@@ -241,6 +241,7 @@ For LEAPS / long-dated options:
       objective: s.objective,
       moneynessPreference: s.moneynessPreference,
       liquidityMinimum: s.liquidityMinimum,
+      ...(s.maxPremium !== undefined ? { maxPremium: formatBudget(s.maxPremium) } : {}),
       ...(s.optionStrategy ? { optionStrategy: s.optionStrategy } : {}),
       ...(s.costBasis !== undefined ? { costBasis: formatBudget(s.costBasis) } : {}),
       ...(s.shareQuantity !== undefined ? { shareQuantity: `${s.shareQuantity} shares` } : {}),
@@ -257,8 +258,12 @@ For LEAPS / long-dated options:
     s.catalystSymbols?.length ? `\n- Catalyst/context tickers: ${s.catalystSymbols.join(", ")}${tag(sources.catalystSymbols)}` : "",
   ].join("");
 
-  const isCoveredCallContext = s.optionStrategy === "covered_call" || s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
   const isProtectivePutContext = s.optionStrategy === "protective_put";
+  const isCoveredCallContext = !isProtectivePutContext && (
+    s.optionStrategy === "covered_call" ||
+    s.costBasis !== undefined ||
+    (s.catalystSymbols?.length ?? 0) > 0
+  );
   const coveredCallInstructions = isCoveredCallContext
     ? `
 Covered-call sale guidance:
@@ -287,6 +292,9 @@ Protective-put hedge guidance:
 - Long protective puts have premium/decay risk and exercise/exit choices; do not frame assignment risk like a short option sale.
 `
     : "";
+  const topPickExplanation = isCoveredCallContext
+    ? `Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.`
+    : "Explain why the top pick is ranked #1.";
 
   return `Current date: ${dateStr}
 Do NOT invent or assume a different current date.${expirationSection}
@@ -302,10 +310,10 @@ Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.
 2. Use get_option_chain for ${s.symbol} to get the full chain with Greeks. If you filter by contract type, pass \`type: "call"\` or \`type: "put"\` in lowercase.
 3. Filter contracts matching: ${s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
-4. ${isProtectivePutContext ? "Rank by hedge quality: protection per dollar of premium, expiration fit, moneyness, liquidity, and hedge floor." : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.`}
+4. ${isProtectivePutContext ? "Rank by hedge quality: protection per dollar of premium, expiration fit, moneyness, liquidity, and hedge floor." : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.`}${s.maxPremium !== undefined ? ` Do not rank contracts above the user's max premium of ${formatBudget(s.maxPremium)} unless no contracts under that cap are liquid; if so, say the cap could not be met.` : ""}
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
 ${s.optionStrategy === "covered_call" ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
-` : ""}${s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
+` : ""}${isCoveredCallContext && s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
 ` : ""}
 ${longDatedInstructions}
 ${coveredCallInstructions}
@@ -317,7 +325,7 @@ Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : isProtectivePutContext ? `Start with an Interpretation line: "Interpretation: Treating this as buying protective puts on an existing long ${s.symbol} share position."` : "State the interpretation only if the user's requested underlying is ambiguous."}
 - Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", hedge floor, premium % of position" : ""}.
-- Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.
+- ${topPickExplanation}
 - Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.
 - Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : isProtectivePutContext ? "protective-put risks (premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost). Do not discuss short-option assignment risk" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;
 }

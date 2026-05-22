@@ -236,6 +236,18 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("rho");
   });
 
+  it("preserves user max premium caps in options ranking instructions", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        { maxPremium: 500 },
+        { maxPremium: "user" },
+      ),
+    );
+
+    expect(prompt).toContain("Max premium: $500");
+    expect(prompt).toContain("Do not rank contracts above the user's max premium of $500");
+  });
+
   it("treats covered-call catalyst tickers as context, not the option-chain underlying", () => {
     const prompt = buildOptionsScreenerPrompt(
       makeOptionsResolution(
@@ -306,6 +318,39 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("hedge floor");
     expect(prompt).toContain("collar or put spread");
     expect(prompt).toContain("Do not discuss short-option assignment risk");
+  });
+
+  it("keeps catalyst-driven protective puts out of covered-call framing", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        {
+          symbol: "AMD",
+          direction: "bearish",
+          optionStrategy: "protective_put",
+          shareQuantity: 200,
+          catalystSymbols: ["NVDA"],
+          dteTarget: "25_to_45_days",
+        },
+        {
+          symbol: "user",
+          direction: "user",
+          optionStrategy: "user",
+          shareQuantity: "user",
+          catalystSymbols: "user",
+          dteTarget: "user",
+        },
+      ),
+    );
+
+    expect(prompt).toContain("Screen and rank options contracts for AMD");
+    expect(prompt).toContain("Catalyst/context tickers: NVDA");
+    expect(prompt).toContain("Use get_option_chain for AMD");
+    expect(prompt).toContain("buying puts to hedge an existing long AMD share position");
+    expect(prompt).toContain("Interpretation: Treating this as buying protective puts on an existing long AMD share position.");
+    expect(prompt).not.toContain("selling covered calls");
+    expect(prompt).not.toContain("premium received");
+    expect(prompt).not.toContain("assignment sale price");
+    expect(prompt).not.toContain("covered-call sale risks");
   });
 });
 

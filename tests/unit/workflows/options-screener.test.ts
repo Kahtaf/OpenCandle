@@ -69,6 +69,12 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp).toContain("rho");
   });
 
+  it("follow-up prompt preserves max premium caps", () => {
+    const workflow = buildOptionsScreenerWorkflow(makeResolution({ maxPremium: 500 }));
+    const followUp = workflow.followUps[0];
+    expect(followUp).toContain("Do not rank contracts above the user's max premium of $500");
+  });
+
   it("follow-up prompt includes length constraints", () => {
     const workflow = buildOptionsScreenerWorkflow(makeResolution());
     const followUp = workflow.followUps[0];
@@ -95,7 +101,7 @@ describe("buildOptionsScreenerWorkflow", () => {
   });
 
   it("follow-up prompt requires actionable guidance when no chain data is usable", () => {
-    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "MSFT", dteTarget: "7_to_14_days" }));
+    const workflow = buildOptionsScreenerWorkflow(makeResolution({ symbol: "MSFT", dteTarget: "7_to_14_days", optionStrategy: "covered_call" }));
     const followUp = workflow.followUps[0];
 
     expect(followUp.toLowerCase()).toContain("do not promise to retry later");
@@ -169,5 +175,26 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp).toContain("1 put contract per 100 shares");
     expect(followUp).toContain("collars or put spreads");
     expect(followUp).toContain("Do not frame assignment risk like a short option sale");
+  });
+
+  it("follow-up prompt does not mix covered-call fallback into catalyst-driven protective puts", () => {
+    const workflow = buildOptionsScreenerWorkflow(
+      makeResolution({
+        symbol: "AMD",
+        direction: "bearish",
+        optionStrategy: "protective_put",
+        shareQuantity: 200,
+        catalystSymbols: ["NVDA"],
+        dteTarget: "25_to_45_days",
+      }),
+    );
+    const followUp = workflow.followUps[0];
+
+    expect(followUp).toContain("top puts for AMD");
+    expect(followUp).toContain("Protective-put requirements");
+    expect(followUp).toContain("buying puts to hedge an existing long AMD share position");
+    expect(followUp).not.toContain("Covered-call fallback");
+    expect(followUp).not.toContain("premium collected");
+    expect(followUp).not.toContain("return-if-assigned");
   });
 });
