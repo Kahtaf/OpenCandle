@@ -304,7 +304,7 @@ Screen and rank options contracts for ${s.symbol}:
 - DTE target: ${s.dteTarget}${tag(sources.dteTarget)}
 - Objective: ${s.objective}${tag(sources.objective)}
 - Moneyness: ${s.moneynessPreference}${tag(sources.moneynessPreference)}
-- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.optionStrategy ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}` : ""}${s.costBasis !== undefined ? `\n- Cost basis: ${formatBudget(s.costBasis)}${tag(sources.costBasis)}` : ""}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
+- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${coveredCallContext}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
 
 Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.

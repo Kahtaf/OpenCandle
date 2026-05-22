@@ -29,6 +29,9 @@ function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   if (/\b(?:1|one)\s*(?:-|to|or)\s*(?:2|two)\s*weeks?\b/.test(normalized)) {
     return "7_to_14_days";
   }
+  if (/\bevent[_\s-]?week\b/.test(normalized)) {
+    return "0_to_7_days";
+  }
   const explicitDays = normalized.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:days?|dte)\b/);
   if (explicitDays) {
     return `${explicitDays[1]}_to_${explicitDays[2]}_days`;
@@ -43,6 +46,8 @@ function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   switch (normalized) {
     case "week":
       return "7_to_14_days";
+    case "event_week":
+      return "0_to_7_days";
     case "month":
       return "25_to_45_days";
     case "leaps":
