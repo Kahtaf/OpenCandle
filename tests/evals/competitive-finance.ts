@@ -240,6 +240,20 @@ export function selectDefaultCompetitiveModel<T extends CompetitiveModelCandidat
     options.available[0];
 }
 
+export function competitiveBenchmarkExitCode(): number {
+  return 0;
+}
+
+export function competitivePreflightTimeoutMs(env: Record<string, string | undefined>): number {
+  const parsed = Number(env.OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
+}
+
+export function shouldRetryCompetitiveModelCall(message: string, attempt: number, maxAttempts: number): boolean {
+  if (attempt >= maxAttempts) return false;
+  return /\b(fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|rate limit|429|500|502|503|504)\b/i.test(message);
+}
+
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {
   if (!isRecord(item)) throw new Error(`Generated prompt ${index + 1} must be an object`);
   const complexity = stringValue(item.complexity);

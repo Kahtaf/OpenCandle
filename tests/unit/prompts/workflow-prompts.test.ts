@@ -15,9 +15,9 @@ function makePortfolioResolution(
     budget: 10_000,
     riskProfile: "balanced",
     timeHorizon: "1y_plus",
-    assetScope: "mixed_etf_and_large_cap_equities",
-    positionCount: 4,
-    maxSinglePositionPct: 35,
+    assetScope: "diversified_etf_building_blocks",
+    positionCount: 6,
+    maxSinglePositionPct: 20,
     ...overrides,
   };
   const sources: Record<keyof PortfolioSlots, "user" | "preference" | "default"> = {
@@ -86,11 +86,12 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("conservative");
   });
 
-  it("includes tool call instructions for mixed scope", () => {
+  it("includes tool call instructions for default fund-building-block scope", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
     expect(prompt).toContain("get_stock_quote");
-    expect(prompt).toContain("get_company_overview");
+    expect(prompt).not.toContain("get_company_overview");
     expect(prompt).toContain("analyze_risk");
+    expect(prompt).toContain("analyze_correlation");
   });
 
   it("includes response format instructions", () => {
@@ -151,9 +152,26 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("get_company_overview");
   });
 
-  it("includes get_company_overview for mixed scope (default)", () => {
+  it("does not include get_company_overview for diversified fund building-block scope", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
-    expect(prompt).toContain("get_company_overview");
+    expect(prompt).not.toContain("get_company_overview");
+    expect(prompt).toContain("diversified fund/ETF building-block candidates");
+  });
+
+  it("includes generic balanced portfolio guardrails", () => {
+    const prompt = buildPortfolioPrompt(makePortfolioResolution({ timeHorizon: "3y" }, { timeHorizon: "user" }));
+    expect(prompt).toContain("prefer diversified building blocks over individual-company concentration");
+    expect(prompt).toContain("core domestic equity");
+    expect(prompt).toContain("international equity");
+    expect(prompt).toContain("short-duration or cash-like stability");
+    expect(prompt).toContain("horizons under 5 years");
+    expect(prompt).toContain("current price used");
+    expect(prompt).toContain("role");
+    expect(prompt).toContain("do not paste company descriptions");
+    expect(prompt).toContain("Why this fits the horizon");
+    expect(prompt).toContain("rebalance cadence");
+    expect(prompt).toContain("low-cost/liquid implementation");
+    expect(prompt).toContain("tax/account caveats");
   });
 });
 
@@ -218,6 +236,18 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("rho");
   });
 
+  it("preserves user max premium caps in options ranking instructions", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        { maxPremium: 500 },
+        { maxPremium: "user" },
+      ),
+    );
+
+    expect(prompt).toContain("Max premium: $500");
+    expect(prompt).toContain("Do not rank contracts above the user's max premium of $500");
+  });
+
   it("treats covered-call catalyst tickers as context, not the option-chain underlying", () => {
     const prompt = buildOptionsScreenerPrompt(
       makeOptionsResolution(
@@ -256,6 +286,71 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Verify bid/ask and open interest in the user's broker");
     expect(prompt).toContain("Best action:");
     expect(prompt).toContain("Conditional candidate:");
+  });
+
+  it("frames protective puts as hedges on existing shares", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        {
+          symbol: "NVDA",
+          direction: "bearish",
+          optionStrategy: "protective_put",
+          shareQuantity: 200,
+          dteTarget: "30_to_45_days",
+        },
+        {
+          symbol: "user",
+          direction: "user",
+          optionStrategy: "user",
+          shareQuantity: "user",
+          dteTarget: "user",
+        },
+      ),
+    );
+
+    expect(prompt).toContain("Screen and rank options contracts for NVDA");
+    expect(prompt).toContain("Option strategy: protective_put");
+    expect(prompt).toContain("Share quantity: 200 shares");
+    expect(prompt).toContain("Filter contracts matching: puts");
+    expect(prompt).toContain("buying puts to hedge an existing long NVDA share position");
+    expect(prompt).toContain("premium as a percent of the stock position");
+    expect(prompt).toContain("1 put contract per 100 shares");
+    expect(prompt).toContain("hedge floor");
+    expect(prompt).toContain("collar or put spread");
+    expect(prompt).toContain("Do not discuss short-option assignment risk");
+  });
+
+  it("keeps catalyst-driven protective puts out of covered-call framing", () => {
+    const prompt = buildOptionsScreenerPrompt(
+      makeOptionsResolution(
+        {
+          symbol: "AMD",
+          direction: "bearish",
+          optionStrategy: "protective_put",
+          shareQuantity: 200,
+          catalystSymbols: ["NVDA"],
+          dteTarget: "25_to_45_days",
+        },
+        {
+          symbol: "user",
+          direction: "user",
+          optionStrategy: "user",
+          shareQuantity: "user",
+          catalystSymbols: "user",
+          dteTarget: "user",
+        },
+      ),
+    );
+
+    expect(prompt).toContain("Screen and rank options contracts for AMD");
+    expect(prompt).toContain("Catalyst/context tickers: NVDA");
+    expect(prompt).toContain("Use get_option_chain for AMD");
+    expect(prompt).toContain("buying puts to hedge an existing long AMD share position");
+    expect(prompt).toContain("Interpretation: Treating this as buying protective puts on an existing long AMD share position.");
+    expect(prompt).not.toContain("selling covered calls");
+    expect(prompt).not.toContain("premium received");
+    expect(prompt).not.toContain("assignment sale price");
+    expect(prompt).not.toContain("covered-call sale risks");
   });
 });
 
@@ -331,6 +426,26 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toMatch(/liquidity crunch/i);
     expect(prompt).not.toMatch(/Highlight which asset is stronger on each metric/i);
   });
+
+  it("specializes comparison guidance for interest-rate-sensitive allocation decisions", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["SPY", "QQQ"], timeHorizon: "12mo", metrics: ["interest_rates"] },
+      sources: { symbols: "user", timeHorizon: "user", metrics: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toContain("get_economic_data");
+    expect(prompt).toContain("current Fed funds backdrop");
+    expect(prompt).toContain("historical/current context");
+    expect(prompt).toContain("why rates fall");
+    expect(prompt).toContain("benign disinflation/soft landing");
+    expect(prompt).toContain("sticky inflation");
+    expect(prompt).toContain("duration-like sensitivity");
+    expect(prompt).toContain("concentration and sector-exposure risk");
+    expect(prompt).toContain("rate-futures evidence is unavailable");
+  });
 });
 
 describe("buildDisclosureBlock", () => {
@@ -380,11 +495,11 @@ describe("buildDisclosureBlock", () => {
 
   it("uses human-readable display names", () => {
     const block = buildDisclosureBlock(
-      { positionCount: 4, maxSinglePositionPct: "35%" },
+      { positionCount: 6, maxSinglePositionPct: "20%" },
       { positionCount: "default", maxSinglePositionPct: "default" },
     );
-    expect(block).toContain("positions (4)");
-    expect(block).toContain("max single position (35%)");
+    expect(block).toContain("positions (6)");
+    expect(block).toContain("max single position (20%)");
     expect(block).not.toContain("positionCount");
     expect(block).not.toContain("maxSinglePositionPct");
   });

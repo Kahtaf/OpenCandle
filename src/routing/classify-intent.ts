@@ -152,9 +152,10 @@ const RULES: Rule[] = [
   {
     workflow: "compare_assets",
     confidence: 0.85,
-    test: (input) => {
+    test: (input, entities) => {
       const lower = input.toLowerCase();
-      return /\bcompare\s+[a-z]{1,5}\b(?:\s*,?\s*(?:and\s+)?[a-z]{1,5}\b)+/.test(lower);
+      return entities.symbols.length >= 2 &&
+        /\bcompare\s+[a-z]{1,5}\b(?:\s*,?\s*(?:and\s+)?[a-z]{1,5}\b)+/.test(lower);
     },
   },
   // Compare: 2+ uppercase symbols without explicit keyword

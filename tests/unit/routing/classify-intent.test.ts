@@ -40,6 +40,7 @@ describe("classifyIntent", () => {
     it("matches case insensitively", () => {
       const result = classifyIntent("ANALYZE nvda");
       expect(result.workflow).toBe("single_asset_analysis");
+      expect(result.entities.symbols).toEqual(["NVDA"]);
     });
 
     it("matches 'is AAPL attractive here?'", () => {
@@ -165,6 +166,12 @@ describe("classifyIntent", () => {
       const result = classifyIntent("Compare AAPL and MSFT sentiment");
       expect(result.workflow).toBe("compare_assets");
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
+    });
+
+    it("does not route lowercase asset-class comparisons as ticker comparisons", () => {
+      const result = classifyIntent("compare bonds and cash");
+      expect(result.workflow).not.toBe("compare_assets");
+      expect(result.entities.symbols).toEqual([]);
     });
   });
 

@@ -247,7 +247,7 @@ export function selectToolBundles(output: Pick<RouterOutput, "routeKind" | "work
 
   const metrics = output.entities.compareMetrics ?? [];
   const horizon = output.entities.timeHorizon ?? "";
-  if (metrics.includes("macro_hedge") || /\b(?:macro|rate|inflation)\b/i.test(horizon)) {
+  if (metrics.includes("macro_hedge") || metrics.includes("interest_rates") || /\b(?:macro|rate|inflation)\b/i.test(horizon)) {
     bundles.add("macro");
   }
 

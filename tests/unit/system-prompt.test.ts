@@ -79,4 +79,40 @@ describe("system prompt — analyst stance", () => {
     expect(prompt.toLowerCase()).toMatch(/calibrate|adapt/);
     expect(prompt.toLowerCase()).toMatch(/vocabulary|prior turn|sophisticated|beginner/);
   });
+
+  it("tells ticker sentiment answers to include price context", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
+    expect(prompt).toContain("whether sentiment diverges from price action");
+  });
+
+  it("exempts conceptual education from committal response labels", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("For conceptual education questions");
+    expect(prompt).toContain("teach the concept directly");
+    expect(prompt).toContain("do not name tool functions");
+    expect(prompt).toContain("do not append analyst-view, confidence-band, or invalidation boilerplate");
+    expect(prompt).toContain("For valuation-metric education");
+    expect(prompt).toContain("start with \"Bottom line\"");
+    expect(prompt).toContain("heading exactly named \"Practical workflow\"");
+    expect(prompt).toContain("numbered question-driven application steps");
+    expect(prompt).toContain("cross-check table with why/when");
+    expect(prompt).toContain("trailing, forward, normalized, or cyclically adjusted variants");
+    expect(prompt).toContain("where the metric misleads");
+    expect(prompt).toContain("heading exactly named \"Quick checklist\"");
+    expect(prompt).toContain("Conceptual education prompts are not committal responses");
+    expect(prompt).toContain("Do not append \"Analyst View\"");
+    expect(prompt).toContain("explanation, definition, or learning framework");
+  });
+
+  it("requires freshness and fallback valuation lenses for current single-stock recommendations", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("For current single-stock recommendations");
+    expect(prompt).toContain("state the quote or tool-output date");
+    expect(prompt).toContain("If DCF or another valuation model is unavailable or not meaningful");
+    expect(prompt).toContain("do not let that tool failure become the whole valuation view");
+    expect(prompt).toContain("relative multiples");
+    expect(prompt).toContain("growth-adjusted multiples");
+    expect(prompt).toContain("cash-flow quality");
+  });
 });

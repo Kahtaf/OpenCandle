@@ -6,17 +6,29 @@ import { promptStep } from "../runtime/prompt-step.js";
 
 export function buildOptionsScreenerWorkflowDefinition(resolution: SlotResolution<OptionsScreenerSlots>): WorkflowDefinition {
   const s = resolution.resolved;
-  const contractType = s.direction === "bullish" ? "calls" : "puts";
-  const isCoveredCallContext = s.optionStrategy === "covered_call" || s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
-  const rankingInstruction = isCoveredCallContext
+  const isProtectivePutContext = s.optionStrategy === "protective_put";
+  const contractType = s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts";
+  const isCoveredCallContext = !isProtectivePutContext && (
+    s.optionStrategy === "covered_call" ||
+    s.costBasis !== undefined ||
+    (s.catalystSymbols?.length ?? 0) > 0
+  );
+  const rankingInstruction = isProtectivePutContext
+    ? "Rank by protection per dollar of premium, expiration fit, moneyness, hedge floor, live liquidity, and premium as a percent of the stock position."
+    : isCoveredCallContext
     ? "Rank by premium collected, strike above cost basis, assignment risk, event risk, live liquidity, and probability of expiring out of the money."
     : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.`;
-  const riskInstruction = isCoveredCallContext
+  const maxPremiumInstruction = s.maxPremium !== undefined
+    ? ` Do not rank contracts above the user's max premium of $${s.maxPremium.toLocaleString("en-US")} unless no contracts under that cap are liquid; if so, say the cap could not be met.`
+    : "";
+  const riskInstruction = isProtectivePutContext
+    ? "Include protective-put hedge risks: premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost. Long protective puts do not have short-option assignment risk."
+    : isCoveredCallContext
     ? "Include covered-call sale risks: assignment risk, upside is capped at the strike plus premium, share-price downside in the owned stock less premium received, IV/event risk, and exit liquidity. Do not say max loss = premium or describe max loss as the option premium paid."
     : "Include risk caveats: max loss = premium, IV crush risk, time decay (theta).";
   const coveredCallFallback = isCoveredCallContext
     ? `
-Covered-call fallback:
+	Covered-call fallback:
 - Treat this as selling covered calls against an existing ${s.symbol} share position, not buying calls.
 - Briefly state that you are treating ${s.symbol} as the held ticker because the user phrased it as an existing holding. If they meant memory exposure or a different ticker, tell them to clarify and do not silently switch to another underlying.
 - If retrieved contracts have zero bid/ask, zero open interest, or otherwise unusable live quotes, do not stop at "cannot rank."
@@ -41,6 +53,20 @@ Covered-call fallback:
   Risk: ...
 `
     : "";
+  const coveredCallNoDataGuidance = isCoveredCallContext
+    ? "- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned, and flag catalyst/IV-crush risk."
+    : "";
+  const protectivePutFallback = isProtectivePutContext
+    ? `
+Protective-put requirements:
+- Treat this as buying puts to hedge an existing long ${s.symbol} share position, not buying calls.
+- The final answer MUST discuss hedge floor, premium as a percent of position value, expiration fit, moneyness, and liquidity.
+- If share quantity is available, translate shares into approximate contract count using 1 put contract per 100 shares.
+- For cost-sensitive requests, explain the tradeoff between cheaper lower-strike puts and weaker protection.
+- Mention lower-cost alternatives such as collars or put spreads when outright put premium is high.
+- Do not frame assignment risk like a short option sale.
+`
+    : "";
 
   return {
     workflowType: "options_screener",
@@ -52,7 +78,7 @@ Covered-call fallback:
       promptStep("rank_and_present", "Rank and present top contracts", `Now rank and present the top ${contractType} for ${s.symbol}. You MUST produce a final text response — never end this turn with only tool calls.
 
 1. From the option chain data already fetched, select the top 3-5 contracts matching: ${s.moneynessPreference} strikes, DTE near ${s.dteTarget}, with ${s.liquidityMinimum}.
-2. ${rankingInstruction}
+2. ${rankingInstruction}${maxPremiumInstruction}
 3. Present a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, open interest, bid-ask spread.
 4. Explain why the #1 pick is ranked highest.
 5. Reproduce the exact Assumptions block from the initial prompt; keep the provenance label text intact and do not shorten it to "Assumptions:".
@@ -61,8 +87,9 @@ Covered-call fallback:
 If some or all of the option chain fetches returned "⚠ Options chain unavailable" or similar gaps, do NOT abort. Instead:
 - Rank and present whatever contracts you did retrieve from the successful fetches, even if fewer than 3.
 - If no chain data is usable at all, still produce a text response: reproduce the Assumptions block, state which expirations failed, and give actionable fallback guidance for the requested DTE instead of ranking nonexistent contracts. Do not promise to retry later. Never end the turn with only tool calls.
-- For covered-call requests in that no-data fallback, explain how to evaluate covered calls: compare 1-week vs 2-week theta/gamma tradeoffs, use delta as an assignment-risk proxy, avoid strikes where assignment would violate the user's cost basis unless premium offsets it, calculate static premium yield and return-if-assigned, and flag catalyst/IV-crush risk.
+${coveredCallNoDataGuidance}
 ${coveredCallFallback}
+${protectivePutFallback}
 
 Length constraints:
 - Max 1 sentence explaining the #1 pick.

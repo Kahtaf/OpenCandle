@@ -19,7 +19,12 @@ import type {
   RouterOutput,
 } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
-import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
+import type {
+  CompareAssetsSlots,
+  ExtractedEntities,
+  SlotResolution,
+  SlotSource,
+} from "../routing/types.js";
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
 import {
   buildPortfolioWorkflowDefinition,
@@ -490,8 +495,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
       const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return { action: "handled" };
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
     const mode = getConfig().routerMode;
@@ -501,7 +506,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       // the workflow's queued prompts; tell Pi not to also forward it.
       // Fallback path (no dispatch) → let Pi pass the user turn through to the
       // main agent, which will run under the router-supplied fallback context.
-      return dispatched ? { action: "handled" } : undefined;
+      return dispatched || undefined;
     }
 
     // --- rules mode ---
@@ -518,8 +523,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       coordinator.recordWorkflowRun("portfolio_builder", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
       const definition = buildPortfolioWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return { action: "handled" };
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
     if (classification.workflow === "options_screener") {
@@ -528,8 +533,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         coordinator.recordWorkflowRun("options_screener", classification.entities, resolution.resolved, resolution.defaultsUsed);
         pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
-        coordinator.executeWorkflow(pi, definition, ctx);
-        return { action: "handled" };
+        const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+        return prompt ? { action: "transform", text: prompt } : { action: "handled" };
       }
     }
 
@@ -551,8 +556,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
       const definition = buildCompareAssetsWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return { action: "handled" };
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
   });
 
@@ -566,7 +571,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   async function handleLlmRouterTurn(
     text: string,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): Promise<boolean> {
+  ): Promise<{ action: "transform"; text: string } | false> {
     const storage = coordinator.getStorage();
     const { profileSnapshot, recentWorkflowRuns, priorTurns } =
       coordinator.buildRouterContextBase(ctx.sessionManager);
@@ -677,81 +682,88 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   function dispatchRouterWorkflow(
     output: RouterOutput,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): boolean {
+  ): { action: "transform"; text: string } | false {
     const workflow = output.workflow!;
     const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
+    const entities = mergeRouterSlotsIntoEntities(output);
 
     if (workflow === "portfolio_builder") {
-      const resolution = resolvePortfolioSlots(output.entities, workflowPrefs);
+      const resolution = withRouterSlotSources(
+        resolvePortfolioSlots(entities, workflowPrefs),
+        output,
+      );
       coordinator.recordWorkflowRun(
         "portfolio_builder",
-        output.entities,
+        entities,
         resolution.resolved,
         resolution.defaultsUsed,
         output.routeKind,
       );
       pi.appendEntry("opencandle-workflow", {
         workflow: "portfolio_builder",
-        entities: output.entities,
+        entities,
         resolved: resolution.resolved,
       });
       const definition = buildPortfolioWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return true;
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : false;
     }
     if (workflow === "options_screener") {
-      const resolution = resolveOptionsScreenerSlots(output.entities, workflowPrefs);
+      const resolution = withRouterSlotSources(
+        resolveOptionsScreenerSlots(entities, workflowPrefs),
+        output,
+      );
       // Router may emit missing_required; main agent handles via ask_user.
       // Still dispatch the workflow when symbol is present.
       if (resolution.missingRequired.length === 0) {
         coordinator.recordWorkflowRun(
           "options_screener",
-          output.entities,
+          entities,
           resolution.resolved,
           resolution.defaultsUsed,
           output.routeKind,
         );
         pi.appendEntry("opencandle-workflow", {
           workflow: "options_screener",
-          entities: output.entities,
+          entities,
           resolved: resolution.resolved,
         });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
-        coordinator.executeWorkflow(pi, definition, ctx);
-        return true;
+        const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+        return prompt ? { action: "transform", text: prompt } : false;
       }
       // Missing required symbol — treat as fallback with ask_user directive.
     }
-    if (workflow === "compare_assets" && output.entities.symbols.length >= 2) {
+    if (workflow === "compare_assets" && entities.symbols.length >= 2) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
         resolved: {
-          symbols: output.entities.symbols,
-          metrics: output.entities.compareMetrics,
-          timeHorizon: output.entities.timeHorizon,
+          symbols: entities.symbols,
+          metrics: entities.compareMetrics,
+          timeHorizon: entities.timeHorizon,
         },
         sources: {
-          symbols: "user",
-          ...(output.entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
-          ...(output.entities.compareMetrics ? { metrics: "user" as const } : {}),
+          symbols: sourceForRouterSlot(output, "symbols", "user"),
+          ...(entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
+          ...(entities.compareMetrics ? { metrics: "user" as const } : {}),
         },
         defaultsUsed: [],
         missingRequired: [],
       };
       coordinator.recordWorkflowRun(
         "compare_assets",
-        output.entities,
+        entities,
         resolution.resolved,
         [],
         output.routeKind,
       );
       pi.appendEntry("opencandle-workflow", {
         workflow: "compare_assets",
-        symbols: output.entities.symbols,
+        symbols: entities.symbols,
       });
       const definition = buildCompareAssetsWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return true;
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : false;
     }
 
     // single_asset_analysis / watchlist / general_qa + any workflow with
@@ -768,9 +780,77 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     coordinator.setPendingFallbackContext({
       assumptionsBlock,
       missingRequired: output.missing_required,
-      extraContext: `Router classified as ${workflow} but declined to dispatch. Symbols: ${output.entities.symbols.join(", ") || "(none)"}.`,
+      extraContext: `Router classified as ${workflow} but declined to dispatch. Symbols: ${entities.symbols.join(", ") || "(none)"}.`,
     });
     return false;
+  }
+
+  function mergeRouterSlotsIntoEntities(output: RouterOutput): ExtractedEntities {
+    const entities: ExtractedEntities = {
+      ...output.entities,
+      symbols: output.entities.symbols,
+    };
+
+    if (entities.budget === undefined && typeof output.slots.budget?.value === "number") {
+      entities.budget = output.slots.budget.value;
+    }
+
+    const slotSymbols = symbolsFromRouterSlots(output);
+    if (slotSymbols.length > 0 && slotSymbols.length > entities.symbols.length) {
+      entities.symbols = mergeSymbols(slotSymbols, entities.symbols);
+    }
+
+    return entities;
+  }
+
+  function withRouterSlotSources<T extends object>(
+    resolution: SlotResolution<T>,
+    output: RouterOutput,
+  ): SlotResolution<T> {
+    const sources: Record<string, SlotSource | undefined> = { ...resolution.sources };
+    if (output.entities.budget === undefined && output.slots.budget) {
+      sources.budget = output.slots.budget.source;
+    }
+    if (output.entities.symbols.length === 0 && output.slots.symbol) {
+      sources.symbol = output.slots.symbol.source;
+    }
+    if (output.entities.symbols.length < 2 && output.slots.symbols) {
+      sources.symbols = output.slots.symbols.source;
+    }
+    return { ...resolution, sources: sources as SlotResolution<T>["sources"] };
+  }
+
+  function sourceForRouterSlot(
+    output: RouterOutput,
+    slotName: "symbol" | "symbols" | "budget",
+    fallback: SlotSource,
+  ): SlotSource {
+    return output.slots[slotName]?.source ?? fallback;
+  }
+
+  function symbolsFromRouterSlots(output: RouterOutput): string[] {
+    const symbols: string[] = [];
+    const symbol = output.slots.symbol?.value;
+    if (typeof symbol === "string" && symbol.trim() !== "") {
+      symbols.push(symbol.toUpperCase());
+    }
+    const symbolList = output.slots.symbols?.value;
+    if (Array.isArray(symbolList)) {
+      for (const value of symbolList) {
+        if (typeof value === "string" && value.trim() !== "") {
+          symbols.push(value.toUpperCase());
+        }
+      }
+    }
+    return symbols;
+  }
+
+  function mergeSymbols(primary: string[], secondary: string[]): string[] {
+    const merged: string[] = [];
+    for (const symbol of [...primary, ...secondary]) {
+      if (!merged.includes(symbol)) merged.push(symbol);
+    }
+    return merged;
   }
 
   function safeGetAllToolNames(): string[] {

@@ -9,7 +9,7 @@ export const DEFAULT_PROMPTS = [
   ["Compare NVDA and AMD", "Compare NVDA and AMD using latest quotes."],
 ];
 
-export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog }) {
+export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog, disabled = false }) {
   return (
     <div className="mx-auto grid w-full max-w-[760px] animate-fade-in-once justify-items-center gap-6 px-2 pb-20 pt-16 text-center sm:pt-24">
       <div className="grid gap-2">
@@ -20,7 +20,7 @@ export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog
           Ask for quotes, filings, macro data, options chains, or a full research workflow.
         </p>
       </div>
-      <PromptSuggestions prompts={prompts} onPrompt={onPrompt} />
+      <PromptSuggestions prompts={prompts} onPrompt={onPrompt} disabled={disabled} />
       {onOpenCatalog ? (
         <button
           type="button"
@@ -36,7 +36,7 @@ export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog
   );
 }
 
-export function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt }) {
+export function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = false }) {
   return (
     <div className="flex w-full flex-wrap justify-center gap-2">
       {prompts.map(([label, prompt]) => (
@@ -46,7 +46,10 @@ export function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt }) {
           size="sm"
           rounded="full"
           className="font-normal text-muted-foreground"
-          onClick={() => onPrompt(prompt)}
+          disabled={disabled}
+          onClick={() => {
+            if (!disabled) onPrompt(prompt);
+          }}
         >
           {label}
         </Button>

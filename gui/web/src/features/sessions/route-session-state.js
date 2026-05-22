@@ -9,15 +9,17 @@ export function routeSessionView({
   entries,
   runState,
   liveBaseEntryCount,
+  canStartFreshHomeSession = true,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
-  const pendingFreshHomeSession = pathname === "/" && entries.length > 0;
+  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && entries.length > 0;
   const streaming = runState === "connecting" || runState === "streaming";
 
   return {
     routeSessionId,
     pendingSessionSwitch,
+    pendingFreshHomeSession,
     activeSessionId: routeSessionId || currentSessionId || "",
     entries: pendingSessionSwitch || pendingFreshHomeSession
       ? []
@@ -33,10 +35,12 @@ export function shouldStartFreshHomeSession({
   currentSessionId,
   entryCount,
   lastResetSessionId,
+  canStartFreshHomeSession = true,
 }) {
   return pathname === "/"
     && role === "writer"
+    && canStartFreshHomeSession
     && Boolean(currentSessionId)
     && entryCount > 0
-    && lastResetSessionId !== currentSessionId;
+    && lastResetSessionId === "";
 }

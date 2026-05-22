@@ -3,9 +3,9 @@ import type { PortfolioSlots, OptionsScreenerSlots } from "./types.js";
 export const PORTFOLIO_DEFAULTS: Omit<PortfolioSlots, "budget"> = {
   riskProfile: "balanced",
   timeHorizon: "1y_plus",
-  assetScope: "mixed_etf_and_large_cap_equities",
-  positionCount: 4,
-  maxSinglePositionPct: 35,
+  assetScope: "diversified_etf_building_blocks",
+  positionCount: 6,
+  maxSinglePositionPct: 20,
 };
 
 export const OPTIONS_SCREENER_DEFAULTS: Omit<OptionsScreenerSlots, "symbol" | "direction"> = {

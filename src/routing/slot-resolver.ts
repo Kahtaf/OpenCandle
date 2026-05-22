@@ -23,14 +23,18 @@ function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   const normalized = dteHint?.toLowerCase().trim();
   if (!normalized) return undefined;
 
-  if (normalized === "event_week") {
-    return "0_to_7_days";
-  }
   if (/\bleaps?\b/.test(normalized) || /\blong[\s-]*dated\b/.test(normalized)) {
     return "180_plus_days";
   }
   if (/\b(?:1|one)\s*(?:-|to|or)\s*(?:2|two)\s*weeks?\b/.test(normalized)) {
     return "7_to_14_days";
+  }
+  if (/\bevent[_\s-]?week\b/.test(normalized)) {
+    return "0_to_7_days";
+  }
+  const explicitDays = normalized.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:days?|dte)\b/);
+  if (explicitDays) {
+    return `${explicitDays[1]}_to_${explicitDays[2]}_days`;
   }
   if (/\b(?:week|weekly|weeks?)\b/.test(normalized)) {
     return "7_to_14_days";
@@ -42,6 +46,8 @@ function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   switch (normalized) {
     case "week":
       return "7_to_14_days";
+    case "event_week":
+      return "0_to_7_days";
     case "month":
       return "25_to_45_days";
     case "leaps":
@@ -124,16 +130,20 @@ export function resolveOptionsScreenerSlots(
 
   // Symbol: required, no default
   let symbol = "";
-  if (entities.symbols.length > 0) {
-    symbol = entities.symbols[0];
+  const requestedUnderlying = entities.heldSymbol ?? entities.symbols[0];
+  if (requestedUnderlying) {
+    symbol = requestedUnderlying;
     sources.symbol = "user";
   } else {
     missingRequired.push("symbol");
     sources.symbol = "default";
   }
 
-  // Direction: default to bullish
-  const dir = resolve(entities.direction, undefined, "bullish" as const);
+  // Direction: default to bullish unless the user specified a protective put hedge.
+  const inferredDirection = entities.optionStrategy === "protective_put"
+    ? "bearish"
+    : entities.direction;
+  const dir = resolve(inferredDirection, undefined, "bullish" as const);
   sources.direction = dir.source;
   if (dir.source === "default") defaultsUsed.push("direction");
 
@@ -155,6 +165,7 @@ export function resolveOptionsScreenerSlots(
 
   if (entities.optionStrategy) sources.optionStrategy = "user";
   if (entities.costBasis !== undefined) sources.costBasis = "user";
+  if (entities.shareQuantity !== undefined) sources.shareQuantity = "user";
   if (entities.catalystSymbols !== undefined) sources.catalystSymbols = "user";
 
   return {
@@ -169,6 +180,7 @@ export function resolveOptionsScreenerSlots(
       maxPremium: entities.maxPremium,
       optionStrategy: entities.optionStrategy,
       costBasis: entities.costBasis,
+      shareQuantity: entities.shareQuantity,
       catalystSymbols: entities.catalystSymbols,
     },
     sources,

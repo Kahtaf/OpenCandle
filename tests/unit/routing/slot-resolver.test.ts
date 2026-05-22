@@ -19,8 +19,10 @@ describe("resolvePortfolioSlots", () => {
     expect(result.sources.riskProfile).toBe("default");
     expect(result.resolved.timeHorizon).toBe("1y_plus");
     expect(result.sources.timeHorizon).toBe("default");
-    expect(result.resolved.positionCount).toBe(4);
+    expect(result.resolved.positionCount).toBe(6);
     expect(result.sources.positionCount).toBe("default");
+    expect(result.resolved.maxSinglePositionPct).toBe(20);
+    expect(result.sources.maxSinglePositionPct).toBe("default");
   });
 
   it("uses risk profile from entities when provided", () => {
@@ -199,6 +201,23 @@ describe("resolveOptionsScreenerSlots", () => {
     expect(result.sources.costBasis).toBe("user");
   });
 
+  it("infers bearish direction and share quantity for protective-put hedges", () => {
+    const result = resolveOptionsScreenerSlots({
+      symbols: ["NVDA"],
+      optionStrategy: "protective_put",
+      shareQuantity: 200,
+      dteHint: "30-45 days",
+    });
+
+    expect(result.resolved.direction).toBe("bearish");
+    expect(result.sources.direction).toBe("user");
+    expect(result.resolved.optionStrategy).toBe("protective_put");
+    expect(result.sources.optionStrategy).toBe("user");
+    expect(result.resolved.shareQuantity).toBe(200);
+    expect(result.sources.shareQuantity).toBe("user");
+    expect(result.resolved.dteTarget).toBe("30_to_45_days");
+  });
+
   it("passes through extracted premium cap", () => {
     const entities: ExtractedEntities = {
       symbols: ["NVDA"],
@@ -227,5 +246,24 @@ describe("resolveOptionsScreenerSlots", () => {
     expect(result.resolved.dteTarget).toBe("0_to_7_days");
     expect(result.sources.costBasis).toBe("user");
     expect(result.sources.catalystSymbols).toBe("user");
+  });
+
+  it("uses the held symbol as the options underlying when catalyst tickers appear first", () => {
+    const entities: ExtractedEntities = {
+      symbols: ["NVDA", "AMD"],
+      heldSymbol: "AMD",
+      catalystSymbols: ["NVDA"],
+      optionStrategy: "protective_put",
+      shareQuantity: 200,
+      direction: "bearish",
+      dteHint: "month",
+    };
+    const result = resolveOptionsScreenerSlots(entities);
+
+    expect(result.resolved.symbol).toBe("AMD");
+    expect(result.resolved.catalystSymbols).toEqual(["NVDA"]);
+    expect(result.resolved.optionStrategy).toBe("protective_put");
+    expect(result.resolved.shareQuantity).toBe(200);
+    expect(result.resolved.dteTarget).toBe("25_to_45_days");
   });
 });

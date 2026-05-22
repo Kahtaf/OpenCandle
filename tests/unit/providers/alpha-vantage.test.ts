@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getFinancials, getOverview, getGlobalQuote, getDailyHistory } from "../../../src/providers/alpha-vantage.js";
+import { getEarnings, getFinancials, getOverview, getGlobalQuote, getDailyHistory } from "../../../src/providers/alpha-vantage.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
@@ -102,6 +102,30 @@ describe("alpha-vantage provider", () => {
 
       expect(statements[0].totalDebt).toBe(111088000000);
       expect(statements[0].cashAndEquivalents).toBe(29943000000);
+    });
+
+    it("throws on Alpha Vantage rate-limit payloads instead of returning empty financials", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          Note: "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute.",
+        }),
+      });
+
+      await expect(getFinancials("AAPL", "test-key")).rejects.toThrow("Alpha Vantage rate limited");
+    });
+  });
+
+  describe("getEarnings", () => {
+    it("throws on Alpha Vantage information payloads instead of returning empty earnings", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          Information: "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute.",
+        }),
+      });
+
+      await expect(getEarnings("AAPL", "test-key")).rejects.toThrow("Alpha Vantage rate limited");
     });
   });
 

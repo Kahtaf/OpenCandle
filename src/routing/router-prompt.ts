@@ -86,10 +86,11 @@ interface RouterOutput {
     riskProfile?: string;            // "conservative" | "balanced" | "aggressive"
     direction?: "bullish" | "bearish";
     dteHint?: string;
-    optionStrategy?: "covered_call";  // set when the user explicitly asks for a covered call
-    heldSymbol?: string;              // for covered calls: ticker the user owns/holds
+    optionStrategy?: "covered_call" | "protective_put";  // set when user explicitly asks for a known option strategy
+    heldSymbol?: string;              // for covered calls/protective puts: ticker the user owns/holds
     catalystSymbols?: string[];        // tickers mentioned as event/catalyst context, not the option-chain underlying
     costBasis?: number;                // per-share basis when user says "cost basis is $X"
+    shareQuantity?: number;            // number of shares owned when stated, e.g. "200 shares"
     compareMetrics?: string[];        // optional compare focus tags, e.g. "sentiment", "macro_hedge"
   };
   slots: Record<string, {
@@ -117,7 +118,8 @@ const ROUTING_RULES = `Routing rules:
 - Choose routeKind = "pass_through" when the request is outside OpenCandle's finance task surface.
 - Set legacy route = "workflow" only for routeKind = "workflow_dispatch"; otherwise set legacy route = "fallback".
 - DO NOT invent a "direct_tool" route. Tool execution belongs to the main agent.
-- For covered call prompts, distinguish the owned underlying from catalyst tickers. Example: "NVDA earnings are today. If I have DRAM..." means symbols=["DRAM","NVDA"], heldSymbol="DRAM", catalystSymbols=["NVDA"], workflow="options_screener", and costBasis if stated.
+- For covered call prompts, distinguish the owned underlying from catalyst tickers. Put the owned symbol first in symbols, set heldSymbol to the owned symbol, put event/context tickers in catalystSymbols, set workflow="options_screener", and preserve costBasis if stated.
+- For protective put prompts, treat the owned/held ticker as the option-chain underlying, set optionStrategy="protective_put", direction="bearish", and preserve shareQuantity if stated. This is a hedge on an existing long share position, not a bullish call screen.
 - Source attribution rules (per-slot source field):
   - source = "user": the value came from THIS turn's text.
   - source = "preference": the value came from profileSnapshot (not this turn).

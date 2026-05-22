@@ -51,4 +51,31 @@ describe("buildCompareAssetsWorkflow", () => {
     expect(workflow.followUps[0]).toContain("hedge role");
     expect(workflow.followUps[0]).toContain("conditions under which");
   });
+
+  it("keeps macro hedge follow-up guidance generic across symbols", () => {
+    const workflow = buildCompareAssetsWorkflow(makeResolution({
+      symbols: ["TLT", "IEF"],
+      timeHorizon: "6mo",
+      metrics: ["macro_hedge"],
+    }));
+
+    expect(workflow.followUps[0]).toContain("each asset");
+    expect(workflow.followUps[0]).not.toContain("BTC");
+    expect(workflow.followUps[0]).not.toContain("GLD");
+  });
+
+  it("adds rate-scenario synthesis guidance for interest-rate comparisons", () => {
+    const workflow = buildCompareAssetsWorkflow(makeResolution({
+      symbols: ["SPY", "QQQ"],
+      timeHorizon: "12mo",
+      metrics: ["interest_rates"],
+    }));
+
+    expect(workflow.initialPrompt).toContain("interest-rate comparison guidance");
+    expect(workflow.initialPrompt).toContain("Fed funds backdrop");
+    expect(workflow.followUps[0]).toContain("benign falling rates");
+    expect(workflow.followUps[0]).toContain("recessionary cuts");
+    expect(workflow.followUps[0]).toContain("sector-exposure risk");
+    expect(workflow.followUps[0]).toContain("historical/current data");
+  });
 });

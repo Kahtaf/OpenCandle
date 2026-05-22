@@ -57,6 +57,28 @@ describe("validateRouterOutput", () => {
     expect(out.entities.compareMetrics).toEqual(["macro_hedge"]);
   });
 
+  it("accepts protective-put strategy and share quantity emitted by the router", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        route: "workflow",
+        workflow: "options_screener",
+        entities: {
+          symbols: ["NVDA"],
+          direction: "bearish",
+          optionStrategy: "protective_put",
+          shareQuantity: 200,
+        },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.entities.optionStrategy).toBe("protective_put");
+    expect(out.entities.shareQuantity).toBe(200);
+  });
+
   it("rejects invalid route", () => {
     expect(() =>
       validateRouterOutput(
@@ -342,6 +364,33 @@ describe("route()", () => {
     }));
   });
 
+  it("removes live tool bundles for no-symbol conceptual education", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Explain how to use valuation ratios without over relying on them.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: ["core_market", "macro"],
+        diagnostics: [],
+        reasoning: "conceptual education prompt",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.tool_bundles).toEqual([]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "conceptual_education_no_tools",
+    }));
+  });
+
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },
@@ -401,6 +450,28 @@ describe("route()", () => {
     expect(result.slots.budget?.source).toBe("preference");
   });
 
+  it("enriches omitted portfolio constraints from deterministic extraction", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "Build a conservative ETF portfolio with $25k for 5 years" },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "portfolio request but omitted constraints",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("portfolio_builder");
+    expect(result.entities.budget).toBe(25_000);
+    expect(result.entities.riskProfile).toBe("conservative");
+    expect(result.entities.assetScope).toBe("etf_focused");
+    expect(result.entities.timeHorizon).toBe("5_years");
+  });
+
   it("does not clarify when prior context supplies the required symbol", async () => {
     const result = await route(
       {
@@ -424,6 +495,28 @@ describe("route()", () => {
     expect(result.routeKind).toBe("workflow_dispatch");
     expect(result.missing_required).toEqual([]);
     expect(result.slots.symbol?.source).toBe("prior_context");
+  });
+
+  it("enriches omitted option premium caps from deterministic extraction", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "MSFT puts under $500 premium" },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "options request but omitted cap",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["MSFT"]);
+    expect(result.entities.direction).toBe("bearish");
+    expect(result.entities.maxPremium).toBe(500);
+    expect(result.entities.budget).toBeUndefined();
   });
 
   it("uses the owned underlying instead of a catalyst ticker for covered-call workflows", async () => {
@@ -452,6 +545,64 @@ describe("route()", () => {
     expect(result.entities.dteHint).toBe("event_week");
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "covered_call_underlying_corrected",
+    }));
+  });
+
+  it("enriches omitted protective-put hedge context from deterministic extraction", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 200 shares of NVDA after a big rally. What's a reasonable protective put 30-45 days out that doesn't cost too much?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "options request",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["NVDA"]);
+    expect(result.entities.direction).toBe("bearish");
+    expect(result.entities.optionStrategy).toBe("protective_put");
+    expect(result.entities.shareQuantity).toBe(200);
+    expect(result.entities.heldSymbol).toBe("NVDA");
+    expect(result.entities.dteHint).toBe("30-45 days");
+  });
+
+  it("uses the owned underlying instead of a catalyst ticker for protective-put workflows", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread catalyst as underlying",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.symbols).toEqual(["AMD", "NVDA"]);
+    expect(result.entities.heldSymbol).toBe("AMD");
+    expect(result.entities.catalystSymbols).toEqual(["NVDA"]);
+    expect(result.entities.optionStrategy).toBe("protective_put");
+    expect(result.entities.direction).toBe("bearish");
+    expect(result.entities.shareQuantity).toBe(200);
+    expect(result.entities.dteHint).toBe("month");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "existing_position_underlying_corrected",
     }));
   });
 });
@@ -484,6 +635,8 @@ describe("buildRouterPrompt", () => {
     expect(prompt).toContain("catalystSymbols");
     expect(prompt).toContain("costBasis");
     expect(prompt).toContain("covered call");
+    expect(prompt).not.toContain("NVDA earnings are today");
+    expect(prompt).not.toContain('symbols=["DRAM","NVDA"]');
   });
 
   it("describes broad sector and macro research as general finance QA", () => {
@@ -564,6 +717,25 @@ describe("route capability manifest", () => {
 
     expect(tools).toEqual(["get_stock_quote", "ask_user"]);
     expect(TOOL_BUNDLE_TOOLS.options).toContain("get_option_chain");
+  });
+
+  it("keeps macro tools for interest-rate comparisons", async () => {
+    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
+      routeKind: "workflow_dispatch",
+      workflow: "compare_assets",
+      entities: { symbols: ["SPY", "QQQ"], compareMetrics: ["interest_rates"] },
+      slots: {},
+      preference_updates: [],
+      missing_required: [],
+      diagnostics: [],
+      reasoning: "rate-sensitive comparison",
+    })));
+    const context = buildResolvedTurnContext(BASE_INPUT, output, {
+      availableToolNames: ["get_stock_quote", "get_economic_data"],
+    });
+
+    expect(context.toolBundles).toContain("macro");
+    expect(context.activeToolNames).toContain("get_economic_data");
   });
 });
 

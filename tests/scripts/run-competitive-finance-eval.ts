@@ -17,12 +17,15 @@ import {
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
   buildPortableAgentPath,
+  competitiveBenchmarkExitCode,
+  competitivePreflightTimeoutMs,
   extractUsableAnswerFromCliFailure,
   fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
   selectDefaultCompetitiveModel,
+  shouldRetryCompetitiveModelCall,
   type ComparisonJudgment,
   type CompetitorAnswer,
   type GeneratedFinancePrompt,
@@ -48,13 +51,17 @@ interface CompetitorRunner {
   label: string;
   provider: string;
   model: string;
-  run(prompt: string): CompetitorRunResult;
+  run(prompt: string, options?: CompetitorRunOptions): CompetitorRunResult;
 }
 
 interface CompetitorRunResult {
   answer: string;
   provider: string;
   model: string;
+}
+
+interface CompetitorRunOptions {
+  timeout?: number;
 }
 
 type AcpxAgent = "claude" | "codex" | "gemini";
@@ -71,7 +78,7 @@ const promptCount = numberFromEnv("COMPETITIVE_PROMPT_COUNT", 5);
 const seed = process.env.COMPETITIVE_PROMPT_SEED ?? new Date().toISOString().slice(0, 10);
 const requestedProvider = process.env.OPENCANDLE_COMPETITIVE_PROVIDER;
 const requestedModelId = process.env.OPENCANDLE_COMPETITIVE_MODEL;
-const settleGraceMs = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS ?? "30000";
+const settleGraceMs = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS ?? "90000";
 const competitorCwd = process.env.OPENCANDLE_COMPETITIVE_AGENT_CWD ?? DEFAULT_COMPETITOR_CWD;
 mkdirSync(competitorCwd, { recursive: true });
 
@@ -179,34 +186,48 @@ for (const competitor of competitors) {
 }
 console.log(`Ties: ${summary.ties}`);
 console.log(`Report: ${outputPath}`);
+process.exit(competitiveBenchmarkExitCode());
 
 async function completeText(
   resolvedModel: ResolvedModel,
   prompt: string,
   options: { temperature: number; maxTokens: number },
 ): Promise<string> {
-  const response = await completeSimple(
-    resolvedModel.model,
-    {
-      messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
-      tools: [],
-    },
-    {
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-      reasoning: "minimal",
-      apiKey: resolvedModel.apiKey,
-      headers: resolvedModel.headers,
-    },
-  );
-  if (response.stopReason === "error" || response.stopReason === "aborted") {
-    throw new Error(response.errorMessage ?? `model call failed: ${response.stopReason}`);
+  const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_MODEL_ATTEMPTS", 3);
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await completeSimple(
+      resolvedModel.model,
+      {
+        messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
+        tools: [],
+      },
+      {
+        temperature: options.temperature,
+        maxTokens: options.maxTokens,
+        reasoning: "minimal",
+        apiKey: resolvedModel.apiKey,
+        headers: resolvedModel.headers,
+      },
+    );
+    if (response.stopReason !== "error" && response.stopReason !== "aborted") {
+      return response.content
+        .filter((content): content is { type: "text"; text: string } => content.type === "text")
+        .map((content) => content.text)
+        .join("")
+        .trim();
+    }
+    const message = response.errorMessage ?? `model call failed: ${response.stopReason}`;
+    if (!shouldRetryCompetitiveModelCall(message, attempt, maxAttempts)) {
+      throw new Error(message);
+    }
+    console.warn(`Model call failed on attempt ${attempt}/${maxAttempts}: ${message}. Retrying...`);
+    await sleep(1000 * attempt);
   }
-  return response.content
-    .filter((content): content is { type: "text"; text: string } => content.type === "text")
-    .map((content) => content.text)
-    .join("")
-    .trim();
+  throw new Error("model call failed after retries");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function runOpenCandle(prompt: string): Promise<EvalTrace> {
@@ -235,7 +256,7 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
   for (const competitor of competitors) {
     console.log(`Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
     try {
-      const result = competitor.run("Reply exactly: OK");
+      const result = competitor.run("Reply exactly: OK", { timeout: competitivePreflightTimeoutMs(process.env) });
       if (!result.answer.trim()) {
         throw new Error(`${competitor.label} baseline returned an empty preflight response`);
       }
@@ -252,19 +273,20 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
   return { active, skipped };
 }
 
-function runClaudeAcp(prompt: string): CompetitorRunResult {
-  const answer = runAcpx("claude", prompt);
+function runClaudeAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
+  const answer = runAcpx("claude", prompt, options);
   return { answer, provider: "acpx/claude", model: "subscription" };
 }
 
-function runCodexAcp(prompt: string): CompetitorRunResult {
+function runCodexAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
   const model = process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium";
-  const answer = runAcpx("codex", prompt, { model });
+  const answer = runAcpx("codex", prompt, { ...options, model });
   return { answer, provider: "acpx/codex", model };
 }
 
-function runGeminiAcp(prompt: string): CompetitorRunResult {
+function runGeminiAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
   const answer = runAcpx("gemini", prompt, {
+    ...options,
     env: { GEMINI_CLI_TRUST_WORKSPACE: "true", TERM: "xterm-256color" },
   });
   return { answer, provider: "acpx/gemini", model: "subscription" };
@@ -273,7 +295,7 @@ function runGeminiAcp(prompt: string): CompetitorRunResult {
 function runAcpx(
   agent: AcpxAgent,
   prompt: string,
-  options: { env?: Record<string, string>; model?: string } = {},
+  options: { env?: Record<string, string>; model?: string; timeout?: number } = {},
 ): string {
   const command = process.env.OPENCANDLE_COMPETITIVE_ACPX_COMMAND ?? DEFAULT_ACPX_COMMAND;
   const agentCommand = resolveAgentCommand(agent);
@@ -299,7 +321,7 @@ function runAcpx(
   return runCli(command, args, {
     cwd: competitorCwd,
     input: prompt,
-    timeout: numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
+    timeout: options.timeout ?? numberFromEnv("OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS", 900_000),
     env: {
       ...defaultAgentEnv(agent),
       ...options.env,

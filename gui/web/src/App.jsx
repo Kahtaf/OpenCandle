@@ -43,20 +43,27 @@ export function AppShell() {
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
   const sessionsOpen = activeDrawer === "history" || location.pathname === "/history";
   const contextOpen = activeDrawer === "context";
+  // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
+  const [draft, setDraft] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const homeResetSessionRef = useRef("");
   const sessionView = routeSessionView({
     pathname: location.pathname,
     currentSessionId: gui.currentSessionId,
     entries: gui.entries,
     runState: chatRun.runState,
     liveBaseEntryCount,
+    canStartFreshHomeSession: gui.supportsSessionActions,
   });
   const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
     !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
   );
-  // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
-  const [draft, setDraft] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const homeResetSessionRef = useRef("");
+  const pendingHomeResetForCurrentSession =
+    sessionView.pendingFreshHomeSession &&
+    (homeResetSessionRef.current === "" || homeResetSessionRef.current === gui.currentSessionId);
+  const inputDisabled = gui.role !== "writer"
+    || pendingHomeResetForCurrentSession
+    || sessionView.pendingSessionSwitch;
 
   const openDrawer = useCallback((drawer) => {
     void navigate({ search: (current) => ({ ...current, drawer }) });
@@ -98,10 +105,11 @@ export function AppShell() {
       currentSessionId: gui.currentSessionId,
       entryCount: gui.entries.length,
       lastResetSessionId: homeResetSessionRef.current,
+      canStartFreshHomeSession: gui.supportsSessionActions,
     })) return;
     homeResetSessionRef.current = gui.currentSessionId;
     gui.send("session.new");
-  }, [location.pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send]);
+  }, [location.pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send, gui.supportsSessionActions]);
 
   useEffect(() => {
     if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;
@@ -127,16 +135,8 @@ export function AppShell() {
   }, []);
 
   const startRoutedChatRun = useCallback((prompt) => {
-    const activeSessionId = gui.currentSessionId;
-    if (location.pathname === "/" && activeSessionId) {
-      void navigate({
-        to: "/sessions/$sessionId",
-        params: { sessionId: activeSessionId },
-        search: (current) => ({ ...current, drawer: undefined }),
-      });
-    }
     void chatRun.startChatRun(prompt);
-  }, [chatRun.startChatRun, gui.currentSessionId, location.pathname, navigate]);
+  }, [chatRun.startChatRun]);
 
   const newSession = useCallback(() => {
     gui.send("session.new");
@@ -192,6 +192,7 @@ export function AppShell() {
           askUserPrompts={visibleAskUserPrompts}
           modelSetup={gui.modelSetup}
           role={gui.role}
+          inputDisabled={inputDisabled}
           runState={chatRun.runState}
           lastPrompt={chatRun.lastPrompt}
           catalog={gui.catalog}

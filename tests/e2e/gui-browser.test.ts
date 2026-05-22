@@ -315,6 +315,106 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Routed answer"));
     await mocked.close();
   }, 30_000);
+
+  it("falls back to HTTP chat runs when WebSocket is unavailable", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const pageErrors: string[] = [];
+    mocked.on("pageerror", (error) => pageErrors.push(error.message));
+    await mocked.addInitScript(() => {
+      window.WebSocket = function BrokenWebSocket() {
+        throw new TypeError("WebSocket is not a constructor");
+      };
+      window.__fetchRequests = [];
+      window.fetch = (input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        window.__fetchRequests.push({ url, body: init?.body ? String(init.body) : "" });
+        if (url.endsWith("/api/bootstrap")) {
+          return Promise.resolve(new Response(JSON.stringify({
+            role: "writer",
+            sessionId: "fallback-session",
+            sessions: [],
+            catalog: {
+              tools: [{ name: "fallback_tool", displayName: "Fallback Tool", enabled: true }],
+              workflows: [],
+              providers: [],
+            },
+            modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+            askUserPrompts: [],
+            snapshot: {
+              sessionId: "fallback-session",
+              entries: [],
+              events: [],
+              state: { watchlist: [], activeAnalyses: [], recentResearch: [], dataQuality: { softGaps: [], hardSkips: [] } },
+            },
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }));
+        }
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            const send = (payload) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            send({ type: "run.started", runId: "fallback-run", sessionId: "fallback-session", seq: 1 });
+            send({ type: "message.created", messageId: "fallback-message", role: "assistant", seq: 2 });
+            send({ type: "message.delta", messageId: "fallback-message", text: "Fallback run worked", seq: 3 });
+            send({ type: "run.completed", runId: "fallback-run", seq: 4 });
+            controller.close();
+          },
+        });
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByLabel("Message OpenCandle"));
+    await mocked.waitForFunction(() => {
+      const textarea = document.querySelector("textarea");
+      return textarea && !textarea.disabled;
+    }, null, { timeout: 5_000 });
+    await mocked.getByRole("button", { name: "New chat" }).click();
+    expect(pageErrors).toEqual([]);
+    await mocked.getByLabel("Message OpenCandle").fill("Fallback browser prompt");
+    await mocked.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(mocked.getByText("Fallback run worked"));
+    await expect(mocked.evaluate(() => window.__fetchRequests)).resolves.toContainEqual(expect.objectContaining({
+      url: "/api/chat/run",
+      body: JSON.stringify({ prompt: "Fallback browser prompt" }),
+    }));
+    await mocked.close();
+  }, 30_000);
+
+  it("disables empty-state suggestions while home waits for a fresh session", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      entries: [
+        {
+          type: "message",
+          id: "stale-user-1",
+          timestamp: new Date().toISOString(),
+          message: { role: "user", content: "Previous prompt" },
+        },
+      ],
+    });
+    await mocked.addInitScript(() => {
+      window.__fetchCount = 0;
+      window.fetch = () => {
+        window.__fetchCount += 1;
+        return Promise.resolve(new Response("", { status: 204 }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const suggestion = mocked.getByRole("button", { name: "Analyze NVDA" });
+    await expect(suggestion.isDisabled()).resolves.toBe(true);
+    await suggestion.click({ force: true });
+    await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(0);
+    await mocked.close();
+  }, 30_000);
 });
 
 async function submitPrompt(page: Page, prompt: string): Promise<void> {

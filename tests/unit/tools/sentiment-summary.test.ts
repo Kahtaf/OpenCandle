@@ -11,6 +11,10 @@ vi.mock("../../../src/providers/web-search.js", () => ({
   searchWeb: vi.fn(),
 }));
 
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
+}));
+
 // Mock reddit provider calls that are not reached through wrapProvider in this tool.
 vi.mock("../../../src/providers/reddit.js", () => ({
   getSubredditPosts: vi.fn(),
@@ -58,6 +62,7 @@ vi.mock("../../../src/sentiment/index.js", async (importOriginal) => {
 });
 
 import { searchWeb } from "../../../src/providers/web-search.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import { getTwitterSentiment } from "../../../src/providers/twitter.js";
 import { getCompanyNews } from "../../../src/providers/finnhub.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
@@ -67,6 +72,7 @@ import { sentimentSummaryTool } from "../../../src/tools/sentiment/sentiment-sum
 const mockedGetTwitterSentiment = vi.mocked(getTwitterSentiment);
 const mockedWrapProvider = vi.mocked(wrapProvider);
 const mockedSearchWeb = vi.mocked(searchWeb);
+const mockedGetQuote = vi.mocked(getQuote);
 const mockedGetCompanyNews = vi.mocked(getCompanyNews);
 const mockedGetConfig = vi.mocked(getConfig);
 
@@ -74,6 +80,7 @@ beforeEach(() => {
   cache.clear();
   vi.clearAllMocks();
   mockedGetConfig.mockReturnValue({ finnhubApiKey: undefined } as any);
+  mockedGetQuote.mockRejectedValue(new Error("quote unavailable"));
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
@@ -144,6 +151,77 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Score");
     expect(text).toMatch(/\bsource-coverage risk\b/i);
     expect(text).toMatch(/\bsentiment can be noisy\b/i);
+  });
+
+  it("adds price context for ticker-specific sentiment summaries", async () => {
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "XYZ",
+        results: [{
+          title: "XYZ bullish",
+          url: "https://example.com/xyz",
+          snippet: "XYZ stock bullish after strong demand.",
+          source: "example.com",
+          published: null,
+          category: "news",
+        }],
+        resultCount: 1,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+    mockedGetQuote.mockResolvedValue({
+      symbol: "XYZ",
+      price: 625,
+      change: -5,
+      changePercent: -0.8,
+      open: 630,
+      high: 632,
+      low: 620,
+      volume: 12_000_000,
+      previousClose: 630,
+      marketCap: 1_500_000_000_000,
+      week52High: 700,
+      week52Low: 450,
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-price", { query: "XYZ" });
+    const text = result.content[0].text;
+
+    expect(mockedGetQuote).toHaveBeenCalledWith("XYZ");
+    expect(text).toContain("Price context");
+    expect(text).toContain("XYZ: $625.00 (-0.80%)");
+    expect(text).toContain("sentiment diverges from price action");
+  });
+
+  it("does not add ticker price context for broad topic sentiment summaries", async () => {
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "semiconductor sector sentiment",
+        results: [{
+          title: "Semiconductor demand improves",
+          url: "https://example.com/semis",
+          snippet: "Semiconductor sector sentiment is improving after stronger orders.",
+          source: "example.com",
+          published: null,
+          category: "news",
+        }],
+        resultCount: 1,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-topic", { query: "semiconductor sector sentiment" });
+    const text = result.content[0].text;
+
+    expect(mockedGetQuote).not.toHaveBeenCalled();
+    expect(text).not.toContain("Price context");
+    expect(text).toContain("Source-coverage risk");
   });
 
   it("handles all sources unavailable", async () => {

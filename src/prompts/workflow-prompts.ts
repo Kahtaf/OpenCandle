@@ -50,6 +50,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   liquidityMinimum: "liquidity",
   optionStrategy: "option strategy",
   costBasis: "cost basis",
+  shareQuantity: "share quantity",
   symbols: "symbols",
   metrics: "metrics",
 };
@@ -137,7 +138,8 @@ function formatSlotValue(value: unknown): string {
 
 export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>): string {
   const { resolved: s, sources } = resolution;
-  const isEtfOnly = s.assetScope.toLowerCase().startsWith("etf");
+  const normalizedScope = s.assetScope.toLowerCase();
+  const isFundBuildingBlocks = normalizedScope.includes("etf") || normalizedScope.includes("fund") || normalizedScope.includes("building_blocks");
 
   const disclosureBlock = buildDisclosureBlock(
     {
@@ -151,12 +153,14 @@ export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>)
     sources as Record<string, SlotSource | undefined>,
   );
 
-  const toolSteps = isEtfOnly
-    ? `1. Identify ${s.positionCount} diverse ETF candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
+  const toolSteps = isFundBuildingBlocks
+    ? `1. Identify ${s.positionCount} diversified fund/ETF building-block candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
+   Include distinct asset-class roles such as core domestic equity, international equity, fixed income, short-duration or cash-like stability, and inflation-sensitive ballast when appropriate.
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
 4. Use analyze_correlation across all candidates to check diversification.`
     : `1. Identify ${s.positionCount} diverse candidates appropriate for a ${s.riskProfile} ${s.timeHorizon} portfolio.
+   Avoid over-concentration in individual equities unless the user explicitly asked for stock picks; use diversified funds where they better fit the requested horizon and risk profile.
 2. Use get_stock_quote for each candidate to get current prices.
 3. Use get_company_overview for fundamentals on each candidate.
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
@@ -175,13 +179,21 @@ Build a draft portfolio under these parameters:
 Steps:
 ${toolSteps}
 
+Portfolio construction guardrails:
+- For broad balanced portfolio requests, prefer diversified building blocks over individual-company concentration unless the user explicitly asks for stocks.
+- For horizons under 5 years, include enough fixed-income, short-duration, cash-like, or inflation-sensitive ballast to make the drawdown risk match the horizon.
+- If a candidate's risk metrics undermine its role (for example materially negative risk-adjusted returns, high drawdown, or excessive correlation), lower the allocation, name a role-equivalent replacement, or explain why you are keeping it.
+- Keep rationale tied to each holding's role in this portfolio; do not paste company descriptions or generic issuer background.
+
 ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
-- Present an allocation table: symbol, allocation %, dollar amount, and a one-line analyst rationale for each position (what the data showed).
+- Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
+- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff for the stated time horizon.
 - Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
+- Include practical implementation notes: rebalance cadence, low-cost/liquid implementation, and tax/account caveats where relevant.
 - Suggest what to change for more growth or more safety.`;
 }
 
@@ -229,8 +241,10 @@ For LEAPS / long-dated options:
       objective: s.objective,
       moneynessPreference: s.moneynessPreference,
       liquidityMinimum: s.liquidityMinimum,
+      ...(s.maxPremium !== undefined ? { maxPremium: formatBudget(s.maxPremium) } : {}),
       ...(s.optionStrategy ? { optionStrategy: s.optionStrategy } : {}),
       ...(s.costBasis !== undefined ? { costBasis: formatBudget(s.costBasis) } : {}),
+      ...(s.shareQuantity !== undefined ? { shareQuantity: `${s.shareQuantity} shares` } : {}),
       ...(s.catalystSymbols?.length ? { catalystSymbols: s.catalystSymbols.join(", ") } : {}),
     },
     sources as Record<string, SlotSource | undefined>,
@@ -240,10 +254,16 @@ For LEAPS / long-dated options:
   const coveredCallContext = [
     s.optionStrategy ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}` : "",
     s.costBasis !== undefined ? `\n- Cost basis: ${formatBudget(s.costBasis)} (Position cost basis: ${formatBudget(s.costBasis)})${tag(sources.costBasis)}` : "",
+    s.shareQuantity !== undefined ? `\n- Share quantity: ${s.shareQuantity} shares${tag(sources.shareQuantity)}` : "",
     s.catalystSymbols?.length ? `\n- Catalyst/context tickers: ${s.catalystSymbols.join(", ")}${tag(sources.catalystSymbols)}` : "",
   ].join("");
 
-  const isCoveredCallContext = s.optionStrategy === "covered_call" || s.costBasis !== undefined || (s.catalystSymbols?.length ?? 0) > 0;
+  const isProtectivePutContext = s.optionStrategy === "protective_put";
+  const isCoveredCallContext = !isProtectivePutContext && (
+    s.optionStrategy === "covered_call" ||
+    s.costBasis !== undefined ||
+    (s.catalystSymbols?.length ?? 0) > 0
+  );
   const coveredCallInstructions = isCoveredCallContext
     ? `
 Covered-call sale guidance:
@@ -259,6 +279,22 @@ Covered-call sale guidance:
 - In that fallback, "Best action:" should be no trade unless the user's broker shows a real bid, and "Conditional candidate:" should be a strike above cost basis labeled conditional on live bid/ask.
 `
     : "";
+  const protectivePutInstructions = isProtectivePutContext
+    ? `
+Protective-put hedge guidance:
+- Treat this as buying puts to hedge an existing long ${s.symbol} share position, not buying calls.
+- Treat ${s.symbol} as the option-chain underlying.
+- Rank put contracts by protection per dollar of premium: expiration fit, hedge floor, moneyness, liquidity, and premium as a percent of the stock position.
+- For "doesn't cost too much" or similar cost-sensitive language, prefer liquid puts modestly below the current stock price before far-OTM lottery hedges; explain the tradeoff between cheaper premium and weaker protection.
+- If share quantity is provided, use 1 put contract per 100 shares when discussing coverage and contract count.
+- Include the hedge floor: approximate protected stock value at strike, net of premium where possible.
+- Mention lower-cost alternatives such as a collar or put spread when outright put premium is high.
+- Long protective puts have premium/decay risk and exercise/exit choices; do not frame assignment risk like a short option sale.
+`
+    : "";
+  const topPickExplanation = isCoveredCallContext
+    ? `Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.`
+    : "Explain why the top pick is ranked #1.";
 
   return `Current date: ${dateStr}
 Do NOT invent or assume a different current date.${expirationSection}
@@ -268,29 +304,30 @@ Screen and rank options contracts for ${s.symbol}:
 - DTE target: ${s.dteTarget}${tag(sources.dteTarget)}
 - Objective: ${s.objective}${tag(sources.objective)}
 - Moneyness: ${s.moneynessPreference}${tag(sources.moneynessPreference)}
-- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}${coveredCallContext}
+- Liquidity: ${s.liquidityMinimum}${tag(sources.liquidityMinimum)}${coveredCallContext}${s.budget ? `\n- Budget: ${formatBudget(s.budget)}` : ""}${s.maxPremium ? `\n- Max premium: ${formatBudget(s.maxPremium)}` : ""}
 
 Steps:
 1. Use get_stock_quote for ${s.symbol} to get current price and recent movement.
 2. Use get_option_chain for ${s.symbol} to get the full chain with Greeks. If you filter by contract type, pass \`type: "call"\` or \`type: "put"\` in lowercase.
-3. Filter contracts matching: ${s.direction === "bullish" ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
-4. Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.
+3. Filter contracts matching: ${s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
+4. ${isProtectivePutContext ? "Rank by hedge quality: protection per dollar of premium, expiration fit, moneyness, liquidity, and hedge floor." : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.`}${s.maxPremium !== undefined ? ` Do not rank contracts above the user's max premium of ${formatBudget(s.maxPremium)} unless no contracts under that cap are liquid; if so, say the cap could not be met.` : ""}
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
 ${s.optionStrategy === "covered_call" ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
-` : ""}${s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
+` : ""}${isCoveredCallContext && s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
 ` : ""}
 ${longDatedInstructions}
 ${coveredCallInstructions}
+${protectivePutInstructions}
 ${rankingConstraints}
 ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : "State the interpretation only if the user's requested underlying is ambiguous."}
-- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread.
-- Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.
+- ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : isProtectivePutContext ? `Start with an Interpretation line: "Interpretation: Treating this as buying protective puts on an existing long ${s.symbol} share position."` : "State the interpretation only if the user's requested underlying is ambiguous."}
+- Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", hedge floor, premium % of position" : ""}.
+- ${topPickExplanation}
 - Verify bid/ask and open interest in the user's broker before trading, even when OC shows live values.
-- Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;
+- Include ${isCoveredCallContext ? "covered-call sale risks (assignment/capped upside, share-price downside in the owned stock, IV/event risk, exit liquidity). Do not describe max loss as the option premium paid" : isProtectivePutContext ? "protective-put risks (premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost). Do not discuss short-option assignment risk" : "risk caveats (max loss = premium, IV crush risk, time decay)"}.`;
 }
 
 export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAssetsSlots>): string {
@@ -299,10 +336,23 @@ export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAsset
   const timeHorizon = resolution.resolved.timeHorizon;
   const includeSentiment = resolution.resolved.metrics?.includes("sentiment") ?? false;
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
+  const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
   const sentimentStep = includeSentiment
     ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
+  const interestRateStep = isInterestRateSensitive
+    ? `\n${includeSentiment ? "7" : "6"}. Use get_economic_data for the current Fed funds backdrop. Treat this as historical/current context unless you also have explicit futures or forecast evidence.`
+    : "";
   const sentimentMetric = includeSentiment ? ", sentiment score/summary" : "";
+  const interestRateGuidance = isInterestRateSensitive
+    ? `
+interest-rate comparison guidance:
+- Separate the user's conditional premise from observed data: if the prompt says rates "start falling," state that the recommendation depends on why rates fall and whether market pricing confirms it.
+- Give a compact scenario split: benign disinflation/soft landing, recession or earnings shock, and sticky inflation or renewed rate pressure. State which asset type should benefit in each case and why.
+- Connect rates to asset mechanics: duration-like sensitivity of future earnings, cost of capital, earnings resilience, valuation multiples, and risk appetite.
+- For ETF or fund comparisons, include concentration and sector-exposure risk when one asset is meaningfully narrower or more growth/technology-heavy than the other.
+- If forward valuation, earnings estimates, or rate-futures evidence is unavailable, say that directly and avoid treating historical Fed funds data as a forecast.`
+    : "";
   const macroHedgeSteps = isMacroHedge
     ? `
 macro hedge decision guidance:
@@ -348,8 +398,9 @@ Steps:
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
 3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}${horizonSteps}
+5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}${interestRateStep}${horizonSteps}
 ${macroHedgeSteps}
+${interestRateGuidance}
 
 ${disclosureBlock}
 
@@ -357,5 +408,5 @@ Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 ${tableInstruction}
 - Provide a summary verdict: which is most attractive and why.
-- Note any caveats (different sectors, market cap disparity, unavailable fundamentals, etc.).${horizonResponse}`;
+- Note any caveats (different sectors, concentration, market cap disparity, unavailable fundamentals, unavailable forward-looking estimates, etc.).${horizonResponse}`;
 }

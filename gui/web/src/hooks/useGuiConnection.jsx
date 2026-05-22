@@ -18,19 +18,66 @@ export function useGuiConnection() {
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
   const [modelSetup, setModelSetup] = useState({ requirement: "unknown", providers: [], availableModels: [] });
+  const [supportsSessionActions, setSupportsSessionActions] = useState(false);
   const [toast, setToast] = useState("");
 
   useEffect(() => {
     let disposed = false;
     let reconnect = 0;
 
+    const connectHttpFallback = async () => {
+      try {
+        wsRef.current = null;
+        const response = await fetch("/api/bootstrap");
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        const snapshot = data.snapshot || {};
+        if (disposed) return;
+        setSupportsSessionActions(false);
+        setRole(data.role || "writer");
+        setCurrentSessionId(data.sessionId || snapshot.sessionId || "");
+        setAskUserPrompts(data.askUserPrompts || []);
+        setEntries(snapshot.entries || []);
+        startTransition(() => {
+          setSessions(data.sessions || []);
+          setDashboard(snapshot.state || EMPTY_DASHBOARD);
+          setEvents(snapshot.events || []);
+          setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
+          setModelSetup(data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
+        });
+      } catch {
+        if (!disposed) setRole("disconnected");
+      }
+    };
+
     const connect = () => {
+      if (typeof WebSocket !== "function") {
+        void connectHttpFallback();
+        return;
+      }
       const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+      let ws;
+      try {
+        ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+      } catch {
+        void connectHttpFallback();
+        return;
+      }
+      let receivedBoot = false;
+      let usingHttpFallback = false;
+      const bootTimeout = window.setTimeout(() => {
+        if (receivedBoot || disposed) return;
+        usingHttpFallback = true;
+        ws.close();
+        void connectHttpFallback();
+      }, 1_500);
       wsRef.current = ws;
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "boot") {
+          receivedBoot = true;
+          window.clearTimeout(bootTimeout);
+          setSupportsSessionActions(true);
           setRole(message.role);
           setCurrentSessionId(message.sessionId);
           setAskUserPrompts(message.askUserPrompts || []);
@@ -58,6 +105,9 @@ export function useGuiConnection() {
         }
       };
       ws.onclose = () => {
+        window.clearTimeout(bootTimeout);
+        if (usingHttpFallback) return;
+        setSupportsSessionActions(false);
         setRole("disconnected");
         if (!disposed) reconnect = window.setTimeout(connect, 1000);
       };
@@ -72,11 +122,12 @@ export function useGuiConnection() {
   }, []);
 
   const send = useCallback((type, payload = {}) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
       setToast("GUI connection is not open.");
       return false;
     }
-    wsRef.current.send(JSON.stringify({ type, ...payload }));
+    socket.send(JSON.stringify({ type, ...payload }));
     return true;
   }, []);
 
@@ -90,10 +141,11 @@ export function useGuiConnection() {
     dashboard,
     currentSessionId,
     modelSetup,
+    supportsSessionActions,
     toast,
     setToast,
     send,
-  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, toast, send]);
+  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, toast, send]);
 }
 
 function upsertPrompt(current, prompt) {
