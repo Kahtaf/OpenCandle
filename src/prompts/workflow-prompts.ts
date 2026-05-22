@@ -328,10 +328,23 @@ export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAsset
   const timeHorizon = resolution.resolved.timeHorizon;
   const includeSentiment = resolution.resolved.metrics?.includes("sentiment") ?? false;
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
+  const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
   const sentimentStep = includeSentiment
     ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
+  const interestRateStep = isInterestRateSensitive
+    ? `\n${includeSentiment ? "7" : "6"}. Use get_economic_data for the current Fed funds backdrop. Treat this as historical/current context unless you also have explicit futures or forecast evidence.`
+    : "";
   const sentimentMetric = includeSentiment ? ", sentiment score/summary" : "";
+  const interestRateGuidance = isInterestRateSensitive
+    ? `
+interest-rate comparison guidance:
+- Separate the user's conditional premise from observed data: if the prompt says rates "start falling," state that the recommendation depends on why rates fall and whether market pricing confirms it.
+- Give a compact scenario split: benign disinflation/soft landing, recession or earnings shock, and sticky inflation or renewed rate pressure. State which asset type should benefit in each case and why.
+- Connect rates to asset mechanics: duration-like sensitivity of future earnings, cost of capital, earnings resilience, valuation multiples, and risk appetite.
+- For ETF or fund comparisons, include concentration and sector-exposure risk when one asset is meaningfully narrower or more growth/technology-heavy than the other.
+- If forward valuation, earnings estimates, or rate-futures evidence is unavailable, say that directly and avoid treating historical Fed funds data as a forecast.`
+    : "";
   const macroHedgeSteps = isMacroHedge
     ? `
 macro hedge decision guidance:
@@ -377,8 +390,9 @@ Steps:
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
 3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}${horizonSteps}
+5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}${interestRateStep}${horizonSteps}
 ${macroHedgeSteps}
+${interestRateGuidance}
 
 ${disclosureBlock}
 
@@ -386,5 +400,5 @@ Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 ${tableInstruction}
 - Provide a summary verdict: which is most attractive and why.
-- Note any caveats (different sectors, market cap disparity, unavailable fundamentals, etc.).${horizonResponse}`;
+- Note any caveats (different sectors, concentration, market cap disparity, unavailable fundamentals, unavailable forward-looking estimates, etc.).${horizonResponse}`;
 }

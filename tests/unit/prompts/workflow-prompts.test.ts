@@ -381,6 +381,26 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toMatch(/liquidity crunch/i);
     expect(prompt).not.toMatch(/Highlight which asset is stronger on each metric/i);
   });
+
+  it("specializes comparison guidance for interest-rate-sensitive allocation decisions", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["SPY", "QQQ"], timeHorizon: "12mo", metrics: ["interest_rates"] },
+      sources: { symbols: "user", timeHorizon: "user", metrics: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toContain("get_economic_data");
+    expect(prompt).toContain("current Fed funds backdrop");
+    expect(prompt).toContain("historical/current context");
+    expect(prompt).toContain("why rates fall");
+    expect(prompt).toContain("benign disinflation/soft landing");
+    expect(prompt).toContain("sticky inflation");
+    expect(prompt).toContain("duration-like sensitivity");
+    expect(prompt).toContain("concentration and sector-exposure risk");
+    expect(prompt).toContain("rate-futures evidence is unavailable");
+  });
 });
 
 describe("buildDisclosureBlock", () => {

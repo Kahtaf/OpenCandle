@@ -238,5 +238,6 @@ function extractCompareMetrics(input: string): string[] | undefined {
   const metrics: string[] = [];
   if (/\bsentiment\b/.test(lower)) metrics.push("sentiment");
   if (/\b(?:macro\s*)?hedg(?:e|ing)\b/.test(lower)) metrics.push("macro_hedge");
+  if (/\b(?:rates?|rate\s*cuts?|fed|federal\s+funds?|interest\s+rates?)\b/.test(lower)) metrics.push("interest_rates");
   return metrics.length > 0 ? metrics : undefined;
 }

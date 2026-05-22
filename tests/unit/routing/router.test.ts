@@ -641,6 +641,25 @@ describe("route capability manifest", () => {
     expect(tools).toEqual(["get_stock_quote", "ask_user"]);
     expect(TOOL_BUNDLE_TOOLS.options).toContain("get_option_chain");
   });
+
+  it("keeps macro tools for interest-rate comparisons", async () => {
+    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
+      routeKind: "workflow_dispatch",
+      workflow: "compare_assets",
+      entities: { symbols: ["SPY", "QQQ"], compareMetrics: ["interest_rates"] },
+      slots: {},
+      preference_updates: [],
+      missing_required: [],
+      diagnostics: [],
+      reasoning: "rate-sensitive comparison",
+    })));
+    const context = buildResolvedTurnContext(BASE_INPUT, output, {
+      availableToolNames: ["get_stock_quote", "get_economic_data"],
+    });
+
+    expect(context.toolBundles).toContain("macro");
+    expect(context.activeToolNames).toContain("get_economic_data");
+  });
 });
 
 describe("ResolvedTurnContext", () => {

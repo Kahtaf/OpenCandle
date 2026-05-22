@@ -10,6 +10,7 @@ export function buildCompareAssetsWorkflowDefinition(
   const symbols = resolution.resolved.symbols.join(", ");
   const timeHorizon = resolution.resolved.timeHorizon;
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
+  const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
   const evidenceList = resolution.resolved.metrics?.includes("sentiment")
     ? "price, technical, risk, and sentiment data"
     : "price, technical, and risk data";
@@ -25,6 +26,12 @@ export function buildCompareAssetsWorkflowDefinition(
 - Do not let missing BTC or ETF-specific metrics turn into a shallow default winner. Explain what the missing metric would have shown and how that lowers confidence.
 - Give actionable conditional guidance: conditions under which GLD is the better capital-preservation hedge, and conditions under which BTC is only a higher-volatility debasement/asymmetric-upside sleeve.`
     : "";
+  const interestRateGuidance = isInterestRateSensitive
+    ? `
+- For the rate-sensitive premise, separate benign falling rates from recessionary cuts and sticky-inflation/rate-reversal scenarios before giving the final tilt.
+- Discuss concentration or sector-exposure risk when one asset is narrower or more growth-heavy than the other.
+- Say whether the rate evidence you used is historical/current data or forward-looking market-pricing evidence; do not treat historical Fed funds data as a forecast.`
+    : "";
 
   return {
     workflowType: "compare_assets",
@@ -36,7 +43,7 @@ export function buildCompareAssetsWorkflowDefinition(
       promptStep("compare_and_present", "Present side-by-side comparison", `Now present the side-by-side comparison for ${symbols}:
 - Keep any unavailable fundamentals marked as unavailable instead of retrying the same failed provider calls.
 - Use the ${evidenceList} you already fetched to finish the comparison even if some fundamentals are missing.
-- End with a concise verdict on which asset looks strongest right now and why.${horizonGuidance}${macroHedgeGuidance}`, {
+- End with a concise verdict on which asset looks strongest right now and why.${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}`, {
         requiredInputs: ["asset_data"],
         expectedOutputs: ["comparison_summary"],
       }),

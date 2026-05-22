@@ -245,6 +245,11 @@ describe("extractEntities", () => {
       const result = extractEntities("For the next 6 months, should I use BTC or GLD as a macro hedge?");
       expect(result.compareMetrics).toEqual(["macro_hedge"]);
     });
+
+    it("detects interest-rate comparison focus", () => {
+      const result = extractEntities("For the next 12 months, should I overweight SPY or QQQ if rates start falling?");
+      expect(result.compareMetrics).toEqual(["interest_rates"]);
+    });
   });
 });
 
