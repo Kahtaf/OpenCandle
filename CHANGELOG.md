@@ -27,6 +27,7 @@
 - Covered-call recommendations no longer use long-call premium-paid max-loss framing; weekly and `1-2 week` horizons normalize to 7-to-14-day expirations, and fallback guidance keeps usable candidates when option quotes are stale or incomplete.
 - Portfolio slot resolution now honors ETF-focused scope and explicit multi-year horizons from the user prompt.
 - GUI options follow-up prompts no longer drop gamma, theta, vega, and rho from the ranked contract table.
+- Generic finance workflow routing no longer leaks benchmark-specific macro-hedge guidance, misreads lowercase asset-class or macro nouns as tickers, treats cost basis as portfolio budget, or strands the GUI home screen when HTTP fallback mode cannot issue session actions.
 
 ## [0.4.0] - 2026-05-16
 
