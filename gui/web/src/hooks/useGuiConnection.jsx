@@ -26,19 +26,22 @@ export function useGuiConnection() {
 
     const connectHttpFallback = async () => {
       try {
-        const response = await fetch("/api/sessions");
+        wsRef.current = null;
+        const response = await fetch("/api/bootstrap");
         if (!response.ok) throw new Error(response.statusText);
         const data = await response.json();
+        const snapshot = data.snapshot || {};
         if (disposed) return;
         setRole(data.role || "writer");
-        setCurrentSessionId(data.currentSessionId || "");
-        setEntries([]);
-        setEvents([]);
+        setCurrentSessionId(data.sessionId || snapshot.sessionId || "");
+        setAskUserPrompts(data.askUserPrompts || []);
+        setEntries(snapshot.entries || []);
         startTransition(() => {
           setSessions(data.sessions || []);
-          setDashboard(EMPTY_DASHBOARD);
-          setCatalog({ tools: [], workflows: [], providers: [] });
-          setModelSetup({ requirement: "ready", providers: [], availableModels: [] });
+          setDashboard(snapshot.state || EMPTY_DASHBOARD);
+          setEvents(snapshot.events || []);
+          setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
+          setModelSetup(data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
         });
       } catch {
         if (!disposed) setRole("disconnected");
@@ -115,11 +118,12 @@ export function useGuiConnection() {
   }, []);
 
   const send = useCallback((type, payload = {}) => {
-    if (typeof WebSocket !== "function" || wsRef.current?.readyState !== WebSocket.OPEN) {
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
       setToast("GUI connection is not open.");
       return false;
     }
-    wsRef.current.send(JSON.stringify({ type, ...payload }));
+    socket.send(JSON.stringify({ type, ...payload }));
     return true;
   }, []);
 

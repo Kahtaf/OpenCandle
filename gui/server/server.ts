@@ -108,6 +108,19 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
     return;
   }
 
+  if (url.pathname === "/api/bootstrap" && req.method === "GET") {
+    writeJson(res, {
+      role: lockResult.role,
+      sessionId: sessionManager.getSessionId(),
+      catalog: buildCatalog(),
+      modelSetup: buildCurrentModelSetupState(),
+      askUserPrompts: askUserBridge.getPrompts(),
+      sessions: await SessionManager.list(cwd, sessionDir),
+      snapshot: buildStateSnapshot(),
+    });
+    return;
+  }
+
   if (url.pathname === "/api/sessions" && req.method === "GET") {
     writeJson(res, {
       currentSessionId: sessionManager.getSessionId(),

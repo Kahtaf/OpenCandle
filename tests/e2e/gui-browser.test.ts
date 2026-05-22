@@ -318,19 +318,34 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
   it("falls back to HTTP chat runs when WebSocket is unavailable", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const pageErrors: string[] = [];
+    mocked.on("pageerror", (error) => pageErrors.push(error.message));
     await mocked.addInitScript(() => {
       window.WebSocket = function BrokenWebSocket() {
         throw new TypeError("WebSocket is not a constructor");
       };
       window.__fetchRequests = [];
       window.fetch = (input, init) => {
-        const url = String(input);
+        const url = typeof input === "string" ? input : input.url;
         window.__fetchRequests.push({ url, body: init?.body ? String(init.body) : "" });
-        if (url.endsWith("/api/sessions")) {
+        if (url.endsWith("/api/bootstrap")) {
           return Promise.resolve(new Response(JSON.stringify({
             role: "writer",
-            currentSessionId: "fallback-session",
+            sessionId: "fallback-session",
             sessions: [],
+            catalog: {
+              tools: [{ name: "fallback_tool", displayName: "Fallback Tool", enabled: true }],
+              workflows: [],
+              providers: [],
+            },
+            modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+            askUserPrompts: [],
+            snapshot: {
+              sessionId: "fallback-session",
+              entries: [],
+              events: [],
+              state: { watchlist: [], activeAnalyses: [], recentResearch: [], dataQuality: { softGaps: [], hardSkips: [] } },
+            },
           }), {
             status: 200,
             headers: { "content-type": "application/json" },
@@ -356,7 +371,12 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByLabel("Message OpenCandle"));
-    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(false);
+    await mocked.waitForFunction(() => {
+      const textarea = document.querySelector("textarea");
+      return textarea && !textarea.disabled;
+    }, null, { timeout: 5_000 });
+    await mocked.getByRole("button", { name: "New chat" }).click();
+    expect(pageErrors).toEqual([]);
     await mocked.getByLabel("Message OpenCandle").fill("Fallback browser prompt");
     await mocked.getByRole("button", { name: "Send" }).click();
 
