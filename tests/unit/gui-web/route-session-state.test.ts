@@ -36,6 +36,7 @@ describe("route session state", () => {
     });
 
     expect(view.activeSessionId).toBe("session-with-history");
+    expect(view.pendingFreshHomeSession).toBe(true);
     expect(view.entries).toEqual([]);
   });
 

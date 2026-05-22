@@ -37,10 +37,11 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
     if (latest && latest !== drawer.run) drawer.open(latest);
   }, [groupedEntries, drawer]);
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
+  const chatDisabled = role === "follower" || inputDisabled;
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
-    if (!prompt) return;
+    if (!prompt || chatDisabled) return;
     setDraft("");
     void startChatRun(prompt);
   };
@@ -57,7 +58,7 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
         ) : visibleEntries.length === 0 && !activity ? (
-          <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} />
+          <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} disabled={chatDisabled} />
         ) : (
           <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
             {groupedEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
@@ -71,9 +72,9 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
       <ChatComposer
         draft={draft}
         setDraft={setDraft}
-        disabled={role === "follower" || inputDisabled}
+        disabled={chatDisabled}
         placeholder={placeholder}
-        canSend={Boolean(draft.trim()) && role !== "follower" && !inputDisabled}
+        canSend={Boolean(draft.trim()) && !chatDisabled}
         onSubmit={() => submit()}
         onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
         onOpenContext={onOpenContext}

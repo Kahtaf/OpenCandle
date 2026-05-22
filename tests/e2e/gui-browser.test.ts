@@ -315,6 +315,34 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Routed answer"));
     await mocked.close();
   }, 30_000);
+
+  it("disables empty-state suggestions while home waits for a fresh session", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      entries: [
+        {
+          type: "message",
+          id: "stale-user-1",
+          timestamp: new Date().toISOString(),
+          message: { role: "user", content: "Previous prompt" },
+        },
+      ],
+    });
+    await mocked.addInitScript(() => {
+      window.__fetchCount = 0;
+      window.fetch = () => {
+        window.__fetchCount += 1;
+        return Promise.resolve(new Response("", { status: 204 }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const suggestion = mocked.getByRole("button", { name: "Analyze NVDA" });
+    await expect(suggestion.isDisabled()).resolves.toBe(true);
+    await suggestion.click({ force: true });
+    await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(0);
+    await mocked.close();
+  }, 30_000);
 });
 
 async function submitPrompt(page: Page, prompt: string): Promise<void> {

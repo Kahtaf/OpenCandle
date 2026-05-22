@@ -635,6 +635,8 @@ describe("buildRouterPrompt", () => {
     expect(prompt).toContain("catalystSymbols");
     expect(prompt).toContain("costBasis");
     expect(prompt).toContain("covered call");
+    expect(prompt).not.toContain("NVDA earnings are today");
+    expect(prompt).not.toContain('symbols=["DRAM","NVDA"]');
   });
 
   it("describes broad sector and macro research as general finance QA", () => {

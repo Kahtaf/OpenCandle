@@ -24,6 +24,9 @@ export async function waitForEntryCount(
   while (getCount() <= previousCount && Date.now() < deadline) {
     await delay(intervalMs);
   }
+  if (getCount() <= previousCount) {
+    throw new Error("Timed out waiting for a new session entry");
+  }
 }
 
 export async function waitForNewEntryId(
@@ -37,6 +40,9 @@ export async function waitForNewEntryId(
 
   while (!getIds().some((id) => !previousIds.has(id)) && Date.now() < deadline) {
     await delay(intervalMs);
+  }
+  if (!getIds().some((id) => !previousIds.has(id))) {
+    throw new Error("Timed out waiting for a new session entry");
   }
 }
 
@@ -67,6 +73,7 @@ export async function waitForSessionTurnSettlement(
 
     await delay(intervalMs);
   }
+  throw new Error("Timed out waiting for the session turn to settle");
 }
 
 function delay(ms: number): Promise<void> {

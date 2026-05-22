@@ -18,6 +18,7 @@ export function routeSessionView({
   return {
     routeSessionId,
     pendingSessionSwitch,
+    pendingFreshHomeSession,
     activeSessionId: routeSessionId || currentSessionId || "",
     entries: pendingSessionSwitch || pendingFreshHomeSession
       ? []
