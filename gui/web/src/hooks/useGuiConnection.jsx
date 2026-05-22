@@ -24,13 +24,54 @@ export function useGuiConnection() {
     let disposed = false;
     let reconnect = 0;
 
+    const connectHttpFallback = async () => {
+      try {
+        const response = await fetch("/api/sessions");
+        if (!response.ok) throw new Error(response.statusText);
+        const data = await response.json();
+        if (disposed) return;
+        setRole(data.role || "writer");
+        setCurrentSessionId(data.currentSessionId || "");
+        setEntries([]);
+        setEvents([]);
+        startTransition(() => {
+          setSessions(data.sessions || []);
+          setDashboard(EMPTY_DASHBOARD);
+          setCatalog({ tools: [], workflows: [], providers: [] });
+          setModelSetup({ requirement: "ready", providers: [], availableModels: [] });
+        });
+      } catch {
+        if (!disposed) setRole("disconnected");
+      }
+    };
+
     const connect = () => {
+      if (typeof WebSocket !== "function") {
+        void connectHttpFallback();
+        return;
+      }
       const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+      let ws;
+      try {
+        ws = new WebSocket(`${wsProtocol}//${location.host}/ws`);
+      } catch {
+        void connectHttpFallback();
+        return;
+      }
+      let receivedBoot = false;
+      let usingHttpFallback = false;
+      const bootTimeout = window.setTimeout(() => {
+        if (receivedBoot || disposed) return;
+        usingHttpFallback = true;
+        ws.close();
+        void connectHttpFallback();
+      }, 1_500);
       wsRef.current = ws;
       ws.onmessage = (event) => {
         const message = JSON.parse(event.data);
         if (message.type === "boot") {
+          receivedBoot = true;
+          window.clearTimeout(bootTimeout);
           setRole(message.role);
           setCurrentSessionId(message.sessionId);
           setAskUserPrompts(message.askUserPrompts || []);
@@ -58,6 +99,8 @@ export function useGuiConnection() {
         }
       };
       ws.onclose = () => {
+        window.clearTimeout(bootTimeout);
+        if (usingHttpFallback) return;
         setRole("disconnected");
         if (!disposed) reconnect = window.setTimeout(connect, 1000);
       };
@@ -72,7 +115,7 @@ export function useGuiConnection() {
   }, []);
 
   const send = useCallback((type, payload = {}) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+    if (typeof WebSocket !== "function" || wsRef.current?.readyState !== WebSocket.OPEN) {
       setToast("GUI connection is not open.");
       return false;
     }

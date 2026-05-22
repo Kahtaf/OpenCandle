@@ -76,5 +76,13 @@ describe("route session state", () => {
       entryCount: 2,
       lastResetSessionId: "session-with-history",
     })).toBe(false);
+
+    expect(shouldStartFreshHomeSession({
+      pathname: "/",
+      role: "writer",
+      currentSessionId: "fresh-session-after-reset",
+      entryCount: 2,
+      lastResetSessionId: "session-with-history",
+    })).toBe(false);
   });
 });

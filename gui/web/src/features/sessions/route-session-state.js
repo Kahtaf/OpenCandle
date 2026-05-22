@@ -39,5 +39,5 @@ export function shouldStartFreshHomeSession({
     && role === "writer"
     && Boolean(currentSessionId)
     && entryCount > 0
-    && lastResetSessionId !== currentSessionId;
+    && lastResetSessionId === "";
 }

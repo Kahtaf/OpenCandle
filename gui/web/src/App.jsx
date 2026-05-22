@@ -43,6 +43,10 @@ export function AppShell() {
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
   const sessionsOpen = activeDrawer === "history" || location.pathname === "/history";
   const contextOpen = activeDrawer === "context";
+  // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
+  const [draft, setDraft] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const homeResetSessionRef = useRef("");
   const sessionView = routeSessionView({
     pathname: location.pathname,
     currentSessionId: gui.currentSessionId,
@@ -53,13 +57,12 @@ export function AppShell() {
   const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
     !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
   );
+  const pendingHomeResetForCurrentSession =
+    sessionView.pendingFreshHomeSession &&
+    (homeResetSessionRef.current === "" || homeResetSessionRef.current === gui.currentSessionId);
   const inputDisabled = gui.role !== "writer"
-    || sessionView.pendingFreshHomeSession
+    || pendingHomeResetForCurrentSession
     || sessionView.pendingSessionSwitch;
-  // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
-  const [draft, setDraft] = useState("");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const homeResetSessionRef = useRef("");
 
   const openDrawer = useCallback((drawer) => {
     void navigate({ search: (current) => ({ ...current, drawer }) });

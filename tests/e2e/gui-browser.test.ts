@@ -316,6 +316,58 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
+  it("falls back to HTTP chat runs when WebSocket is unavailable", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await mocked.addInitScript(() => {
+      window.WebSocket = function BrokenWebSocket() {
+        throw new TypeError("WebSocket is not a constructor");
+      };
+      window.__fetchRequests = [];
+      window.fetch = (input, init) => {
+        const url = String(input);
+        window.__fetchRequests.push({ url, body: init?.body ? String(init.body) : "" });
+        if (url.endsWith("/api/sessions")) {
+          return Promise.resolve(new Response(JSON.stringify({
+            role: "writer",
+            currentSessionId: "fallback-session",
+            sessions: [],
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }));
+        }
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            const send = (payload) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            send({ type: "run.started", runId: "fallback-run", sessionId: "fallback-session", seq: 1 });
+            send({ type: "message.created", messageId: "fallback-message", role: "assistant", seq: 2 });
+            send({ type: "message.delta", messageId: "fallback-message", text: "Fallback run worked", seq: 3 });
+            send({ type: "run.completed", runId: "fallback-run", seq: 4 });
+            controller.close();
+          },
+        });
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByLabel("Message OpenCandle"));
+    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(false);
+    await mocked.getByLabel("Message OpenCandle").fill("Fallback browser prompt");
+    await mocked.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(mocked.getByText("Fallback run worked"));
+    await expect(mocked.evaluate(() => window.__fetchRequests)).resolves.toContainEqual(expect.objectContaining({
+      url: "/api/chat/run",
+      body: JSON.stringify({ prompt: "Fallback browser prompt" }),
+    }));
+    await mocked.close();
+  }, 30_000);
+
   it("disables empty-state suggestions while home waits for a fresh session", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
