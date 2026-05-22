@@ -128,9 +128,9 @@ describe("opencandle extension", () => {
     openCandleExtension(fake.api);
 
     let idle = false;
-    fake.sendUserMessage.mockImplementation(() => {
+    setTimeout(() => {
       idle = true;
-    });
+    }, 5);
 
     const inputHandler = fake.handlers.get("input")?.[0];
     expect(inputHandler).toBeDefined();
@@ -146,17 +146,16 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    expect(result).toEqual({ action: "handled" });
-
     const prompts = getComprehensiveAnalysisPrompts("NVDA");
+    expect(result).toEqual({ action: "transform", text: prompts[0] });
+
     await vi.runAllTimersAsync();
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length);
-    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, prompts[0], { deliverAs: "followUp" });
+    expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length - 1);
     for (const [index, prompt] of prompts.entries()) {
       if (index === 0) continue;
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
+      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index, prompt);
     }
-    expect(ctx.ui.notify).toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
+    expect(ctx.ui.notify).not.toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
   });
 
   it("appends the OpenCandle system prompt before agent start", async () => {
@@ -204,8 +203,8 @@ describe("opencandle extension", () => {
       assetScope: "etf_focused",
     }));
 
-    expect(result).toEqual({ action: "handled" });
-    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
   });
 
   it("routes options-screening prompts through the deterministic workflow", async () => {
@@ -229,8 +228,8 @@ describe("opencandle extension", () => {
       dteHint: "30 to 45 DTE",
     }));
 
-    expect(result).toEqual({ action: "handled" });
-    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
   });
 
   it("routes compare prompts through the deterministic workflow", async () => {
@@ -255,8 +254,8 @@ describe("opencandle extension", () => {
       missingRequired: [],
     });
 
-    expect(result).toEqual({ action: "handled" });
-    expect(fake.sendUserMessage).toHaveBeenNthCalledWith(1, workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
   });
 
   it("records a per-turn disclaimer entry (non-LLM-context) on final assistant turns", async () => {
@@ -368,10 +367,10 @@ describe("opencandle extension", () => {
         ctx,
       );
 
-      expect(result).toEqual({ action: "handled" });
+      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
       // The prompt should use conservative from preference, not balanced default
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("conservative");
-      expect(fake.sendUserMessage.mock.calls[0][0]).not.toContain("balanced [DEFAULT]");
+      expect(result.text).toContain("conservative");
+      expect(result.text).not.toContain("balanced [DEFAULT]");
     });
 
     it("records workflow runs after dispatch", async () => {
@@ -423,17 +422,21 @@ describe("opencandle extension", () => {
     openCandleExtension(fake.api);
 
     const inputHandler = fake.handlers.get("input")?.[0];
+    let idle = false;
+    setTimeout(() => {
+      idle = true;
+    }, 5);
     const ctx = {
-      isIdle: () => true,
+      isIdle: () => idle,
       hasPendingMessages: () => false,
       ui: { notify: vi.fn() },
     };
 
-    await inputHandler!(
+    const firstResult = await inputHandler!(
       { type: "input", text: "analyze NVDA", source: "interactive" },
       ctx,
     );
-    await inputHandler!(
+    const secondResult = await inputHandler!(
       { type: "input", text: "analyze AAPL", source: "interactive" },
       ctx,
     );
@@ -441,8 +444,8 @@ describe("opencandle extension", () => {
     await vi.runAllTimersAsync();
 
     const calls = fake.sendUserMessage.mock.calls.map((call) => call[0]);
-    expect(calls[0]).toBe(getComprehensiveAnalysisPrompts("NVDA")[0]);
-    expect(calls[1]).toBe(getComprehensiveAnalysisPrompts("AAPL")[0]);
+    expect(firstResult).toEqual({ action: "transform", text: getComprehensiveAnalysisPrompts("NVDA")[0] });
+    expect(secondResult).toEqual({ action: "transform", text: getComprehensiveAnalysisPrompts("AAPL")[0] });
     // The NVDA follow-ups should have been cancelled
     expect(calls).not.toContain(getComprehensiveAnalysisPrompts("NVDA")[1]);
     // The AAPL follow-ups should proceed
@@ -451,9 +454,8 @@ describe("opencandle extension", () => {
 
   describe("llm router mode dispatch signal", () => {
     // Regression guard: in llm mode, when the router dispatches a workflow,
-    // the input handler MUST return {action: "handled"} so Pi does not also
-    // forward the original user turn to the main agent (which would cause
-    // double-dispatch alongside the workflow runner's queued prompts).
+    // the input handler MUST transform the current prompt into the first
+    // workflow prompt so Pi does not also forward the original user turn.
     // Fallback turns, by contrast, MUST return undefined so the main agent
     // runs on the user turn under the router-supplied fallback context.
 
@@ -501,7 +503,7 @@ describe("opencandle extension", () => {
     // simulate a fresh turn, not a multi-turn conversation.
     const emptySessionManager = { getBranch: () => [], getSessionId: () => "sid" };
 
-    it("returns {action: 'handled'} when router dispatches a workflow", async () => {
+    it("returns a transform result when router dispatches a workflow", async () => {
       const fake = createFakeApi();
       openCandleExtension(fake.api, { routerLlmClient: mockClient(workflowOutput) });
 
@@ -525,7 +527,7 @@ describe("opencandle extension", () => {
         ctx,
       );
 
-      expect(result).toEqual({ action: "handled" });
+      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
     });
 
     it("dispatches portfolio workflows using budget supplied only by router slots", async () => {
@@ -565,9 +567,9 @@ describe("opencandle extension", () => {
         ctx,
       );
 
-      expect(result).toEqual({ action: "handled" });
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("Budget: $25,000");
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("From saved preferences: budget");
+      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
+      expect(result.text).toContain("Budget: $25,000");
+      expect(result.text).toContain("From saved preferences: budget");
     });
 
     it("dispatches options workflows using a symbol supplied only by router slots", async () => {
@@ -607,9 +609,9 @@ describe("opencandle extension", () => {
         ctx,
       );
 
-      expect(result).toEqual({ action: "handled" });
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("Screen and rank options contracts for MSFT");
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("From prior context: symbol");
+      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
+      expect(result.text).toContain("Screen and rank options contracts for MSFT");
+      expect(result.text).toContain("From prior context: symbol");
     });
 
     it("dispatches compare workflows using symbols supplied only by router slots", async () => {
@@ -649,9 +651,9 @@ describe("opencandle extension", () => {
         ctx,
       );
 
-      expect(result).toEqual({ action: "handled" });
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("Compare these assets side by side: SPY, QQQ");
-      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("From memory: symbols");
+      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
+      expect(result.text).toContain("Compare these assets side by side: SPY, QQQ");
+      expect(result.text).toContain("From memory: symbols");
     });
 
     it("returns undefined for fallback turns so the main agent runs", async () => {

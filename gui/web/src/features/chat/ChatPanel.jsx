@@ -18,7 +18,7 @@ import { groupToolRuns } from "./tool-run-grouper.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 
-export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup, role, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
+export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup, role, inputDisabled = false, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
@@ -71,9 +71,9 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
       <ChatComposer
         draft={draft}
         setDraft={setDraft}
-        disabled={role === "follower"}
+        disabled={role === "follower" || inputDisabled}
         placeholder={placeholder}
-        canSend={Boolean(draft.trim()) && role !== "follower"}
+        canSend={Boolean(draft.trim()) && role !== "follower" && !inputDisabled}
         onSubmit={() => submit()}
         onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
         onOpenContext={onOpenContext}

@@ -53,6 +53,9 @@ export function AppShell() {
   const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
     !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
   );
+  const inputDisabled = gui.role !== "writer"
+    || sessionView.pendingFreshHomeSession
+    || sessionView.pendingSessionSwitch;
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -127,16 +130,8 @@ export function AppShell() {
   }, []);
 
   const startRoutedChatRun = useCallback((prompt) => {
-    const activeSessionId = gui.currentSessionId;
-    if (location.pathname === "/" && activeSessionId) {
-      void navigate({
-        to: "/sessions/$sessionId",
-        params: { sessionId: activeSessionId },
-        search: (current) => ({ ...current, drawer: undefined }),
-      });
-    }
     void chatRun.startChatRun(prompt);
-  }, [chatRun.startChatRun, gui.currentSessionId, location.pathname, navigate]);
+  }, [chatRun.startChatRun]);
 
   const newSession = useCallback(() => {
     gui.send("session.new");
@@ -192,6 +187,7 @@ export function AppShell() {
           askUserPrompts={visibleAskUserPrompts}
           modelSetup={gui.modelSetup}
           role={gui.role}
+          inputDisabled={inputDisabled}
           runState={chatRun.runState}
           lastPrompt={chatRun.lastPrompt}
           catalog={gui.catalog}

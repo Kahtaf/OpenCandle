@@ -495,8 +495,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
       const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return { action: "handled" };
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
     const mode = getConfig().routerMode;
@@ -506,7 +506,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       // the workflow's queued prompts; tell Pi not to also forward it.
       // Fallback path (no dispatch) → let Pi pass the user turn through to the
       // main agent, which will run under the router-supplied fallback context.
-      return dispatched ? { action: "handled" } : undefined;
+      return dispatched || undefined;
     }
 
     // --- rules mode ---
@@ -523,8 +523,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       coordinator.recordWorkflowRun("portfolio_builder", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
       const definition = buildPortfolioWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return { action: "handled" };
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
     if (classification.workflow === "options_screener") {
@@ -533,8 +533,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         coordinator.recordWorkflowRun("options_screener", classification.entities, resolution.resolved, resolution.defaultsUsed);
         pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
-        coordinator.executeWorkflow(pi, definition, ctx);
-        return { action: "handled" };
+        const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+        return prompt ? { action: "transform", text: prompt } : { action: "handled" };
       }
     }
 
@@ -556,8 +556,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
       const definition = buildCompareAssetsWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return { action: "handled" };
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
   });
 
@@ -571,7 +571,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   async function handleLlmRouterTurn(
     text: string,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): Promise<boolean> {
+  ): Promise<{ action: "transform"; text: string } | false> {
     const storage = coordinator.getStorage();
     const { profileSnapshot, recentWorkflowRuns, priorTurns } =
       coordinator.buildRouterContextBase(ctx.sessionManager);
@@ -682,7 +682,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   function dispatchRouterWorkflow(
     output: RouterOutput,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): boolean {
+  ): { action: "transform"; text: string } | false {
     const workflow = output.workflow!;
     const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
@@ -706,8 +706,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         resolved: resolution.resolved,
       });
       const definition = buildPortfolioWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return true;
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : false;
     }
     if (workflow === "options_screener") {
       const resolution = withRouterSlotSources(
@@ -730,8 +730,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           resolved: resolution.resolved,
         });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
-        coordinator.executeWorkflow(pi, definition, ctx);
-        return true;
+        const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+        return prompt ? { action: "transform", text: prompt } : false;
       }
       // Missing required symbol — treat as fallback with ask_user directive.
     }
@@ -762,8 +762,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         symbols: entities.symbols,
       });
       const definition = buildCompareAssetsWorkflowDefinition(resolution);
-      coordinator.executeWorkflow(pi, definition, ctx);
-      return true;
+      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      return prompt ? { action: "transform", text: prompt } : false;
     }
 
     // single_asset_analysis / watchlist / general_qa + any workflow with

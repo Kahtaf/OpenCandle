@@ -6,6 +6,7 @@ import {
   AuthStorage,
   createAgentSessionRuntime,
   createAgentSessionServices,
+  type AgentSession,
   getAgentDir,
   ModelRegistry,
   SessionManager,
@@ -29,6 +30,13 @@ import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
+import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
+import {
+  createPromptObservation,
+  observePromptEvent,
+  selectReplayPrompt,
+  type PromptObservation,
+} from "./prompt-observation.js";
 import { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
@@ -264,7 +272,8 @@ async function handlePrompt(prompt: string): Promise<void> {
     return;
   }
 
-  await session.prompt(prompt);
+  const beforeIds = new Set(sessionManager.getEntries().map((entry) => entry.id));
+  await promptAndSettle(session, prompt, beforeIds);
   broadcastState();
 }
 
@@ -449,9 +458,12 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
 
   let seq = 1;
   const runId = `gui-run-${Date.now()}`;
-  const sessionId = sessionManager.getSessionId();
-  const beforeEntries = sessionManager.getEntries();
+  const runSession = session;
+  const runSessionManager = sessionManager;
+  const sessionId = runSessionManager.getSessionId();
+  const beforeEntries = runSessionManager.getEntries();
   const beforeCount = beforeEntries.length;
+  const beforeIds = new Set(beforeEntries.map((entry) => entry.id));
   writeSse(res, { type: "run.started", runId, sessionId, seq: seq++ });
   res.flushHeaders?.();
   const liveStartSeq = seq;
@@ -461,13 +473,40 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     startSeq: seq,
     emit: (event) => writeSse(res, event),
   });
-  const unsubscribeLive = session.subscribe((event) => liveAdapter.handle(event));
+  const observation = createPromptObservation();
+  const unsubscribeLive = runSession.subscribe((event) => {
+    liveAdapter.handle(event);
+    observePromptEvent(observation, event);
+  });
 
   try {
-    await handlePrompt(prompt);
+    const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
+    if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
+      runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
+      const message =
+        modelSetup.requirement === "select_model"
+          ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
+          : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
+      runSessionManager.appendCustomMessageEntry(
+        "opencandle-model-setup",
+        message,
+        true,
+        { source: "gui", requirement: modelSetup.requirement },
+      );
+      broadcastState();
+    } else {
+      await promptAndSettle(runSession, prompt, beforeIds, observation);
+      broadcastState();
+    }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
-      const newEntries = sessionManager.getEntries().slice(beforeCount);
+      await waitForNewEntryId(
+        () => runSessionManager.getEntries().map((entry) => entry.id),
+        beforeIds,
+      );
+      const newEntries = runSessionManager.getEntries()
+        .slice(beforeCount)
+        .filter((entry) => !beforeIds.has(entry.id));
       const events = sessionEntriesToChatEvents(newEntries, {
         sessionId,
         updatedAt: new Date().toISOString(),
@@ -487,6 +526,40 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     unsubscribeLive();
     res.end();
   }
+}
+
+async function promptAndSettle(
+  runSession: AgentSession,
+  prompt: string,
+  beforeIds: Set<string>,
+  observation?: PromptObservation,
+): Promise<void> {
+  await runSession.prompt(prompt);
+  await waitForSessionTurnSettlement(() => ({
+    isStreaming: runSession.isStreaming,
+    pendingMessageCount: runSession.pendingMessageCount,
+  }));
+  await waitForNewEntryId(() => runSession.sessionManager.getEntries().map((entry) => entry.id), beforeIds);
+  await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
+}
+
+async function replayObservedWorkflowPromptIfNeeded(
+  runSession: AgentSession,
+  originalPrompt: string,
+  observation?: PromptObservation,
+): Promise<void> {
+  if (!observation) return;
+  const replayPrompt = selectReplayPrompt(observation, originalPrompt);
+  if (!replayPrompt) return;
+
+  await runSession.prompt(replayPrompt, {
+    expandPromptTemplates: false,
+    source: "extension",
+  });
+  await waitForSessionTurnSettlement(() => ({
+    isStreaming: runSession.isStreaming,
+    pendingMessageCount: runSession.pendingMessageCount,
+  }));
 }
 
 function buildStateSnapshot() {

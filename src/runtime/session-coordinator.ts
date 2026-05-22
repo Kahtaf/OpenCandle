@@ -61,6 +61,7 @@ function sleep(ms: number): Promise<void> {
 async function waitForPromptSettlement(
   ctx: QueueContext,
   isCurrentRun: () => boolean,
+  options: { requireActivity?: boolean } = {},
 ): Promise<boolean> {
   let sawBusyOrPending = !isReadyForNextPrompt(ctx);
   const startedAt = Date.now();
@@ -75,7 +76,12 @@ async function waitForPromptSettlement(
       return true;
     }
 
-    if (!sawBusyOrPending && ready && Date.now() - startedAt >= IMMEDIATE_IDLE_GRACE_MS) {
+    if (
+      !options.requireActivity &&
+      !sawBusyOrPending &&
+      ready &&
+      Date.now() - startedAt >= IMMEDIATE_IDLE_GRACE_MS
+    ) {
       return true;
     }
 
@@ -352,20 +358,45 @@ export class SessionCoordinator {
     definition: WorkflowDefinition,
     ctx: QueueContext,
   ): void {
+    this.startWorkflowRun(pi, definition, ctx, "send");
+  }
+
+  /**
+   * Start workflow tracking for an input handler that will return a Pi
+   * transform result. The current prompt becomes the first workflow prompt;
+   * only later steps are sent through Pi.
+   */
+  transformWorkflowInput(
+    pi: ExtensionAPI,
+    definition: WorkflowDefinition,
+    ctx: QueueContext,
+  ): string | undefined {
+    if (definition.steps.length === 0) return undefined;
+    this.startWorkflowRun(pi, definition, ctx, "transform");
+    return definition.steps[0].prompt;
+  }
+
+  private startWorkflowRun(
+    pi: ExtensionAPI,
+    definition: WorkflowDefinition,
+    ctx: QueueContext,
+    firstPromptMode: "send" | "transform",
+  ): void {
     if (definition.steps.length === 0) return;
 
     const runner = this.runner;
     const runRef = { active: true };
 
-    // Send the first prompt immediately
-    const [firstStep, ...restSteps] = definition.steps;
-    const startedBusy = !isReadyForNextPrompt(ctx);
+    const [firstStep] = definition.steps;
 
-    if (startedBusy) {
-      pi.sendUserMessage(firstStep.prompt, { deliverAs: "followUp" });
-      ctx.ui?.notify?.("Analysis queued as follow-up.", "info");
-    } else {
-      pi.sendUserMessage(firstStep.prompt);
+    if (firstPromptMode === "send") {
+      const startedBusy = !isReadyForNextPrompt(ctx);
+      if (startedBusy) {
+        pi.sendUserMessage(firstStep.prompt, { deliverAs: "followUp" });
+        ctx.ui?.notify?.("Analysis queued as follow-up.", "info");
+      } else {
+        pi.sendUserMessage(firstStep.prompt);
+      }
     }
 
     // Make the run's ProviderTracker accessible to tools during execution
@@ -383,7 +414,11 @@ export class SessionCoordinator {
         pi.sendUserMessage(definition.steps[stepIndex].prompt);
       } else {
         // For the first step, just wait for it to settle
-        const settled = await waitForPromptSettlement(ctx, () => runRef.active);
+        const settled = await waitForPromptSettlement(
+          ctx,
+          () => runRef.active,
+          { requireActivity: firstPromptMode === "transform" },
+        );
         if (!settled || !runRef.active) {
           throw new Error("run_cancelled");
         }
