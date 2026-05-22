@@ -528,6 +528,132 @@ describe("opencandle extension", () => {
       expect(result).toEqual({ action: "handled" });
     });
 
+    it("dispatches portfolio workflows using budget supplied only by router slots", async () => {
+      const slotOnlyBudgetOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {
+          budget: { value: 25_000, source: "preference", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "saved profile supplies budget",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(slotOnlyBudgetOutput) });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "build me a portfolio like before", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("Budget: $25,000");
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("From saved preferences: budget");
+    });
+
+    it("dispatches options workflows using a symbol supplied only by router slots", async () => {
+      const slotOnlySymbolOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "options_screener",
+        entities: { symbols: [], direction: "bullish" },
+        slots: {
+          symbol: { value: "msft", source: "prior_context", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "prior context supplies the underlying",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(slotOnlySymbolOutput) });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "what about calls now?", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("Screen and rank options contracts for MSFT");
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("From prior context: symbol");
+    });
+
+    it("dispatches compare workflows using symbols supplied only by router slots", async () => {
+      const slotOnlySymbolsOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: [] },
+        slots: {
+          symbols: { value: ["spy", "qqq"], source: "memory", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "memory supplies comparison set",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(slotOnlySymbolsOutput) });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "compare them side by side", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toEqual({ action: "handled" });
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("Compare these assets side by side: SPY, QQQ");
+      expect(fake.sendUserMessage.mock.calls[0][0]).toContain("From memory: symbols");
+    });
+
     it("returns undefined for fallback turns so the main agent runs", async () => {
       const fake = createFakeApi();
       openCandleExtension(fake.api, { routerLlmClient: mockClient(fallbackOutput) });
