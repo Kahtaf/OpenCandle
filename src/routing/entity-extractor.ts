@@ -246,13 +246,6 @@ function extractOptionStrategy(input: string): ExtractedEntities["optionStrategy
   return undefined;
 }
 
-function extractCostBasis(input: string): number | undefined {
-  const match = input.match(/\bcost\s*basis\s*(?:is|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i);
-  if (!match) return undefined;
-  const parsed = parseFloat(match[1].replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 function extractTimeHorizon(input: string): string | undefined {
   const lower = input.toLowerCase();
   const explicitMonths = lower.match(/\b(\d+)\s*(?:month|months|mo|mos)\b/);
