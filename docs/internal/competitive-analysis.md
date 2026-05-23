@@ -20,16 +20,18 @@
 
 ## 1. OpenCandle Current State
 
-Before analyzing competitors, here's what OpenCandle already has (15 tools):
+This section has been refreshed from the current code. The competitor snapshots and star counts later in this document are still a March 2026 research snapshot; use [Data Sources](../data-sources.md) for the current public provider reference.
 
 | Category | Tools | Data Sources |
 |----------|-------|-------------|
 | Market Data (5) | search_ticker, get_stock_quote, get_stock_history, get_crypto_price, get_crypto_history | Yahoo Finance, CoinGecko |
-| Fundamentals (3) | get_company_overview, get_financials, get_earnings | Alpha Vantage |
-| Macro (2) | get_economic_data, get_fear_greed | FRED, CNN Fear & Greed |
-| Sentiment (2) | get_reddit_sentiment, get_news_sentiment | Reddit |
-| Technical (1) | get_technical_indicators (SMA, EMA, RSI, MACD, Bollinger Bands) | Computed locally |
-| Portfolio (2) | track_portfolio, analyze_risk (Sharpe, VaR, max drawdown) | Local computation + JSON persistence |
+| Fundamentals (5) | get_company_overview, get_financials, get_earnings, compute_dcf, compare_companies | Alpha Vantage |
+| Macro (2) | get_economic_data, get_fear_greed | FRED, alternative.me crypto Fear & Greed |
+| Options (1) | get_option_chain with locally computed Greeks | Yahoo Finance plus local calculations |
+| Sentiment (6) | get_reddit_sentiment, get_twitter_sentiment, search_web, get_web_sentiment, get_sentiment_summary, get_sentiment_trend | Reddit, Twitter/X local browser session, Finnhub, Exa, Brave, DuckDuckGo, local SQLite trend store |
+| Filings (1) | get_sec_filings | SEC EDGAR |
+| Technical (2) | get_technical_indicators, backtest_strategy | Local calculations over market history |
+| Portfolio (5) | track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction | Local state plus market data |
 
 **Stack:** TypeScript, pi-agent framework, Gemini 2.5 Flash, Vitest
 **Architecture:** Multi-analyst orchestrator (Fundamental, Technical, Sentiment, Risk + Synthesis)
@@ -92,7 +94,7 @@ Before analyzing competitors, here's what OpenCandle already has (15 tools):
 
 | Idea | Relevance | Why |
 |------|-----------|-----|
-| SEC EDGAR filing fetcher (10-K, 10-Q, 8-K) | **HIGH** | Free API, no key needed. OpenCandle has zero SEC data. Filings contain material info not in price/fundamentals APIs. |
+| SEC EDGAR filing fetcher (10-K, 10-Q, 8-K) | **DONE** | Implemented as `get_sec_filings` backed by SEC EDGAR. Future work should focus on richer filing text extraction, Form 4/insider flows, and better thesis-change synthesis. |
 | Options chain data via Yahoo Finance | **MEDIUM** | Yahoo options endpoint is free and accessible with same approach as existing Yahoo provider. Reveals institutional positioning. |
 | Insider trading data (SEC Form 4) | **MEDIUM** | Public EDGAR data showing insider buys/sells — strong signal. |
 | Sector/industry screening | **LOW** | Requires maintaining a symbol universe. Better addressed through search_ticker improvements. |
@@ -452,6 +454,8 @@ These gaps appear across multiple competitors — things almost every serious pr
 ---
 
 ## 5. Prioritized Feature Recommendations
+
+This recommendation list is retained as the March 2026 planning snapshot. Many entries below have since shipped; treat the refreshed "OpenCandle Current State" table above and the public [Data Sources](../data-sources.md) page as the current source of truth before using this as a backlog.
 
 ### Tier 1: High Impact, Fits Naturally
 

@@ -1,14 +1,17 @@
 # OpenCandle Codebase Audit
 
 **Date:** 2026-03-29
-**Last reviewed:** 2026-04-06
+**Last reviewed:** 2026-05-23
 **Scope:** Repository review of the financial agent implementation, focusing on correctness, code quality, architecture, UX, and improvement opportunities.
+
+This is an internal audit snapshot, not the public product reference. Statuses below have been updated where the current code clearly contradicts the original March 2026 finding; use the public docs for current command, provider, and tool coverage.
 
 ## Method
 
 - Read the core runtime, provider, tool, infra, and test files.
 - Ran `npm test`.
-- Result: 189 tests passed, 1 failed. The failing test is `tests/unit/providers/yahoo-options.test.ts`, which exposed a real options-Greeks correctness issue.
+- Original result: 189 tests passed, 1 failed. The failing test was `tests/unit/providers/yahoo-options.test.ts`, which exposed a real options-Greeks correctness issue.
+- Current local baseline on 2026-05-23: `npm test` passed with 1434 tests across 132 files.
 
 ## Executive Summary
 
@@ -201,40 +204,33 @@ Equity only changes when a sell occurs. While a trade is open, drawdown is measu
 
 | Area | Status | Evidence | Problem |
 |------|--------|----------|---------|
-| Misleading "news sentiment" implementation | **OPEN** | `src/tools/sentiment/news-sentiment.ts` | The tool is named `get_news_sentiment`, but it only filters Reddit post titles from `r/stocks` and `r/investing`. This is not news sentiment. |
-| Misleading Fear and Greed source and history | **OPEN** | `src/tools/macro/fear-greed.ts` and `src/providers/fear-greed.ts` | The tool description says CNN Fear and Greed, but the provider uses `alternative.me`'s crypto index. It also fills `weekAgo` and `monthAgo` with `0`, which looks like real data even though it is missing. |
+| Misleading "news sentiment" implementation | **FIXED** | Replaced by `get_web_sentiment`, `search_web`, and `get_sentiment_summary` over web/news search plus Reddit/Twitter/Finnhub sources. | Earlier versions exposed `get_news_sentiment` over filtered Reddit titles. Keep future copy precise about each source class. |
+| Misleading Fear and Greed source and history | **FIXED** | `src/tools/macro/fear-greed.ts` and `src/providers/fear-greed.ts` now describe the alternative.me crypto index and return `null` for unavailable week/month history. | Earlier versions framed this as CNN Fear and Greed and filled missing history with `0`. Keep future UI and prose scoped to crypto sentiment unless a broader market source is added. |
 | VWAP implementation is not session VWAP | **OPEN** | `src/tools/technical/indicators.ts` | This computes one cumulative price-volume average across the whole selected range of daily bars. That is not the VWAP traders normally mean. The name overstates analytical precision. |
 | Timeout cleanup is incomplete | **FIXED** | `src/infra/http-client.ts` now clears timeout in `finally` block. | `clearTimeout(timeout)` only runs on the success path. Exceptions leave the timer behind until it fires, which is sloppy and unnecessary under load. |
 | Hidden JSON files as application state | **PARTIALLY ADDRESSED** | Portfolio/watchlist/predictions still use hidden files, but SQLite database at `~/.opencandle/state.db` now exists for memory/workflow state. Full migration of portfolio state to SQLite is still pending. | Portfolio, watchlist, and prediction data are stored in hidden files in the current working directory, with no schema validation, locking, migration path, or corruption handling beyond "return empty". |
 
 ### Detailed Code Quality Notes
 
-#### 1. `get_news_sentiment` is misnamed
+#### 1. News sentiment source wording is fixed
 
-This is not a small naming nit. In a financial agent, a tool name implies the evidence class behind the answer. Right now the implementation is:
+The old `get_news_sentiment` issue was resolved by removing that misleading tool surface and adding explicit web/news and cross-source sentiment tools. Current code exposes:
 
-- fetch Reddit posts from `stocks` and `investing`
-- filter titles containing the topic string
-- present that as "news sentiment"
+- `get_web_sentiment` for scored web/news search results
+- `search_web` for raw web/news search
+- `get_sentiment_summary` for Reddit, Twitter/X, web/news, and Finnhub aggregation
 
-That makes it easy for later prompts, future agents, or UI layers to over-trust the signal. Another agent picking this up should treat this as either:
+The remaining product boundary is source labeling: the assistant and UI should continue to say whether a sentiment result came from Reddit, Twitter/X, web search, Finnhub news, or historical local trend data.
 
-- a rename task, or
-- a provider replacement task
+#### 2. Fear and Greed source wording is fixed
 
-but not as a minor docs cleanup.
+`src/tools/macro/fear-greed.ts` now describes the source as the alternative.me Crypto Fear & Greed Index, and `src/providers/fear-greed.ts` returns `null` for unavailable week/month history instead of placeholder `0` values.
 
-#### 2. Fear and Greed is described more strongly than it is implemented
-
-The code in `src/providers/fear-greed.ts:5-35` is honest in comments that it is using `alternative.me`, but the tool description in `src/tools/macro/fear-greed.ts:8-22` still says CNN Fear and Greed and presents `weekAgo` and `monthAgo` as if they are legitimate values.
-
-For another agent, the key context is:
+For another agent, the remaining product boundary is:
 
 - the source is a crypto sentiment proxy
-- the tool text frames it as a broad market sentiment gauge
-- two historical fields are placeholders, not data
-
-That is both a product-trust issue and a modeling issue.
+- future UI and assistant prose should not frame it as a broad equity-market sentiment gauge
+- broader market fear/greed coverage would require a separate provider
 
 #### 3. VWAP is being used as a label for a different statistic
 
@@ -275,7 +271,7 @@ Another agent should treat the three hidden JSON files as a single design smell,
 |----------|-------|----------|--------|
 | P1 | Browser fallback is not safe for parallel tool execution | `src/infra/browser.ts:13-89` keeps a single shared `page` and reuses it for all work. At the same time, the project explicitly describes parallel tool execution in `README.md:57-69`. | Two concurrent Yahoo fallback requests can race on the same page state and contaminate each other. |
 | P1 | Multi-analyst orchestration is not actually isolated | `src/analysts/orchestrator.ts:78-99` queues all analyst, synthesis, and validation prompts as follow-up user messages on one shared agent context. | There is no true role isolation, no dependency barrier before synthesis, and no durable analyst outputs. This is prompt choreography, not a robust multi-agent pipeline. |
-| P2 | Test suite does not really exercise the comprehensive-analysis trigger path | The CLI only invokes the orchestrator when `isAnalysisRequest()` matches `analyze X`, `full analysis of X`, or `deep dive on X` in `src/analysts/orchestrator.ts:102-117` and `src/index.ts:58-64`. The supposed E2E coverage in `tests/e2e/cli.test.ts:174-197` uses a different prompt, so it never hits that branch. | A high-visibility feature exists without meaningful end-to-end coverage of its real entry point. |
+| P2 | Comprehensive-analysis trigger path coverage | **FIXED:** `tests/e2e/cli.test.ts` now exercises `analyze NVDA`, which matches `isAnalysisRequest()` in `src/analysts/orchestrator.ts`. | Keep this path covered because it is a high-visibility workflow trigger. |
 | P2 | Tool-level config access is inconsistent | Some tools use `getConfig()` while others read `process.env` directly, for example `src/tools/fundamentals/company-overview.ts:16-23`, `src/tools/fundamentals/financials.ts:16-23`, and `src/tools/macro/fred-data.ts:22-29`. | This makes dependency handling and testing less coherent, and it scatters environment coupling throughout the codebase. |
 
 ### Detailed Architecture Notes
@@ -331,22 +327,22 @@ If this project grows, centralized config becomes more valuable quickly.
 
 | Issue | Evidence | Why it is poor UX |
 |-------|----------|-------------------|
-| Users are told they are getting one thing while the product returns another | `get_news_sentiment` and `get_fear_greed` are the clearest examples: `src/tools/sentiment/news-sentiment.ts:12-63`, `src/tools/macro/fear-greed.ts:8-22`. | In a financial product, naming drift is trust erosion. "Reddit discussion" and "crypto fear/greed proxy" are acceptable. Pretending they are broader signals is not. |
+| Users are told they are getting one thing while the product returns another | **PARTIALLY FIXED:** the old `get_news_sentiment` surface is gone and Fear & Greed now names the alternative.me crypto source. | Keep source labels precise; broader market sentiment or equity fear/greed would need separate providers. |
 | Portfolio removal deletes the entire position | `src/tools/portfolio/tracker.ts:82-100` only supports removing the whole symbol. | Real users expect partial sells, realized PnL, and transaction history, not all-or-nothing deletion. |
 | Hidden state depends on the current directory | `src/tools/portfolio/tracker.ts:7-20`, `src/tools/portfolio/watchlist.ts:6-27`, `src/tools/portfolio/predictions.ts:6-45` | A user can appear to "lose" their portfolio simply by launching the agent from a different folder. |
-| Tool docs and README are stale | `README.md:43-53` says "Tools (16)" while `src/tools/index.ts:26-51` registers 23 tools. `README.md:74` still says 116 unit tests even though the current run executed 190 tests. | Stale docs make the system look less reliable than it is and create confusion during onboarding. |
+| Tool docs and README are stale | **FIXED IN PUBLIC DOCS:** README and public docs now describe tool coverage by domain instead of a brittle exact tool count, and testing docs point to current commands rather than stale test totals. | Avoid hardcoding test/tool counts in public docs unless a release process keeps them synchronized. |
 | Missing-key handling is returned as normal text instead of a structured failure mode | Examples: `src/tools/fundamentals/company-overview.ts:17-23`, `src/tools/fundamentals/financials.ts:17-22`, `src/tools/macro/fred-data.ts:23-28`. | The agent may treat an error string as data instead of as a failed tool call, which produces awkward or misleading responses to the user. |
 
 ### Detailed UX Notes
 
 #### 1. Naming drift damages trust
 
-In finance, users judge trust not only by whether the app crashes, but by whether labels accurately describe the signal. Right now:
+In finance, users judge trust not only by whether the app crashes, but by whether labels accurately describe the signal. Previously:
 
 - "news sentiment" means filtered Reddit titles
 - "Fear and Greed" implies CNN-style market sentiment but uses a crypto proxy
 
-Another agent should treat these as trust and product-positioning fixes, not only implementation fixes.
+Current source labels are better, but agents should still preserve source boundaries in answers.
 
 #### 2. Portfolio UX is closer to a scratchpad than a tracker
 
@@ -370,9 +366,9 @@ This is worth repeating because it is user-visible behavior, not just an impleme
 
 Nothing in the UX makes that behavior obvious.
 
-#### 4. README drift undermines onboarding
+#### 4. README drift has been reduced
 
-The README is currently behind the codebase on both tool count and test count. For another agent, this means documentation work should not be separated from product-trust work. The stale README is part of the same problem: the product says more than the implementation reliably supports.
+The public README now avoids stale exact tool/test counts and points readers to focused docs for configuration, testing, and data sources. For another agent, the continuing lesson is that documentation work should not be separated from product-trust work: the product should not say more than the implementation reliably supports.
 
 #### 5. Missing-provider-key handling should be machine-meaningful
 
@@ -396,9 +392,9 @@ instead of treating error text as if it were normal content.
    - Align correlation series by date.
    - Mark to market open positions in backtests.
 
-2. Stop overstating what the data sources mean.
-   - Rename or replace `get_news_sentiment`.
-   - Rename or replace the Fear and Greed tool.
+2. Keep source labels precise.
+   - Preserve the newer `get_web_sentiment` / `get_sentiment_summary` source boundaries.
+   - Keep Fear & Greed framed as a crypto sentiment proxy unless a broader market source is added.
    - Correct provider-to-field mappings like `avgVolume`.
 
 3. Replace ad hoc file persistence with a durable state layer.

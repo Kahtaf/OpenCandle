@@ -70,6 +70,7 @@ Model access comes from Pi. Market data providers are optional and additive. A `
 | `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
 | `OPENCANDLE_HOME` | No | Override OpenCandle state directory |
 | `OPENCANDLE_ROUTER_MODE` | No | `llm` by default; set `rules` for legacy routing |
+| `OPENCANDLE_TOOL_SCOPE_MODE` | No | `observe` by default; set `enforce` to apply route-selected active tools |
 | `OPENCANDLE_DEBATE` | No | Set `false` or `0` to disable bull/bear debate |
 | `OPENCANDLE_GUI_HOST` | No | GUI bind host, default `127.0.0.1` |
 | `OPENCANDLE_GUI_PORT` | No | GUI port, default `14567` |

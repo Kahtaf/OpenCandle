@@ -1,8 +1,8 @@
 # OpenCandle Real-Usage E2E Fix Handoff
 
 **Date:** 2026-03-29  
-**Last reviewed:** 2026-04-06  
-**Status:** ~70% of fixes landed — see per-section status annotations  
+**Last reviewed:** 2026-05-23  
+**Status:** Historical handoff; several findings have since landed — see per-section status annotations  
 **Audience:** Engineer / agent taking over runtime-quality fixes after workflow routing and memory landed  
 **Scope:** Fix the remaining issues discovered by running the real CLI agent against broad, realistic user prompts
 
@@ -213,7 +213,7 @@ If the parser mishandles these, the workflow becomes misleading while still look
 
 ### Likely root cause
 
-The current parsing path in `src/index.ts` (L219) is too naive:
+The original parsing path was too naive:
 
 - it strips symbols
 - then uses `parseFloat`
@@ -221,11 +221,15 @@ The current parsing path in `src/index.ts` (L219) is too naive:
 
 That fails for strings where `k` is not the final character after cleanup.
 
-### Probable implementation direction
+### Implementation status
 
-Move budget parsing into a dedicated utility, not inline CLI logic.
+Fixed in `src/routing/entity-extractor.ts`, which handles money expressions such as `$10k`, `$10,000`, `10000 dollars`, and mixed clarification strings.
 
-Requirements for the parser:
+### Implemented direction
+
+Budget parsing moved into routing/entity extraction instead of inline CLI logic.
+
+The parser should continue to support:
 
 - support:
   - `$10k`
@@ -761,4 +765,3 @@ These are exactly the issues that determine whether the product feels like:
 - a demo that only works on the happy path
 
 The next agent should prioritize runtime behavior over adding more features.
-
