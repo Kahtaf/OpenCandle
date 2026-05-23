@@ -113,6 +113,9 @@ describe("system prompt — analyst stance", () => {
     expect(prompt).toContain("last available quote");
     expect(prompt).toContain("If DCF or another valuation model is unavailable or not meaningful");
     expect(prompt).toContain("do not let that tool failure become the whole valuation view");
+    expect(prompt).toContain("Do not make missing fundamentals the main thesis");
+    expect(prompt).toContain("position sizing");
+    expect(prompt).toContain("entry strategy");
     expect(prompt).toContain("relative multiples");
     expect(prompt).toContain("growth-adjusted multiples");
     expect(prompt).toContain("cash-flow quality");

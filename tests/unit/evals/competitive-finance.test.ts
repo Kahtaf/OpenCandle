@@ -28,6 +28,10 @@ describe("competitive finance benchmarking", () => {
     expect(prompt).toContain("Generate 4 realistic finance prompts");
     expect(prompt).toContain("Current date for this benchmark run: 2026-05-16");
     expect(prompt).toContain("Do not bias toward prompts where OpenCandle obviously has a tool advantage");
+    expect(prompt).toContain("average retail investor");
+    expect(prompt).toContain("Do not mention OpenCandle");
+    expect(prompt).toContain("or tools inside the user-facing prompt");
+    expect(prompt).toContain("messy, conversational wording");
     expect(prompt).toContain("A generic agent may be better");
     expect(prompt).toContain("what OpenCandle needs to improve");
   });

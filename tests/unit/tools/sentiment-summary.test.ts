@@ -194,7 +194,7 @@ describe("get_sentiment_summary tool", () => {
     expect(mockedGetQuote).toHaveBeenCalledWith("XYZ");
     expect(text).toContain("Price context");
     expect(text).toContain("XYZ: $625.00 (-0.80%)");
-    expect(text).toContain("sentiment diverges from price action");
+    expect(text).toContain("positive sentiment signal diverges from price action");
   });
 
   it("marks stale weekend quote context as last trading-session data", async () => {

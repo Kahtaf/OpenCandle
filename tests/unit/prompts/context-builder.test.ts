@@ -294,6 +294,9 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("last available quote");
     expect(result).toContain("valuation model is unavailable or not meaningful");
     expect(result).toContain("do not treat that absence as the valuation conclusion");
+    expect(result).toContain("Do not make missing fundamentals the main thesis");
+    expect(result).toContain("position sizing");
+    expect(result).toContain("entry strategy");
     expect(result).toContain("relative multiples");
     expect(result).toContain("growth-adjusted multiples");
     expect(result).toContain("cash-flow quality");

@@ -216,7 +216,7 @@ async function buildPriceContext(symbol: string | undefined, aggregateSentiment:
     const sentimentDirection = aggregateSentiment > 0 ? "positive" : aggregateSentiment < 0 ? "negative" : "neutral";
     const relationship = sentimentDirection === "neutral" || direction === "flat" || sentimentDirection === direction
       ? "roughly aligns with price action"
-      : "sentiment diverges from price action";
+      : "diverges from price action";
     const freshnessNote = formatQuoteFreshnessNote(quote.timestamp);
     return `Price context: ${quote.symbol}: $${quote.price.toFixed(2)} (${sign}${quote.changePercent.toFixed(2)}%).${freshnessNote} The ${sentimentDirection} sentiment signal ${relationship}.`;
   } catch {
