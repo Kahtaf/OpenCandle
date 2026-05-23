@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { RateLimiter, rateLimiter } from "../../../src/infra/rate-limiter.js";
+import {
+  ALPHA_VANTAGE_RATE_LIMIT,
+  RateLimiter,
+} from "../../../src/infra/rate-limiter.js";
 
 describe("RateLimiter", () => {
   it("allows requests within limit", async () => {
@@ -49,23 +52,34 @@ describe("RateLimiter", () => {
     vi.useRealTimers();
   });
 
-  it("does not burst Alpha Vantage requests by default", async () => {
+  it("paces Alpha Vantage requests at the free-tier minute limit by default", async () => {
     vi.useFakeTimers();
+    try {
+      const limiter = new RateLimiter();
+      limiter.configure(
+        "alphavantage",
+        ALPHA_VANTAGE_RATE_LIMIT.maxTokens,
+        ALPHA_VANTAGE_RATE_LIMIT.refillRate,
+      );
 
-    await rateLimiter.acquire("alphavantage");
+      for (let i = 0; i < ALPHA_VANTAGE_RATE_LIMIT.maxTokens; i += 1) {
+        await limiter.acquire("alphavantage");
+      }
 
-    let acquired = false;
-    const acquirePromise = rateLimiter.acquire("alphavantage").then(() => {
-      acquired = true;
-    });
+      let acquired = false;
+      const acquirePromise = limiter.acquire("alphavantage").then(() => {
+        acquired = true;
+      });
 
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(acquired).toBe(false);
+      const waitMs = Math.ceil((1 / ALPHA_VANTAGE_RATE_LIMIT.refillRate) * 1000);
+      await vi.advanceTimersByTimeAsync(waitMs - 1);
+      expect(acquired).toBe(false);
 
-    await vi.advanceTimersByTimeAsync(1);
-    await acquirePromise;
-    expect(acquired).toBe(true);
-
-    vi.useRealTimers();
+      await vi.advanceTimersByTimeAsync(1);
+      await acquirePromise;
+      expect(acquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
