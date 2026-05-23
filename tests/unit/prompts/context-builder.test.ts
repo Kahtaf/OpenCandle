@@ -193,6 +193,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("score scale");
     expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
+    expect(result).toContain("low sample counts");
+    expect(result).toContain("downgrade confidence");
     expect(result).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
     expect(result).toContain("whether sentiment diverges from price action");
   });
@@ -454,6 +456,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("score scale");
     expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
+    expect(result).toContain("low sample counts");
+    expect(result).toContain("downgrade confidence");
     expect(result).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
     expect(result).toContain("whether sentiment diverges from price action");
   });

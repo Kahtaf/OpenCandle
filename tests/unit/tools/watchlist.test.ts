@@ -98,12 +98,13 @@ describe("watchlistTool", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify([
-        { symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 200 },
+        { symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 200, stopPrice: 150 },
       ]),
     );
 
     const result = await watchlistTool.execute("test", { action: "check" });
     expect(result.content[0].text.toLowerCase()).toMatch(/target|alert|hit/);
+    expect(result.content[0].text).toContain("Stop OK");
   });
 
   it("flags when stop price is hit", async () => {
