@@ -5,7 +5,7 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import { computeSMA, computeRSI } from "./indicators.js";
 import type { OHLCV } from "../../types/market.js";
 
-export type Strategy = "sma_crossover" | "rsi_mean_reversion";
+export type Strategy = "sma_crossover" | "sma_50_200_crossover" | "rsi_mean_reversion";
 
 export interface BacktestResult {
   strategy: string;
@@ -25,23 +25,30 @@ export function runBacktest(bars: OHLCV[], strategy: Strategy): BacktestResult {
     : 0;
 
   if (strategy === "sma_crossover") {
-    return backtestSMACrossover(bars, closes);
+    return backtestSMACrossover(bars, closes, 20, 50, strategy);
+  }
+  if (strategy === "sma_50_200_crossover") {
+    return backtestSMACrossover(bars, closes, 50, 200, strategy);
   }
   return backtestRSIMeanReversion(bars, closes);
 }
 
-function backtestSMACrossover(bars: OHLCV[], closes: number[]): BacktestResult {
-  const sma20 = computeSMA(closes, 20);
-  const sma50 = computeSMA(closes, 50);
+function backtestSMACrossover(
+  bars: OHLCV[],
+  closes: number[],
+  shortWindow: number,
+  longWindow: number,
+  strategyName: Strategy,
+): BacktestResult {
+  const shortSma = computeSMA(closes, shortWindow);
+  const longSma = computeSMA(closes, longWindow);
 
-  if (sma50.length === 0) {
-    return emptyResult("sma_crossover", closes);
+  if (longSma.length === 0) {
+    return emptyResult(strategyName, closes);
   }
 
-  // Align: SMA(20) starts at index 19, SMA(50) at index 49
-  // sma20[i] corresponds to closes[i + 19], sma50[i] to closes[i + 49]
-  const offset20 = 19;
-  const offset50 = 49;
+  const shortOffset = shortWindow - 1;
+  const longOffset = longWindow - 1;
 
   let position = false;
   let entryPrice = 0;
@@ -50,19 +57,19 @@ function backtestSMACrossover(bars: OHLCV[], closes: number[]): BacktestResult {
   let peak = 1.0;
   let maxDd = 0;
 
-  for (let i = 0; i < sma50.length; i++) {
-    const barIdx = i + offset50;
-    const sma20Idx = i + (offset50 - offset20);
-    const s20 = sma20[sma20Idx];
-    const s50 = sma50[i];
+  for (let i = 0; i < longSma.length; i++) {
+    const barIdx = i + longOffset;
+    const shortSmaIdx = i + (longOffset - shortOffset);
+    const sShort = shortSma[shortSmaIdx];
+    const sLong = longSma[i];
     const price = closes[barIdx];
 
-    if (!position && s20 > s50) {
+    if (!position && sShort > sLong) {
       // Buy signal
       position = true;
       entryPrice = price;
       tradeLog.push({ type: "buy", date: bars[barIdx].date, price });
-    } else if (position && s20 < s50) {
+    } else if (position && sShort < sLong) {
       // Sell signal
       const pnl = (price - entryPrice) / entryPrice;
       equity *= 1 + pnl;
@@ -87,7 +94,7 @@ function backtestSMACrossover(bars: OHLCV[], closes: number[]): BacktestResult {
     tradeLog.push({ type: "sell", date: bars[bars.length - 1].date, price: lastPrice, pnl });
   }
 
-  return buildResult("sma_crossover", equity - 1, closes, tradeLog, maxDd);
+  return buildResult(strategyName, equity - 1, closes, tradeLog, maxDd);
 }
 
 function backtestRSIMeanReversion(bars: OHLCV[], closes: number[]): BacktestResult {
@@ -187,8 +194,8 @@ function emptyResult(strategy: string, closes: number[]): BacktestResult {
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, SPY)" }),
   strategy: Type.Union(
-    [Type.Literal("sma_crossover"), Type.Literal("rsi_mean_reversion")],
-    { description: "Strategy: sma_crossover (buy when SMA20 > SMA50, sell on reverse) or rsi_mean_reversion (buy when RSI < 30, sell when RSI > 70)" },
+    [Type.Literal("sma_crossover"), Type.Literal("sma_50_200_crossover"), Type.Literal("rsi_mean_reversion")],
+    { description: "Strategy: sma_crossover (buy when SMA20 > SMA50, sell on reverse), sma_50_200_crossover (buy when SMA50 > SMA200, sell on reverse), or rsi_mean_reversion (buy when RSI < 30, sell when RSI > 70)" },
   ),
   period: Type.Optional(
     Type.String({ description: "Historical period to backtest: 1y, 2y, 5y. Default: 2y" }),
@@ -199,7 +206,7 @@ export const backtestTool: AgentTool<typeof params> = {
   name: "backtest_strategy",
   label: "Backtest Strategy",
   description:
-    "Backtest a simple trading strategy against historical data. Supported strategies: SMA crossover (SMA20/SMA50) and RSI mean-reversion (buy <30, sell >70). Returns total return, win rate, max drawdown, and comparison to buy-and-hold.",
+    "Backtest a simple trading strategy against historical data. Supported strategies: SMA crossover (SMA20/SMA50), standard long-term SMA crossover (SMA50/SMA200), and RSI mean-reversion (buy <30, sell >70). Returns total return, win rate, max drawdown, and comparison to buy-and-hold.",
   parameters: params,
   async execute(toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
@@ -213,9 +220,10 @@ export const backtestTool: AgentTool<typeof params> = {
     }
     const bars = historyResult.data;
 
-    if (bars.length < 60) {
+    const minBars = requiredBarsForStrategy(args.strategy);
+    if (bars.length < minBars) {
       return {
-        content: [{ type: "text", text: `Insufficient data for backtesting ${symbol} (need 60+ days, got ${bars.length})` }],
+        content: [{ type: "text", text: `Insufficient data for backtesting ${symbol} (need ${minBars}+ days, got ${bars.length})` }],
         details: null,
       };
     }
@@ -224,7 +232,7 @@ export const backtestTool: AgentTool<typeof params> = {
 
     const outperformance = result.totalReturn - result.buyAndHoldReturn;
     const lines = [
-      `**${symbol} Backtest: ${args.strategy}** (${bars[0].date} to ${bars[bars.length - 1].date}, ${bars.length} days)`,
+      `**${symbol} Backtest: ${strategyLabel(args.strategy)}** (${bars[0].date} to ${bars[bars.length - 1].date}, ${bars.length} days)`,
       ``,
       `Strategy Return: ${(result.totalReturn * 100).toFixed(2)}%`,
       `Buy & Hold Return: ${(result.buyAndHoldReturn * 100).toFixed(2)}%`,
@@ -244,3 +252,19 @@ export const backtestTool: AgentTool<typeof params> = {
     };
   },
 };
+
+function requiredBarsForStrategy(strategy: Strategy): number {
+  if (strategy === "sma_50_200_crossover") return 200;
+  return 60;
+}
+
+function strategyLabel(strategy: Strategy): string {
+  switch (strategy) {
+    case "sma_crossover":
+      return "SMA 20/50 Crossover";
+    case "sma_50_200_crossover":
+      return "SMA 50/200 Crossover";
+    case "rsi_mean_reversion":
+      return "RSI Mean Reversion";
+  }
+}

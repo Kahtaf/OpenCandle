@@ -112,6 +112,8 @@ describe("competitive finance benchmarking", () => {
     expect(judgePrompt).toContain("Agent: Gemini (gemini, google/gemini-cli)");
     expect(judgePrompt).toContain("It is acceptable for any generic agent to win");
     expect(judgePrompt).toContain("Treat dates on or before the current date as current or historical");
+    expect(judgePrompt).toContain("Do not reward fabricated current facts");
+    expect(judgePrompt).toContain("A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized");
     expect(judgePrompt).toContain("get_sec_filings");
     expect(judgePrompt).not.toContain("OpenCandle router telemetry");
   });

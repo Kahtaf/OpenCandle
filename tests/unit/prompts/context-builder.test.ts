@@ -316,8 +316,12 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("practical middle-ground");
     expect(result).toContain("For \"how to use [metric] without over-relying\" prompts");
     expect(result).toContain("the final answer must use these sections");
+    expect(result).toContain("include a one-sentence Core mental model");
+    expect(result).toContain("Bottom line must frame the metric as a starting point or question generator");
     expect(result).toContain("the workflow section must be numbered question-driven application steps");
     expect(result).toContain("not a second limitations list");
+    expect(result).toContain("Where it misleads section must cover common traps");
+    expect(result).toContain("quality of earnings distortions");
     expect(result).toContain("final checklist should reinforce the decision framework");
     expect(result).toContain("\"Practical workflow\"");
     expect(result).toContain("\"Where it misleads\"");
@@ -498,8 +502,10 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("do not append analyst-view, confidence-band, or invalidation boilerplate");
     expect(result).toContain("For valuation-metric education");
     expect(result).toContain("start with \"Bottom line\"");
+    expect(result).toContain("one-sentence paragraph beginning \"Core mental model:\"");
     expect(result).toContain("heading exactly named \"Practical workflow\"");
     expect(result).toContain("numbered question-driven application steps");
+    expect(result).toContain("common traps to avoid");
     expect(result).toContain("cross-check table with why/when");
     expect(result).toContain("trailing, forward, normalized, or cyclically adjusted variants");
     expect(result).toContain("where the metric misleads");

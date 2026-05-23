@@ -57,6 +57,21 @@ describe("runBacktest", () => {
     expect(typeof result.totalReturn).toBe("number");
   });
 
+  it("SMA 50/200 crossover supports standard long-term trend backtests", () => {
+    const bars = makeUptrend(260);
+    const result = runBacktest(bars, "sma_50_200_crossover");
+    expect(result.strategy).toBe("sma_50_200_crossover");
+    expect(result.trades).toBeGreaterThanOrEqual(0);
+    expect(typeof result.buyAndHoldReturn).toBe("number");
+  });
+
+  it("SMA 50/200 crossover requires enough data for the 200-day average", () => {
+    const bars = makeUptrend(100);
+    const result = runBacktest(bars, "sma_50_200_crossover");
+    expect(result.strategy).toBe("sma_50_200_crossover");
+    expect(result.trades).toBe(0);
+  });
+
   it("RSI mean-reversion generates trades on oscillating data", () => {
     const bars = makeOscillating(200);
     const result = runBacktest(bars, "rsi_mean_reversion");
