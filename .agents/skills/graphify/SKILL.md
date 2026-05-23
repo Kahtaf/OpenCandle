@@ -854,7 +854,7 @@ G_new = build_from_json(new_extraction)
 # Merge: new nodes/edges into existing graph
 G_existing.update(G_new)
 print(f'Merged: {G_existing.number_of_nodes()} nodes, {G_existing.number_of_edges()} edges')
-" 
+"
 ```
 
 Then run Steps 4–8 on the merged graph as normal.
@@ -1230,7 +1230,7 @@ Replace `URL` with the actual URL, `AUTHOR` with the user's name if provided, `C
 
 Supported URL types (auto-detected):
 - Twitter/X → fetched via oEmbed, saved as `.md` with tweet text and author
-- arXiv → abstract + metadata saved as `.md`  
+- arXiv → abstract + metadata saved as `.md`
 - PDF → downloaded as `.pdf`
 - Images (.png/.jpg/.webp) → downloaded, vision extraction runs on next build
 - Any webpage → converted to markdown via html2text

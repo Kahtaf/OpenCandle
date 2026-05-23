@@ -1,9 +1,9 @@
 # OpenCandle Real-Usage E2E Fix Handoff
 
-**Date:** 2026-03-29  
-**Last reviewed:** 2026-05-23  
-**Status:** Historical handoff; several findings have since landed — see per-section status annotations  
-**Audience:** Engineer / agent taking over runtime-quality fixes after workflow routing and memory landed  
+**Date:** 2026-03-29
+**Last reviewed:** 2026-05-23
+**Status:** Historical handoff; several findings have since landed — see per-section status annotations
+**Audience:** Engineer / agent taking over runtime-quality fixes after workflow routing and memory landed
 **Scope:** Fix the remaining issues discovered by running the real CLI agent against broad, realistic user prompts
 
 ---

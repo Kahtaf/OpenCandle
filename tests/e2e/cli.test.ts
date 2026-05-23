@@ -34,6 +34,7 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
   let text = "";
   const toolCalls: string[] = [];
   let lastEventAt = Date.now();
+  let sawAgentEnd = false;
 
   const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
     switch (event.type) {
@@ -48,8 +49,11 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
         toolCalls.push(event.toolName);
         break;
       case "tool_execution_end":
+        lastEventAt = Date.now();
+        break;
       case "agent_end":
         lastEventAt = Date.now();
+        sawAgentEnd = true;
         break;
     }
   });
@@ -59,8 +63,8 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
       const quietForMs = Date.now() - lastEventAt;
-      if (quietForMs >= 5_000) break;
-      await new Promise((resolve) => setTimeout(resolve, Math.min(500, 5_000 - quietForMs)));
+      if (sawAgentEnd && quietForMs >= 5_000) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
     return { text, toolCalls };
   } finally {
