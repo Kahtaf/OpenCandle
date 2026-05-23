@@ -33,26 +33,39 @@ const failures: string[] = [];
 async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: string[] }> {
   let text = "";
   const toolCalls: string[] = [];
+  let lastEventAt = Date.now();
 
-  return new Promise((resolve) => {
-    const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
-      switch (event.type) {
-        case "message_update":
-          if (event.assistantMessageEvent.type === "text_delta") {
-            text += event.assistantMessageEvent.delta;
-          }
-          break;
-        case "tool_execution_start":
-          toolCalls.push(event.toolName);
-          break;
-        case "agent_end":
-          unsubscribe();
-          resolve({ text, toolCalls });
-          break;
-      }
-    });
-    void session.prompt(prompt);
+  const unsubscribe = session.subscribe((event: AgentSessionEvent) => {
+    switch (event.type) {
+      case "message_update":
+        lastEventAt = Date.now();
+        if (event.assistantMessageEvent.type === "text_delta") {
+          text += event.assistantMessageEvent.delta;
+        }
+        break;
+      case "tool_execution_start":
+        lastEventAt = Date.now();
+        toolCalls.push(event.toolName);
+        break;
+      case "tool_execution_end":
+      case "agent_end":
+        lastEventAt = Date.now();
+        break;
+    }
   });
+
+  try {
+    await session.prompt(prompt, { streamingBehavior: "followUp" });
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      const quietForMs = Date.now() - lastEventAt;
+      if (quietForMs >= 5_000) break;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(500, 5_000 - quietForMs)));
+    }
+    return { text, toolCalls };
+  } finally {
+    unsubscribe();
+  }
 }
 
 async function test(name: string, prompt: string, validate: (text: string, tools: string[]) => void) {
