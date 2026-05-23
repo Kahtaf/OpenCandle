@@ -28,6 +28,7 @@ export interface RunOpenCandleSessionOptions {
   prompt: string;
   scriptedAnswers?: string[];
   cwd?: string;
+  openCandleHome?: string;
   settleGraceMs?: number;
   timeoutMs?: number;
   jsonlPath?: string;
@@ -45,7 +46,8 @@ export interface RunOpenCandleSessionResult {
 export async function runOpenCandleSession(
   options: RunOpenCandleSessionOptions,
 ): Promise<RunOpenCandleSessionResult> {
-  const openCandleHome = mkdtempSync(join(tmpdir(), "oc-harness-home-"));
+  const openCandleHome = options.openCandleHome ?? mkdtempSync(join(tmpdir(), "oc-harness-home-"));
+  const shouldRemoveOpenCandleHome = options.openCandleHome === undefined;
   const previousHome = process.env.OPENCANDLE_HOME;
   process.env.OPENCANDLE_HOME = openCandleHome;
 
@@ -102,7 +104,9 @@ export async function runOpenCandleSession(
   } finally {
     collector?.dispose();
     session?.dispose();
-    rmSync(openCandleHome, { recursive: true, force: true });
+    if (shouldRemoveOpenCandleHome) {
+      rmSync(openCandleHome, { recursive: true, force: true });
+    }
     if (previousHome === undefined) {
       delete process.env.OPENCANDLE_HOME;
     } else {

@@ -22,6 +22,7 @@ export interface CompetitorAnswer {
   model: string;
   answer: string;
   error?: string;
+  cachedFromReport?: string;
 }
 
 export interface ComparisonJudgeInput {
@@ -41,10 +42,50 @@ export interface ComparisonJudgment {
   openCandleImprovementIdeas: string[];
 }
 
+export interface CompetitiveCaseAnalysis {
+  id: string;
+  prompt: string;
+  winner: string;
+  openCandleScore: number;
+  competitorScores: Record<string, number>;
+  scoreGap: number;
+  lostTo?: string;
+  judgeReason: string;
+  openCandleDidBetter: string[];
+  competitorsDidBetter: Record<string, string[]>;
+  openCandleImprovementIdeas: string[];
+  improvementThemes: string[];
+  toolCalls: string[];
+  cachedCompetitors: string[];
+}
+
+export interface CompetitiveThemeSummary {
+  theme: string;
+  count: number;
+  caseIds: string[];
+  ideas: string[];
+}
+
+export interface CompetitiveReportAnalysis {
+  generatedAt?: string;
+  reportPath?: string;
+  promptCount: number;
+  openCandleWins: number;
+  losses: number;
+  ties: number;
+  cases: CompetitiveCaseAnalysis[];
+  themeSummary: CompetitiveThemeSummary[];
+}
+
 export interface CompetitiveModelCandidate {
   provider: string;
   id: string;
   contextWindow?: number;
+}
+
+export interface CompetitiveReportCacheEntry {
+  path: string;
+  report: unknown;
 }
 
 const PREFERRED_CONTEXT_WINDOW = 128_000;
@@ -118,9 +159,6 @@ ${input.prompt.evaluationFocus}
 OpenCandle classification:
 ${JSON.stringify(input.openCandleTrace.classification)}
 
-OpenCandle router telemetry:
-${JSON.stringify(input.openCandleTrace.router ?? {}, null, 2)}
-
 OpenCandle tool calls:
 ${JSON.stringify(toolCalls, null, 2)}
 
@@ -155,6 +193,40 @@ export function parseGeneratedPrompts(raw: string): GeneratedFinancePrompt[] {
   return prompts.map((item, index) => normalizeGeneratedPrompt(item, index));
 }
 
+export function findCachedPromptMetadata(
+  cache: CompetitiveReportCacheEntry[],
+  promptText: string,
+): GeneratedFinancePrompt | null {
+  for (const entry of cache) {
+    for (const result of reportResults(entry.report)) {
+      const prompt = promptFromResult(result);
+      if (prompt?.prompt === promptText) return prompt;
+    }
+  }
+  return null;
+}
+
+export function findCachedCompetitorAnswer(
+  cache: CompetitiveReportCacheEntry[],
+  promptText: string,
+  competitorId: string,
+): CompetitorAnswer | null {
+  for (const entry of cache) {
+    for (const result of reportResults(entry.report)) {
+      const prompt = promptFromResult(result);
+      if (prompt?.prompt !== promptText) continue;
+      const answers = competitorAnswersFromResult(result);
+      const answer = answers.find((candidate) => candidate.id === competitorId);
+      if (!answer) continue;
+      return {
+        ...answer,
+        cachedFromReport: entry.path,
+      };
+    }
+  }
+  return null;
+}
+
 export function parseComparisonJudgment(raw: string): ComparisonJudgment {
   const value = parseJsonPayload(raw);
   if (!isRecord(value)) throw new Error("Comparison judgment must be a JSON object");
@@ -171,6 +243,116 @@ export function parseComparisonJudgment(raw: string): ComparisonJudgment {
     competitorsDidBetter: stringArrayRecord(value.competitorsDidBetter),
     openCandleImprovementIdeas: stringArray(value.openCandleImprovementIdeas),
   };
+}
+
+export function analyzeCompetitiveReport(
+  report: unknown,
+  options: { reportPath?: string } = {},
+): CompetitiveReportAnalysis {
+  const cases = reportResults(report).flatMap((result): CompetitiveCaseAnalysis[] => {
+    const prompt = promptFromResult(result);
+    const judgment = judgmentFromResult(result);
+    if (!prompt || !judgment) return [];
+    const bestCompetitor = bestCompetitorScore(judgment.competitorScores);
+    const lostTo = judgment.winner !== "opencandle" && judgment.winner !== "tie"
+      ? judgment.winner
+      : undefined;
+    const ideas = judgment.openCandleImprovementIdeas;
+    return [{
+      id: prompt.id,
+      prompt: prompt.prompt,
+      winner: judgment.winner,
+      openCandleScore: judgment.openCandleScore,
+      competitorScores: judgment.competitorScores,
+      scoreGap: bestCompetitor ? bestCompetitor.score - judgment.openCandleScore : 0,
+      lostTo,
+      judgeReason: judgment.reason,
+      openCandleDidBetter: judgment.openCandleDidBetter,
+      competitorsDidBetter: judgment.competitorsDidBetter,
+      openCandleImprovementIdeas: ideas,
+      improvementThemes: unique(ideas.flatMap(classifyImprovementIdea)),
+      toolCalls: toolCallsFromResult(result),
+      cachedCompetitors: competitorAnswersFromResult(result)
+        .filter((answer) => answer.cachedFromReport)
+        .map((answer) => answer.id),
+    }];
+  });
+
+  return {
+    generatedAt: isRecord(report) ? stringValue(report.generatedAt) || undefined : undefined,
+    reportPath: options.reportPath,
+    promptCount: cases.length,
+    openCandleWins: cases.filter((c) => c.winner === "opencandle").length,
+    losses: cases.filter((c) => c.lostTo).length,
+    ties: cases.filter((c) => c.winner === "tie").length,
+    cases: [...cases].sort((a, b) => b.scoreGap - a.scoreGap),
+    themeSummary: summarizeImprovementThemes(cases),
+  };
+}
+
+export function formatCompetitiveReportAnalysisMarkdown(
+  analysis: CompetitiveReportAnalysis,
+): string {
+  const lines: string[] = [];
+  lines.push("# Competitive Report Analysis");
+  if (analysis.reportPath) lines.push(`Report: ${analysis.reportPath}`);
+  if (analysis.generatedAt) lines.push(`Generated: ${analysis.generatedAt}`);
+  lines.push("");
+  lines.push(`Summary: OC wins ${analysis.openCandleWins}, losses ${analysis.losses}, ties ${analysis.ties}, cases ${analysis.promptCount}.`);
+
+  if (analysis.themeSummary.length > 0) {
+    lines.push("");
+    lines.push("## Improvement Themes");
+    for (const theme of analysis.themeSummary) {
+      lines.push(`- ${theme.theme} (${theme.count}): ${theme.ideas.slice(0, 2).join(" / ")}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("## Cases");
+  for (const c of analysis.cases) {
+    const scores = Object.entries(c.competitorScores)
+      .map(([id, score]) => `${id} ${score}`)
+      .join(", ");
+    lines.push(`### ${c.id}`);
+    lines.push(`Winner: ${c.winner}. Scores: OC ${c.openCandleScore}${scores ? `, ${scores}` : ""}.`);
+    if (c.lostTo) lines.push(`Loss gap: ${c.lostTo} beat OC by ${c.scoreGap}.`);
+    lines.push(`Prompt: ${c.prompt}`);
+    lines.push("");
+    lines.push("Judge reason:");
+    lines.push(c.judgeReason || "(none)");
+    if (Object.keys(c.competitorsDidBetter).length > 0) {
+      lines.push("");
+      lines.push("Competitors did better:");
+      for (const [id, items] of Object.entries(c.competitorsDidBetter)) {
+        for (const item of items) lines.push(`- ${id}: ${item}`);
+      }
+    }
+    if (c.openCandleImprovementIdeas.length > 0) {
+      lines.push("");
+      lines.push("OC improvement ideas:");
+      for (const idea of c.openCandleImprovementIdeas) lines.push(`- ${idea}`);
+    }
+    if (c.toolCalls.length > 0) {
+      lines.push("");
+      lines.push(`OC tools: ${c.toolCalls.join(", ")}`);
+    }
+    if (c.cachedCompetitors.length > 0) {
+      lines.push(`Cached competitors: ${c.cachedCompetitors.join(", ")}`);
+    }
+    lines.push("");
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+export function competitiveReportAnalysisPath(reportPath: string): string {
+  if (reportPath.endsWith("_competitive-finance.json")) {
+    return reportPath.replace(/_competitive-finance\.json$/, "_competitive-finance-analysis.md");
+  }
+  if (reportPath.endsWith(".json")) {
+    return `${reportPath.slice(0, -".json".length)}-competitive-finance-analysis.md`;
+  }
+  return `${reportPath}-competitive-finance-analysis.md`;
 }
 
 export function fixedPromptFromEnv(env: Record<string, string | undefined>): GeneratedFinancePrompt | null {
@@ -267,6 +449,124 @@ function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinanc
     complexity,
     evaluationFocus: stringValue(item.evaluationFocus),
   };
+}
+
+function reportResults(report: unknown): unknown[] {
+  if (!isRecord(report) || !Array.isArray(report.results)) return [];
+  return report.results;
+}
+
+function promptFromResult(result: unknown): GeneratedFinancePrompt | null {
+  if (!isRecord(result) || !isRecord(result.prompt)) return null;
+  const prompt = result.prompt;
+  const text = stringValue(prompt.prompt);
+  if (!text) return null;
+  const complexity = stringValue(prompt.complexity);
+  return {
+    id: stringValue(prompt.id) || "cached-prompt",
+    prompt: text,
+    topic: stringValue(prompt.topic),
+    complexity: complexity === "simple" || complexity === "complex" ? complexity : "moderate",
+    evaluationFocus: stringValue(prompt.evaluationFocus),
+  };
+}
+
+function competitorAnswersFromResult(result: unknown): CompetitorAnswer[] {
+  if (!isRecord(result) || !Array.isArray(result.competitorAnswers)) return [];
+  return result.competitorAnswers.flatMap((item): CompetitorAnswer[] => {
+    if (!isRecord(item)) return [];
+    const id = stringValue(item.id);
+    const answer = stringValue(item.answer);
+    if (!id || !answer) return [];
+    return [{
+      id,
+      label: stringValue(item.label) || id,
+      provider: stringValue(item.provider),
+      model: stringValue(item.model),
+      answer,
+      ...(typeof item.error === "string" ? { error: item.error } : {}),
+      ...(typeof item.cachedFromReport === "string" ? { cachedFromReport: item.cachedFromReport } : {}),
+    }];
+  });
+}
+
+function judgmentFromResult(result: unknown): ComparisonJudgment | null {
+  if (!isRecord(result) || !isRecord(result.judgment)) return null;
+  const judgment = result.judgment;
+  const winner = stringValue(judgment.winner);
+  if (!winner) return null;
+  return {
+    winner,
+    openCandleScore: numberValue(judgment.openCandleScore),
+    competitorScores: numberRecord(judgment.competitorScores),
+    reason: stringValue(judgment.reason),
+    openCandleDidBetter: stringArray(judgment.openCandleDidBetter),
+    competitorsDidBetter: stringArrayRecord(judgment.competitorsDidBetter),
+    openCandleImprovementIdeas: stringArray(judgment.openCandleImprovementIdeas),
+  };
+}
+
+function toolCallsFromResult(result: unknown): string[] {
+  if (!isRecord(result) || !isRecord(result.openCandleTrace) || !Array.isArray(result.openCandleTrace.toolCalls)) {
+    return [];
+  }
+  return unique(result.openCandleTrace.toolCalls.flatMap((call): string[] => {
+    if (!isRecord(call)) return [];
+    const name = stringValue(call.name);
+    return name ? [name] : [];
+  }));
+}
+
+function bestCompetitorScore(scores: Record<string, number>): { id: string; score: number } | null {
+  let best: { id: string; score: number } | null = null;
+  for (const [id, score] of Object.entries(scores)) {
+    if (!best || score > best.score) best = { id, score };
+  }
+  return best;
+}
+
+function summarizeImprovementThemes(cases: CompetitiveCaseAnalysis[]): CompetitiveThemeSummary[] {
+  const byTheme = new Map<string, CompetitiveThemeSummary>();
+  for (const c of cases) {
+    for (const idea of c.openCandleImprovementIdeas) {
+      for (const theme of classifyImprovementIdea(idea)) {
+        const current = byTheme.get(theme) ?? { theme, count: 0, caseIds: [], ideas: [] };
+        current.count += 1;
+        if (!current.caseIds.includes(c.id)) current.caseIds.push(c.id);
+        if (!current.ideas.includes(idea)) current.ideas.push(idea);
+        byTheme.set(theme, current);
+      }
+    }
+  }
+  return Array.from(byTheme.values()).sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme));
+}
+
+function classifyImprovementIdea(idea: string): string[] {
+  const lower = idea.toLowerCase();
+  const themes: string[] = [];
+  if (/\b(data|fetch|retriev|source|fred|macro|indicator|tool|current|live)\b/.test(lower)) {
+    themes.push("data retrieval and integration");
+  }
+  if (/\b(synthesis|connect|integrat|context|explain|why|implication)\b/.test(lower)) {
+    themes.push("synthesis and reasoning");
+  }
+  if (/\b(portfolio|sleeve|allocation|component|concentration|duration|credit|tips|emerging|tech)\b/.test(lower)) {
+    themes.push("portfolio-specific nuance");
+  }
+  if (/\b(action|adjust|rebalance|trim|specific|percentage|condition|mitigat)\b/.test(lower)) {
+    themes.push("actionability");
+  }
+  if (/\b(structure|format|table|summar|lead|list|begin|composition)\b/.test(lower)) {
+    themes.push("answer structure");
+  }
+  if (/\b(route|router|classification|workflow|clarification|budget|diagnostic)\b/.test(lower)) {
+    themes.push("routing and harness");
+  }
+  return themes.length > 0 ? themes : ["other"];
+}
+
+function unique<T>(values: T[]): T[] {
+  return Array.from(new Set(values));
 }
 
 function parseJsonPayload(raw: string): unknown {

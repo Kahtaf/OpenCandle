@@ -328,6 +328,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (next.workflow === "portfolio_builder" && isPortfolioEvaluationRequest(text)) {
+    diagnostics.push({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+      message: "existing portfolio/allocation evaluation does not require portfolio-construction budget",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -390,6 +405,18 @@ function isConceptualEducationRequest(text: string, output: RouterOutput): boole
 
 function isCoveredCallRequest(text: string): boolean {
   return /\bcovered\s+calls?\b/i.test(text);
+}
+
+function isPortfolioEvaluationRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasEvaluationIntent =
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment)\b/.test(lower);
+  const hasPortfolioObject =
+    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
+  const hasConstructionIntent =
+    /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
+    (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
+  return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
 }
 
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {

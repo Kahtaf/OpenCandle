@@ -255,6 +255,22 @@ describe("classifyIntent", () => {
       expect(result.entities.symbols).toEqual([]);
     });
 
+    it("routes macro risk discussion for a portfolio to the general path", () => {
+      const result = classifyIntent("What macro risks matter most for a balanced portfolio right now?");
+
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual([]);
+    });
+
+    it("routes evaluation of an existing allocation to the general path", () => {
+      const result = classifyIntent(
+        "Critically evaluate a balanced portfolio with 60% equity and 40% fixed income for the next 12-18 months.",
+      );
+
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual([]);
+    });
+
     it("keeps explicit AI ticker prompts as single-asset analysis", () => {
       const result = classifyIntent("analyze AI");
       expect(result.workflow).toBe("single_asset_analysis");

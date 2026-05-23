@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
+  competitiveReportAnalysisPath,
   buildPortableAgentPath,
   competitiveBenchmarkExitCode,
   competitivePreflightTimeoutMs,
   extractUsableAnswerFromCliFailure,
+  findCachedCompetitorAnswer,
+  findCachedPromptMetadata,
+  formatCompetitiveReportAnalysisMarkdown,
   fixedPromptFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
@@ -108,6 +113,7 @@ describe("competitive finance benchmarking", () => {
     expect(judgePrompt).toContain("It is acceptable for any generic agent to win");
     expect(judgePrompt).toContain("Treat dates on or before the current date as current or historical");
     expect(judgePrompt).toContain("get_sec_filings");
+    expect(judgePrompt).not.toContain("OpenCandle router telemetry");
   });
 
   it("parses comparison judgments with OpenCandle improvement ideas", () => {
@@ -189,6 +195,173 @@ describe("competitive finance benchmarking", () => {
       complexity: "complex",
       evaluationFocus: "Check whether OC improves after a prompt fix.",
     });
+  });
+
+  it("finds cached competitor answers by exact prompt text and competitor id", () => {
+    const cache = [{
+      path: "/repo/tests/evals/runs/old_competitive-finance.json",
+      report: {
+        results: [{
+          prompt: {
+            id: "macro",
+            prompt: "Evaluate a 60/40 portfolio.",
+            topic: "macro",
+            complexity: "complex",
+            evaluationFocus: "Original neutral focus.",
+          },
+          competitorAnswers: [{
+            id: "claude",
+            label: "Claude",
+            provider: "acpx/claude",
+            model: "subscription",
+            answer: "Cached Claude answer",
+          }],
+        }],
+      },
+    }];
+
+    expect(findCachedCompetitorAnswer(cache, "Evaluate a 60/40 portfolio.", "claude")).toEqual({
+      id: "claude",
+      label: "Claude",
+      provider: "acpx/claude",
+      model: "subscription",
+      answer: "Cached Claude answer",
+      cachedFromReport: "/repo/tests/evals/runs/old_competitive-finance.json",
+    });
+    expect(findCachedCompetitorAnswer(cache, "Evaluate a 60/40 portfolio.", "codex")).toBeNull();
+    expect(findCachedCompetitorAnswer(cache, "Different prompt.", "claude")).toBeNull();
+  });
+
+  it("finds cached prompt metadata so reruns keep the original judge focus", () => {
+    const cache = [{
+      path: "/repo/tests/evals/runs/old_competitive-finance.json",
+      report: {
+        results: [{
+          prompt: {
+            id: "generated-id",
+            prompt: "Evaluate a 60/40 portfolio.",
+            topic: "portfolio evaluation",
+            complexity: "complex",
+            evaluationFocus: "Judge the portfolio analysis neutrally.",
+          },
+          competitorAnswers: [],
+        }],
+      },
+    }];
+
+    expect(findCachedPromptMetadata(cache, "Evaluate a 60/40 portfolio.")).toEqual({
+      id: "generated-id",
+      prompt: "Evaluate a 60/40 portfolio.",
+      topic: "portfolio evaluation",
+      complexity: "complex",
+      evaluationFocus: "Judge the portfolio analysis neutrally.",
+    });
+  });
+
+  it("analyzes judge output into loss reasons and improvement themes", () => {
+    const analysis = analyzeCompetitiveReport({
+      generatedAt: "2026-05-23T01:30:00.000Z",
+      results: [{
+        prompt: {
+          id: "macro-portfolio",
+          prompt: "Evaluate a 60/40 portfolio.",
+          topic: "macro",
+          complexity: "complex",
+          evaluationFocus: "Synthesis and actionability",
+        },
+        openCandleTrace: {
+          toolCalls: [
+            { name: "get_economic_data", args: { series_id: "FEDFUNDS" } },
+            { name: "search_web", args: { query: "macro outlook" } },
+          ],
+        },
+        competitorAnswers: [{
+          id: "claude",
+          label: "Claude",
+          provider: "acpx/claude",
+          model: "subscription",
+          answer: "Claude answer",
+          cachedFromReport: "old.json",
+        }],
+        judgment: {
+          winner: "claude",
+          openCandleScore: 3,
+          competitorScores: { claude: 4 },
+          reason: "Claude had more portfolio nuance.",
+          openCandleDidBetter: ["used tools"],
+          competitorsDidBetter: {
+            claude: ["named concentration and duration risks"],
+          },
+          openCandleImprovementIdeas: [
+            "Integrate current macro data into the synthesis.",
+            "Add a more specific rebalancing adjustment.",
+          ],
+        },
+      }],
+    }, { reportPath: "report.json" });
+
+    expect(analysis.losses).toBe(1);
+    expect(analysis.cases[0]).toMatchObject({
+      id: "macro-portfolio",
+      winner: "claude",
+      lostTo: "claude",
+      scoreGap: 1,
+      toolCalls: ["get_economic_data", "search_web"],
+      cachedCompetitors: ["claude"],
+    });
+    expect(analysis.themeSummary.map((theme) => theme.theme)).toContain("data retrieval and integration");
+    expect(analysis.themeSummary.map((theme) => theme.theme)).toContain("actionability");
+  });
+
+  it("formats competitive report analysis as readable markdown", () => {
+    const markdown = formatCompetitiveReportAnalysisMarkdown({
+      generatedAt: "2026-05-23T01:30:00.000Z",
+      reportPath: "report.json",
+      promptCount: 1,
+      openCandleWins: 0,
+      losses: 1,
+      ties: 0,
+      themeSummary: [{
+        theme: "data retrieval and integration",
+        count: 1,
+        caseIds: ["macro-portfolio"],
+        ideas: ["Integrate current macro data into the synthesis."],
+      }],
+      cases: [{
+        id: "macro-portfolio",
+        prompt: "Evaluate a 60/40 portfolio.",
+        winner: "claude",
+        openCandleScore: 3,
+        competitorScores: { claude: 4 },
+        scoreGap: 1,
+        lostTo: "claude",
+        judgeReason: "Claude had more portfolio nuance.",
+        openCandleDidBetter: [],
+        competitorsDidBetter: { claude: ["named concentration risks"] },
+        openCandleImprovementIdeas: ["Integrate current macro data into the synthesis."],
+        improvementThemes: ["data retrieval and integration"],
+        toolCalls: ["get_economic_data"],
+        cachedCompetitors: ["claude"],
+      }],
+    });
+
+    expect(markdown).toContain("# Competitive Report Analysis");
+    expect(markdown).toContain("Summary: OC wins 0, losses 1, ties 0, cases 1.");
+    expect(markdown).toContain("Loss gap: claude beat OC by 1.");
+    expect(markdown).toContain("Competitors did better:");
+    expect(markdown).toContain("OC improvement ideas:");
+  });
+
+  it("derives safe analysis paths without overwriting arbitrary report inputs", () => {
+    expect(competitiveReportAnalysisPath("runs/old_competitive-finance.json")).toBe(
+      "runs/old_competitive-finance-analysis.md",
+    );
+    expect(competitiveReportAnalysisPath("runs/manual.json")).toBe(
+      "runs/manual-competitive-finance-analysis.md",
+    );
+    expect(competitiveReportAnalysisPath("runs/manual-report")).toBe(
+      "runs/manual-report-competitive-finance-analysis.md",
+    );
   });
 
   it("prefers a large-context configured model over the first available model", () => {
