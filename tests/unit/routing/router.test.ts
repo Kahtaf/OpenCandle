@@ -364,6 +364,66 @@ describe("route()", () => {
     }));
   });
 
+  it("keeps macro-risk portfolio discussion as an agent task after router validation fallback", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "What macro risks matter most for a balanced portfolio right now?",
+      },
+      fixedClient("not json"),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.tool_bundles).not.toEqual(["clarification"]);
+  });
+
+  it("keeps existing-allocation evaluation as an agent task after router validation fallback", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Critically evaluate a balanced portfolio with 60% equity and 40% fixed income for the next 12-18 months.",
+      },
+      fixedClient("not json"),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+  });
+
+  it("corrects portfolio-builder output for existing-allocation evaluation prompts", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Evaluate the prospects of a 60/40 portfolio over the next year and suggest one risk mitigation adjustment.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread evaluation as construction",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+    }));
+  });
+
   it("removes live tool bundles for no-symbol conceptual education", async () => {
     const result = await route(
       {

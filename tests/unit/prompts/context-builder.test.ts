@@ -232,9 +232,30 @@ describe("PromptContextBuilder", () => {
     });
 
     expect(result).toContain("web search returns no results");
+    expect(result).toContain("credential-required provider tags");
     expect(result).toContain("continue with the best high-level analysis");
     expect(result).toContain("Label the live-data gap");
     expect(result).toContain("Do not stop with a tool-failure apology");
+    expect(result).toContain("Do not turn a missing-provider tag into a final answer that only asks the user to connect a provider");
+    expect(result).toContain("For macro-risk prompts, produce a ranked risk list");
+    expect(result).toContain("Never say you cannot provide an assessment at this time");
+    expect(result).toContain("For portfolio-allocation macro prompts, critique structural exposures");
+    expect(result).toContain("stock-bond correlation");
+    expect(result).toContain("specific percentage or trigger");
+    expect(result).toContain("scenario table");
+    expect(result).toContain("portfolio exposure map");
+    expect(result).toContain("Do not describe the analysis as hypothetical");
+    expect(result).toContain("name the provider or source family and observation date");
+    expect(result).toContain("compact structural-bias read");
+    expect(result).toContain("what it does not fix");
+    expect(result).toContain("state the trend direction");
+    expect(result).toContain("estimate the order of magnitude of the impact");
+    expect(result).toContain("End macro portfolio answers with a short bottom line");
+    expect(result).toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
+    expect(result).toContain("Structural portfolio read");
+    expect(result).toContain("What this does not fix");
+    expect(result).toContain("Do not begin with process narration");
+    expect(result).toContain("weave each current datapoint into the relevant sleeve");
   });
 
   it("tells filing thesis prompts to distinguish filing evidence from adjacent sources", () => {
@@ -347,6 +368,22 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("country");
     expect(result).toContain("currency");
     expect(result).toContain("capital flows");
+  });
+
+  it("tells U.S. macro fallbacks to search direct U.S. sources and market indicators", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("For U.S. macro or U.S.-heavy portfolio prompts");
+    expect(result).toContain("Federal Reserve SEP");
+    expect(result).toContain("BLS CPI");
+    expect(result).toContain("BEA PCE");
+    expect(result).toContain("Treasury yield");
+    expect(result).toContain("DXY");
+    expect(result).toContain("IG OAS");
+    expect(result).toContain("avoid broad global-only searches");
   });
 
   it("renders clarification playbook from resolved route context", () => {

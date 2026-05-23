@@ -25,11 +25,12 @@ export const fredDataTool: AgentTool<typeof params, FredSeries | { credentialReq
   async execute(toolCallId, args) {
     return withCredentialCheck("fred", async () => {
       const apiKey = getConfig().fredApiKey!;
-      const limit = args.limit ?? 30;
-      const result = await wrapProvider("fred", () => getSeries(args.series_id.toUpperCase(), apiKey, limit));
+      const seriesId = args.series_id.toUpperCase();
+      const limit = normalizeLimit(seriesId, args.limit);
+      const result = await wrapProvider("fred", () => getSeries(seriesId, apiKey, limit));
       if (result.status === "unavailable") {
         return {
-          content: [{ type: "text", text: `⚠ FRED data unavailable for ${args.series_id.toUpperCase()} (${result.reason}).` }],
+          content: [{ type: "text", text: `⚠ FRED data unavailable for ${seriesId} (${result.reason}).` }],
           details: null as any,
         };
       }
@@ -39,12 +40,15 @@ export const fredDataTool: AgentTool<typeof params, FredSeries | { credentialReq
       const header = `**${series.title}** (${series.id})`;
       const meta = `Units: ${series.units} | Frequency: ${series.frequency} | Last updated: ${series.lastUpdated}`;
       const current = latest ? `Latest: ${latest.value} (${latest.date})` : "No data";
+      const derived = formatDerivedChange(series);
 
       // Show last 10 observations
       const recent = series.observations.slice(-10);
       const table = recent.map((o) => `${o.date}: ${o.value}`).join("\n");
 
-      const text = [header, meta, current, "", "Recent observations:", table].join("\n");
+      const text = [header, meta, current, derived, "", "Recent observations:", table]
+        .filter(Boolean)
+        .join("\n");
       const prefix = result.stale
         ? `⚠ Using cached FRED data from ${result.timestamp} (FRED unavailable)\n`
         : "";
@@ -52,3 +56,25 @@ export const fredDataTool: AgentTool<typeof params, FredSeries | { credentialReq
     });
   },
 };
+
+function normalizeLimit(seriesId: string, requested: number | undefined): number {
+  const limit = requested ?? 30;
+  if (seriesId === FRED_SERIES.CPI && limit < 13) return 13;
+  return limit;
+}
+
+function formatDerivedChange(series: FredSeries): string | null {
+  const latest = series.observations.at(-1);
+  if (!latest) return null;
+  if (!/monthly/i.test(series.frequency) || !/\bindex\b/i.test(series.units)) return null;
+
+  const latestYear = Number(latest.date.slice(0, 4));
+  const monthDay = latest.date.slice(4);
+  const prior = series.observations.find((observation) =>
+    observation.date === `${latestYear - 1}${monthDay}`
+  );
+  if (!prior || prior.value === 0) return null;
+
+  const pct = ((latest.value / prior.value) - 1) * 100;
+  return `Derived YoY change: ${pct.toFixed(2)}% (${prior.date} to ${latest.date}).`;
+}

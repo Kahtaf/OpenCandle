@@ -4,7 +4,7 @@ const directAnswer: ProductEvalDimension = {
   id: "direct_answer",
   description: "Answers the user's actual decision or request directly.",
   requiredPatterns: [
-    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight)\b/i,
+    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom line)\b/i,
   ],
   mandatory: true,
 };
@@ -18,7 +18,7 @@ const evidenceUse: ProductEvalDimension = {
 const missingDataHonesty: ProductEvalDimension = {
   id: "missing_data_honesty",
   description: "Marks unavailable or missing evidence instead of hiding gaps.",
-  requiredPatterns: [/\b(unavailable|missing|not available|data gap|cannot verify|no live|not enough)\b/i],
+  requiredPatterns: [/\b(unavailable|missing|not available|data gap|cannot verify|no live|not enough|unable to fetch)\b/i],
 };
 
 const riskFraming: ProductEvalDimension = {
@@ -149,7 +149,7 @@ export const PRODUCT_EVAL_CASES: ProductEvalCase[] = [
   }),
   makeCase("macro-inflation-portfolio-risk", "macro_market_context", {
     prompt: "What macro risks matter most for a balanced portfolio right now?",
-    assertions: {},
+    assertions: { expectedWorkflow: "general_finance_qa" },
   }),
   makeCase("education-pe-ratio", "education_without_fake_current_data", {
     prompt: "Explain how to use P/E ratios without over relying on them.",

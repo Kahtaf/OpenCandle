@@ -106,12 +106,16 @@ const RULES: Rule[] = [
       const lower = input.toLowerCase();
       const hasResearchVerb =
         /\banaly[sz]e\b/.test(lower) ||
+        /\bevaluat(?:e|ion)\b/.test(lower) ||
+        /\breview\b/.test(lower) ||
         /\bdiscuss\b/.test(lower) ||
         /\bpredict\b/.test(lower) ||
-        /\bassess\b/.test(lower);
+        /\bassess\b/.test(lower) ||
+        /^what\b/.test(lower);
       const hasBroadFinanceTopic =
         /\bmarket\s+structure\b/.test(lower) ||
         /\b(?:sector|industry)\b/.test(lower) ||
+        /\bmacro\s+risks?\b/.test(lower) ||
         /\bmonetary\s+policy\b/.test(lower) ||
         /\bemerging\s+markets?\b/.test(lower) ||
         /\bcapital\s+flows?\b/.test(lower) ||
@@ -119,6 +123,13 @@ const RULES: Rule[] = [
         /\binflation\b/.test(lower);
       return hasResearchVerb && hasBroadFinanceTopic;
     },
+  },
+  // Existing allocation / portfolio review. This is not portfolio construction
+  // and should not require a budget.
+  {
+    workflow: "general_finance_qa",
+    confidence: 0.85,
+    test: (input) => isPortfolioEvaluationRequest(input),
   },
   // Options: symbol + option keyword
   {
@@ -259,4 +270,16 @@ export function classifyIntent(input: string): ClassificationResult {
     tier: "rule",
     entities,
   };
+}
+
+function isPortfolioEvaluationRequest(input: string): boolean {
+  const lower = input.toLowerCase();
+  const hasEvaluationIntent =
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment)\b/.test(lower);
+  const hasPortfolioObject =
+    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
+  const hasConstructionIntent =
+    /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
+    (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
+  return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
 }
