@@ -158,8 +158,18 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
           dialog.showWaiting("Waiting for browser authentication...");
         }
       },
+      onDeviceCode: (info) => {
+        dialog.showDeviceCode(info);
+        dialog.showWaiting("Waiting for authentication...");
+      },
       onPrompt: async (prompt) => dialog.showPrompt(prompt.message, prompt.placeholder),
       onProgress: (message) => dialog.showProgress(message),
+      onSelect: async (prompt) => {
+        const options = prompt.options.map((option, index) => `${index + 1}. ${option.label}`).join("\n");
+        const answer = await dialog.showPrompt(`${prompt.message}\n\n${options}`, "Enter a number");
+        const selectedIndex = Number.parseInt(answer.trim(), 10) - 1;
+        return prompt.options[selectedIndex]?.id;
+      },
       onManualCodeInput: () => manualCodePromise,
       signal: dialog.signal,
     })
