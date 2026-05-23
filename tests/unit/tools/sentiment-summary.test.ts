@@ -84,6 +84,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -194,6 +195,96 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Price context");
     expect(text).toContain("XYZ: $625.00 (-0.80%)");
     expect(text).toContain("sentiment diverges from price action");
+  });
+
+  it("marks stale weekend quote context as last trading-session data", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T15:00:00Z"));
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "GME",
+        results: [{
+          title: "GME update",
+          url: "https://example.com/gme",
+          snippet: "GME shares were quiet after recent news.",
+          source: "example.com",
+          published: null,
+          category: "news",
+        }],
+        resultCount: 1,
+        fetchedAt: "2026-05-23T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+    mockedGetQuote.mockResolvedValue({
+      symbol: "GME",
+      price: 21.96,
+      change: -0.53,
+      changePercent: -2.36,
+      open: 22.3,
+      high: 22.4,
+      low: 21.8,
+      volume: 4_000_000,
+      previousClose: 22.49,
+      marketCap: 10_000_000_000,
+      week52High: 35,
+      week52Low: 18,
+      timestamp: Date.parse("2026-05-22T20:00:00Z"),
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-weekend", { query: "GME" });
+    const text = result.content[0].text;
+
+    expect(text).toContain("Last available quote timestamp");
+    expect(text).toContain("U.S. markets are closed today");
+    expect(text).toContain("last trading-session price action");
+  });
+
+  it("marks same-day weekend quote context as market-closed data", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-23T15:00:00Z"));
+    mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "GME",
+        results: [{
+          title: "GME update",
+          url: "https://example.com/gme",
+          snippet: "GME shares were quiet after recent news.",
+          source: "example.com",
+          published: null,
+          category: "news",
+        }],
+        resultCount: 1,
+        fetchedAt: "2026-05-23T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+    mockedGetQuote.mockResolvedValue({
+      symbol: "GME",
+      price: 21.96,
+      change: -0.53,
+      changePercent: -2.36,
+      open: 22.3,
+      high: 22.4,
+      low: 21.8,
+      volume: 4_000_000,
+      previousClose: 22.49,
+      marketCap: 10_000_000_000,
+      week52High: 35,
+      week52Low: 18,
+      timestamp: Date.parse("2026-05-23T15:05:00Z"),
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-weekend-same-day", { query: "GME" });
+    const text = result.content[0].text;
+
+    expect(text).toContain("Quote timestamp");
+    expect(text).toContain("U.S. markets are closed today");
+    expect(text).toContain("not active intraday trading");
   });
 
   it("does not add ticker price context for broad topic sentiment summaries", async () => {

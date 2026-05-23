@@ -217,10 +217,45 @@ async function buildPriceContext(symbol: string | undefined, aggregateSentiment:
     const relationship = sentimentDirection === "neutral" || direction === "flat" || sentimentDirection === direction
       ? "roughly aligns with price action"
       : "sentiment diverges from price action";
-    return `Price context: ${quote.symbol}: $${quote.price.toFixed(2)} (${sign}${quote.changePercent.toFixed(2)}%). The ${sentimentDirection} sentiment signal ${relationship}.`;
+    const freshnessNote = formatQuoteFreshnessNote(quote.timestamp);
+    return `Price context: ${quote.symbol}: $${quote.price.toFixed(2)} (${sign}${quote.changePercent.toFixed(2)}%).${freshnessNote} The ${sentimentDirection} sentiment signal ${relationship}.`;
   } catch {
     return null;
   }
+}
+
+function formatQuoteFreshnessNote(timestamp: number | undefined): string {
+  if (!timestamp) return "";
+  const quoteDate = new Date(timestamp);
+  if (Number.isNaN(quoteDate.getTime())) return "";
+
+  const now = new Date();
+  const quoteDay = quoteDate.toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  const currentDay = now.toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  const quoteStamp = quoteDate.toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/New_York",
+  });
+
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "America/New_York",
+  }).format(now);
+  const isWeekend = weekday === "Saturday" || weekday === "Sunday";
+
+  if (quoteDay === currentDay) {
+    const marketClosedNote = isWeekend
+      ? " U.S. markets are closed today, so treat this as delayed or last available price context, not active intraday trading."
+      : "";
+    return ` Quote timestamp: ${quoteStamp} ET.${marketClosedNote}`;
+  }
+
+  const marketClosedNote = isWeekend
+    ? " U.S. markets are closed today, so treat this as last trading-session price action."
+    : "";
+
+  return ` Last available quote timestamp: ${quoteStamp} ET.${marketClosedNote}`;
 }
 
 async function fetchRedditCrossSubreddit(

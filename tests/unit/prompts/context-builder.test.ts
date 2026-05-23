@@ -290,6 +290,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("single-asset recommendation prompts");
     expect(result).toContain("right now");
     expect(result).toContain("state the quote or tool-output date");
+    expect(result).toContain("market is closed");
+    expect(result).toContain("last available quote");
     expect(result).toContain("valuation model is unavailable or not meaningful");
     expect(result).toContain("do not treat that absence as the valuation conclusion");
     expect(result).toContain("relative multiples");
