@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { RateLimiter } from "../../../src/infra/rate-limiter.js";
+import { RateLimiter, rateLimiter } from "../../../src/infra/rate-limiter.js";
 
 describe("RateLimiter", () => {
   it("allows requests within limit", async () => {
@@ -46,6 +46,26 @@ describe("RateLimiter", () => {
     // Should work without waiting
     await limiter.acquire("test");
     await limiter.acquire("test");
+    vi.useRealTimers();
+  });
+
+  it("does not burst Alpha Vantage requests by default", async () => {
+    vi.useFakeTimers();
+
+    await rateLimiter.acquire("alphavantage");
+
+    let acquired = false;
+    const acquirePromise = rateLimiter.acquire("alphavantage").then(() => {
+      acquired = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(acquired).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await acquirePromise;
+    expect(acquired).toBe(true);
+
     vi.useRealTimers();
   });
 });
