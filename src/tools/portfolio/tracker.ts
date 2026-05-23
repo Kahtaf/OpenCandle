@@ -51,7 +51,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
   description:
     "Track your portfolio of stocks and crypto. Add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker. Data persisted to ~/.opencandle/portfolio.json.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const positions = loadPortfolio();
 
     if (args.action === "add") {

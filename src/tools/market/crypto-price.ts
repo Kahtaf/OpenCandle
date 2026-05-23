@@ -17,7 +17,7 @@ export const cryptoPriceTool: AgentTool<typeof params, CryptoPrice> = {
   description:
     "Get current crypto price, 24h change, market cap, volume, ATH, and supply data",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const result = await wrapProvider("coingecko", () => getCryptoPrice(args.id.toLowerCase()));
     if (result.status === "unavailable") {
       return {

@@ -227,7 +227,7 @@ export async function getOptionsChain(
     try {
       const browserData = await fetchOptionsViaBrowser(symbol, expiration);
       if (browserData) {
-        const chain = parseOptionsResponse(symbol, browserData);
+        const chain = parseOptionsResponse(browserData);
         cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
         return chain;
       }
@@ -252,7 +252,7 @@ export async function getOptionsChain(
   }
 
   const data: YahooOptionsResponse = await res.json();
-  const chain = parseOptionsResponse(symbol, data);
+  const chain = parseOptionsResponse(data);
   cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
   return chain;
 }
@@ -341,7 +341,7 @@ export function buildOptionsQuoteStatus(
   };
 }
 
-function parseOptionsResponse(symbol: string, data: YahooOptionsResponse): OptionsChain {
+function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
   if (data.optionChain.error) {
     throw new Error(`Yahoo Finance options: ${JSON.stringify(data.optionChain.error)}`);
   }

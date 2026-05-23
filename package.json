@@ -135,9 +135,6 @@
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.35.0",
-    "@mariozechner/pi-agent-core": "^0.73.1",
-    "@mariozechner/pi-ai": "^0.73.1",
-    "@mariozechner/pi-coding-agent": "^0.73.1",
     "@sinclair/typebox": "^0.34.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.19",

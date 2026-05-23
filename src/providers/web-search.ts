@@ -1,5 +1,5 @@
 import { search, searchNews, SafeSearchType, SearchTimeType } from "duck-duck-scrape";
-import type { SearchResult, SearchResults } from "duck-duck-scrape";
+import type { SearchResult } from "duck-duck-scrape";
 import type { NewsResult } from "duck-duck-scrape";
 import { httpGet, HttpError } from "../infra/http-client.js";
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";

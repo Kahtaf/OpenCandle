@@ -87,7 +87,7 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
     "NOT for real-time prices, historical data, fundamentals, macro data, SEC filings, or social sentiment — those have dedicated tools.",
   parameters: params,
 
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const query = args.query?.trim();
     if (!query) {
       return {

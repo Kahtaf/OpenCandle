@@ -24,7 +24,7 @@ export const secFilingsTool: AgentTool<typeof params> = {
   description:
     "Search SEC EDGAR for company filings (10-K annual reports, 10-Q quarterly reports, 8-K material events). Returns filing dates, types, and direct links to the documents. Free API, no key required.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const formTypes = args.form_types ?? ["10-K", "10-Q", "8-K"];
     const limit = args.limit ?? 10;

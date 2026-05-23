@@ -96,7 +96,7 @@ export const compsTool: AgentTool<typeof params> = {
   description:
     "Compare 2-6 companies side-by-side on key valuation and financial metrics: P/E, Forward P/E, EPS, Profit Margin, Revenue Growth, Dividend Yield, Beta. Identifies the cheapest and most expensive on each metric.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
     const config = getConfig();
     const symbols = args.symbols.map((s) => s.toUpperCase());

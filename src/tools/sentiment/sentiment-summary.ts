@@ -29,14 +29,13 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
   description:
     "Cross-source sentiment summary combining Twitter, Reddit, and web/news. Returns per-source scores, aggregate sentiment, and divergence detection.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const hours = args.hours ?? 24;
     const config = getConfig();
     const warnings: string[] = [];
     const allRecords: SentinelRecord[] = [];
 
     const twitterAdapter = new TwitterAdapter();
-    const redditAdapter = new RedditAdapter();
     const webAdapter = new WebAdapter();
     const finnhubAdapter = new FinnhubAdapter();
 

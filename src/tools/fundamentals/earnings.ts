@@ -16,7 +16,7 @@ export const earningsTool: AgentTool<typeof params, EarningsData | { credentialR
   description:
     "Get quarterly earnings: reported EPS, estimated EPS, and surprise percentage for the last 8 quarters. Requires Alpha Vantage.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
       const apiKey = getConfig().alphaVantageApiKey!;
       const result = await wrapProvider("alphavantage", () => getEarnings(args.symbol.toUpperCase(), apiKey));

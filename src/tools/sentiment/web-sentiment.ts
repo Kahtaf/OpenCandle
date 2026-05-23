@@ -22,7 +22,7 @@ export const webSentimentTool: AgentTool<typeof params> = {
   description:
     "Analyze sentiment from web and news search results for a ticker or topic. Returns scored results with aggregate sentiment.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const freshness = args.freshness ?? "day";
     const limit = Math.min(args.limit ?? 10, 20);
 

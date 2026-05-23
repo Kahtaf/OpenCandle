@@ -21,7 +21,7 @@ export const cryptoHistoryTool: AgentTool<typeof params, OHLCV[]> = {
   label: "Crypto History",
   description: "Get historical OHLC data for a cryptocurrency",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const id = args.id.toLowerCase();
     const days = args.days ?? 180;
     const result = await wrapProvider("coingecko", () => getCryptoHistory(id, days));

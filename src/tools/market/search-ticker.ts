@@ -25,7 +25,7 @@ export const searchTickerTool: AgentTool<typeof params> = {
   description:
     "Search for any ticker symbol — stocks, crypto, ETFs, indices, forex. Returns matching symbols with names and exchange info. Use this when you don't know the exact ticker for an asset.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(args.query)}&quotesCount=10&newsCount=0`;
     const data = await httpGet<YahooSearchResponse>(url, {
       headers: { "User-Agent": "OpenCandle/1.0" },

@@ -25,7 +25,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
   description:
     "Get the full options chain for a stock with strikes, bids, asks, volume, open interest, implied volatility, and computed Greeks (Delta, Gamma, Theta, Vega, Rho via Black-Scholes). No API key required.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const normalizedType = args.type?.toLowerCase();
     const expirationTs = args.expiration

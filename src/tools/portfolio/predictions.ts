@@ -184,7 +184,7 @@ export const predictionsTool: AgentTool<typeof params> = {
   description:
     "Track your analysis predictions and measure accuracy over time. Record: save a directional prediction with conviction. Check: evaluate all predictions against current prices, compute hit rate and conviction-weighted accuracy. Inspired by ATLAS's Darwinian scoring approach.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     if (args.action === "record") {
       if (!args.symbol || !args.direction || !args.conviction || !args.entry_price) {
         throw new Error("symbol, direction, conviction, and entry_price are required for record action.");

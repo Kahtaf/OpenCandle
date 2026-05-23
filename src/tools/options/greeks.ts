@@ -47,7 +47,6 @@ export function computeGreeks(input: GreeksInput): Greeks {
       rho: (strike * timeYears * expRT * nd2) / 100, // per 1% change in rate
     };
   } else {
-    const nMinusD1 = cdf(-d1);
     const nMinusD2 = cdf(-d2);
     return {
       delta: nd1 - 1,

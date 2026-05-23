@@ -12,7 +12,7 @@ export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
   description:
     "Get the Crypto Fear & Greed Index (alternative.me) — a sentiment indicator from 0 (Extreme Fear) to 100 (Extreme Greed). Includes current value and previous close.",
   parameters: params,
-  async execute(toolCallId, _args) {
+  async execute(_toolCallId, _args) {
     const result = await wrapProvider("feargreed", () => getFearGreedIndex());
     if (result.status === "unavailable") {
       return {

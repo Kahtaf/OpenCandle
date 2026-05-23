@@ -54,7 +54,7 @@ export const watchlistTool: AgentTool<typeof params> = {
   description:
     "Manage your watchlist of stocks and crypto. Add symbols with optional target and stop prices, remove symbols, or check current prices against your alert levels. Data persisted to ~/.opencandle/watchlist.json.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const items = loadWatchlist();
 
     if (args.action === "add") {

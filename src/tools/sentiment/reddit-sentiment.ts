@@ -36,7 +36,7 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
   description:
     "Analyze sentiment from financial Reddit communities. Supports single subreddit, multi-subreddit, and topic filtering. Returns scored posts with comment analysis and trend context.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const limit = Math.min(args.limit ?? 25, 100);
     const config = getConfig();
 

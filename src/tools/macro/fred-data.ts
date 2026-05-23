@@ -22,7 +22,7 @@ export const fredDataTool: AgentTool<typeof params, FredSeries | { credentialReq
   description:
     "Get economic data from FRED (Federal Reserve Economic Data): interest rates, CPI, GDP, unemployment, yield curve, and more. Requires FRED.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     return withCredentialCheck("fred", async () => {
       const apiKey = getConfig().fredApiKey!;
       const seriesId = args.series_id.toUpperCase();

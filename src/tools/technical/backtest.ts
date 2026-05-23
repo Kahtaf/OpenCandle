@@ -20,9 +20,6 @@ export interface BacktestResult {
 
 export function runBacktest(bars: OHLCV[], strategy: Strategy): BacktestResult {
   const closes = bars.map((b) => b.close);
-  const buyAndHoldReturn = closes.length > 1
-    ? (closes[closes.length - 1] - closes[0]) / closes[0]
-    : 0;
 
   if (strategy === "sma_crossover") {
     return backtestSMACrossover(bars, closes, 20, 50, strategy);
@@ -208,7 +205,7 @@ export const backtestTool: AgentTool<typeof params> = {
   description:
     "Backtest a simple trading strategy against historical data. Supported strategies: SMA crossover (SMA20/SMA50), standard long-term SMA crossover (SMA50/SMA200), and RSI mean-reversion (buy <30, sell >70). Returns total return, win rate, max drawdown, and comparison to buy-and-hold.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const period = args.period ?? "2y";
     const historyResult = await wrapProvider("yahoo", () => getHistory(symbol, period, "1d"));

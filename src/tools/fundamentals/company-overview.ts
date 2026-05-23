@@ -16,7 +16,7 @@ export const companyOverviewTool: AgentTool<typeof params, CompanyOverview | { c
   description:
     "Get company fundamentals: P/E ratio, EPS, market cap, sector, dividend yield, profit margin, beta, and description. Requires Alpha Vantage.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
       const apiKey = getConfig().alphaVantageApiKey!;
       const result = await wrapProvider("alphavantage", () => getOverview(args.symbol.toUpperCase(), apiKey));
