@@ -175,6 +175,27 @@ describe("validateRouterOutput", () => {
 });
 
 describe("route()", () => {
+  it("keeps valid LLM route kind authoritative when legacy rules would classify differently", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "analyze NVDA" },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "valid llm classification",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBeUndefined();
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+      code: "deterministic_failure_recovery",
+    }));
+  });
+
   it("returns validated output on first successful call", async () => {
     const expected = {
       routeKind: "workflow_dispatch",
@@ -258,6 +279,9 @@ describe("route()", () => {
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "deterministic_failure_recovery",
+    }));
   });
 
   it("enriches omitted compare focus from deterministic extraction", async () => {

@@ -6,7 +6,7 @@ import {
 import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.js";
 import { getConfig } from "../config.js";
 import {
-  classifyIntent,
+  classifyWithLegacyRules,
   createPiAiRouterClient,
   resolveOptionsScreenerSlots,
   resolvePortfolioSlots,
@@ -509,14 +509,14 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       return dispatched || undefined;
     }
 
-    // --- rules mode ---
+    // --- explicit legacy rules mode (`OPENCANDLE_ROUTER_MODE=rules`) ---
     // Extract and persist user preferences (legacy regex path)
     coordinator.extractAndStorePreferences(event.text);
     const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
 
     // Classify intent
-    const classification = classifyIntent(event.text);
+    const classification = classifyWithLegacyRules(event.text);
 
     if (classification.workflow === "portfolio_builder") {
       const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);

@@ -21,8 +21,9 @@ export interface Config {
   debate?: boolean;
   /**
    * Intent-router mode. `"llm"` (default) runs the LLM router ahead of prompt
-   * assembly. `"rules"` runs the legacy regex `classifyIntent` +
-   * `extractPreferences` path. Controlled by `OPENCANDLE_ROUTER_MODE`.
+   * assembly. `"rules"` is the explicit legacy rule-router rollback path
+   * (`classifyIntent` + `extractPreferences`). Controlled by
+   * `OPENCANDLE_ROUTER_MODE`.
    */
   routerMode: RouterMode;
   /**

@@ -5,7 +5,7 @@
 - [ ] 0.3 Define shadow planning so current prompt/routing/tool behavior remains active while planning metadata, minimal evidence records, capability gaps, and structured checks run observe-only.
 - [ ] 0.4 Add a no-regression rule: no global prompt clause, router correction, workflow behavior, provider-degradation behavior, or tool-scope rule may be removed or weakened until its parity-ledger entry passes.
 - [ ] 0.5 Define V1 completion as feature parity with current behavior plus traceable planning scaffolding, not prompt shrinkage.
-- [ ] 0.6 Resolve GitHub issue #22 or incorporate equivalent tests/comments that make legacy deterministic routing safety-net boundaries explicit before planner-owned behavior or policy-card injection is activated.
+- [x] 0.6 Resolve GitHub issue #22 or incorporate equivalent tests/comments that make legacy deterministic routing safety-net boundaries explicit before planner-owned behavior or policy-card injection is activated.
 - [ ] 0.7 Capture all non-V1 ideas in `future-roadmap.md` with promotion criteria for later specs.
 
 ## 1. Baseline and Prompt Safety

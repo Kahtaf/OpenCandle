@@ -1,4 +1,5 @@
 export { classifyIntent } from "./classify-intent.js";
+export { classifyWithLegacyRules } from "./legacy-rule-router.js";
 export { extractEntities, extractBudget } from "./entity-extractor.js";
 export { resolvePortfolioSlots, resolveOptionsScreenerSlots } from "./slot-resolver.js";
 export { PORTFOLIO_DEFAULTS, OPTIONS_SCREENER_DEFAULTS, parseDteTarget } from "./defaults.js";

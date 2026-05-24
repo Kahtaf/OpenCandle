@@ -14,6 +14,7 @@
 ### Changed
 
 - **LLM routing is now the default** — `OPENCANDLE_ROUTER_MODE` defaults to `llm`, with `rules` retained for fallback comparison.
+- **Legacy router boundary** — deterministic rule routing now has an explicit legacy/safety-net wrapper, with tests locking that valid LLM routing stays authoritative and rules mode remains the rollback path.
 - **Fallback prompt behavior** — fallback-route assumptions are now internal routing context instead of user-visible scaffolding; macro/rates/portfolio prompts ask the agent to convert raw economic series into interpretable rates or trends and to search for direct regional macro facts before declaring data unavailable.
 - **Competitive runner portability** — the benchmark runner no longer contains user-specific executable or Node paths, resolves Claude from `CLAUDE_CODE_EXECUTABLE` or `PATH`, prefers useful stdout answers over stderr diagnostics on non-zero adapter exits, and keeps unavailable baselines in `skippedCompetitors` unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 - **Finance routing and workflow evidence** — rule fallback coverage now preserves specific options/compare routes while routing sentiment, backtest, rate-cut, SEC filing, bull/bear, and owned-holdings risk prompts to more useful tool-backed paths. Compare workflows can request sentiment evidence; options screener output now includes full Greeks in the final table.

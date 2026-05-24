@@ -1,5 +1,5 @@
 import { extractEntities, isAmbiguousConceptUsage } from "./entity-extractor.js";
-import { classifyIntent } from "./classify-intent.js";
+import { classifyWithLegacyRules } from "./legacy-rule-router.js";
 import { buildRouterPrompt } from "./router-prompt.js";
 import {
   computeMissingRequiredSlots,
@@ -182,7 +182,7 @@ function validateEntities(raw: unknown): ExtractedEntities {
 
 export function postProcessRouterOutput(text: string, output: RouterOutput): RouterOutput {
   const extracted = extractEntities(text);
-  const deterministic = classifyIntent(text);
+  const deterministic = classifyWithLegacyRules(text);
   let diagnostics: RouterDiagnostic[] = [...output.diagnostics];
   let next: RouterOutput = {
     ...output,
@@ -238,6 +238,9 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  // Legacy rules may recover a primary route only when the LLM router path has
+  // already failed validation. Otherwise they are limited to enrichment and
+  // narrow corrections below.
   if (
     next.diagnostics.some((d) => d.code === "router_validation_failed") &&
     deterministic.workflow !== "unclassified"
