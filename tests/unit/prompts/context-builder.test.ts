@@ -368,6 +368,22 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("most recent trading day");
   });
 
+  it("tells ticker-alias answers to distinguish current tickers from legacy or alternate listings", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("ticker-alias or alternate-symbol prompts");
+    expect(result).toContain("current primary ticker");
+    expect(result).toContain("legacy ticker");
+    expect(result).toContain("former ticker");
+    expect(result).toContain("foreign listing");
+    expect(result).toContain("company overview is unavailable");
+    expect(result).toContain("business model");
+    expect(result).toContain("licensing");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
