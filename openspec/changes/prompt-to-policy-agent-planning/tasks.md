@@ -22,13 +22,13 @@
 
 ## 2. V1 Planning Scaffold and Manifest
 
-- [ ] 2.1 Add planning-layer types for versioned planning envelope, task family, commitment mode, policy card ID, evidence plan ID, answer contract ID, structured-check ID, optional workspace/artifact placeholder IDs, evidence requirement, capability-gap ID, and planning diagnostics.
-- [ ] 2.2 Add a planning manifest that maps route kinds/workflows to allowed task families, commitment modes, policy cards, evidence plans, answer contracts, structured checks, capability gaps, and compatible tool bundles.
-- [ ] 2.3 Implement deterministic planning validation that corrects or diagnoses unsupported route/workflow/task-family/policy combinations.
-- [ ] 2.4 Extend `ResolvedTurnContext` with planning metadata while preserving existing route, workflow, entity, slot, tool-bundle, memory, and diagnostics fields.
-- [ ] 2.5 Add unit tests for manifest validation, default task-family selection, unsupported combination correction, and preservation of existing resolved-turn context fields.
-- [ ] 2.6 Keep planner output observational for non-migrated task families so traces stabilize before behavior changes.
-- [ ] 2.7 Add tests proving the planner enriches, but does not override, existing deterministic router corrections and workflow dispatch.
+- [x] 2.1 Add planning-layer types for versioned planning envelope, task family, commitment mode, policy card ID, evidence plan ID, answer contract ID, structured-check ID, optional workspace/artifact placeholder IDs, evidence requirement, capability-gap ID, and planning diagnostics.
+- [x] 2.2 Add a planning manifest that maps route kinds/workflows to allowed task families, commitment modes, policy cards, evidence plans, answer contracts, structured checks, capability gaps, and compatible tool bundles.
+- [x] 2.3 Implement deterministic planning validation that corrects or diagnoses unsupported route/workflow/task-family/policy combinations.
+- [x] 2.4 Extend `ResolvedTurnContext` with planning metadata while preserving existing route, workflow, entity, slot, tool-bundle, memory, and diagnostics fields.
+- [x] 2.5 Add unit tests for manifest validation, default task-family selection, unsupported combination correction, and preservation of existing resolved-turn context fields.
+- [x] 2.6 Keep planner output observational for non-migrated task families so traces stabilize before behavior changes.
+- [x] 2.7 Add tests proving the planner enriches, but does not override, existing deterministic router corrections and workflow dispatch.
 
 ## 3. Policy Cards and Prompt Assembly
 

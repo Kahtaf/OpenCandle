@@ -12,6 +12,7 @@ import type {
   ToolBundleName,
   RouterDiagnostic,
 } from "./router-types.js";
+import { buildPlanningEnvelope, type PlanningEnvelope } from "./planning.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
 export interface MemoryQueryPlan {
@@ -47,6 +48,7 @@ export interface ResolvedTurnContext {
   memoryProvenance: MemoryProvenance[];
   promptPlaybook: RouterRouteKind;
   diagnostics: RouterDiagnostic[];
+  planning: PlanningEnvelope;
 }
 
 export function buildResolvedTurnContext(
@@ -79,6 +81,7 @@ export function buildResolvedTurnContext(
     memoryProvenance,
     promptPlaybook: output.routeKind,
     diagnostics: output.diagnostics,
+    planning: buildPlanningEnvelope(input, output),
   };
 }
 

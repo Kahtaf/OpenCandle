@@ -873,5 +873,7 @@ describe("ResolvedTurnContext", () => {
     expect(context.activeToolNames).toContain("get_stock_quote");
     expect(context.memoryQueryPlan.categories).toContain("investor_profile");
     expect(context.diagnostics[0]?.code).toBe("example");
+    expect(context.planning.version).toBe("planning-v1");
+    expect(context.planning.taskFamily).toBe("single_asset_decision");
   });
 });

@@ -23,6 +23,12 @@ export {
   buildMemoryQueryPlan,
   buildResolvedTurnContext,
 } from "./turn-context.js";
+export {
+  PLANNING_MANIFEST,
+  PLANNING_VERSION,
+  buildPlanningEnvelope,
+  validatePlanningSelection,
+} from "./planning.js";
 export type {
   WorkflowType,
   ClassificationResult,
@@ -50,3 +56,15 @@ export type {
   MemoryProvenance,
   ResolvedTurnContext,
 } from "./turn-context.js";
+export type {
+  AnswerContractId,
+  CapabilityGapId,
+  CommitmentMode,
+  EvidencePlanId,
+  PlanningBehaviorMode,
+  PlanningEnvelope,
+  PlanningSelection,
+  PolicyCardId,
+  StructuredCheckId,
+  TaskFamily,
+} from "./planning.js";
