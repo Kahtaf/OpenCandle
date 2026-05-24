@@ -55,15 +55,15 @@
 
 ## 5. Answer Contracts and Structured Checks
 
-- [ ] 5.1 Add answer contract definitions for the first selected migration slice with required fields, freshness obligations, data-gap disclosure, risk/downside obligations, and commitment requirements.
-- [ ] 5.2 Add commitment-mode contracts for `decision`, `compare_tradeoffs`, `framework`, `construct`, `update_state`, and `clarify`.
-- [ ] 5.3 Implement V1 structured checks for required evidence presence, freshness field presence, data-gap disclosure, commitment-mode adherence, source coverage metadata, and capability-gap disclosure.
-- [ ] 5.4 Defer semantic validators such as claim-grounding, unsupported-claim detection, direct-answer quality, downside-risk quality, and causal-claim quality to `future-roadmap.md`.
-- [ ] 5.5 Add trace fields for structured-check pass/fail results and structured-check failure reasons.
-- [ ] 5.6 Do not activate corrective retry in V1; reserve trace fields only if needed for forward compatibility.
-- [ ] 5.7 Add framework-fallback behavior only for the selected migration slice and only where the parity ledger shows equal or better behavior; otherwise record fallback eligibility diagnostically.
-- [ ] 5.8 Add unit tests for structured-check failures, framework fallback, and commitment-mode preservation.
-- [ ] 5.9 Keep structured checks observe-only until parity-ledger assertions prove they do not suppress, rewrite, or degrade current final answers.
+- [x] 5.1 Add answer contract definitions for the first selected migration slice with required fields, freshness obligations, data-gap disclosure, risk/downside obligations, and commitment requirements.
+- [x] 5.2 Add commitment-mode contracts for `decision`, `compare_tradeoffs`, `framework`, `construct`, `update_state`, and `clarify`.
+- [x] 5.3 Implement V1 structured checks for required evidence presence, freshness field presence, data-gap disclosure, commitment-mode adherence, source coverage metadata, and capability-gap disclosure.
+- [x] 5.4 Defer semantic validators such as claim-grounding, unsupported-claim detection, direct-answer quality, downside-risk quality, and causal-claim quality to `future-roadmap.md`.
+- [x] 5.5 Add trace fields for structured-check pass/fail results and structured-check failure reasons.
+- [x] 5.6 Do not activate corrective retry in V1; reserve trace fields only if needed for forward compatibility.
+- [x] 5.7 Add framework-fallback behavior only for the selected migration slice and only where the parity ledger shows equal or better behavior; otherwise record fallback eligibility diagnostically.
+- [x] 5.8 Add unit tests for structured-check failures, framework fallback, and commitment-mode preservation.
+- [x] 5.9 Keep structured checks observe-only until parity-ledger assertions prove they do not suppress, rewrite, or degrade current final answers.
 
 ## 6. Eval and Trace Migration
 

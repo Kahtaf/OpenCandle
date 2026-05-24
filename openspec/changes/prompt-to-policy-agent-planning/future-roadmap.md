@@ -111,6 +111,7 @@ Candidate validators:
 
 Why deferred:
 
+- V1 structured checks only consume contract metadata, evidence records, and trace fields.
 - Robust semantic validation risks fragile NLP and false positives.
 - V1 should use structured checks only: required evidence present, freshness present, data gap disclosed, commitment mode respected, source coverage captured.
 
