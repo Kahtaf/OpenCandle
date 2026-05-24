@@ -42,16 +42,16 @@
 
 ## 4. Evidence Plans and Minimal Evidence Records
 
-- [ ] 4.1 Add evidence record types that capture evidence type, tool/provider source, entity scope, observation timestamp, provider status, normalized facts, raw trace pointer, and gaps/caveats.
-- [ ] 4.2 Keep research workspace and artifact catalog work out of V1 except for stable trace IDs/placeholders documented in `future-roadmap.md`.
-- [ ] 4.3 Add evidence plan definitions for `market_status` and the first selected migration slice only.
-- [ ] 4.4 Add placeholder manifest IDs for later evidence plans without implementing their full behavior.
-- [ ] 4.5 Wire planned tool calls into evidence record capture without removing the existing raw tool-call trace.
-- [ ] 4.6 Capture deterministic market-status evidence for "today", "right now", "this morning", "after close", market-closed, weekend, and holiday prompts.
-- [ ] 4.7 Normalize provider-degradation tags and unavailable data into structured evidence gaps.
-- [ ] 4.8 Add capability-gap registry entries for market calendar, ETF holdings overlap, brokerage comparison, cash-yield products, earnings-event risk, fund tax efficiency, forward-rate probabilities, and sentiment sample depth.
-- [ ] 4.9 Add full evidence-plan unit tests only for `market_status` and the selected migration slice; for non-selected families, assert placeholder IDs, capability gaps, raw trace pointer preservation, or roadmap entries instead of full behavior.
-- [ ] 4.10 Add tests proving evidence normalization preserves current provider-degradation and `/connect` disclosure semantics.
+- [x] 4.1 Add evidence record types that capture evidence type, tool/provider source, entity scope, observation timestamp, provider status, normalized facts, raw trace pointer, and gaps/caveats.
+- [x] 4.2 Keep research workspace and artifact catalog work out of V1 except for stable trace IDs/placeholders documented in `future-roadmap.md`.
+- [x] 4.3 Add evidence plan definitions for `market_status` and the first selected migration slice only.
+- [x] 4.4 Add placeholder manifest IDs for later evidence plans without implementing their full behavior.
+- [x] 4.5 Wire planned tool calls into evidence record capture without removing the existing raw tool-call trace.
+- [x] 4.6 Capture deterministic market-status evidence for "today", "right now", "this morning", "after close", market-closed, weekend, and holiday prompts.
+- [x] 4.7 Normalize provider-degradation tags and unavailable data into structured evidence gaps.
+- [x] 4.8 Add capability-gap registry entries for market calendar, ETF holdings overlap, brokerage comparison, cash-yield products, earnings-event risk, fund tax efficiency, forward-rate probabilities, and sentiment sample depth.
+- [x] 4.9 Add full evidence-plan unit tests only for `market_status` and the selected migration slice; for non-selected families, assert placeholder IDs, capability gaps, raw trace pointer preservation, or roadmap entries instead of full behavior.
+- [x] 4.10 Add tests proving evidence normalization preserves current provider-degradation and `/connect` disclosure semantics.
 
 ## 5. Answer Contracts and Structured Checks
 

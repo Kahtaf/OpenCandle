@@ -95,6 +95,73 @@ export type CapabilityGapId =
   | "forward_rate_probabilities"
   | "sentiment_sample_depth";
 
+export interface CapabilityGapDefinition {
+  id: CapabilityGapId;
+  label: string;
+  description: string;
+  v1Status: "classified_gap";
+  specialistCompetitive: boolean;
+}
+
+export const CAPABILITY_GAP_REGISTRY: Record<CapabilityGapId, CapabilityGapDefinition> = {
+  market_calendar: {
+    id: "market_calendar",
+    label: "Market calendar",
+    description: "Exchange holiday and session-state data beyond deterministic weekday/known-holiday grounding.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  etf_holdings_overlap: {
+    id: "etf_holdings_overlap",
+    label: "ETF holdings overlap",
+    description: "Exact fund holding overlap, weights, and issuer-level exposure calculations.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  brokerage_comparison: {
+    id: "brokerage_comparison",
+    label: "Brokerage comparison",
+    description: "Live brokerage fees, platform features, account support, and execution-quality comparison data.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  cash_yield_products: {
+    id: "cash_yield_products",
+    label: "Cash-yield products",
+    description: "Live HYSA, money-market, CD, T-bill, and sweep-rate comparison data.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  earnings_event_risk: {
+    id: "earnings_event_risk",
+    label: "Earnings-event risk",
+    description: "Upcoming earnings timing, transcript, implied move, and event-specific risk coverage.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  fund_tax_efficiency: {
+    id: "fund_tax_efficiency",
+    label: "Fund tax efficiency",
+    description: "Distribution, turnover, asset-location, and after-tax fund comparison data.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  forward_rate_probabilities: {
+    id: "forward_rate_probabilities",
+    label: "Forward-rate probabilities",
+    description: "Forward policy-rate probability and curve-derived expectation data.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+  sentiment_sample_depth: {
+    id: "sentiment_sample_depth",
+    label: "Sentiment sample depth",
+    description: "Coverage, sample-size, source-depth, and low-volume confidence metadata for sentiment evidence.",
+    v1Status: "classified_gap",
+    specialistCompetitive: false,
+  },
+};
+
 export type PlanningBehaviorMode = "observe_only" | "dual_run" | "replacement_active";
 
 export interface PlanningSelection {

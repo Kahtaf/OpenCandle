@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CAPABILITY_GAP_REGISTRY,
   PLANNING_VERSION,
   buildPlanningEnvelope,
   validatePlanningSelection,
@@ -99,5 +100,20 @@ describe("planning layer", () => {
     }));
     expect(corrected.routeKind).toBe("agent_task");
     expect(corrected.workflow).toBe("general_finance_qa");
+  });
+
+  it("registers V1 capability gaps with stable descriptions", () => {
+    expect(Object.keys(CAPABILITY_GAP_REGISTRY).sort()).toEqual([
+      "brokerage_comparison",
+      "cash_yield_products",
+      "earnings_event_risk",
+      "etf_holdings_overlap",
+      "forward_rate_probabilities",
+      "fund_tax_efficiency",
+      "market_calendar",
+      "sentiment_sample_depth",
+    ]);
+    expect(CAPABILITY_GAP_REGISTRY.market_calendar.v1Status).toBe("classified_gap");
+    expect(CAPABILITY_GAP_REGISTRY.cash_yield_products.specialistCompetitive).toBe(false);
   });
 });

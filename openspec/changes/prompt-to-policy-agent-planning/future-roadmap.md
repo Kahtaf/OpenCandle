@@ -80,6 +80,25 @@ Promotion signal:
 
 - A migrated slice has repeated eval assertions that are awkward without a structured artifact.
 
+### V1 Trace Placeholder IDs
+
+Stable placeholder families reserved by V1 traces:
+
+- `research_workspace_v1_placeholder`
+- `artifact_source_coverage_placeholder`
+- `artifact_filing_change_placeholder`
+- `artifact_comparison_table_placeholder`
+- `artifact_capability_gap_placeholder`
+
+Why deferred:
+
+- V1 only records minimal evidence records, raw trace pointers, and capability gaps.
+- Persisted workspaces, user-visible artifacts, and full artifact lifecycle management need a later spec.
+
+Promotion signal:
+
+- A migrated slice needs reusable intermediate work that cannot be tested with minimal evidence records plus raw trace pointers.
+
 ### Semantic Validators
 
 Candidate validators:
