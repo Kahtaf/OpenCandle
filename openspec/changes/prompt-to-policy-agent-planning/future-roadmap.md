@@ -21,6 +21,7 @@ A roadmap item may move into an implementation spec only when:
 
 Candidate post-V1 migrations:
 
+- `current_event_explanation`
 - `sentiment_snapshot`
 - `filing_thesis_review`
 - `retail_finance_tradeoff`

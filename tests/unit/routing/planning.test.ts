@@ -71,6 +71,29 @@ describe("planning layer", () => {
     }));
   });
 
+  it("runs the selected ticker-disambiguation migration slice in dual-run mode", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Is ARMH still the right ticker for Arm?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["ARMH"] },
+        tool_bundles: ["core_market"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("ticker_disambiguation");
+    expect(planning.policyCardId).toBe("ticker_disambiguation");
+    expect(planning.evidencePlanId).toBe("ticker_disambiguation");
+    expect(planning.answerContractId).toBe("ticker_disambiguation");
+    expect(planning.behaviorMode).toBe("dual_run");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

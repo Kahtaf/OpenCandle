@@ -78,13 +78,13 @@
 
 ## 7. First Migration Slice
 
-- [ ] 7.1 Select exactly one V1 migration slice from the parity ledger after baseline capture and issue #22 boundary gates pass.
-- [ ] 7.2 Recommended first-slice candidates are `ticker_disambiguation` or `current_event_explanation`; document the selected slice and rationale in the parity ledger.
-- [ ] 7.3 Implement only the selected slice's policy card, evidence plan, answer contract, framework fallback if applicable, and structured checks.
-- [ ] 7.4 Run legacy and replacement paths in dual-run mode for the selected slice and advance to replacement-active only when the parity ledger passes.
-- [ ] 7.5 Delete the selected slice's migrated global prompt clause only after parity passes and rollback is documented.
-- [ ] 7.6 Capture all non-selected task-family migrations in `future-roadmap.md`; do not implement them in V1.
-- [ ] 7.7 Keep optional role escalation out of V1 unless a later change implements `risk_review`, `source_audit`, `bull_bear_review`, or `concept_review`.
+- [x] 7.1 Select exactly one V1 migration slice from the parity ledger after baseline capture and issue #22 boundary gates pass.
+- [x] 7.2 Recommended first-slice candidates are `ticker_disambiguation` or `current_event_explanation`; document the selected slice and rationale in the parity ledger.
+- [x] 7.3 Implement only the selected slice's policy card, evidence plan, answer contract, framework fallback if applicable, and structured checks.
+- [x] 7.4 Run legacy and replacement paths in dual-run mode for the selected slice and advance to replacement-active only when the parity ledger passes.
+- [x] 7.5 Delete the selected slice's migrated global prompt clause only after parity passes and rollback is documented.
+- [x] 7.6 Capture all non-selected task-family migrations in `future-roadmap.md`; do not implement them in V1.
+- [x] 7.7 Keep optional role escalation out of V1 unless a later change implements `risk_review`, `source_audit`, `bull_bear_review`, or `concept_review`.
 
 ## 8. Validation and Rollout
 

@@ -279,7 +279,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     structuredCheckIds: ["required_evidence_present", "data_gap_disclosed"],
     capabilityGapIds: ["earnings_event_risk"],
     compatibleToolBundles: ["core_market", "clarification"],
-    migrated: false,
+    migrated: true,
   },
   filing_thesis_review: {
     routeKinds: ["agent_task"],
