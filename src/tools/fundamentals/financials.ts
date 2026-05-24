@@ -16,7 +16,7 @@ export const financialsTool: AgentTool<typeof params, FinancialStatement[] | { c
   description:
     "Get annual income statement data: revenue, gross profit, operating income, net income, and EPS. Requires Alpha Vantage.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
       const apiKey = getConfig().alphaVantageApiKey!;
       const result = await wrapProvider("alphavantage", () =>

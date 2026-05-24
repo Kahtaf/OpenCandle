@@ -12,6 +12,28 @@ The goal is not to prove that OpenCandle is always better. The prompt set should
 
 When Claude or Codex wins, the report should explain why and name concrete OpenCandle improvements. Common outcomes might be poor routing, missing tools, weak synthesis, too much workflow ceremony, stale or incomplete evidence, or another agent simply giving a clearer explanation.
 
+## Prompt Wording
+
+Competitive prompts should read like questions from a regular retail investor using the product, not like benchmark tasks.
+
+Use average-user wording:
+
+- "I'm thinking about buying NVDA today. Would you buy, wait, or avoid it?"
+- "I have $50k for about 3 years. Build me a balanced portfolio."
+- "What's the mood around GME on Reddit, X/Twitter, and news?"
+- "I own 200 shares of NVDA after a big run. What's a reasonable protective put?"
+
+Avoid harness-aware wording in the user-facing prompt:
+
+- Do not mention OpenCandle, generic agents, judges, evals, benchmarks, routing, providers, APIs, or tools.
+- Do not ask for "source-by-source tool status" unless that is how a normal user would ask.
+- Do not phrase prompts around "testing coverage" or "tools we missed."
+- Do not over-specify answer formatting just to make the judge easier.
+
+It is fine for `OPENCANDLE_COMPETITIVE_PROMPT_FOCUS` to mention the evaluation target, because that field goes to the judge metadata. Keep the actual `OPENCANDLE_COMPETITIVE_PROMPT` natural.
+
+The competitor answer cache is keyed by exact prompt text. If you change a prompt to make it more natural, the prompt text must change enough to force fresh Claude/Codex/Gemini answers; do not judge a naturalized prompt against cached answers from harness-aware wording.
+
 ## How It Works
 
 `npm run test:evals:competitive` runs `tests/scripts/run-competitive-finance-eval.ts`.

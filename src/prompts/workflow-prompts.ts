@@ -287,6 +287,7 @@ Protective-put hedge guidance:
 - Rank put contracts by protection per dollar of premium: expiration fit, hedge floor, moneyness, liquidity, and premium as a percent of the stock position.
 - For "doesn't cost too much" or similar cost-sensitive language, prefer liquid puts modestly below the current stock price before far-OTM lottery hedges; explain the tradeoff between cheaper premium and weaker protection.
 - If share quantity is provided, use 1 put contract per 100 shares when discussing coverage and contract count.
+- If share quantity is provided, state total premium for the required number of contracts in the ranked table or top-pick explanation.
 - Include the hedge floor: approximate protected stock value at strike, net of premium where possible.
 - Mention lower-cost alternatives such as a collar or put spread when outright put premium is high.
 - Long protective puts have premium/decay risk and exercise/exit choices; do not frame assignment risk like a short option sale.

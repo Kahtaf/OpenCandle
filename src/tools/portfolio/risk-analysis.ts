@@ -17,7 +17,7 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
   description:
     "Compute risk metrics for a stock: annualized return, volatility, Sharpe ratio, max drawdown, and Value at Risk (95%). All computed locally from historical data.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const period = args.period ?? "1y";
     const result = await wrapProvider("yahoo", () => getHistory(symbol, period, "1d"));

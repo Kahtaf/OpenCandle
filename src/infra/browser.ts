@@ -65,7 +65,7 @@ export const StealthBrowser = {
    * Fetch JSON from a URL using the browser's session (cookies, TLS fingerprint).
    * Useful for APIs that block Node.js fetch but allow real browsers.
    */
-  async fetchJson<T>(url: string, options?: { cookies?: string }): Promise<T> {
+  async fetchJson<T>(url: string): Promise<T> {
     return withPage(async (p) => {
       const result = await p.evaluate(async (fetchUrl: string) => {
         const res = await fetch(fetchUrl, { credentials: "include" });

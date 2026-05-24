@@ -148,7 +148,7 @@ export const dcfTool: AgentTool<typeof params> = {
   description:
     "Compute a Discounted Cash Flow (DCF) intrinsic value estimate for a stock. Uses free cash flow, growth projections, and a discount rate to estimate what the stock is worth. Returns intrinsic value per share, margin of safety vs current price, and a sensitivity table.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
     const symbol = args.symbol.toUpperCase();
     const config = getConfig();

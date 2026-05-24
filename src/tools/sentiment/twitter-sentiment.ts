@@ -24,7 +24,7 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
   description:
     "Fetch recent tweets for a stock ticker or search query and compute engagement-weighted sentiment. Returns tweet data, sentiment score, and co-mentioned tickers. Requires a Twitter session via trigger_twitter_login.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const limit = Math.min(args.limit ?? 50, 200);
     const hours = args.hours ?? 24;
 

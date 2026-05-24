@@ -46,7 +46,7 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
   description:
     "Compute technical indicators (SMA, EMA, RSI, MACD, Bollinger Bands) from historical price data. All computed locally — no API dependency.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const range = args.range ?? "1y";
     const result = await wrapProvider("yahoo", () => getHistory(symbol, range, "1d"));
@@ -68,8 +68,6 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
 
     const sma20 = computeSMA(closes, 20);
     const sma50 = computeSMA(closes, 50);
-    const ema12 = computeEMA(closes, 12);
-    const ema26 = computeEMA(closes, 26);
     const rsi = computeRSI(closes, 14);
     const macd = computeMACD(closes);
     const bb = computeBollingerBands(closes, 20, 2);

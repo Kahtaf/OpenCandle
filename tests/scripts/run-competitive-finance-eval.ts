@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -496,12 +497,18 @@ function createSeededEvalHome(sourceHome: string): string {
   const targetHome = mkdtempSync(join(tmpdir(), "oc-competitive-home-"));
   copyIfExists(join(sourceHome, "config.json"), join(targetHome, "config.json"));
   copyIfExists(join(sourceHome, "onboarding.json"), join(targetHome, "onboarding.json"));
+  copyDirIfExists(join(sourceHome, "browser-profile"), join(targetHome, "browser-profile"));
   return targetHome;
 }
 
 function copyIfExists(source: string, target: string): void {
   if (!existsSync(source)) return;
   copyFileSync(source, target);
+}
+
+function copyDirIfExists(source: string, target: string): void {
+  if (!existsSync(source)) return;
+  cpSync(source, target, { recursive: true, force: true });
 }
 
 function loadCompetitiveReportCache(): Array<{ path: string; report: unknown }> {

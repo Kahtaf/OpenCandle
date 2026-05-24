@@ -100,6 +100,13 @@ ${seedLine}
 
 The set must cover general finance, investing, portfolio construction, market structure, risk, macro, company research, options, sentiment, and educational questions when useful.
 
+Prompt wording rules:
+- Write each prompt as an average retail investor would ask it in chat.
+- Use messy, conversational wording when natural: "thinking about buying", "what should I do", "does this look risky", "explain this to me".
+- Do not mention OpenCandle, generic agents, benchmarks, evals, judges, routing, providers, APIs, or tools inside the user-facing prompt.
+- Do not ask the user to compare tool coverage, source availability, or evidence categories unless a normal user would ask that explicitly.
+- Prefer realistic constraints users actually give, such as budget, holdings, cost basis, time horizon, worry, target, stop, or "today/right now".
+
 Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
 - OpenCandle may be better because it can gather evidence or run tools.
 - A generic agent may be better because the prompt mainly needs synthesis, explanation, or judgment.
@@ -169,6 +176,8 @@ Generic no-tool agent answers:
 ${competitorAnswers}
 
 Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
+
+Do not reward fabricated current facts. A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized for correctness and honesty even if the answer sounds specific. For prompts about current filings or live market data, prefer a sourced OpenCandle answer or an honest generic limitation over an unsourced no-tool answer that invents details.
 
 Return JSON only:
 {

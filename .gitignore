@@ -3,13 +3,9 @@ node_modules/
 dist/
 .DS_Store
 .opencandle/
-.build-agent-progress
-agent-eval-results*.json
 tests/evals/runs/*
 !tests/evals/runs/.gitkeep
-.agents/
-.claude/skills/
-.claude/scheduled_tasks.lock
-skills-lock.json
+.codex/hooks.json
+graphify-out/
 tests/screenshots/out/
 website/dist/

@@ -147,6 +147,7 @@ Provider overrides can force `exa`, `brave`, or `ddg` for a single request. The 
 ## Runtime Configuration
 
 - `OPENCANDLE_ROUTER_MODE` defaults to `llm`. Set `OPENCANDLE_ROUTER_MODE=rules` to force the legacy regex router.
+- `OPENCANDLE_TOOL_SCOPE_MODE` defaults to `observe`, which records route-selected tool bundles without constraining the Pi tool catalog. Set `OPENCANDLE_TOOL_SCOPE_MODE=enforce` to apply the route-selected active tools for each turn.
 - `OPENCANDLE_HOME` defaults to `~/.opencandle` and contains OpenCandle-owned state such as `config.json`, `onboarding.json`, watchlist/portfolio/prediction files, `state.db`, `sentinel.db`, and `browser-profile/`.
 - The local GUI defaults to `http://127.0.0.1:14567`; `/health` reports whether that process is the session `writer` or a read-only `follower`.
 

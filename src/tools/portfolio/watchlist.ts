@@ -54,7 +54,7 @@ export const watchlistTool: AgentTool<typeof params> = {
   description:
     "Manage your watchlist of stocks and crypto. Add symbols with optional target and stop prices, remove symbols, or check current prices against your alert levels. Data persisted to ~/.opencandle/watchlist.json.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const items = loadWatchlist();
 
     if (args.action === "add") {
@@ -118,17 +118,22 @@ export const watchlistTool: AgentTool<typeof params> = {
       items.map(async (item) => {
         const result = await wrapProvider("yahoo", () => getQuote(item.symbol));
         if (result.status === "unavailable") {
-          return { ...item, currentPrice: 0, alerts: [`UNAVAILABLE: ${result.reason}`] };
+          return { ...item, currentPrice: 0, alerts: [`UNAVAILABLE: ${result.reason}`], statuses: [] };
         }
         const quote = result.data;
         const alerts: string[] = [];
+        const statuses: string[] = [];
         if (item.targetPrice && quote.price >= item.targetPrice) {
           alerts.push(`TARGET HIT: $${quote.price.toFixed(2)} >= $${item.targetPrice}`);
+        } else if (item.targetPrice) {
+          statuses.push(`Target pending: $${quote.price.toFixed(2)} < $${item.targetPrice}`);
         }
         if (item.stopPrice && quote.price <= item.stopPrice) {
           alerts.push(`STOP ALERT: $${quote.price.toFixed(2)} fell below $${item.stopPrice}`);
+        } else if (item.stopPrice) {
+          statuses.push(`Stop OK: $${quote.price.toFixed(2)} > $${item.stopPrice}`);
         }
-        return { ...item, currentPrice: quote.price, alerts };
+        return { ...item, currentPrice: quote.price, alerts, statuses };
       }),
     );
 
@@ -140,9 +145,10 @@ export const watchlistTool: AgentTool<typeof params> = {
 
     for (const c of checks) {
       const alertStr = c.alerts.length > 0 ? ` ** ${c.alerts.join(" | ")} **` : "";
+      const statusStr = c.statuses.length > 0 ? ` | ${c.statuses.join(" | ")}` : "";
       const targetStr = c.targetPrice ? ` | Target: $${c.targetPrice}` : "";
       const stopStr = c.stopPrice ? ` | Stop: $${c.stopPrice}` : "";
-      lines.push(`  ${c.symbol}: $${c.currentPrice.toFixed(2)}${targetStr}${stopStr}${alertStr}`);
+      lines.push(`  ${c.symbol}: $${c.currentPrice.toFixed(2)}${targetStr}${stopStr}${statusStr}${alertStr}`);
     }
 
     return {

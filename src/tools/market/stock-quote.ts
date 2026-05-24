@@ -16,7 +16,7 @@ export const stockQuoteTool: AgentTool<typeof params, StockQuote> = {
   description:
     "Get real-time stock price, volume, market cap, and 52-week range for a ticker symbol",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const apiKey = getConfig().alphaVantageApiKey;
 

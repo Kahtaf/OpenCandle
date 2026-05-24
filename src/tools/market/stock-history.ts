@@ -29,7 +29,7 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
   label: "Stock History",
   description: "Get historical OHLCV (open, high, low, close, volume) data for a stock",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const range = args.range ?? "6mo";
     const interval = args.interval ?? "1d";

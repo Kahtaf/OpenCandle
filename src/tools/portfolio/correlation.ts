@@ -86,7 +86,7 @@ export const correlationTool: AgentTool<typeof params> = {
   description:
     "Compute pairwise return correlations between 2+ stocks. Identifies highly correlated positions (|r| > 0.7) as concentration risk. Useful for portfolio diversification analysis.",
   parameters: params,
-  async execute(toolCallId, args) {
+  async execute(_toolCallId, args) {
     const symbols = args.symbols.map((s) => s.toUpperCase());
     const period = args.period ?? "1y";
 

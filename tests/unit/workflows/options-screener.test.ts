@@ -173,6 +173,7 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp).toContain("hedge floor");
     expect(followUp).toContain("premium as a percent of position value");
     expect(followUp).toContain("1 put contract per 100 shares");
+    expect(followUp).toContain("total premium for the required number of contracts");
     expect(followUp).toContain("collars or put spreads");
     expect(followUp).toContain("Do not frame assignment risk like a short option sale");
   });

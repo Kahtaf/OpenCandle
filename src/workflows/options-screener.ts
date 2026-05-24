@@ -62,6 +62,7 @@ Protective-put requirements:
 - Treat this as buying puts to hedge an existing long ${s.symbol} share position, not buying calls.
 - The final answer MUST discuss hedge floor, premium as a percent of position value, expiration fit, moneyness, and liquidity.
 - If share quantity is available, translate shares into approximate contract count using 1 put contract per 100 shares.
+- If share quantity is available, state total premium for the required number of contracts.
 - For cost-sensitive requests, explain the tradeoff between cheaper lower-strike puts and weaker protection.
 - Mention lower-cost alternatives such as collars or put spreads when outright put premium is high.
 - Do not frame assignment risk like a short option sale.
