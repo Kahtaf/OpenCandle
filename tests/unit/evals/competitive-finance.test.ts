@@ -143,6 +143,46 @@ describe("competitive finance benchmarking", () => {
     expect(judgment.openCandleImprovementIdeas).toEqual(["summarize before listing tool output"]);
   });
 
+  it("repairs common missing-comma JSON from comparison judgments", () => {
+    const judgment = parseComparisonJudgment(`{
+      "winner": "opencandle",
+      "openCandleScore": 5,
+      "competitorScores": {
+        "claude": 4
+        "codex": 3
+      },
+      "reason": "OpenCandle used current evidence.",
+      "openCandleDidBetter": [
+        "used live market data"
+        "gave a clearer downside case"
+      ],
+      "competitorsDidBetter": {
+        "claude": [
+          "shorter explanation"
+          "simpler onboarding guidance"
+        ]
+      },
+      "openCandleImprovementIdeas": [
+        "lead with the recommendation"
+        "trim account-opening background"
+      ]
+    }`);
+
+    expect(judgment.competitorScores).toEqual({ claude: 4, codex: 3 });
+    expect(judgment.openCandleDidBetter).toEqual([
+      "used live market data",
+      "gave a clearer downside case",
+    ]);
+    expect(judgment.competitorsDidBetter.claude).toEqual([
+      "shorter explanation",
+      "simpler onboarding guidance",
+    ]);
+    expect(judgment.openCandleImprovementIdeas).toEqual([
+      "lead with the recommendation",
+      "trim account-opening background",
+    ]);
+  });
+
   it("extracts usable agent text from non-zero CLI failures", () => {
     const answer = extractUsableAnswerFromCliFailure(
       "/repo/node_modules/.bin/acpx --cwd /tmp/oc failed: As of May 17, 2026, here is the analysis.\n\nDetails follow.",

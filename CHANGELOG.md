@@ -29,6 +29,7 @@
 - GUI options follow-up prompts no longer drop gamma, theta, vega, and rho from the ranked contract table.
 - Generic finance workflow routing no longer leaks benchmark-specific macro-hedge guidance, misreads lowercase asset-class or macro nouns as tickers, treats cost basis as portfolio budget, or strands the GUI home screen when HTTP fallback mode cannot issue session actions.
 - Competitive Codex baseline preflight now uses the ACP adapter's advertised model id syntax by default.
+- Competitive judge parsing now repairs common missing-comma JSON so benchmark runs are less likely to abort after model formatting glitches.
 
 ## [0.4.0] - 2026-05-16
 

@@ -584,8 +584,18 @@ function unique<T>(values: T[]): T[] {
 
 function parseJsonPayload(raw: string): unknown {
   const trimmed = raw.trim();
+  const parseCandidate = (candidate: string): unknown => {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      const repaired = repairCommonMissingCommas(candidate);
+      if (repaired !== candidate) return JSON.parse(repaired);
+      throw error;
+    }
+  };
+
   try {
-    return JSON.parse(trimmed);
+    return parseCandidate(trimmed);
   } catch {
     const start = Math.min(...["{", "["].map((char) => {
       const index = trimmed.indexOf(char);
@@ -593,8 +603,15 @@ function parseJsonPayload(raw: string): unknown {
     }));
     const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
     if (!Number.isFinite(start) || end <= start) throw new Error("No JSON payload found");
-    return JSON.parse(trimmed.slice(start, end + 1));
+    return parseCandidate(trimmed.slice(start, end + 1));
   }
+}
+
+function repairCommonMissingCommas(payload: string): string {
+  return payload
+    .replace(/("(?:[^"\\]|\\.)*")(\s*\r?\n\s*)"/g, "$1,$2\"")
+    .replace(/(\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null))(\s*\r?\n?\s*)"/g, "$1,$2\"")
+    .replace(/(\]|\})(\s*\r?\n\s*)"/g, "$1,$2\"");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
