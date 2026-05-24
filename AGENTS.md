@@ -76,7 +76,7 @@ export const cache = new Cache();
 ```
 
 ## CONVENTIONS
-- **TDD mandatory**: write failing test first, then implement.
+- **TDD mandatory**: write failing test first, then implement - refer to tdd skill
 - Strictly typed. No `any` except provider raw API responses.
 - Tools fetch + format. Analysts/LLM synthesize. Never analyze within a tool.
 - Use `cache` and `rateLimiter` from `src/infra/` for all external calls.
