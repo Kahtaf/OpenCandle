@@ -37,9 +37,9 @@ export type SectionName = typeof SECTION_ORDER[number];
 /** Default character budgets per section. */
 export const DEFAULT_BUDGETS: Record<SectionName, number> = {
   "base-role": 1500,
-  "safety-rules": 2000,
+  "safety-rules": 3500,
   "tool-catalog": 3000,
-  "workflow-instructions": 3000,
+  "workflow-instructions": 8000,
   "memory-context": 2000,
   "provider-status": 500,
   "output-format": 1500,

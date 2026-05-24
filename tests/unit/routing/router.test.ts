@@ -424,6 +424,33 @@ describe("route()", () => {
     }));
   });
 
+  it("corrects portfolio-builder output for explicit multi-ETF tradeoff prompts", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "If I have $5,000 for 10-15 years, should I prioritize VYM or SCHD, or something more growth-oriented like VOO or QQQ? What are the tradeoffs?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"], budget: 5000 },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread tradeoff as portfolio construction",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.route).toBe("workflow");
+    expect(result.workflow).toBe("compare_assets");
+    expect(result.entities.symbols).toEqual(["VYM", "SCHD", "VOO", "QQQ"]);
+    expect(result.missing_required).toEqual([]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "portfolio_tradeoff_corrected_to_compare_assets",
+    }));
+  });
+
   it("removes live tool bundles for no-symbol conceptual education", async () => {
     const result = await route(
       {

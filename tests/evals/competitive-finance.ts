@@ -191,6 +191,22 @@ Return JSON only:
 }`;
 }
 
+export function buildComparisonJudgeRetryPrompt(input: {
+  originalPrompt: string;
+  invalidResponse: string;
+  errorMessage: string;
+}): string {
+  return `${input.originalPrompt}
+
+Your previous comparison judgment was invalid JSON and could not be parsed.
+Parse error: ${input.errorMessage}
+
+Invalid response:
+${input.invalidResponse}
+
+Return JSON only. Do not include markdown fences, comments, trailing prose, or malformed arrays/objects.`;
+}
+
 export function parseGeneratedPrompts(raw: string): GeneratedFinancePrompt[] {
   const value = parseJsonPayload(raw);
   const prompts = Array.isArray(value)
@@ -440,6 +456,10 @@ export function competitivePreflightTimeoutMs(env: Record<string, string | undef
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
 }
 
+export function selectCompetitiveCodexModel(env: Record<string, string | undefined>): string {
+  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark[medium]";
+}
+
 export function shouldRetryCompetitiveModelCall(message: string, attempt: number, maxAttempts: number): boolean {
   if (attempt >= maxAttempts) return false;
   return /\b(fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|rate limit|429|500|502|503|504)\b/i.test(message);
@@ -580,8 +600,18 @@ function unique<T>(values: T[]): T[] {
 
 function parseJsonPayload(raw: string): unknown {
   const trimmed = raw.trim();
+  const parseCandidate = (candidate: string): unknown => {
+    try {
+      return JSON.parse(candidate);
+    } catch (error) {
+      const repaired = repairCommonMissingCommas(candidate);
+      if (repaired !== candidate) return JSON.parse(repaired);
+      throw error;
+    }
+  };
+
   try {
-    return JSON.parse(trimmed);
+    return parseCandidate(trimmed);
   } catch {
     const start = Math.min(...["{", "["].map((char) => {
       const index = trimmed.indexOf(char);
@@ -589,8 +619,15 @@ function parseJsonPayload(raw: string): unknown {
     }));
     const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
     if (!Number.isFinite(start) || end <= start) throw new Error("No JSON payload found");
-    return JSON.parse(trimmed.slice(start, end + 1));
+    return parseCandidate(trimmed.slice(start, end + 1));
   }
+}
+
+function repairCommonMissingCommas(payload: string): string {
+  return payload
+    .replace(/("(?:[^"\\]|\\.)*")(\s*\r?\n\s*)"/g, "$1,$2\"")
+    .replace(/(\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null))(\s*\r?\n?\s*)"/g, "$1,$2\"")
+    .replace(/(\]|\})(\s*\r?\n\s*)"/g, "$1,$2\"");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -76,7 +76,7 @@ Generic-agent baselines:
 - `OPENCANDLE_COMPETITIVE_CLAUDE_AGENT_COMMAND`: override the Claude ACP adapter command.
 - `OPENCANDLE_COMPETITIVE_CODEX_AGENT_COMMAND`: override the Codex ACP adapter command.
 - `OPENCANDLE_COMPETITIVE_GEMINI_AGENT_COMMAND`: override the Gemini ACP adapter command.
-- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex baseline model. Defaults to `gpt-5.3-codex-spark/medium`.
+- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex baseline model. Defaults to `gpt-5.3-codex-spark[medium]`.
 - `OPENCANDLE_COMPETITIVE_AGENT_CWD`: isolated working directory for baseline agents. Defaults to a temp directory.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS`: `acpx` timeout for each baseline call. Defaults to `900`.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout for each baseline call. Defaults to `900000`.

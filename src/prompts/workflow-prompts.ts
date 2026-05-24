@@ -338,6 +338,7 @@ export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAsset
   const includeSentiment = resolution.resolved.metrics?.includes("sentiment") ?? false;
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
   const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
+  const isOverlapComparison = resolution.resolved.metrics?.includes("overlap") ?? false;
   const sentimentStep = includeSentiment
     ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
@@ -354,6 +355,16 @@ interest-rate comparison guidance:
 - For ETF or fund comparisons, include concentration and sector-exposure risk when one asset is meaningfully narrower or more growth/technology-heavy than the other.
 - If forward valuation, earnings estimates, or rate-futures evidence is unavailable, say that directly and avoid treating historical Fed funds data as a forecast.`
     : "";
+  const overlapGuidance = isOverlapComparison
+    ? `
+ETF overlap guidance:
+- Treat this as an ETF overlap and diversification question, not a generic return ranking.
+- Lead with whether adding the second ETF creates a mega-cap technology tilt, growth-factor tilt, or real diversification.
+- Explain that holdings overlap and sector concentration are not the same as correlation; correlation is supporting evidence, not the answer.
+- If exact holdings weights are unavailable, use plain-language fund structure and say exact top holdings/weights should be verified in issuer fact sheets.
+- Discuss top holdings, shared mega-cap names, sector concentration, and whether the position is a deliberate tilt or accidental duplication.
+- avoid treating price, RSI, or generic risk metrics as the main answer.`
+    : "";
   const macroHedgeSteps = isMacroHedge
     ? `
 macro hedge decision guidance:
@@ -366,8 +377,16 @@ macro hedge decision guidance:
     : "";
   const tableInstruction = isMacroHedge
     ? "- Present a comparison table with hedge-relevant columns: hedge role, macro drivers, volatility/drawdown evidence, correlation regime, liquidity/risk-on sensitivity, current data, and missing evidence."
+    : isOverlapComparison
+      ? "- Present an ETF overlap table with columns: fund role, likely shared top holdings, sector concentration, what exposure is duplicated, what exposure is new, and diversification implication."
     : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
 - Highlight which asset is stronger on each metric.`;
+  const technicalRiskSteps = isOverlapComparison
+    ? `3. Use analyze_correlation across [${symbolList}] to check diversification, but treat it as supporting evidence rather than holdings overlap.
+4. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.`
+    : `3. Use get_technical_indicators for each to compare momentum and trend.
+4. Use analyze_risk for each to compare risk metrics.
+5. Use analyze_correlation across [${symbolList}] to check diversification.`;
   const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";
   const horizonSteps = timeHorizon
     ? `
@@ -397,11 +416,10 @@ Compare these assets side by side: ${symbolList}${horizonLine}
 Steps:
 1. Use get_stock_quote for each of: ${symbolList}.
 2. Use compare_companies with symbols [${symbols.map((s) => `"${s}"`).join(", ")}] for peer metrics. If some fundamentals are unavailable, continue the comparison with the available symbols and mark missing metrics as unavailable.
-3. Use get_technical_indicators for each to compare momentum and trend.
-4. Use analyze_risk for each to compare risk metrics.
-5. Use analyze_correlation across [${symbolList}] to check diversification.${sentimentStep}${interestRateStep}${horizonSteps}
+${technicalRiskSteps}${sentimentStep}${interestRateStep}${horizonSteps}
 ${macroHedgeSteps}
 ${interestRateGuidance}
+${overlapGuidance}
 
 ${disclosureBlock}
 

@@ -25,6 +25,7 @@ import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
   buildComparisonJudgePrompt,
+  buildComparisonJudgeRetryPrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
   buildPortableAgentPath,
@@ -40,6 +41,7 @@ import {
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
+  selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
   type ComparisonJudgment,
@@ -190,12 +192,9 @@ for (const prompt of prompts.slice(0, promptCount)) {
   if (competitorAnswers.length === 0) {
     throw new Error(`No cached or live competitive baseline answers are available for prompt ${prompt.id}`);
   }
-  const judgmentText = await completeText(
-    judgeModel,
+  const judgment = await completeComparisonJudgment(
     buildComparisonJudgePrompt({ prompt, asOfDate, openCandleTrace, competitorAnswers }),
-    { temperature: 0, maxTokens: 3000 },
   );
-  const judgment = parseComparisonJudgment(judgmentText);
   results.push({ prompt, openCandleTrace, competitorAnswers, judgment });
   const competitorScoreText = Object.entries(judgment.competitorScores)
     .map(([id, score]) => `${id}=${score}`)
@@ -281,6 +280,34 @@ async function completeText(
   throw new Error("model call failed after retries");
 }
 
+async function completeComparisonJudgment(prompt: string): Promise<ComparisonJudgment> {
+  const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_JUDGE_PARSE_ATTEMPTS", 3);
+  let lastText = "";
+  let lastError = "";
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const candidatePrompt = attempt === 1
+      ? prompt
+      : buildComparisonJudgeRetryPrompt({
+        originalPrompt: prompt,
+        invalidResponse: lastText,
+        errorMessage: lastError,
+      });
+    lastText = await completeText(
+      judgeModel,
+      candidatePrompt,
+      { temperature: 0, maxTokens: 3000 },
+    );
+    try {
+      return parseComparisonJudgment(lastText);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (attempt >= maxAttempts) throw error;
+      console.warn(`Comparison judgment parse failed on attempt ${attempt}/${maxAttempts}: ${lastError}. Retrying...`);
+    }
+  }
+  throw new Error("comparison judgment failed to parse after retries");
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -335,7 +362,7 @@ function runClaudeAcp(prompt: string, options: CompetitorRunOptions = {}): Compe
 }
 
 function runCodexAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
-  const model = process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium";
+  const model = selectCompetitiveCodexModel(process.env);
   const answer = runAcpx("codex", prompt, { ...options, model });
   return { answer, provider: "acpx/codex", model };
 }
@@ -551,7 +578,7 @@ function resolveCompetitors(): CompetitorRunner[] {
       id: "codex",
       label: "Codex",
       provider: "acpx/codex",
-      model: process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium",
+      model: selectCompetitiveCodexModel(process.env),
       run: runCodexAcp,
     },
     {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
+  buildComparisonJudgeRetryPrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
   competitiveReportAnalysisPath,
@@ -16,6 +17,7 @@ import {
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
+  selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../../evals/competitive-finance.js";
@@ -122,6 +124,20 @@ describe("competitive finance benchmarking", () => {
     expect(judgePrompt).not.toContain("OpenCandle router telemetry");
   });
 
+  it("builds a retry prompt when comparison judgment JSON is invalid", () => {
+    const retryPrompt = buildComparisonJudgeRetryPrompt({
+      originalPrompt: "Compare OpenCandle against baselines and return JSON.",
+      invalidResponse: "{ \"winner\": \"opencandle\"",
+      errorMessage: "Expected ',' or '}'",
+    });
+
+    expect(retryPrompt).toContain("previous comparison judgment was invalid JSON");
+    expect(retryPrompt).toContain("Expected ',' or '}'");
+    expect(retryPrompt).toContain("Return JSON only");
+    expect(retryPrompt).toContain("{ \"winner\": \"opencandle\"");
+    expect(retryPrompt).toContain("Compare OpenCandle against baselines and return JSON.");
+  });
+
   it("parses comparison judgments with OpenCandle improvement ideas", () => {
     const judgment = parseComparisonJudgment(`{
       "winner": "generic",
@@ -140,6 +156,46 @@ describe("competitive finance benchmarking", () => {
       codex: ["better structure"],
     });
     expect(judgment.openCandleImprovementIdeas).toEqual(["summarize before listing tool output"]);
+  });
+
+  it("repairs common missing-comma JSON from comparison judgments", () => {
+    const judgment = parseComparisonJudgment(`{
+      "winner": "opencandle",
+      "openCandleScore": 5,
+      "competitorScores": {
+        "claude": 4
+        "codex": 3
+      },
+      "reason": "OpenCandle used current evidence.",
+      "openCandleDidBetter": [
+        "used live market data"
+        "gave a clearer downside case"
+      ],
+      "competitorsDidBetter": {
+        "claude": [
+          "shorter explanation"
+          "simpler onboarding guidance"
+        ]
+      },
+      "openCandleImprovementIdeas": [
+        "lead with the recommendation"
+        "trim account-opening background"
+      ]
+    }`);
+
+    expect(judgment.competitorScores).toEqual({ claude: 4, codex: 3 });
+    expect(judgment.openCandleDidBetter).toEqual([
+      "used live market data",
+      "gave a clearer downside case",
+    ]);
+    expect(judgment.competitorsDidBetter.claude).toEqual([
+      "shorter explanation",
+      "simpler onboarding guidance",
+    ]);
+    expect(judgment.openCandleImprovementIdeas).toEqual([
+      "lead with the recommendation",
+      "trim account-opening background",
+    ]);
   });
 
   it("extracts usable agent text from non-zero CLI failures", () => {
@@ -379,6 +435,13 @@ describe("competitive finance benchmarking", () => {
       googleModel: { provider: "google", id: "gemini-2.5-flash", contextWindow: 1_000_000 },
       available: [smallContext, largeContext],
     })).toBe(largeContext);
+  });
+
+  it("uses the ACP-advertised Codex model id by default", () => {
+    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark[medium]");
+    expect(selectCompetitiveCodexModel({
+      OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",
+    })).toBe("gpt-5.5[high]");
   });
 
   it("marks completed competitive runs as successful CLI exits", () => {

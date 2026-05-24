@@ -286,5 +286,6 @@ function extractCompareMetrics(input: string): string[] | undefined {
   if (/\bsentiment\b/.test(lower)) metrics.push("sentiment");
   if (/\b(?:macro\s*)?hedg(?:e|ing)\b/.test(lower)) metrics.push("macro_hedge");
   if (/\b(?:rates?|rate\s*cuts?|fed|federal\s+funds?|interest\s+rates?)\b/.test(lower)) metrics.push("interest_rates");
+  if (/\b(?:overlap|same\s+stuff|same\s+holdings|concentration|too\s+much\s+of\s+the\s+same)\b/.test(lower)) metrics.push("overlap");
   return metrics.length > 0 ? metrics : undefined;
 }
