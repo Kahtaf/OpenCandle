@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- Production prompt assembly now reports per-section lengths and prevents active non-memory section truncation across standard, fallback, workflow dispatch, clarification, pass-through, and no-tool variants.
 - Exact SEC filing lookups now filter EDGAR search results to the requested company, resolve common tickers through the SEC submissions feed, and avoid text-search decoys.
 - Covered-call recommendations no longer use long-call premium-paid max-loss framing; weekly and `1-2 week` horizons normalize to 7-to-14-day expirations, and fallback guidance keeps usable candidates when option quotes are stale or incomplete.
 - Portfolio slot resolution now honors ETF-focused scope and explicit multi-year horizons from the user prompt.

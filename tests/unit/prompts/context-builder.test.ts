@@ -59,6 +59,23 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("[...truncated]");
   });
 
+  it("reports section lengths and truncation markers for a built prompt", () => {
+    const builder = new PromptContextBuilder({ "base-role": 50 });
+    builder.setSection("base-role", "x".repeat(200));
+
+    const { prompt, sections, truncationMarkers } = builder.buildWithReport();
+
+    expect(prompt).toContain("[...truncated]");
+    expect(truncationMarkers).toBe(1);
+    expect(sections).toContainEqual({
+      name: "base-role",
+      originalLength: 200,
+      renderedLength: 50,
+      characterBudget: 50,
+      truncated: true,
+    });
+  });
+
   it("populateFromOptions sets all standard sections", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({

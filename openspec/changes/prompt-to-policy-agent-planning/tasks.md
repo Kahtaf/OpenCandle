@@ -10,9 +10,9 @@
 
 ## 1. Baseline and Prompt Safety
 
-- [ ] 1.1 Add characterization tests that assemble current production prompt variants and report section lengths plus truncation markers.
-- [ ] 1.2 Add no-truncation assertions for active non-memory prompt sections in standard, fallback, workflow dispatch, clarification, pass-through, and no-tool prompt variants.
-- [ ] 1.3 Identify the current global scenario clauses in `src/prompts/context-builder.ts` and map each clause to a parity-ledger entry plus intended task family, policy card, evidence plan, answer contract, V1 structured check, future semantic validator, or retained deterministic owner.
+- [x] 1.1 Add characterization tests that assemble current production prompt variants and report section lengths plus truncation markers.
+- [x] 1.2 Add no-truncation assertions for active non-memory prompt sections in standard, fallback, workflow dispatch, clarification, pass-through, and no-tool prompt variants.
+- [x] 1.3 Identify the current global scenario clauses in `src/prompts/context-builder.ts` and map each clause to a parity-ledger entry plus intended task family, policy card, evidence plan, answer contract, V1 structured check, future semantic validator, or retained deterministic owner.
 - [ ] 1.4 Create a committed before-migration prompt manifest covering all parity-ledger behavior, including brokerage selection, ETF overlap, ticker aliases, unknown-ticker earnings risk, crypto sizing, market-closed "today" move, sentiment source coverage, filing thesis review, dividend-vs-growth ETF tradeoffs, safe cash products, mortgage-vs-investing, covered-call/protective-put routing, macro portfolio review, provider degradation disclosure, no-tool education, and at least two followups.
 - [ ] 1.5 For each manifest prompt, record exact prompt ID, text, followup sequence when applicable, expected route/workflow/tool/evidence/final-answer hard assertions, optional judge assertions, baseline OpenCandle report path, competitor baseline report path/hash, model/date metadata, and whether cached competitor answers are allowed.
 - [ ] 1.6 Run the current unit tests and targeted harness prompt manifest; record route, tool, trace, and final-answer baseline paths in `docs/internal/competitive-benchmark-history.md` or a dedicated migration note.

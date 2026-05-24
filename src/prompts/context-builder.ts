@@ -2,6 +2,20 @@ import type { PromptSection, SectionName } from "./sections.js";
 import { SECTION_ORDER, DEFAULT_BUDGETS, truncateTobudget } from "./sections.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 
+export interface PromptSectionReport {
+  name: SectionName;
+  originalLength: number;
+  renderedLength: number;
+  characterBudget: number;
+  truncated: boolean;
+}
+
+export interface PromptBuildReport {
+  prompt: string;
+  sections: PromptSectionReport[];
+  truncationMarkers: number;
+}
+
 /** Options for building prompt context. */
 export interface PromptContextOptions {
   workflowType?: string;
@@ -55,14 +69,34 @@ export class PromptContextBuilder {
 
   /** Build the complete system prompt. */
   build(): string {
+    return this.buildWithReport().prompt;
+  }
+
+  /** Build the complete prompt and report section size/truncation metadata. */
+  buildWithReport(): PromptBuildReport {
     const parts: string[] = [];
+    const report: PromptSectionReport[] = [];
+    let truncationMarkers = 0;
     for (const name of SECTION_ORDER) {
       const section = this.sections.get(name)!;
       if (!section.content) continue;
       const truncated = truncateTobudget(section.content, section.characterBudget);
+      const wasTruncated = truncated.includes("[...truncated]");
+      if (wasTruncated) truncationMarkers += 1;
+      report.push({
+        name,
+        originalLength: section.content.length,
+        renderedLength: truncated.length,
+        characterBudget: section.characterBudget,
+        truncated: wasTruncated,
+      });
       parts.push(truncated);
     }
-    return parts.join("\n\n");
+    return {
+      prompt: parts.join("\n\n"),
+      sections: report,
+      truncationMarkers,
+    };
   }
 
   /**
