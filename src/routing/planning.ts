@@ -494,7 +494,7 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\b(?:brokerage|hysa|money-market|t-bills?|cds?|mortgage|taxable account)\b/.test(lower)) {
     return "retail_finance_tradeoff";
   }
-  if (/\b(?:explain|what is|how to|define)\b/.test(lower) && output.entities.symbols.length === 0) {
+  if (/\b(?:explain|what is|what does|how to|define)\b/.test(lower) && output.entities.symbols.length === 0) {
     return "concept_explainer";
   }
   return "general_fallback";

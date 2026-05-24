@@ -67,14 +67,14 @@
 
 ## 6. Eval and Trace Migration
 
-- [ ] 6.1 Extend deterministic eval traces with planning version, task family, commitment mode, policy card, evidence plan, answer contract, structured-check IDs, optional workspace/artifact placeholder IDs, capability-gap IDs, evidence records, structured-check failures, and retry eligibility.
-- [ ] 6.2 Extend router fixtures or router eval assertions with task-family and policy-card expectations while preserving existing route/workflow/entity/slot/tool-bundle assertions.
-- [ ] 6.3 Extend competitive benchmark reports with planning metadata and layer-specific failure classification.
-- [ ] 6.4 Update LLM judge prompts or report analysis so improvement ideas are classified as routing, planning, evidence-plan, tool-capability, answer-contract, structured-check, retry-eligibility, or synthesis issues.
-- [ ] 6.5 Add before/after migration comparison output for the committed prompt manifest from tasks 1.4-1.5.
-- [ ] 6.6 Defer workspace-style artifact assertions to `future-roadmap.md`; V1 evals assert minimal evidence records, raw trace pointers, and capability gaps.
-- [ ] 6.7 Add multi-turn eval assertions for plan carryover, entity/constraint replacement, stale evidence invalidation, and clarification when prior context is ambiguous.
-- [ ] 6.8 Add parity-ledger status and regression classification to deterministic and competitive eval reports.
+- [x] 6.1 Extend deterministic eval traces with planning version, task family, commitment mode, policy card, evidence plan, answer contract, structured-check IDs, optional workspace/artifact placeholder IDs, capability-gap IDs, evidence records, structured-check failures, and retry eligibility.
+- [x] 6.2 Extend router fixtures or router eval assertions with task-family and policy-card expectations while preserving existing route/workflow/entity/slot/tool-bundle assertions.
+- [x] 6.3 Extend competitive benchmark reports with planning metadata and layer-specific failure classification.
+- [x] 6.4 Update LLM judge prompts or report analysis so improvement ideas are classified as routing, planning, evidence-plan, tool-capability, answer-contract, structured-check, retry-eligibility, or synthesis issues.
+- [x] 6.5 Add before/after migration comparison output for the committed prompt manifest from tasks 1.4-1.5.
+- [x] 6.6 Defer workspace-style artifact assertions to `future-roadmap.md`; V1 evals assert minimal evidence records, raw trace pointers, and capability gaps.
+- [x] 6.7 Add multi-turn eval assertions for plan carryover, entity/constraint replacement, stale evidence invalidation, and clarification when prior context is ambiguous.
+- [x] 6.8 Add parity-ledger status and regression classification to deterministic and competitive eval reports.
 
 ## 7. First Migration Slice
 

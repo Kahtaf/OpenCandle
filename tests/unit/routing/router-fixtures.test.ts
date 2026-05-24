@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { route } from "../../../src/routing/router.js";
+import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 import type {
   RouterInputContext,
   RouterLlmClient,
@@ -78,6 +79,40 @@ describe("Router deterministic fixtures", () => {
       expect(stripReasoning(result)).toEqual(stripReasoning(data.expectedRouterOutput));
     });
   }
+
+  it("fixtures expose planning expectations without dropping route metadata", async () => {
+    const expectedPlanningByFixture = new Map([
+      ["005-compare-assets.json", { taskFamily: "asset_compare", policyCardId: "asset_compare" }],
+      ["009-general-qa.json", { taskFamily: "concept_explainer", policyCardId: "concept_explainer" }],
+    ]);
+
+    for (const { name, data } of fixtures) {
+      const expected = expectedPlanningByFixture.get(name);
+      if (!expected) continue;
+      const result = await route(
+        {
+          text: data.input,
+          priorTurns: data.priorTurns,
+          profileSnapshot: data.profileSnapshot,
+          recentWorkflowRuns: [],
+        },
+        mockClient(data.expectedRouterOutput),
+      );
+      const resolved = buildResolvedTurnContext({
+        text: data.input,
+        priorTurns: data.priorTurns,
+        profileSnapshot: data.profileSnapshot,
+        recentWorkflowRuns: [],
+      }, result);
+
+      expect(resolved.routeKind).toBe(data.expectedRouterOutput.routeKind);
+      expect(resolved.workflow).toBe(data.expectedRouterOutput.workflow);
+      expect(resolved.entities).toEqual(data.expectedRouterOutput.entities);
+      expect(resolved.toolBundles).toEqual(data.expectedRouterOutput.tool_bundles);
+      expect(resolved.planning.taskFamily).toBe(expected.taskFamily);
+      expect(resolved.planning.policyCardId).toBe(expected.policyCardId);
+    }
+  });
 });
 
 describe("Router fixtures drive prompt assembly correctly", () => {

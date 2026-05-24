@@ -3,7 +3,8 @@ export type BaselineComparisonField =
   | "workflow"
   | "toolCalls"
   | "providerGapDisclosure"
-  | "finalAnswerHardAssertions";
+  | "finalAnswerHardAssertions"
+  | "planning";
 
 export interface PromptMigrationManifestEntry {
   id: string;
@@ -28,6 +29,14 @@ export interface ObservedMigrationResult {
   providerGapDisclosure: string[];
   finalAnswerHardAssertionsPassed: string[];
   acceptedImprovements?: AcceptedImprovement[];
+  planning?: {
+    taskFamily?: string;
+    evidencePlanId?: string;
+    structuredCheckFailures?: Array<{ checkId?: string }>;
+    retryEligible?: boolean;
+  };
+  parityStatus?: string;
+  regressionClassification?: string;
 }
 
 export interface BaselineComparisonFailure {
@@ -51,6 +60,49 @@ export interface CapabilityScorecardEntry {
   capabilityGapId: string;
   promptIds: string[];
   status: CapabilityScorecardStatus;
+}
+
+export interface MigrationComparisonReport {
+  cases: MigrationComparisonCase[];
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+  };
+}
+
+export interface MigrationComparisonCase {
+  promptId: string;
+  passed: boolean;
+  failures: BaselineComparisonFailure[];
+  acceptedImprovements: AcceptedImprovement[];
+  planning?: ObservedMigrationResult["planning"];
+  parityStatus: string;
+  regressionClassification: string;
+}
+
+export interface MultiTurnPlanningAssertionInput {
+  expected: {
+    carryoverTaskFamily?: string;
+    replacedEntity?: string;
+    staleEvidenceInvalidated?: boolean;
+    clarificationRequired?: boolean;
+  };
+  observed: {
+    taskFamily?: string;
+    entities?: string[];
+    staleEvidenceInvalidated?: boolean;
+    clarificationAsked?: boolean;
+  };
+}
+
+export interface MultiTurnPlanningAssertionFailure {
+  requirement:
+    | "plan_carryover"
+    | "entity_replacement"
+    | "stale_evidence_invalidation"
+    | "ambiguous_followup_clarification";
+  message: string;
 }
 
 export function compareMigrationBaseline(
@@ -94,6 +146,81 @@ export function compareMigrationBaseline(
     failures: unacceptedFailures,
     acceptedImprovements: failures.length === unacceptedFailures.length ? [] : accepted,
   };
+}
+
+export function buildMigrationComparisonReport(input: {
+  entries: readonly PromptMigrationManifestEntry[];
+  observed: Record<string, ObservedMigrationResult | undefined>;
+}): MigrationComparisonReport {
+  const cases = input.entries.map((entry): MigrationComparisonCase => {
+    const observed = input.observed[entry.id] ?? {
+      toolCalls: [],
+      providerGapDisclosure: [],
+      finalAnswerHardAssertionsPassed: [],
+    };
+    const comparison = compareMigrationBaseline(entry, observed);
+    return {
+      promptId: entry.id,
+      passed: comparison.passed,
+      failures: comparison.failures,
+      acceptedImprovements: comparison.acceptedImprovements,
+      planning: observed.planning,
+      parityStatus: observed.parityStatus ?? "unknown",
+      regressionClassification: observed.regressionClassification ?? (comparison.passed ? "none" : "unreviewed_regression"),
+    };
+  });
+
+  return {
+    cases,
+    summary: {
+      total: cases.length,
+      passed: cases.filter((entry) => entry.passed).length,
+      failed: cases.filter((entry) => !entry.passed).length,
+    },
+  };
+}
+
+export function evaluateMultiTurnPlanningAssertions(
+  input: MultiTurnPlanningAssertionInput,
+): MultiTurnPlanningAssertionFailure[] {
+  const failures: MultiTurnPlanningAssertionFailure[] = [];
+  if (
+    input.expected.carryoverTaskFamily !== undefined &&
+    input.observed.taskFamily !== input.expected.carryoverTaskFamily
+  ) {
+    failures.push({
+      requirement: "plan_carryover",
+      message: `Expected carried task family ${input.expected.carryoverTaskFamily}, got ${input.observed.taskFamily ?? "(missing)"}`,
+    });
+  }
+  if (
+    input.expected.replacedEntity !== undefined &&
+    !(input.observed.entities ?? []).includes(input.expected.replacedEntity)
+  ) {
+    failures.push({
+      requirement: "entity_replacement",
+      message: `Expected replacement entity ${input.expected.replacedEntity} in observed entities.`,
+    });
+  }
+  if (
+    input.expected.staleEvidenceInvalidated === true &&
+    input.observed.staleEvidenceInvalidated !== true
+  ) {
+    failures.push({
+      requirement: "stale_evidence_invalidation",
+      message: "Expected stale evidence to be invalidated for the followup.",
+    });
+  }
+  if (
+    input.expected.clarificationRequired === true &&
+    input.observed.clarificationAsked !== true
+  ) {
+    failures.push({
+      requirement: "ambiguous_followup_clarification",
+      message: "Expected an ambiguous followup to ask for clarification.",
+    });
+  }
+  return failures;
 }
 
 export function buildCapabilityScorecard(
