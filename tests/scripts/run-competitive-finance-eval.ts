@@ -40,6 +40,7 @@ import {
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
+  selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
   type ComparisonJudgment,
@@ -335,7 +336,7 @@ function runClaudeAcp(prompt: string, options: CompetitorRunOptions = {}): Compe
 }
 
 function runCodexAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
-  const model = process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium";
+  const model = selectCompetitiveCodexModel(process.env);
   const answer = runAcpx("codex", prompt, { ...options, model });
   return { answer, provider: "acpx/codex", model };
 }
@@ -551,7 +552,7 @@ function resolveCompetitors(): CompetitorRunner[] {
       id: "codex",
       label: "Codex",
       provider: "acpx/codex",
-      model: process.env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark/medium",
+      model: selectCompetitiveCodexModel(process.env),
       run: runCodexAcp,
     },
     {

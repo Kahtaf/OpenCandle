@@ -440,6 +440,10 @@ export function competitivePreflightTimeoutMs(env: Record<string, string | undef
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 60_000;
 }
 
+export function selectCompetitiveCodexModel(env: Record<string, string | undefined>): string {
+  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark[medium]";
+}
+
 export function shouldRetryCompetitiveModelCall(message: string, attempt: number, maxAttempts: number): boolean {
   if (attempt >= maxAttempts) return false;
   return /\b(fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|rate limit|429|500|502|503|504)\b/i.test(message);

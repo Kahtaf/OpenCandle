@@ -88,7 +88,7 @@ Useful environment variables:
 - `OPENCANDLE_COMPETITIVE_CLAUDE_AGENT_COMMAND`: optional Claude ACP adapter override. Defaults to the repo-local `node_modules/.bin/claude-agent-acp`.
 - `OPENCANDLE_COMPETITIVE_CODEX_AGENT_COMMAND`: optional Codex ACP adapter override. Defaults to the acpx `codex` built-in.
 - `OPENCANDLE_COMPETITIVE_GEMINI_AGENT_COMMAND`: optional Gemini ACP adapter override. Defaults to `gemini --acp --skip-trust`.
-- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.3-codex-spark/medium`.
+- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.3-codex-spark[medium]`.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS`: acpx timeout in seconds for each baseline call. Defaults to `900`.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout in milliseconds for each baseline call. Defaults to `900000`.
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip one-time baseline smoke calls before running OpenCandle. Defaults to enabled so auth failures happen early.

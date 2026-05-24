@@ -16,6 +16,7 @@ import {
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
+  selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../../evals/competitive-finance.js";
@@ -379,6 +380,13 @@ describe("competitive finance benchmarking", () => {
       googleModel: { provider: "google", id: "gemini-2.5-flash", contextWindow: 1_000_000 },
       available: [smallContext, largeContext],
     })).toBe(largeContext);
+  });
+
+  it("uses the ACP-advertised Codex model id by default", () => {
+    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark[medium]");
+    expect(selectCompetitiveCodexModel({
+      OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",
+    })).toBe("gpt-5.5[high]");
   });
 
   it("marks completed competitive runs as successful CLI exits", () => {
