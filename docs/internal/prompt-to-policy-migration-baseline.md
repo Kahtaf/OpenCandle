@@ -57,3 +57,30 @@ Final-answer hard assertions to preserve:
 ## Baseline Scope
 
 This is a targeted before-migration smoke baseline, not the full before/after migration comparison. Full manifest rerun and parity comparison remain gated by tasks 8.2 and 8.8.
+
+## V1 Scaffold Validation
+
+Date: 2026-05-24
+
+Commands:
+
+- `npm run build` — passed
+- `npm test` — passed, 141 files / 1491 tests
+- `graphify update .` — passed, graph rebuilt with 8443 nodes and 13220 edges
+
+Selected-slice live harness smoke:
+
+| Prompt ID | IPC trace | Tool sequence | Interactions | Final answer chars | Result |
+| --- | --- | --- | --- | --- | --- |
+| `ticker-alias-armh` | `/tmp/oc-harness.Tmq19w` | `search_ticker`, `get_company_overview`, `search_web` | 1 | 757 | Passed selected-slice smoke: answer led with `ARM` as the current Nasdaq ticker and explained licensing/royalty business model. |
+| `unknown-ticker-earnings-risk` | `/tmp/oc-harness.9DD6DV` | `get_stock_quote`, `get_earnings` | 1 | 5392 | Passed selected-slice smoke: provider gaps were disclosed, no current ZZZZ facts were invented, and the answer continued with an event-risk trim/hold framework. |
+
+Eval limitations:
+
+- Direct `npx tsx -e` harness import failed with `ERR_PACKAGE_PATH_NOT_EXPORTED` from `@earendil-works/pi-coding-agent`; the same prompts were rerun through `tests/harness/cli.ts`, which completed.
+- `npm run test:evals` currently fails before running eval cases with `TypeError: define is not a function` from `vitest-evals/src/index.ts`. This is outside the prompt-to-policy unit harness added here and blocks a full eval-suite manifest run in this session.
+
+Full-manifest status:
+
+- The committed manifest is still the required comparison surface for route, task family, tool calls, evidence records, structured-check results, retry eligibility, hard final-answer assertions, and optional judge assertions.
+- This session exercised the two selected `ticker_disambiguation` manifest prompts live. The full 16-prompt manifest remains to be run once the eval runner issue is resolved or a dedicated manifest runner is added.

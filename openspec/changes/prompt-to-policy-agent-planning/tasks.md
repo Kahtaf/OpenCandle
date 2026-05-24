@@ -88,11 +88,11 @@
 
 ## 8. Validation and Rollout
 
-- [ ] 8.1 Run `npm test` after each migrated task-family slice.
+- [x] 8.1 Run `npm test` after each migrated task-family slice.
 - [ ] 8.2 Run the committed before/after harness prompt manifest and compare route, task family, tool calls, evidence records, structured-check results, retry eligibility, final-answer hard assertions, and optional judge-scored assertions.
-- [ ] 8.3 Run `graphify update .` after code changes.
-- [ ] 8.4 Update `CHANGELOG.md` and internal benchmark/migration docs with the prompt-to-policy migration evidence.
-- [ ] 8.5 Keep tool-bundle enforcement in observe mode until planning-layer evals prove no expected tool is hidden.
-- [ ] 8.6 Document rollback knobs for disabling policy-card injection, shadow planning diagnostics, retry eligibility tracing, and hard tool enforcement independently.
-- [ ] 8.7 Document that V1 completion means stable scaffold plus no regressions against the current behavior baseline; prompt shrinkage is a later outcome, not the V1 success criterion.
-- [ ] 8.8 Require the full parity prompt manifest, existing router/unit tests, and competitive harness comparison to pass before any migrated prompt clause is deleted.
+- [x] 8.3 Run `graphify update .` after code changes.
+- [x] 8.4 Update `CHANGELOG.md` and internal benchmark/migration docs with the prompt-to-policy migration evidence.
+- [x] 8.5 Keep tool-bundle enforcement in observe mode until planning-layer evals prove no expected tool is hidden.
+- [x] 8.6 Document rollback knobs for disabling policy-card injection, shadow planning diagnostics, retry eligibility tracing, and hard tool enforcement independently.
+- [x] 8.7 Document that V1 completion means stable scaffold plus no regressions against the current behavior baseline; prompt shrinkage is a later outcome, not the V1 success criterion.
+- [x] 8.8 Require the full parity prompt manifest, existing router/unit tests, and competitive harness comparison to pass before any migrated prompt clause is deleted.

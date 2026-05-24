@@ -61,6 +61,14 @@ Current state:
 - Replacement-active and legacy-clause deletion are blocked until route, tool, evidence, provider-gap, and final-answer assertions pass against the committed migration manifest.
 - Non-selected task-family migrations remain deferred in `openspec/changes/prompt-to-policy-agent-planning/future-roadmap.md`.
 
+## Rollback Knobs
+
+- Policy-card injection: keep selected-slice planning in `observe_only`, or return `ticker_disambiguation` manifest status to non-migrated so `renderPolicyCardForPlanning()` emits no replacement card.
+- Shadow-planning diagnostics: disable consumers of `ResolvedTurnContext.planning` and ignore `EvalTrace.planning`; existing route/workflow/tool behavior remains active.
+- Retry-eligibility tracing: ignore `retryEligibility` fields from structured-check traces. V1 never performs active corrective retry.
+- Hard tool enforcement: keep `OPENCANDLE_TOOL_SCOPE_MODE=observe`; evidence plans and tool bundles remain diagnostic until separate parity gates pass.
+- Prompt-clause rollback: fallback playbook items 18 and 21 remain in `src/prompts/context-builder.ts`, so disabling the selected slice restores the pre-migration prompt owner without deleting code.
+
 ## Ledger
 
 | ID | Protected behavior | Current owner/source | Replacement owner | Characterization prompts/tests | Required hard assertions | Optional judge assertions | Baseline path | Status | Accepted improvement | Rollback knob |
