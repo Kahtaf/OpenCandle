@@ -16,9 +16,9 @@
 - [x] 1.4 Create a committed before-migration prompt manifest covering all parity-ledger behavior, including brokerage selection, ETF overlap, ticker aliases, unknown-ticker earnings risk, crypto sizing, market-closed "today" move, sentiment source coverage, filing thesis review, dividend-vs-growth ETF tradeoffs, safe cash products, mortgage-vs-investing, covered-call/protective-put routing, macro portfolio review, provider degradation disclosure, no-tool education, and at least two followups.
 - [x] 1.5 For each manifest prompt, record exact prompt ID, text, followup sequence when applicable, expected route/workflow/tool/evidence/final-answer hard assertions, optional judge assertions, baseline OpenCandle report path, competitor baseline report path/hash, model/date metadata, and whether cached competitor answers are allowed.
 - [x] 1.6 Run the current unit tests and targeted harness prompt manifest; record route, tool, trace, and final-answer baseline paths in `docs/internal/competitive-benchmark-history.md` or a dedicated migration note.
-- [ ] 1.7 Classify each recent competitive loss or prompt patch as routing, planning, evidence-plan, tool-capability, evidence-normalization, answer-contract, structured-check, retry-eligibility, synthesis, or judge/harness.
-- [ ] 1.8 Add a baseline comparison check that fails if a migrated path changes route kind, workflow, tool calls, provider-gap disclosure, or required final-answer hard assertions without an explicit accepted improvement.
-- [ ] 1.9 Add a specialist-capability scorecard that reports disclosed capability gaps as honest but not specialist-competitive until the underlying capability is implemented.
+- [x] 1.7 Classify each recent competitive loss or prompt patch as routing, planning, evidence-plan, tool-capability, evidence-normalization, answer-contract, structured-check, retry-eligibility, synthesis, or judge/harness.
+- [x] 1.8 Add a baseline comparison check that fails if a migrated path changes route kind, workflow, tool calls, provider-gap disclosure, or required final-answer hard assertions without an explicit accepted improvement.
+- [x] 1.9 Add a specialist-capability scorecard that reports disclosed capability gaps as honest but not specialist-competitive until the underlying capability is implemented.
 
 ## 2. V1 Planning Scaffold and Manifest
 
