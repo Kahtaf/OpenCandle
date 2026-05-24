@@ -175,6 +175,53 @@ describe("PromptContextBuilder", () => {
     expect(result).not.toContain("compute_dcf");
   });
 
+  it("injects a selected dual-run policy card without unrelated cards", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Is ARMH still the right ticker for Arm?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["ARMH"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market"],
+        activeToolNames: ["search_ticker"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["ARMH"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "ticker_disambiguation",
+          commitmentMode: "framework",
+          policyCardId: "ticker_disambiguation",
+          evidencePlanId: "ticker_disambiguation",
+          answerContractId: "ticker_disambiguation",
+          structuredCheckIds: ["required_evidence_present"],
+          capabilityGapIds: ["earnings_event_risk"],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Ticker Disambiguation Policy");
+    expect(result).not.toContain("Sentiment Snapshot Policy");
+    expect(result).not.toContain("Asset Compare Policy");
+  });
+
   it("does not reference get_reddit_discussions", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});

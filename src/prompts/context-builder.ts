@@ -1,5 +1,6 @@
 import type { PromptSection, SectionName } from "./sections.js";
 import { SECTION_ORDER, DEFAULT_BUDGETS, truncateTobudget } from "./sections.js";
+import { renderPolicyCardForPlanning } from "./policy-cards.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 
 export interface PromptSectionReport {
@@ -114,9 +115,11 @@ export class PromptContextBuilder {
     if (options.workflowInstructions) {
       this.setSection("workflow-instructions", options.workflowInstructions);
     } else if (options.resolvedTurnContext) {
+      const routePlaybook = buildRoutePlaybook(options.resolvedTurnContext);
+      const policyCard = renderPolicyCardForPlanning(options.resolvedTurnContext.planning);
       this.setSection(
         "workflow-instructions",
-        buildRoutePlaybook(options.resolvedTurnContext),
+        policyCard ? `${routePlaybook}\n\n${policyCard}` : routePlaybook,
       );
     } else if (options.fallbackContext) {
       this.setSection(
