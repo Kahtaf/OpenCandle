@@ -168,6 +168,15 @@ describe("classifyIntent", () => {
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
     });
 
+    it("routes ETF strategy tradeoff prompts as comparison instead of portfolio construction", () => {
+      const result = classifyIntent(
+        "If I have $5,000 for 10-15 years, should I prioritize VYM or SCHD, or something more growth-oriented like VOO or QQQ? What are the tradeoffs?",
+      );
+
+      expect(result.workflow).toBe("compare_assets");
+      expect(result.entities.symbols).toEqual(["VYM", "SCHD", "VOO", "QQQ"]);
+    });
+
     it("does not route lowercase asset-class comparisons as ticker comparisons", () => {
       const result = classifyIntent("compare bonds and cash");
       expect(result.workflow).not.toBe("compare_assets");

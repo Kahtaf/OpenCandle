@@ -380,6 +380,23 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toContain("compare_companies");
   });
 
+  it("tells ETF overlap comparisons to prioritize holdings and concentration over generic metrics", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["VOO", "QQQ"], metrics: ["overlap"] },
+      sources: { symbols: "user", metrics: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toContain("ETF overlap");
+    expect(prompt).toContain("top holdings");
+    expect(prompt).toContain("sector concentration");
+    expect(prompt).toContain("not the same as correlation");
+    expect(prompt).toContain("mega-cap technology tilt");
+    expect(prompt).toContain("avoid treating price, RSI, or generic risk metrics as the main answer");
+  });
+
   // Fix 3: Date grounding
   it("includes current date", () => {
     const resolution: SlotResolution<CompareAssetsSlots> = {

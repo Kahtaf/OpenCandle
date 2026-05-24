@@ -306,6 +306,11 @@ describe("extractEntities", () => {
       const result = extractEntities("For the next 12 months, should I overweight SPY or QQQ if rates start falling?");
       expect(result.compareMetrics).toEqual(["interest_rates"]);
     });
+
+    it("detects ETF overlap comparison focus", () => {
+      const result = extractEntities("Does buying QQQ on top of VOO create too much overlap?");
+      expect(result.compareMetrics).toEqual(["overlap"]);
+    });
   });
 });
 

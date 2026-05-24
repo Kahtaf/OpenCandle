@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
+  buildComparisonJudgeRetryPrompt,
   buildGenericAgentPrompt,
   buildPromptGenerationPrompt,
   competitiveReportAnalysisPath,
@@ -121,6 +122,20 @@ describe("competitive finance benchmarking", () => {
     expect(judgePrompt).toContain("A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized");
     expect(judgePrompt).toContain("get_sec_filings");
     expect(judgePrompt).not.toContain("OpenCandle router telemetry");
+  });
+
+  it("builds a retry prompt when comparison judgment JSON is invalid", () => {
+    const retryPrompt = buildComparisonJudgeRetryPrompt({
+      originalPrompt: "Compare OpenCandle against baselines and return JSON.",
+      invalidResponse: "{ \"winner\": \"opencandle\"",
+      errorMessage: "Expected ',' or '}'",
+    });
+
+    expect(retryPrompt).toContain("previous comparison judgment was invalid JSON");
+    expect(retryPrompt).toContain("Expected ',' or '}'");
+    expect(retryPrompt).toContain("Return JSON only");
+    expect(retryPrompt).toContain("{ \"winner\": \"opencandle\"");
+    expect(retryPrompt).toContain("Compare OpenCandle against baselines and return JSON.");
   });
 
   it("parses comparison judgments with OpenCandle improvement ideas", () => {

@@ -343,6 +343,25 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    next.workflow === "portfolio_builder" &&
+    next.entities.symbols.length >= 2 &&
+    isPortfolioTradeoffComparisonRequest(text)
+  ) {
+    diagnostics.push({
+      code: "portfolio_tradeoff_corrected_to_compare_assets",
+      message: "explicit multi-asset tradeoff question should compare the requested assets before constructing a portfolio",
+    });
+    next = {
+      ...next,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: "compare_assets",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -417,6 +436,12 @@ function isPortfolioEvaluationRequest(text: string): boolean {
     /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
     (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
   return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
+}
+
+function isPortfolioTradeoffComparisonRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:prioritize|tradeoffs?|growth[-\s]?oriented|dividend|income|which\s+(?:one|is)\s+better|should\s+i)\b/.test(lower) &&
+    /\b(?:or|vs\.?|versus|compare)\b/.test(lower);
 }
 
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {

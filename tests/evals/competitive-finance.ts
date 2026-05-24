@@ -191,6 +191,22 @@ Return JSON only:
 }`;
 }
 
+export function buildComparisonJudgeRetryPrompt(input: {
+  originalPrompt: string;
+  invalidResponse: string;
+  errorMessage: string;
+}): string {
+  return `${input.originalPrompt}
+
+Your previous comparison judgment was invalid JSON and could not be parsed.
+Parse error: ${input.errorMessage}
+
+Invalid response:
+${input.invalidResponse}
+
+Return JSON only. Do not include markdown fences, comments, trailing prose, or malformed arrays/objects.`;
+}
+
 export function parseGeneratedPrompts(raw: string): GeneratedFinancePrompt[] {
   const value = parseJsonPayload(raw);
   const prompts = Array.isArray(value)

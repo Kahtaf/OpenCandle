@@ -302,6 +302,72 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("cash-flow quality");
   });
 
+  it("tells retail account and product-selection answers not to punt when no live tool exists", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("brokerage, account, fund-platform, or financial-product selection prompts");
+    expect(result).toContain("Do not punt just because no dedicated live-data tool exists");
+    expect(result).toContain("cash sweep yields");
+    expect(result).toContain("fractional shares");
+    expect(result).toContain("fund minimums");
+    expect(result).toContain("ETF tax efficiency");
+    expect(result).toContain("simple next step");
+  });
+
+  it("tells unknown-ticker earnings prompts to continue with an event-risk framework", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("ticker lookup fails");
+    expect(result).toContain("earnings");
+    expect(result).toContain("do not stop at");
+    expect(result).toContain("gap risk");
+    expect(result).toContain("guidance");
+    expect(result).toContain("position size");
+    expect(result).toContain("trim");
+    expect(result).toContain("If ask_user returns no answer");
+    expect(result).toContain("lead with a risk-first answer");
+    expect(result).toContain("do not use a conceptual education section order");
+  });
+
+  it("tells crypto sizing answers to include drawdown math and implementation rules", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("crypto position-sizing");
+    expect(result).toContain("allocation range");
+    expect(result).toContain("drawdown");
+    expect(result).toContain("sleep test");
+    expect(result).toContain("dollar-cost averaging");
+    expect(result).toContain("rebalancing rules");
+    expect(result).toContain("emergency fund");
+    const fullPrompt = new PromptContextBuilder().populateFromOptions({}).build();
+    expect(fullPrompt).toContain("For crypto position-sizing prompts");
+    expect(fullPrompt).toContain("history period");
+    expect(fullPrompt).toContain("sparse or unavailable history");
+  });
+
+  it("tells today-move answers to check market status before causal claims", () => {
+    const result = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+
+    expect(result).toContain("\"today\"");
+    expect(result).toContain("market status");
+    expect(result).toContain("weekend or market holiday");
+    expect(result).toContain("lead with that");
+    expect(result).toContain("do not invent");
+    expect(result).toContain("most recent trading day");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
