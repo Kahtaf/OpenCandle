@@ -56,7 +56,7 @@ Final-answer hard assertions to preserve:
 
 ## Baseline Scope
 
-This is a targeted before-migration smoke baseline, not the full before/after migration comparison. Full manifest rerun and parity comparison remain gated by tasks 8.2 and 8.8.
+This first section is a targeted before-migration smoke baseline. The full before/after manifest comparison is recorded below.
 
 ## V1 Scaffold Validation
 
@@ -80,7 +80,24 @@ Eval limitations:
 - Direct `npx tsx -e` harness import failed with `ERR_PACKAGE_PATH_NOT_EXPORTED` from `@earendil-works/pi-coding-agent`; the same prompts were rerun through `tests/harness/cli.ts`, which completed.
 - `npm run test:evals` currently fails before running eval cases with `TypeError: define is not a function` from `vitest-evals/src/index.ts`. This is outside the prompt-to-policy unit harness added here and blocks a full eval-suite manifest run in this session.
 
-Full-manifest status:
+## Full Manifest Comparison
 
-- The committed manifest is still the required comparison surface for route, task family, tool calls, evidence records, structured-check results, retry eligibility, hard final-answer assertions, and optional judge assertions.
-- This session exercised the two selected `ticker_disambiguation` manifest prompts live. The full 16-prompt manifest remains to be run once the eval runner issue is resolved or a dedicated manifest runner is added.
+Date: 2026-05-24
+
+Command:
+
+- `npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Report:
+
+- `tests/evals/runs/2026-05-24T20-31-43-658Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 16/16 committed manifest prompts.
+- Compared route kind, workflow, task family, commitment mode, tool bundles, tool calls, evidence records, capability-gap disclosure, structured-check failures, retry eligibility, and deterministic final-answer hard assertions.
+
+Notes:
+
+- The dedicated manifest runner is committed as `tests/scripts/run-prompt-policy-manifest.ts` because `npm run test:evals` is still blocked by the `vitest-evals` `define is not a function` loader failure above.
+- Generated run reports under `tests/evals/runs/` are gitignored; the path above is recorded as local validation evidence.

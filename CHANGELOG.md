@@ -40,6 +40,7 @@
 - Competitive Codex baseline preflight now uses the ACP adapter's advertised model id syntax by default.
 - Competitive judge parsing now repairs common missing-comma JSON so benchmark runs are less likely to abort after model formatting glitches.
 - Retail-investor prompts now handle brokerage selection, ETF tradeoffs/overlap, ticker aliases, unknown-ticker earnings risk, crypto position sizing, and market-closed "today" move questions with more direct guidance instead of punting or over-routing to portfolio construction.
+- Prompt-to-policy manifest routing now normalizes dispatchable compare workflows, keeps crypto sizing in advisory planning instead of portfolio construction, and prefers specific sentiment, SEC filing, current-event, ticker-disambiguation, retail, and macro task families over generic single-asset metadata.
 
 ## [0.4.0] - 2026-05-16
 

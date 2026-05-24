@@ -94,6 +94,74 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("dual_run");
   });
 
+  it("prefers specific task families over generic single-asset workflow metadata", () => {
+    const singleAssetOutput: RouterOutput = {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "single_asset_analysis",
+      entities: { symbols: ["GME"] },
+      tool_bundles: ["core_market", "sentiment"],
+    };
+
+    expect(buildPlanningEnvelope({
+      ...input,
+      text: "What's the retail mood around GME right now across Reddit, X/Twitter, and recent news?",
+    }, singleAssetOutput).taskFamily).toBe("sentiment_snapshot");
+
+    expect(buildPlanningEnvelope({
+      ...input,
+      text: "Look at COIN's latest 10-Q. Separate SEC filing evidence from news.",
+    }, {
+      ...singleAssetOutput,
+      entities: { symbols: ["COIN"] },
+      tool_bundles: ["core_market", "sec"],
+    }).taskFamily).toBe("filing_thesis_review");
+
+    expect(buildPlanningEnvelope({
+      ...input,
+      text: "Why did Boeing move today? I want the actual catalyst.",
+    }, {
+      ...singleAssetOutput,
+      entities: { symbols: ["BA"] },
+    }).taskFamily).toBe("current_event_explanation");
+  });
+
+  it("sets prompt-specific commitment modes and capability gaps for manifest tradeoffs", () => {
+    const retail = buildPlanningEnvelope({
+      ...input,
+      text: "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: [],
+    });
+    const providerDegradation = buildPlanningEnvelope({
+      ...input,
+      text: "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro", "sentiment"],
+    });
+
+    expect(retail.taskFamily).toBe("retail_finance_tradeoff");
+    expect(retail.commitmentMode).toBe("compare_tradeoffs");
+    expect(providerDegradation.taskFamily).toBe("macro_allocation_review");
+    expect(providerDegradation.commitmentMode).toBe("framework");
+    expect(providerDegradation.capabilityGapIds).toEqual(expect.arrayContaining([
+      "market_calendar",
+      "forward_rate_probabilities",
+      "sentiment_sample_depth",
+    ]));
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

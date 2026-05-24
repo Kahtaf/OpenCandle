@@ -295,6 +295,19 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (next.routeKind === "agent_task" && isDispatchableWorkflow(next.workflow)) {
+    diagnostics.push({
+      code: "dispatchable_workflow_corrected_to_workflow_dispatch",
+      message: `${next.workflow} is a dispatchable workflow`,
+    });
+    next = {
+      ...next,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      diagnostics,
+    };
+  }
+
   if (
     next.workflow === "compare_assets" &&
     next.entities.symbols.length === 0 &&
@@ -331,6 +344,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (next.workflow === "portfolio_builder" && isCryptoSizingRequest(text)) {
+    diagnostics.push({
+      code: "crypto_sizing_corrected_to_agent_task",
+      message: "crypto allocation-range and drawdown questions are advisory tradeoffs, not portfolio construction",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
   if (next.workflow === "portfolio_builder" && isPortfolioEvaluationRequest(text)) {
     diagnostics.push({
       code: "portfolio_evaluation_corrected_to_agent_task",
@@ -361,6 +389,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       route: "workflow",
       workflow: "compare_assets",
       missing_required: [],
+      diagnostics,
+    };
+  }
+
+  if (
+    next.workflow === "single_asset_analysis" &&
+    isSpecializedSingleAssetPolicyRequest(text)
+  ) {
+    diagnostics.push({
+      code: "single_asset_workflow_corrected_to_general_policy_task",
+      message: "prompt asks for policy-card planning outside a single-asset buy/sell analysis",
+    });
+    next = {
+      ...next,
+      workflow: "general_finance_qa",
       diagnostics,
     };
   }
@@ -445,6 +488,20 @@ function isPortfolioTradeoffComparisonRequest(text: string): boolean {
   const lower = text.toLowerCase();
   return /\b(?:prioritize|tradeoffs?|growth[-\s]?oriented|dividend|income|which\s+(?:one|is)\s+better|should\s+i)\b/.test(lower) &&
     /\b(?:or|vs\.?|versus|compare)\b/.test(lower);
+}
+
+function isCryptoSizingRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
+    /\b(?:allocation|range|position\s+size|sizing|exposure|drawdown)\b/.test(lower);
+}
+
+function isSpecializedSingleAssetPolicyRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:ticker|symbol|formerly|old ticker|earnings are|earnings tonight)\b/.test(lower) ||
+    /\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower) ||
+    /\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower) ||
+    /\b(?:filing|10-k|10-q|8-k|sec)\b/.test(lower);
 }
 
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {

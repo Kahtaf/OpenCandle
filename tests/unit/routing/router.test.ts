@@ -224,6 +224,57 @@ describe("route()", () => {
     expect(result.tool_bundles).toContain("core_market");
   });
 
+  it("normalizes dispatchable compare workflow emitted as agent_task to workflow_dispatch", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        workflow: "compare_assets",
+        entities: { symbols: ["VOO", "QQQ", "SCHD"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "compare assets but wrong route kind",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.route).toBe("workflow");
+    expect(result.workflow).toBe("compare_assets");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "dispatchable_workflow_corrected_to_workflow_dispatch",
+    }));
+  });
+
+  it("keeps crypto sizing out of portfolio construction when the user asks allocation range and drawdown", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I have a $75k portfolio and want BTC exposure. What allocation range would you use, and how bad could the drawdown feel?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: ["BTC"], budget: 75_000 },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "mistaken portfolio builder",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "crypto_sizing_corrected_to_agent_task",
+    }));
+  });
+
   it("retries once on validation failure", async () => {
     const bad = JSON.stringify({ route: "nope" });
     const good = JSON.stringify({

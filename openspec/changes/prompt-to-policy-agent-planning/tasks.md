@@ -89,7 +89,7 @@
 ## 8. Validation and Rollout
 
 - [x] 8.1 Run `npm test` after each migrated task-family slice.
-- [ ] 8.2 Run the committed before/after harness prompt manifest and compare route, task family, tool calls, evidence records, structured-check results, retry eligibility, final-answer hard assertions, and optional judge-scored assertions.
+- [x] 8.2 Run the committed before/after harness prompt manifest and compare route, task family, tool calls, evidence records, structured-check results, retry eligibility, final-answer hard assertions, and optional judge-scored assertions.
 - [x] 8.3 Run `graphify update .` after code changes.
 - [x] 8.4 Update `CHANGELOG.md` and internal benchmark/migration docs with the prompt-to-policy migration evidence.
 - [x] 8.5 Keep tool-bundle enforcement in observe mode until planning-layer evals prove no expected tool is hidden.

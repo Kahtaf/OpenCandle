@@ -270,7 +270,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
   },
   ticker_disambiguation: {
     routeKinds: ["agent_task"],
-    workflows: ["general_finance_qa", undefined],
+    workflows: ["general_finance_qa", "single_asset_analysis", undefined],
     taskFamily: "ticker_disambiguation",
     commitmentMode: "framework",
     policyCardId: "ticker_disambiguation",
@@ -283,7 +283,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
   },
   filing_thesis_review: {
     routeKinds: ["agent_task"],
-    workflows: ["general_finance_qa"],
+    workflows: ["general_finance_qa", "single_asset_analysis"],
     taskFamily: "filing_thesis_review",
     commitmentMode: "framework",
     policyCardId: "filing_thesis_review",
@@ -296,7 +296,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
   },
   sentiment_snapshot: {
     routeKinds: ["agent_task"],
-    workflows: ["general_finance_qa"],
+    workflows: ["general_finance_qa", "single_asset_analysis"],
     taskFamily: "sentiment_snapshot",
     commitmentMode: "framework",
     policyCardId: "sentiment_snapshot",
@@ -444,7 +444,8 @@ function defaultPlanningSelection(
   input: RouterInputContext,
   output: RouterOutput,
 ): PlanningSelection {
-  return selectionForTaskFamily(defaultTaskFamilyForOutput(output, input.text));
+  const selection = selectionForTaskFamily(defaultTaskFamilyForOutput(output, input.text));
+  return refinePlanningSelectionForPrompt(selection, input.text);
 }
 
 function selectionForTaskFamily(taskFamily: TaskFamily): PlanningSelection {
@@ -467,17 +468,13 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (output.workflow === "options_screener") return "options_strategy";
   if (output.workflow === "compare_assets") return "asset_compare";
   if (output.workflow === "watchlist_or_tracking") return "stateful_tracking_update";
-  if (output.workflow === "single_asset_analysis") return "single_asset_decision";
 
   const lower = text.toLowerCase();
-  if (/\b(?:60\/40|portfolio|allocation)\b/.test(lower) && /\b(?:evaluate|evaluation|review|risk|prospects)\b/.test(lower)) {
-    return "portfolio_review";
-  }
-  if (output.entities.symbols.length === 1 && /\b(?:analyze|buy|sell|wait|avoid|recommendation|attractive)\b/.test(lower)) {
-    return "single_asset_decision";
-  }
   if (/\b(?:macro|inflation|fed|rates?|duration|recession)\b/.test(lower)) {
     return "macro_allocation_review";
+  }
+  if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
+    return "sentiment_snapshot";
   }
   if (/\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower)) {
     return "current_event_explanation";
@@ -488,16 +485,85 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\b(?:filing|10-k|10-q|8-k|sec)\b/.test(lower)) {
     return "filing_thesis_review";
   }
-  if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
-    return "sentiment_snapshot";
-  }
   if (/\b(?:brokerage|hysa|money-market|t-bills?|cds?|mortgage|taxable account)\b/.test(lower)) {
     return "retail_finance_tradeoff";
   }
+  if (/\b(?:btc|bitcoin|crypto)\b/.test(lower) && /\b(?:allocation|range|position\s+size|sizing|drawdown)\b/.test(lower)) {
+    return "retail_finance_tradeoff";
+  }
+  if (/\b(?:60\/40|portfolio|allocation)\b/.test(lower) && /\b(?:evaluate|evaluation|review|risk|prospects)\b/.test(lower)) {
+    return "portfolio_review";
+  }
+  if (output.entities.symbols.length === 1 && /\b(?:analyze|buy|sell|wait|avoid|recommendation|attractive)\b/.test(lower)) {
+    return "single_asset_decision";
+  }
+  if (output.workflow === "single_asset_analysis") return "single_asset_decision";
   if (/\b(?:explain|what is|what does|how to|define)\b/.test(lower) && output.entities.symbols.length === 0) {
     return "concept_explainer";
   }
   return "general_fallback";
+}
+
+function refinePlanningSelectionForPrompt(
+  selection: PlanningSelection,
+  text: string,
+): PlanningSelection {
+  const lower = text.toLowerCase();
+
+  if (
+    selection.taskFamily === "retail_finance_tradeoff" &&
+    /\b(?:where should|hysa|money-market|t-bills?|cds?|mortgage|versus|vs\.?|or)\b/.test(lower)
+  ) {
+    return {
+      ...selection,
+      commitmentMode: "compare_tradeoffs",
+    };
+  }
+
+  if (
+    selection.taskFamily === "retail_finance_tradeoff" &&
+    /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
+    /\b(?:allocation|range|position\s+size|sizing|drawdown)\b/.test(lower)
+  ) {
+    return {
+      ...selection,
+      commitmentMode: "decision",
+    };
+  }
+
+  if (
+    selection.taskFamily === "ticker_disambiguation" &&
+    /\b(?:earnings|trim|hedge|hold|event[-\s]?risk|position\s+size)\b/.test(lower)
+  ) {
+    return {
+      ...selection,
+      commitmentMode: "decision",
+    };
+  }
+
+  if (
+    selection.taskFamily === "macro_allocation_review" &&
+    /\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)
+  ) {
+    return {
+      ...selection,
+      commitmentMode: "framework",
+      capabilityGapIds: mergeCapabilityGaps(selection.capabilityGapIds, ["sentiment_sample_depth"]),
+    };
+  }
+
+  return selection;
+}
+
+function mergeCapabilityGaps(
+  primary: readonly CapabilityGapId[],
+  secondary: readonly CapabilityGapId[],
+): CapabilityGapId[] {
+  const merged: CapabilityGapId[] = [];
+  for (const gap of [...primary, ...secondary]) {
+    if (!merged.includes(gap)) merged.push(gap);
+  }
+  return merged;
 }
 
 function isAllowedForOutput(entry: PlanningManifestEntry, output: RouterOutput): boolean {
