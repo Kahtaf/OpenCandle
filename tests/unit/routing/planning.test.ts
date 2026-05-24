@@ -71,7 +71,7 @@ describe("planning layer", () => {
     }));
   });
 
-  it("runs the selected ticker-disambiguation migration slice in dual-run mode", () => {
+  it("runs the selected ticker-disambiguation migration slice in replacement-active mode", () => {
     const planning = buildPlanningEnvelope(
       {
         ...input,
@@ -91,7 +91,7 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("ticker_disambiguation");
     expect(planning.evidencePlanId).toBe("ticker_disambiguation");
     expect(planning.answerContractId).toBe("ticker_disambiguation");
-    expect(planning.behaviorMode).toBe("dual_run");
+    expect(planning.behaviorMode).toBe("replacement_active");
   });
 
   it("prefers specific task families over generic single-asset workflow metadata", () => {

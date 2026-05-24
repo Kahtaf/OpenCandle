@@ -34,7 +34,7 @@
 
 - [x] 3.1 Create a policy-card registry with stable IDs for `ticker_disambiguation`, `current_event_explanation`, `sentiment_snapshot`, `filing_thesis_review`, `asset_compare`, `retail_finance_tradeoff`, and `concept_explainer`; implement only the first selected migration slice in V1 and leave the rest as placeholders/roadmap entries.
 - [x] 3.2 Update prompt assembly so migrated or dual-run selected slices may inject the selected policy card and answer contract for the current resolved turn context; non-migrated legacy clauses remain active until their parity-ledger gate passes.
-- [ ] 3.3 Keep the global prompt limited to analyst stance, data honesty, tool-before-current-facts, freshness, downside/risk posture, and refusal boundaries.
+- [x] 3.3 Keep the global prompt limited to analyst stance, data honesty, tool-before-current-facts, freshness, downside/risk posture, and refusal boundaries.
 - [x] 3.4 Add prompt assembly tests proving unrelated policy cards are not injected for a selected task family.
 - [x] 3.5 Remove migrated global scenario clauses only after their parity-ledger entry passes route, tool, evidence, provider-gap, and final-answer assertions.
 - [x] 3.6 Add an assertion that policy cards cannot claim missing capabilities; they may only disclose a capability gap or route to a future tool/meta-tool.

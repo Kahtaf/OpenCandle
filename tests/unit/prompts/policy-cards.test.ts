@@ -43,8 +43,9 @@ describe("policy cards", () => {
     expect(getPolicyCard("asset_compare").status).toBe("placeholder");
   });
 
-  it("renders implemented policy only for dual-run or active planning", () => {
+  it("renders implemented policy only for dual-run or replacement-active planning", () => {
     expect(renderPolicyCardForPlanning(planning())).toContain("Ticker Disambiguation Policy");
+    expect(renderPolicyCardForPlanning(planning({ behaviorMode: "replacement_active" }))).toContain("Ticker Disambiguation Policy");
     expect(renderPolicyCardForPlanning(planning({ behaviorMode: "observe_only" }))).toBe("");
   });
 

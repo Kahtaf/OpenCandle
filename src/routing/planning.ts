@@ -394,7 +394,7 @@ export function buildPlanningEnvelope(
   const proposed = defaultPlanningSelection(input, output);
   const { selection, diagnostics } = validatePlanningSelection(output, proposed);
   const behaviorMode: PlanningBehaviorMode = PLANNING_MANIFEST[selection.taskFamily].migrated
-    ? "dual_run"
+    ? "replacement_active"
     : "observe_only";
 
   return {

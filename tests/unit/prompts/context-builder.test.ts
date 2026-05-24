@@ -4,6 +4,7 @@ import {
   buildFallbackPlaybook,
   buildRoutePlaybook,
 } from "../../../src/prompts/context-builder.js";
+import { getPolicyCard } from "../../../src/prompts/policy-cards.js";
 import { truncateTobudget } from "../../../src/prompts/sections.js";
 import type { ResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
@@ -175,7 +176,7 @@ describe("PromptContextBuilder", () => {
     expect(result).not.toContain("compute_dcf");
   });
 
-  it("injects a selected dual-run policy card without unrelated cards", () => {
+  it("injects a replacement-active policy card without migrated legacy global clauses", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
@@ -208,7 +209,7 @@ describe("PromptContextBuilder", () => {
           answerContractId: "ticker_disambiguation",
           structuredCheckIds: ["required_evidence_present"],
           capabilityGapIds: ["earnings_event_risk"],
-          behaviorMode: "dual_run",
+          behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
           artifactPlaceholderIds: [],
           diagnostics: [],
@@ -218,6 +219,9 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Ticker Disambiguation Policy");
+    expect(result).toContain("event-risk framework");
+    expect(result).not.toContain("For ticker-alias or alternate-symbol prompts");
+    expect(result).not.toContain("If ticker lookup fails but the user is asking an earnings, event-risk, or holdings-risk question");
     expect(result).not.toContain("Sentiment Snapshot Policy");
     expect(result).not.toContain("Asset Compare Policy");
   });
@@ -381,22 +385,20 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("simple next step");
   });
 
-  it("tells unknown-ticker earnings prompts to continue with an event-risk framework", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
+  it("moves unknown-ticker earnings guidance to the ticker-disambiguation policy card", () => {
+    const result = getPolicyCard("ticker_disambiguation").content;
 
-    expect(result).toContain("ticker lookup fails");
+    expect(result).toContain("lookup or company overview evidence is unavailable");
     expect(result).toContain("earnings");
-    expect(result).toContain("do not stop at");
+    expect(result).toContain("event-risk framework");
     expect(result).toContain("gap risk");
     expect(result).toContain("guidance");
     expect(result).toContain("position size");
     expect(result).toContain("trim");
-    expect(result).toContain("If ask_user returns no answer");
-    expect(result).toContain("lead with a risk-first answer");
-    expect(result).toContain("do not use a conceptual education section order");
+    expect(buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    })).not.toContain("ticker lookup fails");
   });
 
   it("tells crypto sizing answers to include drawdown math and implementation rules", () => {
@@ -432,20 +434,21 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("most recent trading day");
   });
 
-  it("tells ticker-alias answers to distinguish current tickers from legacy or alternate listings", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
+  it("moves ticker-alias guidance to the ticker-disambiguation policy card", () => {
+    const result = getPolicyCard("ticker_disambiguation").content;
 
-    expect(result).toContain("ticker-alias or alternate-symbol prompts");
+    expect(result).toContain("current primary ticker");
     expect(result).toContain("current primary ticker");
     expect(result).toContain("legacy ticker");
     expect(result).toContain("former ticker");
     expect(result).toContain("foreign listing");
-    expect(result).toContain("company overview is unavailable");
-    expect(result).toContain("business model");
+    expect(result).toContain("company overview evidence is unavailable");
+    expect(result).toContain("business-model");
     expect(result).toContain("licensing");
+    expect(buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    })).not.toContain("ticker-alias or alternate-symbol prompts");
   });
 
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {

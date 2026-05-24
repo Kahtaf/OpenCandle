@@ -91,10 +91,12 @@ Command:
 Report:
 
 - `tests/evals/runs/2026-05-24T20-31-43-658Z_prompt-policy-manifest.json`
+- Replacement-active rerun after removing selected legacy prompt clauses: `tests/evals/runs/2026-05-24T20-59-47-837Z_prompt-policy-manifest.json`
 
 Result:
 
 - Passed 16/16 committed manifest prompts.
+- Passed 16/16 committed manifest prompts after moving selected ticker-disambiguation prompt ownership from fallback playbook clauses to the replacement policy card.
 - Compared route kind, workflow, task family, commitment mode, tool bundles, tool calls, evidence records, capability-gap disclosure, structured-check failures, retry eligibility, and deterministic final-answer hard assertions.
 
 Notes:
