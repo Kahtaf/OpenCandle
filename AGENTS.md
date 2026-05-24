@@ -86,9 +86,11 @@ export const cache = new Cache();
 
 **Always (do autonomously):**
 - Run `npm test` after changes
+- Follow Pi conventions where possible (sessions, TUI) (https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md)
 - Add fixture JSON in `tests/fixtures/<provider>/` for new API responses
 - Use existing `cache`/`rateLimiter` infra for new providers
 - Use `.js` extensions on all relative imports
+- For new atomic features or bug fixes, update the @CHANGELOG.md (use changelog-automation skill)
 
 **Ask first:**
 - Adding a new provider (needs rate-limit config, fixture strategy)
@@ -97,6 +99,7 @@ export const cache = new Cache();
 - Schema changes in memory SQLite tables
 
 **Never:**
+- Prompt engineering: never overfit the prompts to specific tickers or sectors
 - Guess financial numbers, prices, ratios, or metrics
 - Downplay downside scenarios; always flag risks prominently
 - Hardcode mock data in tools; use providers
@@ -112,10 +115,7 @@ Use `runOpenCandleSession()` from `tests/harness/opencandle-runner.ts` for scrip
 - OpenCandle user state: `~/.opencandle/` — CLI must not depend on repo-local `.pi/extensions/`.
 - GUI writer/follower: one process holds `writer.lock` per Pi session; followers are read-only and poll/re-render session entries.
 
-## ENV FLAGS
-- `OPENCANDLE_ROUTER_MODE`: `llm` (default) or `rules`. `rules` uses the legacy keyword router for fallback comparison.
-
-## graphify
+## GRAPHIFY
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
 
