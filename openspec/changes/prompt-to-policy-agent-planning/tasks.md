@@ -1,12 +1,12 @@
 ## 0. Feature Parity Gates
 
-- [ ] 0.1 Create a parity ledger that lists current prompt-protected behavior, deterministic router corrections, workflow dispatch behavior, tool-scope behavior, provider-degradation behavior, and competitive-eval fixes that must survive the refactor.
-- [ ] 0.2 For each ledger entry, record current owner/source location, replacement owner, characterization prompts/tests, required route/workflow/tool/evidence/final-answer hard assertions, optional judge assertions, baseline run path, migration status, accepted-improvement status if applicable, and rollback knob.
-- [ ] 0.3 Define shadow planning so current prompt/routing/tool behavior remains active while planning metadata, minimal evidence records, capability gaps, and structured checks run observe-only.
-- [ ] 0.4 Add a no-regression rule: no global prompt clause, router correction, workflow behavior, provider-degradation behavior, or tool-scope rule may be removed or weakened until its parity-ledger entry passes.
-- [ ] 0.5 Define V1 completion as feature parity with current behavior plus traceable planning scaffolding, not prompt shrinkage.
+- [x] 0.1 Create a parity ledger that lists current prompt-protected behavior, deterministic router corrections, workflow dispatch behavior, tool-scope behavior, provider-degradation behavior, and competitive-eval fixes that must survive the refactor.
+- [x] 0.2 For each ledger entry, record current owner/source location, replacement owner, characterization prompts/tests, required route/workflow/tool/evidence/final-answer hard assertions, optional judge assertions, baseline run path, migration status, accepted-improvement status if applicable, and rollback knob.
+- [x] 0.3 Define shadow planning so current prompt/routing/tool behavior remains active while planning metadata, minimal evidence records, capability gaps, and structured checks run observe-only.
+- [x] 0.4 Add a no-regression rule: no global prompt clause, router correction, workflow behavior, provider-degradation behavior, or tool-scope rule may be removed or weakened until its parity-ledger entry passes.
+- [x] 0.5 Define V1 completion as feature parity with current behavior plus traceable planning scaffolding, not prompt shrinkage.
 - [x] 0.6 Resolve GitHub issue #22 or incorporate equivalent tests/comments that make legacy deterministic routing safety-net boundaries explicit before planner-owned behavior or policy-card injection is activated.
-- [ ] 0.7 Capture all non-V1 ideas in `future-roadmap.md` with promotion criteria for later specs.
+- [x] 0.7 Capture all non-V1 ideas in `future-roadmap.md` with promotion criteria for later specs.
 
 ## 1. Baseline and Prompt Safety
 

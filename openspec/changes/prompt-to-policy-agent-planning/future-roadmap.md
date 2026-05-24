@@ -165,6 +165,32 @@ Promotion signal:
 
 - Users need inspectable intermediate work or reusable deliverables beyond chat answers.
 
+### Prompt Shrinkage Beyond Gated Slice Removal
+
+Broad deletion of global scenario clauses after V1, beyond the single selected migration slice.
+
+Why deferred:
+
+- V1 success is parity plus traceable planning scaffolding, not a smaller prompt.
+- Deleting many clauses at once would make regressions hard to attribute.
+
+Promotion signal:
+
+- Each candidate clause has a passing parity-ledger row, baseline comparison, and rollback knob.
+
+### Deeper Planner Or Router-Suggested Planning
+
+Allowing the router or a deeper planner to suggest richer task-family, evidence, policy, or answer-contract fields.
+
+Why deferred:
+
+- V1 deterministic planning owns final selection so the router does not become another super prompt.
+- Richer planner agency needs separate failure-classification and rollback criteria.
+
+Promotion signal:
+
+- Static manifest defaults are stable, and eval misses show deterministic selection lacks needed context.
+
 ## Explicitly Not V1
 
 - Full artifact catalog implementation
@@ -175,4 +201,6 @@ Promotion signal:
 - New provider integrations
 - Hard tool-bundle enforcement changes
 - Broad prompt clause deletion
+- Prompt shrinkage before parity-ledger gates pass
+- Router-owned scenario guidance or deep planner agency
 - User-visible report/workspace UX
