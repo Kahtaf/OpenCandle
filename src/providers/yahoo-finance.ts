@@ -275,7 +275,7 @@ export function computeTimeToExpiry(expirationTs: number, nowMs: number = Date.n
   return Math.max(MIN_TIME_YEARS, remainingS / SECONDS_PER_YEAR);
 }
 
-export function getUsOptionsMarketSession(now: Date = new Date()): OptionsMarketSession {
+function getUsOptionsMarketSession(now: Date = new Date()): OptionsMarketSession {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
     weekday: "short",
@@ -295,7 +295,7 @@ export function getUsOptionsMarketSession(now: Date = new Date()): OptionsMarket
   return "after_hours";
 }
 
-export function buildOptionsQuoteStatus(
+function buildOptionsQuoteStatus(
   contracts: OptionContract[],
   now: Date = new Date(),
 ): OptionsQuoteStatus {

@@ -53,11 +53,6 @@ export class PromptContextBuilder {
     return this;
   }
 
-  /** Get a section by name. */
-  getSection(name: SectionName): PromptSection | undefined {
-    return this.sections.get(name);
-  }
-
   /** Build the complete system prompt. */
   build(): string {
     const parts: string[] = [];

@@ -13,7 +13,8 @@
   },
   "type": "module",
   "workspaces": [
-    "gui/*"
+    "gui/server",
+    "gui/web"
   ],
   "bin": {
     "opencandle": "dist/cli.js"
