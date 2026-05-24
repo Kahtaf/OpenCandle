@@ -92,14 +92,37 @@ Report:
 
 - `tests/evals/runs/2026-05-24T20-31-43-658Z_prompt-policy-manifest.json`
 - Replacement-active rerun after removing selected legacy prompt clauses: `tests/evals/runs/2026-05-24T20-59-47-837Z_prompt-policy-manifest.json`
+- Ref-parity follow-up rerun after adding the baseline-ref comparator: `tests/evals/runs/2026-05-24T22-22-20-298Z_prompt-policy-manifest.json`
 
 Result:
 
 - Passed 16/16 committed manifest prompts.
 - Passed 16/16 committed manifest prompts after moving selected ticker-disambiguation prompt ownership from fallback playbook clauses to the replacement policy card.
+- Passed 16/16 committed manifest prompts after adding the old-vs-current ref parity runner.
 - Compared route kind, workflow, task family, commitment mode, tool bundles, tool calls, evidence records, capability-gap disclosure, structured-check failures, retry eligibility, and deterministic final-answer hard assertions.
 
 Notes:
 
 - The dedicated manifest runner is committed as `tests/scripts/run-prompt-policy-manifest.ts` because `npm run test:evals` is still blocked by the `vitest-evals` `define is not a function` loader failure above.
 - Generated run reports under `tests/evals/runs/` are gitignored; the path above is recorded as local validation evidence.
+
+## Ref Parity Comparison
+
+Date: 2026-05-24
+
+Command:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=ticker-alias-armh,unknown-ticker-earnings-risk,market-closed-today-move,sentiment-source-coverage,filing-thesis-review,no-tool-valuation-education PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+
+Report:
+
+- `tests/evals/runs/2026-05-24T22-15-02-587Z_prompt-policy-ref-parity.json`
+- `tests/evals/runs/2026-05-24T22-29-27-818Z_prompt-policy-ref-parity.json`
+- `tests/evals/runs/2026-05-24T22-34-37-321Z_prompt-policy-ref-parity.json`
+
+Result:
+
+- Passed 16/16 old-vs-current manifest parity cases against baseline ref `3e3a039` across three focused batches.
+- Both baseline and current implementations passed their manifest assertions before each parity comparison.
+- The comparator checked stable route kind, workflow, task family, commitment mode, policy/evidence/contract IDs, tool bundles, evidence records, capability-gap disclosure, structured-check failures, retry eligibility, and deterministic final-answer hard assertions.
+- Warnings were limited to additive evidence/tool-call differences and nondeterministic tool ordering. No baseline planning field, capability gap, structured check, or final-answer assertion regressed.
