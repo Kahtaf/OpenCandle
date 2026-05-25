@@ -175,7 +175,11 @@ The router selected workflow dispatch${ctx.workflow ? ` for ${ctx.workflow}` : "
 ${ctx.missingRequired.length > 0 ? `## Missing Required Information\nThe following slots are required but not yet filled: ${ctx.missingRequired.join(", ")}. Call the \`ask_user\` tool before committing to analysis.\n\n` : ""}## Assumptions Context
 ${assumptionsBlock}`;
   }
-  return buildAgentTaskPlaybook(fallbackContext);
+  return buildAgentTaskPlaybook(fallbackContext, {
+    includeTodayMoveClause:
+      ctx.planning?.taskFamily !== "current_event_explanation" ||
+      ctx.planning?.behaviorMode !== "replacement_active",
+  });
 }
 
 function buildClarificationPlaybook(ctx: FallbackContext): string {
@@ -200,7 +204,13 @@ function buildResolvedAssumptionsBlock(ctx: ResolvedTurnContext): string {
   return lines.join("\n");
 }
 
-function buildAgentTaskPlaybook(ctx: FallbackContext): string {
+interface AgentTaskPlaybookOptions {
+  includeTodayMoveClause?: boolean;
+}
+
+const TODAY_MOVE_PLAYBOOK_ITEM = `19. For "today" or "why did it move today" prompts: check market status against the current date before causal claims. If it is a weekend or market holiday, lead with that and do not invent an intraday move or news catalyst; offer the most recent trading day and only cite a cause when fetched quote/news evidence supports it.`;
+
+function buildAgentTaskPlaybook(ctx: FallbackContext, options: AgentTaskPlaybookOptions = {}): string {
   const missingLine =
     ctx.missingRequired.length > 0
       ? `\n## Missing Required Information\nThe following slots are required but not yet filled: ${ctx.missingRequired.join(", ")}. Call the \`ask_user\` tool to collect each one BEFORE committing to a final answer. Do not guess or assume these values.`
@@ -227,8 +237,7 @@ This turn did not match a structured workflow, but you still commit to an answer
 15. For sentiment-only prompts: final answer must include the direction and strength of the sentiment signal, the score scale when the tool reports one, any missing sources, why those missing sources matter for the user's question, the source-coverage risk, low sample counts, and how those gaps downgrade confidence. For ticker-specific sentiment prompts, call get_stock_quote before the final answer, then state whether sentiment diverges from price action instead of treating sentiment as a standalone signal.
 16. For single-asset recommendation prompts, especially "right now" or "today" prompts, state the quote or tool-output date in the final answer so the user can see data freshness. If tool output says the market is closed, the quote is delayed, or this is the last available quote, carry that freshness note into the final answer. If a DCF or other valuation model is unavailable or not meaningful, do not treat that absence as the valuation conclusion; replace it with supported fallback valuation lenses such as relative multiples, growth-adjusted multiples, cash-flow quality, balance-sheet risk, and historical range context from the available tool outputs. Do not make missing fundamentals the main thesis when quote, earnings, technicals, sentiment, or news are available; use those data points plus structural business risks to give a clear call, position sizing, and entry strategy.
 17. For brokerage, account, fund-platform, or financial-product selection prompts: Do not punt just because no dedicated live-data tool exists. Give durable public decision criteria, label facts that should be verified on the provider site, and compare fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss-harvesting support, transfer/account fees, mutual-fund versus ETF availability, support quality, and ease of recurring investment. For taxable accounts, explain ETF tax efficiency and asset-location caveats. End with a simple next step or default choice based on the user's stated priorities.
-18. For crypto position-sizing prompts: give a concrete allocation range by risk profile, show drawdown math on the user's stated portfolio value, include a sleep test, and explain implementation with dollar-cost averaging, rebalancing rules, position caps, tax tracking, reputable custody/exchange considerations, and emergency fund or high-interest-debt prerequisites.
-19. For "today" or "why did it move today" prompts: check market status against the current date before causal claims. If it is a weekend or market holiday, lead with that and do not invent an intraday move or news catalyst; offer the most recent trading day and only cite a cause when fetched quote/news evidence supports it.
+18. For crypto position-sizing prompts: give a concrete allocation range by risk profile, show drawdown math on the user's stated portfolio value, include a sleep test, and explain implementation with dollar-cost averaging, rebalancing rules, position caps, tax tracking, reputable custody/exchange considerations, and emergency fund or high-interest-debt prerequisites.${options.includeTodayMoveClause === false ? "" : `\n${TODAY_MOVE_PLAYBOOK_ITEM}`}
 
 ## Assumptions Context
 ${ctx.assumptionsBlock}

@@ -182,11 +182,16 @@ export interface PlanningEnvelope extends PlanningSelection {
   diagnostics: RouterDiagnostic[];
 }
 
+export interface PlanningBuildOptions {
+  migrationStatuses?: Partial<Record<TaskFamily, PlanningBehaviorMode>>;
+}
+
 interface PlanningManifestEntry extends PlanningSelection {
   routeKinds: RouterRouteKind[];
   workflows: Array<Exclude<WorkflowType, "unclassified"> | undefined>;
   compatibleToolBundles: ToolBundleName[];
   migrated: boolean;
+  migrationStatus?: PlanningBehaviorMode;
 }
 
 export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
@@ -267,6 +272,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: ["market_calendar"],
     compatibleToolBundles: ["core_market", "macro", "sentiment", "sec", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   ticker_disambiguation: {
     routeKinds: ["agent_task"],
@@ -390,12 +396,16 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
 export function buildPlanningEnvelope(
   input: RouterInputContext,
   output: RouterOutput,
+  options: PlanningBuildOptions = {},
 ): PlanningEnvelope {
   const proposed = defaultPlanningSelection(input, output);
   const { selection, diagnostics } = validatePlanningSelection(output, proposed);
-  const behaviorMode: PlanningBehaviorMode = PLANNING_MANIFEST[selection.taskFamily].migrated
+  const manifestEntry = PLANNING_MANIFEST[selection.taskFamily];
+  const behaviorMode: PlanningBehaviorMode = options.migrationStatuses?.[selection.taskFamily] ??
+    manifestEntry.migrationStatus ??
+    (manifestEntry.migrated
     ? "replacement_active"
-    : "observe_only";
+    : "observe_only");
 
   return {
     version: PLANNING_VERSION,

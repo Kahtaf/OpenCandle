@@ -451,6 +451,53 @@ describe("PromptContextBuilder", () => {
     })).not.toContain("ticker-alias or alternate-symbol prompts");
   });
 
+  it("uses the current-event policy without retaining the legacy today-move clause after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Why did Boeing move today?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["BA"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market"],
+        activeToolNames: ["get_stock_quote", "search_web"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["BA"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "current_event_explanation",
+          commitmentMode: "framework",
+          policyCardId: "current_event_explanation",
+          evidencePlanId: "market_status",
+          answerContractId: "current_event_explanation",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+          capabilityGapIds: ["market_calendar"],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Current Event Explanation Policy");
+    expect(result).not.toContain("For \"today\" or \"why did it move today\" prompts");
+    expect(result).toContain("market-status evidence");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",

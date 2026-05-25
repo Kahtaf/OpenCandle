@@ -62,6 +62,45 @@ describe("planning evidence plans", () => {
     expect(afterClose.normalizedFacts.temporalReferences).toEqual(["this_morning", "after_close"]);
   });
 
+  it("uses market-status plus tool-result evidence for current-event explanations", () => {
+    const plan = EVIDENCE_PLAN_REGISTRY.market_status;
+    const quote = captureEvidenceFromToolCall({
+      name: "get_stock_quote",
+      args: { symbol: "BA" },
+      result: { symbol: "BA", price: 180 },
+      isError: false,
+    }, {
+      traceId: "trace-current-event",
+      toolCallIndex: 0,
+    });
+    const news = captureEvidenceFromToolCall({
+      name: "search_web",
+      args: { query: "Boeing stock catalyst today", category: "news" },
+      result: { results: [{ title: "Boeing headline" }] },
+      isError: false,
+    }, {
+      traceId: "trace-current-event",
+      toolCallIndex: 1,
+    });
+
+    expect(plan.taskFamilies).toContain("current_event_explanation");
+    expect(plan.requiredEvidence).toEqual(["market_status"]);
+    expect(plan.optionalEvidence).toContain("tool_result");
+    expect(plan.capabilityGapIds).toContain("market_calendar");
+    expect(quote.evidenceType).toBe("tool_result");
+    expect(news.evidenceType).toBe("tool_result");
+    expect(quote.rawTracePointer).toEqual(expect.objectContaining({
+      traceId: "trace-current-event",
+      toolName: "get_stock_quote",
+      toolCallIndex: 0,
+    }));
+    expect(news.rawTracePointer).toEqual(expect.objectContaining({
+      traceId: "trace-current-event",
+      toolName: "search_web",
+      toolCallIndex: 1,
+    }));
+  });
+
   it("builds the selected ticker-disambiguation slice without invoking unrelated plans", () => {
     const record = buildTickerDisambiguationEvidence({
       text: "What's the current ticker for Facebook?",

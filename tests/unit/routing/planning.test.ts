@@ -94,6 +94,58 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("can activate only the current-event slice without changing unrelated task families", () => {
+    const currentEvent = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Why did Boeing move today? I want the actual catalyst.",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["BA"] },
+        tool_bundles: ["core_market"],
+      },
+      {
+        migrationStatuses: {
+          current_event_explanation: "dual_run",
+        },
+      },
+    );
+    const assetCompare = buildPlanningEnvelope(input, compareOutput, {
+      migrationStatuses: {
+        current_event_explanation: "dual_run",
+      },
+    });
+
+    expect(currentEvent.taskFamily).toBe("current_event_explanation");
+    expect(currentEvent.behaviorMode).toBe("dual_run");
+    expect(assetCompare.taskFamily).toBe("asset_compare");
+    expect(assetCompare.behaviorMode).toBe("observe_only");
+  });
+
+  it("runs the current-event migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Why did Boeing move today? I want the actual catalyst.",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["BA"] },
+        tool_bundles: ["core_market"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("current_event_explanation");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("prefers specific task families over generic single-asset workflow metadata", () => {
     const singleAssetOutput: RouterOutput = {
       ...compareOutput,

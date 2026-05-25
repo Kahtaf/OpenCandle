@@ -126,3 +126,26 @@ Result:
 - Both baseline and current implementations passed their manifest assertions before each parity comparison.
 - The comparator checked stable route kind, workflow, task family, commitment mode, policy/evidence/contract IDs, tool bundles, evidence records, capability-gap disclosure, structured-check failures, retry eligibility, and deterministic final-answer hard assertions.
 - Warnings were limited to additive evidence/tool-call differences and nondeterministic tool ordering. No baseline planning field, capability gap, structured check, or final-answer assertion regressed.
+
+## Current-Event Replacement Activation
+
+Date: 2026-05-24
+
+Command:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=market-closed-today-move PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+
+Reports:
+
+- Dual-run gate before legacy prompt-clause removal: `tests/evals/runs/2026-05-25T01-33-09-953Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting the legacy today-move clause for current-event turns: `tests/evals/runs/2026-05-25T01-39-20-513Z_prompt-policy-ref-parity.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039`.
+- Both baseline and current implementations passed the manifest assertions for `market-closed-today-move`.
+- Final replacement-active parity completed with zero warnings; stable route, task-family, policy/evidence/contract, evidence, capability-gap, structured-check, tool-call, and deterministic final-answer assertions matched the legacy baseline.
+
+Validation note:
+
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts` was run after this change and passed the current-event case, but the full 16-case manifest stopped at 15/16 because unrelated `unknown-ticker-earnings-risk` nondeterministically ended without the expected unresolved-ticker disclosure. The current-event manifest case passed in the full run and in an isolated strict rerun: `tests/evals/runs/2026-05-25T01-50-22-902Z_prompt-policy-manifest.json`.

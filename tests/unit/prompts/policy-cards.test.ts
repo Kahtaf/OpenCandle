@@ -61,6 +61,26 @@ describe("policy cards", () => {
     expect(rendered).toBe("");
   });
 
+  it("renders current-event policy only after the slice leaves observe-only mode", () => {
+    const currentEventPlanning = planning({
+      taskFamily: "current_event_explanation",
+      policyCardId: "current_event_explanation",
+      evidencePlanId: "market_status",
+      answerContractId: "current_event_explanation",
+      structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+      capabilityGapIds: ["market_calendar"],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(currentEventPlanning);
+    expect(rendered).toContain("Current Event Explanation Policy");
+    expect(rendered).toContain("Fetch quote or market-status evidence before searching for news or event catalysts");
+    expect(renderPolicyCardForPlanning({
+      ...currentEventPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
   it("asserts policy cards disclose capability gaps instead of claiming them", () => {
     expect(validatePolicyCardRegistry()).toEqual([]);
   });

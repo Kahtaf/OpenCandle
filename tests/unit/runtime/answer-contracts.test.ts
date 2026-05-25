@@ -54,6 +54,23 @@ describe("answer contracts", () => {
     expect(COMMITMENT_MODE_CONTRACTS.decision.requiresConcreteCommitment).toBe(true);
     expect(COMMITMENT_MODE_CONTRACTS.framework.requiresConcreteCommitment).toBe(false);
   });
+
+  it("defines current-event obligations for freshness, source coverage, and market-calendar gaps", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.current_event_explanation;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.requiredEvidenceTypes).toEqual(["market_status"]);
+    expect(contract.requiredFinalFields).toEqual(expect.arrayContaining([
+      "framework_or_checklist",
+      "freshness_disclosure",
+      "source_coverage",
+      "data_gap_disclosure",
+    ]));
+    expect(contract.requiresFreshness).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.capabilityGapIds).toContain("market_calendar");
+  });
 });
 
 describe("structured checks", () => {
@@ -118,6 +135,42 @@ describe("structured checks", () => {
       expect.objectContaining({ checkId: "freshness_disclosed" }),
       expect.objectContaining({ checkId: "source_coverage_disclosed" }),
     ]));
+  });
+
+  it("passes current-event checks when freshness, sources, and market-calendar gaps are disclosed", () => {
+    const trace = runStructuredChecks({
+      contract: ANSWER_CONTRACT_REGISTRY.current_event_explanation,
+      evidenceRecords: [{
+        ...tickerEvidence,
+        id: "market_status:deterministic",
+        evidenceType: "market_status",
+        normalizedFacts: {
+          marketStatus: "after_close",
+          lastTradingDay: "2026-05-22",
+        },
+        gaps: [{
+          kind: "capability_gap",
+          capabilityGapId: "market_calendar",
+          reason: "V1 deterministic market calendar.",
+        }],
+      }],
+      finalAnswerMetadata: {
+        commitmentMode: "framework",
+        finalFields: ["framework_or_checklist", "freshness_disclosure", "source_coverage", "data_gap_disclosure"],
+        freshness: {
+          asOfDate: "2026-05-22",
+          marketStatus: "after_close",
+          lastTradingDay: "2026-05-22",
+        },
+        sourceCoverage: {
+          sources: ["market_status", "quote", "web_news"],
+        },
+        disclosedCapabilityGapIds: ["market_calendar"],
+      },
+    });
+
+    expect(trace.failures).toEqual([]);
+    expect(trace.retryEligibility.eligible).toBe(false);
   });
 
   it("keeps framework fallback diagnostic until parity allows activation", () => {
