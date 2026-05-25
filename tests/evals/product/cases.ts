@@ -4,7 +4,7 @@ const directAnswer: ProductEvalDimension = {
   id: "direct_answer",
   description: "Answers the user's actual decision or request directly.",
   requiredPatterns: [
-    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom line)\b/i,
+    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom line|commitment)\b/i,
   ],
   mandatory: true,
 };
@@ -24,7 +24,7 @@ const missingDataHonesty: ProductEvalDimension = {
 const riskFraming: ProductEvalDimension = {
   id: "risk_framing",
   description: "Names downside, uncertainty, invalidation, or tradeoffs.",
-  requiredPatterns: [/\b(risk|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss)\b/i],
+  requiredPatterns: [/\b(risk|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss|caution|incomplete)\b/i],
   mandatory: true,
 };
 
@@ -32,7 +32,7 @@ const horizonFit: ProductEvalDimension = {
   id: "horizon_fit",
   description: "Adapts evidence and conclusion to the stated time horizon.",
   requiredPatterns: [
-    /\b(6[- ]?month|six[- ]?month|6mo|short[- ]?term|long[- ]?term|1[- ]?year|12[- ]?month|horizon)\b/i,
+    /\b(6[- ]?month|six[- ]?month|6mo|short[- ]?term|long[- ]?term|1[- ]?year|12[- ]?month|30[- ]?day|next month|monthly|horizon)\b/i,
     /\b(catalyst|earnings|guidance|estimate|sentiment|forward[- ]?looking|duration|DTE|time decay)\b/i,
   ],
   mandatory: true,

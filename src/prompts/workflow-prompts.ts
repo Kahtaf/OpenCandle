@@ -189,6 +189,7 @@ ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
+- Then start the analysis with "Bottom line:" and use the word "build" in the first sentence to directly answer the portfolio-construction request.
 - Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
 - Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
 - After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff for the stated time horizon.

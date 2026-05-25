@@ -295,6 +295,11 @@ describe("policy cards", () => {
     expect(rendered).toContain("Where it misleads");
     expect(rendered).toContain("Cross-checks");
     expect(rendered).toContain("Quick checklist");
+    expect(rendered).toContain("For inflation");
+    expect(rendered).toContain("nominal returns");
+    expect(rendered).toContain("For options education");
+    expect(rendered).toContain("Main risks");
+    expect(rendered).toContain("simple analogy");
     expect(renderPolicyCardForPlanning({
       ...conceptPlanning,
       behaviorMode: "observe_only",

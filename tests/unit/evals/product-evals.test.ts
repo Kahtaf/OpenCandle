@@ -132,6 +132,43 @@ describe("product eval scoring", () => {
     expect(result.passed).toBe(true);
   });
 
+  it("counts portfolio commitment language as a direct answer", () => {
+    const portfolioCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "portfolio-balanced-50k");
+    if (!portfolioCase) throw new Error("missing portfolio eval case");
+
+    const result = scoreProductEvalCase(portfolioCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "portfolio_builder" },
+      toolCalls: [{ name: "get_stock_quote", args: { symbol: "VOO" } }],
+      text:
+        "Commitment: This draft portfolio allocates $50,000 across diversified ETFs for a 3 year horizon. " +
+        "It balances growth and stability, names duration and volatility risk, and includes an invalidation condition.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(true);
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(true);
+  });
+
+  it("recognizes 30-day option horizons and incomplete sentiment risk framing", () => {
+    const optionsCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "options-aapl-covered-call");
+    const sentimentCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "sentiment-market-ai-stocks");
+    if (!optionsCase || !sentimentCase) throw new Error("missing eval case");
+
+    const options = scoreProductEvalCase(optionsCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "options_screener" },
+      toolCalls: [{ name: "get_option_chain", args: { symbol: "AAPL" } }],
+      text:
+        "Screen these 30-day covered calls by DTE, time decay, premium, delta, and downside risk.",
+    }));
+    const sentiment = scoreProductEvalCase(sentimentCase, makeTrace({
+      toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+      text:
+        "Bottom line: sentiment is leaning bearish, but Twitter and Reddit are missing, so the picture is incomplete and should be treated with caution.",
+    }));
+
+    expect(options.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(true);
+    expect(sentiment.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(true);
+  });
+
   it("maps failed product eval reports to a failing process exit code", () => {
     expect(productEvalExitCode({ failed: 0 })).toBe(0);
     expect(productEvalExitCode({ failed: 1 })).toBe(1);

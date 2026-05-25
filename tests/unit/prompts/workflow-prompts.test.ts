@@ -99,6 +99,12 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("assumption");
   });
 
+  it("requires a direct bottom-line portfolio commitment after assumptions", () => {
+    const prompt = buildPortfolioPrompt(makePortfolioResolution());
+    expect(prompt).toContain("Then start the analysis with \"Bottom line:\"");
+    expect(prompt).toContain("use the word \"build\"");
+  });
+
   it("includes position count", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution({ positionCount: 6 }));
     expect(prompt).toContain("6");
