@@ -100,7 +100,11 @@ export type StructuredCheckId =
   | "data_gap_disclosed"
   | "commitment_mode_respected"
   | "source_coverage_disclosed"
-  | "capability_gap_disclosure";
+  | "capability_gap_disclosure"
+  | "assumption_disclosed"
+  | "tax_caveat_present"
+  | "target_bands_present"
+  | "when_not_ideal_present";
 
 export type CapabilityGapId =
   | "market_calendar"
@@ -564,12 +568,17 @@ function refinePlanningSelectionForPrompt(
       return {
         ...selection,
         policyCardId: "concept_options_education",
+        structuredCheckIds: mergeStructuredChecks(selection.structuredCheckIds, [
+          "tax_caveat_present",
+          "when_not_ideal_present",
+        ]),
       };
     }
     if (isInflationCashEducationPrompt(lower)) {
       return {
         ...selection,
         policyCardId: "concept_inflation_cash_education",
+        structuredCheckIds: mergeStructuredChecks(selection.structuredCheckIds, ["tax_caveat_present"]),
       };
     }
     if (isValuationMetricEducationPrompt(lower)) {
@@ -584,6 +593,11 @@ function refinePlanningSelectionForPrompt(
     return {
       ...selection,
       policyCardId: "portfolio_rebalance_review",
+      structuredCheckIds: mergeStructuredChecks(selection.structuredCheckIds, [
+        "assumption_disclosed",
+        "target_bands_present",
+      ]),
+      capabilityGapIds: mergeCapabilityGaps(selection.capabilityGapIds, ["etf_holdings_overlap"]),
     };
   }
 
@@ -666,6 +680,17 @@ function mergeCapabilityGaps(
   const merged: CapabilityGapId[] = [];
   for (const gap of [...primary, ...secondary]) {
     if (!merged.includes(gap)) merged.push(gap);
+  }
+  return merged;
+}
+
+function mergeStructuredChecks(
+  primary: readonly StructuredCheckId[],
+  secondary: readonly StructuredCheckId[],
+): StructuredCheckId[] {
+  const merged: StructuredCheckId[] = [];
+  for (const check of [...primary, ...secondary]) {
+    if (!merged.includes(check)) merged.push(check);
   }
   return merged;
 }

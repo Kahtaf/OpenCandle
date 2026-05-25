@@ -113,4 +113,56 @@ describe("OpenCandle harness planning telemetry", () => {
     expect(trace.planning?.structuredCheckFailures).toEqual([]);
     expect(trace.planning?.retryEligibility.eligible).toBe(false);
   });
+
+  it("adds portfolio exposure-map evidence for portfolio rebalance planning traces", () => {
+    const agentTrace: AgentTrace = {
+      prompt: "I have 45% tech, 25% S&P 500 index, 20% bonds, and 10% cash. Should I rebalance?",
+      turns: [{ text: "answer", toolCalls: [] }],
+      interactions: [],
+      finalText: "Bottom line: rebalance toward target bands and watch tax costs.",
+      toolSequence: [],
+      durationMs: 100,
+      customEntries: [{
+        customType: "opencandle-route-context",
+        timestamp: "2026-05-24T00:00:00.000Z",
+        data: {
+          routeKind: "agent_task",
+          legacyRoute: "fallback",
+          workflow: "general_finance_qa",
+          entities: { symbols: [] },
+          toolBundles: [],
+          activeToolNames: [],
+          memoryQueryPlan: { categories: [] },
+          diagnostics: [],
+          planning: {
+            version: "planning-v1",
+            behaviorMode: "replacement_active",
+            taskFamily: "portfolio_review",
+            commitmentMode: "decision",
+            policyCardId: "portfolio_rebalance_review",
+            evidencePlanId: "placeholder_portfolio_review",
+            answerContractId: "portfolio_review",
+            structuredCheckIds: ["required_evidence_present"],
+            workspacePlaceholderIds: [],
+            artifactPlaceholderIds: [],
+            artifactContractIds: ["portfolio_exposure_map", "rebalance_action_plan"],
+            capabilityGapIds: ["etf_holdings_overlap"],
+            diagnostics: [],
+          },
+        },
+      }],
+    };
+
+    const trace = toEvalTrace(agentTrace);
+
+    expect(trace.planning?.evidenceRecords).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        evidenceType: "portfolio_exposure_map",
+        normalizedFacts: expect.objectContaining({
+          broadIndexOverlapCaveat: true,
+          targetBandGuidanceNeeded: true,
+        }),
+      }),
+    ]));
+  });
 });

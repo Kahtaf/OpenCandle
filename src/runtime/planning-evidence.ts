@@ -6,6 +6,7 @@ import type { ProviderResult } from "./evidence.js";
 export type PlanningEvidenceType =
   | "market_status"
   | "ticker_disambiguation"
+  | "portfolio_exposure_map"
   | "tool_result"
   | "provider_gap";
 
@@ -80,6 +81,18 @@ export interface TickerDisambiguationInput {
   text: string;
   symbols?: string[];
   traceId?: string;
+}
+
+export interface PortfolioExposureMapInput {
+  text: string;
+  now?: Date;
+  traceId?: string;
+}
+
+export interface PortfolioExposureSleeve {
+  label: string;
+  normalizedSleeve: string;
+  percent: number;
 }
 
 export interface ToolCallEvidenceInput {
@@ -240,6 +253,47 @@ export function buildTickerDisambiguationEvidence(
   };
 }
 
+export function buildPortfolioExposureMapEvidence(
+  input: PortfolioExposureMapInput,
+): PlanningEvidenceRecord {
+  const sleeves = extractPortfolioSleeves(input.text);
+  const normalizedSleeves = new Set(sleeves.map((sleeve) => sleeve.normalizedSleeve));
+  const hasBroadIndex = normalizedSleeves.has("broad_us_index") || normalizedSleeves.has("broad_equity");
+  const hasSectorSleeve = sleeves.some((sleeve) => sleeve.normalizedSleeve.endsWith("_sector"));
+  const broadIndexOverlapCaveat = hasBroadIndex && hasSectorSleeve;
+
+  return {
+    id: "portfolio_exposure_map:deterministic",
+    evidenceType: "portfolio_exposure_map",
+    source: { toolName: "deterministic_portfolio_exposure_map" },
+    entityScope: { query: input.text },
+    observedAt: (input.now ?? new Date()).toISOString(),
+    providerStatus: "available",
+    normalizedFacts: {
+      directSleeves: sleeves,
+      directExposureTotalPercent: roundPercent(sleeves.reduce((sum, sleeve) => sum + sleeve.percent, 0)),
+      broadIndexOverlapCaveat,
+      exactHoldingsOverlapAvailable: false,
+      targetBandGuidanceNeeded: /\b(?:rebalance|target\s+bands?|drift|overweight|underweight|concentration|diversif)/i.test(input.text),
+    },
+    rawTracePointer: input.traceId ? {
+      traceId: input.traceId,
+      toolName: "deterministic_portfolio_exposure_map",
+    } : undefined,
+    gaps: [{
+      kind: "capability_gap",
+      capabilityGapId: "etf_holdings_overlap",
+      reason: "V1 records user-stated sleeves and overlap caveats but does not fetch exact ETF/index holdings or issuer weights.",
+    }],
+    caveats: [
+      "Exact ETF/index holdings overlap requires a provider-backed holdings source.",
+      ...(broadIndexOverlapCaveat
+        ? ["Broad index exposure may already include sector exposure; V1 does not estimate exact constituent weights."]
+        : []),
+    ],
+  };
+}
+
 export function captureEvidenceFromToolCall(
   toolCall: ToolCallEvidenceInput,
   options: ToolTraceOptions = {},
@@ -391,6 +445,48 @@ function symbolsFromArgs(args: Record<string, unknown>): EntityScope {
     return { symbols: [...symbols] };
   }
   return {};
+}
+
+function extractPortfolioSleeves(text: string): PortfolioExposureSleeve[] {
+  const matches: PortfolioExposureSleeve[] = [];
+  const pattern = /(\d+(?:\.\d+)?)\s*%\s*(?:in|to|of|toward|towards|allocated\s+to)?\s*([^,;.\n?]+)/gi;
+  for (const match of text.matchAll(pattern)) {
+    const percent = Number(match[1]);
+    if (!Number.isFinite(percent)) continue;
+    const label = cleanSleeveLabel(match[2] ?? "");
+    if (!label) continue;
+    matches.push({
+      label,
+      normalizedSleeve: normalizePortfolioSleeve(label),
+      percent: roundPercent(percent),
+    });
+  }
+  return matches;
+}
+
+function cleanSleeveLabel(label: string): string {
+  return label
+    .replace(/^(?:and|plus|with)\s+/i, "")
+    .replace(/\b(?:should|can|could|would|do|does|rebalance|diversify|target|bands?).*$/i, "")
+    .trim();
+}
+
+function normalizePortfolioSleeve(label: string): string {
+  const lower = label.toLowerCase();
+  if (/\b(?:s&p\s*500|sp\s*500|index|voo|spy|ivv)\b/.test(lower)) return "broad_us_index";
+  if (/\b(?:tech|technology|software|semis?|semiconductors?)\b/.test(lower)) return "technology_sector";
+  if (/\b(?:bond|bonds|fixed\s+income|treasur(?:y|ies))\b/.test(lower)) return "bonds";
+  if (/\b(?:cash|savings?|money\s*market|t[-\s]?bills?)\b/.test(lower)) return "cash";
+  if (/\b(?:international|ex[-\s]?us|foreign|global)\b/.test(lower)) return "international_equity";
+  if (/\b(?:stock|stocks|equity|equities)\b/.test(lower)) return "broad_equity";
+  return lower
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48) || "unknown_sleeve";
+}
+
+function roundPercent(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 function temporalReferencesFor(text: string): string[] {

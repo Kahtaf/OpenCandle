@@ -5,16 +5,16 @@
 
 ## 2. TDD Implementation
 
-- [ ] 2.1 Add a failing unit test for semantic structured checks against answer text.
-- [ ] 2.2 Add a failing unit test for planning selections including semantic check IDs.
-- [ ] 2.3 Implement semantic check IDs and answer-text checks.
-- [ ] 2.4 Attach semantic checks to relevant policy-card refinements.
-- [ ] 2.5 Ensure harness telemetry records semantic check results/failures.
+- [x] 2.1 Add a failing unit test for semantic structured checks against answer text.
+- [x] 2.2 Add a failing unit test for planning selections including semantic check IDs.
+- [x] 2.3 Implement semantic check IDs and answer-text checks.
+- [x] 2.4 Attach semantic checks to relevant policy-card refinements.
+- [x] 2.5 Ensure harness telemetry records semantic check results/failures.
 
 ## 3. Validation
 
-- [ ] 3.1 Run focused answer-contract and planning unit tests.
-- [ ] 3.2 Run a smoke prompt-policy manifest case that includes semantic checks when feasible.
-- [ ] 3.3 Run `npm run build`.
-- [ ] 3.4 Run `npm test`.
-- [ ] 3.5 Run `graphify update .`.
+- [x] 3.1 Run focused answer-contract and planning unit tests.
+- [x] 3.2 Run a smoke prompt-policy manifest case that includes semantic checks when feasible.
+- [x] 3.3 Run `npm run build`.
+- [x] 3.4 Run `npm test`.
+- [x] 3.5 Run `graphify update .`.

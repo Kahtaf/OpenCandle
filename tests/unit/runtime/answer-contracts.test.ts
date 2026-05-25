@@ -380,6 +380,54 @@ describe("structured checks", () => {
     expect(trace.retryEligibility.eligible).toBe(false);
   });
 
+  it("evaluates selected semantic checks against answer text in observe-only mode", () => {
+    const missing = runStructuredChecks({
+      contract: ANSWER_CONTRACT_REGISTRY.portfolio_review,
+      evidenceRecords: [],
+      structuredCheckIds: ["assumption_disclosed", "target_bands_present"],
+      finalAnswerMetadata: {
+        commitmentMode: "decision",
+        finalFields: [
+          "clear_commitment",
+          "risk_downside",
+          "framework_or_checklist",
+          "data_gap_disclosure",
+          "source_coverage",
+        ],
+        disclosedCapabilityGapIds: [],
+        disclosedProviderStatuses: ["skipped"],
+        sourceCoverage: { sources: ["user_allocation"] },
+      },
+      answerText: "Rebalance gradually and reduce concentration.",
+    });
+    const passing = runStructuredChecks({
+      contract: ANSWER_CONTRACT_REGISTRY.portfolio_review,
+      evidenceRecords: [],
+      structuredCheckIds: ["assumption_disclosed", "target_bands_present"],
+      finalAnswerMetadata: {
+        commitmentMode: "decision",
+        finalFields: [
+          "clear_commitment",
+          "risk_downside",
+          "framework_or_checklist",
+          "data_gap_disclosure",
+          "source_coverage",
+        ],
+        disclosedProviderStatuses: ["skipped"],
+        sourceCoverage: { sources: ["user_allocation"] },
+      },
+      answerText: "Assuming your stated percentages are current, use 5% target bands before rebalancing.",
+    });
+
+    expect(missing.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ checkId: "assumption_disclosed" }),
+      expect.objectContaining({ checkId: "target_bands_present" }),
+    ]));
+    expect(missing.activeRetryAllowed).toBe(false);
+    expect(passing.failures.map((failure) => failure.checkId)).not.toContain("assumption_disclosed");
+    expect(passing.failures.map((failure) => failure.checkId)).not.toContain("target_bands_present");
+  });
+
   it("keeps framework fallback diagnostic until parity allows activation", () => {
     const fallback = evaluateFrameworkFallbackEligibility({
       contract: ANSWER_CONTRACT_REGISTRY.ticker_disambiguation,

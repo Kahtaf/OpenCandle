@@ -18,6 +18,7 @@ import {
 } from "../../src/runtime/answer-contracts.js";
 import {
   buildMarketStatusEvidence,
+  buildPortfolioExposureMapEvidence,
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
 } from "../../src/runtime/planning-evidence.js";
@@ -339,6 +340,7 @@ function planningTelemetryFromTrace(
     ...plannedEvidenceRecords({
       prompt: agentTrace.prompt,
       evidencePlanId,
+      policyCardId: stringOrUndefined(planning.policyCardId),
       symbols,
     }),
     ...toolCalls.map((toolCall, index) => captureEvidenceFromToolCall({
@@ -357,6 +359,8 @@ function planningTelemetryFromTrace(
     ? runStructuredChecks({
       contract,
       evidenceRecords,
+      structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
+      answerText: finalText,
       finalAnswerMetadata: {
         commitmentMode,
         finalFields: inferFinalAnswerFieldsForEval(finalText),
@@ -438,6 +442,7 @@ function latestRouteContext(agentTrace: AgentTrace): Record<string, unknown> | n
 function plannedEvidenceRecords(options: {
   prompt: string;
   evidencePlanId?: string;
+  policyCardId?: string;
   symbols: string[];
 }) {
   if (options.evidencePlanId === "market_status") {
@@ -450,6 +455,12 @@ function plannedEvidenceRecords(options: {
     return [buildTickerDisambiguationEvidence({
       text: options.prompt,
       symbols: options.symbols,
+      traceId: "eval-trace",
+    })];
+  }
+  if (options.policyCardId === "portfolio_rebalance_review" && /\d+(?:\.\d+)?\s*%/.test(options.prompt)) {
+    return [buildPortfolioExposureMapEvidence({
+      text: options.prompt,
       traceId: "eval-trace",
     })];
   }
@@ -527,6 +538,10 @@ function structuredCheckArrayOrEmpty(value: unknown): StructuredCheckId[] {
     "commitment_mode_respected",
     "source_coverage_disclosed",
     "capability_gap_disclosure",
+    "assumption_disclosed",
+    "tax_caveat_present",
+    "target_bands_present",
+    "when_not_ideal_present",
   ]);
   return (stringArrayOrUndefined(value) ?? []).filter((item): item is StructuredCheckId =>
     allowed.has(item as StructuredCheckId)

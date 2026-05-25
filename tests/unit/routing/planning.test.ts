@@ -196,6 +196,10 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("concept_options_education");
     expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
     expect(planning.answerContractId).toBe("concept_explainer");
+    expect(planning.structuredCheckIds).toEqual(expect.arrayContaining([
+      "tax_caveat_present",
+      "when_not_ideal_present",
+    ]));
   });
 
   it("selects inflation education policy without converting cash education into macro allocation", () => {
@@ -218,6 +222,7 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("concept_inflation_cash_education");
     expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
     expect(planning.answerContractId).toBe("concept_explainer");
+    expect(planning.structuredCheckIds).toContain("tax_caveat_present");
   });
 
   it("prefers specific task families over generic single-asset workflow metadata", () => {
@@ -493,6 +498,11 @@ describe("planning layer", () => {
     expect(planning.evidencePlanId).toBe("placeholder_portfolio_review");
     expect(planning.answerContractId).toBe("portfolio_review");
     expect(planning.artifactContractIds).toEqual(["portfolio_exposure_map", "rebalance_action_plan"]);
+    expect(planning.structuredCheckIds).toEqual(expect.arrayContaining([
+      "assumption_disclosed",
+      "target_bands_present",
+    ]));
+    expect(planning.capabilityGapIds).toContain("etf_holdings_overlap");
   });
 
   it("keeps portfolio rebalance ahead of incidental right-now wording", () => {

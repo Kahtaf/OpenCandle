@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Prompt-to-policy parity evidence** — main-vs-branch competitive replay reports, an OC superiority scorecard, deterministic portfolio exposure-map evidence, and observe-only semantic answer checks now make feature parity with `main` measurable without expanding the large router prompt.
 - **Prompt-to-policy migration controls** — the internal parity ledger and fixed migration prompt manifest now capture protected retail-investor, routing, provider-degradation, and prompt-behavior baselines before policy-card migration begins.
 - **Planning scaffold** — routed turns now carry observe-only `planning-v1` metadata with task family, commitment mode, policy/evidence/contract/check IDs, capability gaps, and diagnostics while preserving existing router/workflow/tool behavior.
 - **Policy-card scaffolding** — prompt assembly can now inject implemented policy cards for explicit dual-run/replacement planning slices, with ticker disambiguation implemented and other V1 policy IDs registered as placeholders.

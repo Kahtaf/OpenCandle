@@ -104,6 +104,8 @@ export interface StructuredCheckInput {
   contract: AnswerContractDefinition;
   evidenceRecords: PlanningEvidenceRecord[];
   finalAnswerMetadata: FinalAnswerMetadata;
+  structuredCheckIds?: StructuredCheckId[];
+  answerText?: string;
 }
 
 export interface FrameworkFallbackInput {
@@ -376,6 +378,7 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
 };
 
 export function runStructuredChecks(input: StructuredCheckInput): StructuredCheckTrace {
+  const requestedChecks = new Set(input.structuredCheckIds ?? []);
   const results: StructuredCheckResult[] = [
     checkRequiredEvidence(input.contract, input.evidenceRecords),
     checkFreshness(input.contract, input.finalAnswerMetadata),
@@ -383,6 +386,7 @@ export function runStructuredChecks(input: StructuredCheckInput): StructuredChec
     checkCommitmentMode(input.contract, input.finalAnswerMetadata),
     checkSourceCoverage(input.contract, input.finalAnswerMetadata),
     checkCapabilityGapDisclosure(input.contract, input.evidenceRecords, input.finalAnswerMetadata),
+    ...semanticChecks(requestedChecks, input.answerText),
   ];
   const failures = results.filter((result) => !result.passed);
   const retryReasons = failures.map((failure) => `${failure.checkId}: ${failure.failureReason ?? "failed"}`);
@@ -399,6 +403,60 @@ export function runStructuredChecks(input: StructuredCheckInput): StructuredChec
     },
     activeRetryAllowed: false,
   };
+}
+
+function semanticChecks(
+  requestedChecks: ReadonlySet<StructuredCheckId>,
+  answerText: string | undefined,
+): StructuredCheckResult[] {
+  const checks: StructuredCheckResult[] = [];
+  if (requestedChecks.has("assumption_disclosed")) {
+    checks.push(checkAnswerText(
+      "assumption_disclosed",
+      answerText,
+      /\b(?:assuming|assumption|assuming that|if your|based on your stated|given your stated)\b/i,
+      "Explicit assumption disclosure is missing.",
+    ));
+  }
+  if (requestedChecks.has("tax_caveat_present")) {
+    checks.push(checkAnswerText(
+      "tax_caveat_present",
+      answerText,
+      /\b(?:tax|taxable|after[-\s]?tax|capital gains?|ordinary income|qualified dividend|tax advisor|jurisdiction|account type)\b/i,
+      "Tax/account caveat is missing.",
+    ));
+  }
+  if (requestedChecks.has("target_bands_present")) {
+    checks.push(checkAnswerText(
+      "target_bands_present",
+      answerText,
+      /\b(?:target bands?|bands?|range|threshold|drift|5\s*%|percentage points?)\b/i,
+      "Target band, range, or rebalance threshold guidance is missing.",
+    ));
+  }
+  if (requestedChecks.has("when_not_ideal_present")) {
+    checks.push(checkAnswerText(
+      "when_not_ideal_present",
+      answerText,
+      /\b(?:not ideal|avoid|bad fit|poor fit|when this fails|where it fails|doesn'?t work|not suitable|watch out)\b/i,
+      "When-not-ideal or unsuitability guidance is missing.",
+    ));
+  }
+  return checks;
+}
+
+function checkAnswerText(
+  checkId: StructuredCheckId,
+  answerText: string | undefined,
+  pattern: RegExp,
+  failureReason: string,
+): StructuredCheckResult {
+  const passed = typeof answerText === "string" && pattern.test(answerText);
+  return structuredResult(
+    checkId,
+    passed,
+    passed ? undefined : failureReason,
+  );
 }
 
 export function evaluateFrameworkFallbackEligibility(

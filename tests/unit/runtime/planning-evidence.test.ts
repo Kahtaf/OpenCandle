@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EVIDENCE_PLAN_REGISTRY,
+  buildPortfolioExposureMapEvidence,
   buildMarketStatusEvidence,
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
@@ -114,6 +115,32 @@ describe("planning evidence plans", () => {
     expect(record.gaps).toContainEqual(expect.objectContaining({
       capabilityGapId: "earnings_event_risk",
     }));
+  });
+
+  it("builds deterministic portfolio exposure-map evidence from user-stated allocations", () => {
+    const record = buildPortfolioExposureMapEvidence({
+      text: "I have 45% tech, 25% S&P 500 index, 20% bonds, and 10% cash. Should I rebalance?",
+      traceId: "trace-portfolio",
+    });
+
+    expect(record.evidenceType).toBe("portfolio_exposure_map");
+    expect(record.rawTracePointer).toEqual(expect.objectContaining({
+      traceId: "trace-portfolio",
+      toolName: "deterministic_portfolio_exposure_map",
+    }));
+    expect(record.normalizedFacts.directSleeves).toEqual([
+      { label: "tech", normalizedSleeve: "technology_sector", percent: 45 },
+      { label: "S&P 500 index", normalizedSleeve: "broad_us_index", percent: 25 },
+      { label: "bonds", normalizedSleeve: "bonds", percent: 20 },
+      { label: "cash", normalizedSleeve: "cash", percent: 10 },
+    ]);
+    expect(record.normalizedFacts.directExposureTotalPercent).toBe(100);
+    expect(record.normalizedFacts.broadIndexOverlapCaveat).toBe(true);
+    expect(record.normalizedFacts.targetBandGuidanceNeeded).toBe(true);
+    expect(record.gaps).toContainEqual(expect.objectContaining({
+      capabilityGapId: "etf_holdings_overlap",
+    }));
+    expect(record.caveats.join(" ")).toMatch(/exact ETF\/index holdings overlap/i);
   });
 });
 
