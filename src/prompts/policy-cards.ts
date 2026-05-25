@@ -42,7 +42,14 @@ Use ticker lookup evidence to distinguish the current primary ticker from a lega
     content: `## Current Event Explanation Policy
 For "today", "right now", "this morning", "after close", or "why did it move" prompts, check market-status evidence before causal claims. Fetch quote or market-status evidence before searching for news or event catalysts. Distinguish the current date from the most recent trading day when the market is closed, after-hours, on a weekend, or on a holiday. Use fetched quote, news, filing, or event evidence for catalysts when available, and do not invent an intraday move or causal catalyst without supporting evidence. Disclose when exact exchange-calendar coverage is unavailable and lower confidence when quote/news/event evidence is missing. If current evidence is unavailable, continue with a useful framework that labels what is known, what is missing, and what facts would confirm the catalyst.`,
   },
-  sentiment_snapshot: placeholder("sentiment_snapshot", "sentiment_snapshot", ["sentiment_sample_depth"]),
+  sentiment_snapshot: {
+    id: "sentiment_snapshot",
+    taskFamily: "sentiment_snapshot",
+    status: "implemented",
+    capabilityGapIds: ["sentiment_sample_depth"],
+    content: `## Sentiment Snapshot Policy
+For sentiment-only prompts, include the direction and strength of the sentiment signal, the score scale when available, missing sources, why missing sources matter for the user's question, source-coverage risk, low sample counts, and how those gaps downgrade confidence. For ticker-specific sentiment prompts, compare sentiment with fetched price action and state whether sentiment diverges from price action. Treat sentiment as supporting evidence, not a standalone buy/sell verdict. Disclose sparse source coverage, unavailable Twitter/X sessions, provider gaps, or low sample depth instead of implying full-market sentiment coverage.`,
+  },
   filing_thesis_review: placeholder("filing_thesis_review", "filing_thesis_review", []),
   asset_compare: placeholder("asset_compare", "asset_compare", ["etf_holdings_overlap"]),
   retail_finance_tradeoff: placeholder("retail_finance_tradeoff", "retail_finance_tradeoff", [

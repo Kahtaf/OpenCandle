@@ -84,6 +84,20 @@ describe("answer contracts", () => {
     expect(contract.requiresConcreteCommitment).toBe(false);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines sentiment-snapshot obligations for source coverage without trade commitment", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.sentiment_snapshot;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual(["source_coverage", "data_gap_disclosure"]);
+    expect(contract.requiresFreshness).toBe(false);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.capabilityGapIds).toEqual(["sentiment_sample_depth"]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

@@ -546,6 +546,102 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Core mental model");
   });
 
+  it("uses the sentiment policy with the legacy sentiment clause during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["GME"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "sentiment"],
+        activeToolNames: ["get_stock_quote", "get_sentiment_summary"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["GME"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "sentiment_snapshot",
+          commitmentMode: "framework",
+          policyCardId: "sentiment_snapshot",
+          evidencePlanId: "placeholder_sentiment_snapshot",
+          answerContractId: "sentiment_snapshot",
+          structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+          capabilityGapIds: ["sentiment_sample_depth"],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_source_coverage_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Sentiment Snapshot Policy");
+    expect(result).toContain("For sentiment-only prompts: final answer must include");
+    expect(result).toContain("source-coverage risk");
+    expect(result).toContain("whether sentiment diverges from price action");
+  });
+
+  it("uses the sentiment policy without retaining the legacy sentiment clause after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["GME"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "sentiment"],
+        activeToolNames: ["get_stock_quote", "get_sentiment_summary"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["GME"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "sentiment_snapshot",
+          commitmentMode: "framework",
+          policyCardId: "sentiment_snapshot",
+          evidencePlanId: "placeholder_sentiment_snapshot",
+          answerContractId: "sentiment_snapshot",
+          structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+          capabilityGapIds: ["sentiment_sample_depth"],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_source_coverage_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Sentiment Snapshot Policy");
+    expect(result).not.toContain("For sentiment-only prompts: final answer must include");
+    expect(result).toContain("source-coverage risk");
+    expect(result).toContain("diverges from price action");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",

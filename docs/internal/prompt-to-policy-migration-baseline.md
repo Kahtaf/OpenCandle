@@ -171,3 +171,26 @@ Result:
 - Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` in both dual-run and replacement-active states.
 - Both baseline and current implementations passed the manifest assertions for `no-tool-valuation-education`.
 - The concept slice now owns educational no-tool answer shape through the `concept_explainer` policy card and answer contract while preserving no active finance tools and suppressing analyst commitment/confidence/invalidation boilerplate.
+
+## Sentiment Snapshot Replacement Activation
+
+Date: 2026-05-24
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=sentiment-source-coverage PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=sentiment-source-coverage PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before sentiment runtime changes: `tests/evals/runs/2026-05-25T03-33-47-202Z_prompt-policy-ref-parity.json`
+- Dual-run gate with the legacy sentiment-source clause still present: `tests/evals/runs/2026-05-25T03-37-02-346Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting the legacy sentiment-source clause for sentiment turns: `tests/evals/runs/2026-05-25T03-37-58-312Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T03-38-21-284Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations passed the manifest assertions for `sentiment-source-coverage`.
+- The replacement-active ref parity kept hard assertions green with one additive warning: the current implementation records `capability_gap_disclosure` for the declared `sentiment_sample_depth` gap.
+- The sentiment slice now owns direction/strength, score-scale, missing-source, source-coverage-risk, low-sample, confidence-downgrade, and price-action-divergence obligations through the `sentiment_snapshot` policy card and answer contract.

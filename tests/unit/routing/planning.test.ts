@@ -203,6 +203,30 @@ describe("planning layer", () => {
     }).taskFamily).toBe("current_event_explanation");
   });
 
+  it("runs the sentiment snapshot migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["GME"] },
+        tool_bundles: ["core_market", "sentiment"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("sentiment_snapshot");
+    expect(planning.policyCardId).toBe("sentiment_snapshot");
+    expect(planning.evidencePlanId).toBe("placeholder_sentiment_snapshot");
+    expect(planning.answerContractId).toBe("sentiment_snapshot");
+    expect(planning.capabilityGapIds).toContain("sentiment_sample_depth");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("sets prompt-specific commitment modes and capability gaps for manifest tradeoffs", () => {
     const retail = buildPlanningEnvelope({
       ...input,

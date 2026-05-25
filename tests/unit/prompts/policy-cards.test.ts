@@ -40,6 +40,7 @@ describe("policy cards", () => {
 
   it("implements selected policy cards and leaves unrelated cards as placeholders", () => {
     expect(getPolicyCard("ticker_disambiguation").status).toBe("implemented");
+    expect(getPolicyCard("sentiment_snapshot").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("placeholder");
   });
@@ -114,6 +115,31 @@ describe("policy cards", () => {
     expect(rendered).toContain("Quick checklist");
     expect(renderPolicyCardForPlanning({
       ...conceptPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders sentiment policy only after the slice leaves observe-only mode", () => {
+    const sentimentPlanning = planning({
+      taskFamily: "sentiment_snapshot",
+      policyCardId: "sentiment_snapshot",
+      evidencePlanId: "placeholder_sentiment_snapshot",
+      answerContractId: "sentiment_snapshot",
+      structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+      capabilityGapIds: ["sentiment_sample_depth"],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(sentimentPlanning);
+    expect(rendered).toContain("Sentiment Snapshot Policy");
+    expect(rendered).toContain("direction and strength");
+    expect(rendered).toContain("score scale");
+    expect(rendered).toContain("missing sources");
+    expect(rendered).toContain("source-coverage risk");
+    expect(rendered).toContain("low sample counts");
+    expect(rendered).toContain("diverges from price action");
+    expect(renderPolicyCardForPlanning({
+      ...sentimentPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });
