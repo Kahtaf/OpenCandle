@@ -462,10 +462,16 @@ function isExplicitMacroDataRequest(text: string): boolean {
 function isConceptualEducationRequest(text: string, output: RouterOutput): boolean {
   if (output.routeKind !== "agent_task") return false;
   if (output.entities.symbols.length > 0) return false;
+  if (isForwardLookingMacroContextRequest(text)) return false;
   if (/\b(?:current|recent|today|right now|latest|news|sentiment|build|portfolio|buy|sell|allocate|compare)\b/i.test(text)) {
     return false;
   }
   return /\b(?:explain|what is|define|how (?:do|should|to)|teach me|help me understand)\b/i.test(text);
+}
+
+function isForwardLookingMacroContextRequest(text: string): boolean {
+  return /\b(?:rates?|rate\s*cuts?|fed|inflation|macro)\b/i.test(text) &&
+    /\b(?:next\s+(?:year|12\s*months?)|over\s+the\s+next|outlook|affect|impact|falling|rising)\b/i.test(text);
 }
 
 function isCoveredCallRequest(text: string): boolean {

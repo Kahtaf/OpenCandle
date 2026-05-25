@@ -101,6 +101,8 @@ describe("policy cards", () => {
     expect(inflation).toContain("tax");
     expect(inflation).toContain("debt");
     expect(inflation).toContain("mental framework");
+    expect(inflation).toContain("Do not return an empty answer");
+    expect(inflation).toContain("framework checklist");
     expect(options).toContain("When it is not ideal");
     expect(options).toContain("wash-sale");
     expect(options).toContain("simple table");
@@ -238,6 +240,10 @@ describe("policy cards", () => {
     expect(rendered).toContain("Macro Allocation Review Policy");
     expect(rendered).toContain("Current macro evidence");
     expect(rendered).toContain("provider gaps");
+    expect(rendered).toContain("Data gap:");
+    expect(rendered).toContain("forward-rate pricing");
+    expect(rendered).toContain("forward-looking rate-impact prompts");
+    expect(rendered).toContain("Do not use the conceptual-education");
     expect(rendered).toContain("Sleeve-by-sleeve implications");
     expect(rendered).toContain("Watchlist and invalidation");
     expect(renderPolicyCardForPlanning({

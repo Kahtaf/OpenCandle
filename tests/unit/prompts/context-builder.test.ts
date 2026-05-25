@@ -1501,6 +1501,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("different investor profiles");
     expect(result).toContain("common traps to avoid");
     expect(result).toContain("practical middle-ground");
+    expect(result).toContain("Data gap:");
+    expect(result).toContain("future-horizon macro/rate education");
     expect(result).toContain("For \"how to use [metric] without over-relying\" prompts");
     expect(result).toContain("the final answer must use these sections");
     expect(result).toContain("include a one-sentence Core mental model");

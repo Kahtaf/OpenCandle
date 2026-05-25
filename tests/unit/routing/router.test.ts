@@ -604,6 +604,31 @@ describe("route()", () => {
     }));
   });
 
+  it("keeps macro tools for forward-looking rate impact questions", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "How should falling rates affect growth stocks over the next year?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: ["macro"],
+        diagnostics: [],
+        reasoning: "macro rate context",
+      })),
+    );
+
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+      code: "conceptual_education_no_tools",
+    }));
+  });
+
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },
