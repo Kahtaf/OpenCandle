@@ -172,6 +172,7 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("concept_valuation_metric_education");
     expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
     expect(planning.answerContractId).toBe("concept_explainer");
+    expect(planning.artifactContractIds).toContain("concept_example_table");
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
@@ -491,6 +492,7 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("portfolio_rebalance_review");
     expect(planning.evidencePlanId).toBe("placeholder_portfolio_review");
     expect(planning.answerContractId).toBe("portfolio_review");
+    expect(planning.artifactContractIds).toEqual(["portfolio_exposure_map", "rebalance_action_plan"]);
   });
 
   it("keeps portfolio rebalance ahead of incidental right-now wording", () => {

@@ -6,6 +6,10 @@ import type {
   ToolBundleName,
 } from "./router-types.js";
 import type { WorkflowType } from "./types.js";
+import {
+  artifactContractIdsForPlanning,
+  type ArtifactContractId,
+} from "../runtime/artifact-contracts.js";
 
 export const PLANNING_VERSION = "planning-v1" as const;
 
@@ -192,6 +196,7 @@ export interface PlanningEnvelope extends PlanningSelection {
   behaviorMode: PlanningBehaviorMode;
   workspacePlaceholderIds: string[];
   artifactPlaceholderIds: string[];
+  artifactContractIds?: ArtifactContractId[];
   diagnostics: RouterDiagnostic[];
 }
 
@@ -437,6 +442,7 @@ export function buildPlanningEnvelope(
     behaviorMode,
     workspacePlaceholderIds: [],
     artifactPlaceholderIds: [],
+    artifactContractIds: artifactContractIdsForPlanning(selection),
     diagnostics: [
       ...diagnostics,
       ...(output.diagnostics.length > 0

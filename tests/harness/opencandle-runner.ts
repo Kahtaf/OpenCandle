@@ -21,6 +21,7 @@ import {
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
 } from "../../src/runtime/planning-evidence.js";
+import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
 import type {
   AnswerContractId,
@@ -373,6 +374,7 @@ function planningTelemetryFromTrace(
     structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
     workspacePlaceholderIds: stringArrayOrUndefined(planning.workspacePlaceholderIds) ?? [],
     artifactPlaceholderIds: stringArrayOrUndefined(planning.artifactPlaceholderIds) ?? [],
+    artifactContractIds: artifactContractArrayOrEmpty(planning.artifactContractIds),
     capabilityGapIds,
     evidenceRecords,
     structuredCheckResults: structuredTrace?.results ?? [],
@@ -545,6 +547,16 @@ function capabilityGapArrayOrEmpty(value: unknown): CapabilityGapId[] {
   return (stringArrayOrUndefined(value) ?? []).filter((item): item is CapabilityGapId =>
     allowed.has(item as CapabilityGapId)
   );
+}
+
+function artifactContractArrayOrEmpty(value: unknown): ArtifactContractId[] {
+  const allowed = new Set([
+    "concept_example_table",
+    "portfolio_exposure_map",
+    "rebalance_action_plan",
+    "source_coverage_table",
+  ]);
+  return (stringArrayOrUndefined(value) ?? []).filter((item): item is ArtifactContractId => allowed.has(item));
 }
 
 function commitmentModeOrUndefined(value: unknown): CommitmentMode | undefined {

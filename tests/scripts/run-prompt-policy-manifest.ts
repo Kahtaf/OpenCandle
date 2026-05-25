@@ -55,6 +55,7 @@ interface ManifestCaseReport {
     policyCardId?: string;
     evidencePlanId?: string;
     answerContractId?: string;
+    artifactContractIds: string[];
     toolBundles: string[];
     toolCalls: string[];
     evidenceTypes: string[];
@@ -135,6 +136,7 @@ function comparePrompt(prompt: ManifestPrompt, trace: EvalTrace): ManifestCaseRe
     policyCardId: trace.planning?.policyCardId,
     evidencePlanId: trace.planning?.evidencePlanId,
     answerContractId: trace.planning?.answerContractId,
+    artifactContractIds: trace.planning?.artifactContractIds ?? [],
     toolBundles: trace.router?.toolBundles ?? [],
     toolCalls: trace.toolCalls.map((call) => call.name),
     evidenceTypes: trace.planning?.evidenceRecords.map((record) => record.evidenceType) ?? [],
