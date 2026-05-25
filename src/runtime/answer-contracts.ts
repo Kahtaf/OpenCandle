@@ -199,7 +199,7 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     id: "concept_explainer",
     taskFamily: "concept_explainer",
     commitmentMode: "framework",
-    implemented: false,
+    implemented: true,
     requiredEvidenceTypes: [],
     requiredFinalFields: ["framework_or_checklist"],
     requiresFreshness: false,

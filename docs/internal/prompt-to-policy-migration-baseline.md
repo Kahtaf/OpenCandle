@@ -150,3 +150,24 @@ Validation note:
 
 - `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts` was run after this change and passed the current-event case, but the full 16-case manifest stopped at 15/16 because unrelated `unknown-ticker-earnings-risk` nondeterministically ended without the expected unresolved-ticker disclosure. The current-event manifest case passed in the full run and in an isolated strict rerun: `tests/evals/runs/2026-05-25T01-50-22-902Z_prompt-policy-manifest.json`.
 - Follow-up stabilization hardened the ticker-disambiguation policy for supplied-but-unverified symbols. The full strict manifest then passed 16/16: `tests/evals/runs/2026-05-25T03-18-01-755Z_prompt-policy-manifest.json`.
+
+## Concept Explainer Replacement Activation
+
+Date: 2026-05-24
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=no-tool-valuation-education PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=no-tool-valuation-education PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Dual-run gate with the legacy conceptual-education clause still present: `tests/evals/runs/2026-05-25T03-29-21-961Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting the legacy conceptual-education clause for concept turns: `tests/evals/runs/2026-05-25T03-28-08-142Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T03-28-26-918Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` in both dual-run and replacement-active states.
+- Both baseline and current implementations passed the manifest assertions for `no-tool-valuation-education`.
+- The concept slice now owns educational no-tool answer shape through the `concept_explainer` policy card and answer contract while preserving no active finance tools and suppressing analyst commitment/confidence/invalidation boilerplate.

@@ -71,6 +71,19 @@ describe("answer contracts", () => {
     expect(contract.requiresDataGapDisclosure).toBe(true);
     expect(contract.capabilityGapIds).toContain("market_calendar");
   });
+
+  it("defines concept-explainer obligations without live evidence or commitment requirements", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.concept_explainer;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual(["framework_or_checklist"]);
+    expect(contract.requiresFreshness).toBe(false);
+    expect(contract.requiresDataGapDisclosure).toBe(false);
+    expect(contract.requiresSourceCoverage).toBe(false);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

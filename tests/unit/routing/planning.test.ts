@@ -146,6 +146,30 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the concept explainer migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Explain how to use P/E ratios without over relying on them.",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        tool_bundles: [],
+        diagnostics: [{ code: "conceptual_education_no_tools", message: "no tools needed" }],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("concept_explainer");
+    expect(planning.policyCardId).toBe("concept_explainer");
+    expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
+    expect(planning.answerContractId).toBe("concept_explainer");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("prefers specific task families over generic single-asset workflow metadata", () => {
     const singleAssetOutput: RouterOutput = {
       ...compareOutput,

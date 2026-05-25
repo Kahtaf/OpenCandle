@@ -325,6 +325,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: [],
     compatibleToolBundles: [],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   retail_finance_tradeoff: {
     routeKinds: ["agent_task"],

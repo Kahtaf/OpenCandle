@@ -498,6 +498,54 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("market-status evidence");
   });
 
+  it("uses the concept policy without retaining the legacy conceptual-education clause after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Explain how to use P/E ratios without over relying on them.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: [],
+        activeToolNames: [],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [{ code: "conceptual_education_no_tools", message: "no tools needed" }],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "concept_explainer",
+          commitmentMode: "framework",
+          policyCardId: "concept_explainer",
+          evidencePlanId: "placeholder_concept_explainer",
+          answerContractId: "concept_explainer",
+          structuredCheckIds: ["commitment_mode_respected"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Concept Explainer Policy");
+    expect(result).not.toContain("For conceptual or educational finance prompts: use a decision-framework shape");
+    expect(result).toContain("Bottom line");
+    expect(result).toContain("Core mental model");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",

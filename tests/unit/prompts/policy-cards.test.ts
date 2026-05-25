@@ -38,8 +38,9 @@ describe("policy cards", () => {
     ]);
   });
 
-  it("implements ticker disambiguation and leaves other cards as placeholders", () => {
+  it("implements selected policy cards and leaves unrelated cards as placeholders", () => {
     expect(getPolicyCard("ticker_disambiguation").status).toBe("implemented");
+    expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("placeholder");
   });
 
@@ -88,6 +89,31 @@ describe("policy cards", () => {
     expect(rendered).toContain("Fetch quote or market-status evidence before searching for news or event catalysts");
     expect(renderPolicyCardForPlanning({
       ...currentEventPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders concept policy only after the slice leaves observe-only mode", () => {
+    const conceptPlanning = planning({
+      taskFamily: "concept_explainer",
+      policyCardId: "concept_explainer",
+      evidencePlanId: "placeholder_concept_explainer",
+      answerContractId: "concept_explainer",
+      structuredCheckIds: ["commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(conceptPlanning);
+    expect(rendered).toContain("Concept Explainer Policy");
+    expect(rendered).toContain("Bottom line");
+    expect(rendered).toContain("Core mental model");
+    expect(rendered).toContain("Practical workflow");
+    expect(rendered).toContain("Where it misleads");
+    expect(rendered).toContain("Cross-checks");
+    expect(rendered).toContain("Quick checklist");
+    expect(renderPolicyCardForPlanning({
+      ...conceptPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

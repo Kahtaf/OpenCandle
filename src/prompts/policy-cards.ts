@@ -50,7 +50,14 @@ For "today", "right now", "this morning", "after close", or "why did it move" pr
     "cash_yield_products",
     "fund_tax_efficiency",
   ]),
-  concept_explainer: placeholder("concept_explainer", "concept_explainer", []),
+  concept_explainer: {
+    id: "concept_explainer",
+    taskFamily: "concept_explainer",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Concept Explainer Policy
+For conceptual or educational finance prompts, use a decision-framework shape instead of a stock-analysis shape. Do not fetch live data unless the user asks for current examples, named securities, or live comparisons. Do not mention OpenCandle tool names unless the user asks how to apply the concept with OpenCandle. Do not append Analyst View, Commitment, Reasoning Chain, Confidence Band, or Invalidation Level sections. For valuation-metric education, start with Bottom line, then a one-sentence Core mental model, then Practical workflow, Where it misleads, Cross-checks, and Quick checklist. Frame metrics as screening tools or question generators, not verdicts; cover earnings-quality distortions, variants such as trailing, forward, normalized, or cyclically adjusted, and cross-checks such as cash flow or enterprise-value lenses.`,
+  },
 };
 
 export function getPolicyCard(id: PolicyCardId): PolicyCard {
