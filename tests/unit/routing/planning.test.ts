@@ -65,9 +65,9 @@ describe("planning layer", () => {
   it("keeps non-migrated task families observational", () => {
     const planning = buildPlanningEnvelope(input, {
       ...compareOutput,
-      workflow: "options_screener",
+      workflow: "portfolio_builder",
       entities: { symbols: ["NVDA"] },
-      tool_bundles: ["core_market", "options"],
+      tool_bundles: ["core_market", "macro", "sentiment", "clarification"],
     });
 
     expect(planning.behaviorMode).toBe("observe_only");
@@ -381,6 +381,28 @@ describe("planning layer", () => {
       "forward_rate_probabilities",
       "sentiment_sample_depth",
     ]));
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
+  it("runs the options strategy migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "I own 100 shares of NVDA at a $500 cost basis. Should I sell covered calls around earnings?",
+    }, {
+      ...compareOutput,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: "options_screener",
+      entities: { symbols: ["NVDA"] },
+      tool_bundles: ["core_market", "options", "sentiment", "clarification"],
+    });
+
+    expect(planning.taskFamily).toBe("options_strategy");
+    expect(planning.policyCardId).toBe("options_strategy");
+    expect(planning.evidencePlanId).toBe("placeholder_options_strategy");
+    expect(planning.answerContractId).toBe("options_strategy");
+    expect(planning.commitmentMode).toBe("decision");
+    expect(planning.capabilityGapIds).toEqual([]);
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 

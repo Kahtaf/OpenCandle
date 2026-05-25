@@ -35,6 +35,7 @@ describe("policy cards", () => {
       "filing_thesis_review",
       "asset_compare",
       "macro_allocation_review",
+      "options_strategy",
       "retail_finance_tradeoff",
       "concept_explainer",
     ]);
@@ -49,6 +50,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("implemented");
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
+    expect(getPolicyCard("options_strategy").status).toBe("implemented");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
@@ -136,6 +138,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("Watchlist and invalidation");
     expect(renderPolicyCardForPlanning({
       ...macroPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders options policy only after the slice leaves observe-only mode", () => {
+    const optionsPlanning = planning({
+      taskFamily: "options_strategy",
+      commitmentMode: "decision",
+      policyCardId: "options_strategy",
+      evidencePlanId: "placeholder_options_strategy",
+      answerContractId: "options_strategy",
+      structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(optionsPlanning);
+    expect(rendered).toContain("Options Strategy Policy");
+    expect(rendered).toContain("owned underlying");
+    expect(rendered).toContain("catalyst");
+    expect(rendered).toContain("premium received");
+    expect(rendered).toContain("protective put");
+    expect(renderPolicyCardForPlanning({
+      ...optionsPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

@@ -310,3 +310,26 @@ Result:
 - The macro owner promotion from `portfolio_review` to `macro_allocation_review` is recorded as an explicit accepted observed change in the manifest; unlisted scalar planning drift remains a comparator failure.
 - The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for data-gap, freshness, and source-coverage obligations plus nondeterministic tool-call ordering.
 - The macro slice now owns current macro evidence conversion, provider-gap continuation, policy mechanism maps, direct regional-source fallback, structural portfolio reads, sleeve-by-sleeve implications, actionable adjustments, what the adjustment does not fix, and watchlist/invalidation through the `macro_allocation_review` policy card and answer contract.
+
+## Options Strategy Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=covered-call-routing,protective-put-routing PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=covered-call-routing,protective-put-routing PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before options runtime changes: `tests/evals/runs/2026-05-25T07-22-14-716Z_prompt-policy-ref-parity.json`
+- Dual-run gate with options workflow guidance still authoritative: `tests/evals/runs/2026-05-25T07-31-14-975Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after options policy activation: `tests/evals/runs/2026-05-25T07-34-46-720Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T07-36-19-820Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 2/2 old-vs-current manifest parity cases against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations passed the manifest assertions for `covered-call-routing` and `protective-put-routing`.
+- The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for data-gap, freshness, and source-coverage obligations plus nondeterministic tool-call ordering.
+- The options slice now owns owned-underlying context, catalyst ticker separation, cost basis/share/DTE context, option-chain underlying grounding, covered-call premium/assignment/capped-upside/downside framing, protective-put floor/cost/decay framing, stale quote and liquidity gaps, and source coverage through the `options_strategy` policy card and answer contract. Options workflow prompts remain authoritative for dispatch and step orchestration.

@@ -13,6 +13,7 @@ export const POLICY_CARD_IDS = [
   "filing_thesis_review",
   "asset_compare",
   "macro_allocation_review",
+  "options_strategy",
   "retail_finance_tradeoff",
   "concept_explainer",
 ] as const;
@@ -83,6 +84,14 @@ Compare the requested assets before portfolio construction. For ETF overlap, div
     capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
     content: `## Macro Allocation Review Policy
 For macro outlook, inflation, Fed, rates, recession, or balanced-portfolio prompts, use current macro evidence when available and convert raw series into interpretable rates, trends, or policy implications instead of dropping naked numbers. Name provider gaps and unavailable inflation, Fed funds, forward-rate probability, market-calendar, or sentiment facts without turning the answer into a tool-failure apology. Explain the mechanism from policy shift to currency, capital flows, inflation or financial conditions, and asset-market impact; use direct U.S. or regional sources when dedicated macro coverage is missing. Preserve the portfolio review shape when the user asks about allocation: Bottom line, Current macro evidence, Structural portfolio read, Sleeve-by-sleeve implications, Key risks and opportunities, Actionable adjustment, What this does not fix, and Watchlist and invalidation. Cover equity concentration, cyclicality, emerging-market currency or liquidity sensitivity, duration, credit-spread risk, inflation-linked real-rate duration, stock-bond correlation, a concrete adjustment with trigger or percent, and the risks that would invalidate the view.`,
+  },
+  options_strategy: {
+    id: "options_strategy",
+    taskFamily: "options_strategy",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Options Strategy Policy
+For covered-call, protective-put, hedge, income, catalyst-volatility, or options strategy prompts, keep the strategy tied to the option-chain underlying, the user's owned underlying or intended exposure, stated cost basis, share count, horizon, risk tolerance, and event catalyst when supplied. Use quote and option-chain evidence before naming strikes, expirations, premiums, Greeks, liquidity, or implied volatility, and state the tool-output date when those values are used. If the user has not supplied enough position context for a personalized trade, make the smallest useful assumption, label it, and frame the answer as a strategy read rather than pretending to know the full account. For covered calls, discuss premium received, assignment risk, capped upside, share-price downside that the premium does not protect, IV or earnings-event risk, exit liquidity, and return-if-assigned. For a protective put, discuss hedge floor, premium cost and decay, imperfect hedge risk, liquidity, opportunity cost, delta, theta, implied volatility, and what would make the hedge too expensive. Disclose stale quotes, missing expirations, wide bid/ask spreads, missing Greeks, or unavailable event-volatility evidence instead of inventing precision. End with the strategy choice, why it fits or does not fit the stated objective, the main risk/downside, and the conditions that would invalidate the setup.`,
   },
   retail_finance_tradeoff: {
     id: "retail_finance_tradeoff",

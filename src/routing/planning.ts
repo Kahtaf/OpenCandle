@@ -264,6 +264,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "options", "sentiment", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   current_event_explanation: {
     routeKinds: ["agent_task"],

@@ -29,10 +29,10 @@ Completed replacement-active migrations after V1:
 - `asset_compare`
 - `single_asset_decision`
 - `macro_allocation_review`
+- `options_strategy`
 
 Remaining post-V1 migration candidates:
 
-- `options_strategy`
 - `portfolio_review`
 - `backtest_review`
 - `stateful_tracking_update`
@@ -45,7 +45,7 @@ Why deferred:
 Promotion signal:
 
 - A selected migrated slice proves parity and prompt-clause deletion works without changing current behavior.
-- For the next phase, promote one of `options_strategy`, `portfolio_review`, `backtest_review`, or `stateful_tracking_update` only after capturing focused old-vs-current ref parity and a rollback knob in the parity ledger.
+- For the next phase, promote one of `portfolio_review`, `backtest_review`, or `stateful_tracking_update` only after capturing focused old-vs-current ref parity and a rollback knob in the parity ledger.
 
 ### Persistent Research Workspaces
 

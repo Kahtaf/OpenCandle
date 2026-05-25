@@ -323,6 +323,102 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("tax");
   });
 
+  it("uses the options strategy policy alongside workflow dispatch context during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "I own 100 shares of NVDA at a $500 cost basis. Should I sell covered calls around earnings?",
+        priorTurns: [],
+        routeKind: "workflow_dispatch",
+        legacyRoute: "workflow",
+        workflow: "options_screener",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "options", "sentiment"],
+        activeToolNames: ["get_stock_quote", "get_option_chain"],
+        memoryQueryPlan: {
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["NVDA"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "workflow_dispatch",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "options_strategy",
+          commitmentMode: "decision",
+          policyCardId: "options_strategy",
+          evidencePlanId: "placeholder_options_strategy",
+          answerContractId: "options_strategy",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Workflow Dispatch Context");
+    expect(result).toContain("Options Strategy Policy");
+    expect(result).toContain("owned underlying");
+    expect(result).toContain("premium received");
+  });
+
+  it("uses the options strategy policy after replacement activation without deleting workflow dispatch context", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Should I buy protective puts on SPY before CPI?",
+        priorTurns: [],
+        routeKind: "workflow_dispatch",
+        legacyRoute: "workflow",
+        workflow: "options_screener",
+        entities: { symbols: ["SPY"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "options", "sentiment"],
+        activeToolNames: ["get_stock_quote", "get_option_chain"],
+        memoryQueryPlan: {
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["SPY"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "workflow_dispatch",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "options_strategy",
+          commitmentMode: "decision",
+          policyCardId: "options_strategy",
+          evidencePlanId: "placeholder_options_strategy",
+          answerContractId: "options_strategy",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Workflow Dispatch Context");
+    expect(result).toContain("Options Strategy Policy");
+    expect(result).toContain("option-chain underlying");
+    expect(result).toContain("protective put");
+  });
+
   it("uses the single-asset policy with the legacy single-asset clause during dual run", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({

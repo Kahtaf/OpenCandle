@@ -193,6 +193,28 @@ describe("answer contracts", () => {
     expect(contract.capabilityGapIds).toEqual(["market_calendar", "forward_rate_probabilities"]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines options strategy obligations for strategy-specific risk and data freshness", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.options_strategy;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("decision");
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual([
+      "clear_commitment",
+      "risk_downside",
+      "freshness_disclosure",
+      "data_gap_disclosure",
+      "source_coverage",
+    ]);
+    expect(contract.requiresFreshness).toBe(true);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresRiskDownside).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(true);
+    expect(contract.capabilityGapIds).toEqual([]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {
