@@ -49,6 +49,17 @@ describe("policy cards", () => {
     expect(renderPolicyCardForPlanning(planning({ behaviorMode: "observe_only" }))).toBe("");
   });
 
+  it("keeps supplied-but-unverified event-risk prompts from blocking on clarification", () => {
+    const rendered = renderPolicyCardForPlanning(planning({
+      behaviorMode: "replacement_active",
+    }));
+
+    expect(rendered).toContain("explicitly say whether the supplied symbol is still the current primary ticker");
+    expect(rendered).toContain("Do not call ask_user merely because a supplied ticker-like symbol is unverified");
+    expect(rendered).toContain("If any clarification attempt returns no usable answer");
+    expect(rendered).toContain("unresolved-ticker event-risk framework");
+  });
+
   it("does not inject unrelated placeholder policy cards", () => {
     const rendered = renderPolicyCardForPlanning(planning({
       taskFamily: "asset_compare",

@@ -149,3 +149,4 @@ Result:
 Validation note:
 
 - `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts` was run after this change and passed the current-event case, but the full 16-case manifest stopped at 15/16 because unrelated `unknown-ticker-earnings-risk` nondeterministically ended without the expected unresolved-ticker disclosure. The current-event manifest case passed in the full run and in an isolated strict rerun: `tests/evals/runs/2026-05-25T01-50-22-902Z_prompt-policy-manifest.json`.
+- Follow-up stabilization hardened the ticker-disambiguation policy for supplied-but-unverified symbols. The full strict manifest then passed 16/16: `tests/evals/runs/2026-05-25T03-18-01-755Z_prompt-policy-manifest.json`.
