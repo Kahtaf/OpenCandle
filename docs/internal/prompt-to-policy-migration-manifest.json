@@ -397,6 +397,32 @@
       "cachedCompetitorAnswersAllowed": true
     },
     {
+      "id": "existing-allocation-review",
+      "text": "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+      "followupSequence": [],
+      "ledgerRows": ["portfolio-evaluation-not-construction"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "portfolio_review",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "macro", "sentiment", "sec", "clarification"],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [
+          "does not ask for a portfolio budget",
+          "does not route as portfolio construction requiring a budget",
+          "starts with a bottom-line structural portfolio read",
+          "critiques diversification, concentration, geography, duration, credit, liquidity, taxes, horizon fit, and rebalance discipline",
+          "gives one practical adjustment or watchlist trigger without building a new portfolio from scratch"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["structural allocation critique", "does not over-construct"],
+      "baselineOpenCandleReportPath": "not-applicable-new-prompt-policy-case",
+      "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
       "id": "provider-degradation-disclosure",
       "text": "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
       "followupSequence": [],
