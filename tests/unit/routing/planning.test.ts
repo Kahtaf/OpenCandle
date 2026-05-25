@@ -428,6 +428,28 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the backtest review migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "single_asset_analysis",
+      entities: { symbols: ["SPY"] },
+      tool_bundles: ["core_market", "options", "sentiment", "sec", "clarification"],
+    });
+
+    expect(planning.taskFamily).toBe("backtest_review");
+    expect(planning.policyCardId).toBe("backtest_review");
+    expect(planning.evidencePlanId).toBe("placeholder_backtest_review");
+    expect(planning.answerContractId).toBe("backtest_review");
+    expect(planning.commitmentMode).toBe("framework");
+    expect(planning.capabilityGapIds).toEqual([]);
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

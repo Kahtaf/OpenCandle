@@ -144,10 +144,10 @@ function comparePrompt(prompt: ManifestPrompt, trace: EvalTrace): ManifestCaseRe
     finalTextLength: trace.text.length,
   };
   const failures: ComparisonFailure[] = [];
-  addStringMismatch(failures, "routeKind", prompt.expected.routeKind, observed.routeKind);
-  addStringMismatch(failures, "workflow", prompt.expected.workflow, observed.workflow);
-  addStringMismatch(failures, "taskFamily", prompt.expected.taskFamily, observed.taskFamily);
-  addStringMismatch(failures, "commitmentMode", prompt.expected.commitmentMode, observed.commitmentMode);
+  addStringMismatch(failures, "routeKind", prompt.expected.routeKind, observed.routeKind, prompt.expected.acceptedObservedChanges);
+  addStringMismatch(failures, "workflow", prompt.expected.workflow, observed.workflow, prompt.expected.acceptedObservedChanges);
+  addStringMismatch(failures, "taskFamily", prompt.expected.taskFamily, observed.taskFamily, prompt.expected.acceptedObservedChanges);
+  addStringMismatch(failures, "commitmentMode", prompt.expected.commitmentMode, observed.commitmentMode, prompt.expected.acceptedObservedChanges);
   addMissingValues(failures, "toolBundles", prompt.expected.toolBundles ?? [], observed.toolBundles);
   addEvidenceFailures(failures, prompt.expected.requiredEvidence ?? [], observed);
   addMissingValues(failures, "providerGapDisclosure", prompt.expected.providerGapDisclosure ?? [], observed.capabilityGapIds);
@@ -182,8 +182,17 @@ function addStringMismatch(
   field: string,
   expected: string | undefined,
   actual: string | undefined,
+  acceptedChanges: readonly AcceptedObservedChange[] = [],
 ): void {
   if (expected === undefined || expected === actual) return;
+  const accepted = acceptedChanges.find((change) =>
+    change.field === field &&
+    (
+      (change.from === expected && change.to === actual) ||
+      (change.to === expected && (change.from === undefined || change.from === actual))
+    )
+  );
+  if (accepted) return;
   failures.push({
     field,
     expected,

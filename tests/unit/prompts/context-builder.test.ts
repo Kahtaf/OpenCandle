@@ -728,6 +728,102 @@ describe("PromptContextBuilder", () => {
     })).toBe("");
   });
 
+  it("uses the backtest policy alongside agent-task context during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["SPY"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "options", "sentiment", "sec", "clarification"],
+        activeToolNames: ["backtest_strategy"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["SPY"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "backtest_review",
+          commitmentMode: "framework",
+          policyCardId: "backtest_review",
+          evidencePlanId: "placeholder_backtest_review",
+          answerContractId: "backtest_review",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Fallback Playbook");
+    expect(result).toContain("Backtest Review Policy");
+    expect(result).toContain("strategy return");
+    expect(result).toContain("costs and slippage");
+  });
+
+  it("uses the backtest policy after replacement activation without changing agent-task routing context", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Backtest a simple moving average crossover on SPY over 1 year.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["SPY"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "options", "sentiment", "sec", "clarification"],
+        activeToolNames: ["backtest_strategy"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["SPY"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "backtest_review",
+          commitmentMode: "framework",
+          policyCardId: "backtest_review",
+          evidencePlanId: "placeholder_backtest_review",
+          answerContractId: "backtest_review",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Route kind: agent_task");
+    expect(result).toContain("Backtest Review Policy");
+    expect(result).toContain("buy-and-hold return");
+    expect(result).toContain("Sharpe or Sortino");
+  });
+
   it("does not reference get_reddit_discussions", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});

@@ -48,6 +48,7 @@ export type PolicyCardId =
   | "filing_thesis_review"
   | "retail_finance_tradeoff"
   | "concept_explainer"
+  | "backtest_review"
   | "general_fallback";
 
 export type EvidencePlanId =
@@ -63,6 +64,7 @@ export type EvidencePlanId =
   | "placeholder_filing_thesis_review"
   | "placeholder_retail_finance_tradeoff"
   | "placeholder_concept_explainer"
+  | "placeholder_backtest_review"
   | "placeholder_general_fallback";
 
 export type AnswerContractId =
@@ -78,6 +80,7 @@ export type AnswerContractId =
   | "filing_thesis_review"
   | "retail_tradeoff_framework"
   | "concept_explainer"
+  | "backtest_review"
   | "general_fallback";
 
 export type StructuredCheckId =
@@ -365,16 +368,17 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
   },
   backtest_review: {
     routeKinds: ["agent_task"],
-    workflows: ["general_finance_qa"],
+    workflows: ["general_finance_qa", "single_asset_analysis"],
     taskFamily: "backtest_review",
     commitmentMode: "framework",
-    policyCardId: "general_fallback",
-    evidencePlanId: "placeholder_general_fallback",
-    answerContractId: "general_fallback",
-    structuredCheckIds: ["required_evidence_present"],
+    policyCardId: "backtest_review",
+    evidencePlanId: "placeholder_backtest_review",
+    answerContractId: "backtest_review",
+    structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
     capabilityGapIds: [],
-    compatibleToolBundles: ["core_market"],
+    compatibleToolBundles: ["core_market", "options", "sentiment", "sec", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   macro_allocation_review: {
     routeKinds: ["agent_task"],
@@ -492,6 +496,9 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (output.workflow === "watchlist_or_tracking") return "stateful_tracking_update";
 
   const lower = text.toLowerCase();
+  if (/\bbacktest(?:ing|ed)?\b/.test(lower)) {
+    return "backtest_review";
+  }
   if (/\b(?:macro|inflation|fed|rates?|duration|recession)\b/.test(lower)) {
     return "macro_allocation_review";
   }

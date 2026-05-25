@@ -13,7 +13,7 @@ The baseline manifest may initially expect `general_fallback` planning because t
 
 The migration covers prompts asking to run, evaluate, or interpret a strategy backtest. The policy must preserve:
 
-- route remains `agent_task` / `general_finance_qa`
+- route remains `agent_task` and preserves the current workflow label selected by the router
 - `backtest_strategy` remains available and expected for backtest prompts
 - final answer reports strategy return, buy-and-hold return, outperformance, trade count, win rate, max drawdown, and risk-adjusted metrics such as Sharpe or Sortino when available
 - if risk-adjusted metrics, cost assumptions, or enough history are unavailable, the final answer must disclose the gap without collapsing into a tool-failure apology

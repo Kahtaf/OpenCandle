@@ -238,6 +238,28 @@ describe("answer contracts", () => {
     expect(contract.capabilityGapIds).toEqual([]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines backtest review obligations for metrics and practical edge disclosure", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.backtest_review;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("framework");
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual([
+      "framework_or_checklist",
+      "risk_downside",
+      "data_gap_disclosure",
+      "source_coverage",
+    ]);
+    expect(contract.requiredFinalFields).not.toContain("constructed_output");
+    expect(contract.requiresFreshness).toBe(false);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresRiskDownside).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.capabilityGapIds).toEqual([]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

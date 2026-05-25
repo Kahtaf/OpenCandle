@@ -136,10 +136,10 @@ export const EVIDENCE_PLAN_REGISTRY: Record<EvidencePlanId, EvidencePlanDefiniti
     "fund_tax_efficiency",
   ]),
   placeholder_concept_explainer: placeholderPlan("placeholder_concept_explainer", ["concept_explainer"], []),
+  placeholder_backtest_review: placeholderPlan("placeholder_backtest_review", ["backtest_review"], []),
   placeholder_general_fallback: placeholderPlan("placeholder_general_fallback", [
     "general_fallback",
     "stateful_tracking_update",
-    "backtest_review",
   ], []),
 };
 

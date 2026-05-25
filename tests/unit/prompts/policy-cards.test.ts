@@ -37,6 +37,7 @@ describe("policy cards", () => {
       "portfolio_review",
       "macro_allocation_review",
       "options_strategy",
+      "backtest_review",
       "retail_finance_tradeoff",
       "concept_explainer",
     ]);
@@ -53,6 +54,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("portfolio_review").status).toBe("implemented");
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
     expect(getPolicyCard("options_strategy").status).toBe("implemented");
+    expect(getPolicyCard("backtest_review").status).toBe("implemented");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
@@ -188,6 +190,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("protective put");
     expect(renderPolicyCardForPlanning({
       ...optionsPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders backtest policy only after the slice leaves observe-only mode", () => {
+    const backtestPlanning = planning({
+      taskFamily: "backtest_review",
+      commitmentMode: "framework",
+      policyCardId: "backtest_review",
+      evidencePlanId: "placeholder_backtest_review",
+      answerContractId: "backtest_review",
+      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(backtestPlanning);
+    expect(rendered).toContain("Backtest Review Policy");
+    expect(rendered).toContain("strategy return");
+    expect(rendered).toContain("buy-and-hold return");
+    expect(rendered).toContain("win rate");
+    expect(rendered).toContain("costs and slippage");
+    expect(renderPolicyCardForPlanning({
+      ...backtestPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

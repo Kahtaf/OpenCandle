@@ -479,7 +479,39 @@
           "explains why the strategy worked or failed in the tested regime",
           "discusses trading costs/slippage when asked whether the edge is practical"
         ],
-        "providerGapDisclosure": []
+        "providerGapDisclosure": [],
+        "acceptedObservedChanges": [
+          {
+            "field": "taskFamily",
+            "from": "single_asset_decision",
+            "to": "backtest_review",
+            "reason": "backtest migration promotes backtest prompts from generic single-asset planning to a dedicated backtest policy owner while preserving agent-task routing"
+          },
+          {
+            "field": "commitmentMode",
+            "from": "decision",
+            "to": "framework",
+            "reason": "backtest reporting is a metrics and practical-edge review, not a single-security buy/sell decision"
+          },
+          {
+            "field": "policyCardId",
+            "from": "single_asset_decision",
+            "to": "backtest_review",
+            "reason": "backtest obligations move to a dedicated policy card"
+          },
+          {
+            "field": "evidencePlanId",
+            "from": "placeholder_single_asset_decision",
+            "to": "placeholder_backtest_review",
+            "reason": "backtest obligations use a dedicated placeholder evidence-plan owner until a full backtest evidence plan is implemented"
+          },
+          {
+            "field": "answerContractId",
+            "from": "single_asset_decision",
+            "to": "backtest_review",
+            "reason": "backtest metric coverage uses a dedicated answer contract"
+          }
+        ]
       },
       "optionalJudgeAssertions": ["backtest metric completeness", "practical edge discussion"],
       "baselineOpenCandleReportPath": "tests/evals/cases/faithfulness.eval.ts#backtest-metrics",

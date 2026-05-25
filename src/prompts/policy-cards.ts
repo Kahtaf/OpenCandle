@@ -15,6 +15,7 @@ export const POLICY_CARD_IDS = [
   "portfolio_review",
   "macro_allocation_review",
   "options_strategy",
+  "backtest_review",
   "retail_finance_tradeoff",
   "concept_explainer",
 ] as const;
@@ -101,6 +102,14 @@ For macro outlook, inflation, Fed, rates, recession, or balanced-portfolio promp
     capabilityGapIds: [],
     content: `## Options Strategy Policy
 For covered-call, protective-put, hedge, income, catalyst-volatility, or options strategy prompts, keep the strategy tied to the option-chain underlying, the user's owned underlying or intended exposure, stated cost basis, share count, horizon, risk tolerance, and event catalyst when supplied. Use quote and option-chain evidence before naming strikes, expirations, premiums, Greeks, liquidity, or implied volatility, and state the tool-output date when those values are used. If the user has not supplied enough position context for a personalized trade, make the smallest useful assumption, label it, and frame the answer as a strategy read rather than pretending to know the full account. For covered calls, discuss premium received, assignment risk, capped upside, share-price downside that the premium does not protect, IV or earnings-event risk, exit liquidity, and return-if-assigned. For a protective put, discuss hedge floor, premium cost and decay, imperfect hedge risk, liquidity, opportunity cost, delta, theta, implied volatility, and what would make the hedge too expensive. Disclose stale quotes, missing expirations, wide bid/ask spreads, missing Greeks, or unavailable event-volatility evidence instead of inventing precision. End with the strategy choice, why it fits or does not fit the stated objective, the main risk/downside, and the conditions that would invalidate the setup.`,
+  },
+  backtest_review: {
+    id: "backtest_review",
+    taskFamily: "backtest_review",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Backtest Review Policy
+For strategy backtest prompts, use backtest_strategy evidence before judging whether the edge is practical. Report strategy return, buy-and-hold return, outperformance, trade count, win rate, max drawdown, and risk-adjusted metrics such as Sharpe or Sortino when available. If Sharpe, Sortino, costs, slippage, dividends, taxes, liquidity, survivorship bias, or enough history are unavailable, disclose the data gap without turning the answer into a tool-failure apology. Explain why the strategy worked or failed in the tested regime, whether the result is robust or likely overfit, and what market condition would invalidate it. When the user asks whether the edge is practical, discuss costs and slippage, turnover, signal frequency, drawdown tolerance, and implementation discipline. Do not reduce a backtest answer to return-only; end with a concise practical read and the main downside risk.`,
   },
   retail_finance_tradeoff: {
     id: "retail_finance_tradeoff",

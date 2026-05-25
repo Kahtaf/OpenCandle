@@ -357,3 +357,26 @@ Result:
 - The initial reviewed prompt variants with ETF tickers and broad allocation language failed the gate by routing to single-asset/clarification paths; the accepted fixed manifest prompt is the narrow 60/40 existing-allocation class already covered by router correction tests.
 - The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for data-gap and source-coverage obligations plus nondeterministic tool-call ordering.
 - The portfolio slice now owns existing-allocation critique, no budget clarification, structural allocation read, sleeve implications, concentration/diversification/geography/duration/credit/liquidity/tax/horizon/rebalance critique, actionable adjustment, and watchlist/invalidation through the `portfolio_review` policy card and answer contract.
+
+## Backtest Review Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_MANIFEST=/Users/kahtaf/Documents/workspace_kahtaf/opencandle/docs/internal/prompt-to-policy-migration-manifest.json PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=backtest-strategy-review PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=backtest-strategy-review PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity with old single-asset owner: `tests/evals/runs/2026-05-25T12-02-04-550Z_prompt-policy-ref-parity.json`
+- Dual-run gate with legacy global backtest guidance still present: `tests/evals/runs/2026-05-25T12-08-59-724Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after backtest policy activation: `tests/evals/runs/2026-05-25T12-09-50-329Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T12-10-17-854Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations called `backtest_strategy` for `backtest-strategy-review`.
+- The replacement-active ref parity kept hard assertions green with accepted planning-owner changes from `single_asset_decision` to `backtest_review`, plus expected additive structured-check warnings for data-gap and source-coverage obligations.
+- The backtest slice now owns strategy return, buy-and-hold return, outperformance, trade count, win rate, max drawdown, Sharpe/Sortino availability, regime explanation, cost/slippage practicality, and main downside risk through the `backtest_review` policy card and answer contract.

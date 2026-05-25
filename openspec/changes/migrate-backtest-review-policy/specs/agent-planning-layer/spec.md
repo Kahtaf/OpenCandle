@@ -8,7 +8,7 @@ The planning layer SHALL support a replacement-active `backtest_review` slice fo
 
 - **WHEN** the user asks to backtest a strategy
 - **THEN** the planner selects `backtest_review`
-- **AND** the route remains an agent task with the general finance workflow label
+- **AND** the route remains an agent task with the current router workflow label preserved
 - **AND** the answer contract requires backtest metric coverage, risk/downside, data-gap disclosure, and source coverage
 
 #### Scenario: Backtest policy preserves practical edge discussion
