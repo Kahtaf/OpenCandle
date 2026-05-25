@@ -34,6 +34,7 @@ describe("policy cards", () => {
       "sentiment_snapshot",
       "filing_thesis_review",
       "asset_compare",
+      "macro_allocation_review",
       "retail_finance_tradeoff",
       "concept_explainer",
     ]);
@@ -47,6 +48,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("retail_finance_tradeoff").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("implemented");
+    expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
@@ -110,6 +112,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("tax");
     expect(renderPolicyCardForPlanning({
       ...assetPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders macro allocation policy only after the slice leaves observe-only mode", () => {
+    const macroPlanning = planning({
+      taskFamily: "macro_allocation_review",
+      commitmentMode: "decision",
+      policyCardId: "macro_allocation_review",
+      evidencePlanId: "market_status",
+      answerContractId: "macro_allocation_review",
+      structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+      capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(macroPlanning);
+    expect(rendered).toContain("Macro Allocation Review Policy");
+    expect(rendered).toContain("Current macro evidence");
+    expect(rendered).toContain("provider gaps");
+    expect(rendered).toContain("Sleeve-by-sleeve implications");
+    expect(rendered).toContain("Watchlist and invalidation");
+    expect(renderPolicyCardForPlanning({
+      ...macroPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

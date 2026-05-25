@@ -419,6 +419,109 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("unavailable DCF");
   });
 
+  it("uses the macro allocation policy with legacy macro clauses during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "macro", "sentiment"],
+        activeToolNames: ["get_economic_data", "get_fear_greed", "get_web_sentiment"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "macro_allocation_review",
+          commitmentMode: "framework",
+          policyCardId: "macro_allocation_review",
+          evidencePlanId: "market_status",
+          answerContractId: "macro_allocation_review",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          capabilityGapIds: ["market_calendar", "forward_rate_probabilities", "sentiment_sample_depth"],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Macro Allocation Review Policy");
+    expect(result).toContain("For macro, rates, inflation, sector, or portfolio-allocation prompts");
+    expect(result).toContain("For macro-policy impact prompts");
+    expect(result).toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
+    expect(result).toContain("If web search returns no results");
+  });
+
+  it("uses the macro allocation policy without retaining legacy macro clauses after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Given the current macro outlook for 2026, critically evaluate a balanced portfolio with 60% equity and 40% fixed income.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "macro", "sentiment"],
+        activeToolNames: ["get_economic_data", "get_fear_greed"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "macro_allocation_review",
+          commitmentMode: "decision",
+          policyCardId: "macro_allocation_review",
+          evidencePlanId: "market_status",
+          answerContractId: "macro_allocation_review",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Macro Allocation Review Policy");
+    expect(result).not.toContain("For macro, rates, inflation, sector, or portfolio-allocation prompts");
+    expect(result).not.toContain("For macro-policy impact prompts");
+    expect(result).not.toContain("For U.S. macro or U.S.-heavy portfolio prompts");
+    expect(result).not.toContain("For non-US macro data");
+    expect(result).not.toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
+    expect(result).toContain("If web search returns no results");
+    expect(result).toContain("Current macro evidence");
+    expect(result).toContain("Sleeve-by-sleeve implications");
+    expect(result).toContain("Watchlist and invalidation");
+  });
+
   it("does not reference get_reddit_discussions", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});

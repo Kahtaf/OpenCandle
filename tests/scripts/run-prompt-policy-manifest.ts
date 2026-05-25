@@ -23,7 +23,15 @@ interface ManifestPrompt {
     requiredEvidence?: string[];
     providerGapDisclosure?: string[];
     finalAnswerHardAssertions?: string[];
+    acceptedObservedChanges?: AcceptedObservedChange[];
   };
+}
+
+interface AcceptedObservedChange {
+  field: "routeKind" | "workflow" | "taskFamily" | "commitmentMode" | "policyCardId" | "evidencePlanId" | "answerContractId" | "retryEligible";
+  from?: string;
+  to: string;
+  reason: string;
 }
 
 interface ComparisonFailure {
@@ -38,6 +46,7 @@ interface ManifestCaseReport {
   prompt: string;
   passed: boolean;
   failures: ComparisonFailure[];
+  acceptedObservedChanges?: AcceptedObservedChange[];
   observed: {
     routeKind?: string;
     workflow?: string;
@@ -162,6 +171,7 @@ function comparePrompt(prompt: ManifestPrompt, trace: EvalTrace): ManifestCaseRe
     prompt: prompt.text,
     passed: failures.length === 0,
     failures,
+    acceptedObservedChanges: prompt.expected.acceptedObservedChanges,
     observed,
     finalAnswerHardAssertions,
   };

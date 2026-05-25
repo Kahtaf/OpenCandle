@@ -286,3 +286,27 @@ Result:
 - Both baseline and current implementations passed the manifest assertions for `single-asset-buy-wait-avoid`.
 - The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for freshness and data-gap obligations plus nondeterministic tool-call ordering.
 - The single-asset slice now owns clear buy/wait/avoid calls, quote/tool-output dates, market-closed or delayed quote caveats, fallback valuation lenses when DCF or fundamentals are unavailable, key risks, position sizing or entry strategy, confidence, and invalidation through the `single_asset_decision` policy card and answer contract.
+
+## Macro Allocation Review Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=macro-portfolio-review,provider-degradation-disclosure PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=macro-portfolio-review,provider-degradation-disclosure PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before macro runtime changes: `tests/evals/runs/2026-05-25T04-49-59-546Z_prompt-policy-ref-parity.json`
+- Dual-run gate with legacy macro clauses still present: `tests/evals/runs/2026-05-25T04-59-03-459Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting legacy macro clauses for macro allocation turns: `tests/evals/runs/2026-05-25T05-00-51-618Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T05-02-14-282Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 2/2 old-vs-current manifest parity cases against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations passed the manifest assertions for `macro-portfolio-review` and `provider-degradation-disclosure`.
+- The macro owner promotion from `portfolio_review` to `macro_allocation_review` is recorded as an explicit accepted observed change in the manifest; unlisted scalar planning drift remains a comparator failure.
+- The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for data-gap, freshness, and source-coverage obligations plus nondeterministic tool-call ordering.
+- The macro slice now owns current macro evidence conversion, provider-gap continuation, policy mechanism maps, direct regional-source fallback, structural portfolio reads, sleeve-by-sleeve implications, actionable adjustments, what the adjustment does not fix, and watchlist/invalidation through the `macro_allocation_review` policy card and answer contract.

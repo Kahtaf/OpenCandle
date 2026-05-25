@@ -375,7 +375,21 @@
           "includes current macro evidence, structural portfolio read, sleeve-by-sleeve implications, key risks/opportunities, actionable adjustment, what it does not fix, and watchlist/invalidation",
           "names exact unavailable macro data rather than blocking"
         ],
-        "providerGapDisclosure": ["market_calendar", "forward_rate_probabilities"]
+        "providerGapDisclosure": ["market_calendar", "forward_rate_probabilities"],
+        "acceptedObservedChanges": [
+          {
+            "field": "policyCardId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review policy owner to a dedicated macro policy card"
+          },
+          {
+            "field": "answerContractId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review answer contract to a dedicated macro contract"
+          }
+        ]
       },
       "optionalJudgeAssertions": ["macro mechanism clarity", "actionable adjustment quality"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T01-30-00-478Z_competitive-finance.json",
@@ -400,7 +414,21 @@
           "names specific current facts that would improve the answer",
           "does not answer only with a missing-provider apology"
         ],
-        "providerGapDisclosure": ["forward_rate_probabilities", "sentiment_sample_depth"]
+        "providerGapDisclosure": ["forward_rate_probabilities", "sentiment_sample_depth"],
+        "acceptedObservedChanges": [
+          {
+            "field": "policyCardId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review policy owner to a dedicated macro policy card"
+          },
+          {
+            "field": "answerContractId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review answer contract to a dedicated macro contract"
+          }
+        ]
       },
       "optionalJudgeAssertions": ["honest but useful degradation"],
       "baselineOpenCandleReportPath": "docs/internal/competitive-benchmark-history.md",

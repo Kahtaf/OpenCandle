@@ -170,6 +170,29 @@ describe("answer contracts", () => {
     expect(contract.capabilityGapIds).toEqual(["etf_holdings_overlap"]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines macro allocation obligations for portfolio review with gaps, freshness, and source coverage", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.macro_allocation_review;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("decision");
+    expect(contract.requiredEvidenceTypes).toEqual(["market_status"]);
+    expect(contract.requiredFinalFields).toEqual([
+      "clear_commitment",
+      "risk_downside",
+      "framework_or_checklist",
+      "freshness_disclosure",
+      "data_gap_disclosure",
+      "source_coverage",
+    ]);
+    expect(contract.requiresFreshness).toBe(true);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresRiskDownside).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(true);
+    expect(contract.capabilityGapIds).toEqual(["market_calendar", "forward_rate_probabilities"]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

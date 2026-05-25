@@ -2,6 +2,7 @@ export interface PromptPolicyCase {
   id: string;
   passed: boolean;
   failures: unknown[];
+  acceptedObservedChanges?: PromptPolicyAcceptedObservedChange[];
   observed: {
     routeKind?: string;
     workflow?: string;
@@ -24,6 +25,13 @@ export interface PromptPolicyCase {
     passed: boolean;
     reason: string;
   }>;
+}
+
+export interface PromptPolicyAcceptedObservedChange {
+  field: typeof stableScalarFields[number];
+  from?: string;
+  to: string;
+  reason: string;
 }
 
 export interface PromptPolicyParityIssue {
@@ -85,7 +93,7 @@ export function comparePromptPolicyReports(input: {
     }
 
     for (const field of stableScalarFields) {
-      addScalarMismatch(failures, field, base.observed[field], current.observed[field]);
+      addScalarMismatch(failures, warnings, field, base.observed[field], current.observed[field], current);
     }
     for (const field of stableSetFields) {
       addSetParityIssues(failures, warnings, field, base.observed[field], current.observed[field]);
@@ -159,11 +167,22 @@ function indexCases(cases: readonly PromptPolicyCase[]): Map<string, PromptPolic
 
 function addScalarMismatch(
   failures: PromptPolicyParityIssue[],
+  warnings: PromptPolicyParityIssue[],
   field: typeof stableScalarFields[number],
   expected: unknown,
   actual: unknown,
+  current: PromptPolicyCase,
 ): void {
   if (expected === actual) return;
+  const accepted = current.acceptedObservedChanges?.find((change) =>
+    change.field === field &&
+    (change.from === undefined || change.from === expected) &&
+    change.to === actual
+  );
+  if (accepted) {
+    warnings.push(issue(field, expected, actual, `accepted observed change: ${accepted.reason}`));
+    return;
+  }
   failures.push(issue(field, expected, actual, `${field} changed`));
 }
 

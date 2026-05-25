@@ -14,6 +14,7 @@ export type TaskFamily =
   | "asset_compare"
   | "portfolio_build"
   | "portfolio_review"
+  | "macro_allocation_review"
   | "options_strategy"
   | "current_event_explanation"
   | "ticker_disambiguation"
@@ -39,6 +40,7 @@ export type PolicyCardId =
   | "asset_compare"
   | "portfolio_build"
   | "portfolio_review"
+  | "macro_allocation_review"
   | "options_strategy"
   | "current_event_explanation"
   | "ticker_disambiguation"
@@ -376,13 +378,14 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     workflows: ["general_finance_qa"],
     taskFamily: "macro_allocation_review",
     commitmentMode: "decision",
-    policyCardId: "portfolio_review",
+    policyCardId: "macro_allocation_review",
     evidencePlanId: "market_status",
-    answerContractId: "portfolio_review",
+    answerContractId: "macro_allocation_review",
     structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
     capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
     compatibleToolBundles: ["core_market", "macro", "sentiment", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   general_fallback: {
     routeKinds: ["agent_task", "clarification", "pass_through"],

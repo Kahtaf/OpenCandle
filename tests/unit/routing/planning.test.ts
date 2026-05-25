@@ -358,6 +358,32 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the macro allocation migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro", "sentiment"],
+    });
+
+    expect(planning.taskFamily).toBe("macro_allocation_review");
+    expect(planning.policyCardId).toBe("macro_allocation_review");
+    expect(planning.evidencePlanId).toBe("market_status");
+    expect(planning.answerContractId).toBe("macro_allocation_review");
+    expect(planning.commitmentMode).toBe("framework");
+    expect(planning.capabilityGapIds).toEqual(expect.arrayContaining([
+      "market_calendar",
+      "forward_rate_probabilities",
+      "sentiment_sample_depth",
+    ]));
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

@@ -91,4 +91,51 @@ describe("prompt policy ref parity", () => {
       field: "evidenceTypes",
     }));
   });
+
+  it("allows explicit manifest-accepted scalar owner changes while preserving unlisted failures", () => {
+    const report = comparePromptPolicyReports({
+      baseLabel: "before",
+      currentLabel: "current",
+      baseCases: [{
+        ...baseCase,
+        id: "macro-portfolio-review",
+        observed: {
+          ...baseCase.observed,
+          taskFamily: "macro_allocation_review",
+          policyCardId: "portfolio_review",
+          answerContractId: "portfolio_review",
+        },
+      }],
+      currentCases: [{
+        ...baseCase,
+        id: "macro-portfolio-review",
+        acceptedObservedChanges: [
+          {
+            field: "policyCardId",
+            from: "portfolio_review",
+            to: "macro_allocation_review",
+            reason: "macro allocation owner promotion",
+          },
+          {
+            field: "answerContractId",
+            from: "portfolio_review",
+            to: "macro_allocation_review",
+            reason: "macro allocation owner promotion",
+          },
+        ],
+        observed: {
+          ...baseCase.observed,
+          taskFamily: "macro_allocation_review",
+          policyCardId: "macro_allocation_review",
+          answerContractId: "macro_allocation_review",
+        },
+      }],
+    });
+
+    expect(report.summary).toMatchObject({ total: 1, passed: 1, failed: 0 });
+    expect(report.cases[0]?.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "policyCardId" }),
+      expect.objectContaining({ field: "answerContractId" }),
+    ]));
+  });
 });

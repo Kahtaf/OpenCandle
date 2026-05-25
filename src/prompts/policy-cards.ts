@@ -12,6 +12,7 @@ export const POLICY_CARD_IDS = [
   "sentiment_snapshot",
   "filing_thesis_review",
   "asset_compare",
+  "macro_allocation_review",
   "retail_finance_tradeoff",
   "concept_explainer",
 ] as const;
@@ -74,6 +75,14 @@ For SEC filing or thesis-change prompts, call get_sec_filings first, then use ta
     capabilityGapIds: ["etf_holdings_overlap"],
     content: `## Asset Compare Policy
 Compare the requested assets before portfolio construction. For ETF overlap, diversification, dividend-vs-growth, or income-vs-total-return prompts, keep the answer in comparison mode unless the user explicitly asks to build a portfolio. Use available quote, risk, correlation, technical, or fund context, but disclose that exact holdings overlap by weight requires a dedicated holdings provider when unavailable. Do not imply exact constituent-level overlap, top shared holdings, sector weights, expense ratios, yields, or distribution facts unless fetched evidence supports them. Cover diversification impact, concentration risk, growth versus income tradeoffs, tax and asset-location caveats, horizon fit, and a practical default or next step tied to the user's stated goal.`,
+  },
+  macro_allocation_review: {
+    id: "macro_allocation_review",
+    taskFamily: "macro_allocation_review",
+    status: "implemented",
+    capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
+    content: `## Macro Allocation Review Policy
+For macro outlook, inflation, Fed, rates, recession, or balanced-portfolio prompts, use current macro evidence when available and convert raw series into interpretable rates, trends, or policy implications instead of dropping naked numbers. Name provider gaps and unavailable inflation, Fed funds, forward-rate probability, market-calendar, or sentiment facts without turning the answer into a tool-failure apology. Explain the mechanism from policy shift to currency, capital flows, inflation or financial conditions, and asset-market impact; use direct U.S. or regional sources when dedicated macro coverage is missing. Preserve the portfolio review shape when the user asks about allocation: Bottom line, Current macro evidence, Structural portfolio read, Sleeve-by-sleeve implications, Key risks and opportunities, Actionable adjustment, What this does not fix, and Watchlist and invalidation. Cover equity concentration, cyclicality, emerging-market currency or liquidity sensitivity, duration, credit-spread risk, inflation-linked real-rate duration, stock-bond correlation, a concrete adjustment with trigger or percent, and the risks that would invalidate the view.`,
   },
   retail_finance_tradeoff: {
     id: "retail_finance_tradeoff",
