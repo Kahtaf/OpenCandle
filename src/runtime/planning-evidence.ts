@@ -137,10 +137,8 @@ export const EVIDENCE_PLAN_REGISTRY: Record<EvidencePlanId, EvidencePlanDefiniti
   ]),
   placeholder_concept_explainer: placeholderPlan("placeholder_concept_explainer", ["concept_explainer"], []),
   placeholder_backtest_review: placeholderPlan("placeholder_backtest_review", ["backtest_review"], []),
-  placeholder_general_fallback: placeholderPlan("placeholder_general_fallback", [
-    "general_fallback",
-    "stateful_tracking_update",
-  ], []),
+  placeholder_stateful_tracking_update: placeholderPlan("placeholder_stateful_tracking_update", ["stateful_tracking_update"], []),
+  placeholder_general_fallback: placeholderPlan("placeholder_general_fallback", ["general_fallback"], []),
 };
 
 const KNOWN_US_MARKET_HOLIDAYS: Record<string, string> = {

@@ -260,6 +260,24 @@ describe("answer contracts", () => {
     expect(contract.capabilityGapIds).toEqual([]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines stateful tracking obligations for saved state confirmation", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.stateful_tracking_update;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("update_state");
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual(["state_update_confirmation", "data_gap_disclosure"]);
+    expect(contract.requiredFinalFields).not.toContain("clear_commitment");
+    expect(contract.requiredFinalFields).not.toContain("constructed_output");
+    expect(contract.requiresFreshness).toBe(false);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresRiskDownside).toBe(false);
+    expect(contract.requiresSourceCoverage).toBe(false);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.capabilityGapIds).toEqual([]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

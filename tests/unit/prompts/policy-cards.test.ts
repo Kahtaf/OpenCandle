@@ -38,6 +38,7 @@ describe("policy cards", () => {
       "macro_allocation_review",
       "options_strategy",
       "backtest_review",
+      "stateful_tracking_update",
       "retail_finance_tradeoff",
       "concept_explainer",
     ]);
@@ -55,6 +56,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
     expect(getPolicyCard("options_strategy").status).toBe("implemented");
     expect(getPolicyCard("backtest_review").status).toBe("implemented");
+    expect(getPolicyCard("stateful_tracking_update").status).toBe("implemented");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
@@ -214,6 +216,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("costs and slippage");
     expect(renderPolicyCardForPlanning({
       ...backtestPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders stateful tracking policy only after the slice leaves observe-only mode", () => {
+    const statefulPlanning = planning({
+      taskFamily: "stateful_tracking_update",
+      commitmentMode: "update_state",
+      policyCardId: "stateful_tracking_update",
+      evidencePlanId: "placeholder_stateful_tracking_update",
+      answerContractId: "stateful_tracking_update",
+      structuredCheckIds: ["commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(statefulPlanning);
+    expect(rendered).toContain("Stateful Tracking Update Policy");
+    expect(rendered).toContain("track_prediction");
+    expect(rendered).toContain("manage_watchlist");
+    expect(rendered).toContain("Confirm the persisted state update");
+    expect(rendered).toContain("Do not turn a state update into a buy/sell recommendation");
+    expect(renderPolicyCardForPlanning({
+      ...statefulPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

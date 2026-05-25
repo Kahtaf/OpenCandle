@@ -419,6 +419,57 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("protective put");
   });
 
+  it("uses the stateful tracking policy without deleting agent-task context", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "watchlist_or_tracking",
+        entities: { symbols: ["AAPL"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "clarification"],
+        activeToolNames: ["track_prediction"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "watchlist_or_tracking",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["AAPL"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "stateful_tracking_update",
+          commitmentMode: "update_state",
+          policyCardId: "stateful_tracking_update",
+          evidencePlanId: "placeholder_stateful_tracking_update",
+          answerContractId: "stateful_tracking_update",
+          structuredCheckIds: ["commitment_mode_respected"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Route kind: agent_task");
+    expect(result).toContain("Tool bundles: core_market, clarification");
+    expect(result).toContain("Stateful Tracking Update Policy");
+    expect(result).toContain("track_prediction");
+    expect(result).toContain("Confirm the persisted state update");
+    expect(result).not.toContain("Portfolio Review Policy");
+    expect(result).not.toContain("Single Asset Decision Policy");
+  });
+
   it("uses the single-asset policy with the legacy single-asset clause during dual run", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({

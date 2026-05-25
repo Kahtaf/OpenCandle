@@ -16,6 +16,7 @@ export const POLICY_CARD_IDS = [
   "macro_allocation_review",
   "options_strategy",
   "backtest_review",
+  "stateful_tracking_update",
   "retail_finance_tradeoff",
   "concept_explainer",
 ] as const;
@@ -110,6 +111,14 @@ For covered-call, protective-put, hedge, income, catalyst-volatility, or options
     capabilityGapIds: [],
     content: `## Backtest Review Policy
 For strategy backtest prompts, use backtest_strategy evidence before judging whether the edge is practical. Report strategy return, buy-and-hold return, outperformance, trade count, win rate, max drawdown, and risk-adjusted metrics such as Sharpe or Sortino when available. If Sharpe, Sortino, costs, slippage, dividends, taxes, liquidity, survivorship bias, or enough history are unavailable, disclose the data gap without turning the answer into a tool-failure apology. Explain why the strategy worked or failed in the tested regime, whether the result is robust or likely overfit, and what market condition would invalidate it. When the user asks whether the edge is practical, discuss costs and slippage, turnover, signal frequency, drawdown tolerance, and implementation discipline. Do not reduce a backtest answer to return-only; end with a concise practical read and the main downside risk.`,
+  },
+  stateful_tracking_update: {
+    id: "stateful_tracking_update",
+    taskFamily: "stateful_tracking_update",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Stateful Tracking Update Policy
+For watchlist, portfolio tracking, prediction recording, and prediction-check prompts, use the state tool that owns the change or lookup: manage_watchlist, track_prediction, or track_portfolio. Do not confirm a saved change from prose alone. Confirm the persisted state update with the symbol, action, direction, entry price, target, stop, conviction, timeframe, or check result that the tool accepted. If required fields for a state mutation are missing, ask the smallest clarification question instead of inventing values. For check or list operations, summarize the saved state and say clearly when no records exist. Do not turn a state update into a buy/sell recommendation unless the user separately asks for market analysis.`,
   },
   retail_finance_tradeoff: {
     id: "retail_finance_tradeoff",

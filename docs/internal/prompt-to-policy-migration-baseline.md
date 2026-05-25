@@ -380,3 +380,26 @@ Result:
 - Both baseline and current implementations called `backtest_strategy` for `backtest-strategy-review`.
 - The replacement-active ref parity kept hard assertions green with accepted planning-owner changes from `single_asset_decision` to `backtest_review`, plus expected additive structured-check warnings for data-gap and source-coverage obligations.
 - The backtest slice now owns strategy return, buy-and-hold return, outperformance, trade count, win rate, max drawdown, Sharpe/Sortino availability, regime explanation, cost/slippage practicality, and main downside risk through the `backtest_review` policy card and answer contract.
+
+## Stateful Tracking Update Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_MANIFEST=/Users/kahtaf/Documents/workspace_kahtaf/opencandle/docs/internal/prompt-to-policy-migration-manifest.json PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=stateful-prediction-record PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=stateful-prediction-record PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity with old generic fallback owner: `tests/evals/runs/2026-05-25T12-18-42-895Z_prompt-policy-ref-parity.json`
+- Dual-run gate with state tools unchanged: `tests/evals/runs/2026-05-25T12-24-26-265Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after stateful policy activation: `tests/evals/runs/2026-05-25T12-25-28-068Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T12-26-55-449Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations called `track_prediction` for `stateful-prediction-record`.
+- The replacement-active ref parity kept hard assertions green with accepted planning-owner changes from `general_fallback` to `stateful_tracking_update`; nondeterministic state-tool retries remained warning-only.
+- The stateful slice now owns watchlist, prediction, and portfolio tracking state-confirmation obligations through the `stateful_tracking_update` policy card and answer contract while preserving `watchlist_or_tracking` route/tool behavior.

@@ -450,6 +450,28 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the stateful tracking migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days.",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "watchlist_or_tracking",
+      entities: { symbols: ["AAPL"] },
+      tool_bundles: ["core_market", "clarification"],
+    });
+
+    expect(planning.taskFamily).toBe("stateful_tracking_update");
+    expect(planning.policyCardId).toBe("stateful_tracking_update");
+    expect(planning.evidencePlanId).toBe("placeholder_stateful_tracking_update");
+    expect(planning.answerContractId).toBe("stateful_tracking_update");
+    expect(planning.commitmentMode).toBe("update_state");
+    expect(planning.capabilityGapIds).toEqual([]);
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

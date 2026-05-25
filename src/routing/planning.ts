@@ -49,6 +49,7 @@ export type PolicyCardId =
   | "retail_finance_tradeoff"
   | "concept_explainer"
   | "backtest_review"
+  | "stateful_tracking_update"
   | "general_fallback";
 
 export type EvidencePlanId =
@@ -65,6 +66,7 @@ export type EvidencePlanId =
   | "placeholder_retail_finance_tradeoff"
   | "placeholder_concept_explainer"
   | "placeholder_backtest_review"
+  | "placeholder_stateful_tracking_update"
   | "placeholder_general_fallback";
 
 export type AnswerContractId =
@@ -81,6 +83,7 @@ export type AnswerContractId =
   | "retail_tradeoff_framework"
   | "concept_explainer"
   | "backtest_review"
+  | "stateful_tracking_update"
   | "general_fallback";
 
 export type StructuredCheckId =
@@ -358,13 +361,14 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     workflows: ["watchlist_or_tracking"],
     taskFamily: "stateful_tracking_update",
     commitmentMode: "update_state",
-    policyCardId: "general_fallback",
-    evidencePlanId: "placeholder_general_fallback",
-    answerContractId: "general_fallback",
+    policyCardId: "stateful_tracking_update",
+    evidencePlanId: "placeholder_stateful_tracking_update",
+    answerContractId: "stateful_tracking_update",
     structuredCheckIds: ["commitment_mode_respected"],
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   backtest_review: {
     routeKinds: ["agent_task"],
