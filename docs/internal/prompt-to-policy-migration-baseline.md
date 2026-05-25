@@ -333,3 +333,27 @@ Result:
 - Both baseline and current implementations passed the manifest assertions for `covered-call-routing` and `protective-put-routing`.
 - The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for data-gap, freshness, and source-coverage obligations plus nondeterministic tool-call ordering.
 - The options slice now owns owned-underlying context, catalyst ticker separation, cost basis/share/DTE context, option-chain underlying grounding, covered-call premium/assignment/capped-upside/downside framing, protective-put floor/cost/decay framing, stale quote and liquidity gaps, and source coverage through the `options_strategy` policy card and answer contract. Options workflow prompts remain authoritative for dispatch and step orchestration.
+
+## Portfolio Review Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_MANIFEST=/Users/kahtaf/Documents/workspace_kahtaf/opencandle/docs/internal/prompt-to-policy-migration-manifest.json PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=existing-allocation-review PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=existing-allocation-review PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity after adding the fixed non-macro prompt: `tests/evals/runs/2026-05-25T07-45-45-654Z_prompt-policy-ref-parity.json`
+- Dual-run gate with legacy fallback portfolio guidance still present: `tests/evals/runs/2026-05-25T07-49-40-789Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after portfolio policy activation: `tests/evals/runs/2026-05-25T07-50-45-376Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T07-51-20-640Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations passed the manifest assertions for `existing-allocation-review`.
+- The initial reviewed prompt variants with ETF tickers and broad allocation language failed the gate by routing to single-asset/clarification paths; the accepted fixed manifest prompt is the narrow 60/40 existing-allocation class already covered by router correction tests.
+- The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for data-gap and source-coverage obligations plus nondeterministic tool-call ordering.
+- The portfolio slice now owns existing-allocation critique, no budget clarification, structural allocation read, sleeve implications, concentration/diversification/geography/duration/credit/liquidity/tax/horizon/rebalance critique, actionable adjustment, and watchlist/invalidation through the `portfolio_review` policy card and answer contract.

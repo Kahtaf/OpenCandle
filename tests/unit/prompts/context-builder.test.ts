@@ -4,7 +4,7 @@ import {
   buildFallbackPlaybook,
   buildRoutePlaybook,
 } from "../../../src/prompts/context-builder.js";
-import { getPolicyCard } from "../../../src/prompts/policy-cards.js";
+import { getPolicyCard, renderPolicyCardForPlanning } from "../../../src/prompts/policy-cards.js";
 import { truncateTobudget } from "../../../src/prompts/sections.js";
 import type { ResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
@@ -616,6 +616,116 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Current macro evidence");
     expect(result).toContain("Sleeve-by-sleeve implications");
     expect(result).toContain("Watchlist and invalidation");
+  });
+
+  it("uses the portfolio-review policy alongside agent-task context during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "macro", "sentiment"],
+        activeToolNames: ["get_economic_data", "analyze_risk"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "portfolio_review",
+          commitmentMode: "decision",
+          policyCardId: "portfolio_review",
+          evidencePlanId: "placeholder_portfolio_review",
+          answerContractId: "portfolio_review",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+          capabilityGapIds: [],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Fallback Playbook");
+    expect(result).toContain("Portfolio Review Policy");
+    expect(result).toContain("existing allocation");
+    expect(result).toContain("Structural allocation read");
+  });
+
+  it("uses the portfolio-review policy after replacement activation without changing portfolio-builder isolation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "macro", "sentiment"],
+        activeToolNames: ["get_economic_data", "analyze_risk"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "portfolio_review",
+          commitmentMode: "decision",
+          policyCardId: "portfolio_review",
+          evidencePlanId: "placeholder_portfolio_review",
+          answerContractId: "portfolio_review",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Portfolio Review Policy");
+    expect(result).toContain("Do not build a new portfolio");
+    expect(result).toContain("rebalance");
+
+    expect(renderPolicyCardForPlanning({
+      version: "planning-v1",
+      taskFamily: "portfolio_build",
+      commitmentMode: "construct",
+      policyCardId: "portfolio_build",
+      evidencePlanId: "placeholder_portfolio_build",
+      answerContractId: "portfolio_build",
+      structuredCheckIds: ["required_evidence_present", "commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "replacement_active",
+      workspacePlaceholderIds: [],
+      artifactPlaceholderIds: [],
+      diagnostics: [],
+    })).toBe("");
   });
 
   it("does not reference get_reddit_discussions", () => {

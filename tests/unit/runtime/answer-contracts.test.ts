@@ -194,6 +194,29 @@ describe("answer contracts", () => {
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
 
+  it("defines portfolio review obligations without construction requirements", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.portfolio_review;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("decision");
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual([
+      "clear_commitment",
+      "risk_downside",
+      "framework_or_checklist",
+      "data_gap_disclosure",
+      "source_coverage",
+    ]);
+    expect(contract.requiredFinalFields).not.toContain("constructed_output");
+    expect(contract.requiresFreshness).toBe(false);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresRiskDownside).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(true);
+    expect(contract.capabilityGapIds).toEqual([]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
+
   it("defines options strategy obligations for strategy-specific risk and data freshness", () => {
     const contract = ANSWER_CONTRACT_REGISTRY.options_strategy;
 

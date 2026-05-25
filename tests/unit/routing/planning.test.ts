@@ -406,6 +406,28 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the portfolio review migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro", "sentiment", "sec", "clarification"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_review");
+    expect(planning.evidencePlanId).toBe("placeholder_portfolio_review");
+    expect(planning.answerContractId).toBe("portfolio_review");
+    expect(planning.commitmentMode).toBe("decision");
+    expect(planning.capabilityGapIds).toEqual([]);
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

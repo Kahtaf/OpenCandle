@@ -34,6 +34,7 @@ describe("policy cards", () => {
       "sentiment_snapshot",
       "filing_thesis_review",
       "asset_compare",
+      "portfolio_review",
       "macro_allocation_review",
       "options_strategy",
       "retail_finance_tradeoff",
@@ -49,6 +50,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("retail_finance_tradeoff").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("implemented");
+    expect(getPolicyCard("portfolio_review").status).toBe("implemented");
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
     expect(getPolicyCard("options_strategy").status).toBe("implemented");
   });
@@ -114,6 +116,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("tax");
     expect(renderPolicyCardForPlanning({
       ...assetPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders portfolio-review policy only after the slice leaves observe-only mode", () => {
+    const portfolioPlanning = planning({
+      taskFamily: "portfolio_review",
+      commitmentMode: "decision",
+      policyCardId: "portfolio_review",
+      evidencePlanId: "placeholder_portfolio_review",
+      answerContractId: "portfolio_review",
+      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(portfolioPlanning);
+    expect(rendered).toContain("Portfolio Review Policy");
+    expect(rendered).toContain("existing allocation");
+    expect(rendered).toContain("Do not build a new portfolio");
+    expect(rendered).toContain("Structural allocation read");
+    expect(rendered).toContain("rebalance");
+    expect(renderPolicyCardForPlanning({
+      ...portfolioPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

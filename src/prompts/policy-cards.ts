@@ -12,6 +12,7 @@ export const POLICY_CARD_IDS = [
   "sentiment_snapshot",
   "filing_thesis_review",
   "asset_compare",
+  "portfolio_review",
   "macro_allocation_review",
   "options_strategy",
   "retail_finance_tradeoff",
@@ -76,6 +77,14 @@ For SEC filing or thesis-change prompts, call get_sec_filings first, then use ta
     capabilityGapIds: ["etf_holdings_overlap"],
     content: `## Asset Compare Policy
 Compare the requested assets before portfolio construction. For ETF overlap, diversification, dividend-vs-growth, or income-vs-total-return prompts, keep the answer in comparison mode unless the user explicitly asks to build a portfolio. Use available quote, risk, correlation, technical, or fund context, but disclose that exact holdings overlap by weight requires a dedicated holdings provider when unavailable. Do not imply exact constituent-level overlap, top shared holdings, sector weights, expense ratios, yields, or distribution facts unless fetched evidence supports them. Cover diversification impact, concentration risk, growth versus income tradeoffs, tax and asset-location caveats, horizon fit, and a practical default or next step tied to the user's stated goal.`,
+  },
+  portfolio_review: {
+    id: "portfolio_review",
+    taskFamily: "portfolio_review",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Portfolio Review Policy
+For prompts that ask to critically evaluate an existing allocation, review the portfolio as given. Do not build a new portfolio, ask for a construction budget, or convert the turn into portfolio-builder workflow guidance unless the user explicitly asks for construction. Start with a direct bottom-line structural read, then use sections for Structural allocation read, Sleeve-by-sleeve implications, Key risks and opportunities, Actionable adjustment, What this does not fix, and Watchlist and invalidation. Evaluate concentration, diversification, geography, equity cyclicality, fixed-income duration, credit sensitivity, liquidity, tax and asset-location caveats, horizon fit, and rebalance discipline. Use current macro, quote, sentiment, risk, or correlation evidence when available, but disclose missing live data, unknown holdings, unknown account type, or unavailable exact duration/credit/overlap facts without inventing precision. End with one clear adjustment or monitoring trigger tied to the stated horizon, the main downside risk, confidence, and what would change the view.`,
   },
   macro_allocation_review: {
     id: "macro_allocation_review",
