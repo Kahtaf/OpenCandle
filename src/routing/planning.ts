@@ -70,6 +70,7 @@ export type AnswerContractId =
   | "asset_compare_tradeoff"
   | "portfolio_build"
   | "portfolio_review"
+  | "macro_allocation_review"
   | "options_strategy"
   | "current_event_explanation"
   | "ticker_disambiguation"
