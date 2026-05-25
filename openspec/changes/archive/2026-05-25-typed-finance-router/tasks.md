@@ -47,4 +47,4 @@
 - [x] 7.2 Extend competitive harness reports with route kind, selected tool bundles, active tools, memory provenance, and clarification quality.
 - [x] 7.3 Add unit tests for manifest validation and deterministic correction diagnostics.
 - [x] 7.4 Run `npm test`.
-- [ ] 7.5 Run targeted harness prompts covering workflow dispatch, agent task, clarification, pass-through, and memory-backed context resolution.
+- [x] 7.5 Run targeted harness prompts covering workflow dispatch, agent task, clarification, pass-through, and memory-backed context resolution.
