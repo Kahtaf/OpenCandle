@@ -519,6 +519,50 @@
       "cachedCompetitorAnswersAllowed": false
     },
     {
+      "id": "stateful-prediction-record",
+      "text": "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days.",
+      "followupSequence": [],
+      "ledgerRows": ["stateful-tracking-update"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "watchlist_or_tracking",
+        "taskFamily": "stateful_tracking_update",
+        "commitmentMode": "update_state",
+        "toolBundles": ["core_market", "clarification"],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [
+          "uses track_prediction to persist the prediction",
+          "confirms AAPL, bullish direction, entry price, conviction, and 30-day timeframe",
+          "does not turn the state update into a buy/sell recommendation"
+        ],
+        "providerGapDisclosure": [],
+        "acceptedObservedChanges": [
+          {
+            "field": "policyCardId",
+            "from": "general_fallback",
+            "to": "stateful_tracking_update",
+            "reason": "stateful tracking migration moves state confirmation obligations to a dedicated policy card"
+          },
+          {
+            "field": "evidencePlanId",
+            "from": "placeholder_general_fallback",
+            "to": "placeholder_stateful_tracking_update",
+            "reason": "stateful tracking uses a dedicated placeholder evidence-plan owner"
+          },
+          {
+            "field": "answerContractId",
+            "from": "general_fallback",
+            "to": "stateful_tracking_update",
+            "reason": "state update confirmation uses a dedicated answer contract"
+          }
+        ]
+      },
+      "optionalJudgeAssertions": ["state confirmation clarity"],
+      "baselineOpenCandleReportPath": "tests/e2e/cli.test.ts#Record prediction",
+      "competitorBaselineReportPathOrHash": "not-applicable-stateful-tool",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
       "id": "no-tool-valuation-education",
       "text": "Explain how to use P/E ratios without over relying on them.",
       "followupSequence": [],
