@@ -1,0 +1,28 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "price": {
+          "symbol": "VOO",
+          "shortName": "Vanguard S&P 500 ETF"
+        },
+        "topHoldings": {
+          "holdings": [
+            { "symbol": "AAPL", "holdingName": "Apple Inc.", "holdingPercent": 0.072 },
+            { "symbol": "MSFT", "holdingName": "Microsoft Corp.", "holdingPercent": 0.065 },
+            { "symbol": "NVDA", "holdingName": "NVIDIA Corp.", "holdingPercent": 0.061 },
+            { "symbol": "AMZN", "holdingName": "Amazon.com Inc.", "holdingPercent": 0.038 }
+          ],
+          "equityHoldings": {
+            "sectorWeightings": [
+              { "technology": 0.31 },
+              { "communication_services": 0.09 },
+              { "consumer_cyclical": 0.10 }
+            ]
+          }
+        }
+      }
+    ],
+    "error": null
+  }
+}

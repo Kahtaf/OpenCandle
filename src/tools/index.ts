@@ -16,6 +16,7 @@ import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 import { watchlistTool } from "./portfolio/watchlist.js";
 import { correlationTool } from "./portfolio/correlation.js";
+import { holdingsOverlapTool } from "./portfolio/holdings-overlap.js";
 import { optionChainTool } from "./options/option-chain.js";
 import { dcfTool } from "./fundamentals/dcf.js";
 import { compsTool } from "./fundamentals/comps.js";
@@ -52,6 +53,7 @@ export { portfolioTrackerTool } from "./portfolio/tracker.js";
 export { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 export { watchlistTool } from "./portfolio/watchlist.js";
 export { correlationTool } from "./portfolio/correlation.js";
+export { holdingsOverlapTool } from "./portfolio/holdings-overlap.js";
 export { predictionsTool } from "./portfolio/predictions.js";
 export { optionChainTool } from "./options/option-chain.js";
 
@@ -78,6 +80,7 @@ export function getAllTools(): AgentTool<any>[] {
     riskAnalysisTool,
     watchlistTool,
     correlationTool,
+    holdingsOverlapTool,
     predictionsTool,
     optionChainTool,
     webSearchTool,

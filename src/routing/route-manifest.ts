@@ -33,6 +33,7 @@ export const TOOL_BUNDLE_TOOLS: Record<ToolBundleName, readonly string[]> = {
     "backtest_strategy",
     "analyze_risk",
     "analyze_correlation",
+    "analyze_holdings_overlap",
     "track_portfolio",
     "manage_watchlist",
     "track_prediction",
