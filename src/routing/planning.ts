@@ -220,6 +220,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: ["etf_holdings_overlap"],
     compatibleToolBundles: ["core_market", "macro", "sentiment", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   portfolio_build: {
     routeKinds: ["workflow_dispatch"],

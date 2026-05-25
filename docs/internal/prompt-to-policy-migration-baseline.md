@@ -240,3 +240,26 @@ Result:
 - Both baseline and current implementations passed the manifest assertions for `brokerage-choice-taxable`, `safe-cash-products`, and `mortgage-vs-investing`.
 - The replacement-active ref parity kept hard assertions green with expected additive warnings: `capability_gap_disclosure` is now recorded for declared brokerage, cash-yield, and fund-tax-efficiency gaps; the active mortgage-vs-investing run may fetch broad-market history when available.
 - The retail slice now owns durable brokerage/account/product, cash-parking, and mortgage-vs-investing tradeoff obligations through the `retail_finance_tradeoff` policy card and `retail_tradeoff_framework` answer contract.
+
+## Asset Compare Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=etf-overlap-check,dividend-growth-etf-tradeoff PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=etf-overlap-check,dividend-growth-etf-tradeoff PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before asset-compare runtime changes: `tests/evals/runs/2026-05-25T04-24-59-878Z_prompt-policy-ref-parity.json`
+- Dual-run gate with compare workflow guidance still authoritative: `tests/evals/runs/2026-05-25T04-29-39-130Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after asset policy activation: `tests/evals/runs/2026-05-25T04-31-54-174Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T04-33-08-342Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 2/2 old-vs-current manifest parity cases against baseline ref `3e3a039` in dual-run and replacement-active states.
+- Both baseline and current implementations passed the manifest assertions for `etf-overlap-check` and `dividend-growth-etf-tradeoff`.
+- The replacement-active ref parity kept hard assertions green with expected additive warnings for structured checks and nondeterministic tool-call ordering.
+- The asset slice now owns ETF overlap, diversification, dividend/income versus growth, tax/asset-location, horizon-fit, and exact-holdings-overlap capability-gap obligations through the `asset_compare` policy card and `asset_compare_tradeoff` answer contract.

@@ -44,7 +44,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("filing_thesis_review").status).toBe("implemented");
     expect(getPolicyCard("retail_finance_tradeoff").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
-    expect(getPolicyCard("asset_compare").status).toBe("placeholder");
+    expect(getPolicyCard("asset_compare").status).toBe("implemented");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
@@ -64,13 +64,37 @@ describe("policy cards", () => {
     expect(rendered).toContain("unresolved-ticker event-risk framework");
   });
 
-  it("does not inject unrelated placeholder policy cards", () => {
-    const rendered = renderPolicyCardForPlanning(planning({
+  it("renders asset-compare policy only after the slice leaves observe-only mode", () => {
+    const assetPlanning = planning({
       taskFamily: "asset_compare",
       policyCardId: "asset_compare",
       evidencePlanId: "placeholder_asset_compare",
       answerContractId: "asset_compare_tradeoff",
+      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
       capabilityGapIds: ["etf_holdings_overlap"],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(assetPlanning);
+    expect(rendered).toContain("Asset Compare Policy");
+    expect(rendered).toContain("Compare the requested assets before portfolio construction");
+    expect(rendered).toContain("exact holdings overlap by weight");
+    expect(rendered).toContain("dividend");
+    expect(rendered).toContain("growth");
+    expect(rendered).toContain("tax");
+    expect(renderPolicyCardForPlanning({
+      ...assetPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("does not inject unrelated placeholder policy cards", () => {
+    const rendered = renderPolicyCardForPlanning(planning({
+      taskFamily: "portfolio_build",
+      policyCardId: "portfolio_build",
+      evidencePlanId: "placeholder_portfolio_build",
+      answerContractId: "portfolio_build",
+      capabilityGapIds: [],
     }));
 
     expect(rendered).toBe("");

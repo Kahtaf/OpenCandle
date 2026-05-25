@@ -153,7 +153,21 @@ export const COMMITMENT_MODE_CONTRACTS: Record<CommitmentMode, CommitmentModeCon
 
 export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDefinition> = {
   single_asset_decision: placeholderContract("single_asset_decision", "single_asset_decision", "decision", ["risk_downside"]),
-  asset_compare_tradeoff: placeholderContract("asset_compare_tradeoff", "asset_compare", "compare_tradeoffs", ["comparison_tradeoffs"]),
+  asset_compare_tradeoff: {
+    id: "asset_compare_tradeoff",
+    taskFamily: "asset_compare",
+    commitmentMode: "compare_tradeoffs",
+    implemented: true,
+    requiredEvidenceTypes: [],
+    requiredFinalFields: ["comparison_tradeoffs", "risk_downside", "data_gap_disclosure", "source_coverage"],
+    requiresFreshness: false,
+    requiresDataGapDisclosure: true,
+    requiresRiskDownside: true,
+    requiresSourceCoverage: true,
+    requiresConcreteCommitment: false,
+    capabilityGapIds: ["etf_holdings_overlap"],
+    frameworkFallback: "not_allowed",
+  },
   portfolio_build: placeholderContract("portfolio_build", "portfolio_build", "construct", ["constructed_output"]),
   portfolio_review: placeholderContract("portfolio_review", "portfolio_review", "decision", ["risk_downside"]),
   options_strategy: placeholderContract("options_strategy", "options_strategy", "decision", ["risk_downside"]),

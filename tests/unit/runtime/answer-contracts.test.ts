@@ -132,6 +132,25 @@ describe("answer contracts", () => {
     ]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines asset-compare obligations for tradeoffs without construction commitment", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.asset_compare_tradeoff;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("compare_tradeoffs");
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual([
+      "comparison_tradeoffs",
+      "risk_downside",
+      "data_gap_disclosure",
+      "source_coverage",
+    ]);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.capabilityGapIds).toEqual(["etf_holdings_overlap"]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

@@ -226,6 +226,103 @@ describe("PromptContextBuilder", () => {
     expect(result).not.toContain("Asset Compare Policy");
   });
 
+  it("uses the asset-compare policy alongside workflow dispatch context during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying?",
+        priorTurns: [],
+        routeKind: "workflow_dispatch",
+        legacyRoute: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["VOO", "QQQ", "SCHD"], compareMetrics: ["overlap"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "macro", "sentiment"],
+        activeToolNames: ["get_stock_quote", "compare_companies", "analyze_correlation"],
+        memoryQueryPlan: {
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["VOO", "QQQ", "SCHD"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "workflow_dispatch",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "asset_compare",
+          commitmentMode: "compare_tradeoffs",
+          policyCardId: "asset_compare",
+          evidencePlanId: "placeholder_asset_compare",
+          answerContractId: "asset_compare_tradeoff",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
+          capabilityGapIds: ["etf_holdings_overlap"],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_comparison_table_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Workflow Dispatch Context");
+    expect(result).toContain("Asset Compare Policy");
+    expect(result).toContain("Compare the requested assets before portfolio construction");
+    expect(result).toContain("exact holdings overlap by weight");
+  });
+
+  it("uses the asset-compare policy after replacement activation without deleting workflow dispatch context", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Should I prioritize VYM, SCHD, VOO, or QQQ for 10-15 years?",
+        priorTurns: [],
+        routeKind: "workflow_dispatch",
+        legacyRoute: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "macro", "sentiment"],
+        activeToolNames: ["get_stock_quote", "compare_companies", "analyze_risk"],
+        memoryQueryPlan: {
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["VYM", "SCHD", "VOO", "QQQ"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "workflow_dispatch",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "asset_compare",
+          commitmentMode: "compare_tradeoffs",
+          policyCardId: "asset_compare",
+          evidencePlanId: "placeholder_asset_compare",
+          answerContractId: "asset_compare_tradeoff",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
+          capabilityGapIds: ["etf_holdings_overlap"],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_comparison_table_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Workflow Dispatch Context");
+    expect(result).toContain("Asset Compare Policy");
+    expect(result).toContain("dividend");
+    expect(result).toContain("growth");
+    expect(result).toContain("tax");
+  });
+
   it("does not reference get_reddit_discussions", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});

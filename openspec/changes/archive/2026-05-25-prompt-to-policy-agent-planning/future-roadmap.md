@@ -26,10 +26,10 @@ Completed replacement-active migrations after V1:
 - `sentiment_snapshot`
 - `filing_thesis_review`
 - `retail_finance_tradeoff`
+- `asset_compare`
 
 Remaining post-V1 migration candidates:
 
-- `asset_compare`
 - `single_asset_decision`
 - `options_strategy`
 - `portfolio_review`
@@ -45,7 +45,7 @@ Why deferred:
 Promotion signal:
 
 - A selected migrated slice proves parity and prompt-clause deletion works without changing current behavior.
-- For the next phase, promote one of `asset_compare`, `single_asset_decision`, or `macro_allocation_review` only after capturing focused old-vs-current ref parity and a rollback knob in the parity ledger.
+- For the next phase, promote one of `single_asset_decision` or `macro_allocation_review` only after capturing focused old-vs-current ref parity and a rollback knob in the parity ledger.
 
 ### Persistent Research Workspaces
 

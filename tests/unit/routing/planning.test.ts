@@ -38,7 +38,7 @@ describe("planning layer", () => {
     expect(planning.evidencePlanId).toBe("placeholder_asset_compare");
     expect(planning.answerContractId).toBe("asset_compare_tradeoff");
     expect(planning.structuredCheckIds).toContain("capability_gap_disclosure");
-    expect(planning.behaviorMode).toBe("observe_only");
+    expect(planning.behaviorMode).toBe("replacement_active");
   });
 
   it("corrects unsupported route and task-family combinations deterministically", () => {
@@ -63,7 +63,12 @@ describe("planning layer", () => {
   });
 
   it("keeps non-migrated task families observational", () => {
-    const planning = buildPlanningEnvelope(input, compareOutput);
+    const planning = buildPlanningEnvelope(input, {
+      ...compareOutput,
+      workflow: "options_screener",
+      entities: { symbols: ["NVDA"] },
+      tool_bundles: ["core_market", "options"],
+    });
 
     expect(planning.behaviorMode).toBe("observe_only");
     expect(planning.diagnostics).toContainEqual(expect.objectContaining({
@@ -123,7 +128,7 @@ describe("planning layer", () => {
     expect(currentEvent.taskFamily).toBe("current_event_explanation");
     expect(currentEvent.behaviorMode).toBe("dual_run");
     expect(assetCompare.taskFamily).toBe("asset_compare");
-    expect(assetCompare.behaviorMode).toBe("observe_only");
+    expect(assetCompare.behaviorMode).toBe("replacement_active");
   });
 
   it("runs the current-event migration slice in replacement-active mode by default", () => {
@@ -307,6 +312,28 @@ describe("planning layer", () => {
       "cash_yield_products",
       "fund_tax_efficiency",
     ]));
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
+  it("runs the asset compare migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "If I have $5,000 for 10-15 years, should I prioritize VYM or SCHD, or something more growth-oriented like VOO or QQQ?",
+    }, {
+      ...compareOutput,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: "compare_assets",
+      entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"], compareMetrics: ["overlap"] },
+      tool_bundles: ["core_market", "macro", "sentiment"],
+    });
+
+    expect(planning.taskFamily).toBe("asset_compare");
+    expect(planning.policyCardId).toBe("asset_compare");
+    expect(planning.evidencePlanId).toBe("placeholder_asset_compare");
+    expect(planning.answerContractId).toBe("asset_compare_tradeoff");
+    expect(planning.commitmentMode).toBe("compare_tradeoffs");
+    expect(planning.capabilityGapIds).toEqual(["etf_holdings_overlap"]);
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 

@@ -58,7 +58,14 @@ For sentiment-only prompts, include the direction and strength of the sentiment 
     content: `## Filing Thesis Review Policy
 For SEC filing or thesis-change prompts, call get_sec_filings first, then use targeted search_web queries for requested filing sections or adjacent themes such as risk factors, MD&A, litigation, regulatory disclosures, revenue concentration, management commentary, and recent 8-K events. Separate filing metadata, filing-section summaries or filing-body gaps, news or management commentary, and market data. Do not treat search_web or news results as SEC filing evidence unless they point back to the same primary filing fact in get_sec_filings output. Do not claim an Item 5.02, management change, risk-factor change, or thesis-changing event unless that fact appears in SEC filing evidence. If the full filing body was not parsed, say that directly and avoid implying every filing section was read. Prioritize thesis-changing deltas, dates, source type, and 6-12 month impact over generic company background.`,
   },
-  asset_compare: placeholder("asset_compare", "asset_compare", ["etf_holdings_overlap"]),
+  asset_compare: {
+    id: "asset_compare",
+    taskFamily: "asset_compare",
+    status: "implemented",
+    capabilityGapIds: ["etf_holdings_overlap"],
+    content: `## Asset Compare Policy
+Compare the requested assets before portfolio construction. For ETF overlap, diversification, dividend-vs-growth, or income-vs-total-return prompts, keep the answer in comparison mode unless the user explicitly asks to build a portfolio. Use available quote, risk, correlation, technical, or fund context, but disclose that exact holdings overlap by weight requires a dedicated holdings provider when unavailable. Do not imply exact constituent-level overlap, top shared holdings, sector weights, expense ratios, yields, or distribution facts unless fetched evidence supports them. Cover diversification impact, concentration risk, growth versus income tradeoffs, tax and asset-location caveats, horizon fit, and a practical default or next step tied to the user's stated goal.`,
+  },
   retail_finance_tradeoff: {
     id: "retail_finance_tradeoff",
     taskFamily: "retail_finance_tradeoff",
