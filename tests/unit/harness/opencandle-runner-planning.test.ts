@@ -119,7 +119,9 @@ describe("OpenCandle harness planning telemetry", () => {
       prompt: "I have 45% tech, 25% S&P 500 index, 20% bonds, and 10% cash. Should I rebalance?",
       turns: [{ text: "answer", toolCalls: [] }],
       interactions: [],
-      finalText: "Bottom line: rebalance toward target bands and watch tax costs.",
+      finalText:
+        "Bottom line: assuming your stated allocation is current, rebalance toward 5% target bands. " +
+        "Based on your stated percentages, exact ETF holdings overlap is not verified and tax costs depend on account type.",
       toolSequence: [],
       durationMs: 100,
       customEntries: [{
@@ -163,6 +165,13 @@ describe("OpenCandle harness planning telemetry", () => {
           targetBandGuidanceNeeded: true,
         }),
       }),
+    ]));
+    expect(trace.planning?.structuredCheckFailures.map((failure) => failure.checkId)).not.toEqual(expect.arrayContaining([
+      "data_gap_disclosed",
+      "source_coverage_disclosed",
+      "capability_gap_disclosure",
+      "assumption_disclosed",
+      "target_bands_present",
     ]));
   });
 });

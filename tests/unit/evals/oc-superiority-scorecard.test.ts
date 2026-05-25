@@ -29,7 +29,7 @@ describe("OpenCandle superiority scorecard", () => {
       generatedAt: "2026-05-25T12:00:00.000Z",
       productReplay: productReplay({ aggregateDelta: -1, passDelta: 0 }),
       competitiveReplay: competitiveReplay({ openCandleWinDelta: 0, lossDelta: 1, regressed: true }),
-      promptPolicy: promptPolicy({ failed: 1, artifactContracts: [], structuredFailures: ["target_bands_present"] }),
+      promptPolicy: promptPolicy({ failed: 1, artifactContracts: [], evidenceTypes: [], structuredFailures: ["target_bands_present"] }),
     });
 
     expect(scorecard.status).toBe("below_main_parity");
@@ -39,6 +39,24 @@ describe("OpenCandle superiority scorecard", () => {
       expect.objectContaining({ layer: "promptPolicy" }),
       expect.objectContaining({ layer: "architectureSignals" }),
     ]));
+  });
+
+  it("reports observe-only structured failures without making architecture signals a blocker", () => {
+    const scorecard = buildOcSuperiorityScorecard({
+      generatedAt: "2026-05-25T12:00:00.000Z",
+      productReplay: productReplay({ aggregateDelta: 0, passDelta: 0 }),
+      competitiveReplay: competitiveReplay({ openCandleWinDelta: 0, lossDelta: 0, regressed: false }),
+      promptPolicy: promptPolicy({
+        failed: 0,
+        artifactContracts: ["portfolio_exposure_map"],
+        evidenceTypes: ["portfolio_exposure_map"],
+        structuredFailures: ["assumption_disclosed"],
+      }),
+    });
+
+    expect(scorecard.status).toBe("at_main_parity");
+    expect(scorecard.blockers.map((blocker) => blocker.layer)).not.toContain("architectureSignals");
+    expect(scorecard.layers.architectureSignals.reasons).toContain("observe-only structured check failures observed: assumption_disclosed");
   });
 });
 
@@ -126,6 +144,7 @@ function competitiveReplay(input: {
 function promptPolicy(input: {
   failed: number;
   artifactContracts: string[];
+  evidenceTypes?: string[];
   structuredFailures: string[];
 }) {
   return {
@@ -144,7 +163,7 @@ function promptPolicy(input: {
       observed: {
         taskFamily: "portfolio_review",
         policyCardId: "portfolio_rebalance_review",
-        evidenceTypes: ["portfolio_exposure_map"],
+        evidenceTypes: input.evidenceTypes ?? ["portfolio_exposure_map"],
         artifactContractIds: input.artifactContracts,
         structuredCheckFailures: input.structuredFailures,
       },

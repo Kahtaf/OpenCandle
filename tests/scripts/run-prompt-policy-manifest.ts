@@ -94,6 +94,7 @@ for (const prompt of selected) {
   console.log(`\n=== ${prompt.id}: ${prompt.text}`);
   const { evalTrace } = await runOpenCandleSession({
     prompt: prompt.text,
+    scriptedAnswers: prompt.followupSequence,
     settleGraceMs: numberFromEnv("PROMPT_POLICY_SETTLE_GRACE_MS") ?? 5_000,
     timeoutMs: numberFromEnv("PROMPT_POLICY_TIMEOUT_MS") ?? 900_000,
   });

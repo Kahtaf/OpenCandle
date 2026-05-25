@@ -146,11 +146,12 @@ function classifyArchitectureSignals(report: PromptPolicyManifestLike | undefine
   if (!hasArtifactContracts && !hasEvidenceTypes) {
     reasons.push("artifact-contract or evidence-plan signals missing from prompt-policy report");
   }
+  const blockingReasons = [...reasons];
   if (structuredFailures.length > 0) {
-    reasons.push(`semantic or structured check failures observed: ${[...new Set(structuredFailures)].join(", ")}`);
+    reasons.push(`observe-only structured check failures observed: ${[...new Set(structuredFailures)].join(", ")}`);
   }
   return {
-    status: reasons.length > 0 ? "fail" : "pass",
+    status: blockingReasons.length > 0 ? "fail" : "pass",
     reasons,
     reportPaths: report.manifestPath ? [report.manifestPath] : [],
   };

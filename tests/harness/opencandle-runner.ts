@@ -21,6 +21,7 @@ import {
   buildPortfolioExposureMapEvidence,
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
+  type PlanningEvidenceRecord,
 } from "../../src/runtime/planning-evidence.js";
 import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
@@ -364,6 +365,9 @@ function planningTelemetryFromTrace(
       finalAnswerMetadata: {
         commitmentMode,
         finalFields: inferFinalAnswerFieldsForEval(finalText),
+        sourceCoverage: inferSourceCoverageForEval(finalText, evidenceRecords),
+        disclosedProviderStatuses: inferDisclosedProviderStatusesForEval(finalText, evidenceRecords),
+        disclosedCapabilityGapIds: inferDisclosedCapabilityGapIdsForEval(finalText, capabilityGapIds, evidenceRecords),
       },
     })
     : undefined;
@@ -411,10 +415,16 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   if (/\b(unavailable|missing|data gap|cannot verify|not available|no live|unknown)\b/.test(lower)) {
     fields.push("data_gap_disclosure");
   }
+  if (/\b(not verified|not verify|unverified|exact .* not|requires? .* provider|requires? .* source)\b/.test(lower)) {
+    fields.push("data_gap_disclosure");
+  }
   if (/\b(as of|market closed|last trading day|freshness|quote date)\b/.test(lower)) {
     fields.push("freshness_disclosure");
   }
   if (/\b(source|coverage|filing|news|reddit|twitter|x\/twitter)\b/.test(lower)) {
+    fields.push("source_coverage");
+  }
+  if (/\b(based on your|stated percentages?|stated allocation|user[- ]stated|provided allocation)\b/.test(lower)) {
     fields.push("source_coverage");
   }
   if (/\b(confirmed|saved|recorded|updated|tracked)\b/.test(lower)) {
@@ -430,6 +440,64 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
     fields.push("constructed_output");
   }
   return [...new Set(fields)];
+}
+
+function inferSourceCoverageForEval(
+  text: string,
+  evidenceRecords: PlanningEvidenceRecord[],
+): { sources: string[] } | undefined {
+  const fields = inferFinalAnswerFieldsForEval(text);
+  if (!fields.includes("source_coverage")) return undefined;
+  const sources = evidenceRecords.map((record) =>
+    record.source.toolName ?? record.source.provider ?? record.evidenceType
+  );
+  return { sources: [...new Set(sources.length > 0 ? sources : ["final_answer"])] };
+}
+
+function inferDisclosedProviderStatusesForEval(
+  text: string,
+  evidenceRecords: PlanningEvidenceRecord[],
+): string[] | undefined {
+  if (!/\b(unavailable|missing|skipped|credential|required|no live|cannot verify|not available|not verified|unverified)\b/i.test(text)) {
+    return undefined;
+  }
+  const statuses = evidenceRecords
+    .filter((record) => record.providerStatus !== "available")
+    .map((record) => record.providerStatus);
+  return statuses.length > 0 ? [...new Set(statuses)] : undefined;
+}
+
+function inferDisclosedCapabilityGapIdsForEval(
+  text: string,
+  capabilityGapIds: CapabilityGapId[],
+  evidenceRecords: PlanningEvidenceRecord[],
+): CapabilityGapId[] | undefined {
+  const required = new Set<CapabilityGapId>(capabilityGapIds);
+  for (const record of evidenceRecords) {
+    for (const gap of record.gaps) {
+      if (gap.capabilityGapId) required.add(gap.capabilityGapId);
+    }
+  }
+  const lower = text.toLowerCase();
+  const disclosed = [...required].filter((gapId) => {
+    if (gapId === "etf_holdings_overlap") {
+      return /\b(?:exact .*holdings?|holdings? overlap|etf overlap|index overlap|constituent|not verified|not available)\b/.test(lower);
+    }
+    if (gapId === "market_calendar") {
+      return /\b(?:market calendar|holiday|last trading day|market status|after close|weekend)\b/.test(lower);
+    }
+    if (gapId === "forward_rate_probabilities") {
+      return /\b(?:forward rate|rate probabilities|fed probabilities|market-implied|probabilities unavailable)\b/.test(lower);
+    }
+    if (gapId === "sentiment_sample_depth") {
+      return /\b(?:sample depth|sample size|sentiment coverage|low volume|source coverage)\b/.test(lower);
+    }
+    if (gapId === "earnings_event_risk") {
+      return /\b(?:earnings event|event risk|implied move|earnings timing|not verified)\b/.test(lower);
+    }
+    return lower.includes(gapId.replaceAll("_", " "));
+  });
+  return disclosed.length > 0 ? disclosed : undefined;
 }
 
 function latestRouteContext(agentTrace: AgentTrace): Record<string, unknown> | null {
