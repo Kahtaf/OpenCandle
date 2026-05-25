@@ -299,6 +299,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "sec"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   sentiment_snapshot: {
     routeKinds: ["agent_task"],

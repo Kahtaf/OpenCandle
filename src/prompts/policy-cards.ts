@@ -50,7 +50,14 @@ For "today", "right now", "this morning", "after close", or "why did it move" pr
     content: `## Sentiment Snapshot Policy
 For sentiment-only prompts, include the direction and strength of the sentiment signal, the score scale when available, missing sources, why missing sources matter for the user's question, source-coverage risk, low sample counts, and how those gaps downgrade confidence. For ticker-specific sentiment prompts, compare sentiment with fetched price action and state whether sentiment diverges from price action. Treat sentiment as supporting evidence, not a standalone buy/sell verdict. Disclose sparse source coverage, unavailable Twitter/X sessions, provider gaps, or low sample depth instead of implying full-market sentiment coverage.`,
   },
-  filing_thesis_review: placeholder("filing_thesis_review", "filing_thesis_review", []),
+  filing_thesis_review: {
+    id: "filing_thesis_review",
+    taskFamily: "filing_thesis_review",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Filing Thesis Review Policy
+For SEC filing or thesis-change prompts, call get_sec_filings first, then use targeted search_web queries for requested filing sections or adjacent themes such as risk factors, MD&A, litigation, regulatory disclosures, revenue concentration, management commentary, and recent 8-K events. Separate filing metadata, filing-section summaries or filing-body gaps, news or management commentary, and market data. Do not treat search_web or news results as SEC filing evidence unless they point back to the same primary filing fact in get_sec_filings output. Do not claim an Item 5.02, management change, risk-factor change, or thesis-changing event unless that fact appears in SEC filing evidence. If the full filing body was not parsed, say that directly and avoid implying every filing section was read. Prioritize thesis-changing deltas, dates, source type, and 6-12 month impact over generic company background.`,
+  },
   asset_compare: placeholder("asset_compare", "asset_compare", ["etf_holdings_overlap"]),
   retail_finance_tradeoff: placeholder("retail_finance_tradeoff", "retail_finance_tradeoff", [
     "brokerage_comparison",

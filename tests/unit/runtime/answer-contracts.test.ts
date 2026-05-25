@@ -98,6 +98,20 @@ describe("answer contracts", () => {
     expect(contract.capabilityGapIds).toEqual(["sentiment_sample_depth"]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines filing-thesis obligations for source separation without trade commitment", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.filing_thesis_review;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual(["source_coverage", "data_gap_disclosure", "framework_or_checklist"]);
+    expect(contract.requiresFreshness).toBe(false);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresSourceCoverage).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.capabilityGapIds).toEqual([]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

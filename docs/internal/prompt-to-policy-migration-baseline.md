@@ -194,3 +194,26 @@ Result:
 - Both baseline and current implementations passed the manifest assertions for `sentiment-source-coverage`.
 - The replacement-active ref parity kept hard assertions green with one additive warning: the current implementation records `capability_gap_disclosure` for the declared `sentiment_sample_depth` gap.
 - The sentiment slice now owns direction/strength, score-scale, missing-source, source-coverage-risk, low-sample, confidence-downgrade, and price-action-divergence obligations through the `sentiment_snapshot` policy card and answer contract.
+
+## Filing Thesis Review Replacement Activation
+
+Date: 2026-05-24
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=filing-thesis-review PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=filing-thesis-review PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before filing runtime changes: `tests/evals/runs/2026-05-25T03-46-04-628Z_prompt-policy-ref-parity.json`
+- Dual-run gate with the legacy SEC filing clause still present: `tests/evals/runs/2026-05-25T03-51-30-571Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting the legacy SEC filing clause for filing turns: `tests/evals/runs/2026-05-25T03-52-34-659Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T03-53-14-780Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` after tightening the filing policy card to preserve the legacy SEC-first-then-targeted-search behavior.
+- Both baseline and current implementations passed the manifest assertions for `filing-thesis-review`.
+- The final replacement-active ref parity completed with zero warnings.
+- The filing slice now owns source separation between filing metadata, filing-body gaps, news/management commentary, and market data through the `filing_thesis_review` policy card and answer contract.

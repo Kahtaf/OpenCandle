@@ -41,6 +41,7 @@ describe("policy cards", () => {
   it("implements selected policy cards and leaves unrelated cards as placeholders", () => {
     expect(getPolicyCard("ticker_disambiguation").status).toBe("implemented");
     expect(getPolicyCard("sentiment_snapshot").status).toBe("implemented");
+    expect(getPolicyCard("filing_thesis_review").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("placeholder");
   });
@@ -140,6 +141,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("diverges from price action");
     expect(renderPolicyCardForPlanning({
       ...sentimentPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders filing policy only after the slice leaves observe-only mode", () => {
+    const filingPlanning = planning({
+      taskFamily: "filing_thesis_review",
+      policyCardId: "filing_thesis_review",
+      evidencePlanId: "placeholder_filing_thesis_review",
+      answerContractId: "filing_thesis_review",
+      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(filingPlanning);
+    expect(rendered).toContain("Filing Thesis Review Policy");
+    expect(rendered).toContain("get_sec_filings");
+    expect(rendered).toContain("filing metadata");
+    expect(rendered).toContain("filing-section summaries");
+    expect(rendered).toContain("market data");
+    expect(rendered).toContain("Do not claim");
+    expect(renderPolicyCardForPlanning({
+      ...filingPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

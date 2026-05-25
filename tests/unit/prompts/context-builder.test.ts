@@ -642,6 +642,101 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("diverges from price action");
   });
 
+  it("uses the filing policy with the legacy SEC filing clause during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Look at COIN's latest 10-Q. Separate SEC filing evidence from news.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["COIN"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "sec"],
+        activeToolNames: ["get_sec_filings", "search_web"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["COIN"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "filing_thesis_review",
+          commitmentMode: "framework",
+          policyCardId: "filing_thesis_review",
+          evidencePlanId: "placeholder_filing_thesis_review",
+          answerContractId: "filing_thesis_review",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_filing_change_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Filing Thesis Review Policy");
+    expect(result).toContain("For SEC filing or thesis-change prompts");
+    expect(result).toContain("Do not treat search_web/news results as SEC filing evidence");
+  });
+
+  it("uses the filing policy without retaining the legacy SEC filing clause after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Look at COIN's latest 10-Q. Separate SEC filing evidence from news.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["COIN"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market", "sec"],
+        activeToolNames: ["get_sec_filings", "search_web"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["COIN"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "filing_thesis_review",
+          commitmentMode: "framework",
+          policyCardId: "filing_thesis_review",
+          evidencePlanId: "placeholder_filing_thesis_review",
+          answerContractId: "filing_thesis_review",
+          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_filing_change_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Filing Thesis Review Policy");
+    expect(result).not.toContain("targeted search_web queries for the requested filing sections or themes");
+    expect(result).toContain("filing metadata");
+    expect(result).toContain("filing-section summaries");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",

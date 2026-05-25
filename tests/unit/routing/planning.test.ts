@@ -227,6 +227,29 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the filing thesis migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Look at COIN's latest 10-Q. Separate SEC filing evidence from news.",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["COIN"] },
+        tool_bundles: ["core_market", "sec"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("filing_thesis_review");
+    expect(planning.policyCardId).toBe("filing_thesis_review");
+    expect(planning.evidencePlanId).toBe("placeholder_filing_thesis_review");
+    expect(planning.answerContractId).toBe("filing_thesis_review");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("sets prompt-specific commitment modes and capability gaps for manifest tradeoffs", () => {
     const retail = buildPlanningEnvelope({
       ...input,
