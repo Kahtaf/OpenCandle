@@ -462,6 +462,31 @@
       "cachedCompetitorAnswersAllowed": false
     },
     {
+      "id": "backtest-strategy-review",
+      "text": "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
+      "followupSequence": [],
+      "ledgerRows": ["backtest-review"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "single_asset_analysis",
+        "taskFamily": "single_asset_decision",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "options", "sentiment", "sec", "clarification"],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [
+          "reports strategy return, buy-and-hold return, outperformance, trade count, win rate, and max drawdown",
+          "includes Sharpe or Sortino when available or says they were unavailable",
+          "explains why the strategy worked or failed in the tested regime",
+          "discusses trading costs/slippage when asked whether the edge is practical"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["backtest metric completeness", "practical edge discussion"],
+      "baselineOpenCandleReportPath": "tests/evals/cases/faithfulness.eval.ts#backtest-metrics",
+      "competitorBaselineReportPathOrHash": "not-applicable-router-boundary",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
       "id": "no-tool-valuation-education",
       "text": "Explain how to use P/E ratios without over relying on them.",
       "followupSequence": [],
