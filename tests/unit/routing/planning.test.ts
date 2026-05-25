@@ -337,6 +337,27 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("runs the single-asset decision migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Analyze NVDA and tell me whether to buy, wait, or avoid. Include the key risks and entry strategy.",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "single_asset_analysis",
+      entities: { symbols: ["NVDA"] },
+      tool_bundles: ["core_market"],
+    });
+
+    expect(planning.taskFamily).toBe("single_asset_decision");
+    expect(planning.policyCardId).toBe("single_asset_decision");
+    expect(planning.evidencePlanId).toBe("placeholder_single_asset_decision");
+    expect(planning.answerContractId).toBe("single_asset_decision");
+    expect(planning.commitmentMode).toBe("decision");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

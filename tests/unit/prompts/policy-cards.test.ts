@@ -29,6 +29,7 @@ describe("policy cards", () => {
   it("declares stable IDs for V1 policy-card candidates", () => {
     expect(POLICY_CARD_IDS).toEqual([
       "ticker_disambiguation",
+      "single_asset_decision",
       "current_event_explanation",
       "sentiment_snapshot",
       "filing_thesis_review",
@@ -40,6 +41,7 @@ describe("policy cards", () => {
 
   it("implements selected policy cards and leaves unrelated cards as placeholders", () => {
     expect(getPolicyCard("ticker_disambiguation").status).toBe("implemented");
+    expect(getPolicyCard("single_asset_decision").status).toBe("implemented");
     expect(getPolicyCard("sentiment_snapshot").status).toBe("implemented");
     expect(getPolicyCard("filing_thesis_review").status).toBe("implemented");
     expect(getPolicyCard("retail_finance_tradeoff").status).toBe("implemented");
@@ -51,6 +53,30 @@ describe("policy cards", () => {
     expect(renderPolicyCardForPlanning(planning())).toContain("Ticker Disambiguation Policy");
     expect(renderPolicyCardForPlanning(planning({ behaviorMode: "replacement_active" }))).toContain("Ticker Disambiguation Policy");
     expect(renderPolicyCardForPlanning(planning({ behaviorMode: "observe_only" }))).toBe("");
+  });
+
+  it("renders single-asset policy only after the slice leaves observe-only mode", () => {
+    const singleAssetPlanning = planning({
+      taskFamily: "single_asset_decision",
+      commitmentMode: "decision",
+      policyCardId: "single_asset_decision",
+      evidencePlanId: "placeholder_single_asset_decision",
+      answerContractId: "single_asset_decision",
+      structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(singleAssetPlanning);
+    expect(rendered).toContain("Single Asset Decision Policy");
+    expect(rendered).toContain("quote or tool-output date");
+    expect(rendered).toContain("market-closed");
+    expect(rendered).toContain("unavailable DCF");
+    expect(rendered).toContain("clear call");
+    expect(renderPolicyCardForPlanning({
+      ...singleAssetPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
   });
 
   it("keeps supplied-but-unverified event-risk prompts from blocking on clarification", () => {

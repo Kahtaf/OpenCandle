@@ -263,3 +263,26 @@ Result:
 - Both baseline and current implementations passed the manifest assertions for `etf-overlap-check` and `dividend-growth-etf-tradeoff`.
 - The replacement-active ref parity kept hard assertions green with expected additive warnings for structured checks and nondeterministic tool-call ordering.
 - The asset slice now owns ETF overlap, diversification, dividend/income versus growth, tax/asset-location, horizon-fit, and exact-holdings-overlap capability-gap obligations through the `asset_compare` policy card and `asset_compare_tradeoff` answer contract.
+
+## Single Asset Decision Replacement Activation
+
+Date: 2026-05-25
+
+Commands:
+
+- `PROMPT_POLICY_MANIFEST=/Users/kahtaf/Documents/workspace_kahtaf/opencandle/docs/internal/prompt-to-policy-migration-manifest.json PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=single-asset-buy-wait-avoid PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_MANIFEST=/Users/kahtaf/Documents/workspace_kahtaf/opencandle/docs/internal/prompt-to-policy-migration-manifest.json PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=single-asset-buy-wait-avoid PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before single-asset runtime changes: `tests/evals/runs/2026-05-25T04-36-52-942Z_prompt-policy-ref-parity.json`
+- Dual-run gate with the legacy single-asset clause still present: `tests/evals/runs/2026-05-25T04-43-07-151Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting the legacy single-asset clause for single-asset turns: `tests/evals/runs/2026-05-25T04-44-28-302Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T04-45-12-842Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 1/1 old-vs-current manifest parity case against baseline ref `3e3a039` before migration, in dual-run mode, and in replacement-active mode.
+- Both baseline and current implementations passed the manifest assertions for `single-asset-buy-wait-avoid`.
+- The replacement-active ref parity kept hard assertions green with expected additive structured-check warnings for freshness and data-gap obligations plus nondeterministic tool-call ordering.
+- The single-asset slice now owns clear buy/wait/avoid calls, quote/tool-output dates, market-closed or delayed quote caveats, fallback valuation lenses when DCF or fundamentals are unavailable, key risks, position sizing or entry strategy, confidence, and invalidation through the `single_asset_decision` policy card and answer contract.

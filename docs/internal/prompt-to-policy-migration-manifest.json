@@ -158,6 +158,31 @@
       "cachedCompetitorAnswersAllowed": true
     },
     {
+      "id": "single-asset-buy-wait-avoid",
+      "text": "Analyze NVDA and tell me whether to buy, wait, or avoid. Include the key risks and entry strategy.",
+      "followupSequence": [],
+      "ledgerRows": ["current-single-asset-freshness"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "single_asset_analysis",
+        "taskFamily": "single_asset_decision",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market"],
+        "requiredEvidence": ["quote or tool-output date when available"],
+        "finalAnswerHardAssertions": [
+          "states the quote or tool-output date",
+          "preserves market-closed, delayed, or last available quote caveats",
+          "does not make missing fundamentals or unavailable DCF the main thesis",
+          "gives a clear call with key risks, position sizing or entry strategy, confidence, and invalidation"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["direct buy/wait/avoid call", "risk-first entry strategy"],
+      "baselineOpenCandleReportPath": "tests/evals/product/cases.ts#single-asset-nvda-recommendation",
+      "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
       "id": "sentiment-source-coverage",
       "text": "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
       "followupSequence": [],

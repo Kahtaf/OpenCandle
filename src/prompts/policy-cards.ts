@@ -7,6 +7,7 @@ import type {
 
 export const POLICY_CARD_IDS = [
   "ticker_disambiguation",
+  "single_asset_decision",
   "current_event_explanation",
   "sentiment_snapshot",
   "filing_thesis_review",
@@ -33,6 +34,14 @@ const POLICY_CARDS: Record<PromptPolicyCardId, PolicyCard> = {
     capabilityGapIds: ["earnings_event_risk"],
     content: `## Ticker Disambiguation Policy
 Use ticker lookup evidence to distinguish the current primary ticker from a legacy ticker, former ticker, ETF, ADR, foreign listing, or exchange-specific symbol. For old-symbol or "is this still the right ticker" prompts, explicitly say whether the supplied symbol is still the current primary ticker and name the current primary ticker when evidence supports one. Explain the current-vs-legacy relationship before less-common interpretations. If lookup or company overview evidence is unavailable or conflicts, disclose the ambiguity and do not invent listing facts. For unresolved earnings, event-risk, or holdings-risk questions, do not stop with a clarification question as the final output. Do not call ask_user merely because a supplied ticker-like symbol is unverified; treat the supplied symbol as unresolved evidence and continue. If any clarification attempt returns no usable answer, say the ticker could not be verified, avoid current earnings claims, then give an unresolved-ticker event-risk framework covering expected move/gap risk, beat-or-miss versus guidance, revenue and margin drivers, position size, trim/hedge/stop choices, and the specific facts that would change the answer. For business-model questions, explain durable mechanics such as licensing, royalties, products, customers, or distribution only when supported by fetched evidence or stable general knowledge.`,
+  },
+  single_asset_decision: {
+    id: "single_asset_decision",
+    taskFamily: "single_asset_decision",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Single Asset Decision Policy
+For single-security buy, sell, wait, avoid, trim, add, size, or entry prompts, give a clear call and tie it to the user's horizon when stated. Fetch and use available quote, earnings, technical, sentiment/news, fundamentals, filing, or risk evidence before stating prices, ratios, or current metrics. State the quote or tool-output date when using current data, and carry market-closed, delayed, or last-available quote caveats into the final answer. If DCF, fundamentals, or another valuation model is unavailable or not meaningful, disclose the data gap once; do not make unavailable DCF or missing fundamentals the main thesis. Replace unavailable valuation with supported fallback lenses such as relative multiples, growth-adjusted multiples, cash-flow quality, balance-sheet risk, historical trading range, momentum, earnings trend, and structural business risk. End with the decision, key downside risks, position sizing or entry strategy, confidence, and concrete invalidation.`,
   },
   current_event_explanation: {
     id: "current_event_explanation",

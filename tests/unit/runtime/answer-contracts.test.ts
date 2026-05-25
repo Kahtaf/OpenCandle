@@ -42,6 +42,25 @@ describe("answer contracts", () => {
     expect(contract.frameworkFallback).toBe("diagnostic_until_parity");
   });
 
+  it("defines single-asset decision obligations for clear calls with freshness and risks", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.single_asset_decision;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.commitmentMode).toBe("decision");
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual([
+      "clear_commitment",
+      "risk_downside",
+      "freshness_disclosure",
+      "data_gap_disclosure",
+    ]);
+    expect(contract.requiresFreshness).toBe(true);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresRiskDownside).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(true);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
+
   it("defines commitment-mode contracts for every V1 mode", () => {
     expect(Object.keys(COMMITMENT_MODE_CONTRACTS).sort()).toEqual([
       "clarify",

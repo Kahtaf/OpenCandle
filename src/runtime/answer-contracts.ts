@@ -152,7 +152,21 @@ export const COMMITMENT_MODE_CONTRACTS: Record<CommitmentMode, CommitmentModeCon
 };
 
 export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDefinition> = {
-  single_asset_decision: placeholderContract("single_asset_decision", "single_asset_decision", "decision", ["risk_downside"]),
+  single_asset_decision: {
+    id: "single_asset_decision",
+    taskFamily: "single_asset_decision",
+    commitmentMode: "decision",
+    implemented: true,
+    requiredEvidenceTypes: [],
+    requiredFinalFields: ["clear_commitment", "risk_downside", "freshness_disclosure", "data_gap_disclosure"],
+    requiresFreshness: true,
+    requiresDataGapDisclosure: true,
+    requiresRiskDownside: true,
+    requiresSourceCoverage: false,
+    requiresConcreteCommitment: true,
+    capabilityGapIds: [],
+    frameworkFallback: "not_allowed",
+  },
   asset_compare_tradeoff: {
     id: "asset_compare_tradeoff",
     taskFamily: "asset_compare",

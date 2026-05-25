@@ -323,6 +323,102 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("tax");
   });
 
+  it("uses the single-asset policy with the legacy single-asset clause during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Analyze NVDA and tell me whether to buy, wait, or avoid.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market"],
+        activeToolNames: ["get_stock_quote", "get_financials", "analyze_risk"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["NVDA"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "single_asset_decision",
+          commitmentMode: "decision",
+          policyCardId: "single_asset_decision",
+          evidencePlanId: "placeholder_single_asset_decision",
+          answerContractId: "single_asset_decision",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Single Asset Decision Policy");
+    expect(result).toContain("For single-asset recommendation prompts");
+    expect(result).toContain("state the quote or tool-output date");
+  });
+
+  it("uses the single-asset policy without retaining the legacy single-asset clause after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Analyze NVDA and tell me whether to buy, wait, or avoid.",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: ["core_market"],
+        activeToolNames: ["get_stock_quote", "get_financials", "analyze_risk"],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "single_asset_analysis",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: ["NVDA"],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "single_asset_decision",
+          commitmentMode: "decision",
+          policyCardId: "single_asset_decision",
+          evidencePlanId: "placeholder_single_asset_decision",
+          answerContractId: "single_asset_decision",
+          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          capabilityGapIds: [],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: [],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Single Asset Decision Policy");
+    expect(result).not.toContain("For single-asset recommendation prompts");
+    expect(result).toContain("quote or tool-output date");
+    expect(result).toContain("market-closed");
+    expect(result).toContain("unavailable DCF");
+  });
+
   it("does not reference get_reddit_discussions", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});

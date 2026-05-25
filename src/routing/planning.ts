@@ -207,6 +207,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "options", "sentiment", "sec", "clarification"],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   asset_compare: {
     routeKinds: ["workflow_dispatch", "agent_task"],
