@@ -285,6 +285,31 @@ describe("planning layer", () => {
     ]));
   });
 
+  it("runs the retail finance migration slice in replacement-active mode by default", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: [],
+    });
+
+    expect(planning.taskFamily).toBe("retail_finance_tradeoff");
+    expect(planning.policyCardId).toBe("retail_finance_tradeoff");
+    expect(planning.evidencePlanId).toBe("placeholder_retail_finance_tradeoff");
+    expect(planning.answerContractId).toBe("retail_tradeoff_framework");
+    expect(planning.capabilityGapIds).toEqual(expect.arrayContaining([
+      "brokerage_comparison",
+      "cash_yield_products",
+      "fund_tax_efficiency",
+    ]));
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("enriches deterministic router corrections without overriding them", () => {
     const corrected: RouterOutput = {
       ...compareOutput,

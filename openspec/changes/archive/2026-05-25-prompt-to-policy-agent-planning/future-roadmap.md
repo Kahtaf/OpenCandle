@@ -19,14 +19,18 @@ A roadmap item may move into an implementation spec only when:
 
 ### Additional Task-Family Migrations
 
-Candidate post-V1 migrations:
+Completed replacement-active migrations after V1:
 
 - `current_event_explanation`
+- `concept_explainer`
 - `sentiment_snapshot`
 - `filing_thesis_review`
 - `retail_finance_tradeoff`
+
+Remaining post-V1 migration candidates:
+
 - `asset_compare`
-- `concept_explainer`
+- `single_asset_decision`
 - `options_strategy`
 - `portfolio_review`
 - `macro_allocation_review`
@@ -40,7 +44,8 @@ Why deferred:
 
 Promotion signal:
 
-- The first migrated slice proves parity and prompt-clause deletion works without changing current behavior.
+- A selected migrated slice proves parity and prompt-clause deletion works without changing current behavior.
+- For the next phase, promote one of `asset_compare`, `single_asset_decision`, or `macro_allocation_review` only after capturing focused old-vs-current ref parity and a rollback knob in the parity ledger.
 
 ### Persistent Research Workspaces
 

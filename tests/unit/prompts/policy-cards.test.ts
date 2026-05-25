@@ -42,6 +42,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("ticker_disambiguation").status).toBe("implemented");
     expect(getPolicyCard("sentiment_snapshot").status).toBe("implemented");
     expect(getPolicyCard("filing_thesis_review").status).toBe("implemented");
+    expect(getPolicyCard("retail_finance_tradeoff").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("placeholder");
   });
@@ -165,6 +166,30 @@ describe("policy cards", () => {
     expect(rendered).toContain("Do not claim");
     expect(renderPolicyCardForPlanning({
       ...filingPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders retail policy only after the slice leaves observe-only mode", () => {
+    const retailPlanning = planning({
+      taskFamily: "retail_finance_tradeoff",
+      policyCardId: "retail_finance_tradeoff",
+      evidencePlanId: "placeholder_retail_finance_tradeoff",
+      answerContractId: "retail_tradeoff_framework",
+      structuredCheckIds: ["data_gap_disclosed", "capability_gap_disclosure"],
+      capabilityGapIds: ["brokerage_comparison", "cash_yield_products", "fund_tax_efficiency"],
+      behaviorMode: "dual_run",
+    });
+
+    const rendered = renderPolicyCardForPlanning(retailPlanning);
+    expect(rendered).toContain("Retail Finance Tradeoff Policy");
+    expect(rendered).toContain("Do not punt");
+    expect(rendered).toContain("brokerage");
+    expect(rendered).toContain("cash sweep yields");
+    expect(rendered).toContain("current yield facts");
+    expect(rendered).toContain("6.8% mortgage");
+    expect(renderPolicyCardForPlanning({
+      ...retailPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

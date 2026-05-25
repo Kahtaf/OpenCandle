@@ -341,6 +341,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     capabilityGapIds: ["brokerage_comparison", "cash_yield_products", "fund_tax_efficiency"],
     compatibleToolBundles: [],
     migrated: false,
+    migrationStatus: "replacement_active",
   },
   stateful_tracking_update: {
     routeKinds: ["agent_task"],

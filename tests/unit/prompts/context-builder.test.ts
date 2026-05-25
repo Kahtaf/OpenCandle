@@ -737,6 +737,101 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("filing-section summaries");
   });
 
+  it("uses the retail policy with the legacy retail clause during dual run", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "I’m opening a taxable account and want simple recurring ETF investing. Which brokerage would you pick?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: [],
+        activeToolNames: [],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "retail_finance_tradeoff",
+          commitmentMode: "framework",
+          policyCardId: "retail_finance_tradeoff",
+          evidencePlanId: "placeholder_retail_finance_tradeoff",
+          answerContractId: "retail_tradeoff_framework",
+          structuredCheckIds: ["data_gap_disclosed", "capability_gap_disclosure"],
+          capabilityGapIds: ["brokerage_comparison", "cash_yield_products", "fund_tax_efficiency"],
+          behaviorMode: "dual_run",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_comparison_table_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Retail Finance Tradeoff Policy");
+    expect(result).toContain("For brokerage, account, fund-platform, or financial-product selection prompts");
+    expect(result).toContain("Do not punt just because no dedicated live-data tool exists");
+  });
+
+  it("uses the retail policy without retaining the legacy retail clause after replacement activation", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({
+      resolvedTurnContext: {
+        userInput: "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
+        priorTurns: [],
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        missingRequired: [],
+        toolBundles: [],
+        activeToolNames: [],
+        memoryQueryPlan: {
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          categories: ["investor_profile", "workflow_history"],
+          symbols: [],
+          slotKeys: [],
+        },
+        memoryProvenance: [],
+        promptPlaybook: "agent_task",
+        diagnostics: [],
+        planning: {
+          version: "planning-v1",
+          taskFamily: "retail_finance_tradeoff",
+          commitmentMode: "compare_tradeoffs",
+          policyCardId: "retail_finance_tradeoff",
+          evidencePlanId: "placeholder_retail_finance_tradeoff",
+          answerContractId: "retail_tradeoff_framework",
+          structuredCheckIds: ["data_gap_disclosed", "capability_gap_disclosure"],
+          capabilityGapIds: ["brokerage_comparison", "cash_yield_products", "fund_tax_efficiency"],
+          behaviorMode: "replacement_active",
+          workspacePlaceholderIds: [],
+          artifactPlaceholderIds: ["artifact_comparison_table_placeholder"],
+          diagnostics: [],
+        },
+      } satisfies ResolvedTurnContext,
+    });
+
+    const result = builder.build();
+    expect(result).toContain("Retail Finance Tradeoff Policy");
+    expect(result).not.toContain("For brokerage, account, fund-platform, or financial-product selection prompts");
+    expect(result).toContain("current yield facts");
+    expect(result).toContain("FDIC/SIPC/Treasury");
+  });
+
   it("tells educational finance prompts to include behavioral and practical frameworks", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",

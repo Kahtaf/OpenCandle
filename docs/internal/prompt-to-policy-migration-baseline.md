@@ -217,3 +217,26 @@ Result:
 - Both baseline and current implementations passed the manifest assertions for `filing-thesis-review`.
 - The final replacement-active ref parity completed with zero warnings.
 - The filing slice now owns source separation between filing metadata, filing-body gaps, news/management commentary, and market data through the `filing_thesis_review` policy card and answer contract.
+
+## Retail Finance Tradeoff Replacement Activation
+
+Date: 2026-05-24
+
+Commands:
+
+- `PROMPT_POLICY_BASE_REF=3e3a039 PROMPT_POLICY_IDS=brokerage-choice-taxable,safe-cash-products,mortgage-vs-investing PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-ref-parity.ts`
+- `PROMPT_POLICY_STRICT=1 PROMPT_POLICY_IDS=brokerage-choice-taxable,safe-cash-products,mortgage-vs-investing PROMPT_POLICY_TIMEOUT_MS=300000 npx tsx tests/scripts/run-prompt-policy-manifest.ts`
+
+Reports:
+
+- Baseline parity before retail runtime changes: `tests/evals/runs/2026-05-25T03-57-27-982Z_prompt-policy-ref-parity.json`
+- Dual-run gate with the legacy retail clause still present: `tests/evals/runs/2026-05-25T04-08-10-156Z_prompt-policy-ref-parity.json`
+- Replacement-active gate after omitting the legacy retail clause for retail turns: `tests/evals/runs/2026-05-25T04-10-05-829Z_prompt-policy-ref-parity.json`
+- Focused strict replacement-active manifest: `tests/evals/runs/2026-05-25T04-12-26-181Z_prompt-policy-manifest.json`
+
+Result:
+
+- Passed 3/3 old-vs-current manifest parity cases against baseline ref `3e3a039` in dual-run and replacement-active states.
+- Both baseline and current implementations passed the manifest assertions for `brokerage-choice-taxable`, `safe-cash-products`, and `mortgage-vs-investing`.
+- The replacement-active ref parity kept hard assertions green with expected additive warnings: `capability_gap_disclosure` is now recorded for declared brokerage, cash-yield, and fund-tax-efficiency gaps; the active mortgage-vs-investing run may fetch broad-market history when available.
+- The retail slice now owns durable brokerage/account/product, cash-parking, and mortgage-vs-investing tradeoff obligations through the `retail_finance_tradeoff` policy card and `retail_tradeoff_framework` answer contract.

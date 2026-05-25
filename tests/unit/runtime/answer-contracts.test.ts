@@ -112,6 +112,26 @@ describe("answer contracts", () => {
     expect(contract.capabilityGapIds).toEqual([]);
     expect(contract.frameworkFallback).toBe("not_allowed");
   });
+
+  it("defines retail tradeoff obligations for comparisons without trade commitment", () => {
+    const contract = ANSWER_CONTRACT_REGISTRY.retail_tradeoff_framework;
+
+    expect(contract.implemented).toBe(true);
+    expect(contract.requiredEvidenceTypes).toEqual([]);
+    expect(contract.requiredFinalFields).toEqual([
+      "comparison_tradeoffs",
+      "data_gap_disclosure",
+      "framework_or_checklist",
+    ]);
+    expect(contract.requiresDataGapDisclosure).toBe(true);
+    expect(contract.requiresConcreteCommitment).toBe(false);
+    expect(contract.capabilityGapIds).toEqual([
+      "brokerage_comparison",
+      "cash_yield_products",
+      "fund_tax_efficiency",
+    ]);
+    expect(contract.frameworkFallback).toBe("not_allowed");
+  });
 });
 
 describe("structured checks", () => {

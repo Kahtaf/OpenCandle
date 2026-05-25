@@ -59,11 +59,14 @@ For sentiment-only prompts, include the direction and strength of the sentiment 
 For SEC filing or thesis-change prompts, call get_sec_filings first, then use targeted search_web queries for requested filing sections or adjacent themes such as risk factors, MD&A, litigation, regulatory disclosures, revenue concentration, management commentary, and recent 8-K events. Separate filing metadata, filing-section summaries or filing-body gaps, news or management commentary, and market data. Do not treat search_web or news results as SEC filing evidence unless they point back to the same primary filing fact in get_sec_filings output. Do not claim an Item 5.02, management change, risk-factor change, or thesis-changing event unless that fact appears in SEC filing evidence. If the full filing body was not parsed, say that directly and avoid implying every filing section was read. Prioritize thesis-changing deltas, dates, source type, and 6-12 month impact over generic company background.`,
   },
   asset_compare: placeholder("asset_compare", "asset_compare", ["etf_holdings_overlap"]),
-  retail_finance_tradeoff: placeholder("retail_finance_tradeoff", "retail_finance_tradeoff", [
-    "brokerage_comparison",
-    "cash_yield_products",
-    "fund_tax_efficiency",
-  ]),
+  retail_finance_tradeoff: {
+    id: "retail_finance_tradeoff",
+    taskFamily: "retail_finance_tradeoff",
+    status: "implemented",
+    capabilityGapIds: ["brokerage_comparison", "cash_yield_products", "fund_tax_efficiency"],
+    content: `## Retail Finance Tradeoff Policy
+For brokerage, account, cash-parking, mortgage-vs-investing, or retail financial-product prompts, use the retail tradeoff answer shape. Do not punt just because no dedicated live-data provider exists. Answer from durable public finance knowledge, disclose unavailable provider coverage, and label provider-site facts or current yield facts as facts the user should verify instead of fabricating them. For brokerage comparisons, cover fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss-harvesting support, transfer/account fees, mutual-fund versus ETF availability, support quality, recurring investment ease, ETF tax efficiency, and asset-location caveats for taxable accounts. For cash parking, compare liquidity, FDIC/SIPC/Treasury risk, rate risk, taxes, minimums, access timing, and default 6-12 month cash hierarchy without inventing live yields. For mortgage-vs-investing prompts that compare against index funds, fetch broad-market history when available, then compare the guaranteed after-tax debt-return from the mortgage rate against uncertain market returns, liquidity, emergency fund, taxes, risk tolerance, time horizon, hybrid payoff/investing splits, and the practical implications of a 6.8% mortgage.`,
+  },
   concept_explainer: {
     id: "concept_explainer",
     taskFamily: "concept_explainer",
