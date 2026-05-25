@@ -743,3 +743,46 @@ The planning layer SHALL expose typed answer artifact contract identifiers for s
 - **WHEN** a task can reuse an existing task family, evidence plan, and answer contract
 - **THEN** adding an artifact contract does not require a new task family
 
+### Requirement: Portfolio Exposure Map Evidence
+
+The planning layer SHALL expose deterministic portfolio exposure-map evidence for portfolio rebalance review prompts without inventing exact provider-backed holdings.
+
+#### Scenario: User allocation percentages become structured exposure evidence
+
+- **WHEN** a portfolio rebalance review prompt includes allocation percentages
+- **THEN** planning evidence includes a `portfolio_exposure_map` record with normalized user-stated sleeves and percentages
+- **AND** the record distinguishes direct user-stated exposure from inferred overlap caveats
+
+#### Scenario: Broad-index overlap remains honest
+
+- **WHEN** the prompt combines broad-index exposure with sector or concentrated sleeves
+- **THEN** the evidence record includes a broad-index overlap caveat
+- **AND** exact holdings overlap remains represented by the `etf_holdings_overlap` capability gap
+
+#### Scenario: Exposure evidence is trace-only in V1
+
+- **WHEN** exposure-map evidence is emitted
+- **THEN** it appears in planning telemetry and eval traces
+- **AND** it does not require live ETF holdings providers, persisted portfolio storage, or rendered artifacts
+
+### Requirement: Semantic Answer Contract Checks
+
+The planning layer SHALL expose observe-only semantic answer contract checks for recurring financial answer obligations that should not live only inside the router prompt.
+
+#### Scenario: Semantic checks evaluate answer text diagnostically
+
+- **WHEN** a selected planning policy requires semantic obligations such as assumptions, tax caveats, target bands, or when-not-ideal guidance
+- **THEN** structured checks evaluate those obligations against answer text
+- **AND** failures remain observe-only with retry eligibility recorded but no active retry
+
+#### Scenario: Semantic checks are selected by generic policy obligations
+
+- **WHEN** planning selects portfolio rebalance review or concept education refinements
+- **THEN** planning includes relevant semantic check IDs
+- **AND** the check IDs are generic and not tied to individual tickers, sectors, or memorized prompt strings
+
+#### Scenario: Eval traces expose semantic check outcomes
+
+- **WHEN** the harness records planning telemetry
+- **THEN** semantic structured check results and failures appear alongside existing structured checks
+- **AND** missing semantic obligations can be tracked as parity gaps before active answer enforcement
