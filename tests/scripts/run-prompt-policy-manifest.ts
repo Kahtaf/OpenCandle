@@ -246,6 +246,14 @@ function addEvidenceFailures(
         message: "missing market_status evidence record",
       });
     }
+    if (expected === "holdings_overlap_tool_when_available" && !observed.toolCalls.includes("analyze_holdings_overlap")) {
+      failures.push({
+        field: "requiredEvidence",
+        expected,
+        actual: observed.toolCalls,
+        message: "missing holdings-overlap tool call",
+      });
+    }
   }
 }
 
@@ -270,6 +278,13 @@ function evaluateFinalAnswerAssertion(
       pattern: /exact holdings overlap by weight requires a dedicated holdings tool/i,
       passed: trace.planning?.capabilityGapIds.includes("etf_holdings_overlap") ?? false,
       reason: "expected ETF holdings-overlap capability gap",
+    },
+    {
+      pattern: /uses holdings overlap tool when available/i,
+      passed: tools.includes("analyze_holdings_overlap"),
+      reason: tools.includes("analyze_holdings_overlap")
+        ? "observed analyze_holdings_overlap tool call"
+        : `observed tool calls: ${tools.join(", ") || "none"}`,
     },
     {
       pattern: /labels? any ambiguity if lookup\/company overview is unavailable/i,

@@ -12,6 +12,7 @@ export interface PromptMigrationManifestEntry {
     routeKind?: string;
     workflow?: string;
     toolBundles?: string[];
+    requiredEvidence?: string[];
     providerGapDisclosure?: string[];
     finalAnswerHardAssertions?: string[];
   };

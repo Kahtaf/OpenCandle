@@ -196,7 +196,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       riskProfile: output.entities.riskProfile ?? extracted.riskProfile,
       assetScope: output.entities.assetScope ?? extracted.assetScope,
-      compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+      compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
       costBasis: output.entities.costBasis ?? extracted.costBasis,
@@ -259,7 +259,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
         assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
-        compareMetrics: deterministic.entities.compareMetrics ?? extracted.compareMetrics,
+        compareMetrics: mergeStringArrays(deterministic.entities.compareMetrics, extracted.compareMetrics),
         direction: deterministic.entities.direction ?? extracted.direction,
         costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
         shareQuantity: deterministic.entities.shareQuantity ?? extracted.shareQuantity,
@@ -514,6 +514,14 @@ function mergeSymbols(primary: string[], secondary: string[]): string[] {
     if (!merged.includes(symbol)) merged.push(symbol);
   }
   return merged;
+}
+
+function mergeStringArrays(primary?: string[], secondary?: string[]): string[] | undefined {
+  const merged: string[] = [];
+  for (const value of [...(primary ?? []), ...(secondary ?? [])]) {
+    if (!merged.includes(value)) merged.push(value);
+  }
+  return merged.length > 0 ? merged : undefined;
 }
 
 function omitUndefined<T>(value: T): T {

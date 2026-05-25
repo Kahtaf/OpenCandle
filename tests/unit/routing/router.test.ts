@@ -228,7 +228,7 @@ describe("route()", () => {
     const result = await route(
       {
         ...BASE_INPUT,
-        text: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying?",
+        text: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying or just buying more of the same stuff?",
       },
       fixedClient(JSON.stringify({
         routeKind: "agent_task",
@@ -245,9 +245,31 @@ describe("route()", () => {
     expect(result.routeKind).toBe("workflow_dispatch");
     expect(result.route).toBe("workflow");
     expect(result.workflow).toBe("compare_assets");
+    expect(result.entities.compareMetrics).toEqual(["overlap"]);
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "dispatchable_workflow_corrected_to_workflow_dispatch",
     }));
+  });
+
+  it("merges deterministic overlap focus when router emits a different compare metric", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Does buying QQQ on top of VOO create too much overlap?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["VOO", "QQQ"], compareMetrics: ["sentiment"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "compare assets",
+      })),
+    );
+
+    expect(result.entities.compareMetrics).toEqual(["sentiment", "overlap"]);
   });
 
   it("keeps crypto sizing out of portfolio construction when the user asks allocation range and drawdown", async () => {

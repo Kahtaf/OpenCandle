@@ -130,9 +130,12 @@ describe("prompt-to-policy baseline comparison", () => {
     const manifest = JSON.parse(
       readFileSync("docs/internal/prompt-to-policy-migration-manifest.json", "utf-8"),
     ) as { prompts: PromptMigrationManifestEntry[] };
+    const etfOverlap = manifest.prompts.find((prompt) => prompt.id === "etf-overlap-check");
 
     expect(manifest.prompts.length).toBeGreaterThanOrEqual(16);
     expect(buildCapabilityScorecard(manifest.prompts).length).toBeGreaterThan(0);
+    expect(etfOverlap?.expected.providerGapDisclosure).toEqual([]);
+    expect(etfOverlap?.expected.requiredEvidence).toContain("holdings_overlap_tool_when_available");
   });
 
   it("builds before/after migration comparison output with planning and parity status", () => {

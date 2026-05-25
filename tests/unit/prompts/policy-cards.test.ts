@@ -162,7 +162,8 @@ describe("policy cards", () => {
     const rendered = renderPolicyCardForPlanning(assetPlanning);
     expect(rendered).toContain("Asset Compare Policy");
     expect(rendered).toContain("Compare the requested assets before portfolio construction");
-    expect(rendered).toContain("exact holdings overlap by weight");
+    expect(rendered).toContain("provider-backed holdings-overlap evidence");
+    expect(rendered).toContain("partial or unavailable provider coverage");
     expect(rendered).toContain("dividend");
     expect(rendered).toContain("growth");
     expect(rendered).toContain("tax");

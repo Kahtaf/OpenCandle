@@ -46,14 +46,14 @@
         "taskFamily": "asset_compare",
         "commitmentMode": "compare_tradeoffs",
         "toolBundles": ["core_market", "macro", "sentiment"],
-        "requiredEvidence": ["compare metrics include overlap when extracted", "capability_gap:etf_holdings_overlap"],
+        "requiredEvidence": ["compare metrics include overlap when extracted", "holdings_overlap_tool_when_available"],
         "finalAnswerHardAssertions": [
           "compares requested ETFs before portfolio construction",
-          "discloses that exact holdings overlap by weight requires a dedicated holdings tool if unavailable",
+          "uses holdings overlap tool when available and discloses partial provider coverage if unavailable",
           "still gives a useful diversification framework using available quote/fund context",
           "followup preserves comparison shape and replaces SCHD with VYM"
         ],
-        "providerGapDisclosure": ["etf_holdings_overlap"]
+        "providerGapDisclosure": []
       },
       "optionalJudgeAssertions": ["tradeoff clarity", "does not claim exact overlap if unavailable"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-30-50-516Z_competitive-finance.json",
@@ -244,14 +244,14 @@
         "taskFamily": "asset_compare",
         "commitmentMode": "compare_tradeoffs",
         "toolBundles": ["core_market", "macro", "sentiment"],
-        "requiredEvidence": ["quote or fund context when available", "capability_gap:etf_holdings_overlap if exact overlap is unavailable"],
+        "requiredEvidence": ["quote or fund context when available", "holdings_overlap_tool_when_available for ETF/fund overlap"],
         "finalAnswerHardAssertions": [
           "does not route as portfolio construction requiring a budget",
           "compares dividend/income and growth-oriented ETFs",
           "covers tax/asset-location caveats for taxable accounts where relevant",
           "gives a clear practical default based on horizon and goal"
         ],
-        "providerGapDisclosure": ["etf_holdings_overlap"]
+        "providerGapDisclosure": []
       },
       "optionalJudgeAssertions": ["tradeoff framing", "horizon fit"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-18-42-168Z_competitive-finance.json",

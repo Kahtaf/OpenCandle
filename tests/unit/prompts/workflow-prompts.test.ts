@@ -403,6 +403,21 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toContain("avoid treating price, RSI, or generic risk metrics as the main answer");
   });
 
+  it("tells ETF overlap comparisons to use the holdings overlap tool before correlation fallback", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["VOO", "QQQ", "SCHD"], metrics: ["overlap"] },
+      sources: { symbols: "user", metrics: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toContain("Use analyze_holdings_overlap with symbols [VOO, QQQ, SCHD]");
+    expect(prompt).toContain("Use analyze_correlation across [VOO, QQQ, SCHD] only as supporting");
+    expect(prompt).toContain("provider top holdings");
+    expect(prompt).not.toContain("If exact holdings weights are unavailable");
+  });
+
   // Fix 3: Date grounding
   it("includes current date", () => {
     const resolution: SlotResolution<CompareAssetsSlots> = {

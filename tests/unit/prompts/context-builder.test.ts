@@ -271,7 +271,8 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Workflow Dispatch Context");
     expect(result).toContain("Asset Compare Policy");
     expect(result).toContain("Compare the requested assets before portfolio construction");
-    expect(result).toContain("exact holdings overlap by weight");
+    expect(result).toContain("provider-backed holdings-overlap evidence");
+    expect(result).toContain("partial or unavailable provider coverage");
   });
 
   it("uses the asset-compare policy after replacement activation without deleting workflow dispatch context", () => {

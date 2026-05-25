@@ -78,4 +78,17 @@ describe("buildCompareAssetsWorkflow", () => {
     expect(workflow.followUps[0]).toContain("sector-exposure risk");
     expect(workflow.followUps[0]).toContain("historical/current data");
   });
+
+  it("keeps ETF overlap synthesis focused on holdings evidence instead of generic risk ranking", () => {
+    const workflow = buildCompareAssetsWorkflow(makeResolution({
+      symbols: ["VOO", "QQQ", "SCHD"],
+      metrics: ["overlap"],
+    }));
+
+    expect(workflow.initialPrompt).toContain("analyze_holdings_overlap");
+    expect(workflow.followUps[0]).toContain("holdings-overlap");
+    expect(workflow.followUps[0]).toContain("diversification implication");
+    expect(workflow.followUps[0]).not.toContain("price, technical, and risk data");
+    expect(workflow.followUps[0]).not.toContain("which asset looks strongest right now");
+  });
 });

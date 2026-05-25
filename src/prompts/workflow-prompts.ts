@@ -362,7 +362,7 @@ ETF overlap guidance:
 - Treat this as an ETF overlap and diversification question, not a generic return ranking.
 - Lead with whether adding the second ETF creates a mega-cap technology tilt, growth-factor tilt, or real diversification.
 - Explain that holdings overlap and sector concentration are not the same as correlation; correlation is supporting evidence, not the answer.
-- If exact holdings weights are unavailable, use plain-language fund structure and say exact top holdings/weights should be verified in issuer fact sheets.
+- Use provider top holdings and overlap weights when available. If provider coverage is partial or unavailable, say so directly and fall back to plain-language fund structure.
 - Discuss top holdings, shared mega-cap names, sector concentration, and whether the position is a deliberate tilt or accidental duplication.
 - avoid treating price, RSI, or generic risk metrics as the main answer.`
     : "";
@@ -379,12 +379,13 @@ macro hedge decision guidance:
   const tableInstruction = isMacroHedge
     ? "- Present a comparison table with hedge-relevant columns: hedge role, macro drivers, volatility/drawdown evidence, correlation regime, liquidity/risk-on sensitivity, current data, and missing evidence."
     : isOverlapComparison
-      ? "- Present an ETF overlap table with columns: fund role, likely shared top holdings, sector concentration, what exposure is duplicated, what exposure is new, and diversification implication."
+      ? "- Present an ETF overlap table with columns: fund role, shared top holdings/overlap weight from provider when available, sector concentration, what exposure is duplicated, what exposure is new, and diversification implication."
     : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
 - Highlight which asset is stronger on each metric.`;
   const technicalRiskSteps = isOverlapComparison
-    ? `3. Use analyze_correlation across [${symbolList}] to check diversification, but treat it as supporting evidence rather than holdings overlap.
-4. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.`
+    ? `3. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
+4. Use analyze_correlation across [${symbolList}] only as supporting diversification evidence; do not substitute correlation for holdings overlap.
+5. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.`
     : `3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
 5. Use analyze_correlation across [${symbolList}] to check diversification.`;
