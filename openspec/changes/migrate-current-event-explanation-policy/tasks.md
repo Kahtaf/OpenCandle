@@ -23,8 +23,8 @@
 ## 4. Validation
 
 - [x] 4.1 Run `npm test`.
-- [ ] 4.2 Run `PROMPT_POLICY_STRICT=1 npx tsx tests/scripts/run-prompt-policy-manifest.ts`.
+- [x] 4.2 Run `PROMPT_POLICY_STRICT=1 npx tsx tests/scripts/run-prompt-policy-manifest.ts`.
   - Current-event strict manifest passed with `PROMPT_POLICY_IDS=market-closed-today-move`.
-  - Full strict manifest was run and failed 15/16 on unrelated `unknown-ticker-earnings-risk` nondeterminism.
+  - Full strict manifest passed 16/16 after `stabilize-prompt-policy-manifest`: `tests/evals/runs/2026-05-25T03-18-01-755Z_prompt-policy-manifest.json`.
 - [x] 4.3 Run `graphify update .`.
 - [x] 4.4 Update `CHANGELOG.md` and internal migration evidence docs.
