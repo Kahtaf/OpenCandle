@@ -48,6 +48,9 @@ export type PolicyCardId =
   | "filing_thesis_review"
   | "retail_finance_tradeoff"
   | "concept_explainer"
+  | "concept_options_education"
+  | "concept_inflation_cash_education"
+  | "concept_valuation_metric_education"
   | "backtest_review"
   | "stateful_tracking_update"
   | "general_fallback";
@@ -500,6 +503,9 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (output.workflow === "watchlist_or_tracking") return "stateful_tracking_update";
 
   const lower = text.toLowerCase();
+  if (output.entities.symbols.length === 0 && isNoToolConceptEducationPrompt(lower)) {
+    return "concept_explainer";
+  }
   if (/\bbacktest(?:ing|ed)?\b/.test(lower)) {
     return "backtest_review";
   }
@@ -542,6 +548,27 @@ function refinePlanningSelectionForPrompt(
   text: string,
 ): PlanningSelection {
   const lower = text.toLowerCase();
+
+  if (selection.taskFamily === "concept_explainer") {
+    if (isOptionsEducationPrompt(lower)) {
+      return {
+        ...selection,
+        policyCardId: "concept_options_education",
+      };
+    }
+    if (isInflationCashEducationPrompt(lower)) {
+      return {
+        ...selection,
+        policyCardId: "concept_inflation_cash_education",
+      };
+    }
+    if (isValuationMetricEducationPrompt(lower)) {
+      return {
+        ...selection,
+        policyCardId: "concept_valuation_metric_education",
+      };
+    }
+  }
 
   if (
     selection.taskFamily === "retail_finance_tradeoff" &&
@@ -586,6 +613,28 @@ function refinePlanningSelectionForPrompt(
   }
 
   return selection;
+}
+
+function isNoToolConceptEducationPrompt(lower: string): boolean {
+  if (!/\b(?:explain|what\s+is|what\s+are|what\s+does|how\s+does|how\s+do|how\s+to|define)\b/.test(lower)) {
+    return false;
+  }
+  return isOptionsEducationPrompt(lower) ||
+    isInflationCashEducationPrompt(lower) ||
+    isValuationMetricEducationPrompt(lower);
+}
+
+function isOptionsEducationPrompt(lower: string): boolean {
+  return /\b(?:covered\s+calls?|protective\s+puts?|options?|option\s+premium|assignment\s+risk|strike|expiration|delta|theta|greeks?)\b/.test(lower);
+}
+
+function isInflationCashEducationPrompt(lower: string): boolean {
+  return /\b(?:inflation|purchasing\s+power|real\s+returns?|cash\s+savings?|cash\s+drag|tips|short(?:er)?[-\s]?duration)\b/.test(lower) &&
+    /\b(?:cash|savings?|purchasing\s+power|real\s+returns?|bonds?|tips|protect|protection|affect)\b/.test(lower);
+}
+
+function isValuationMetricEducationPrompt(lower: string): boolean {
+  return /\b(?:p\/e|pe\s+ratio|price[-\s]?to[-\s]?earnings|ev\/ebitda|p\/s|price[-\s]?to[-\s]?sales|valuation\s+metric|trailing|forward\s+earnings|normalized\s+earnings|cyclically\s+adjusted)\b/.test(lower);
 }
 
 function mergeCapabilityGaps(

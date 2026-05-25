@@ -41,6 +41,9 @@ describe("policy cards", () => {
       "stateful_tracking_update",
       "retail_finance_tradeoff",
       "concept_explainer",
+      "concept_options_education",
+      "concept_inflation_cash_education",
+      "concept_valuation_metric_education",
     ]);
   });
 
@@ -51,12 +54,55 @@ describe("policy cards", () => {
     expect(getPolicyCard("filing_thesis_review").status).toBe("implemented");
     expect(getPolicyCard("retail_finance_tradeoff").status).toBe("implemented");
     expect(getPolicyCard("concept_explainer").status).toBe("implemented");
+    expect(getPolicyCard("concept_options_education").status).toBe("implemented");
+    expect(getPolicyCard("concept_inflation_cash_education").status).toBe("implemented");
+    expect(getPolicyCard("concept_valuation_metric_education").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("implemented");
     expect(getPolicyCard("portfolio_review").status).toBe("implemented");
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
     expect(getPolicyCard("options_strategy").status).toBe("implemented");
     expect(getPolicyCard("backtest_review").status).toBe("implemented");
     expect(getPolicyCard("stateful_tracking_update").status).toBe("implemented");
+  });
+
+  it("renders only the selected concept education subtype policy card", () => {
+    const rendered = renderPolicyCardForPlanning(planning({
+      taskFamily: "concept_explainer",
+      policyCardId: "concept_options_education",
+      evidencePlanId: "placeholder_concept_explainer",
+      answerContractId: "concept_explainer",
+      structuredCheckIds: ["commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "replacement_active",
+    }));
+
+    expect(rendered).toContain("Options Education Policy");
+    expect(rendered).toContain("assignment risk");
+    expect(rendered).not.toContain("Inflation and Cash Education Policy");
+    expect(rendered).not.toContain("Valuation Metric Education Policy");
+    expect(renderPolicyCardForPlanning(planning({
+      taskFamily: "concept_explainer",
+      policyCardId: "concept_options_education",
+      evidencePlanId: "placeholder_concept_explainer",
+      answerContractId: "concept_explainer",
+      structuredCheckIds: ["commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "observe_only",
+    }))).toBe("");
+  });
+
+  it("covers judged education gaps in targeted concept subtype cards", () => {
+    const inflation = getPolicyCard("concept_inflation_cash_education").content;
+    const options = getPolicyCard("concept_options_education").content;
+
+    expect(inflation).toContain("time horizon");
+    expect(inflation).toContain("tax");
+    expect(inflation).toContain("debt");
+    expect(inflation).toContain("mental framework");
+    expect(options).toContain("When it is not ideal");
+    expect(options).toContain("wash-sale");
+    expect(options).toContain("simple table");
+    expect(options).toContain("long-term holdings");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {

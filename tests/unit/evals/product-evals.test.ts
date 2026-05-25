@@ -169,6 +169,19 @@ describe("product eval scoring", () => {
     expect(sentiment.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(true);
   });
 
+  it("recognizes plural risk headings in education answers", () => {
+    const educationCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "education-options-greeks");
+    if (!educationCase) throw new Error("missing education eval case");
+
+    const result = scoreProductEvalCase(educationCase, makeTrace({
+      text:
+        "Bottom line: delta is price sensitivity and theta is time decay. " +
+        "Main risks: option buyers can lose money if the move is too slow, and sellers face assignment risks.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(true);
+  });
+
   it("maps failed product eval reports to a failing process exit code", () => {
     expect(productEvalExitCode({ failed: 0 })).toBe(0);
     expect(productEvalExitCode({ failed: 1 })).toBe(1);

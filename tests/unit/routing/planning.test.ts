@@ -151,7 +151,7 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
-  it("runs the concept explainer migration slice in replacement-active mode by default", () => {
+  it("selects valuation-metric education policy for valuation concept prompts", () => {
     const planning = buildPlanningEnvelope(
       {
         ...input,
@@ -169,10 +169,54 @@ describe("planning layer", () => {
     );
 
     expect(planning.taskFamily).toBe("concept_explainer");
-    expect(planning.policyCardId).toBe("concept_explainer");
+    expect(planning.policyCardId).toBe("concept_valuation_metric_education");
     expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
     expect(planning.answerContractId).toBe("concept_explainer");
     expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
+  it("selects options education policy for no-symbol options concept prompts", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "Explain covered calls and assignment risk for a beginner.",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        tool_bundles: [],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("concept_explainer");
+    expect(planning.policyCardId).toBe("concept_options_education");
+    expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
+    expect(planning.answerContractId).toBe("concept_explainer");
+  });
+
+  it("selects inflation education policy without converting cash education into macro allocation", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "How does inflation affect cash savings and purchasing power?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        tool_bundles: [],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("concept_explainer");
+    expect(planning.policyCardId).toBe("concept_inflation_cash_education");
+    expect(planning.evidencePlanId).toBe("placeholder_concept_explainer");
+    expect(planning.answerContractId).toBe("concept_explainer");
   });
 
   it("prefers specific task families over generic single-asset workflow metadata", () => {

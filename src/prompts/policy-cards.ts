@@ -19,6 +19,9 @@ export const POLICY_CARD_IDS = [
   "stateful_tracking_update",
   "retail_finance_tradeoff",
   "concept_explainer",
+  "concept_options_education",
+  "concept_inflation_cash_education",
+  "concept_valuation_metric_education",
 ] as const;
 
 export type PromptPolicyCardId = typeof POLICY_CARD_IDS[number];
@@ -135,6 +138,30 @@ For brokerage, account, cash-parking, mortgage-vs-investing, or retail financial
     capabilityGapIds: [],
     content: `## Concept Explainer Policy
 For conceptual or educational finance prompts, use a decision-framework shape instead of a stock-analysis shape. Do not fetch live data unless the user asks for current examples, named securities, or live comparisons. Do not mention OpenCandle tool names unless the user asks how to apply the concept with OpenCandle. Do not append Analyst View, Commitment, Reasoning Chain, Confidence Band, or Invalidation Level sections. Lead with Bottom line and a plain-language Core mental model, then adapt the sections to the concept instead of forcing every topic into a valuation-metric template. For inflation, cash, savings, or purchasing-power education, explain nominal returns versus real returns, how inflation affects cash, bonds, stocks, and real assets, common protection tools such as TIPS or shorter-duration bonds, and the tax/time-horizon tradeoffs. For options education, use a simple analogy before mechanics, define jargon immediately, and include an explicit Main risks section covering capped upside, assignment risk, premium decay or limited protection, tax consequences, and behavioral risk. For valuation-metric education, start with Bottom line, then a one-sentence Core mental model, then Practical workflow, Where it misleads, Cross-checks, and Quick checklist. Frame metrics as screening tools or question generators, not verdicts; cover earnings-quality distortions, variants such as trailing, forward, normalized, or cyclically adjusted, and cross-checks such as cash flow or enterprise-value lenses.`,
+  },
+  concept_options_education: {
+    id: "concept_options_education",
+    taskFamily: "concept_explainer",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Options Education Policy
+For no-symbol options education prompts, teach the concept without fetching live option chains unless the user asks for current tradable examples. Start with Bottom line and a simple analogy before mechanics, then define jargon immediately. Use distinct beginner-friendly headings or a simple table for How it works, What you give up, Main risks, and When it is not ideal. Explain the payoff shape, why the strategy exists, and the tradeoffs in plain language, especially for long-term holdings. Include a Main risks section covering capped upside, assignment risk, share-price downside that premium does not protect, tax consequences including possible wash-sale or holding-period complications, liquidity or bid/ask caveats, and behavioral risk. Treat premium decay as a mechanics point for sellers rather than overstating it as a seller risk. Do not name strikes, expirations, premiums, Greeks, or implied volatility as current facts without fetched evidence.`,
+  },
+  concept_inflation_cash_education: {
+    id: "concept_inflation_cash_education",
+    taskFamily: "concept_explainer",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Inflation and Cash Education Policy
+For no-symbol inflation, cash, savings, or purchasing-power education, explain nominal returns versus real returns before discussing products. Give a mental framework by time horizon: emergency cash, near-term spending, medium-term savings, and long-term investing each handle inflation differently. Cover how inflation affects cash, short-term bonds, longer-duration bonds, stocks, and real assets; why cash can lose purchasing power even when the account balance rises; and common protection tools such as TIPS, shorter-duration bonds, laddered cash, diversified real assets, and debt management such as paying down variable-rate debt or locking in fixed rates when relevant. Include tradeoffs for taxes on nominal interest, liquidity, duration risk, reinvestment risk, time horizon, and emergency-fund needs. Do not turn the answer into a macro allocation recommendation unless the user asks what to buy or how to rebalance.`,
+  },
+  concept_valuation_metric_education: {
+    id: "concept_valuation_metric_education",
+    taskFamily: "concept_explainer",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Valuation Metric Education Policy
+For valuation-metric education, start with Bottom line and a one-sentence Core mental model. Then explain Practical workflow, Where it misleads, Cross-checks, and a Quick checklist. Frame P/E, P/S, EV/EBITDA, trailing, forward, normalized, or cyclically adjusted metrics as screening tools and question generators, not verdicts. Cover earnings-quality distortions, cyclicality, balance-sheet differences, capital intensity, growth quality, margin durability, accounting noise, and cross-checks such as cash flow, enterprise-value lenses, historical ranges, and peer context. Do not add entry levels, confidence bands, or invalidation boilerplate for pure education prompts.`,
   },
 };
 

@@ -24,7 +24,7 @@ const missingDataHonesty: ProductEvalDimension = {
 const riskFraming: ProductEvalDimension = {
   id: "risk_framing",
   description: "Names downside, uncertainty, invalidation, or tradeoffs.",
-  requiredPatterns: [/\b(risk|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss|caution|incomplete)\b/i],
+  requiredPatterns: [/\b(risks?|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss|caution|incomplete)\b/i],
   mandatory: true,
 };
 

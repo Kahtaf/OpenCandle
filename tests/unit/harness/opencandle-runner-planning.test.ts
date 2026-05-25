@@ -67,4 +67,48 @@ describe("OpenCandle harness planning telemetry", () => {
     expect(trace.planning?.structuredCheckFailures.map((failure) => failure.checkId)).toContain("freshness_disclosed");
     expect(trace.planning?.retryEligibility.activeRetryAllowed).toBe(false);
   });
+
+  it("infers framework final-answer fields for concept education traces", () => {
+    const agentTrace: AgentTrace = {
+      prompt: "Explain covered calls for a beginner.",
+      turns: [{ text: "answer", toolCalls: [] }],
+      interactions: [],
+      finalText: "Bottom line: covered calls are income for capped upside.\n\nHow it works:\n- You sell a call.\n\nMain risks:\n- Assignment risk.",
+      toolSequence: [],
+      durationMs: 100,
+      customEntries: [{
+        customType: "opencandle-route-context",
+        timestamp: "2026-05-24T00:00:00.000Z",
+        data: {
+          routeKind: "agent_task",
+          legacyRoute: "fallback",
+          workflow: "general_finance_qa",
+          entities: { symbols: [] },
+          toolBundles: [],
+          activeToolNames: [],
+          memoryQueryPlan: { categories: [] },
+          diagnostics: [],
+          planning: {
+            version: "planning-v1",
+            behaviorMode: "replacement_active",
+            taskFamily: "concept_explainer",
+            commitmentMode: "framework",
+            policyCardId: "concept_options_education",
+            evidencePlanId: "placeholder_concept_explainer",
+            answerContractId: "concept_explainer",
+            structuredCheckIds: ["commitment_mode_respected"],
+            workspacePlaceholderIds: [],
+            artifactPlaceholderIds: [],
+            capabilityGapIds: [],
+            diagnostics: [],
+          },
+        },
+      }],
+    };
+
+    const trace = toEvalTrace(agentTrace);
+
+    expect(trace.planning?.structuredCheckFailures).toEqual([]);
+    expect(trace.planning?.retryEligibility.eligible).toBe(false);
+  });
 });

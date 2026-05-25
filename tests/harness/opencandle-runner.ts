@@ -13,6 +13,7 @@ import { cache } from "../../src/infra/cache.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import {
   ANSWER_CONTRACT_REGISTRY,
+  type FinalAnswerField,
   runStructuredChecks,
 } from "../../src/runtime/answer-contracts.js";
 import {
@@ -163,7 +164,7 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
     prompt: agentTrace.prompt,
     classification: classificationFromTrace(agentTrace),
     router: routerTelemetryFromTrace(agentTrace),
-    planning: planningTelemetryFromTrace(agentTrace, toolCalls),
+    planning: planningTelemetryFromTrace(agentTrace, toolCalls, agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join("")),
     toolCalls,
     askUserTranscript: agentTrace.interactions.map((interaction) => ({
       question: interaction.question,
@@ -319,6 +320,7 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
 function planningTelemetryFromTrace(
   agentTrace: AgentTrace,
   toolCalls: TraceToolCall[],
+  finalText: string,
 ): PlanningTelemetry | undefined {
   const routeContext = latestRouteContext(agentTrace);
   const planning = isRecord(routeContext?.planning) ? routeContext.planning : null;
@@ -356,7 +358,7 @@ function planningTelemetryFromTrace(
       evidenceRecords,
       finalAnswerMetadata: {
         commitmentMode,
-        finalFields: [],
+        finalFields: inferFinalAnswerFieldsForEval(finalText),
       },
     })
     : undefined;
@@ -383,6 +385,45 @@ function planningTelemetryFromTrace(
     parityStatus: "legacy_active",
     regressionClassification: "none",
   };
+}
+
+function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
+  const lower = text.toLowerCase();
+  const fields: FinalAnswerField[] = [];
+  if (/\b(bottom line|framework|checklist|workflow|how it works|mental model|main risks?|steps?)\b/.test(lower)) {
+    fields.push("framework_or_checklist");
+  }
+  if (/\b(risk|downside|trade[- ]?off|caveat|uncertain|loss|not ideal)\b/.test(lower)) {
+    fields.push("risk_downside");
+  }
+  if (/\b(compare|versus|vs\.?|trade[- ]?offs?|better fit|prefer)\b/.test(lower)) {
+    fields.push("comparison_tradeoffs");
+  }
+  if (/\b(buy|sell|hold|avoid|trim|add|recommend|bottom line: (?:yes|no))\b/.test(lower)) {
+    fields.push("clear_commitment");
+  }
+  if (/\b(unavailable|missing|data gap|cannot verify|not available|no live|unknown)\b/.test(lower)) {
+    fields.push("data_gap_disclosure");
+  }
+  if (/\b(as of|market closed|last trading day|freshness|quote date)\b/.test(lower)) {
+    fields.push("freshness_disclosure");
+  }
+  if (/\b(source|coverage|filing|news|reddit|twitter|x\/twitter)\b/.test(lower)) {
+    fields.push("source_coverage");
+  }
+  if (/\b(confirmed|saved|recorded|updated|tracked)\b/.test(lower)) {
+    fields.push("state_update_confirmation");
+  }
+  if (/\?\s*$|\b(what is your|which symbol|please clarify|need your)\b/.test(lower)) {
+    fields.push("clarifying_question");
+  }
+  if (/\b(ticker|symbol|could not verify|not verified)\b/.test(lower)) {
+    fields.push("symbol_verification_disclosure");
+  }
+  if (/\b(portfolio|allocation|allocate|sleeve|target weight)\b/.test(lower)) {
+    fields.push("constructed_output");
+  }
+  return [...new Set(fields)];
 }
 
 function latestRouteContext(agentTrace: AgentTrace): Record<string, unknown> | null {
