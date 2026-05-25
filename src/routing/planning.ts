@@ -40,6 +40,7 @@ export type PolicyCardId =
   | "asset_compare"
   | "portfolio_build"
   | "portfolio_review"
+  | "portfolio_rebalance_review"
   | "macro_allocation_review"
   | "options_strategy"
   | "current_event_explanation"
@@ -515,6 +516,9 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
     return "sentiment_snapshot";
   }
+  if (isPortfolioRebalancePrompt(lower)) {
+    return "portfolio_review";
+  }
   if (/\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower)) {
     return "current_event_explanation";
   }
@@ -568,6 +572,13 @@ function refinePlanningSelectionForPrompt(
         policyCardId: "concept_valuation_metric_education",
       };
     }
+  }
+
+  if (selection.taskFamily === "portfolio_review" && isPortfolioRebalancePrompt(lower)) {
+    return {
+      ...selection,
+      policyCardId: "portfolio_rebalance_review",
+    };
   }
 
   if (
@@ -635,6 +646,11 @@ function isInflationCashEducationPrompt(lower: string): boolean {
 
 function isValuationMetricEducationPrompt(lower: string): boolean {
   return /\b(?:p\/e|pe\s+ratio|price[-\s]?to[-\s]?earnings|ev\/ebitda|p\/s|price[-\s]?to[-\s]?sales|valuation\s+metric|trailing|forward\s+earnings|normalized\s+earnings|cyclically\s+adjusted)\b/.test(lower);
+}
+
+function isPortfolioRebalancePrompt(lower: string): boolean {
+  return /\b(?:portfolio|allocation|holdings?|sleeves?|s&p\s*500|index|equity|bonds?|cash)\b/.test(lower) &&
+    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration)\b/.test(lower);
 }
 
 function mergeCapabilityGaps(

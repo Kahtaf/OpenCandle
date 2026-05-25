@@ -35,6 +35,7 @@ describe("policy cards", () => {
       "filing_thesis_review",
       "asset_compare",
       "portfolio_review",
+      "portfolio_rebalance_review",
       "macro_allocation_review",
       "options_strategy",
       "backtest_review",
@@ -59,6 +60,7 @@ describe("policy cards", () => {
     expect(getPolicyCard("concept_valuation_metric_education").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("implemented");
     expect(getPolicyCard("portfolio_review").status).toBe("implemented");
+    expect(getPolicyCard("portfolio_rebalance_review").status).toBe("implemented");
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
     expect(getPolicyCard("options_strategy").status).toBe("implemented");
     expect(getPolicyCard("backtest_review").status).toBe("implemented");
@@ -190,6 +192,31 @@ describe("policy cards", () => {
     expect(rendered).toContain("rebalance");
     expect(renderPolicyCardForPlanning({
       ...portfolioPlanning,
+      behaviorMode: "observe_only",
+    })).toBe("");
+  });
+
+  it("renders rebalance portfolio-review policy with honest execution caveats", () => {
+    const rebalancePlanning = planning({
+      taskFamily: "portfolio_review",
+      commitmentMode: "decision",
+      policyCardId: "portfolio_rebalance_review",
+      evidencePlanId: "placeholder_portfolio_review",
+      answerContractId: "portfolio_review",
+      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+      capabilityGapIds: [],
+      behaviorMode: "replacement_active",
+    });
+
+    const rendered = renderPolicyCardForPlanning(rebalancePlanning);
+    expect(rendered).toContain("Portfolio Rebalance Review Policy");
+    expect(rendered).toContain("hidden overlap");
+    expect(rendered).toContain("S&P 500");
+    expect(rendered).toContain("tax lots");
+    expect(rendered).toContain("target bands");
+    expect(rendered).toContain("risk tolerance");
+    expect(renderPolicyCardForPlanning({
+      ...rebalancePlanning,
       behaviorMode: "observe_only",
     })).toBe("");
   });

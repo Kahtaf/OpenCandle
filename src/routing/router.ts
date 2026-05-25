@@ -475,7 +475,7 @@ function isCoveredCallRequest(text: string): boolean {
 function isPortfolioEvaluationRequest(text: string): boolean {
   const lower = text.toLowerCase();
   const hasEvaluationIntent =
-    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment)\b/.test(lower);
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift)\b/.test(lower);
   const hasPortfolioObject =
     /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
   const hasConstructionIntent =

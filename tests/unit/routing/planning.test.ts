@@ -472,6 +472,63 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("selects portfolio rebalance review policy for existing allocation rebalance prompts", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text:
+        "I have a portfolio that is 55% S&P 500 index, 25% QQQ, 10% bonds, and 10% cash. " +
+        "How should I rebalance to reduce concentration and set target bands?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+    expect(planning.evidencePlanId).toBe("placeholder_portfolio_review");
+    expect(planning.answerContractId).toBe("portfolio_review");
+  });
+
+  it("keeps portfolio rebalance ahead of incidental right-now wording", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text:
+        "My portfolio is heavy on tech right now, about 45% tech, 25% S&P 500 ETFs, and 30% bonds. " +
+        "Should I rebalance it?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+  });
+
+  it("keeps explicit portfolio construction prompts on portfolio_build", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "Build me a diversified $50k portfolio for a 5 year horizon.",
+    }, {
+      ...compareOutput,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: "portfolio_builder",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro", "sentiment"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_build");
+    expect(planning.policyCardId).toBe("portfolio_build");
+  });
+
   it("runs the backtest review migration slice in replacement-active mode by default", () => {
     const planning = buildPlanningEnvelope({
       ...input,

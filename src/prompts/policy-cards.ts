@@ -13,6 +13,7 @@ export const POLICY_CARD_IDS = [
   "filing_thesis_review",
   "asset_compare",
   "portfolio_review",
+  "portfolio_rebalance_review",
   "macro_allocation_review",
   "options_strategy",
   "backtest_review",
@@ -90,6 +91,14 @@ Compare the requested assets before portfolio construction. For ETF overlap, div
     capabilityGapIds: [],
     content: `## Portfolio Review Policy
 For prompts that ask to critically evaluate an existing allocation, review the portfolio as given. Do not build a new portfolio, ask for a construction budget, or convert the turn into portfolio-builder workflow guidance unless the user explicitly asks for construction. Start with a direct bottom-line structural read, then use sections for Structural allocation read, Sleeve-by-sleeve implications, Key risks and opportunities, Actionable adjustment, What this does not fix, and Watchlist and invalidation. Evaluate concentration, diversification, geography, equity cyclicality, fixed-income duration, credit sensitivity, liquidity, tax and asset-location caveats, horizon fit, and rebalance discipline. Use current macro, quote, sentiment, risk, or correlation evidence when available, but disclose missing live data, unknown holdings, unknown account type, or unavailable exact duration/credit/overlap facts without inventing precision. End with one clear adjustment or monitoring trigger tied to the stated horizon, the main downside risk, confidence, and what would change the view.`,
+  },
+  portfolio_rebalance_review: {
+    id: "portfolio_rebalance_review",
+    taskFamily: "portfolio_review",
+    status: "implemented",
+    capabilityGapIds: [],
+    content: `## Portfolio Rebalance Review Policy
+For existing-allocation rebalance, diversification, concentration, overweight, target bands, or drift prompts, review the portfolio as given rather than building a new portfolio. Start with a direct structural read, then separate target allocation from execution sequencing. Cover concentration, hidden overlap, geography, sector and factor exposure, S&P 500 and mega-cap tech concentration where relevant, fixed-income role, cash role, time horizon, and risk tolerance uncertainty. Use target bands or ranges instead of pretending exact optimization is available. Include staged implementation and tax-aware execution caveats, but disclose unknown account type, tax lots, cost basis, exact holdings, exact ETF overlap, and user-specific tax constraints without inventing them. End with a clear adjustment or monitoring trigger and say what the adjustment does not fix.`,
   },
   macro_allocation_review: {
     id: "macro_allocation_review",

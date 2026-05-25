@@ -5,15 +5,15 @@
 
 ## 2. TDD Implementation
 
-- [ ] 2.1 Add a failing planner test for existing-portfolio rebalance prompts selecting the rebalance policy card.
-- [ ] 2.2 Add a failing planner test proving portfolio construction prompts still select `portfolio_build`.
-- [ ] 2.3 Add a failing policy-card rendering test for rebalance prompt injection.
-- [ ] 2.4 Implement the rebalance portfolio review policy and selection refinement.
+- [x] 2.1 Add a failing planner test for existing-portfolio rebalance prompts selecting the rebalance policy card.
+- [x] 2.2 Add a failing planner test proving portfolio construction prompts still select `portfolio_build`.
+- [x] 2.3 Add a failing policy-card rendering test for rebalance prompt injection.
+- [x] 2.4 Implement the rebalance portfolio review policy and selection refinement.
 
 ## 3. Validation
 
-- [ ] 3.1 Run focused planner and policy-card tests.
-- [ ] 3.2 Run focused product or fixed competitive eval smoke for portfolio rebalance behavior.
-- [ ] 3.3 Run `npm run build`.
-- [ ] 3.4 Run `npm test`.
-- [ ] 3.5 Run `graphify update .`.
+- [x] 3.1 Run focused planner and policy-card tests.
+- [x] 3.2 Run focused product or fixed competitive eval smoke for portfolio rebalance behavior.
+- [x] 3.3 Run `npm run build`.
+- [x] 3.4 Run `npm test`.
+- [x] 3.5 Run `graphify update .`.

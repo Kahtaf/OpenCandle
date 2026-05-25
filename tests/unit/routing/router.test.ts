@@ -499,6 +499,35 @@ describe("route()", () => {
     }));
   });
 
+  it("corrects portfolio-builder clarification for existing-allocation rebalance prompts", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text:
+          "My portfolio is 45% tech stocks, 25% S&P 500 ETFs, and 30% bonds. " +
+          "Should I rebalance to diversify more?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "clarification",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: ["budget"],
+        reasoning: "misread rebalance as construction",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+    }));
+  });
+
   it("corrects portfolio-builder output for explicit multi-ETF tradeoff prompts", async () => {
     const result = await route(
       {
