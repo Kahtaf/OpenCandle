@@ -1,16 +1,16 @@
 ---
 title: Testing and Evals
-description: How OpenCandle validates tools, routing, GUI behavior, and full agent runs.
+description: How OpenCandle validates tools, workflows, GUI behavior, and full agent runs.
 ---
 
 # Testing and Evals
 
 OpenCandle has four validation layers:
 
-- deterministic unit tests for pure logic, routing fixtures, providers with mocked fetch, and GUI state helpers
+- deterministic unit tests for pure logic, request-understanding fixtures, providers with mocked fetch, and GUI state helpers
 - focused end-to-end tests for CLI, credential flows, and live provider/tool behavior
 - browser smoke tests for the local GUI
-- evals that run full OpenCandle sessions through the shared agent harness and score product behavior, live router behavior, or competitive performance
+- evals that run full OpenCandle sessions through the shared agent harness and score product behavior, task selection, evidence use, or competitive performance
 
 ## Baseline Checks
 
@@ -59,7 +59,7 @@ npm run test:evals:competitive
 |---------|--------------|----------------|
 | `npm run test:evals` | Vitest eval cases under `tests/evals/cases/**/*.eval.ts` | Deterministic or semi-deterministic scoring cases that should run as a suite. |
 | `npm run test:evals:usually` | Same Vitest eval suite with `EVAL_TIER=usually` | The common eval tier when you want the usual subset rather than every case. |
-| `npm run eval:router-live` | `tests/scripts/run-live-router-eval.ts` against router fixtures with the real LLM router | Opt-in router quality check. Requires live model credentials and compares live router output to fixture expectations. |
+| `npm run eval:router-live` | `tests/scripts/run-live-router-eval.ts` against request-understanding fixtures with a live model | Opt-in task-selection quality check. Requires live model credentials and compares live output to fixture expectations. |
 | `npm run test:evals:product` | `tests/scripts/run-product-evals.ts` | Full-session product evals over curated finance prompts, using the OpenCandle harness and rubric-style dimensions. |
 | `npm run test:evals:competitive` | `tests/scripts/run-competitive-finance-eval.ts` | Competitive finance benchmark against generic no-tool Claude, Codex, and Gemini baselines. See [Benchmarking](./benchmarking.md). |
 
@@ -67,7 +67,7 @@ Eval reports are written under `tests/evals/runs/` when a runner produces a JSON
 
 ## Product Evals
 
-Product evals run curated prompts through `runOpenCandleSession()` and score the resulting trace for workflow fit, tool usage, directness, evidence use, risk framing, horizon fit, and honest handling of missing data.
+Product evals run curated prompts through `runOpenCandleSession()` and score the resulting trace for investigation fit, tool usage, directness, evidence use, risk framing, horizon fit, and honest handling of missing data.
 
 Prompt families currently include:
 
@@ -139,21 +139,21 @@ If the run asks a question:
 npx tsx tests/harness/cli.ts answer --ipc /tmp/oc-test --value "Moderate"
 ```
 
-The final `trace.json` includes tool calls, results, interactions, final text, duration, and OpenCandle custom entries such as workflow dispatch, router output, disclaimers, and degradation notes.
+The final `trace.json` includes tool calls, results, interactions, final text, duration, and OpenCandle custom entries such as workflow dispatch, request-understanding output, disclaimers, and degradation notes.
 
-## Router Fixtures
+## Request-Understanding Fixtures
 
-Router fixtures live in `tests/fixtures/router/` and are included in `npm test`.
+Request-understanding fixtures live in `tests/fixtures/router/` and are included in `npm test`.
 
 Use them when changing:
 
 - `src/routing/router-prompt.ts`
 - `src/routing/router.ts`
-- router model choice
+- task-selection model choice
 - multi-turn context handling
 - preference extraction or slot resolution
 
-The live router eval is opt-in:
+The live fixture eval is opt-in:
 
 ```bash
 npm run eval:router-live
@@ -161,7 +161,7 @@ npm run eval:router-live
 
 It uses `OPENCANDLE_ROUTER_PROVIDER` and `OPENCANDLE_ROUTER_MODEL` when set. Defaults are `anthropic` and `claude-haiku-4-5`, so it requires matching live model credentials unless you override those env vars.
 
-Treat route mismatches as regressions even when the aggregate pass rate looks acceptable.
+Treat task-selection mismatches as regressions even when the aggregate pass rate looks acceptable.
 
 ## Test Data Rules
 

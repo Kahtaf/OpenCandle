@@ -1,8 +1,8 @@
-# Prompt-To-Policy Failure Classification
+# Competitive Failure Classification
 
 Date: 2026-05-24
 
-This classifies recent competitive losses and prompt patches before the planning-layer migration. The purpose is to prevent future benchmark fixes from becoming new global prompt clauses by default.
+This classifies recurring competitive losses so future fixes land in the narrowest durable layer instead of becoming new global prompt clauses by default.
 
 | Prompt or patch | Source | Primary layer | Secondary layer | Classification note | Current status |
 | --- | --- | --- | --- | --- | --- |

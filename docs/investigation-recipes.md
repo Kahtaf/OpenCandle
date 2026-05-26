@@ -7,9 +7,11 @@ description: Repeatable OpenCandle research paths for market, macro, filings, se
 
 OpenCandle works best when prompts name the evidence you want, not only the conclusion you hope to reach. These recipes are starting points for repeatable investigations.
 
+You can run these recipes as natural-language chat prompts, slash commands where available, or GUI catalog workflows. The GUI catalog pre-fills structured prompts, but the investigation still appears in the normal chat timeline.
+
 ## Stock Snapshot
 
-Use this when you want a quick but inspectable view of one public company.
+Use this when you want a quick but inspectable view of one public company. In the GUI, start from Comprehensive Analysis.
 
 ```text
 /analyze NVDA
@@ -30,7 +32,7 @@ What parts of that answer are based on stale or missing data?
 
 ## Compare Assets
 
-Use this when choosing between two or more tickers.
+Use this when choosing between two or more tickers. In the GUI, start from Compare Assets.
 
 ```text
 Compare MSFT, GOOGL, and AMZN using price trend, fundamentals, and sentiment.
@@ -45,7 +47,7 @@ Expected evidence:
 
 ## Options Screen
 
-Use this when exploring contracts and Greeks.
+Use this when exploring contracts and Greeks. In the GUI, start from Options Screener.
 
 ```text
 Show me TSLA puts expiring next month with Greeks and open interest.
@@ -103,7 +105,7 @@ Expected evidence:
 
 ## Portfolio Risk
 
-Use this when checking local holdings or a hypothetical allocation.
+Use this when checking local holdings or a hypothetical allocation. In the GUI, use chat for existing holdings or Portfolio Builder when you want OpenCandle to build a proposed allocation from goals and constraints.
 
 ```text
 Add 100 shares of NVDA at 120 and 50 shares of MSFT at 430, then run risk analysis.

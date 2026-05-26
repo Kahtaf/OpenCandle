@@ -24,9 +24,11 @@ Effective precedence:
 3. `$OPENCANDLE_HOME/config.json`.
 4. Built-in defaults.
 
-For provider API keys and `OPENCANDLE_DEBATE`, env wins over JSON config. `OPENCANDLE_ROUTER_MODE`, `OPENCANDLE_TOOL_SCOPE_MODE`, `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, and `OPENCANDLE_GUI_PORT` are env-only.
+For provider API keys and `OPENCANDLE_DEBATE`, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, and developer diagnostic switches are env-only.
 
 ## Environment Variables
+
+Most users only need model credentials, optional data-provider keys, the OpenCandle home directory, and GUI host/port settings.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -40,10 +42,17 @@ For provider API keys and `OPENCANDLE_DEBATE`, env wins over JSON config. `OPENC
 | `FINNHUB_API_KEY` | unset | Finnhub company news for sentiment summaries. Overrides `providers.finnhub.apiKey`. |
 | `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config, local state, and browser profile data. |
 | `OPENCANDLE_DEBATE` | `true` | Enables adversarial bull/bear debate for comprehensive analysis. Set `false` or `0` to disable. |
-| `OPENCANDLE_ROUTER_MODE` | `llm` | Intent router mode. Use `rules` to force the legacy regex router. Invalid values fail startup config loading. |
-| `OPENCANDLE_TOOL_SCOPE_MODE` | `observe` | Route-selected tool-scope mode. `observe` records selected bundles and active-tool candidates; `enforce` applies Pi active tools for each turn. Invalid values fail startup config loading. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
 | `OPENCANDLE_GUI_PORT` | `14567` | GUI HTTP/WebSocket port. |
+
+### Advanced Developer Diagnostics
+
+These settings are for debugging request understanding and tool availability. Keep the defaults for normal use.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENCANDLE_ROUTER_MODE` | `llm` | Advanced request-understanding mode. Use `rules` only when comparing deterministic behavior during development. Invalid values fail startup config loading. |
+| `OPENCANDLE_TOOL_SCOPE_MODE` | `observe` | Tool-scope diagnostic mode. `observe` records selected bundles and active-tool candidates; `enforce` applies Pi active tools for each turn. Invalid values fail startup config loading. |
 
 ## File Config
 

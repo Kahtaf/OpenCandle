@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "change": "prompt-to-policy-agent-planning",
   "createdAt": "2026-05-24",
-  "purpose": "Fixed before-migration prompt set for prompt-to-policy parity comparisons. Prompt text and deterministic hard assertions must not drift silently; qualitative answer expectations live in optionalJudgeAssertions.",
+  "purpose": "Fixed prompt set for planning parity comparisons. Prompt text and deterministic hard assertions must not drift silently; qualitative answer expectations live in optionalJudgeAssertions.",
   "modelMetadata": {
     "openCandleRouterMode": "llm",
     "openCandleVersion": "0.4.0",

@@ -1,4 +1,6 @@
-# Prompt-To-Policy Migration Baseline
+# Planning Baseline Evidence
+
+This file is historical validation evidence for a specific implementation change. It is not current implementation guidance. Use it to understand preserved behavior and test evidence, not as a pattern for new product docs.
 
 Date: 2026-05-24
 
@@ -56,7 +58,7 @@ Final-answer hard assertions to preserve:
 
 ## Baseline Scope
 
-This first section is a targeted before-migration smoke baseline. The full before/after manifest comparison is recorded below.
+This first section is a targeted smoke baseline. The full manifest comparison is recorded below.
 
 ## V1 Scaffold Validation
 
@@ -78,7 +80,7 @@ Selected-slice live harness smoke:
 Eval limitations:
 
 - Direct `npx tsx -e` harness import failed with `ERR_PACKAGE_PATH_NOT_EXPORTED` from `@earendil-works/pi-coding-agent`; the same prompts were rerun through `tests/harness/cli.ts`, which completed.
-- `npm run test:evals` currently fails before running eval cases with `TypeError: define is not a function` from `vitest-evals/src/index.ts`. This is outside the prompt-to-policy unit harness added here and blocks a full eval-suite manifest run in this session.
+- `npm run test:evals` currently fails before running eval cases with `TypeError: define is not a function` from `vitest-evals/src/index.ts`. This is outside the planning unit harness added here and blocks a full eval-suite manifest run in this session.
 
 ## Full Manifest Comparison
 

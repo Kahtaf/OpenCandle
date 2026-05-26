@@ -122,7 +122,7 @@ Do not:
 
 - Providers: `src/providers/`
 - Tools: `src/tools/`
-- Routing: `src/routing/`
+- Request understanding: `src/routing/`
 - Workflows: `src/workflows/`
 - Memory: `src/memory/`
 - Pi integration: `src/pi/`

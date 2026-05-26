@@ -46,6 +46,20 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 - Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
 - Writer/follower locking keeps one local process responsible for mutating a session.
 
+## What You Can Do From The GUI
+
+- Ask a normal finance question, such as `Should I add NVDA if I already own AAPL and TSLA?`
+- Launch a workflow from the catalog, such as Comprehensive Analysis, Compare Assets, Portfolio Builder, or Options Screener.
+- Run one tool directly when you only need a quote, option chain, filing lookup, or macro series.
+- Connect provider keys from the Providers tab instead of editing config files.
+- Inspect tool cards and the drawer to see arguments, results, sources, and warnings.
+- Reopen previous sessions and continue the investigation.
+- Answer focused follow-up questions when OpenCandle needs a ticker, goal, horizon, budget, or risk preference before proceeding.
+
+Workflow catalog entries prefill a structured chat prompt. They do not switch the GUI into a separate mode; the result still appears in the same chat timeline with the same tool cards and session history.
+
+The financial context panel summarizes relevant local context from the current session, such as watchlist entries, holdings, recent symbols, and provider status. Treat it as a navigation aid, not a separate source of truth.
+
 ## When To Use The GUI
 
 Use the GUI when you want to inspect tool output visually, browse prior sessions, run an individual tool from the catalog, or see provider setup status without remembering command syntax.

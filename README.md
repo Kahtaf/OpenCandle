@@ -1,6 +1,6 @@
 # OpenCandle
 
-OpenCandle is an open source financial investigator built with TypeScript and Pi. Pi is the agent runtime that provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle adds finance tools on top: it fetches market, macro, options, fundamentals, filings, sentiment, and portfolio data from real providers, then lets the model synthesize that evidence into an answer.
+OpenCandle is an open source financial investigator built with TypeScript and Pi. Pi provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle adds finance research on top: it understands what kind of financial question you asked, gathers market, macro, options, fundamentals, filings, sentiment, and portfolio evidence from real sources, then turns that evidence into a risk-aware answer.
 
 This repository is useful in three ways:
 
@@ -14,7 +14,7 @@ This repository is useful in three ways:
 
 Financial research gets messy when evidence is scattered across quote pages, filings, macro dashboards, sentiment feeds, and ad hoc spreadsheets. OpenCandle gives the agent explicit tools, provider boundaries, and local state so research stays inspectable: gather the data first, show the gaps, then synthesize without pretending uncertainty disappeared.
 
-OpenCandle is strongest when the answer depends on live or inspectable financial evidence: quotes, histories, options chains, filings, macro series, sentiment, local portfolio state, and source-gap disclosure. Generic agents can still be better for pure finance education or a short conceptual explanation. OpenCandle's job is to make market research auditable.
+OpenCandle is strongest when the answer depends on live or inspectable financial evidence: quotes, histories, options chains, filings, macro series, sentiment, local portfolio state, and source-gap disclosure. It can also answer educational questions without forcing unnecessary data lookups. OpenCandle's job is to make financial research auditable and useful without pretending uncertainty disappeared.
 
 ## What You Can Use It For
 
@@ -25,6 +25,8 @@ OpenCandle is strongest when the answer depends on live or inspectable financial
 - Reddit-based sentiment and discussion lookups
 - Portfolio tracking, watchlists, correlation, and risk analysis
 - Multi-step workflows such as `/analyze NVDA`
+- Clarifying follow-ups when a ticker, goal, horizon, or risk profile is ambiguous
+- Source-gap and stale-data warnings when a provider is missing, delayed, or unavailable
 
 OpenCandle is designed to fetch and format data. The model handles synthesis. Tool code should not invent financial conclusions or hardcode market numbers.
 
@@ -69,7 +71,7 @@ Model access comes from Pi. Market data providers are optional and additive. A `
 | `EXA_API_KEY` | No | Exa web search |
 | `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
 | `OPENCANDLE_HOME` | No | Override OpenCandle state directory |
-| `OPENCANDLE_ROUTER_MODE` | No | `llm` by default; set `rules` for legacy routing |
+| `OPENCANDLE_ROUTER_MODE` | No | Advanced request-understanding mode; keep the default unless debugging |
 | `OPENCANDLE_TOOL_SCOPE_MODE` | No | `observe` by default; set `enforce` to apply route-selected active tools |
 | `OPENCANDLE_DEBATE` | No | Set `false` or `0` to disable bull/bear debate |
 | `OPENCANDLE_GUI_HOST` | No | GUI bind host, default `127.0.0.1` |
@@ -148,6 +150,8 @@ Then open `http://127.0.0.1:14567`.
 
 ![OpenCandle GUI](./website/assets/gui-screenshot.png)
 
+From the GUI you can ask normal chat questions, launch workflows from the catalog, run one tool directly, answer clarification cards, inspect tool output, connect provider keys, and reopen prior sessions. Workflow catalog entries become structured chat prompts, so the result still appears in the same transcript with tool cards and source warnings.
+
 The GUI reports whether it is the session `writer` or a read-only `follower` at `/health`. See [docs/gui-quickstart.md](./docs/gui-quickstart.md).
 
 ## Data Sources And Tool Coverage
@@ -172,7 +176,7 @@ src/
 ├── providers/    API clients
 ├── tools/        Tool implementations by domain
 ├── infra/        Cache, rate limiter, HTTP, browser, paths
-├── routing/      Intent classification and slot resolution
+├── routing/      Request understanding, entity extraction, and slot resolution
 ├── workflows/    Multi-step workflow builders
 ├── memory/       SQLite-backed state and retrieval
 ├── analysts/     Multi-analyst orchestration

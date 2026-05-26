@@ -23,7 +23,9 @@ npm start
 
 ## Basics
 
-Type a question and press Enter. OpenCandle routes the request to tools, gathers data, and then asks the model to synthesize. Tools fetch and format evidence; the model writes the answer.
+Type a question and press Enter. OpenCandle identifies what kind of financial investigation you are asking for, gathers provider-backed evidence when useful, and then asks the model to synthesize. Tools fetch and format evidence; the model writes the answer.
+
+If a ticker, goal, horizon, budget, or risk preference is missing and materially changes the answer, OpenCandle may ask a focused follow-up before continuing. If a provider is missing, stale, or unavailable, the answer should name that gap instead of hiding it.
 
 Good first prompts:
 
@@ -35,7 +37,16 @@ Show me TSLA puts with Greeks
 Get the fed funds rate from FRED
 ```
 
-If a provider is missing, OpenCandle should name the gap and suggest a `/connect ...` command when a key would help.
+Slash commands are optional. Plain-English prompts can trigger the same investigation paths:
+
+```text
+Analyze NVDA and tell me whether to buy, wait, or avoid.
+I already own VOO and QQQ. Would SCHD diversify me?
+I own 200 shares of AMD. What protective put should I consider?
+Is this SPY/MSFT retirement portfolio too risky?
+```
+
+If a provider key would improve the result, OpenCandle should name the gap and suggest a `/connect ...` command.
 
 ## Slash Commands
 

@@ -38,6 +38,14 @@ On first run, OpenCandle walks through model setup. You can rerun setup later fr
 
 For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures.
 
+## Choose Your Interface
+
+Use the terminal UI when you want the fastest keyboard loop, slash commands, and a plain transcript.
+
+Use the GUI when you want a visual investigation workspace: chat, workflow cards, tool results, provider setup, session history, and financial context in one browser tab.
+
+Both use the same OpenCandle tools and saved session state. You can start in the terminal and later inspect sessions in the GUI.
+
 ## Run the Local GUI
 
 From a source checkout:
@@ -53,6 +61,14 @@ opencandle gui
 ```
 
 Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions through a writer/follower lock so only one process mutates a session at a time.
+
+Good first GUI flow:
+
+1. Ask `What is AAPL trading at?`
+2. Open the catalog with `⌘K`.
+3. Pick a workflow such as Comprehensive Analysis or Compare Assets.
+4. Inspect the tool card or drawer to see what data was used.
+5. Open the provider tab if the answer says a data source is missing.
 
 See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and writer/follower behavior.
 

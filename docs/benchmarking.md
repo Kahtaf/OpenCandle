@@ -5,9 +5,9 @@ description: How OpenCandle compares full finance-agent behavior against generic
 
 # Benchmarking
 
-OpenCandle benchmark runs are designed to answer a product question: when does a finance-native agent with market tools, routing, workflows, and traceable evidence produce a more useful answer than a generic agent answering without tools?
+OpenCandle benchmark runs are designed to answer a product question: when does a finance-native agent with market tools, guided workflows, and traceable evidence produce a more useful answer than a generic agent answering without tools?
 
-The benchmark is not meant to prove OpenCandle always wins. Generic agents can be stronger on concise education, broad explanations, or clean synthesis when live data is unnecessary. OpenCandle should shine when the user benefits from finance-specific workflow selection, fresh market evidence, explicit tool traces, risk framing, and honest disclosure of missing data.
+The benchmark is not meant to prove OpenCandle always wins. Generic agents can be stronger on concise education, broad explanations, or clean synthesis when live data is unnecessary. OpenCandle should shine when the user benefits from the right investigation path, fresh market evidence, explicit tool traces, risk framing, and honest disclosure of missing data.
 
 ## Competitive Finance Benchmark
 
@@ -83,14 +83,16 @@ Generic-agent baselines:
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip one-time baseline smoke calls.
 - `OPENCANDLE_COMPETITIVE_REQUIRE_ALL`: set to `1` to fail if any baseline is unavailable. By default, unavailable baselines are recorded as skipped and the run continues.
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `30000` in this runner.
-- `OPENCANDLE_ROUTER_MODE`: defaults to `llm`; set to `rules` to compare against the legacy keyword router.
+Developer diagnostic:
+
+- `OPENCANDLE_ROUTER_MODE`: advanced request-understanding mode. Keep the default unless you are intentionally comparing task-selection behavior.
 
 ## Where OpenCandle Should Shine
 
 OpenCandle should outperform generic no-tool agents when the answer depends on:
 
 - current quote, options, technical, sentiment, filing, macro, or crypto data
-- choosing the right finance workflow before answering
+- choosing the right investigation path before answering
 - combining several evidence types into one investment decision
 - preserving a trace of tool calls, workflow dispatch, disclaimers, and degradation notes
 - asking for missing risk tolerance, horizon, budget, or objective only when that information changes the answer

@@ -298,7 +298,7 @@ This is the kind of bug that is easy to miss in local testing and painful to dia
 
 This does not make the current feature useless, but it does mean another agent should not assume this is a genuine multi-agent architecture.
 
-#### 3. The comprehensive-analysis branch lacks real end-to-end coverage
+#### 3. The comprehensive-analysis path lacks real end-to-end coverage
 
 The current test comment says it is validating the orchestrated path, but the prompt used in `tests/e2e/cli.test.ts:185-187` does not match the trigger patterns in `src/analysts/orchestrator.ts:103-106`.
 

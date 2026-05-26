@@ -5,9 +5,21 @@ description: Documentation for the open source financial investigator.
 
 # OpenCandle Docs
 
-OpenCandle is an open source financial investigator: a terminal-first agent and local browser workbench for gathering market evidence, inspecting tool output, and turning real provider data into research answers.
+OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for gathering market evidence, inspecting tool output, and turning real provider data into research answers.
 
 It is built for investors, builders, and researchers who want the speed of an agent without hiding the source data. Tools fetch and format market, macro, options, fundamentals, filings, sentiment, and portfolio data. The model synthesizes after the evidence is gathered.
+
+## How OpenCandle Works
+
+OpenCandle keeps a simple research loop:
+
+1. You ask a financial question in the terminal or local GUI.
+2. OpenCandle identifies the kind of investigation: quote lookup, comparison, portfolio review, options strategy, filing check, macro question, sentiment read, education, or state update.
+3. It asks a focused follow-up only when a missing detail changes the answer.
+4. It gathers tool-backed evidence and surfaces provider gaps or stale data.
+5. It writes an answer that separates facts from judgment and names the important risks.
+
+Pi provides the local agent runtime, model setup, sessions, and terminal shell. OpenCandle adds the finance tools, workflows, provider integrations, local finance state, GUI cards, and evaluation harness.
 
 ## Start Here
 
@@ -18,9 +30,9 @@ It is built for investors, builders, and researchers who want the speed of an ag
 - [Data Sources](./data-sources.md) for provider coverage, optional keys, and local state.
 - [Configuration](./configuration.md) for env vars, file config, OpenCandle state files, and GUI runtime knobs.
 - [GUI Quickstart](./gui-quickstart.md) for the local browser workbench.
-- [System Architecture](./system-architecture.md) for routing, tools, providers, and runtime boundaries.
+- [System Architecture](./system-architecture.md) for how questions become investigations, evidence, and answers.
 - [Build a Tool](./build-a-tool.md) for adding first-party tools or external add-on packages.
-- [Testing and Evals](./testing-and-evals.md) for unit tests, harness traces, router fixtures, and live checks.
+- [Testing and Evals](./testing-and-evals.md) for validating tools, workflows, GUI behavior, and full-session quality.
 - [Benchmarking](./benchmarking.md) for comparing OpenCandle against generic no-tool agents.
 
 ## What OpenCandle Investigates
@@ -47,7 +59,7 @@ It is built for investors, builders, and researchers who want the speed of an ag
 
 Use OpenCandle when a question needs current or inspectable financial evidence: quotes, price history, options chains, filings, macro data, sentiment, watchlists, portfolio state, or a visible trail of what data was missing.
 
-Use a generic agent when the question is purely educational, does not need current market data, and would be better served by a short conceptual explanation. OpenCandle is designed for auditable market research, not for pretending every finance question needs a tool call.
+OpenCandle can answer pure education questions without unnecessary tools, but it is most differentiated when evidence matters. It is designed for auditable market research, not for pretending every finance question needs a data lookup.
 
 ## Common Workflows
 
