@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Prompt debt guardrails** — competitive-regression docs and a local prompt-debt unit guard now steer future fixes toward scoped routing, policy, evidence, contract, or harness changes instead of benchmark-specific prompt stuffing.
 - **Prompt-to-policy parity evidence** — main-vs-branch competitive replay reports, an OC superiority scorecard, deterministic portfolio exposure-map evidence, and observe-only semantic answer checks now make feature parity with `main` measurable without expanding the large router prompt.
 - **Competitive parity hardening** — concept, portfolio-diversification, retail tradeoff, debt payoff, high-risk speculation, and single-company financial-health prompts now use generic policy/playbook guidance that closes the six observed competitive losses without adding prompt-specific router rules.
 - **Competitive prompt parity fixes** — Fed/FOMC announcement searches now gate unsupported current-event claims behind official-source evidence, and covered-call education stays in policy-card synthesis with stale-option fallback guidance instead of over-dispatching to contract ranking.

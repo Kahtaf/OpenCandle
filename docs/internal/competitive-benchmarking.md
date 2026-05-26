@@ -119,11 +119,45 @@ The next engineering loop should convert recurring improvement ideas into target
 When OpenCandle loses, or wins with obvious quality gaps, treat the result as the start of a focused improvement loop:
 
 1. Read `competitorsDidBetter`, `openCandleImprovementIdeas`, OpenCandle classification, tool calls, ask-user transcript, and final text from the report.
-2. Decide whether the gap belongs to the harness, routing, prompt assembly, tool selection, data transformation, or final synthesis. Keep the fix at that layer.
+2. Decide whether the gap belongs to the harness, routing/planning selection, slot/entity extraction, tool capability, evidence normalization, answer contract, structured check, policy card, workflow prompt, or final synthesis. Keep the fix at that layer.
 3. Add a targeted test for the reusable behavior when possible. Examples: preserve useful baseline output even if a CLI exits non-zero, avoid leaking fallback assumptions as user-visible scaffolding, or convert raw macro series into interpretable rates.
 4. Rerun the exact prompt by setting `OPENCANDLE_COMPETITIVE_PROMPT` and the optional fixed-prompt metadata variables. Compare the new report against the prior report before broadening the change.
 5. Only generalize after the rerun shows the target behavior improved, or after the failure recurs across multiple generated prompts.
 6. If the loop caused any committed change, update `docs/internal/competitive-benchmark-history.md` before finishing.
+
+## Regression Fix Protocol
+
+Do not fix a competitive loss by appending benchmark-specific instructions to the fallback playbook or another broad prompt. The production fix must generalize beyond the one prompt that exposed the issue.
+
+Before editing prompts, classify the root cause and choose the narrowest durable layer:
+
+- `routing/planning selection`: the turn picked the wrong task family, workflow, policy card, or tool bundle.
+- `slot/entity extraction`: the right facts were present in the user prompt but were not captured or were confused, such as owned underlying versus catalyst ticker.
+- `tool capability`: OpenCandle needs a real provider/tool improvement, not more prose.
+- `evidence normalization`: tool output needs clearer dates, stale-data labels, source coverage, or provider-gap metadata.
+- `policy card`: the behavior is reusable for one task family and should render only for that selected family.
+- `workflow prompt`: the behavior belongs to an existing tool-backed workflow's orchestration.
+- `answer contract or structured check`: the answer shape, required disclosure, or no-fabrication rule should be enforced outside freeform prompt prose.
+- `eval assertion or harness`: the benchmark is judging the wrong thing, missing trace data, or accepting false positives.
+
+The fallback playbook is the last resort. Use it only for behavior that is universal across finance tasks, such as fetching data before stating current prices, labeling data gaps, or asking for genuinely missing required slots.
+
+For every competitive or prompt-policy regression fix, leave enough evidence for review:
+
+- failing prompt id and report path
+- root cause
+- chosen layer and why it generalizes
+- focused test or manifest assertion
+- exact rerun command and result
+- confirmation that benchmark-specific literals were not copied into production prompt guidance
+
+Benchmark-specific literals belong in eval manifests and tests, not in production prompt guidance. Good production wording uses reusable variables such as "the supplied debt rate", "the owned underlying", "the catalyst symbol", or "the user's stated horizon". Bad production wording copies a benchmark value such as a specific ticker, share count, cost basis, mortgage rate, or exact prompt phrase.
+
+Local guard: `tests/unit/prompts/prompt-debt-guard.test.ts` scans prompt-policy manifest literals against production prompt guidance. Run it when fixing prompt-policy or competitive regressions:
+
+```bash
+npx vitest run tests/unit/prompts/prompt-debt-guard.test.ts
+```
 
 Example rerun:
 

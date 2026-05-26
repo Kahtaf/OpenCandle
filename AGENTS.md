@@ -99,7 +99,7 @@ export const cache = new Cache();
 - Schema changes in memory SQLite tables
 
 **Never:**
-- Prompt engineering: never overfit the prompts to specific tickers or sectors
+- Prompt engineering: never overfit prompts to specific tickers, sectors, rates, dollar amounts, share counts, or benchmark phrases
 - Guess financial numbers, prices, ratios, or metrics
 - Downplay downside scenarios; always flag risks prominently
 - Hardcode mock data in tools; use providers
@@ -109,6 +109,8 @@ export const cache = new Cache();
 ## TESTING OPENCANDLE AS AN AGENT
 
 Use `runOpenCandleSession()` from `tests/harness/opencandle-runner.ts` for scripted evals and competitive benchmarking. For external-agent/manual ask-user driving, run `npx tsx tests/harness/cli.ts run --prompt "<prompt>" --ipc <ipc-dir>` in background, poll with `npx tsx tests/harness/cli.ts wait --ipc <ipc-dir>`, answer pending questions with `npx tsx tests/harness/cli.ts answer --ipc <ipc-dir> --value "<answer>"`, and read the final trace with `npx tsx tests/harness/cli.ts trace --ipc <ipc-dir>`.
+
+When fixing eval or competitive-benchmark regressions, classify the issue into the narrowest durable layer before editing prompts: routing/planning, slot/entity extraction, tool capability, evidence normalization, policy card, workflow prompt, answer contract, structured check, eval assertion, or harness. Do not append benchmark-specific instructions to the fallback playbook or a broad prompt. If production prompt guidance changes, run `npx vitest run tests/unit/prompts/prompt-debt-guard.test.ts` and keep benchmark literals in manifests/tests only.
 
 ## RUNTIME STATE
 - Pi config: `.pi/` and `~/.pi/agent/` — do not move into OpenCandle storage.
