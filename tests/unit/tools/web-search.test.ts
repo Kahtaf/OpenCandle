@@ -189,6 +189,34 @@ describe("search_web tool", () => {
     expect(result.content[0].text).toMatch(/cached/i);
   });
 
+  it("marks Fed announcement searches as unverified when official sources are absent", async () => {
+    const fedEnvelope: WebSearchEnvelope = {
+      query: "Fed meeting announcements",
+      results: [
+        {
+          title: "Analyst says Fed may shift policy",
+          url: "https://example.com/fed-commentary",
+          snippet: "A market strategist discussed potential Fed changes.",
+          source: "example.com",
+          published: "2026-05-26T06:00:00Z",
+          category: "news",
+        },
+      ],
+      resultCount: 1,
+      fetchedAt: "2026-05-26T07:00:00Z",
+      provider: "exa",
+    };
+    mockedSearchWeb.mockResolvedValue(okResult(fedEnvelope));
+
+    const result = await webSearchTool.execute("call-1", { query: "Fed meeting announcements" });
+
+    expect(result.content[0].text).toContain("[OPENCANDLE_SOURCE_GAP");
+    expect(result.content[0].text).toContain("official Fed/FOMC source");
+    expect(result.content[0].text).toContain("treat results as market commentary");
+    expect(result.content[0].text).toContain("Non-official results were omitted");
+    expect(result.content[0].text).not.toContain("Analyst says Fed may shift policy");
+  });
+
   it("emits [OPENCANDLE_SOFT_DEGRADED provider=brave ...] when Brave credential is missing and the cascade fell back", async () => {
     // 7.6/7.7 — Brave is the clearest soft-degraded case: if the user has no
     // Brave key, the cascade silently skipped Brave and the result comes from

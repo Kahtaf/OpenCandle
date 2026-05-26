@@ -46,7 +46,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
       `Underlying: $${chain.underlyingPrice.toFixed(2)}`,
       `Quote status: ${chain.quoteStatus.marketSession} / ${chain.quoteStatus.bidAskState}`,
       ...(chain.quoteStatus.warning
-        ? [`⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification.`]
+        ? [`⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification; do not stop at the stale quote caveat. Disclose the gap, avoid naming tradable live premiums, and finish the strategy explanation with mechanics, assignment outcomes, labeled hypotheticals, and what live broker quotes would change.`]
         : []),
       `Available expirations: ${formatAvailableExpirations(chain.expirationDates)}`,
       "",

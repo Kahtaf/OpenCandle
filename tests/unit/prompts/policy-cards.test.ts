@@ -116,6 +116,25 @@ describe("policy cards", () => {
     expect(options).toContain("wash-sale");
     expect(options).toContain("simple table");
     expect(options).toContain("long-term holdings");
+    expect(options).toContain("For volatility strategies such as long strangles or straddles");
+    expect(options).toContain("hypothetical stock price");
+    expect(options).toContain("break-even");
+    expect(options).toContain("IV crush");
+    expect(options).toContain("IV rank");
+    expect(options).toContain("profit target");
+    expect(options).toContain("position sizing");
+    expect(options).toContain("strangle versus straddle");
+    expect(options).toContain("pre-trade checklist");
+    expect(options).toContain("paper trading");
+    expect(options).toContain("tax treatment");
+    expect(options).toContain("Vega");
+    expect(options).toContain("Theta");
+    const valuation = getPolicyCard("concept_valuation_metric_education").content;
+    expect(valuation).toContain("simple analogy");
+    expect(valuation).toContain("rules of thumb");
+    expect(valuation).toContain("growth companies");
+    expect(valuation).toContain("value companies");
+    expect(valuation).toContain("set of considerations");
   });
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
@@ -142,6 +161,19 @@ describe("policy cards", () => {
     expect(rendered).toContain("market-closed");
     expect(rendered).toContain("unavailable DCF");
     expect(rendered).toContain("clear call");
+    expect(rendered).toContain("If provider financials fail");
+    expect(rendered).toContain("business model");
+    expect(rendered).toContain("dividend profile");
+    expect(rendered).toContain("financial-health, stability, revenue-trend, or profit-trend prompts");
+    expect(rendered).toContain("targeted web earnings context or SEC filing evidence");
+    expect(rendered).toContain("If the user explicitly asks for a metric");
+    expect(rendered).toContain("comparison is incomplete");
+    expect(rendered).toContain("do not make a strong buy/sell verdict");
+    expect(rendered).toContain("latest earnings report");
+    expect(rendered).toContain("revenue, EPS, guidance");
+    expect(rendered).toContain("analyst outlook");
+    expect(rendered).toContain("12-18 month");
+    expect(rendered).toContain("growth drivers");
     expect(renderPolicyCardForPlanning({
       ...singleAssetPlanning,
       behaviorMode: "observe_only",
@@ -178,6 +210,11 @@ describe("policy cards", () => {
     expect(rendered).toContain("dividend");
     expect(rendered).toContain("growth");
     expect(rendered).toContain("tax");
+    expect(rendered).toContain("explicitly requested metric");
+    expect(rendered).toContain("lead with that data gap");
+    expect(rendered).toContain("cannot fully answer the comparison");
+    expect(rendered).toContain("do not rank a winner");
+    expect(rendered).toContain("If the requested metric is missing for multiple peers");
     expect(renderPolicyCardForPlanning({
       ...assetPlanning,
       behaviorMode: "observe_only",
@@ -227,6 +264,14 @@ describe("policy cards", () => {
     expect(rendered).toContain("tax lots");
     expect(rendered).toContain("target bands");
     expect(rendered).toContain("risk tolerance");
+    expect(rendered).toContain("several allocation dials");
+    expect(rendered).toContain("why the current allocation is conservative or moderate");
+    expect(rendered).toContain("international diversification");
+    expect(rendered).toContain("home-country bias");
+    expect(rendered).toContain("Things to avoid");
+    expect(rendered).toContain("stress test");
+    expect(rendered).toContain("explicit assumptions");
+    expect(rendered).toContain("ETF-overlap");
     expect(renderPolicyCardForPlanning({
       ...rebalancePlanning,
       behaviorMode: "observe_only",
@@ -255,6 +300,23 @@ describe("policy cards", () => {
     expect(rendered).toContain("Do not use the conceptual-education");
     expect(rendered).toContain("Sleeve-by-sleeve implications");
     expect(rendered).toContain("Watchlist and invalidation");
+    expect(rendered).toContain("Do not assert a Fed meeting outcome");
+    expect(rendered).toContain("named policymaker");
+    expect(rendered).toContain("If the exact Fed announcement cannot be verified");
+    expect(rendered).toContain("official Federal Reserve or FOMC source");
+    expect(rendered).toContain("Hard official-source gate");
+    expect(rendered).toContain("federalreserve.gov");
+    expect(rendered).toContain("treat non-official search results as market commentary only");
+    expect(rendered).toContain("Ignore general web claims about Fed leadership");
+    expect(rendered).toContain("omit named policymakers and leadership changes entirely");
+    expect(rendered).toContain("Do not name specific geopolitical events");
+    expect(rendered).toContain("do not stop at rate datapoints");
+    expect(rendered).toContain("Verified announcement status");
+    expect(rendered).toContain("Bond impact");
+    expect(rendered).toContain("market_calendar");
+    expect(rendered).toContain("forward_rate_probabilities");
+    expect(rendered).toContain("2-year yield is above the 10-year yield");
+    expect(rendered).toContain("Do not call a 10Y > 2Y curve inverted");
     expect(renderPolicyCardForPlanning({
       ...macroPlanning,
       behaviorMode: "observe_only",
@@ -279,6 +341,21 @@ describe("policy cards", () => {
     expect(rendered).toContain("catalyst");
     expect(rendered).toContain("premium received");
     expect(rendered).toContain("protective put");
+    expect(rendered).toContain("good covered-call candidate only if");
+    expect(rendered).toContain("assignment outcomes");
+    expect(rendered).toContain("ex-dividend");
+    expect(rendered).toContain("annualized premium yield");
+    expect(rendered).toContain("roll, close, or let assignment happen");
+    expect(rendered).toContain("If the option chain is stale, empty, or unusable");
+    expect(rendered).toContain("do not stop at cannot rank contracts");
+    expect(rendered).toContain("labeled hypothetical example");
+    expect(rendered).toContain("hedge floor");
+    expect(rendered).toContain("premium as a percent of the stock position");
+    expect(rendered).toContain("whether it makes sense");
+    expect(rendered).toContain("Do not create a ranked contract table");
+    expect(rendered).toContain("How it works");
+    expect(rendered).toContain("Strike and expiration tradeoff");
+    expect(rendered).toContain("Alternatives");
     expect(renderPolicyCardForPlanning({
       ...optionsPlanning,
       behaviorMode: "observe_only",
@@ -389,10 +466,71 @@ describe("policy cards", () => {
     expect(rendered).toContain("For options education");
     expect(rendered).toContain("Main risks");
     expect(rendered).toContain("simple analogy");
+    expect(rendered).toContain("simple numerical example");
+    expect(rendered).toContain("common misconception");
+    expect(rendered).toContain("typical ranges or rules of thumb");
+    expect(rendered).toContain("spikes often accompany");
+    expect(rendered).toContain("For pure definition or interpretation prompts");
+    expect(rendered).toContain("do not force the Practical workflow");
+    expect(rendered).toContain("options-implied annualized volatility");
+    expect(rendered).toContain("daily expected-move rule");
+    expect(rendered).toContain("magnitude, not direction");
+    expect(rendered).toContain("Use direct Q&A headings");
+    expect(rendered).toContain("What a high reading means");
+    expect(rendered).toContain("What a low reading means");
+    expect(rendered).toContain("VIX / sqrt(252)");
+    expect(rendered).toContain("small range table");
+    expect(rendered).toContain("Practical takeaways");
+    expect(rendered).toContain("thermometer, not a forecast");
+    expect(rendered).toContain("term structure");
+    expect(rendered).toContain("Key things to keep straight");
+    expect(rendered).toContain("For high-risk speculation education");
+    expect(rendered).toContain("opportunity cost");
+    expect(rendered).toContain("do not use Practical workflow, Cross-checks, or Quick checklist");
+    expect(rendered).toContain("Why the win story is misleading");
+    expect(rendered).toContain("If you insist");
     expect(renderPolicyCardForPlanning({
       ...conceptPlanning,
       behaviorMode: "observe_only",
     })).toBe("");
+  });
+
+  it("keeps portfolio diversification reviews broad and synthesis-consistent", () => {
+    const rendered = renderPolicyCardForPlanning(planning({
+      taskFamily: "portfolio_review",
+      policyCardId: "portfolio_review",
+      evidencePlanId: "placeholder_portfolio_review",
+      answerContractId: "portfolio_review",
+      structuredCheckIds: ["data_gap_disclosed"],
+      capabilityGapIds: [],
+      behaviorMode: "replacement_active",
+    }));
+
+    expect(rendered).toContain("For tech-heavy diversification");
+    expect(rendered).toContain("healthcare");
+    expect(rendered).toContain("financials");
+    expect(rendered).toContain("industrials");
+    expect(rendered).toContain("international");
+    expect(rendered).toContain("core/satellite");
+    expect(rendered).toContain("do not present only one sector");
+    expect(rendered).toContain("exposure diagnosis");
+    expect(rendered).toContain("mega-cap concentration");
+    expect(rendered).toContain("valuation-multiple sensitivity");
+    expect(rendered).toContain("pre-purchase checks");
+    expect(rendered).toContain("target allocation bands");
+    expect(rendered).toContain("examples of fund types");
+    expect(rendered).toContain("equal-weight");
+    expect(rendered).toContain("value or dividend");
+    expect(rendered).toContain("systematic trimming");
+    expect(rendered).toContain("tax-aware");
+    expect(rendered).toContain("tax-loss harvesting");
+    expect(rendered).toContain("donating appreciated shares");
+    expect(rendered).toContain("across tax years");
+    expect(rendered).toContain("cost basis");
+    expect(rendered).toContain("target-date fund");
+    expect(rendered).toContain("glide path");
+    expect(rendered).toContain("already addresses inflation");
+    expect(rendered).toContain("core and satellite");
   });
 
   it("renders sentiment policy only after the slice leaves observe-only mode", () => {
@@ -462,6 +600,17 @@ describe("policy cards", () => {
     expect(rendered).toContain("cash sweep yields");
     expect(rendered).toContain("current yield facts");
     expect(rendered).toContain("6.8% mortgage");
+    expect(rendered).toContain("direct comparison table");
+    expect(rendered).toContain("cash drag");
+    expect(rendered).toContain("verify current fees");
+    expect(rendered).toContain("Debt payoff");
+    expect(rendered).toContain("avalanche");
+    expect(rendered).toContain("High-risk speculation");
+    expect(rendered).toContain("survivorship bias");
+    expect(rendered).toContain("opportunity cost");
+    expect(rendered).toContain("play-money bucket");
+    expect(rendered).toContain("safer alternatives");
+    expect(rendered).toContain("Do not use Practical workflow, Cross-checks, or Quick checklist");
     expect(renderPolicyCardForPlanning({
       ...retailPlanning,
       behaviorMode: "observe_only",

@@ -811,6 +811,32 @@ describe("route()", () => {
     }));
   });
 
+  it("keeps covered-call education and suitability prompts out of options workflow dispatch", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 200 shares of Microsoft (MSFT) and it's been flat. How does selling covered calls work, and is it a good idea?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread education as a contract screen",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.tool_bundles).toEqual(expect.arrayContaining(["core_market", "options"]));
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "options_workflow_corrected_to_policy_task",
+    }));
+  });
+
   it("enriches omitted protective-put hedge context from deterministic extraction", async () => {
     const result = await route(
       {

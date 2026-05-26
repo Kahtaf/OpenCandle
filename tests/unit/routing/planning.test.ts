@@ -408,6 +408,26 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("routes owned-share covered-call prompts to the options strategy slice", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "I own 200 shares of Microsoft (MSFT) and it's been flat. How does selling covered calls work, and is it a good idea?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["MSFT"] },
+      tool_bundles: ["core_market", "options"],
+    });
+
+    expect(planning.taskFamily).toBe("options_strategy");
+    expect(planning.policyCardId).toBe("options_strategy");
+    expect(planning.answerContractId).toBe("options_strategy");
+    expect(planning.commitmentMode).toBe("decision");
+    expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
   it("runs the macro allocation migration slice in replacement-active mode by default", () => {
     const planning = buildPlanningEnvelope({
       ...input,
@@ -522,6 +542,46 @@ describe("planning layer", () => {
 
     expect(planning.taskFamily).toBe("portfolio_review");
     expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+  });
+
+  it("selects portfolio rebalance review for existing allocation growth-adjustment prompts", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text:
+        "I have $50,000 in my Roth IRA. Currently, it's 70% VOO and 30% BND. " +
+        "I'm 35 and want to be a bit more aggressive. What are good ways to adjust this for higher growth without going crazy on risk?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["VOO", "BND"] },
+      tool_bundles: ["core_market", "macro"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+    expect(planning.answerContractId).toBe("portfolio_review");
+  });
+
+  it("reviews existing retirement target-date fund allocations before proposing replacements", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text:
+        "I'm 40 and have about $150,000 in my 401k, mostly in a target-date fund. " +
+        "I'm worried about inflation eating away at it. Should I look at other options to diversify or boost returns without taking crazy risks?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "portfolio",
+      workflow: "portfolio_builder",
+      entities: { budget: 150000, riskProfile: "balanced", symbols: [] },
+      tool_bundles: ["core_market", "macro"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_review");
+    expect(planning.answerContractId).toBe("portfolio_review");
   });
 
   it("keeps explicit portfolio construction prompts on portfolio_build", () => {

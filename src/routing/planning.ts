@@ -258,8 +258,8 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     migrated: false,
   },
   portfolio_review: {
-    routeKinds: ["agent_task"],
-    workflows: ["general_finance_qa"],
+    routeKinds: ["agent_task", "workflow_dispatch"],
+    workflows: ["general_finance_qa", "portfolio_builder"],
     taskFamily: "portfolio_review",
     commitmentMode: "decision",
     policyCardId: "portfolio_review",
@@ -273,7 +273,7 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
   },
   options_strategy: {
     routeKinds: ["workflow_dispatch", "agent_task"],
-    workflows: ["options_screener"],
+    workflows: ["options_screener", "general_finance_qa"],
     taskFamily: "options_strategy",
     commitmentMode: "decision",
     policyCardId: "options_strategy",
@@ -505,17 +505,21 @@ function selectionForTaskFamily(taskFamily: TaskFamily): PlanningSelection {
 }
 
 function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFamily {
+  const lower = text.toLowerCase();
   if (output.routeKind === "clarification") return "general_fallback";
   if (output.routeKind === "pass_through") return "general_fallback";
+  if (output.workflow === "portfolio_builder" && isExistingRetirementAllocationReviewPrompt(lower)) {
+    return "portfolio_review";
+  }
   if (output.workflow === "portfolio_builder") return "portfolio_build";
   if (output.workflow === "options_screener") return "options_strategy";
   if (output.workflow === "compare_assets") return "asset_compare";
   if (output.workflow === "watchlist_or_tracking") return "stateful_tracking_update";
 
-  const lower = text.toLowerCase();
   if (output.entities.symbols.length === 0 && isNoToolConceptEducationPrompt(lower)) {
     return "concept_explainer";
   }
+  if (isOptionsStrategyPrompt(lower)) return "options_strategy";
   if (/\bbacktest(?:ing|ed)?\b/.test(lower)) {
     return "backtest_review";
   }
@@ -588,7 +592,11 @@ function refinePlanningSelectionForPrompt(
     }
   }
 
-  if (selection.taskFamily === "portfolio_review" && isPortfolioRebalancePrompt(lower)) {
+  if (
+    selection.taskFamily === "portfolio_review" &&
+    isPortfolioRebalancePrompt(lower) &&
+    !isExistingRetirementAllocationReviewPrompt(lower)
+  ) {
     return {
       ...selection,
       policyCardId: "portfolio_rebalance_review",
@@ -658,6 +666,11 @@ function isOptionsEducationPrompt(lower: string): boolean {
   return /\b(?:covered\s+calls?|protective\s+puts?|options?|option\s+premium|assignment\s+risk|strike|expiration|delta|theta|greeks?)\b/.test(lower);
 }
 
+function isOptionsStrategyPrompt(lower: string): boolean {
+  return /\b(?:covered\s+calls?|protective\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|options?\s+income|option\s+strategy|hedge|collar)\b/.test(lower) &&
+    /\b(?:own|shares?|position|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge)\b/.test(lower);
+}
+
 function isInflationCashEducationPrompt(lower: string): boolean {
   return /\b(?:inflation|purchasing\s+power|real\s+returns?|cash\s+savings?|cash\s+drag|tips|short(?:er)?[-\s]?duration)\b/.test(lower) &&
     /\b(?:cash|savings?|purchasing\s+power|real\s+returns?|bonds?|tips|protect|protection|affect)\b/.test(lower);
@@ -668,8 +681,14 @@ function isValuationMetricEducationPrompt(lower: string): boolean {
 }
 
 function isPortfolioRebalancePrompt(lower: string): boolean {
-  return /\b(?:portfolio|allocation|holdings?|sleeves?|s&p\s*500|index|equity|bonds?|cash)\b/.test(lower) &&
-    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration)\b/.test(lower);
+  return /\b(?:portfolio|allocation|holdings?|sleeves?|ira|etfs?|funds?|s&p\s*500|index|equity|bonds?|cash)\b/.test(lower) &&
+    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth)\b/.test(lower);
+}
+
+function isExistingRetirementAllocationReviewPrompt(lower: string): boolean {
+  return /\b(?:401k|401\(k\)|retirement|target[-\s]?date|tdf)\b/.test(lower) &&
+    /\b(?:mostly|current(?:ly)?|already|have|holding|invested|allocation)\b/.test(lower) &&
+    /\b(?:review|solid|worried|inflation|diversify|boost returns?|other options?|without taking crazy risks?|risk)\b/.test(lower);
 }
 
 function mergeCapabilityGaps(

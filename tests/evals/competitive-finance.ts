@@ -677,7 +677,7 @@ function parseJsonPayload(raw: string): unknown {
     try {
       return JSON.parse(candidate);
     } catch (error) {
-      const repaired = repairCommonMissingCommas(candidate);
+      const repaired = repairMalformedJson(candidate);
       if (repaired !== candidate) return JSON.parse(repaired);
       throw error;
     }
@@ -696,11 +696,115 @@ function parseJsonPayload(raw: string): unknown {
   }
 }
 
+function repairMalformedJson(payload: string): string {
+  return trimAfterFirstCompleteJson(balanceJsonDelimiters(repairCommonMissingCommas(payload)));
+}
+
 function repairCommonMissingCommas(payload: string): string {
+  const jsonValueEnd = /("(?:[^"\\]|\\.)*"|\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)|\]|\})/g;
   return payload
-    .replace(/("(?:[^"\\]|\\.)*")(\s*\r?\n\s*)"/g, "$1,$2\"")
-    .replace(/(\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null))(\s*\r?\n?\s*)"/g, "$1,$2\"")
-    .replace(/(\]|\})(\s*\r?\n\s*)"/g, "$1,$2\"");
+    .replace(jsonValueEnd, (match, value: string, offset: number, full: string) => {
+      const rest = full.slice(offset + match.length);
+      const whitespace = rest.match(/^\s*/)?.[0] ?? "";
+      const next = rest.slice(whitespace.length, whitespace.length + 1);
+      if (!whitespace.includes("\n")) return match;
+      if (!next || next === "," || next === "]" || next === "}" || next === ":") return match;
+      if (next === "\"" || next === "{" || next === "[" || next === "-" || /\d|t|f|n/.test(next)) {
+        return `${value},`;
+      }
+      return match;
+    });
+}
+
+function balanceJsonDelimiters(payload: string): string {
+  let repaired = "";
+  const stack: Array<"{" | "["> = [];
+  let inString = false;
+  let escaped = false;
+
+  for (const char of payload) {
+    repaired += char;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === "{" || char === "[") {
+      stack.push(char);
+      continue;
+    }
+
+    if (char === "}" || char === "]") {
+      const expected = char === "}" ? "{" : "[";
+      if (stack.at(-1) === expected) {
+        stack.pop();
+        continue;
+      }
+      repaired = repaired.slice(0, -1);
+      if (!stack.includes(expected)) continue;
+      while (stack.length > 0 && stack.at(-1) !== expected) {
+        repaired += closeDelimiter(stack.pop());
+      }
+      repaired += char;
+      if (stack.at(-1) === expected) stack.pop();
+    }
+  }
+
+  while (stack.length > 0) {
+    repaired += closeDelimiter(stack.pop());
+  }
+  return repaired;
+}
+
+function trimAfterFirstCompleteJson(payload: string): string {
+  const stack: Array<"{" | "["> = [];
+  let inString = false;
+  let escaped = false;
+  let started = false;
+
+  for (let index = 0; index < payload.length; index += 1) {
+    const char = payload[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === "{" || char === "[") {
+      started = true;
+      stack.push(char);
+      continue;
+    }
+    if (char === "}" || char === "]") {
+      const expected = char === "}" ? "{" : "[";
+      if (stack.at(-1) !== expected) continue;
+      stack.pop();
+      if (started && stack.length === 0) return payload.slice(0, index + 1);
+    }
+  }
+
+  return payload;
+}
+
+function closeDelimiter(open: "{" | "[" | undefined): string {
+  return open === "[" ? "]" : "}";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

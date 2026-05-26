@@ -132,5 +132,7 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("Quote status: pre_market");
     expect(text).toContain("closed_market_or_stale_quotes");
     expect(text).toContain("do not treat zero bid/ask as confirmed live illiquidity");
+    expect(text).toContain("do not stop at the stale quote caveat");
+    expect(text).toContain("finish the strategy explanation");
   });
 });

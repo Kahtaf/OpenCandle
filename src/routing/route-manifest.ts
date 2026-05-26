@@ -255,6 +255,9 @@ export function selectToolBundles(output: Pick<RouterOutput, "routeKind" | "work
   if (output.entities.symbols.length > 0) {
     bundles.add("core_market");
   }
+  if (output.entities.optionStrategy) {
+    bundles.add("options");
+  }
 
   return Array.from(bundles);
 }

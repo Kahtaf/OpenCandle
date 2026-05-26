@@ -39,7 +39,7 @@ export const DEFAULT_BUDGETS: Record<SectionName, number> = {
   "base-role": 1500,
   "safety-rules": 6000,
   "tool-catalog": 3000,
-  "workflow-instructions": 16000,
+  "workflow-instructions": 18000,
   "memory-context": 2000,
   "provider-status": 500,
   "output-format": 2500,

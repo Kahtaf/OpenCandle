@@ -238,6 +238,25 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    next.workflow === "options_screener" &&
+    isOptionsEducationOrSuitabilityRequest(text) &&
+    !isSpecificOptionContractSelectionRequest(text)
+  ) {
+    diagnostics.push({
+      code: "options_workflow_corrected_to_policy_task",
+      message: "options education or suitability prompt should use policy-card synthesis, not contract-screen workflow dispatch",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
   // Legacy rules may recover a primary route only when the LLM router path has
   // already failed validation. Otherwise they are limited to enrichment and
   // narrow corrections below.
@@ -516,6 +535,18 @@ function isSpecializedSingleAssetPolicyRequest(text: string): boolean {
 
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {
   return isCoveredCallRequest(text) || extracted.optionStrategy === "protective_put";
+}
+
+function isOptionsEducationOrSuitabilityRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:how\s+does|how\s+do|explain|what\s+is|good\s+idea|make\s+sense|suitable|suitability|is\s+it\s+(?:good|worth|smart))\b/.test(lower) &&
+    /\b(?:covered\s+calls?|protective\s+puts?|options?|selling\s+calls?|option\s+income)\b/.test(lower);
+}
+
+function isSpecificOptionContractSelectionRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:best|which|what\s+(?:strike|contract|option)|rank|screen|specific|right\s+now|today|around\s+earnings|expiration|dte|premium\s+under)\b/.test(lower) &&
+    /\b(?:sell|buy|trade|contract|strike|expiration|premium|call|put)\b/.test(lower);
 }
 
 function mergeSymbols(primary: string[], secondary: string[]): string[] {

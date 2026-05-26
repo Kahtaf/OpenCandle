@@ -5,6 +5,8 @@
 ### Added
 
 - **Prompt-to-policy parity evidence** — main-vs-branch competitive replay reports, an OC superiority scorecard, deterministic portfolio exposure-map evidence, and observe-only semantic answer checks now make feature parity with `main` measurable without expanding the large router prompt.
+- **Competitive parity hardening** — concept, portfolio-diversification, retail tradeoff, debt payoff, high-risk speculation, and single-company financial-health prompts now use generic policy/playbook guidance that closes the six observed competitive losses without adding prompt-specific router rules.
+- **Competitive prompt parity fixes** — Fed/FOMC announcement searches now gate unsupported current-event claims behind official-source evidence, and covered-call education stays in policy-card synthesis with stale-option fallback guidance instead of over-dispatching to contract ranking.
 - **ETF holdings overlap tool** — `analyze_holdings_overlap` fetches Yahoo fund top-holdings data and computes pairwise ETF/fund overlap by weight, giving portfolio and ETF comparison prompts a provider-backed alternative to generic correlation-only overlap checks.
 - **ETF overlap prompt wiring** — asset-compare prompts and migration checks now require `analyze_holdings_overlap` for ETF/fund overlap before falling back to correlation-only diversification evidence.
 - **Product eval parity hardening** — portfolio, options, macro-rate, and inflation-education policy paths now emit stable horizon, data-gap, and framework wording that keeps product replay ahead of `main` without broadening the router prompt.

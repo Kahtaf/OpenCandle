@@ -219,8 +219,8 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Ticker Disambiguation Policy");
-    expect(result).toContain("For ticker-alias or alternate-symbol prompts");
-    expect(result).toContain("If ticker lookup fails but the user is asking an earnings, event-risk, or holdings-risk question");
+    expect(result).toContain("distinguish the current primary ticker from a legacy ticker");
+    expect(result).toContain("lead with a risk-first trim/hedge/hold framework");
     expect(result).not.toContain("Sentiment Snapshot Policy");
     expect(result).not.toContain("Asset Compare Policy");
   });
@@ -513,7 +513,7 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Single Asset Decision Policy");
-    expect(result).toContain("For single-asset recommendation prompts");
+    expect(result).toContain("For single-security buy, sell, wait, avoid, trim, add, size, or entry prompts");
     expect(result).toContain("state the quote or tool-output date");
   });
 
@@ -563,7 +563,7 @@ describe("PromptContextBuilder", () => {
     expect(result).not.toContain("For single-asset recommendation prompts");
     expect(result).toContain("quote or tool-output date");
     expect(result).toContain("market-closed");
-    expect(result).toContain("unavailable DCF");
+    expect(result).toContain("If DCF, fundamentals");
   });
 
   it("uses the macro allocation policy with legacy macro clauses during dual run", () => {
@@ -970,6 +970,17 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("state the trend direction");
     expect(result).toContain("estimate the order of magnitude of the impact");
     expect(result).toContain("End macro portfolio answers with a short bottom line");
+    expect(result).toContain("If the exact Fed announcement cannot be verified");
+    expect(result).toContain("official Federal Reserve or FOMC source");
+    expect(result).toContain("Hard official-source gate");
+    expect(result).toContain("federalreserve.gov");
+    expect(result).toContain("treat non-official search results as market commentary only");
+    expect(result).toContain("Ignore general web claims about Fed leadership");
+    expect(result).toContain("omit named policymakers and leadership changes entirely");
+    expect(result).toContain("Do not name specific geopolitical events");
+    expect(result).toContain("Do not call a 10Y > 2Y curve inverted");
+    expect(result).toContain("Verified announcement status");
+    expect(result).toContain("do not stop at rate datapoints");
     expect(result).toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
     expect(result).toContain("Structural portfolio read");
     expect(result).toContain("What this does not fix");
@@ -1017,6 +1028,12 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("relative multiples");
     expect(result).toContain("growth-adjusted multiples");
     expect(result).toContain("cash-flow quality");
+    expect(result).toContain("If core fundamentals or financials fail");
+    expect(result).toContain("business model");
+    expect(result).toContain("dividend profile");
+    expect(result).toContain("official filings");
+    expect(result).toContain("financial-health, stability, revenue-trend, or profit-trend prompts");
+    expect(result).toContain("targeted web earnings context or SEC filing evidence");
   });
 
   it("tells retail account and product-selection answers not to punt when no live tool exists", () => {
@@ -1025,13 +1042,27 @@ describe("PromptContextBuilder", () => {
       missingRequired: [],
     });
 
-    expect(result).toContain("brokerage, account, fund-platform, or financial-product selection prompts");
+    expect(result).toContain("brokerage, account, fund-platform, robo-advisor, or financial-product selection prompts");
     expect(result).toContain("Do not punt just because no dedicated live-data tool exists");
     expect(result).toContain("cash sweep yields");
     expect(result).toContain("fractional shares");
     expect(result).toContain("fund minimums");
     expect(result).toContain("ETF tax efficiency");
     expect(result).toContain("simple next step");
+    expect(result).toContain("direct comparison table");
+    expect(result).toContain("cash drag");
+    expect(result).toContain("verify current fees");
+    expect(result).toContain("Debt payoff prompts");
+    expect(result).toContain("avalanche");
+    expect(result).toContain("snowball");
+    expect(result).toContain("monthly interest cost");
+    expect(result).toContain("High-risk speculation prompts");
+    expect(result).toContain("limited capital");
+    expect(result).toContain("opportunity cost");
+    expect(result).toContain("play-money bucket");
+    expect(result).toContain("safer alternatives");
+    expect(result).toContain("do not use Practical workflow, Cross-checks, or Quick checklist");
+    expect(result).toContain("Why the win story is misleading");
   });
 
   it("moves unknown-ticker earnings guidance to the ticker-disambiguation policy card", () => {
@@ -1449,8 +1480,8 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Retail Finance Tradeoff Policy");
-    expect(result).toContain("For brokerage, account, fund-platform, or financial-product selection prompts");
-    expect(result).toContain("Do not punt just because no dedicated live-data tool exists");
+    expect(result).toContain("brokerage, account, cash-parking, mortgage-vs-investing, robo-advisor");
+    expect(result).toContain("Do not punt just because no dedicated live-data provider exists");
   });
 
   it("uses the retail policy without retaining the legacy retail clause after replacement activation", () => {
@@ -1512,9 +1543,18 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Do not fetch live data unless the user asks for current examples");
     expect(result).toContain("do not mention OpenCandle tool names");
     expect(result).toContain("Bottom line");
-    expect(result).toContain("practical step-by-step workflow");
-    expect(result).toContain("evidence/base-rate view");
-    expect(result).toContain("concrete study names or rough percentages");
+    expect(result).toContain("simple numerical example");
+    expect(result).toContain("common misconception cases");
+    expect(result).toContain("typical ranges or rules of thumb");
+    expect(result).toContain("For pure definition or interpretation prompts");
+    expect(result).toContain("do not force the Practical workflow");
+    expect(result).toContain("options-implied annualized volatility");
+    expect(result).toContain("VIX / sqrt(252)");
+    expect(result).toContain("small range table");
+    expect(result).toContain("direct Q&A");
+    expect(result).toContain("Practical takeaways");
+    expect(result).toContain("thermometer, not a forecast");
+    expect(result).toContain("term structure");
     expect(result).toContain("behavioral or implementation tradeoff");
     expect(result).toContain("simple self-check questions");
     expect(result).toContain("different investor profiles");
