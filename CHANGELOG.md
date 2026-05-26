@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Local GUI shutdown now exits cleanly from a single `Ctrl+C` by closing browser connections before waiting on the HTTP server.
+
 ## [0.5.0] - 2026-05-26
 
 ### Added

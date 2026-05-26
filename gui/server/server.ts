@@ -40,6 +40,7 @@ import {
 import { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
+import { createGracefulShutdown } from "./shutdown.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 
 const cwd = process.cwd();
@@ -186,8 +187,25 @@ server.listen(port, host, () => {
   console.log(`Writer role: ${lockResult.role}`);
 });
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+const shutdown = createGracefulShutdown({
+  server,
+  cleanup: async () => {
+    clearInterval(heartbeat);
+    if (poller) {
+      clearInterval(poller);
+      poller = null;
+    }
+    for (const client of clients) client.close();
+    clients.clear();
+    unsubscribeSession();
+    releaseWriterLock(sessionDir);
+    await runtime.dispose();
+  },
+  exit: (code) => process.exit(code),
+});
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
 
 async function handleClientMessage(client: WsClient, message: unknown): Promise<void> {
   const data = asRecord(message);
@@ -691,13 +709,4 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-}
-
-function shutdown(): void {
-  clearInterval(heartbeat);
-  if (poller) clearInterval(poller);
-  releaseWriterLock(sessionDir);
-  void runtime.dispose().finally(() => {
-    server.close(() => process.exit(0));
-  });
 }
