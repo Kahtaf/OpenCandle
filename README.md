@@ -1,125 +1,85 @@
 # OpenCandle
 
-OpenCandle is an open source financial investigator built with TypeScript and Pi. Pi is the bundled local agent runtime that provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle adds finance research on top: it understands what kind of financial question you asked, gathers market, macro, options, fundamentals, filings, sentiment, and portfolio evidence from real sources, then turns that evidence into a risk-aware answer.
+```bash
+npx opencandle
+# or
+npx opencandle gui
+```
 
-This repository is useful in three ways:
+OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for market research that starts from real provider data, shows source gaps, and keeps risk visible.
 
-- Run `opencandle` as an interactive CLI for market research
-- Open the local GUI for chat, tool discovery, provider status, and session history
-- Extend OpenCandle with new tools, providers, or Pi-compatible add-on packages
+[Docs](./docs/index.md) | [First run](./docs/first-run.md) | [GUI quickstart](./docs/gui-quickstart.md) | [Data sources](./docs/data-sources.md) | [Build a tool](./docs/build-a-tool.md)
 
-![OpenCandle terminal demo](./assets/demo.gif)
+## See It Work
 
-## Why OpenCandle?
+### Terminal UI
 
-Financial research gets messy when evidence is scattered across quote pages, filings, macro dashboards, sentiment feeds, and ad hoc spreadsheets. OpenCandle gives the agent explicit tools, provider boundaries, and local state so research stays inspectable: gather the data first, show the gaps, then synthesize without pretending uncertainty disappeared.
+<video src="https://raw.githubusercontent.com/Kahtaf/opencandle/main/assets/opencandle-tui.mp4" controls muted playsinline title="OpenCandle terminal UI demo"></video>
 
-OpenCandle is strongest when the answer depends on live or inspectable financial evidence: quotes, histories, options chains, filings, macro series, sentiment, local portfolio state, and source-gap disclosure. It can also answer educational questions without forcing unnecessary data lookups. OpenCandle's job is to make financial research auditable and useful without pretending uncertainty disappeared.
+### Local GUI
 
-## What You Can Use It For
+<video src="https://raw.githubusercontent.com/Kahtaf/opencandle/main/assets/opencandle-gui.mp4" controls muted playsinline title="OpenCandle local GUI demo"></video>
 
-- Quote and history lookups for stocks and crypto
-- Options chains with locally computed Greeks
-- Company fundamentals, earnings, and SEC filings
-- FRED macro series and the alternative.me crypto Fear & Greed index
-- Reddit-based sentiment and discussion lookups
-- Portfolio tracking, watchlists, correlation, and risk analysis
-- Multi-step workflows such as `/analyze NVDA`
-- Clarifying follow-ups when a ticker, goal, horizon, or risk profile is ambiguous
-- Source-gap and stale-data warnings when a provider is missing, delayed, or unavailable
+## Why OpenCandle
 
-OpenCandle is designed to fetch and format data. The model handles synthesis. Tool code should not invent financial conclusions or hardcode market numbers.
+Most finance agents answer too early. OpenCandle is built around the opposite loop: understand the question, gather market evidence, disclose missing or stale data, then synthesize.
+
+Use it when a question needs inspectable evidence:
+
+- What is this stock or crypto trading at right now?
+- How do two companies compare across price action, fundamentals, filings, and sentiment?
+- What does the options chain imply, and where are the Greeks?
+- How exposed is my local portfolio or watchlist?
+- What macro series, filings, or sentiment sources support the answer?
 
 OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
-## Install And Run
+## Highlights
+
+| Capability | What it gives you |
+| --- | --- |
+| Terminal agent | Fast keyboard-driven research inside Pi's local TUI, with sessions, slash commands, model setup, and saved transcripts. |
+| Local browser GUI | Chat, session history, provider setup, tool discovery, workflow launches, and richer financial result cards at `http://127.0.0.1:14567`. |
+| Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
+| Finance routing | Quote lookup, comparison, portfolio review, options strategy, filing checks, macro questions, sentiment reads, and educational prompts route differently. |
+| Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
+| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set. |
+| Extensible tools | TypeScript tool APIs, provider boundaries, workflow builders, and package exports for add-on tools. |
+| Eval harness | Unit tests, live provider checks, CLI e2e, GUI browser smoke tests, and competitive finance evals. |
+
+## Quick Start
 
 Requires Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0 <27`.
 
-### CLI
+```bash
+npx opencandle
+```
+
+On first run, OpenCandle walks you through model setup. You can use Pi sign-in when available or provide a model API key. Data-provider keys are separate and optional.
+
+Start the GUI instead:
 
 ```bash
-npm install -g opencandle
-opencandle
-
-# or without installing globally
-npx opencandle@latest
+npx opencandle gui
 ```
 
-### From Source
+Then open `http://127.0.0.1:14567`.
 
-```bash
-npm install
-cp .env.example .env
-npm start
+For a five-minute path from install to a successful answer, see [docs/first-run.md](./docs/first-run.md).
+
+## Example Prompts
+
+```text
+/analyze NVDA
+What is AAPL trading at?
+Compare MSFT and GOOGL using price, fundamentals, and sentiment
+Show me TSLA puts with Greeks
+Get the fed funds rate from FRED
+Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
+Run risk analysis on SPY
 ```
 
-On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`.
-
-On first run, OpenCandle walks you through model setup. You can rerun that flow later with `/setup`.
-
-For a step-by-step happy path, see [docs/first-run.md](./docs/first-run.md).
-
-## Configuration
-
-Model access comes from Pi. Market data providers are optional and additive. A `.env` file in the current working directory is loaded at startup, and env values override values from `~/.opencandle/config.json`. If the same key is both exported in your shell and present in `.env`, the `.env` value wins.
-
-| Key | Required | Used For |
-| --- | --- | --- |
-| `GEMINI_API_KEY` | No | Google models through Pi |
-| `OPENAI_API_KEY` | No | OpenAI models through Pi |
-| `ANTHROPIC_API_KEY` | No | Anthropic models through Pi |
-| `ALPHA_VANTAGE_API_KEY` | No | Fundamentals, earnings, financial statements |
-| `FRED_API_KEY` | No | Macro series such as rates, CPI, GDP, unemployment |
-| `BRAVE_API_KEY` | No | Brave web search fallback |
-| `EXA_API_KEY` | No | Exa web search |
-| `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
-| `OPENCANDLE_HOME` | No | Override OpenCandle state directory |
-| `OPENCANDLE_ROUTER_MODE` | No | Advanced request-understanding mode; keep the default unless debugging |
-| `OPENCANDLE_TOOL_SCOPE_MODE` | No | `observe` by default; set `enforce` to apply route-selected active tools |
-| `OPENCANDLE_DEBATE` | No | Set `false` or `0` to disable bull/bear debate |
-| `OPENCANDLE_GUI_HOST` | No | GUI bind host, default `127.0.0.1` |
-| `OPENCANDLE_GUI_PORT` | No | GUI port, default `14567` |
-
-Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require keys.
-
-OpenCandle stores its own user state in `~/.opencandle/` by default. Pi configuration stays in `.pi/` and `~/.pi/agent/`. The CLI should not depend on repo-local `.pi/extensions/`.
-
-Provider keys can also be stored in `~/.opencandle/config.json`:
-
-```json
-{
-  "providers": {
-    "alphaVantage": {
-      "apiKey": "..."
-    },
-    "fred": {
-      "apiKey": "..."
-    },
-    "brave": {
-      "apiKey": "..."
-    },
-    "exa": {
-      "apiKey": "..."
-    },
-    "finnhub": {
-      "apiKey": "..."
-    }
-  }
-}
-```
-
-Environment variables override values from `~/.opencandle/config.json`. Set `OPENCANDLE_HOME` if you want OpenCandle state somewhere other than `~/.opencandle/`.
-
-See [docs/configuration.md](./docs/configuration.md) for the full env var, file config, state file, and GUI runtime reference.
-
-## Basic Usage
-
-OpenCandle runs inside Pi's interactive terminal UI. The local GUI can be started with `opencandle gui` from an installed package or `npm run gui` from a checkout.
-
-See [docs/tui.md](./docs/tui.md) for terminal usage, sessions, and slash-command behavior.
-
-Useful commands:
+Useful slash commands:
 
 ```text
 /setup
@@ -129,66 +89,98 @@ Useful commands:
 /analyze AAPL
 ```
 
-Example prompts:
-
-```text
-What is AAPL trading at?
-Get the options chain for TSLA expiring next month
-Show me MSFT puts with Greeks
-Get the fed funds rate from FRED
-Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
-Run risk analysis on SPY
-```
-
-## Local GUI
-
-The GUI is a local browser workbench for chat, session history, tool discovery, provider setup, and richer financial result cards.
-
-```bash
-opencandle gui
-# or from a checkout
-npm run gui
-```
-
-Then open `http://127.0.0.1:14567`.
-
-![OpenCandle GUI](./website/assets/gui-screenshot.png)
-
-From the GUI you can ask normal chat questions, launch workflows from the catalog, run one tool directly, answer clarification cards, inspect tool output, connect provider keys, and reopen prior sessions. Workflow catalog entries become structured chat prompts, so the result still appears in the same transcript with tool cards and source warnings.
-
-The GUI reports whether it is the session `writer` or a read-only `follower` at `/health`. See [docs/gui-quickstart.md](./docs/gui-quickstart.md).
-
-## Data Sources And Tool Coverage
+## Data Sources
 
 | Area | Examples | Source |
 | --- | --- | --- |
-| Market data | quotes, history, ticker search, crypto price/history | Yahoo Finance, Alpha Vantage fallback when configured, CoinGecko |
-| Options | chains, open interest, IV, Greeks | Yahoo Finance plus local calculations |
-| Fundamentals | overview, financials, earnings, DCF, company comparison | Alpha Vantage |
-| Macro | economic series, crypto Fear & Greed | FRED, alternative.me |
-| Technical | indicators, strategy backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment with cross-source pipeline | Reddit JSON API, Twitter/X local browser session, Finnhub, Exa, Brave, DuckDuckGo |
+| Market data | Quotes, history, ticker search, crypto price and history | Yahoo Finance, Alpha Vantage fallback when configured, CoinGecko |
+| Options | Chains, open interest, IV, locally computed Greeks | Yahoo Finance plus local calculations |
+| Fundamentals | Overview, financials, earnings, DCF, comparable companies | Alpha Vantage |
+| Macro | Rates, CPI, GDP, unemployment, crypto Fear & Greed | FRED, alternative.me |
+| Technical | Indicators and strategy backtests | Local calculations over market history |
+| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | Reddit JSON API, Twitter/X local browser session, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
-| Portfolio | watchlist, prediction tracking, correlation, risk | Local state plus market data |
+| Portfolio | Watchlists, holdings, prediction tracking, correlation, risk | Local state plus market data |
 
-## Engineering Notes
+Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
 
-### Project Shape
+## Configuration
+
+Model access comes from Pi. Market data provider keys can be set in the environment, through `/connect`, through the GUI provider setup flow, or in `~/.opencandle/config.json`.
+
+| Key | Used For |
+| --- | --- |
+| `GEMINI_API_KEY` | Google models through Pi |
+| `OPENAI_API_KEY` | OpenAI models through Pi |
+| `ANTHROPIC_API_KEY` | Anthropic models through Pi |
+| `ALPHA_VANTAGE_API_KEY` | Fundamentals, earnings, financial statements, DCF, comps |
+| `FRED_API_KEY` | Macro series such as rates, CPI, GDP, unemployment |
+| `BRAVE_API_KEY` | Brave web search fallback |
+| `EXA_API_KEY` | Exa web search |
+| `FINNHUB_API_KEY` | Finnhub company news for sentiment summaries |
+| `OPENCANDLE_HOME` | Override OpenCandle state directory |
+| `OPENCANDLE_GUI_HOST` | GUI bind host, default `127.0.0.1` |
+| `OPENCANDLE_GUI_PORT` | GUI port, default `14567` |
+
+Environment variables override `~/.opencandle/config.json`. See [docs/configuration.md](./docs/configuration.md) for the full reference, including advanced routing and diagnostic switches.
+
+## From Source
+
+```bash
+git clone https://github.com/Kahtaf/OpenCandle.git
+cd OpenCandle
+npm install
+cp .env.example .env
+npm start
+```
+
+On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`.
+
+Run the local GUI from a checkout:
+
+```bash
+npm run gui
+```
+
+## How It Fits Together
+
+```text
+User prompt
+  -> routing and slot resolution
+  -> tools and workflows gather provider-backed evidence
+  -> provider gaps, stale data, and warnings are preserved
+  -> model synthesizes a risk-aware answer
+  -> terminal or GUI session records the trace
+```
+
+Project shape:
 
 ```text
 src/
-├── providers/    API clients
-├── tools/        Tool implementations by domain
-├── infra/        Cache, rate limiter, HTTP, browser, paths
-├── routing/      Request understanding, entity extraction, and slot resolution
-├── workflows/    Multi-step workflow builders
-├── memory/       SQLite-backed state and retrieval
-├── analysts/     Multi-analyst orchestration
-├── pi/           Pi integration and session wiring
-└── index.ts      Public exports
+|-- providers/    API clients
+|-- tools/        Tool implementations by domain
+|-- infra/        Cache, rate limiter, HTTP, browser, paths
+|-- routing/      Request understanding, entity extraction, slot resolution
+|-- workflows/    Multi-step workflow builders
+|-- memory/       SQLite-backed state and retrieval
+|-- analysts/     Multi-analyst orchestration
+|-- pi/           Pi integration and session wiring
+`-- index.ts      Public exports
 ```
 
-### Development Commands
+Package exports:
+
+- `opencandle`
+- `opencandle/tool-kit`
+- `opencandle/infra`
+- `opencandle/types`
+- `opencandle/providers`
+- `opencandle/tools`
+- `opencandle/workflows`
+
+If you want to add a new first-party tool or publish an add-on package, start with [docs/build-a-tool.md](./docs/build-a-tool.md).
+
+## Development
 
 ```bash
 npm start
@@ -204,35 +196,23 @@ npm run test:evals:product
 npm run test:evals:competitive
 ```
 
-`npm test` is the required baseline check after changes.
+Baseline check:
+
+```bash
+npm test
+```
 
 The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. Run them intentionally; see [docs/testing-and-evals.md](./docs/testing-and-evals.md).
 
-### Repository Rules That Matter
+Repository rules that matter:
 
-- TDD is mandatory for behavior changes
-- Unit tests mock `globalThis.fetch` and use JSON fixtures
-- Use `cache` and `rateLimiter` for external calls
-- Tools fetch and format data; analysts and prompts synthesize
-- Keep typing strict and use `.js` extensions on relative imports
+- Unit tests mock `globalThis.fetch` and use fixture JSON.
+- External calls go through shared cache and rate-limiter infrastructure.
+- Tools fetch and format; analysts and prompts synthesize.
+- Relative TypeScript imports use `.js` extensions.
+- Behavior changes should be test-first.
 
-### Public Package Exports
-
-Besides the CLI, the package exposes pieces for engineers building on top of OpenCandle:
-
-- `opencandle`
-- `opencandle/tool-kit`
-- `opencandle/infra`
-- `opencandle/types`
-- `opencandle/providers`
-- `opencandle/tools`
-- `opencandle/workflows`
-
-If you want to add a new tool or publish an add-on package, start with [docs/build-a-tool.md](./docs/build-a-tool.md).
-
-## Testing The Agent
-
-For end-to-end agent driving with file-based IPC:
+For scripted full-session driving with file-based IPC:
 
 ```bash
 npx tsx tests/harness/cli.ts run --prompt "What is AAPL trading at?" --ipc /tmp/opencandle-ipc &
@@ -240,35 +220,21 @@ npx tsx tests/harness/cli.ts wait --ipc /tmp/opencandle-ipc
 npx tsx tests/harness/cli.ts trace --ipc /tmp/opencandle-ipc
 ```
 
-The harness writes status and trace files into the IPC directory. See [tests/harness/README.md](./tests/harness/README.md) for the full flow.
+See [tests/harness/README.md](./tests/harness/README.md) for the full flow.
 
-## Project Docs
+## Documentation
 
-- [docs/index.md](./docs/index.md)
-- [docs/getting-started.md](./docs/getting-started.md)
-- [docs/first-run.md](./docs/first-run.md)
-- [docs/tui.md](./docs/tui.md)
-- [docs/investigation-recipes.md](./docs/investigation-recipes.md)
-- [docs/data-sources.md](./docs/data-sources.md)
-- [docs/configuration.md](./docs/configuration.md)
-- [docs/system-architecture.md](./docs/system-architecture.md)
-- [docs/gui-quickstart.md](./docs/gui-quickstart.md)
-- [docs/testing-and-evals.md](./docs/testing-and-evals.md)
-- [docs/benchmarking.md](./docs/benchmarking.md)
-- [CONTRIBUTING.md](./CONTRIBUTING.md)
-- [docs/build-a-tool.md](./docs/build-a-tool.md)
-- [tests/harness/README.md](./tests/harness/README.md)
-- [CHANGELOG.md](./CHANGELOG.md)
-- [SECURITY.md](./SECURITY.md)
-- [LICENSE](./LICENSE)
+- [Getting Started](./docs/getting-started.md)
+- [First Run](./docs/first-run.md)
+- [TUI](./docs/tui.md)
+- [GUI Quickstart](./docs/gui-quickstart.md)
+- [Investigation Recipes](./docs/investigation-recipes.md)
+- [Data Sources](./docs/data-sources.md)
+- [Configuration](./docs/configuration.md)
+- [System Architecture](./docs/system-architecture.md)
+- [Testing and Evals](./docs/testing-and-evals.md)
+- [Benchmarking](./docs/benchmarking.md)
 
-## Website
+## License
 
-The static website lives in [website/](./website/). It builds a product landing page plus the public Markdown docs into `website/dist/`.
-
-```bash
-npm run docs:site:build
-npm run docs:site:serve
-```
-
-GitHub Pages can publish the generated artifact through the included Pages workflow.
+MIT
