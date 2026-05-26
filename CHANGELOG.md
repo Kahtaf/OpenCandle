@@ -54,6 +54,7 @@
 
 ### Fixed
 
+- Ambiguous ticker prompt-policy evals now accept an `ask_user` ticker clarification as valid unresolved-ticker handling without growing the fallback playbook.
 - Fallback prompt debt guard now keeps fallback-route guidance generic, with domain-specific competitive fixes enforced through policy cards, safety rules, tool/evidence normalization, answer contracts, or structured checks instead of rebuilding a broad playbook.
 - Planning migration rollback overrides can now be applied at runtime with `OPENCANDLE_PLANNING_MIGRATION_STATUSES`, so replacement-active task families can be demoted to `dual_run` or `observe_only` without editing the planning manifest.
 - Main-branch product replay subprocesses now have a bounded timeout, preventing stale eval processes from hanging replay comparison and worktree cleanup indefinitely.

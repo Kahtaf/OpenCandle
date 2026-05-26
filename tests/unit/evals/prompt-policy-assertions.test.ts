@@ -40,6 +40,30 @@ describe("prompt-policy final answer assertions", () => {
 
     expect(result.passed).toBe(true);
   });
+
+  it("accepts ask_user ticker clarification for ambiguous ticker lookup assertions", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "states the ticker could not be verified if lookup fails",
+      {
+        ...trace("Which company or ticker did you mean by ZZZZ?"),
+        askUserTranscript: [{ question: "Which company or ticker did you mean by ZZZZ?", answer: null }],
+      },
+    );
+
+    expect(result.passed).toBe(true);
+  });
+
+  it("does not treat unrelated ask_user prompts as ticker clarification", () => {
+    const result = evaluateFinalAnswerAssertion(
+      "states the ticker could not be verified if lookup fails",
+      {
+        ...trace("What is your portfolio budget?"),
+        askUserTranscript: [{ question: "What is your portfolio budget?", answer: null }],
+      },
+    );
+
+    expect(result.passed).toBe(false);
+  });
 });
 
 function trace(text: string, workflow = "general_finance_qa"): EvalTrace {

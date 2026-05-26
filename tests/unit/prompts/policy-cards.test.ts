@@ -180,14 +180,14 @@ describe("policy cards", () => {
     })).toBe("");
   });
 
-  it("keeps supplied-but-unverified event-risk prompts from blocking on clarification", () => {
+  it("allows supplied-but-unverified event-risk prompts to clarify ambiguous tickers", () => {
     const rendered = renderPolicyCardForPlanning(planning({
       behaviorMode: "replacement_active",
     }));
 
     expect(rendered).toContain("explicitly say whether the supplied symbol is still the current primary ticker");
-    expect(rendered).toContain("Do not call ask_user merely because a supplied ticker-like symbol is unverified");
-    expect(rendered).toContain("If the supplied ticker cannot be confirmed by lookup or quote evidence");
+    expect(rendered).toContain("it is appropriate to call ask_user to clarify the intended ticker");
+    expect(rendered).toContain("If the supplied ticker cannot be confirmed by lookup, quote, or user clarification evidence");
     expect(rendered).toContain("risk-first trim/hedge/hold framework");
   });
 

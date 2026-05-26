@@ -44,8 +44,11 @@ export function evaluateFinalAnswerAssertion(
     },
     {
       pattern: /states the ticker could not be verified if lookup fails/i,
-      passed: /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|not recognized|no verified|not find|no results|not available/i.test(text),
-      reason: "expected unresolved-ticker disclosure",
+      passed: /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|not recognized|no verified|not find|no results|not available/i.test(text) ||
+        asksForTickerClarification(trace),
+      reason: asksForTickerClarification(trace)
+        ? "asked user to clarify ambiguous ticker"
+        : "expected unresolved-ticker disclosure",
     },
     {
       pattern: /does not invent current earnings facts|no invented current earnings facts/i,
@@ -108,6 +111,13 @@ export function evaluateFinalAnswerAssertion(
     reason: manifestCheck.reason,
     deterministic: manifestCheck.deterministic,
   };
+}
+
+function asksForTickerClarification(trace: EvalTrace): boolean {
+  return trace.askUserTranscript.some(({ question }) =>
+    /\b(?:ticker|symbol|company)\b/i.test(question) &&
+    /\b(?:which|clarify|confirm|correct|intended|mean)\b/i.test(question)
+  );
 }
 
 function evaluateManifestAssertion(
