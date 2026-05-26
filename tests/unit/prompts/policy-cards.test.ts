@@ -599,7 +599,8 @@ describe("policy cards", () => {
     expect(rendered).toContain("brokerage");
     expect(rendered).toContain("cash sweep yields");
     expect(rendered).toContain("current yield facts");
-    expect(rendered).toContain("6.8% mortgage");
+    expect(rendered).toContain("the supplied debt rate");
+    expect(rendered).not.toContain("6.8% mortgage");
     expect(rendered).toContain("direct comparison table");
     expect(rendered).toContain("cash drag");
     expect(rendered).toContain("verify current fees");
