@@ -10,11 +10,11 @@ description: Run the local OpenCandle browser workbench and understand writer/fo
 3. Open `http://127.0.0.1:14567`.
 4. If the model setup panel appears, connect a model first. Chat cannot run without model access.
 5. Start with a keyless market-data prompt such as `What is AAPL trading at?`, then try `/analyze NVDA` or the empty-state action cards.
-6. Open the catalog with `⌘K` or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
+6. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or Tailscale access.
 
-The GUI shares Pi sessions through a writer/follower lock so only one process mutates a session at a time. The writer can run chat, save provider/model setup, toggle tools, and manage sessions. Followers can serve the browser and read session state, but mutating actions return "Read-only follower mode".
+The GUI shares Pi sessions through a writer/follower lock so only one process mutates a session at a time. Pi is the bundled local agent runtime that owns model setup and saved sessions; the writer/follower lock is the GUI's guard against two browser servers editing the same session at once. The writer can run chat, save provider/model setup, toggle tools, and manage sessions. Followers can serve the browser and read session state, but mutating actions return "Read-only follower mode".
 
 Check the running role with:
 

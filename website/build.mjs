@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const outDir = join(root, "website/dist");
+const siteUrl = "https://opencandle.app";
 
 const sourcePages = [
   { source: "docs/index.md", output: "docs/index.html", section: "Docs" },
@@ -252,6 +253,7 @@ function pageShell({ title, description, content, headings, output }) {
     <meta name="description" content="${escapeHtml(description)}">
     <title>${escapeHtml(title)} - OpenCandle</title>
     <link rel="icon" href="${rootPrefix}assets/logo.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="${rootPrefix}favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -298,6 +300,7 @@ function landingShell() {
     <meta name="description" content="OpenCandle is an open source financial investigator for evidence-first market research.">
     <title>OpenCandle - Open source financial investigator</title>
     <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
@@ -326,7 +329,8 @@ function landingShell() {
         <div class="float-tile tile-logo" aria-hidden="true"><img src="assets/logo.svg" alt="" width="52" height="52"></div>
         <div class="hero-copy">
           <h1>The open-source control plane for market research.</h1>
-          <p class="hero-lede">Orchestrate quotes, filings, macro data, sentiment, options, and portfolio tools from one local surface. Bring your own model keys. Fork the whole thing.</p>
+          <p class="hero-lede">Orchestrate quotes, filings, macro data, sentiment, options, and portfolio tools from one local surface. Works with OpenAI, Anthropic, and Google model keys.</p>
+          <p class="hero-note">Read-only research software. Not investment advice. No order routing.</p>
           <div class="hero-actions">
             <a class="button-primary" href="docs/getting-started.html">Install OpenCandle</a>
             <a class="button-secondary" href="https://github.com/Kahtaf/OpenCandle">Star on GitHub</a>
@@ -334,7 +338,7 @@ function landingShell() {
         </div>
         <div id="product" class="hero-product live-gui-callout">
           <div class="window-dots" aria-hidden="true"><span></span><span></span><span></span></div>
-          <img src="assets/gui-screenshot.png" alt="OpenCandle GUI showing the local research workspace" width="1440" height="1100" fetchpriority="high">
+          <img src="assets/gui-screenshot.png" alt="OpenCandle GUI showing a completed research answer with evidence sources and risk commentary" width="1440" height="1000" fetchpriority="high">
         </div>
       </section>
 
@@ -354,13 +358,16 @@ function landingShell() {
       <section id="providers" class="landing-band provider-section">
         <div>
           <h2>Bring your own data stack</h2>
-          <p>OpenCandle does not hide setup behind magic. Add model keys through Pi, add optional market data keys where needed, and keep keyless sources working by default.</p>
+          <p>OpenCandle does not hide setup behind magic. Pi handles local model setup and sessions; OpenCandle adds finance tools on top. Add optional market data keys where needed and keep keyless sources working by default.</p>
         </div>
         <div class="provider-grid">
+          <div><strong>OpenAI</strong><code>model access</code></div>
+          <div><strong>Anthropic</strong><code>model access</code></div>
+          <div><strong>Google</strong><code>model access</code></div>
           <div><strong>Yahoo Finance</strong><code>quotes, options</code></div>
           <div><strong>SEC EDGAR</strong><code>filings</code></div>
           <div><strong>FRED</strong><code>macro series</code></div>
-          <div><strong>Reddit + Web</strong><code>sentiment</code></div>
+          <div><strong>Reddit + Web</strong><code>sentiment, search</code></div>
         </div>
         <div class="provider-checks">
           <span>No data resale.</span>
@@ -374,7 +381,7 @@ function landingShell() {
           <div class="terminal-title"><strong>Run an evidence sweep</strong><span>READY</span></div>
           <div><span>Prompt</span><strong>/analyze NVDA with quote, filings, sentiment, and macro context</strong></div>
           <div><span>Tools</span><strong>get_stock_quote -> get_sec_filings -> get_sentiment_summary -> get_economic_data</strong></div>
-          <div><span>Evidence</span><strong>fresh quote, SEC records, partial sentiment, dated macro observation</strong></div>
+          <div><span>Evidence</span><strong>provider quote timestamp, SEC filing links, source-counted sentiment, dated macro observation</strong></div>
           <div class="workflow-action"><a href="docs/investigation-recipes.html">Inspect tool output</a></div>
         </div>
         <div>
@@ -396,9 +403,8 @@ function landingShell() {
         <div class="oss-layout">
           <div class="code-window">
             <div class="code-title">~/opencandle</div>
-            <code>$ git clone github.com/Kahtaf/OpenCandle</code>
-            <code>$ npm install</code>
-            <code>$ npm run gui</code>
+            <code>$ npx opencandle@latest</code>
+            <code>$ opencandle gui</code>
             <code class="success">OpenCandle GUI listening on http://127.0.0.1:14567</code>
           </div>
           <div class="oss-grid">
@@ -441,6 +447,7 @@ async function build() {
   await mkdir(join(outDir, "assets"), { recursive: true });
   await copyFile(join(root, "assets/logo.svg"), join(outDir, "assets/logo.svg"));
   await cp(join(root, "website/assets"), join(outDir, "assets"), { recursive: true });
+  await copyFile(join(root, "website/assets/favicon.ico"), join(outDir, "favicon.ico"));
   await copyFile(join(root, "website/styles.css"), join(outDir, "styles.css"));
 
   const loaded = [];
@@ -454,6 +461,16 @@ async function build() {
   sitePages = loaded;
 
   await writeFile(join(outDir, "index.html"), landingShell());
+  await writeFile(
+    join(outDir, "robots.txt"),
+    `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`,
+  );
+  await writeFile(
+    join(outDir, "sitemap.xml"),
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}/</loc></url>\n${loaded
+      .map((page) => `  <url><loc>${siteUrl}/${page.output}</loc></url>`)
+      .join("\n")}\n</urlset>\n`,
+  );
 
   for (const page of loaded) {
     const markdown = await readFile(join(root, page.source), "utf8");

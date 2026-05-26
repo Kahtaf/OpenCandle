@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- Docs site newcomer flow now uses a populated GUI screenshot, aligns homepage install commands with the package install path, defines Pi earlier, names supported model providers, adds finance boundaries, and emits favicon, robots, and sitemap files.
 - Existing-holdings growth additions and crash-protection reviews now use portfolio-review behavior instead of single-asset or simple comparison behavior.
 - Company/ticker mismatch hype prompts now warn that identity is unverified and give a verification checklist before discussing speculative catalysts.
 - Option-chain output now labels bid/ask and last prices as per-share quotes and states the 100-share contract math.

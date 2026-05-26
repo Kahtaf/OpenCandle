@@ -1,6 +1,6 @@
 # OpenCandle
 
-OpenCandle is an open source financial investigator built with TypeScript and Pi. Pi provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle adds finance research on top: it understands what kind of financial question you asked, gathers market, macro, options, fundamentals, filings, sentiment, and portfolio evidence from real sources, then turns that evidence into a risk-aware answer.
+OpenCandle is an open source financial investigator built with TypeScript and Pi. Pi is the bundled local agent runtime that provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle adds finance research on top: it understands what kind of financial question you asked, gathers market, macro, options, fundamentals, filings, sentiment, and portfolio evidence from real sources, then turns that evidence into a risk-aware answer.
 
 This repository is useful in three ways:
 
@@ -30,6 +30,8 @@ OpenCandle is strongest when the answer depends on live or inspectable financial
 
 OpenCandle is designed to fetch and format data. The model handles synthesis. Tool code should not invent financial conclusions or hardcode market numbers.
 
+OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
+
 ## Install And Run
 
 Requires Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0 <27`.
@@ -51,6 +53,8 @@ npm install
 cp .env.example .env
 npm start
 ```
+
+On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`.
 
 On first run, OpenCandle walks you through model setup. You can rerun that flow later with `/setup`.
 

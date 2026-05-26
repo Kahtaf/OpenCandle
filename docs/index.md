@@ -9,6 +9,8 @@ OpenCandle is an open source financial investigator: a terminal agent and local 
 
 It is built for investors, builders, and researchers who want the speed of an agent without hiding the source data. Tools fetch and format market, macro, options, fundamentals, filings, sentiment, and portfolio data. The model synthesizes after the evidence is gathered.
 
+OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
+
 ## How OpenCandle Works
 
 OpenCandle keeps a simple research loop:
@@ -19,7 +21,7 @@ OpenCandle keeps a simple research loop:
 4. It gathers tool-backed evidence and surfaces provider gaps or stale data.
 5. It writes an answer that separates facts from judgment and names the important risks.
 
-Pi provides the local agent runtime, model setup, sessions, and terminal shell. OpenCandle adds the finance tools, workflows, provider integrations, local finance state, GUI cards, and evaluation harness.
+Pi provides the bundled local agent runtime, model setup, sessions, and terminal shell. You do not need a separate Pi install for normal OpenCandle usage. OpenCandle adds the finance tools, workflows, provider integrations, local finance state, GUI cards, and evaluation harness.
 
 ## Start Here
 
