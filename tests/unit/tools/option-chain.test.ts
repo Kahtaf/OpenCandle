@@ -60,6 +60,16 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("Put/Call");
   });
 
+  it("labels option premiums as per-share quotes with standard-contract total math", async () => {
+    mockCrumbAndOptions();
+    const result = await optionChainTool.execute("call-premium-units", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text;
+
+    expect(text).toContain("Option bid/ask and last prices are quoted per share");
+    expect(text).toContain("multiply by 100 for one standard contract");
+    expect(text).toContain("Bid/Ask (per share)");
+  });
+
   it("returns typed OptionsChain in details", async () => {
     mockCrumbAndOptions();
     const result = await optionChainTool.execute("call-2", { symbol: "AAPL" });
@@ -132,5 +142,7 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("Quote status: pre_market");
     expect(text).toContain("closed_market_or_stale_quotes");
     expect(text).toContain("do not treat zero bid/ask as confirmed live illiquidity");
+    expect(text).toContain("do not stop at the stale quote caveat");
+    expect(text).toContain("finish the strategy explanation");
   });
 });

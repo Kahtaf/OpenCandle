@@ -4,9 +4,11 @@ import { rateLimiter } from "../infra/rate-limiter.js";
 import { StealthBrowser } from "../infra/browser.js";
 import type { StockQuote, OHLCV } from "../types/market.js";
 import type { OptionsChain, OptionContract, OptionsMarketSession, OptionsQuoteStatus } from "../types/options.js";
+import type { FundHoldings } from "../types/portfolio.js";
 import { computeGreeks } from "../tools/options/greeks.js";
 
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
+const QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
 
 interface YahooChartResponse {
   chart: {
@@ -25,6 +27,29 @@ interface YahooChartResponse {
       };
     }>;
     error?: { code: string; description: string };
+  };
+}
+
+interface YahooQuoteSummaryResponse {
+  quoteSummary: {
+    result?: Array<{
+      price?: {
+        symbol?: string;
+        shortName?: string;
+        longName?: string;
+      };
+      topHoldings?: {
+        holdings?: Array<{
+          symbol?: string;
+          holdingName?: string;
+          holdingPercent?: number;
+        }>;
+        equityHoldings?: {
+          sectorWeightings?: Array<Record<string, number>>;
+        };
+      };
+    }>;
+    error?: { code?: string; description?: string } | null;
   };
 }
 
@@ -126,6 +151,80 @@ export async function getHistory(
     if (stale) return stale.value;
     throw error;
   }
+}
+
+export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
+  const normalizedSymbol = symbol.toUpperCase();
+  const cacheKey = `yahoo:fund-holdings:${normalizedSymbol}`;
+  const cached = cache.get<FundHoldings>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("yahoo");
+
+    const modules = encodeURIComponent("price,topHoldings");
+    const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(normalizedSymbol)}?modules=${modules}`;
+    const data = await httpGet<YahooQuoteSummaryResponse>(url, {
+      headers: { "User-Agent": "OpenCandle/1.0" },
+    });
+    const result = data.quoteSummary.result?.[0];
+    if (data.quoteSummary.error) {
+      throw new Error(`Yahoo Finance: ${data.quoteSummary.error.description ?? data.quoteSummary.error.code ?? "quoteSummary error"}`);
+    }
+    if (!result?.topHoldings?.holdings?.length) {
+      throw new Error(`Yahoo Finance: no fund holdings returned for ${normalizedSymbol}`);
+    }
+
+    const holdings: FundHoldings = {
+      symbol: result.price?.symbol?.toUpperCase() ?? normalizedSymbol,
+      name: result.price?.shortName ?? result.price?.longName,
+      provider: "yahoo",
+      holdings: result.topHoldings.holdings.flatMap((holding) => {
+        const holdingSymbol = holding.symbol?.trim().toUpperCase();
+        const weight = normalizeHoldingWeight(holding.holdingPercent);
+        if (!holdingSymbol || weight === undefined) return [];
+        return [{
+          symbol: holdingSymbol,
+          name: holding.holdingName?.trim() || holdingSymbol,
+          weight,
+        }];
+      }),
+      sectorWeights: normalizeSectorWeights(result.topHoldings.equityHoldings?.sectorWeightings),
+    };
+    if (holdings.holdings.length === 0) {
+      throw new Error(`Yahoo Finance: no weighted fund holdings returned for ${normalizedSymbol}`);
+    }
+
+    cache.set(cacheKey, holdings, TTL.FUNDAMENTALS);
+    return holdings;
+  } catch (error) {
+    const stale = cache.getStale<FundHoldings>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
+    if (stale) return stale.value;
+    throw error;
+  }
+}
+
+function normalizeHoldingWeight(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
+  return value > 1 ? roundWeight(value / 100) : roundWeight(value);
+}
+
+function normalizeSectorWeights(
+  sectors: Array<Record<string, number>> | undefined,
+): Record<string, number> | undefined {
+  if (!sectors?.length) return undefined;
+  const weights: Record<string, number> = {};
+  for (const sector of sectors) {
+    for (const [name, rawWeight] of Object.entries(sector)) {
+      const weight = normalizeHoldingWeight(rawWeight);
+      if (weight !== undefined) weights[name] = weight;
+    }
+  }
+  return Object.keys(weights).length > 0 ? weights : undefined;
+}
+
+function roundWeight(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
 }
 
 // --- Options Chain (v7 API with crumb+cookie auth) ---

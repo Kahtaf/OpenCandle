@@ -7,9 +7,11 @@ description: Repeatable OpenCandle research paths for market, macro, filings, se
 
 OpenCandle works best when prompts name the evidence you want, not only the conclusion you hope to reach. These recipes are starting points for repeatable investigations.
 
+You can run these recipes as natural-language chat prompts, slash commands where available, or GUI catalog workflows. The GUI catalog pre-fills structured prompts, but the investigation still appears in the normal chat timeline.
+
 ## Stock Snapshot
 
-Use this when you want a quick but inspectable view of one public company.
+Use this when you want a quick but inspectable view of one public company. In the GUI, start from Comprehensive Analysis.
 
 ```text
 /analyze NVDA
@@ -22,6 +24,20 @@ Expected evidence:
 - relevant news or web context when search is configured
 - clear warnings for unavailable providers
 
+Sample shape:
+
+```text
+Evidence gathered
+- Quote: provider timestamp and recent move shown before synthesis
+- Fundamentals: company profile or provider warning
+- Filings/news: source links or explicit "not configured" note
+
+Answer
+- What the evidence says
+- What still depends on judgment
+- Main downside risks and data gaps
+```
+
 Good follow-up:
 
 ```text
@@ -30,7 +46,7 @@ What parts of that answer are based on stale or missing data?
 
 ## Compare Assets
 
-Use this when choosing between two or more tickers.
+Use this when choosing between two or more tickers. In the GUI, start from Compare Assets.
 
 ```text
 Compare MSFT, GOOGL, and AMZN using price trend, fundamentals, and sentiment.
@@ -43,9 +59,24 @@ Expected evidence:
 - sentiment or web search context if configured
 - a synthesis that separates data-backed observations from judgment calls
 
+Sample shape:
+
+```text
+Side-by-side comparison
+| Asset | Price context | Fundamental context | Sentiment/source notes |
+| --- | --- | --- | --- |
+| MSFT | provider quote + trend | available or unavailable | source count or gap |
+| GOOGL | provider quote + trend | available or unavailable | source count or gap |
+| AMZN | provider quote + trend | available or unavailable | source count or gap |
+
+Verdict
+- Best fit for the stated goal
+- Concentration, valuation, and data-quality risks
+```
+
 ## Options Screen
 
-Use this when exploring contracts and Greeks.
+Use this when exploring contracts and Greeks. In the GUI, start from Options Screener.
 
 ```text
 Show me TSLA puts expiring next month with Greeks and open interest.
@@ -71,6 +102,15 @@ Expected evidence:
 - SEC EDGAR filing records
 - filing dates, accession links, or available identifiers
 - cautious synthesis that does not overstate what was inspected
+
+Sample shape:
+
+```text
+SEC filing trail
+- 10-K/10-Q/8-K record: filing date, form type, accession or document link
+- What that form is normally used for
+- What OpenCandle inspected versus what would require reading the full filing
+```
 
 ## Macro Check
 
@@ -103,7 +143,7 @@ Expected evidence:
 
 ## Portfolio Risk
 
-Use this when checking local holdings or a hypothetical allocation.
+Use this when checking local holdings or a hypothetical allocation. In the GUI, use chat for existing holdings or Portfolio Builder when you want OpenCandle to build a proposed allocation from goals and constraints.
 
 ```text
 Add 100 shares of NVDA at 120 and 50 shares of MSFT at 430, then run risk analysis.

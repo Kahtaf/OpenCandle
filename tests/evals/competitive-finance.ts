@@ -55,6 +55,13 @@ export interface CompetitiveCaseAnalysis {
   competitorsDidBetter: Record<string, string[]>;
   openCandleImprovementIdeas: string[];
   improvementThemes: string[];
+  failureClassifications: string[];
+  planning?: {
+    taskFamily?: string;
+    evidencePlanId?: string;
+    structuredCheckFailures?: unknown[];
+    retryEligible?: boolean;
+  };
   toolCalls: string[];
   cachedCompetitors: string[];
 }
@@ -150,6 +157,22 @@ export function buildComparisonJudgePrompt(input: ComparisonJudgeInput): string 
 Answer:
 ${competitor.answer}`)
     .join("\n\n---\n\n");
+  const planningMetadata = input.openCandleTrace.planning
+    ? {
+      taskFamily: input.openCandleTrace.planning.taskFamily,
+      commitmentMode: input.openCandleTrace.planning.commitmentMode,
+      policyCardId: input.openCandleTrace.planning.policyCardId,
+      evidencePlanId: input.openCandleTrace.planning.evidencePlanId,
+      answerContractId: input.openCandleTrace.planning.answerContractId,
+      structuredCheckIds: input.openCandleTrace.planning.structuredCheckIds,
+      capabilityGapIds: input.openCandleTrace.planning.capabilityGapIds,
+      structuredCheckFailures: input.openCandleTrace.planning.structuredCheckFailures.map((failure) => ({
+        checkId: failure.checkId,
+        failureReason: failure.failureReason,
+      })),
+      retryEligibility: input.openCandleTrace.planning.retryEligibility,
+    }
+    : null;
   const winnerOptions = ["opencandle", ...input.competitorAnswers.map((competitor) => competitor.id), "tie"].join("|");
   const scoreShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, 0]));
   const didBetterShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, ["..."]]));
@@ -169,6 +192,9 @@ ${JSON.stringify(input.openCandleTrace.classification)}
 OpenCandle tool calls:
 ${JSON.stringify(toolCalls, null, 2)}
 
+OpenCandle planning metadata:
+${JSON.stringify(planningMetadata, null, 2)}
+
 OpenCandle answer:
 ${input.openCandleTrace.text}
 
@@ -178,6 +204,8 @@ ${competitorAnswers}
 Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
 
 Do not reward fabricated current facts. A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized for correctness and honesty even if the answer sounds specific. For prompts about current filings or live market data, prefer a sourced OpenCandle answer or an honest generic limitation over an unsourced no-tool answer that invents details.
+
+When suggesting OpenCandle improvements, make them layer-specific where possible: routing, planning, evidence-plan, tool-capability, evidence-normalization, answer-contract, structured-check, retry-eligibility, synthesis, or judge/harness.
 
 Return JSON only:
 {
@@ -296,6 +324,8 @@ export function analyzeCompetitiveReport(
       competitorsDidBetter: judgment.competitorsDidBetter,
       openCandleImprovementIdeas: ideas,
       improvementThemes: unique(ideas.flatMap(classifyImprovementIdea)),
+      failureClassifications: unique(ideas.flatMap(classifyFailureLayer)),
+      planning: planningFromResult(result),
       toolCalls: toolCallsFromResult(result),
       cachedCompetitors: competitorAnswersFromResult(result)
         .filter((answer) => answer.cachedFromReport)
@@ -357,6 +387,14 @@ export function formatCompetitiveReportAnalysisMarkdown(
       lines.push("");
       lines.push("OC improvement ideas:");
       for (const idea of c.openCandleImprovementIdeas) lines.push(`- ${idea}`);
+    }
+    const failureClassifications = c.failureClassifications ?? [];
+    if (failureClassifications.length > 0) {
+      lines.push("");
+      lines.push(`Failure layers: ${failureClassifications.join(", ")}`);
+    }
+    if (c.planning) {
+      lines.push(`Planning: ${c.planning.taskFamily ?? "(unknown)"} / ${c.planning.evidencePlanId ?? "(unknown evidence plan)"}.`);
     }
     if (c.toolCalls.length > 0) {
       lines.push("");
@@ -570,12 +608,31 @@ function summarizeImprovementThemes(cases: CompetitiveCaseAnalysis[]): Competiti
   return Array.from(byTheme.values()).sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme));
 }
 
+function planningFromResult(result: unknown): CompetitiveCaseAnalysis["planning"] | undefined {
+  if (!isRecord(result) || !isRecord(result.openCandleTrace) || !isRecord(result.openCandleTrace.planning)) {
+    return undefined;
+  }
+  const planning = result.openCandleTrace.planning;
+  const retryEligibility = isRecord(planning.retryEligibility) ? planning.retryEligibility : undefined;
+  return {
+    taskFamily: stringValue(planning.taskFamily) || undefined,
+    evidencePlanId: stringValue(planning.evidencePlanId) || undefined,
+    structuredCheckFailures: Array.isArray(planning.structuredCheckFailures)
+      ? planning.structuredCheckFailures
+      : undefined,
+    retryEligible: typeof retryEligibility?.eligible === "boolean"
+      ? retryEligibility.eligible
+      : undefined,
+  };
+}
+
 function classifyImprovementIdea(idea: string): string[] {
   const lower = idea.toLowerCase();
   const themes: string[] = [];
   if (/\b(data|fetch|retriev|source|fred|macro|indicator|tool|current|live)\b/.test(lower)) {
     themes.push("data retrieval and integration");
   }
+  themes.push(...classifyFailureLayer(idea));
   if (/\b(synthesis|connect|integrat|context|explain|why|implication)\b/.test(lower)) {
     themes.push("synthesis and reasoning");
   }
@@ -594,6 +651,22 @@ function classifyImprovementIdea(idea: string): string[] {
   return themes.length > 0 ? themes : ["other"];
 }
 
+function classifyFailureLayer(idea: string): string[] {
+  const lower = idea.toLowerCase();
+  const layers: string[] = [];
+  if (/\b(route|router|classification|workflow)\b/.test(lower)) layers.push("routing");
+  if (/\b(plan|planning|task family|task-family)\b/.test(lower)) layers.push("planning");
+  if (/\b(evidence plan|market status|temporal|freshness|source coverage)\b/.test(lower)) layers.push("evidence-plan");
+  if (/\b(tool|provider|data|holdings overlap|cash yield|brokerage|calendar|earnings|live)\b/.test(lower)) layers.push("tool-capability");
+  if (/\b(normaliz|provider gap|degradation|connect|credential)\b/.test(lower)) layers.push("evidence-normalization");
+  if (/\b(answer contract|contract|tradeoff framing|framework|commitment)\b/.test(lower)) layers.push("answer-contract");
+  if (/\b(structured check|check|validator|disclosure)\b/.test(lower)) layers.push("structured-check");
+  if (/\b(retry|repair)\b/.test(lower)) layers.push("retry-eligibility");
+  if (/\b(synthesis|reasoning|explain|connect)\b/.test(lower)) layers.push("synthesis");
+  if (/\b(judge|harness|eval|benchmark|parser)\b/.test(lower)) layers.push("judge/harness");
+  return layers.length > 0 ? layers : ["synthesis"];
+}
+
 function unique<T>(values: T[]): T[] {
   return Array.from(new Set(values));
 }
@@ -604,7 +677,7 @@ function parseJsonPayload(raw: string): unknown {
     try {
       return JSON.parse(candidate);
     } catch (error) {
-      const repaired = repairCommonMissingCommas(candidate);
+      const repaired = repairMalformedJson(candidate);
       if (repaired !== candidate) return JSON.parse(repaired);
       throw error;
     }
@@ -623,11 +696,115 @@ function parseJsonPayload(raw: string): unknown {
   }
 }
 
+function repairMalformedJson(payload: string): string {
+  return trimAfterFirstCompleteJson(balanceJsonDelimiters(repairCommonMissingCommas(payload)));
+}
+
 function repairCommonMissingCommas(payload: string): string {
+  const jsonValueEnd = /("(?:[^"\\]|\\.)*"|\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)|\]|\})/g;
   return payload
-    .replace(/("(?:[^"\\]|\\.)*")(\s*\r?\n\s*)"/g, "$1,$2\"")
-    .replace(/(\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null))(\s*\r?\n?\s*)"/g, "$1,$2\"")
-    .replace(/(\]|\})(\s*\r?\n\s*)"/g, "$1,$2\"");
+    .replace(jsonValueEnd, (match, value: string, offset: number, full: string) => {
+      const rest = full.slice(offset + match.length);
+      const whitespace = rest.match(/^\s*/)?.[0] ?? "";
+      const next = rest.slice(whitespace.length, whitespace.length + 1);
+      if (!whitespace.includes("\n")) return match;
+      if (!next || next === "," || next === "]" || next === "}" || next === ":") return match;
+      if (next === "\"" || next === "{" || next === "[" || next === "-" || /\d|t|f|n/.test(next)) {
+        return `${value},`;
+      }
+      return match;
+    });
+}
+
+function balanceJsonDelimiters(payload: string): string {
+  let repaired = "";
+  const stack: Array<"{" | "["> = [];
+  let inString = false;
+  let escaped = false;
+
+  for (const char of payload) {
+    repaired += char;
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === "{" || char === "[") {
+      stack.push(char);
+      continue;
+    }
+
+    if (char === "}" || char === "]") {
+      const expected = char === "}" ? "{" : "[";
+      if (stack.at(-1) === expected) {
+        stack.pop();
+        continue;
+      }
+      repaired = repaired.slice(0, -1);
+      if (!stack.includes(expected)) continue;
+      while (stack.length > 0 && stack.at(-1) !== expected) {
+        repaired += closeDelimiter(stack.pop());
+      }
+      repaired += char;
+      if (stack.at(-1) === expected) stack.pop();
+    }
+  }
+
+  while (stack.length > 0) {
+    repaired += closeDelimiter(stack.pop());
+  }
+  return repaired;
+}
+
+function trimAfterFirstCompleteJson(payload: string): string {
+  const stack: Array<"{" | "["> = [];
+  let inString = false;
+  let escaped = false;
+  let started = false;
+
+  for (let index = 0; index < payload.length; index += 1) {
+    const char = payload[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = inString;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === "{" || char === "[") {
+      started = true;
+      stack.push(char);
+      continue;
+    }
+    if (char === "}" || char === "]") {
+      const expected = char === "}" ? "{" : "[";
+      if (stack.at(-1) !== expected) continue;
+      stack.pop();
+      if (started && stack.length === 0) return payload.slice(0, index + 1);
+    }
+  }
+
+  return payload;
+}
+
+function closeDelimiter(open: "{" | "[" | undefined): string {
+  return open === "[" ? "]" : "}";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

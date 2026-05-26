@@ -1,5 +1,5 @@
 import { extractEntities, isAmbiguousConceptUsage } from "./entity-extractor.js";
-import { classifyIntent } from "./classify-intent.js";
+import { classifyWithLegacyRules } from "./legacy-rule-router.js";
 import { buildRouterPrompt } from "./router-prompt.js";
 import {
   computeMissingRequiredSlots,
@@ -182,7 +182,7 @@ function validateEntities(raw: unknown): ExtractedEntities {
 
 export function postProcessRouterOutput(text: string, output: RouterOutput): RouterOutput {
   const extracted = extractEntities(text);
-  const deterministic = classifyIntent(text);
+  const deterministic = classifyWithLegacyRules(text);
   let diagnostics: RouterDiagnostic[] = [...output.diagnostics];
   let next: RouterOutput = {
     ...output,
@@ -196,7 +196,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
       riskProfile: output.entities.riskProfile ?? extracted.riskProfile,
       assetScope: output.entities.assetScope ?? extracted.assetScope,
-      compareMetrics: output.entities.compareMetrics ?? extracted.compareMetrics,
+      compareMetrics: mergeStringArrays(output.entities.compareMetrics, extracted.compareMetrics),
       direction: output.entities.direction ?? extracted.direction,
       optionStrategy: output.entities.optionStrategy ?? extracted.optionStrategy,
       costBasis: output.entities.costBasis ?? extracted.costBasis,
@@ -239,6 +239,28 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   }
 
   if (
+    next.workflow === "options_screener" &&
+    isOptionsEducationOrSuitabilityRequest(text) &&
+    !isSpecificOptionContractSelectionRequest(text)
+  ) {
+    diagnostics.push({
+      code: "options_workflow_corrected_to_policy_task",
+      message: "options education or suitability prompt should use policy-card synthesis, not contract-screen workflow dispatch",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
+  // Legacy rules may recover a primary route only when the LLM router path has
+  // already failed validation. Otherwise they are limited to enrichment and
+  // narrow corrections below.
+  if (
     next.diagnostics.some((d) => d.code === "router_validation_failed") &&
     deterministic.workflow !== "unclassified"
   ) {
@@ -256,7 +278,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
         assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
-        compareMetrics: deterministic.entities.compareMetrics ?? extracted.compareMetrics,
+        compareMetrics: mergeStringArrays(deterministic.entities.compareMetrics, extracted.compareMetrics),
         direction: deterministic.entities.direction ?? extracted.direction,
         costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
         shareQuantity: deterministic.entities.shareQuantity ?? extracted.shareQuantity,
@@ -292,6 +314,19 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (next.routeKind === "agent_task" && isDispatchableWorkflow(next.workflow)) {
+    diagnostics.push({
+      code: "dispatchable_workflow_corrected_to_workflow_dispatch",
+      message: `${next.workflow} is a dispatchable workflow`,
+    });
+    next = {
+      ...next,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      diagnostics,
+    };
+  }
+
   if (
     next.workflow === "compare_assets" &&
     next.entities.symbols.length === 0 &&
@@ -300,6 +335,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     diagnostics.push({
       code: "compare_route_corrected_to_macro_task",
       message: "macro/source acronyms were not explicit tickers",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
+  if (next.workflow === "compare_assets" && isPortfolioEvaluationRequest(text)) {
+    diagnostics.push({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+      message: "existing portfolio/allocation risk review should not be reduced to asset comparison",
     });
     next = {
       ...next,
@@ -324,6 +374,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     next = {
       ...next,
       workflow: "general_finance_qa",
+      diagnostics,
+    };
+  }
+
+  if (next.workflow === "portfolio_builder" && isCryptoSizingRequest(text)) {
+    diagnostics.push({
+      code: "crypto_sizing_corrected_to_agent_task",
+      message: "crypto allocation-range and drawdown questions are advisory tradeoffs, not portfolio construction",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
       diagnostics,
     };
   }
@@ -358,6 +423,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       route: "workflow",
       workflow: "compare_assets",
       missing_required: [],
+      diagnostics,
+    };
+  }
+
+  if (
+    next.workflow === "single_asset_analysis" &&
+    isSpecializedSingleAssetPolicyRequest(text)
+  ) {
+    diagnostics.push({
+      code: "single_asset_workflow_corrected_to_general_policy_task",
+      message: "prompt asks for policy-card planning outside a single-asset buy/sell analysis",
+    });
+    next = {
+      ...next,
+      workflow: "general_finance_qa",
       diagnostics,
     };
   }
@@ -416,10 +496,16 @@ function isExplicitMacroDataRequest(text: string): boolean {
 function isConceptualEducationRequest(text: string, output: RouterOutput): boolean {
   if (output.routeKind !== "agent_task") return false;
   if (output.entities.symbols.length > 0) return false;
+  if (isForwardLookingMacroContextRequest(text)) return false;
   if (/\b(?:current|recent|today|right now|latest|news|sentiment|build|portfolio|buy|sell|allocate|compare)\b/i.test(text)) {
     return false;
   }
   return /\b(?:explain|what is|define|how (?:do|should|to)|teach me|help me understand)\b/i.test(text);
+}
+
+function isForwardLookingMacroContextRequest(text: string): boolean {
+  return /\b(?:rates?|rate\s*cuts?|fed|inflation|macro)\b/i.test(text) &&
+    /\b(?:next\s+(?:year|12\s*months?)|over\s+the\s+next|outlook|affect|impact|falling|rising)\b/i.test(text);
 }
 
 function isCoveredCallRequest(text: string): boolean {
@@ -429,7 +515,7 @@ function isCoveredCallRequest(text: string): boolean {
 function isPortfolioEvaluationRequest(text: string): boolean {
   const lower = text.toLowerCase();
   const hasEvaluationIntent =
-    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment)\b/.test(lower);
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|risky|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
   const hasPortfolioObject =
     /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
   const hasConstructionIntent =
@@ -444,8 +530,38 @@ function isPortfolioTradeoffComparisonRequest(text: string): boolean {
     /\b(?:or|vs\.?|versus|compare)\b/.test(lower);
 }
 
+function isCryptoSizingRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasPortfolioConstructionIntent =
+    /\b(?:build|create|construct|put\s+together)\b/.test(lower) &&
+    /\b(?:portfolio|allocation)\b/.test(lower);
+  if (hasPortfolioConstructionIntent) return false;
+  return /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
+    /\b(?:allocation|range|position\s+size|sizing|exposure|drawdown)\b/.test(lower);
+}
+
+function isSpecializedSingleAssetPolicyRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:ticker|symbol|formerly|old ticker|earnings are|earnings tonight)\b/.test(lower) ||
+    /\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower) ||
+    /\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower) ||
+    /\b(?:filing|10-k|10-q|8-k|sec)\b/.test(lower);
+}
+
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {
   return isCoveredCallRequest(text) || extracted.optionStrategy === "protective_put";
+}
+
+function isOptionsEducationOrSuitabilityRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:how\s+does|how\s+do|explain|what\s+is|good\s+idea|make\s+sense|suitable|suitability|is\s+it\s+(?:good|worth|smart))\b/.test(lower) &&
+    /\b(?:covered\s+calls?|protective\s+puts?|options?|selling\s+calls?|option\s+income)\b/.test(lower);
+}
+
+function isSpecificOptionContractSelectionRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  return /\b(?:best|which|what\s+(?:strike|contract|option)|rank|screen|specific|right\s+now|today|around\s+earnings|expiration|dte|premium\s+under)\b/.test(lower) &&
+    /\b(?:sell|buy|trade|contract|strike|expiration|premium|call|put)\b/.test(lower);
 }
 
 function mergeSymbols(primary: string[], secondary: string[]): string[] {
@@ -454,6 +570,14 @@ function mergeSymbols(primary: string[], secondary: string[]): string[] {
     if (!merged.includes(symbol)) merged.push(symbol);
   }
   return merged;
+}
+
+function mergeStringArrays(primary?: string[], secondary?: string[]): string[] | undefined {
+  const merged: string[] = [];
+  for (const value of [...(primary ?? []), ...(secondary ?? [])]) {
+    if (!merged.includes(value)) merged.push(value);
+  }
+  return merged.length > 0 ? merged : undefined;
 }
 
 function omitUndefined<T>(value: T): T {

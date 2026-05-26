@@ -209,7 +209,7 @@ button:focus-visible {
   min-height: 1120px;
   display: block;
   overflow: hidden;
-  padding: 130px 52px 58px;
+  padding: 108px 52px 58px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -234,9 +234,9 @@ button:focus-visible {
 
 .hero-copy h1 {
   max-width: 970px;
-  margin: 26px auto 24px;
+  margin: 18px auto 18px;
   color: var(--ink);
-  font-size: 4.8rem;
+  font-size: 4.3rem;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.05;
@@ -252,12 +252,20 @@ button:focus-visible {
   text-wrap: pretty;
 }
 
+.hero-note {
+  max-width: 680px;
+  margin: 16px auto 0;
+  color: var(--body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
-  margin-top: 36px;
+  margin-top: 28px;
 }
 
 .button-primary,
@@ -322,7 +330,7 @@ button:focus-visible {
   position: relative;
   z-index: 2;
   width: min(1176px, 100%);
-  margin: 44px auto 0;
+  margin: 24px auto 0;
   overflow: hidden;
   background: var(--paper);
   border: 1px solid var(--line);
@@ -440,10 +448,16 @@ button:focus-visible {
   padding: 22px;
   background: rgba(255, 255, 255, 0.82);
   border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
+.provider-grid div:nth-child(4n),
 .provider-grid div:last-child {
   border-right: 0;
+}
+
+.provider-grid div:nth-last-child(-n + 3) {
+  border-bottom: 0;
 }
 
 .provider-grid strong,

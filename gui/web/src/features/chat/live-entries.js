@@ -1,4 +1,5 @@
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
+import { textContent } from "../../rendering/text.js";
 
 export function eventsToLiveEntries(events) {
   if (!events?.length) return [];
@@ -89,4 +90,22 @@ function groupToolsByMessage(tools) {
     grouped.set(tool.messageId, group);
   }
   return grouped;
+}
+
+export function compactDuplicateUserMessages(entries) {
+  const compacted = [];
+  for (const entry of entries) {
+    const previous = compacted[compacted.length - 1];
+    if (
+      entry.type === "message"
+      && previous?.type === "message"
+      && entry.message?.role === "user"
+      && previous.message?.role === "user"
+      && textContent(entry.message.content) === textContent(previous.message.content)
+    ) {
+      continue;
+    }
+    compacted.push(entry);
+  }
+  return compacted;
 }

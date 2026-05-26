@@ -1,5 +1,6 @@
-## ADDED Requirements
-
+## Purpose
+Router evals provide deterministic and opt-in live coverage for router behavior, fixture stability, and routing regressions.
+## Requirements
 ### Requirement: Two-Tier Eval Structure
 
 The router SHALL have two eval tiers: (1) deterministic CI fixtures that run on every PR without live model calls, and (2) an opt-in live-run eval that developers invoke locally. The two tiers SHALL have clearly separated responsibilities: CI enforces deterministic correctness of router code; live eval measures real-model behavior against labeled real turns.
@@ -96,3 +97,151 @@ The repository SHALL document when and how to run the live eval: before PRs that
 
 - **WHEN** a developer reads the router testing documentation
 - **THEN** they can find instructions for running the live eval script and the criteria for considering a delta acceptable
+
+### Requirement: Router Evals Cover Task-Family Selection
+
+Router deterministic and live evals SHALL assert task-family selection in addition to route kind, workflow, entities, slots, tool bundles, and missing required fields.
+
+#### Scenario: Sentiment prompt selects sentiment task family
+
+- **WHEN** a router eval input asks whether retail mood around a ticker has shifted
+- **THEN** the expected router output includes a sentiment-oriented task family and the sentiment tool bundle
+
+#### Scenario: Concept prompt selects concept task family
+
+- **WHEN** a router eval input asks for an educational explanation without named securities or current examples
+- **THEN** the expected router output includes a concept-explainer task family and no active finance tool bundle
+
+#### Scenario: Retail tradeoff prompt selects retail task family
+
+- **WHEN** a router eval input asks about brokerage choice, safe cash products, mortgage-vs-investing, tax-loss harvesting, or crypto sizing
+- **THEN** the expected output includes a retail tradeoff-oriented task family or planning diagnostic
+- **AND** it does not require market-data tools unless current security-specific facts are requested
+
+### Requirement: Router Evals Cover Commitment Mode
+
+Router deterministic and live evals SHALL assert commitment mode where the prompt's requested answer shape is material to behavior.
+
+#### Scenario: Decision prompt selects decision mode
+
+- **WHEN** a router eval input asks whether to buy, wait, or avoid a security
+- **THEN** the expected output includes a decision-oriented commitment mode
+
+#### Scenario: Tradeoff prompt selects comparison mode
+
+- **WHEN** a router eval input asks for pros and cons or tradeoffs without asking for a portfolio build
+- **THEN** the expected output includes a comparison-oriented commitment mode
+
+### Requirement: Router Evals Preserve Existing Routing Expectations
+
+Adding task-family assertions SHALL NOT weaken existing route/workflow fixture expectations. Existing route kind, workflow, entity, slot, tool-bundle, prior-turn, and memory expectations SHALL remain part of router evals.
+
+#### Scenario: Existing workflow dispatch remains asserted
+
+- **WHEN** a portfolio-builder fixture is updated with task-family metadata
+- **THEN** the fixture still asserts workflow dispatch, required slots, slot provenance, and tool bundles
+
+#### Scenario: Existing clarification behavior remains asserted
+
+- **WHEN** a missing-symbol options fixture is updated with task-family metadata
+- **THEN** the fixture still asserts clarification route kind and missing required fields
+
+### Requirement: Router Live Eval Reports Planning Accuracy
+
+The live router eval SHALL report task-family accuracy separately from route/workflow accuracy. It SHALL report policy-card accuracy for migrated or dual-run behaviors where policy-card expectations are defined.
+
+#### Scenario: Live eval reports task-family pass rate
+
+- **WHEN** a developer runs the live router eval
+- **THEN** the report includes aggregate route accuracy, workflow accuracy, task-family accuracy, and any defined policy-card accuracy
+
+#### Scenario: Task-family failure does not hide route success
+
+- **WHEN** the live router chooses the correct route kind but wrong task family
+- **THEN** the report records route success and task-family failure separately
+
+#### Scenario: Commitment-mode accuracy is reported
+
+- **WHEN** live router eval cases include commitment-mode expectations
+- **THEN** the report includes commitment-mode accuracy separately from route and task-family accuracy
+
+### Requirement: Router Evals Cover Followup Context
+
+Router evals SHALL include multi-turn cases where prior context determines task family, commitment mode, entity replacement, or clarification behavior.
+
+#### Scenario: Followup entity replacement
+
+- **WHEN** a prior turn asked about VOO versus QQQ and the followup asks "what about SCHD instead?"
+- **THEN** the expected output preserves the comparison task shape and identifies the replaced entity
+
+#### Scenario: Ambiguous followup asks clarification
+
+- **WHEN** a followup uses "that" or "same thing" and prior context is insufficient
+- **THEN** the expected route or planning diagnostics require clarification rather than silent guessing
+
+### Requirement: Typed Route Eval Coverage
+
+Router evals SHALL include deterministic and live cases for each canonical route kind: `workflow_dispatch`, `agent_task`, `clarification`, and `pass_through`.
+
+#### Scenario: Workflow dispatch eval passes
+
+- **WHEN** an eval prompt clearly maps to a known workflow
+- **THEN** the expected output asserts `routeKind: "workflow_dispatch"` and the workflow name
+
+#### Scenario: Agent task eval passes
+
+- **WHEN** an eval prompt is an in-scope finance analysis request without a matching workflow
+- **THEN** the expected output asserts `routeKind: "agent_task"` and relevant entities
+
+#### Scenario: Clarification eval passes
+
+- **WHEN** an eval prompt is missing a required slot and no reliable memory fills it
+- **THEN** the expected output asserts `routeKind: "clarification"` and the missing slot names
+
+#### Scenario: Pass-through eval passes
+
+- **WHEN** an eval prompt is outside OpenCandle's finance task surface
+- **THEN** the expected output asserts `routeKind: "pass_through"`
+
+### Requirement: Tool Scope Eval Reporting
+
+Router and competitive eval reports SHALL include selected tool bundles, active tool names when available, and any attempted out-of-bundle tool calls.
+
+#### Scenario: Eval reports selected bundles
+
+- **WHEN** a harness run completes
+- **THEN** the report includes the route-selected tool bundles for each prompt
+
+#### Scenario: Eval reports unnecessary exposure
+
+- **WHEN** a prompt expected to need only core market tools exposes options tools
+- **THEN** the report marks unnecessary tool exposure for that prompt
+
+### Requirement: Memory Use Eval Reporting
+
+Router and competitive eval reports SHALL include memory categories retrieved, memory items used for slot filling, and filtered stale or low-trust memory counts when those data are available.
+
+#### Scenario: Eval reports preference memory source
+
+- **WHEN** a prompt relies on a saved investor preference
+- **THEN** the report shows the preference memory category and slot source provenance
+
+#### Scenario: Eval reports stale memory filtering
+
+- **WHEN** candidate memory is filtered out by staleness or trust rules
+- **THEN** the report includes a filtered-memory count or diagnostic
+
+### Requirement: Clarification Quality Eval
+
+Router evals SHALL measure whether clarification is requested only when required and whether the missing slots are specific enough for the main agent to ask a useful question.
+
+#### Scenario: Missing symbol clarification is specific
+
+- **WHEN** the user asks "build me an options setup" without a symbol
+- **THEN** the eval expects `missing_required` to include `"symbol"` rather than a generic `"details"` field
+
+#### Scenario: Clarification is not over-used
+
+- **WHEN** prior context reliably supplies the missing symbol
+- **THEN** the eval expects no clarification route for that symbol
+

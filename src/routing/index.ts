@@ -1,4 +1,5 @@
 export { classifyIntent } from "./classify-intent.js";
+export { classifyWithLegacyRules } from "./legacy-rule-router.js";
 export { extractEntities, extractBudget } from "./entity-extractor.js";
 export { resolvePortfolioSlots, resolveOptionsScreenerSlots } from "./slot-resolver.js";
 export { PORTFOLIO_DEFAULTS, OPTIONS_SCREENER_DEFAULTS, parseDteTarget } from "./defaults.js";
@@ -22,6 +23,12 @@ export {
   buildMemoryQueryPlan,
   buildResolvedTurnContext,
 } from "./turn-context.js";
+export {
+  PLANNING_MANIFEST,
+  PLANNING_VERSION,
+  buildPlanningEnvelope,
+  validatePlanningSelection,
+} from "./planning.js";
 export type {
   WorkflowType,
   ClassificationResult,
@@ -49,3 +56,15 @@ export type {
   MemoryProvenance,
   ResolvedTurnContext,
 } from "./turn-context.js";
+export type {
+  AnswerContractId,
+  CapabilityGapId,
+  CommitmentMode,
+  EvidencePlanId,
+  PlanningBehaviorMode,
+  PlanningEnvelope,
+  PlanningSelection,
+  PolicyCardId,
+  StructuredCheckId,
+  TaskFamily,
+} from "./planning.js";

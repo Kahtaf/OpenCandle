@@ -79,6 +79,33 @@ function buildSoftDegradedPrefix(data: WebSearchEnvelope): string {
   return tags.length === 0 ? "" : `${tags.join("\n")}\n\n`;
 }
 
+function buildOfficialSourceGapPrefix(query: string, data: WebSearchEnvelope): string {
+  if (!hasOfficialFedSourceGap(query, data)) return "";
+
+  return [
+    "[OPENCANDLE_SOURCE_GAP source=fed_official evidence=missing remediation=\"verify against federalreserve.gov/FOMC before stating Fed announcements\"]",
+    "Hard source gap: no official Fed/FOMC source was returned. Do not present meeting announcements, votes, quotes, appointments, leadership changes, or named policy rationales as verified; treat results as market commentary only.",
+    "",
+  ].join("\n");
+}
+
+function hasOfficialFedSourceGap(query: string, data: WebSearchEnvelope): boolean {
+  return isFedAnnouncementQuery(query) &&
+    !data.results.some((result) => isOfficialFedSource(result.source) || isOfficialFedSource(result.url));
+}
+
+function isFedAnnouncementQuery(query: string): boolean {
+  const lower = query.toLowerCase();
+  const mentionsFed = /\b(?:fed|fomc|federal reserve)\b/.test(lower);
+  const asksOfficialFact = /\b(?:announcement|meeting|minutes|statement|decision|vote|chair|governor|appointment|leadership)\b/.test(lower);
+  return mentionsFed && asksOfficialFact;
+}
+
+function isOfficialFedSource(value: string): boolean {
+  const lower = value.toLowerCase();
+  return lower.includes("federalreserve.gov") || lower.includes("fomc.gov");
+}
+
 export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
   name: "search_web",
   label: "Web Search",
@@ -114,11 +141,12 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
 
     if (data.resultCount === 0) {
       const zeroPrefix = buildSoftDegradedPrefix(data);
+      const sourceGapPrefix = buildOfficialSourceGapPrefix(query, data);
       return {
         content: [
           {
             type: "text",
-            text: `${zeroPrefix}No results found for "${query}" (${category}, past ${freshness}).`,
+            text: `${zeroPrefix}${sourceGapPrefix}No results found for "${query}" (${category}, past ${freshness}).`,
           },
         ],
         details: data,
@@ -130,6 +158,8 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
       : "";
 
     const softDegradedPrefix = buildSoftDegradedPrefix(data);
+    const sourceGapPrefix = buildOfficialSourceGapPrefix(query, data);
+    const shouldOmitResults = hasOfficialFedSourceGap(query, data);
 
     const header = `**Web Search** — ${data.resultCount} results for "${query}" (${category}, past ${freshness}, via ${data.provider})`;
     const items = data.results.map((r) => {
@@ -139,8 +169,11 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
       const pub = r.published ? `Published: ${r.published}` : "Published: unknown";
       return `• [${title}](${url}) — ${r.source}\n  ${snippet}\n  ${pub}`;
     });
+    const body = shouldOmitResults
+      ? "Non-official results were omitted from assistant-visible evidence for this Fed/FOMC announcement query. Verify against an official Federal Reserve or FOMC source before naming announcements or personnel changes."
+      : items.join("\n\n");
 
-    const text = `${softDegradedPrefix}${stalePrefix}${header}\n\n${items.join("\n\n")}`;
+    const text = `${softDegradedPrefix}${sourceGapPrefix}${stalePrefix}${header}\n\n${body}`;
 
     return {
       content: [{ type: "text", text }],

@@ -29,7 +29,7 @@ export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog
         >
           <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
           Browse workflows, tools, and providers
-          <Kbd className="hidden sm:inline-flex">⌘K</Kbd>
+          <Kbd className="hidden sm:inline-flex">⌘K / Ctrl+K</Kbd>
         </button>
       ) : null}
     </div>

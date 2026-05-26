@@ -5,12 +5,14 @@ description: Install OpenCandle, configure providers, and run the CLI or GUI.
 
 # Getting Started
 
-OpenCandle runs as an interactive Pi agent in the terminal and as a local browser GUI. The CLI is the primary entry point; the GUI is a local workbench for chat, tool discovery, provider status, session history, and financial context.
+OpenCandle runs as an interactive Pi agent in the terminal and as a local browser GUI. Pi is the bundled local agent runtime that handles model setup, the terminal shell, and saved sessions; OpenCandle adds the financial tools and workflows on top. The CLI is the primary entry point; the GUI is a local workbench for chat, tool discovery, provider status, session history, and financial context.
+
+OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
 
 ## Requirements
 
 - Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0 <27`
-- One supported model provider configured through Pi
+- One supported model provider configured through Pi: OpenAI, Anthropic, or Google
 - Optional market data provider keys for expanded coverage
 
 ## Install
@@ -34,9 +36,19 @@ cp .env.example .env
 npm start
 ```
 
+On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`. OpenCandle stores local state in `~/.opencandle` on macOS/Linux and `%USERPROFILE%\.opencandle` on Windows unless `OPENCANDLE_HOME` is set.
+
 On first run, OpenCandle walks through model setup. You can rerun setup later from inside the agent with `/setup`.
 
 For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures.
+
+## Choose Your Interface
+
+Use the terminal UI when you want the fastest keyboard loop, slash commands, and a plain transcript.
+
+Use the GUI when you want a visual investigation workspace: chat, workflow cards, tool results, provider setup, session history, and financial context in one browser tab.
+
+Both use the same OpenCandle tools and saved session state. You can start in the terminal and later inspect sessions in the GUI.
 
 ## Run the Local GUI
 
@@ -53,6 +65,14 @@ opencandle gui
 ```
 
 Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions through a writer/follower lock so only one process mutates a session at a time.
+
+Good first GUI flow:
+
+1. Ask `What is AAPL trading at?`
+2. Open the catalog with `⌘K` on macOS or `Ctrl+K` on Windows/Linux.
+3. Pick a workflow such as Comprehensive Analysis or Compare Assets.
+4. Inspect the tool card or drawer to see what data was used.
+5. Open the provider tab if the answer says a data source is missing.
 
 See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and writer/follower behavior.
 

@@ -1,4 +1,8 @@
 import type { ClassificationResult, WorkflowType } from "../../src/routing/types.js";
+import type { CapabilityGapId, CommitmentMode, StructuredCheckId } from "../../src/routing/planning.js";
+import type { PlanningEvidenceRecord } from "../../src/runtime/planning-evidence.js";
+import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
+import type { RetryEligibilityTrace, StructuredCheckResult } from "../../src/runtime/answer-contracts.js";
 import type { CustomEntryTrace } from "../harness/types.js";
 
 /** Shape of tool call data captured in a trace. */
@@ -22,11 +26,32 @@ export interface RouterTelemetry {
   toolScopeViolations?: unknown[];
 }
 
+export interface PlanningTelemetry {
+  version?: string;
+  taskFamily?: string;
+  commitmentMode?: CommitmentMode;
+  policyCardId?: string;
+  evidencePlanId?: string;
+  answerContractId?: string;
+  structuredCheckIds: StructuredCheckId[];
+  workspacePlaceholderIds: string[];
+  artifactPlaceholderIds: string[];
+  artifactContractIds: ArtifactContractId[];
+  capabilityGapIds: CapabilityGapId[];
+  evidenceRecords: PlanningEvidenceRecord[];
+  structuredCheckResults: StructuredCheckResult[];
+  structuredCheckFailures: StructuredCheckResult[];
+  retryEligibility: RetryEligibilityTrace;
+  parityStatus?: string;
+  regressionClassification?: string;
+}
+
 /** Structured trace emitted by the test harness. */
 export interface EvalTrace {
   prompt: string;
   classification: ClassificationResult;
   router?: RouterTelemetry;
+  planning?: PlanningTelemetry;
   toolCalls: TraceToolCall[];
   askUserTranscript: Array<{ question: string; answer: string | null }>;
   text: string;

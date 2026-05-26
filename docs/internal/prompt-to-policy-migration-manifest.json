@@ -1,0 +1,532 @@
+{
+  "manifestVersion": 1,
+  "change": "prompt-to-policy-agent-planning",
+  "createdAt": "2026-05-24",
+  "purpose": "Fixed prompt set for planning parity comparisons. Prompt text and deterministic hard assertions must not drift silently; qualitative answer expectations live in optionalJudgeAssertions.",
+  "modelMetadata": {
+    "openCandleRouterMode": "llm",
+    "openCandleVersion": "0.4.0",
+    "baselineDate": "2026-05-24",
+    "notes": "Competitor baseline answers may be cached only where cachedCompetitorAnswersAllowed is true; OpenCandle route/tool/evidence assertions must be rerun for before/after comparisons."
+  },
+  "prompts": [
+    {
+      "id": "brokerage-choice-taxable",
+      "text": "I’m opening a taxable account and want simple recurring ETF investing. Which brokerage would you pick and what tradeoffs should I check first?",
+      "followupSequence": [],
+      "ledgerRows": ["retail-finance-tradeoff", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "retail_finance_tradeoff",
+        "commitmentMode": "framework",
+        "toolBundles": [],
+        "requiredEvidence": ["capability_gap:brokerage_comparison"],
+        "finalAnswerHardAssertions": [
+          "does not punt because a dedicated live brokerage tool is missing"
+        ],
+        "providerGapDisclosure": ["brokerage_comparison"]
+      },
+      "optionalJudgeAssertions": ["practical retail default", "clear taxable-account caveats", "compares fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss harvesting support, transfer/account fees, support quality, and ease of recurring investment", "labels provider-site facts that must be verified", "gives a practical default or next step"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-21-00-764Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-21-00-764Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "etf-overlap-check",
+      "text": "I already own VOO and QQQ. If I add SCHD, am I actually diversifying or just buying more of the same stuff?",
+      "followupSequence": ["What about VYM instead of SCHD?"],
+      "ledgerRows": ["dividend-growth-etf-tradeoff", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "workflow_dispatch",
+        "workflow": "compare_assets",
+        "taskFamily": "asset_compare",
+        "commitmentMode": "compare_tradeoffs",
+        "toolBundles": ["core_market", "macro", "sentiment"],
+        "requiredEvidence": ["compare metrics include overlap when extracted", "holdings_overlap_tool_when_available"],
+        "finalAnswerHardAssertions": [
+          "compares requested ETFs before portfolio construction",
+          "uses holdings overlap tool when available and discloses partial provider coverage if unavailable"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["tradeoff clarity", "does not claim exact overlap if unavailable", "still gives a useful diversification framework using available quote/fund context", "followup preserves comparison shape and replaces SCHD with VYM"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-30-50-516Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-30-50-516Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "ticker-alias-armh",
+      "text": "Is ARMH still the right ticker for Arm, and how does the business actually make money now?",
+      "followupSequence": [],
+      "ledgerRows": ["ticker-alias", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "ticker_disambiguation",
+        "commitmentMode": "framework",
+        "toolBundles": ["core_market"],
+        "requiredEvidence": ["ticker lookup or company overview when available"],
+        "finalAnswerHardAssertions": [
+          "distinguishes legacy ticker from current primary ticker before less-common interpretations",
+          "explains durable business model without fabricating listing facts"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["clear legacy/current ticker relationship", "business model specificity", "labels any ambiguity if lookup/company overview is unavailable"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-43-27-171Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-43-27-171Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "unknown-ticker-earnings-risk",
+      "text": "I hold 300 shares of ZZZZ and earnings are tonight. Should I trim, hedge, or hold through it?",
+      "followupSequence": [],
+      "ledgerRows": ["unknown-ticker-event-risk", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "ticker_disambiguation",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "clarification"],
+        "requiredEvidence": ["ticker verification attempt or unresolved-ticker diagnostic"],
+        "finalAnswerHardAssertions": [
+          "states the ticker could not be verified if lookup fails",
+          "does not invent current earnings facts",
+          "gives an event-risk framework covering expected move/gap risk, guidance, drivers, position size, trim/hedge/stop choices, and facts that would change the answer"
+        ],
+        "providerGapDisclosure": ["earnings_event_risk"]
+      },
+      "optionalJudgeAssertions": ["risk-first answer", "specific hedge/trim framework"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-28-37-353Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-28-37-353Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "crypto-position-sizing",
+      "text": "I have a $75k portfolio and want BTC exposure. What allocation range would you use, and how bad could the drawdown feel?",
+      "followupSequence": [],
+      "ledgerRows": ["crypto-sizing", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "retail_finance_tradeoff",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market"],
+        "requiredEvidence": ["crypto price/history when available"],
+        "finalAnswerHardAssertions": [],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["specific sizing discipline", "risk math clarity", "starts with a concrete allocation range and dollar amount", "shows drawdown math against the stated portfolio value", "includes sleep test, DCA, rebalancing rules, position caps, tax tracking, custody/exchange considerations, and emergency fund/high-interest-debt prerequisites"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-36-05-634Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-36-05-634Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "market-closed-today-move",
+      "text": "Why did Boeing move today? I want the actual catalyst, not generic company background.",
+      "followupSequence": ["What if the market is closed right now?"],
+      "ledgerRows": ["market-closed-today-move", "current-single-asset-freshness", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "current_event_explanation",
+        "commitmentMode": "framework",
+        "toolBundles": ["core_market"],
+        "requiredEvidence": ["market_status", "quote freshness", "news/event evidence when available"],
+        "finalAnswerHardAssertions": [
+          "does not invent an intraday move on weekends or holidays"
+        ],
+        "providerGapDisclosure": ["market_calendar"]
+      },
+      "optionalJudgeAssertions": ["causal restraint", "freshness clarity", "checks current date and market status before causal claims", "offers the most recent trading day when market is closed", "ties cause only to fetched quote/news/event evidence"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-38-04-569Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-38-04-569Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "single-asset-buy-wait-avoid",
+      "text": "Analyze NVDA and tell me whether to buy, wait, or avoid. Include the key risks and entry strategy.",
+      "followupSequence": [],
+      "ledgerRows": ["current-single-asset-freshness"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "single_asset_analysis",
+        "taskFamily": "single_asset_decision",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market"],
+        "requiredEvidence": ["quote or tool-output date when available"],
+        "finalAnswerHardAssertions": [
+          "does not make missing fundamentals or unavailable DCF the main thesis"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["direct buy/wait/avoid call", "risk-first entry strategy", "states the quote or tool-output date", "preserves market-closed, delayed, or last available quote caveats", "gives a clear call with key risks, position sizing or entry strategy, confidence, and invalidation"],
+      "baselineOpenCandleReportPath": "tests/evals/product/cases.ts#single-asset-nvda-recommendation",
+      "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "sentiment-source-coverage",
+      "text": "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
+      "followupSequence": [],
+      "ledgerRows": ["sentiment-source-coverage"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "sentiment_snapshot",
+        "commitmentMode": "framework",
+        "toolBundles": ["core_market", "sentiment"],
+        "requiredEvidence": ["stock quote", "sentiment summary or source-level sentiment"],
+        "finalAnswerHardAssertions": [],
+        "providerGapDisclosure": ["sentiment_sample_depth"]
+      },
+      "optionalJudgeAssertions": ["confidence appropriately downgraded for missing sources", "includes direction and strength of sentiment signal", "states score scale when provided", "discloses missing sources and why they matter", "mentions source-coverage risk and low sample counts", "states whether sentiment diverges from price action"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T16-04-56-986Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T16-04-56-986Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "filing-thesis-review",
+      "text": "Look at COIN’s latest 10-Q or 10-K. What changed that could alter the investment thesis over the next 6-12 months? Separate SEC filing evidence from news or market context.",
+      "followupSequence": [],
+      "ledgerRows": ["filing-thesis-review"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "filing_thesis_review",
+        "commitmentMode": "framework",
+        "toolBundles": ["core_market", "sec"],
+        "requiredEvidence": ["SEC filing metadata", "filing evidence or explicit filing-body gap"],
+        "finalAnswerHardAssertions": [
+          "calls or uses SEC filing evidence before final answer",
+          "does not claim an Item 5.02 or filing-section change unless SEC evidence supports it"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["thesis relevance", "anti-fabrication", "separates filing metadata, filing-section summaries, adjacent news, and market data", "prioritizes thesis-changing deltas, dates, source type, and 6-12 month impact"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T15-56-34-698Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T15-56-34-698Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "dividend-growth-etf-tradeoff",
+      "text": "If I have $5,000 for 10-15 years, should I prioritize VYM or SCHD, or something more growth-oriented like VOO or QQQ? What are the tradeoffs?",
+      "followupSequence": [],
+      "ledgerRows": ["dividend-growth-etf-tradeoff", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "workflow_dispatch",
+        "workflow": "compare_assets",
+        "taskFamily": "asset_compare",
+        "commitmentMode": "compare_tradeoffs",
+        "toolBundles": ["core_market", "macro", "sentiment"],
+        "requiredEvidence": ["quote or fund context when available", "holdings_overlap_tool_when_available for ETF/fund overlap"],
+        "finalAnswerHardAssertions": [
+          "does not route as portfolio construction requiring a budget"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["tradeoff framing", "horizon fit", "compares dividend/income and growth-oriented ETFs", "covers tax/asset-location caveats for taxable accounts where relevant", "gives a clear practical default based on horizon and goal"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-18-42-168Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-18-42-168Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "safe-cash-products",
+      "text": "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
+      "followupSequence": [],
+      "ledgerRows": ["retail-finance-tradeoff", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "retail_finance_tradeoff",
+        "commitmentMode": "compare_tradeoffs",
+        "toolBundles": [],
+        "requiredEvidence": ["capability_gap:cash_yield_products"],
+        "finalAnswerHardAssertions": [
+          "does not fabricate live yields"
+        ],
+        "providerGapDisclosure": ["cash_yield_products"]
+      },
+      "optionalJudgeAssertions": ["practical cash hierarchy", "compares liquidity, FDIC/SIPC/Treasury risk, rate risk, taxes, minimums, and access timing", "labels current yield facts as needing verification", "gives a default hierarchy for 6-12 month cash"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json#safe-cash",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "mortgage-vs-investing",
+      "text": "I have extra monthly cash. Should I pay down a 6.8% mortgage faster or invest in index funds?",
+      "followupSequence": [],
+      "ledgerRows": ["retail-finance-tradeoff", "competitive-retail-fixes"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "retail_finance_tradeoff",
+        "commitmentMode": "compare_tradeoffs",
+        "toolBundles": [],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["clear financial tradeoff", "not over-tooled", "compares guaranteed after-tax debt return versus uncertain market return", "covers liquidity, emergency fund, taxes, risk tolerance, time horizon, and hybrid split", "gives a practical default based on the 6.8% rate"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json#mortgage",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "covered-call-routing",
+      "text": "NVDA earnings are today. If I have DRAM at a $51 cost basis, what is the best covered call to sell right now?",
+      "followupSequence": [],
+      "ledgerRows": ["options-existing-position"],
+      "expected": {
+        "routeKind": "workflow_dispatch",
+        "workflow": "options_screener",
+        "taskFamily": "options_strategy",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "options", "sentiment", "clarification"],
+        "requiredEvidence": ["owned underlying DRAM", "catalyst symbol NVDA", "options chain when available"],
+        "finalAnswerHardAssertions": [],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["strategy/risk framing", "uses DRAM as the covered-call underlying", "preserves NVDA as catalyst context, not the option-chain symbol", "preserves cost basis and event-week DTE hint", "frames covered-call assignment/downside/opportunity-cost risk"],
+      "baselineOpenCandleReportPath": "tests/unit/routing/router.test.ts",
+      "competitorBaselineReportPathOrHash": "not-applicable-router-boundary",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "protective-put-routing",
+      "text": "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?",
+      "followupSequence": [],
+      "ledgerRows": ["options-existing-position"],
+      "expected": {
+        "routeKind": "workflow_dispatch",
+        "workflow": "options_screener",
+        "taskFamily": "options_strategy",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "options", "sentiment", "clarification"],
+        "requiredEvidence": ["owned underlying AMD", "catalyst symbol NVDA", "share quantity", "options chain when available"],
+        "finalAnswerHardAssertions": [],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["cost-sensitive hedge quality", "uses AMD as protective-put underlying", "preserves NVDA as catalyst context", "preserves 200-share hedge quantity and month DTE hint", "frames hedge floor, premium, Greeks, liquidity, and protective-put risks"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-21T23-40-58-459Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-21T23-40-58-459Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "macro-portfolio-review",
+      "text": "Given the current macro outlook for 2026, critically evaluate a balanced portfolio with 60% equity and 40% fixed income. What is the biggest risk and one adjustment you would make?",
+      "followupSequence": [],
+      "ledgerRows": ["macro-policy-and-portfolio", "portfolio-evaluation-not-construction"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "macro_allocation_review",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "macro", "sentiment", "sec", "clarification"],
+        "requiredEvidence": ["macro evidence when available", "provider gap disclosure when macro providers are unavailable"],
+        "finalAnswerHardAssertions": [
+          "does not ask for a portfolio budget"
+        ],
+        "providerGapDisclosure": ["market_calendar", "forward_rate_probabilities"],
+        "acceptedObservedChanges": [
+          {
+            "field": "policyCardId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review policy owner to a dedicated macro policy card"
+          },
+          {
+            "field": "answerContractId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review answer contract to a dedicated macro contract"
+          }
+        ]
+      },
+      "optionalJudgeAssertions": ["macro mechanism clarity", "actionable adjustment quality", "starts with a bottom-line portfolio risk/reward read", "includes current macro evidence, structural portfolio read, sleeve-by-sleeve implications, key risks/opportunities, actionable adjustment, what it does not fix, and watchlist/invalidation", "names exact unavailable macro data rather than blocking"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T01-30-00-478Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T01-30-00-478Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    },
+    {
+      "id": "existing-allocation-review",
+      "text": "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+      "followupSequence": [],
+      "ledgerRows": ["portfolio-evaluation-not-construction"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "portfolio_review",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "macro", "sentiment", "sec", "clarification"],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [
+          "does not ask for a portfolio budget",
+          "does not route as portfolio construction requiring a budget"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["structural allocation critique", "does not over-construct", "starts with a bottom-line structural portfolio read", "critiques diversification, concentration, geography, duration, credit, liquidity, taxes, horizon fit, and rebalance discipline", "gives one practical adjustment or watchlist trigger without building a new portfolio from scratch"],
+      "baselineOpenCandleReportPath": "not-applicable-new-prompt-policy-case",
+      "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "provider-degradation-disclosure",
+      "text": "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
+      "followupSequence": [],
+      "ledgerRows": ["provider-degradation-connect", "source-gap-continuation", "macro-policy-and-portfolio"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "macro_allocation_review",
+        "commitmentMode": "framework",
+        "toolBundles": ["core_market", "macro", "sentiment", "sec", "clarification"],
+        "requiredEvidence": ["macro/sentiment evidence when available", "structured provider gaps when unavailable"],
+        "finalAnswerHardAssertions": [
+          "does not answer only with a missing-provider apology"
+        ],
+        "providerGapDisclosure": ["forward_rate_probabilities", "sentiment_sample_depth"],
+        "acceptedObservedChanges": [
+          {
+            "field": "policyCardId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review policy owner to a dedicated macro policy card"
+          },
+          {
+            "field": "answerContractId",
+            "from": "portfolio_review",
+            "to": "macro_allocation_review",
+            "reason": "macro allocation migration promotes macro prompts from the generic portfolio-review answer contract to a dedicated macro contract"
+          }
+        ]
+      },
+      "optionalJudgeAssertions": ["honest but useful degradation", "preserves `/connect` remediation semantics where credential-required tags occur", "continues with a useful macro/portfolio framework when live data is unavailable", "names specific current facts that would improve the answer"],
+      "baselineOpenCandleReportPath": "docs/internal/competitive-benchmark-history.md",
+      "competitorBaselineReportPathOrHash": "not-applicable-provider-degradation",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "backtest-strategy-review",
+      "text": "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
+      "followupSequence": [],
+      "ledgerRows": ["backtest-review"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "single_asset_analysis",
+        "taskFamily": "single_asset_decision",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "options", "sentiment", "sec", "clarification"],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [],
+        "providerGapDisclosure": [],
+        "acceptedObservedChanges": [
+          {
+            "field": "taskFamily",
+            "from": "single_asset_decision",
+            "to": "backtest_review",
+            "reason": "backtest migration promotes backtest prompts from generic single-asset planning to a dedicated backtest policy owner while preserving agent-task routing"
+          },
+          {
+            "field": "commitmentMode",
+            "from": "decision",
+            "to": "framework",
+            "reason": "backtest reporting is a metrics and practical-edge review, not a single-security buy/sell decision"
+          },
+          {
+            "field": "policyCardId",
+            "from": "single_asset_decision",
+            "to": "backtest_review",
+            "reason": "backtest obligations move to a dedicated policy card"
+          },
+          {
+            "field": "evidencePlanId",
+            "from": "placeholder_single_asset_decision",
+            "to": "placeholder_backtest_review",
+            "reason": "backtest obligations use a dedicated placeholder evidence-plan owner until a full backtest evidence plan is implemented"
+          },
+          {
+            "field": "answerContractId",
+            "from": "single_asset_decision",
+            "to": "backtest_review",
+            "reason": "backtest metric coverage uses a dedicated answer contract"
+          }
+        ]
+      },
+      "optionalJudgeAssertions": ["backtest metric completeness", "practical edge discussion", "reports strategy return, buy-and-hold return, outperformance, trade count, win rate, and max drawdown", "includes Sharpe or Sortino when available or says they were unavailable", "explains why the strategy worked or failed in the tested regime", "discusses trading costs/slippage when asked whether the edge is practical"],
+      "baselineOpenCandleReportPath": "tests/evals/cases/faithfulness.eval.ts#backtest-metrics",
+      "competitorBaselineReportPathOrHash": "not-applicable-router-boundary",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "stateful-prediction-record",
+      "text": "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days.",
+      "followupSequence": [],
+      "ledgerRows": ["stateful-tracking-update"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "watchlist_or_tracking",
+        "taskFamily": "stateful_tracking_update",
+        "commitmentMode": "update_state",
+        "toolBundles": ["core_market", "clarification"],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [
+          "uses track_prediction to persist the prediction",
+          "does not turn the state update into a buy/sell recommendation"
+        ],
+        "providerGapDisclosure": [],
+        "acceptedObservedChanges": [
+          {
+            "field": "policyCardId",
+            "from": "general_fallback",
+            "to": "stateful_tracking_update",
+            "reason": "stateful tracking migration moves state confirmation obligations to a dedicated policy card"
+          },
+          {
+            "field": "evidencePlanId",
+            "from": "placeholder_general_fallback",
+            "to": "placeholder_stateful_tracking_update",
+            "reason": "stateful tracking uses a dedicated placeholder evidence-plan owner"
+          },
+          {
+            "field": "answerContractId",
+            "from": "general_fallback",
+            "to": "stateful_tracking_update",
+            "reason": "state update confirmation uses a dedicated answer contract"
+          }
+        ]
+      },
+      "optionalJudgeAssertions": ["state confirmation clarity", "confirms AAPL, bullish direction, entry price, conviction, and 30-day timeframe"],
+      "baselineOpenCandleReportPath": "tests/e2e/cli.test.ts#Record prediction",
+      "competitorBaselineReportPathOrHash": "not-applicable-stateful-tool",
+      "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "no-tool-valuation-education",
+      "text": "Explain how to use P/E ratios without over relying on them.",
+      "followupSequence": [],
+      "ledgerRows": ["no-tool-education"],
+      "expected": {
+        "routeKind": "agent_task",
+        "workflow": "general_finance_qa",
+        "taskFamily": "concept_explainer",
+        "commitmentMode": "framework",
+        "toolBundles": [],
+        "requiredEvidence": [],
+        "finalAnswerHardAssertions": [
+          "does not fetch live data",
+          "does not mention OpenCandle tool names",
+          "uses Bottom line, Core mental model, Practical workflow, Where it misleads, Cross-checks, and Quick checklist",
+          "does not append analyst commitment/confidence/invalidation boilerplate"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["teaching clarity", "practical checklist"],
+      "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T15-30-30-747Z_competitive-finance.json",
+      "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T15-30-30-747Z_competitive-finance.json",
+      "cachedCompetitorAnswersAllowed": true
+    }
+  ]
+}

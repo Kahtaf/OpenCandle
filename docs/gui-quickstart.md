@@ -10,11 +10,11 @@ description: Run the local OpenCandle browser workbench and understand writer/fo
 3. Open `http://127.0.0.1:14567`.
 4. If the model setup panel appears, connect a model first. Chat cannot run without model access.
 5. Start with a keyless market-data prompt such as `What is AAPL trading at?`, then try `/analyze NVDA` or the empty-state action cards.
-6. Open the catalog with `⌘K` or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
+6. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or Tailscale access.
 
-The GUI shares Pi sessions through a writer/follower lock so only one process mutates a session at a time. The writer can run chat, save provider/model setup, toggle tools, and manage sessions. Followers can serve the browser and read session state, but mutating actions return "Read-only follower mode".
+The GUI shares Pi sessions through a writer/follower lock so only one process mutates a session at a time. Pi is the bundled local agent runtime that owns model setup and saved sessions; the writer/follower lock is the GUI's guard against two browser servers editing the same session at once. The writer can run chat, save provider/model setup, toggle tools, and manage sessions. Followers can serve the browser and read session state, but mutating actions return "Read-only follower mode".
 
 Check the running role with:
 
@@ -45,6 +45,20 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 - Session history keeps prior investigations reachable through Pi session state.
 - Context and tool result cards make prices, filings, macro data, sentiment, and portfolio facts inspectable.
 - Writer/follower locking keeps one local process responsible for mutating a session.
+
+## What You Can Do From The GUI
+
+- Ask a normal finance question, such as `Should I add NVDA if I already own AAPL and TSLA?`
+- Launch a workflow from the catalog, such as Comprehensive Analysis, Compare Assets, Portfolio Builder, or Options Screener.
+- Run one tool directly when you only need a quote, option chain, filing lookup, or macro series.
+- Connect provider keys from the Providers tab instead of editing config files.
+- Inspect tool cards and the drawer to see arguments, results, sources, and warnings.
+- Reopen previous sessions and continue the investigation.
+- Answer focused follow-up questions when OpenCandle needs a ticker, goal, horizon, budget, or risk preference before proceeding.
+
+Workflow catalog entries prefill a structured chat prompt. They do not switch the GUI into a separate mode; the result still appears in the same chat timeline with the same tool cards and session history.
+
+The financial context panel summarizes relevant local context from the current session, such as watchlist entries, holdings, recent symbols, and provider status. Treat it as a navigation aid, not a separate source of truth.
 
 ## When To Use The GUI
 

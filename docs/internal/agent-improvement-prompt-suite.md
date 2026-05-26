@@ -694,4 +694,4 @@ After each competitive run:
 4. Rerun the exact prompt with fixed `OPENCANDLE_COMPETITIVE_PROMPT_*` metadata.
 5. If a committed change improves the result, add a compact row to `docs/internal/competitive-benchmark-history.md`.
 
-Do not broaden from a single prompt until the failure recurs or the fix is clearly generic.
+Do not broaden from a single prompt until the failure recurs or the fix is clearly generic. Do not copy benchmark-specific tickers, rates, dollar amounts, share counts, or exact prompt phrases into production prompt guidance. If prompt guidance changes, prefer the selected policy card, workflow prompt, evidence normalization, answer contract, or structured check over the fallback playbook, and run `npx vitest run tests/unit/prompts/prompt-debt-guard.test.ts`.

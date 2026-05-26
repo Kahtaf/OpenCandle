@@ -1,0 +1,28 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "price": {
+          "symbol": "QQQ",
+          "shortName": "Invesco QQQ Trust"
+        },
+        "topHoldings": {
+          "holdings": [
+            { "symbol": "AAPL", "holdingName": "Apple Inc.", "holdingPercent": 0.085 },
+            { "symbol": "MSFT", "holdingName": "Microsoft Corp.", "holdingPercent": 0.083 },
+            { "symbol": "NVDA", "holdingName": "NVIDIA Corp.", "holdingPercent": 0.075 },
+            { "symbol": "AVGO", "holdingName": "Broadcom Inc.", "holdingPercent": 0.044 }
+          ],
+          "equityHoldings": {
+            "sectorWeightings": [
+              { "technology": 0.51 },
+              { "communication_services": 0.15 },
+              { "consumer_cyclical": 0.13 }
+            ]
+          }
+        }
+      }
+    ],
+    "error": null
+  }
+}

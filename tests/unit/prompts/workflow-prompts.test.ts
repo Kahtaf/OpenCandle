@@ -99,6 +99,14 @@ describe("buildPortfolioPrompt", () => {
     expect(prompt).toContain("assumption");
   });
 
+  it("requires a direct bottom-line portfolio commitment after assumptions", () => {
+    const prompt = buildPortfolioPrompt(makePortfolioResolution());
+    expect(prompt).toContain("Then start the analysis with \"Bottom line:\"");
+    expect(prompt).toContain("directly say what portfolio you would build");
+    expect(prompt).toContain("horizon-specific risks");
+    expect(prompt).not.toContain("beginning exactly");
+  });
+
   it("includes position count", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution({ positionCount: 6 }));
     expect(prompt).toContain("6");
@@ -395,6 +403,21 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toContain("not the same as correlation");
     expect(prompt).toContain("mega-cap technology tilt");
     expect(prompt).toContain("avoid treating price, RSI, or generic risk metrics as the main answer");
+  });
+
+  it("tells ETF overlap comparisons to use the holdings overlap tool before correlation fallback", () => {
+    const resolution: SlotResolution<CompareAssetsSlots> = {
+      resolved: { symbols: ["VOO", "QQQ", "SCHD"], metrics: ["overlap"] },
+      sources: { symbols: "user", metrics: "user" },
+      defaultsUsed: [],
+      missingRequired: [],
+    };
+    const prompt = buildCompareAssetsPrompt(resolution);
+
+    expect(prompt).toContain("Use analyze_holdings_overlap with symbols [VOO, QQQ, SCHD]");
+    expect(prompt).toContain("Use analyze_correlation across [VOO, QQQ, SCHD] only as supporting");
+    expect(prompt).toContain("provider top holdings");
+    expect(prompt).not.toContain("If exact holdings weights are unavailable");
   });
 
   // Fix 3: Date grounding

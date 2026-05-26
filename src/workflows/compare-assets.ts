@@ -11,8 +11,11 @@ export function buildCompareAssetsWorkflowDefinition(
   const timeHorizon = resolution.resolved.timeHorizon;
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
   const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
+  const isOverlapComparison = resolution.resolved.metrics?.includes("overlap") ?? false;
   const evidenceList = resolution.resolved.metrics?.includes("sentiment")
     ? "price, technical, risk, and sentiment data"
+    : isOverlapComparison
+      ? "quote, holdings-overlap, and correlation data"
     : "price, technical, and risk data";
   const horizonGuidance = timeHorizon
     ? `
@@ -32,6 +35,15 @@ export function buildCompareAssetsWorkflowDefinition(
 - Discuss concentration or sector-exposure risk when one asset is narrower or more growth-heavy than the other.
 - Say whether the rate evidence you used is historical/current data or forward-looking market-pricing evidence; do not treat historical Fed funds data as a forecast.`
     : "";
+  const overlapGuidance = isOverlapComparison
+    ? `
+- For ETF overlap prompts, synthesize the holdings-overlap and shared-exposure evidence first, with correlation only as supporting diversification context.
+- State the diversification implication directly: deliberate factor tilt, accidental duplication, or genuinely differentiated exposure.
+- If provider holdings coverage was partial or unavailable, say that before giving the practical next step.`
+    : "";
+  const verdictInstruction = isOverlapComparison
+    ? "End with a concise verdict on whether the added fund improves diversification or mostly duplicates existing exposure."
+    : "End with a concise verdict on which asset looks strongest right now and why.";
 
   return {
     workflowType: "compare_assets",
@@ -43,7 +55,7 @@ export function buildCompareAssetsWorkflowDefinition(
       promptStep("compare_and_present", "Present side-by-side comparison", `Now present the side-by-side comparison for ${symbols}:
 - Keep any unavailable fundamentals marked as unavailable instead of retrying the same failed provider calls.
 - Use the ${evidenceList} you already fetched to finish the comparison even if some fundamentals are missing.
-- End with a concise verdict on which asset looks strongest right now and why.${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}`, {
+- ${verdictInstruction}${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}${overlapGuidance}`, {
         requiredInputs: ["asset_data"],
         expectedOutputs: ["comparison_summary"],
       }),

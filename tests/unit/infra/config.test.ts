@@ -292,6 +292,26 @@ describe("loadConfig", () => {
     );
   });
 
+  it("loads planning migration status overrides from OPENCANDLE_PLANNING_MIGRATION_STATUSES", () => {
+    process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES = "single_asset_decision=dual_run,asset_compare=observe_only";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    const config = loadConfig();
+    expect(config.planningMigrationStatuses).toEqual({
+      single_asset_decision: "dual_run",
+      asset_compare: "observe_only",
+    });
+  });
+
+  it("rejects invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES values", () => {
+    process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES = "single_asset_decision=regex";
+    mockedExistsSync.mockReturnValue(false);
+    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    expect(() => loadConfig()).toThrowError(
+      'Invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES entry "single_asset_decision=regex".',
+    );
+  });
+
   it("loads braveApiKey from BRAVE_API_KEY env var", () => {
     process.env.BRAVE_API_KEY = "brave-env-key";
     mockedExistsSync.mockReturnValue(false);

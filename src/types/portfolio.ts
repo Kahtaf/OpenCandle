@@ -30,6 +30,38 @@ export interface RiskMetrics {
   var95: number; // 95% Value at Risk (daily)
 }
 
+export interface FundHolding {
+  symbol: string;
+  name: string;
+  weight: number;
+}
+
+export interface FundHoldings {
+  symbol: string;
+  name?: string;
+  provider: string;
+  holdings: FundHolding[];
+  sectorWeights?: Record<string, number>;
+}
+
+export interface SharedFundHolding {
+  symbol: string;
+  name: string;
+  weights: Record<string, number>;
+  overlapWeight: number;
+}
+
+export interface FundOverlapPair {
+  symbols: [string, string];
+  overlapWeight: number;
+  sharedHoldings: SharedFundHolding[];
+}
+
+export interface FundHoldingsOverlap {
+  funds: FundHoldings[];
+  pairs: FundOverlapPair[];
+}
+
 export interface TechnicalIndicators {
   symbol: string;
   period: string;

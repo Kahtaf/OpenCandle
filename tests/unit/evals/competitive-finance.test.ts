@@ -198,6 +198,84 @@ describe("competitive finance benchmarking", () => {
     ]);
   });
 
+  it("repairs missing commas between array object values in comparison judgments", () => {
+    const judgment = parseComparisonJudgment(`{
+      "winner": "opencandle",
+      "openCandleScore": 5,
+      "competitorScores": {
+        "claude": 4,
+        "codex": 3
+      },
+      "reason": "OpenCandle used current evidence.",
+      "openCandleDidBetter": [
+        "used live market data"
+        {"note": "ignored non-string object"}
+        "gave a clearer downside case"
+      ],
+      "competitorsDidBetter": {},
+      "openCandleImprovementIdeas": [
+        {"layer": "synthesis", "idea": "lead with the recommendation"}
+        {"layer": "structured-check", "idea": "state source coverage"}
+        "trim account-opening background"
+      ]
+    }`);
+
+    expect(judgment.openCandleDidBetter).toEqual([
+      "used live market data",
+      "gave a clearer downside case",
+    ]);
+    expect(judgment.openCandleImprovementIdeas).toEqual([
+      "trim account-opening background",
+    ]);
+  });
+
+  it("repairs comparison judgments with an omitted closing array bracket", () => {
+    const judgment = parseComparisonJudgment(`{
+      "winner": "opencandle",
+      "openCandleScore": 5,
+      "competitorScores": {
+        "claude": 4,
+        "codex": 3
+      },
+      "reason": "OpenCandle used current evidence.",
+      "openCandleDidBetter": [
+        "used live market data"
+      ],
+      "competitorsDidBetter": {},
+      "openCandleImprovementIdeas": [
+        "lead with the recommendation"
+    }`);
+
+    expect(judgment.openCandleImprovementIdeas).toEqual([
+      "lead with the recommendation",
+    ]);
+  });
+
+  it("repairs comparison judgments with extra trailing object delimiters", () => {
+    const judgment = parseComparisonJudgment(`{
+      "winner": "opencandle",
+      "openCandleScore": 5,
+      "competitorScores": {
+        "claude": 4,
+        "codex": 3
+      },
+      "reason": "OpenCandle used current evidence.",
+      "openCandleDidBetter": [
+        "used live market data"
+      ],
+      "competitorsDidBetter": {},
+      "openCandleImprovementIdeas": [
+        "lead with the recommendation"
+      ]
+    },
+    }`);
+
+    expect(judgment.winner).toBe("opencandle");
+    expect(judgment.openCandleImprovementIdeas).toEqual([
+      "lead with the recommendation",
+    ]);
+  });
+
   it("extracts usable agent text from non-zero CLI failures", () => {
     const answer = extractUsableAnswerFromCliFailure(
       "/repo/node_modules/.bin/acpx --cwd /tmp/oc failed: As of May 17, 2026, here is the analysis.\n\nDetails follow.",

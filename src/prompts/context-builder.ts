@@ -1,6 +1,21 @@
 import type { PromptSection, SectionName } from "./sections.js";
 import { SECTION_ORDER, DEFAULT_BUDGETS, truncateTobudget } from "./sections.js";
+import { renderPolicyCardForPlanning } from "./policy-cards.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
+
+export interface PromptSectionReport {
+  name: SectionName;
+  originalLength: number;
+  renderedLength: number;
+  characterBudget: number;
+  truncated: boolean;
+}
+
+export interface PromptBuildReport {
+  prompt: string;
+  sections: PromptSectionReport[];
+  truncationMarkers: number;
+}
 
 /** Options for building prompt context. */
 export interface PromptContextOptions {
@@ -55,14 +70,34 @@ export class PromptContextBuilder {
 
   /** Build the complete system prompt. */
   build(): string {
+    return this.buildWithReport().prompt;
+  }
+
+  /** Build the complete prompt and report section size/truncation metadata. */
+  buildWithReport(): PromptBuildReport {
     const parts: string[] = [];
+    const report: PromptSectionReport[] = [];
+    let truncationMarkers = 0;
     for (const name of SECTION_ORDER) {
       const section = this.sections.get(name)!;
       if (!section.content) continue;
       const truncated = truncateTobudget(section.content, section.characterBudget);
+      const wasTruncated = truncated.includes("[...truncated]");
+      if (wasTruncated) truncationMarkers += 1;
+      report.push({
+        name,
+        originalLength: section.content.length,
+        renderedLength: truncated.length,
+        characterBudget: section.characterBudget,
+        truncated: wasTruncated,
+      });
       parts.push(truncated);
     }
-    return parts.join("\n\n");
+    return {
+      prompt: parts.join("\n\n"),
+      sections: report,
+      truncationMarkers,
+    };
   }
 
   /**
@@ -80,9 +115,11 @@ export class PromptContextBuilder {
     if (options.workflowInstructions) {
       this.setSection("workflow-instructions", options.workflowInstructions);
     } else if (options.resolvedTurnContext) {
+      const routePlaybook = buildRoutePlaybook(options.resolvedTurnContext);
+      const policyCard = renderPolicyCardForPlanning(options.resolvedTurnContext.planning);
       this.setSection(
         "workflow-instructions",
-        buildRoutePlaybook(options.resolvedTurnContext),
+        policyCard ? `${policyCard}\n\n${routePlaybook}` : routePlaybook,
       );
     } else if (options.fallbackContext) {
       this.setSection(
@@ -171,29 +208,15 @@ function buildAgentTaskPlaybook(ctx: FallbackContext): string {
   const extraLine = ctx.extraContext ? `\n## Additional Context\n${ctx.extraContext}` : "";
 
   return `## Fallback Playbook
-This turn did not match a structured workflow, but you still commit to an answer under the analyst stance. Follow this playbook:${missingLine}${extraLine}
+This turn did not match a structured workflow, but you still answer under the analyst stance. Keep this fallback generic: task-specific behavior belongs in policy cards, workflow prompts, tool/evidence normalization, answer contracts, or structured checks. Do not add task-specific instructions here.${missingLine}${extraLine}
 
 1. Tool-first: fetch relevant data with your available tools before stating prices, levels, or metrics.
 2. Use the Assumptions Context below only as internal routing context. Do not quote it, label it, or start the answer with it unless the user explicitly asked for assumptions.
-3. Commit: give a concrete, specific answer (entry zone, target, allocation, recommendation, explanation — whatever the question asked for). Do not refuse. Do not hedge into vagueness. Low confidence is a legitimate answer; refusal is not.
+3. Commit to a concrete, specific answer when the user asks for a view, recommendation, allocation, target, explanation, or next step. Low confidence is valid; refusal-shaped hedging is not.
 4. Attach reasoning, a confidence band, and an invalidation condition to every committal response.
-5. For macro, rates, inflation, sector, or portfolio-allocation prompts: convert raw economic series into interpretable rates or trends where possible (for example, CPI index level → same-month year-over-year inflation when 13+ monthly observations are available), explain the policy stance in plain language (nominal and real-rate implications when available), and explicitly connect each macro datapoint to earnings, valuation multiples, asset-class returns, and portfolio risk. When citing macro data, name the provider or source family and observation date in plain language (for example, "FRED, April 2026") instead of dropping naked numbers, and state the trend direction when the tool output supports it (for example rising, falling, above/below target, or unchanged versus recent observations). For macro-risk prompts, produce a ranked risk list even when current macro tools are unavailable: inflation, rates/duration, growth/recession, credit/liquidity, currency, and geopolitical shocks are durable channels to assess. For portfolio-allocation macro prompts, critique structural exposures even without live data: equity concentration, cyclicality, emerging-market currency/liquidity sensitivity, fixed-income duration, credit-spread risk, inflation-linked bond real-rate duration, and stock-bond correlation regime. Start the portfolio section with a compact structural-bias read that calls out unusually large sleeves or hidden factor bets such as mega-cap tech concentration, emerging-market risk, duration, credit, real-rate exposure, and inflation hedge dependence. Use a scenario table for the main macro paths and a portfolio exposure map tying each sleeve to risks, opportunities, indicators to watch, and invalidation triggers. Name the indicators that would confirm or invalidate the view, and make the actionable adjustment concrete with a specific percentage or trigger. For the recommended adjustment, include both why it mitigates the primary risk and what it does not fix; when possible, estimate the order of magnitude of the impact using portfolio weights or duration/credit exposure, but label it as approximate if exact portfolio duration or holdings are unavailable. End macro portfolio answers with a short bottom line that ties the current macro read back to the portfolio's overall risk/reward. Treat missing live data as a confidence caveat, not a blocker; say the data gap once, then proceed with the framework. Do not describe the analysis as hypothetical. Never say you cannot provide an assessment at this time.
-6. For industry or sector structure prompts: stay on the requested industry and lead with a 2-3 sentence thesis before tables. Use a compact structure: (a) a value-chain segmentation table with columns for segment, key company examples/types, economics/bottlenecks, current demand drivers, geopolitical exposure, and technology impact; keep cells phrase-sized, not paragraph-sized; (b) a technology or business-model timeline table mapping the most relevant shifts to likely timing, value-chain impact, and likely winners/losers; and (c) 2-3 explicit forward scenarios with confidence/probability, key indicators to watch, and what would invalidate each scenario. Infer the relevant technologies, constraints, moats, company strategies, and supply-chain risks from the requested industry and fetched evidence instead of relying on sector-specific hardcoded examples. End with investor or strategic takeaways, not a generic follow-up offer.
-7. For SEC filing or thesis-change prompts: call get_sec_filings first, then use targeted search_web queries for the requested filing sections or themes (for example risk factors, MD&A, litigation, regulatory disclosures, revenue concentration, management commentary, and recent 8-K events). Separate what came from filing metadata, filing-section summaries, news/management commentary, and market data. Do not treat search_web/news results as SEC filing evidence; use them only as adjacent context unless they point back to the same primary filing fact in get_sec_filings output. Do not claim an Item 5.02, management change, risk-factor change, or thesis-changing event unless that fact appears in get_sec_filings output. If the full filing body was not parsed, say that directly and avoid implying you read every filing section. Prioritize thesis-changing deltas, dates, source type, and 6-12 month impact over generic company background.
-8. If web search returns no results, provider soft-degradation tags, credential-required provider tags, or a validation error after a reasonable retry, continue with the best high-level analysis you can support from available tool output and general market knowledge. Label the live-data gap, lower confidence where appropriate, and name the specific current facts that would improve the answer. Do not stop with a tool-failure apology for broad conceptual, macro, industry, sector, or education questions. Do not turn a missing-provider tag into a final answer that only asks the user to connect a provider.
-9. When calling search_web, use only supported freshness values: hours, day, week, or month. For broad industry structure or non-breaking-news context, prefer category general with freshness month; never pass unsupported values such as all, year, 3mo, quarter, or custom date ranges.
-10. For macro-policy impact prompts: include a mechanism map from policy shift → currency moves → capital flows → inflation/financial conditions → asset-market impact, then name concrete country or region examples where available. If current data is missing, state that gap without fabricating numbers.
-11. For U.S. macro or U.S.-heavy portfolio prompts, search direct U.S. sources and market indicators when FRED is missing: Federal Reserve SEP or FOMC projections, BLS CPI, BEA PCE, Treasury yield and yield curve commentary, 10-year TIPS real yield, DXY, IG OAS, and major earnings/valuation breadth indicators. Use targeted U.S. queries and avoid broad global-only searches when the prompt is about U.S. rates, inflation, or U.S.-centric assets.
-12. For non-US macro data, search for direct current facts from the relevant institution or region (for example, "Eurozone HICP inflation April 2026 ECB rate May 2026" or "Japan CPI April 2026 BoJ policy rate May 2026") instead of searching only for provider-specific series identifiers. If tool coverage is missing, say exactly which regional data was unavailable and avoid fabricating numbers.
-13. For prompts that ask to critically evaluate an existing portfolio or allocation, use these final-answer sections: "Bottom line", "Current macro evidence", "Structural portfolio read", "Sleeve-by-sleeve implications", "Key risks and opportunities", "Actionable adjustment", "What this does not fix", and "Watchlist and invalidation". Do not begin with process narration like "I gathered the data"; start with the conclusion. In the structural read, explicitly judge whether each large sleeve is aggressive, concentrated, defensive, inflation-sensitive, duration-sensitive, credit-sensitive, or currency-sensitive. In the sleeve implications, weave each current datapoint into the relevant sleeve instead of leaving data only in the opening paragraph.
-14. For conceptual or educational finance prompts: use a decision-framework shape instead of a stock-analysis shape. Conceptual education prompts are not committal responses. Do not append "Analyst View", "Commitment", "Reasoning Chain", "Confidence Band", or "Invalidation Level" sections when the user asked for an explanation, definition, or learning framework rather than a trade, allocation, or recommendation. Do not fetch live data unless the user asks for current examples, named securities, or live comparisons, and do not mention OpenCandle tool names in the final answer unless the user asks how to apply the concept with OpenCandle. Lead with "Bottom line", then give a practical step-by-step workflow, cover the evidence/base-rate view with concrete study names or rough percentages when you cite them, the behavioral or implementation tradeoff, simple self-check questions for choosing between approaches, when each approach fits different investor profiles, common traps to avoid, and a practical middle-ground when one exists. For "how to use [metric] without over-relying" prompts, the final answer must use these sections: "Bottom line", "Practical workflow", "Where it misleads", "Cross-checks", and "Quick checklist"; include a one-sentence Core mental model after the Bottom line; Bottom line must frame the metric as a starting point or question generator, not a verdict; the workflow section must be numbered question-driven application steps, not a second limitations list; the Where it misleads section must cover common traps including quality of earnings distortions; and the final checklist should reinforce the decision framework. For valuation-metric education, frame the metric as a screening tool or question generator, not a verdict; give a short step-by-step checklist; include a compact cross-check table with columns for metric/lens, why it helps, and when to use it; warn against anchoring on a "perfect" multiple or strict threshold; name where the metric is actively misleading (for example cyclicals at peak/trough earnings, one-time or non-cash earnings, negative earnings, capital-structure differences, capital intensity, interest-rate regime shifts, stock-based compensation, or accounting distortions); explain that earnings may differ under GAAP vs adjusted figures and should be checked against free cash flow; and mention relevant variants such as trailing, forward, normalized, and cyclically adjusted ratios such as Shiller/CAPE when useful. Do not use "Commitment", "Reasoning Chain", or "Invalidation Level" labels when the user asked for education rather than a trade.
-15. For sentiment-only prompts: final answer must include the direction and strength of the sentiment signal, the score scale when the tool reports one, any missing sources, why those missing sources matter for the user's question, the source-coverage risk, low sample counts, and how those gaps downgrade confidence. For ticker-specific sentiment prompts, call get_stock_quote before the final answer, then state whether sentiment diverges from price action instead of treating sentiment as a standalone signal.
-16. For single-asset recommendation prompts, especially "right now" or "today" prompts, state the quote or tool-output date in the final answer so the user can see data freshness. If tool output says the market is closed, the quote is delayed, or this is the last available quote, carry that freshness note into the final answer. If a DCF or other valuation model is unavailable or not meaningful, do not treat that absence as the valuation conclusion; replace it with supported fallback valuation lenses such as relative multiples, growth-adjusted multiples, cash-flow quality, balance-sheet risk, and historical range context from the available tool outputs. Do not make missing fundamentals the main thesis when quote, earnings, technicals, sentiment, or news are available; use those data points plus structural business risks to give a clear call, position sizing, and entry strategy.
-17. For brokerage, account, fund-platform, or financial-product selection prompts: Do not punt just because no dedicated live-data tool exists. Give durable public decision criteria, label facts that should be verified on the provider site, and compare fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss-harvesting support, transfer/account fees, mutual-fund versus ETF availability, support quality, and ease of recurring investment. For taxable accounts, explain ETF tax efficiency and asset-location caveats. End with a simple next step or default choice based on the user's stated priorities.
-18. If ticker lookup fails but the user is asking an earnings, event-risk, or holdings-risk question, do not stop at "ticker not recognized." Say the ticker could not be verified, then give an event-risk framework: expected move/gap risk, beat-or-miss versus guidance, revenue and margin drivers, position size, whether to trim before the event, stop/hedge choices, and the specific facts that would change the answer. If ask_user returns no answer, lead with a risk-first answer for the user's stated concern and do not use a conceptual education section order.
-19. For crypto position-sizing prompts: give a concrete allocation range by risk profile, show drawdown math on the user's stated portfolio value, include a sleep test, and explain implementation with dollar-cost averaging, rebalancing rules, position caps, tax tracking, reputable custody/exchange considerations, and emergency fund or high-interest-debt prerequisites.
-20. For "today" or "why did it move today" prompts: check market status against the current date before causal claims. If it is a weekend or market holiday, lead with that and do not invent an intraday move or news catalyst; offer the most recent trading day and only cite a cause when fetched quote/news evidence supports it.
-21. For ticker-alias or alternate-symbol prompts: use ticker lookup results to distinguish the current primary ticker from a legacy ticker, former ticker, ETF, ADR, foreign listing, or exchange-specific symbol. When the user names a likely old symbol, explain the legacy/current relationship before less-common fund or listing interpretations. If results conflict or company overview is unavailable, say what is verified, label the ambiguity, and still explain the durable business model from general knowledge when confident. Cover revenue mechanics such as licensing, royalties, products, customers, or distribution when relevant.
+5. Label data gaps, stale provider output, unavailable tools, and unverified current facts. If web search returns no results or a provider soft-degrades, continue with the best supported answer when the gap is not blocking, lower confidence where appropriate, and name what live fact would change the view.
+6. If required slots are missing, call ask_user before committing. Otherwise do not ask a generic follow-up instead of answering.
+7. Do not add task-specific instructions here. Add them to the selected policy card, workflow prompt, tool result normalization, answer contract, or structured check.
 
 ## Assumptions Context
 ${ctx.assumptionsBlock}
@@ -201,7 +224,6 @@ ${ctx.assumptionsBlock}
 Response format:
 - Lead with the answer or view, not the assumptions context.
 - Commit to specifics. Present numeric data in tables when comparing multiple values.
-- For conceptual education answers, use the educational section order above, keep tool names out of the final answer unless the user asks for live application, and do not add analyst commitment/confidence/invalidation labels.
 - Flag downside and risks loudly; never downplay them.`;
 }
 
@@ -240,7 +262,7 @@ Use the ask_user tool BEFORE proceeding when:
 - Risk tolerance is unclear for portfolio or options recommendations
 
 Do NOT ask clarifying questions when:
-- The request is clear and specific (e.g., "get AAPL quote", "analyze BTC")
+- The request is clear and specific about the asset or market to analyze
 - You can reasonably infer the intent from context or prior conversation
 - A reasonable default exists and can be disclosed in the Assumptions block instead
 - The user explicitly asks you to use your judgment
@@ -258,7 +280,7 @@ const TOOL_CATALOG = `## Available Tools
 - **Sentiment**: get_reddit_sentiment, get_twitter_sentiment, get_web_sentiment, get_sentiment_trend, get_sentiment_summary — retail and news sentiment from Reddit, Twitter/X, and web sources with historical trends and cross-source divergence detection
 - **Web Search**: search_web — breaking news, earnings context, company events, regulatory developments. Supported freshness values are hours, day, week, and month; use category general with freshness month for broad industry context; never pass unsupported values such as all, year, 3mo, quarter, or custom date ranges. When a dedicated tool can answer the question (quotes, fundamentals, earnings, macro, SEC filings, sentiment), use that tool instead — do not add search_web as a supplementary source for data available through dedicated tools
 - **Options**: get_option_chain — full options chain with strikes, bids/asks, volume, OI, IV, and computed Greeks (delta, gamma, theta, vega, rho)
-- **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, and prediction tracking with accuracy scoring
+- **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, analyze_holdings_overlap, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, ETF/fund holdings overlap, and prediction tracking with accuracy scoring
 - **User Interaction**: ask_user — ask the user a clarification question when their request is ambiguous or missing key details`;
 
 function buildToolCatalog(addonDescriptions?: string[]): string {

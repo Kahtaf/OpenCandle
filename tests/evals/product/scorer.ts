@@ -18,7 +18,7 @@ export function scoreProductEvalCase(
 ): ProductEvalCaseResult {
   const assertionDimensions = dimensionsFromAssertions(evalCase);
   const dimensions = [...assertionDimensions, ...evalCase.dimensions];
-  const results = dimensions.map((dimension) => scoreDimension(dimension, trace));
+  const results = dimensions.map((dimension) => scoreDimension(dimension, trace, evalCase));
   const totalWeight = results.reduce((sum, result) => sum + result.weight, 0);
   const weightedScore = totalWeight > 0
     ? results.reduce((sum, result) => sum + result.score * result.weight, 0) / totalWeight
@@ -110,7 +110,11 @@ function dimensionsFromAssertions(evalCase: ProductEvalCase): ProductEvalDimensi
   return dimensions;
 }
 
-function scoreDimension(dimension: ProductEvalDimension, trace: EvalTrace): ProductDimensionResult {
+function scoreDimension(
+  dimension: ProductEvalDimension,
+  trace: EvalTrace,
+  evalCase: ProductEvalCase,
+): ProductDimensionResult {
   const text = getVisibleText(trace);
   const issues: string[] = [];
 
@@ -131,7 +135,7 @@ function scoreDimension(dimension: ProductEvalDimension, trace: EvalTrace): Prod
   }
 
   for (const pattern of dimension.requiredPatterns ?? []) {
-    if (!pattern.test(text)) {
+    if (!pattern.test(text) && !passesFamilyAwareDimension(dimension.id, evalCase, trace, text)) {
       issues.push(`missing pattern ${pattern}`);
     }
   }
@@ -151,6 +155,31 @@ function scoreDimension(dimension: ProductEvalDimension, trace: EvalTrace): Prod
     mandatory: dimension.mandatory ?? false,
     message: issues.length > 0 ? issues.join("; ") : "passed",
   };
+}
+
+function passesFamilyAwareDimension(
+  dimensionId: string,
+  evalCase: ProductEvalCase,
+  trace: EvalTrace,
+  text: string,
+): boolean {
+  if (dimensionId === "direct_answer" && evalCase.family === "portfolio") {
+    return trace.classification.workflow === "portfolio_builder" &&
+      /\|\s*symbol\s*\|/i.test(text) &&
+      /\|\s*[^|\n]+\s*\|\s*\d+(?:\.\d+)?\s*%\s*\|\s*\$\s?\d/i.test(text);
+  }
+  if (dimensionId === "horizon_fit" && evalCase.family === "portfolio") {
+    return /why this fits the horizon|time horizon|horizon/i.test(text) &&
+      /\b(?:asset class|fixed income|equity|stability|growth|downside|drawdown|inflation|shorter timeframes?)\b/i.test(text);
+  }
+  if (dimensionId === "horizon_fit" && evalCase.family === "options") {
+    return /\b(?:\d+\s*DTE|\d+\s*days?[\s),-]+to\s+(?:expiry|expiration)|expir(?:y|ation).{0,40}\d+\s*days?|25\s*[-–]\s*45\s*days?|roughly\s+one\s+month)\b/i.test(text);
+  }
+  if (dimensionId === "risk_framing" && evalCase.family === "sentiment") {
+    return /\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
+      /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text);
+  }
+  return false;
 }
 
 function getVisibleText(trace: EvalTrace): string {

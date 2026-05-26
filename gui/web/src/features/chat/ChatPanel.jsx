@@ -10,10 +10,9 @@ import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { cn } from "../../lib/utils.js";
-import { textContent } from "../../rendering/text.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
-import { eventsToLiveEntries } from "./live-entries.js";
+import { compactDuplicateUserMessages, eventsToLiveEntries } from "./live-entries.js";
 import { groupToolRuns } from "./tool-run-grouper.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
@@ -297,16 +296,4 @@ function compactThinkingText(text) {
   const normalized = String(text || "").trim().replace(/\n{3,}/g, "\n\n");
   if (normalized.length <= 700) return normalized;
   return `${normalized.slice(0, 700).trimEnd()}...`;
-}
-
-function compactDuplicateUserMessages(entries) {
-  const compacted = [];
-  for (const entry of entries) {
-    const previous = compacted[compacted.length - 1];
-    if (entry.type === "message" && previous?.type === "message" && entry.message?.role === "user" && previous.message?.role === "user" && textContent(entry.message.content) === textContent(previous.message.content)) {
-      continue;
-    }
-    compacted.push(entry);
-  }
-  return compacted;
 }

@@ -11,10 +11,29 @@ import { join } from "node:path";
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
 import { cache } from "../../src/infra/cache.js";
 import { createOpenCandleSession } from "../../src/index.js";
+import {
+  ANSWER_CONTRACT_REGISTRY,
+  type FinalAnswerField,
+  runStructuredChecks,
+} from "../../src/runtime/answer-contracts.js";
+import {
+  buildMarketStatusEvidence,
+  buildPortfolioExposureMapEvidence,
+  buildTickerDisambiguationEvidence,
+  captureEvidenceFromToolCall,
+  type PlanningEvidenceRecord,
+} from "../../src/runtime/planning-evidence.js";
+import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
+import type {
+  AnswerContractId,
+  CapabilityGapId,
+  CommitmentMode,
+  StructuredCheckId,
+} from "../../src/routing/planning.js";
 import type { ClassificationResult, ExtractedEntities, WorkflowType } from "../../src/routing/types.js";
 import type { AskUserHandler } from "../../src/types/index.js";
-import type { EvalTrace, TraceToolCall } from "../evals/types.js";
+import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
 import type { AgentTrace, CustomEntryTrace, InteractionTrace } from "./types.js";
 
@@ -135,19 +154,21 @@ export function drainOpenCandleCustomEntries(
 }
 
 export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
+  const toolCalls = agentTrace.turns.flatMap((turn) =>
+    turn.toolCalls.map(
+      (tool): TraceToolCall => ({
+        name: tool.name,
+        args: tool.args,
+        result: tool.result,
+      }),
+    ),
+  );
   return {
     prompt: agentTrace.prompt,
     classification: classificationFromTrace(agentTrace),
     router: routerTelemetryFromTrace(agentTrace),
-    toolCalls: agentTrace.turns.flatMap((turn) =>
-      turn.toolCalls.map(
-        (tool): TraceToolCall => ({
-          name: tool.name,
-          args: tool.args,
-          result: tool.result,
-        }),
-      ),
-    ),
+    planning: planningTelemetryFromTrace(agentTrace, toolCalls, agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join("")),
+    toolCalls,
     askUserTranscript: agentTrace.interactions.map((interaction) => ({
       question: interaction.question,
       answer: interaction.answer,
@@ -299,6 +320,221 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
   };
 }
 
+function planningTelemetryFromTrace(
+  agentTrace: AgentTrace,
+  toolCalls: TraceToolCall[],
+  finalText: string,
+): PlanningTelemetry | undefined {
+  const routeContext = latestRouteContext(agentTrace);
+  const planning = isRecord(routeContext?.planning) ? routeContext.planning : null;
+  if (!planning) return undefined;
+
+  const evidencePlanId = stringOrUndefined(planning.evidencePlanId);
+  const taskFamily = stringOrUndefined(planning.taskFamily);
+  const commitmentMode = commitmentModeOrUndefined(planning.commitmentMode);
+  const answerContractId = answerContractIdOrUndefined(planning.answerContractId);
+  const capabilityGapIds = capabilityGapArrayOrEmpty(planning.capabilityGapIds);
+  const symbols = isRecord(routeContext?.entities)
+    ? stringArrayOrUndefined(routeContext.entities.symbols) ?? []
+    : [];
+  const evidenceRecords = [
+    ...plannedEvidenceRecords({
+      prompt: agentTrace.prompt,
+      evidencePlanId,
+      policyCardId: stringOrUndefined(planning.policyCardId),
+      symbols,
+    }),
+    ...toolCalls.map((toolCall, index) => captureEvidenceFromToolCall({
+      name: toolCall.name,
+      args: toolCall.args,
+      result: toolCall.result,
+      isError: false,
+    }, {
+      traceId: "eval-trace",
+      toolCallIndex: index,
+    })),
+  ];
+
+  const contract = answerContractId ? ANSWER_CONTRACT_REGISTRY[answerContractId] : undefined;
+  const structuredTrace = contract && commitmentMode
+    ? runStructuredChecks({
+      contract,
+      evidenceRecords,
+      structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
+      answerText: finalText,
+      finalAnswerMetadata: {
+        commitmentMode,
+        finalFields: inferFinalAnswerFieldsForEval(finalText),
+        sourceCoverage: inferSourceCoverageForEval(finalText, evidenceRecords),
+        disclosedProviderStatuses: inferDisclosedProviderStatusesForEval(finalText, evidenceRecords),
+        disclosedCapabilityGapIds: inferDisclosedCapabilityGapIdsForEval(finalText, capabilityGapIds, evidenceRecords),
+      },
+    })
+    : undefined;
+
+  return {
+    version: stringOrUndefined(planning.version),
+    taskFamily,
+    commitmentMode,
+    policyCardId: stringOrUndefined(planning.policyCardId),
+    evidencePlanId,
+    answerContractId,
+    structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
+    workspacePlaceholderIds: stringArrayOrUndefined(planning.workspacePlaceholderIds) ?? [],
+    artifactPlaceholderIds: stringArrayOrUndefined(planning.artifactPlaceholderIds) ?? [],
+    artifactContractIds: artifactContractArrayOrEmpty(planning.artifactContractIds),
+    capabilityGapIds,
+    evidenceRecords,
+    structuredCheckResults: structuredTrace?.results ?? [],
+    structuredCheckFailures: structuredTrace?.failures ?? [],
+    retryEligibility: structuredTrace?.retryEligibility ?? {
+      eligible: false,
+      activeRetryAllowed: false,
+      reasons: [],
+    },
+    parityStatus: "legacy_active",
+    regressionClassification: "none",
+  };
+}
+
+function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
+  const lower = text.toLowerCase();
+  const fields: FinalAnswerField[] = [];
+  if (/\b(bottom line|framework|checklist|workflow|how it works|mental model|main risks?|steps?)\b/.test(lower)) {
+    fields.push("framework_or_checklist");
+  }
+  if (/\b(risk|downside|trade[- ]?off|caveat|uncertain|loss|not ideal)\b/.test(lower)) {
+    fields.push("risk_downside");
+  }
+  if (/\b(compare|versus|vs\.?|trade[- ]?offs?|better fit|prefer)\b/.test(lower)) {
+    fields.push("comparison_tradeoffs");
+  }
+  if (/\b(buy|sell|hold|avoid|trim|add|recommend|bottom line: (?:yes|no))\b/.test(lower)) {
+    fields.push("clear_commitment");
+  }
+  if (/\b(unavailable|missing|data gap|cannot verify|not available|no live|unknown)\b/.test(lower)) {
+    fields.push("data_gap_disclosure");
+  }
+  if (/\b(not verified|not verify|unverified|exact .* not|requires? .* provider|requires? .* source)\b/.test(lower)) {
+    fields.push("data_gap_disclosure");
+  }
+  if (/\b(as of|market closed|last trading day|freshness|quote date)\b/.test(lower)) {
+    fields.push("freshness_disclosure");
+  }
+  if (/\b(source|coverage|filing|news|reddit|twitter|x\/twitter)\b/.test(lower)) {
+    fields.push("source_coverage");
+  }
+  if (/\b(based on your|stated percentages?|stated allocation|user[- ]stated|provided allocation)\b/.test(lower)) {
+    fields.push("source_coverage");
+  }
+  if (/\b(confirmed|saved|recorded|updated|tracked)\b/.test(lower)) {
+    fields.push("state_update_confirmation");
+  }
+  if (/\?\s*$|\b(what is your|which symbol|please clarify|need your)\b/.test(lower)) {
+    fields.push("clarifying_question");
+  }
+  if (/\b(ticker|symbol|could not verify|not verified)\b/.test(lower)) {
+    fields.push("symbol_verification_disclosure");
+  }
+  if (/\b(portfolio|allocation|allocate|sleeve|target weight)\b/.test(lower)) {
+    fields.push("constructed_output");
+  }
+  return [...new Set(fields)];
+}
+
+function inferSourceCoverageForEval(
+  text: string,
+  evidenceRecords: PlanningEvidenceRecord[],
+): { sources: string[] } | undefined {
+  const fields = inferFinalAnswerFieldsForEval(text);
+  if (!fields.includes("source_coverage")) return undefined;
+  const sources = evidenceRecords.map((record) =>
+    record.source.toolName ?? record.source.provider ?? record.evidenceType
+  );
+  return { sources: [...new Set(sources.length > 0 ? sources : ["final_answer"])] };
+}
+
+function inferDisclosedProviderStatusesForEval(
+  text: string,
+  evidenceRecords: PlanningEvidenceRecord[],
+): string[] | undefined {
+  if (!/\b(unavailable|missing|skipped|credential|required|no live|cannot verify|not available|not verified|unverified)\b/i.test(text)) {
+    return undefined;
+  }
+  const statuses = evidenceRecords
+    .filter((record) => record.providerStatus !== "available")
+    .map((record) => record.providerStatus);
+  return statuses.length > 0 ? [...new Set(statuses)] : undefined;
+}
+
+function inferDisclosedCapabilityGapIdsForEval(
+  text: string,
+  capabilityGapIds: CapabilityGapId[],
+  evidenceRecords: PlanningEvidenceRecord[],
+): CapabilityGapId[] | undefined {
+  const required = new Set<CapabilityGapId>(capabilityGapIds);
+  for (const record of evidenceRecords) {
+    for (const gap of record.gaps) {
+      if (gap.capabilityGapId) required.add(gap.capabilityGapId);
+    }
+  }
+  const lower = text.toLowerCase();
+  const disclosed = [...required].filter((gapId) => {
+    if (gapId === "etf_holdings_overlap") {
+      return /\b(?:exact .*holdings?|holdings? overlap|etf overlap|index overlap|constituent|not verified|not available)\b/.test(lower);
+    }
+    if (gapId === "market_calendar") {
+      return /\b(?:market calendar|holiday|last trading day|market status|after close|weekend)\b/.test(lower);
+    }
+    if (gapId === "forward_rate_probabilities") {
+      return /\b(?:forward rate|rate probabilities|fed probabilities|market-implied|probabilities unavailable)\b/.test(lower);
+    }
+    if (gapId === "sentiment_sample_depth") {
+      return /\b(?:sample depth|sample size|sentiment coverage|low volume|source coverage)\b/.test(lower);
+    }
+    if (gapId === "earnings_event_risk") {
+      return /\b(?:earnings event|event risk|implied move|earnings timing|not verified)\b/.test(lower);
+    }
+    return lower.includes(gapId.replaceAll("_", " "));
+  });
+  return disclosed.length > 0 ? disclosed : undefined;
+}
+
+function latestRouteContext(agentTrace: AgentTrace): Record<string, unknown> | null {
+  const entry = [...(agentTrace.customEntries ?? [])]
+    .reverse()
+    .find((candidate) => candidate.customType === "opencandle-route-context");
+  return isRecord(entry?.data) ? entry.data : null;
+}
+
+function plannedEvidenceRecords(options: {
+  prompt: string;
+  evidencePlanId?: string;
+  policyCardId?: string;
+  symbols: string[];
+}) {
+  if (options.evidencePlanId === "market_status") {
+    return [buildMarketStatusEvidence({
+      text: options.prompt,
+      traceId: "eval-trace",
+    })];
+  }
+  if (options.evidencePlanId === "ticker_disambiguation") {
+    return [buildTickerDisambiguationEvidence({
+      text: options.prompt,
+      symbols: options.symbols,
+      traceId: "eval-trace",
+    })];
+  }
+  if (options.policyCardId === "portfolio_rebalance_review" && /\d+(?:\.\d+)?\s*%/.test(options.prompt)) {
+    return [buildPortfolioExposureMapEvidence({
+      text: options.prompt,
+      traceId: "eval-trace",
+    })];
+  }
+  return [];
+}
+
 function getRouterOutput(data: unknown): {
   workflow?: WorkflowType;
   confidence?: unknown;
@@ -360,4 +596,64 @@ function stringOrUndefined(value: unknown): string | undefined {
 function stringArrayOrUndefined(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function structuredCheckArrayOrEmpty(value: unknown): StructuredCheckId[] {
+  const allowed = new Set<StructuredCheckId>([
+    "required_evidence_present",
+    "freshness_disclosed",
+    "data_gap_disclosed",
+    "commitment_mode_respected",
+    "source_coverage_disclosed",
+    "capability_gap_disclosure",
+    "assumption_disclosed",
+    "tax_caveat_present",
+    "target_bands_present",
+    "when_not_ideal_present",
+  ]);
+  return (stringArrayOrUndefined(value) ?? []).filter((item): item is StructuredCheckId =>
+    allowed.has(item as StructuredCheckId)
+  );
+}
+
+function capabilityGapArrayOrEmpty(value: unknown): CapabilityGapId[] {
+  const allowed = new Set<CapabilityGapId>([
+    "market_calendar",
+    "etf_holdings_overlap",
+    "brokerage_comparison",
+    "cash_yield_products",
+    "earnings_event_risk",
+    "fund_tax_efficiency",
+    "forward_rate_probabilities",
+    "sentiment_sample_depth",
+  ]);
+  return (stringArrayOrUndefined(value) ?? []).filter((item): item is CapabilityGapId =>
+    allowed.has(item as CapabilityGapId)
+  );
+}
+
+function artifactContractArrayOrEmpty(value: unknown): ArtifactContractId[] {
+  const allowed = new Set([
+    "concept_example_table",
+    "portfolio_exposure_map",
+    "rebalance_action_plan",
+    "source_coverage_table",
+  ]);
+  return (stringArrayOrUndefined(value) ?? []).filter((item): item is ArtifactContractId => allowed.has(item));
+}
+
+function commitmentModeOrUndefined(value: unknown): CommitmentMode | undefined {
+  return value === "decision" ||
+    value === "compare_tradeoffs" ||
+    value === "framework" ||
+    value === "construct" ||
+    value === "update_state" ||
+    value === "clarify"
+    ? value
+    : undefined;
+}
+
+function answerContractIdOrUndefined(value: unknown): AnswerContractId | undefined {
+  if (typeof value !== "string") return undefined;
+  return value in ANSWER_CONTRACT_REGISTRY ? value as AnswerContractId : undefined;
 }

@@ -175,6 +175,27 @@ describe("validateRouterOutput", () => {
 });
 
 describe("route()", () => {
+  it("keeps valid LLM route kind authoritative when legacy rules would classify differently", async () => {
+    const result = await route(
+      { ...BASE_INPUT, text: "analyze NVDA" },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "valid llm classification",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBeUndefined();
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+      code: "deterministic_failure_recovery",
+    }));
+  });
+
   it("returns validated output on first successful call", async () => {
     const expected = {
       routeKind: "workflow_dispatch",
@@ -201,6 +222,104 @@ describe("route()", () => {
       reasoning: "simple",
     });
     expect(result.tool_bundles).toContain("core_market");
+  });
+
+  it("normalizes dispatchable compare workflow emitted as agent_task to workflow_dispatch", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying or just buying more of the same stuff?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        workflow: "compare_assets",
+        entities: { symbols: ["VOO", "QQQ", "SCHD"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "compare assets but wrong route kind",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.route).toBe("workflow");
+    expect(result.workflow).toBe("compare_assets");
+    expect(result.entities.compareMetrics).toEqual(["overlap"]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "dispatchable_workflow_corrected_to_workflow_dispatch",
+    }));
+  });
+
+  it("merges deterministic overlap focus when router emits a different compare metric", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Does buying QQQ on top of VOO create too much overlap?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["VOO", "QQQ"], compareMetrics: ["sentiment"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "compare assets",
+      })),
+    );
+
+    expect(result.entities.compareMetrics).toEqual(["sentiment", "overlap"]);
+  });
+
+  it("keeps crypto sizing out of portfolio construction when the user asks allocation range and drawdown", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I have a $75k portfolio and want BTC exposure. What allocation range would you use, and how bad could the drawdown feel?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: ["BTC"], budget: 75_000 },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "mistaken portfolio builder",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "crypto_sizing_corrected_to_agent_task",
+    }));
+  });
+
+  it("preserves portfolio construction when bitcoin is one sleeve in an explicit build request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Build me a $75k portfolio with a small bitcoin allocation.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: ["BTC"], budget: 75_000 },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "portfolio build with bitcoin sleeve",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("portfolio_builder");
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+      code: "crypto_sizing_corrected_to_agent_task",
+    }));
   });
 
   it("retries once on validation failure", async () => {
@@ -258,6 +377,9 @@ describe("route()", () => {
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "deterministic_failure_recovery",
+    }));
   });
 
   it("enriches omitted compare focus from deterministic extraction", async () => {
@@ -424,6 +546,60 @@ describe("route()", () => {
     }));
   });
 
+  it("corrects compare-assets output for existing-portfolio crash-risk prompts", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I've got about $50,000 invested, mostly in SPY and a little MSFT. I'm 40 and planning for retirement in 25 years. I'm worried about a big market crash. Does this portfolio look too risky and what's a simple way to protect myself without missing growth?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["SPY", "MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread portfolio review as asset comparison",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+    }));
+  });
+
+  it("corrects portfolio-builder clarification for existing-allocation rebalance prompts", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text:
+          "My portfolio is 45% tech stocks, 25% S&P 500 ETFs, and 30% bonds. " +
+          "Should I rebalance to diversify more?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "clarification",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: ["budget"],
+        reasoning: "misread rebalance as construction",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+    }));
+  });
+
   it("corrects portfolio-builder output for explicit multi-ETF tradeoff prompts", async () => {
     const result = await route(
       {
@@ -474,6 +650,31 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.tool_bundles).toEqual([]);
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "conceptual_education_no_tools",
+    }));
+  });
+
+  it("keeps macro tools for forward-looking rate impact questions", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "How should falling rates affect growth stocks over the next year?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "agent_task",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: ["macro"],
+        diagnostics: [],
+        reasoning: "macro rate context",
+      })),
+    );
+
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
       code: "conceptual_education_no_tools",
     }));
   });
@@ -632,6 +833,32 @@ describe("route()", () => {
     expect(result.entities.dteHint).toBe("event_week");
     expect(result.diagnostics).toContainEqual(expect.objectContaining({
       code: "covered_call_underlying_corrected",
+    }));
+  });
+
+  it("keeps covered-call education and suitability prompts out of options workflow dispatch", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 200 shares of Microsoft (MSFT) and it's been flat. How does selling covered calls work, and is it a good idea?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "options_screener",
+        entities: { symbols: ["MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread education as a contract screen",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.tool_bundles).toEqual(expect.arrayContaining(["core_market", "options"]));
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "options_workflow_corrected_to_policy_task",
     }));
   });
 
@@ -849,5 +1076,32 @@ describe("ResolvedTurnContext", () => {
     expect(context.activeToolNames).toContain("get_stock_quote");
     expect(context.memoryQueryPlan.categories).toContain("investor_profile");
     expect(context.diagnostics[0]?.code).toBe("example");
+    expect(context.planning.version).toBe("planning-v1");
+    expect(context.planning.taskFamily).toBe("single_asset_decision");
+  });
+
+  it("applies planning migration status overrides to the resolved context", async () => {
+    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
+      routeKind: "agent_task",
+      entities: { symbols: ["AAPL"] },
+      slots: {
+        symbol: { value: "AAPL", source: "user", confidence: "high" },
+      },
+      preference_updates: [],
+      missing_required: [],
+      diagnostics: [],
+      reasoning: "single asset decision",
+    })));
+    const context = buildResolvedTurnContext(BASE_INPUT, output, {
+      availableToolNames: ["get_stock_quote", "search_ticker"],
+      planning: {
+        migrationStatuses: {
+          single_asset_decision: "dual_run",
+        },
+      },
+    });
+
+    expect(context.planning.taskFamily).toBe("single_asset_decision");
+    expect(context.planning.behaviorMode).toBe("dual_run");
   });
 });

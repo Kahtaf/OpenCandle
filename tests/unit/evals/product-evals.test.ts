@@ -132,6 +132,113 @@ describe("product eval scoring", () => {
     expect(result.passed).toBe(true);
   });
 
+  it("does not count a commitment heading alone as a direct answer", () => {
+    const portfolioCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "portfolio-balanced-50k");
+    if (!portfolioCase) throw new Error("missing portfolio eval case");
+
+    const result = scoreProductEvalCase(portfolioCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "portfolio_builder" },
+      toolCalls: [{ name: "get_stock_quote", args: { symbol: "VOO" } }],
+      text:
+        "Commitment: This draft portfolio allocates $50,000 across diversified ETFs for a 3 year horizon. " +
+        "It balances growth and stability, names duration and volatility risk, and includes an invalidation condition.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(false);
+  });
+
+  it("counts a concrete portfolio allocation table as a direct construction answer", () => {
+    const portfolioCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "portfolio-balanced-50k");
+    if (!portfolioCase) throw new Error("missing portfolio eval case");
+
+    const result = scoreProductEvalCase(portfolioCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "portfolio_builder" },
+      toolCalls: [{ name: "get_stock_quote", args: { symbol: "VOO" } }],
+      text:
+        "**Draft Portfolio Allocation**\n\n" +
+        "| Symbol | Allocation % | Dollar Amount | Role |\n" +
+        "| VOO | 20% | $10,000 | Core equity |\n" +
+        "| BND | 40% | $20,000 | Core fixed income |\n" +
+        "Why this fits the horizon: this is appropriate for a 3-year horizon with stability and downside protection.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(true);
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(true);
+  });
+
+  it("counts explicit portfolio-construction language as a direct answer", () => {
+    const portfolioCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "portfolio-balanced-50k");
+    if (!portfolioCase) throw new Error("missing portfolio eval case");
+
+    const result = scoreProductEvalCase(portfolioCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "portfolio_builder" },
+      toolCalls: [{ name: "get_stock_quote", args: { symbol: "VOO" } }],
+      text:
+        "Bottom line: I would build a $50,000 diversified ETF portfolio for a 3 year horizon. " +
+        "It balances growth and stability, names duration and volatility risk, and includes an invalidation condition.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "direct_answer")?.passed).toBe(true);
+    expect(result.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(true);
+  });
+
+  it("recognizes 30-day option horizons but not incomplete/caution wording alone as risk framing", () => {
+    const optionsCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "options-aapl-covered-call");
+    const sentimentCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "sentiment-market-ai-stocks");
+    if (!optionsCase || !sentimentCase) throw new Error("missing eval case");
+
+    const options = scoreProductEvalCase(optionsCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "options_screener" },
+      toolCalls: [{ name: "get_option_chain", args: { symbol: "AAPL" } }],
+      text:
+        "Screen these 30-day covered calls by DTE, time decay, premium, delta, and downside risk.",
+    }));
+    const sentiment = scoreProductEvalCase(sentimentCase, makeTrace({
+      toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+      text:
+        "Bottom line: sentiment is leaning bearish, but Twitter and Reddit are missing, so the picture is incomplete and should be treated with caution.",
+    }));
+
+    expect(options.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(true);
+    expect(sentiment.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(false);
+  });
+
+  it("recognizes option expiry windows and sentiment confidence downgrades without fixed keyword prompts", () => {
+    const optionsCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "options-aapl-covered-call");
+    const sentimentCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "sentiment-market-ai-stocks");
+    if (!optionsCase || !sentimentCase) throw new Error("missing eval case");
+
+    const options = scoreProductEvalCase(optionsCase, makeTrace({
+      classification: { ...makeTrace().classification, workflow: "options_screener" },
+      toolCalls: [{ name: "get_option_chain", args: { symbol: "AAPL" } }],
+      text:
+        "Here are covered call candidates targeting roughly one month (32 days) to expiration. " +
+        "The table includes premium, delta, open interest, and assignment risk.",
+    }));
+    const sentiment = scoreProductEvalCase(sentimentCase, makeTrace({
+      toolCalls: [{ name: "get_sentiment_summary", args: { query: "AI stocks" } }],
+      text:
+        "Sentiment summary for AI stocks is unavailable because no sources returned data. " +
+        "Missing sources: Twitter, Reddit, and web/news. Their absence significantly downgrades confidence.",
+    }));
+
+    expect(options.dimensions.find((dimension) => dimension.id === "horizon_fit")?.passed).toBe(true);
+    expect(sentiment.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(true);
+  });
+
+  it("recognizes plural risk headings in education answers", () => {
+    const educationCase = PRODUCT_EVAL_CASES.find((evalCase) => evalCase.id === "education-options-greeks");
+    if (!educationCase) throw new Error("missing education eval case");
+
+    const result = scoreProductEvalCase(educationCase, makeTrace({
+      text:
+        "Bottom line: delta is price sensitivity and theta is time decay. " +
+        "Main risks: option buyers can lose money if the move is too slow, and sellers face assignment risks.",
+    }));
+
+    expect(result.dimensions.find((dimension) => dimension.id === "risk_framing")?.passed).toBe(true);
+  });
+
   it("maps failed product eval reports to a failing process exit code", () => {
     expect(productEvalExitCode({ failed: 0 })).toBe(0);
     expect(productEvalExitCode({ failed: 1 })).toBe(1);

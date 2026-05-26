@@ -8,6 +8,7 @@ export function buildOptionsScreenerWorkflowDefinition(resolution: SlotResolutio
   const s = resolution.resolved;
   const isProtectivePutContext = s.optionStrategy === "protective_put";
   const contractType = s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts";
+  const horizonPhrase = describeDteTarget(s.dteTarget);
   const isCoveredCallContext = !isProtectivePutContext && (
     s.optionStrategy === "covered_call" ||
     s.costBasis !== undefined ||
@@ -83,7 +84,8 @@ Protective-put requirements:
 3. Present a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, open interest, bid-ask spread.
 4. Explain why the #1 pick is ranked highest.
 5. Reproduce the exact Assumptions block from the initial prompt; keep the provenance label text intact and do not shorten it to "Assumptions:".
-6. ${riskInstruction}
+6. State the requested option horizon in plain language (${horizonPhrase}) in the bottom line or table intro; use the user's horizon wording or approximate DTE window without forcing a fixed sentence.
+7. ${riskInstruction}
 
 If some or all of the option chain fetches returned "⚠ Options chain unavailable" or similar gaps, do NOT abort. Instead:
 - Rank and present whatever contracts you did retrieve from the successful fetches, even if fewer than 3.
@@ -101,6 +103,18 @@ Length constraints:
       }),
     ],
   };
+}
+
+function describeDteTarget(dteTarget: string): string {
+  if (dteTarget === "25_to_45_days") return "25-45 day target, roughly one month";
+  if (dteTarget === "7_to_14_days") return "1-2 week horizon";
+  if (dteTarget === "0_to_7_days") return "event-week or 0-7 day horizon";
+  if (dteTarget === "180_plus_days") return "LEAPS or long-dated horizon";
+  const range = dteTarget.match(/^(\d+)_to_(\d+)_days$/);
+  if (range) return `${range[1]}-${range[2]} day horizon`;
+  const plus = dteTarget.match(/^(\d+)_plus_days$/);
+  if (plus) return `${plus[1]}+ day horizon`;
+  return `${dteTarget} horizon`;
 }
 
 /** @deprecated Use buildOptionsScreenerWorkflowDefinition instead */

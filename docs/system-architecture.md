@@ -1,173 +1,156 @@
 ---
 title: System Architecture
-description: How OpenCandle routes prompts through workflows, tools, providers, and local runtime state.
+description: How OpenCandle turns a financial question into evidence, tool output, and an answer.
 ---
 
 # System Architecture
 
-How OpenCandle routes user requests to tools, providers, and the sentiment pipeline.
+OpenCandle is a local financial research workbench. You ask a question in the terminal or the browser GUI; OpenCandle figures out what kind of investigation it is, gathers evidence from finance tools, keeps the trace visible, and produces an answer that names risks and data gaps.
 
-## Request Flow
+It is not an automated trading system and it is not a financial advisor. It is research software built to make the evidence path inspectable.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        USER PROMPT                                  │
-│              "What's the sentiment on AAPL?"                        │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  ROUTING (src/routing/)                                             │
-│                                                                     │
-│  router.ts           →  default LLM router when                     │
-│                         OPENCANDLE_ROUTER_MODE is unset or "llm"    │
-│                         structured route, entities, slots, prefs    │
-│  classify-intent.ts  →  legacy rule-based pattern matching when     │
-│                         OPENCANDLE_ROUTER_MODE=rules                │
-│                         "analyze AAPL" → single_asset_analysis      │
-│                         news keywords  → general_finance_qa         │
-│                         "compare X Y"  → compare_assets             │
-│                                                                     │
-│  entity-extractor.ts →  pulls symbols, budget, direction            │
-│  slot-resolver.ts    →  fills workflow params from entities          │
-│                                                                     │
-│  NOTE: Routing classifies into WORKFLOWS, not individual tools.     │
-│  The LLM (Pi agent) decides which TOOLS to call within a workflow.  │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  TOOLS (src/tools/) — the LLM picks from these                      │
-│                                                                     │
-│  ┌─ market/ ──────────────────────────────────────────────────────┐ │
-│  │  stock_quote, stock_history, crypto_price, crypto_history,     │ │
-│  │  search_ticker                                                 │ │
-│  ├─ fundamentals/ ────────────────────────────────────────────────┤ │
-│  │  company_overview, financials, earnings, dcf, comps,           │ │
-│  │  sec_filings                                                   │ │
-│  ├─ technical/ ───────────────────────────────────────────────────┤ │
-│  │  indicators, backtest                                          │ │
-│  ├─ macro/ ───────────────────────────────────────────────────────┤ │
-│  │  fred_data, crypto fear_greed                                  │ │
-│  ├─ options/ ─────────────────────────────────────────────────────┤ │
-│  │  option_chain with computed Greeks                             │ │
-│  ├─ portfolio/ ───────────────────────────────────────────────────┤ │
-│  │  tracker, risk_analysis, watchlist, correlation, predictions   │ │
-│  └─ sentiment/ ───────────────────────────────────────────────────┘ │
-│     search_web          → raw web search (Exa → Brave → DDG)       │
-│     get_web_sentiment   → web search + keyword scoring pipeline     │
-│     get_reddit_sentiment                                            │
-│     get_twitter_sentiment                                           │
-│     get_sentiment_summary → cross-source summary, including Finnhub  │
-│     get_sentiment_trend   → historical from local SQLite store      │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  PROVIDERS (src/providers/) — tools call these                      │
-│                                                                     │
-│  yahoo-finance.ts  ←── stock-quote, stock-history                   │
-│  alpha-vantage.ts  ←── company-overview, financials, earnings, dcf  │
-│  coingecko.ts      ←── crypto-price, crypto-history                 │
-│  fred.ts           ←── fred-data                                    │
-│  reddit.ts         ←── reddit-sentiment, sentiment-summary          │
-│  twitter.ts        ←── twitter-sentiment, sentiment-summary         │
-│                         requires a local Twitter/X browser session  │
-│  finnhub.ts        ←── sentiment-summary                            │
-│  sec-edgar.ts      ←── sec-filings                                  │
-│  fear-greed.ts     ←── alternative.me crypto Fear & Greed           │
-│  web-search.ts     ←── search-web, web-sentiment, sentiment-summary │
-│  exa-search.ts     ←── web-search.ts (cascade member)               │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  INFRA (src/infra/)                                                 │
-│                                                                     │
-│  http-client.ts   — shared helper for many provider calls           │
-│  cache.ts         — TTL cache with stale fallback                   │
-│  rate-limiter.ts  — per-provider token bucket                       │
-│                                                                     │
-│  CROSS-CUTTING PROVIDER HELPERS (src/providers/):                   │
-│  with-fallback.ts — cascade orchestrator (try providers in order)   │
-│  wrap-provider.ts — circuit breaker + failure tracking              │
-└─────────────────────────────────────────────────────────────────────┘
+## The Everyday Flow
+
+```text
+User question
+  |
+  v
+Understand the financial task
+  - symbols, companies, assets, portfolio details
+  - time horizon, risk profile, budget, strategy, or missing details
+  - whether this is education, comparison, portfolio review, options, sentiment, filings, macro, or state tracking
+  |
+  v
+Choose an investigation path
+  - use a structured workflow when the user asks for one
+  - otherwise prepare a finance-specific evidence plan for the question
+  - ask a focused follow-up only when the missing detail changes the answer
+  |
+  v
+Gather tool-backed evidence
+  - quotes, histories, options chains, fundamentals, filings, macro data
+  - sentiment, web/news context, portfolio state, risk, correlations, backtests
+  - provider freshness, missing credentials, stale cache, or degraded data
+  |
+  v
+Produce the answer
+  - cite what was actually checked
+  - separate facts from judgment
+  - call out uncertainty and downside scenarios
+  - answer directly when the user asks for a decision or tradeoff
 ```
 
-## Sentiment Pipeline
+## User Interfaces
 
-The unified sentiment pipeline (src/sentiment/) normalizes data from multiple sources into a common `SentinelRecord` format, scores it, persists it, and computes trends + divergence.
+OpenCandle has two main surfaces.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  SENTIMENT PIPELINE (src/sentiment/)                                │
-│                                                                     │
-│  ┌──────────┐   ┌──────────┐   ┌──────────┐                       │
-│  │ Twitter  │   │  Reddit  │   │   Web    │    ← ADAPTERS          │
-│  │ Adapter  │   │ Adapter  │   │ Adapter  │    normalize to        │
-│  └────┬─────┘   └────┬─────┘   └────┬─────┘    SentinelRecord     │
-│       │              │              │                               │
-│       │          ┌──────────┐        │                               │
-│       │          │ Finnhub  │        │                               │
-│       │          │ Adapter  │        │                               │
-│       │          └────┬─────┘        │                               │
-│       └──────────┬───┴──────────────┘                               │
-│                  ▼                                                   │
-│  ┌──────────────────────────────┐                                   │
-│  │  scorer.ts (keyword-based)   │  scores each record               │
-│  │  BULLISH_TERMS / BEARISH_TERMS                                   │
-│  │  engagement-weighted                                             │
-│  └──────────────┬───────────────┘                                   │
-│                 ▼                                                    │
-│  ┌──────────────────────────────┐                                   │
-│  │  store.ts (SQLite)           │  persists for trend tracking      │
-│  └──────────────┬───────────────┘                                   │
-│                 ▼                                                    │
-│  ┌──────────────────────────────┐                                   │
-│  │  trends.ts                   │  sparkline, direction, delta      │
-│  │  + divergence detection      │  retail vs news gap               │
-│  └──────────────────────────────┘                                   │
-│                                                                     │
-│  Output: SentimentSummary { fresh, trend, divergence, warnings }    │
-└─────────────────────────────────────────────────────────────────────┘
-```
+The terminal UI is the fastest keyboard loop. It supports normal chat, slash commands, model setup, provider connection, and saved Pi sessions.
 
-## Web Search Cascade
+The local GUI is a browser workbench at `http://127.0.0.1:14567`. It shows chat, session history, provider setup, a tool and workflow catalog, a financial context panel, and visual result cards for market data, options, macro, filings, sentiment, and portfolio facts.
 
-The web search provider (`src/providers/web-search.ts`) uses a fallback cascade. Each member is tried in order; the first success wins. Circuit breakers skip providers that recently failed.
+Both surfaces use the same OpenCandle session and finance tools. The GUI adds richer rendering and easier discovery; it is not a separate agent.
 
-```
-Exa (MCP or API key) ──fail──▶ Brave (API key) ──fail──▶ DuckDuckGo
-```
+## Workflows And Regular Questions
 
-Used by three tools: `search_web`, `get_web_sentiment`, `get_sentiment_summary`.
+Some prompts map cleanly to visible workflows:
 
-Provider overrides can force `exa`, `brave`, or `ddg` for a single request. The default cascade tries Exa first, uses Brave when configured, and keeps DuckDuckGo as the keyless final fallback.
+| Workflow | Use it for |
+| --- | --- |
+| Comprehensive Analysis | A broad single-asset investigation such as `/analyze NVDA`. |
+| Compare Assets | Side-by-side comparison of stocks, ETFs, crypto assets, or funds. |
+| Portfolio Builder | Building a proposed allocation from goals, budget, horizon, and risk preference. |
+| Options Screener | Looking at calls, puts, covered calls, protective puts, expirations, and Greeks. |
 
-## Runtime Configuration
+Regular chat questions still get structure. For example:
 
-- `OPENCANDLE_ROUTER_MODE` defaults to `llm`. Set `OPENCANDLE_ROUTER_MODE=rules` to force the legacy regex router.
-- `OPENCANDLE_TOOL_SCOPE_MODE` defaults to `observe`, which records route-selected tool bundles without constraining the Pi tool catalog. Set `OPENCANDLE_TOOL_SCOPE_MODE=enforce` to apply the route-selected active tools for each turn.
-- `OPENCANDLE_HOME` defaults to `~/.opencandle` and contains OpenCandle-owned state such as `config.json`, `onboarding.json`, watchlist/portfolio/prediction files, `state.db`, `sentinel.db`, and `browser-profile/`.
-- The local GUI defaults to `http://127.0.0.1:14567`; `/health` reports whether that process is the session `writer` or a read-only `follower`.
+- "Does adding NVDA make sense if I already own AAPL and TSLA?"
+- "Is this SPY/MSFT retirement portfolio too risky?"
+- "Is ARMH still the right ticker for Arm?"
+- "Should I keep cash in HYSA, T-bills, CDs, or a bond ETF?"
+
+Those are not just freeform replies. OpenCandle still extracts the relevant entities, chooses useful evidence, asks for clarification when needed, and applies the right answer shape for the task.
+
+## Clarifying Questions
+
+OpenCandle should ask a follow-up only when the missing information materially changes the investigation.
+
+Good examples:
+
+- An unknown ticker appears in an earnings-risk question.
+- An options request is missing the underlying position.
+- A portfolio-construction request has no budget, horizon, or risk preference.
+
+In the GUI, these appear as question cards in the chat. After you answer, OpenCandle continues the investigation and uses tools; it should not stop at a generic response.
+
+## Tools And Providers
+
+Tools are small finance capabilities. They fetch and format data. They should not invent market facts or make the final investment conclusion.
+
+| Area | Examples | Providers or source |
+| --- | --- | --- |
+| Market data | quotes, history, ticker lookup, crypto price/history | Yahoo Finance, Alpha Vantage when configured, CoinGecko |
+| Options | option chains, open interest, implied volatility, Greeks | Yahoo Finance plus local calculations |
+| Fundamentals | company overview, financials, earnings, DCF, comparisons | Alpha Vantage |
+| Macro | rates, CPI, GDP, unemployment, fear/greed | FRED, alternative.me |
+| Technical | indicators, moving-average backtests | Local calculations over market history |
+| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | Reddit, local browser session, Finnhub, Exa, Brave, DuckDuckGo |
+| Filings | SEC filing search | SEC EDGAR |
+| Portfolio | holdings, watchlists, predictions, risk, correlation | Local state plus market data |
+
+Provider helpers add caching, rate limiting, fallback behavior, and degraded-state metadata. If a provider is missing, stale, or unavailable, that should show up in the result instead of being hidden.
+
+## Evidence And Answer Quality
+
+OpenCandle answers should be useful because the evidence is visible and the answer shape matches the question.
+
+Expected behavior:
+
+- A current-price question should show the quote source and freshness.
+- A portfolio-risk question should discuss concentration, horizon, drawdown, and simple adjustments.
+- An options question should distinguish per-share option quotes from standard 100-share contract cost.
+- A ticker mismatch should be treated as a red flag before discussing social hype.
+- A filing question should separate SEC filing evidence from news or market context.
+- A pure education question should avoid unnecessary tool calls.
+
+The model synthesizes after evidence is gathered. It should answer directly, name risks, disclose gaps, and avoid unsupported certainty.
 
 ## GUI Runtime
 
-The GUI server owns the local browser workbench. It serves the built `gui/web/dist` bundle, reads Pi session state, and publishes chat/session updates over HTTP, server-sent events, and WebSocket.
+The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates.
 
-- `GET /health` reports `{ ok, role }`, where `role` is `writer` or `follower`.
-- `GET /api/sessions` lists sessions and the current GUI session.
-- `GET /api/session/events` returns the current session's projected chat events.
-- `POST /api/chat/run` streams a chat run over SSE when the process is writer.
-- `GET /ws` upgrades to a WebSocket for boot, snapshot, setup, catalog, and session update messages.
+Useful local endpoints:
 
-The browser is organized as reusable UI primitives plus product feature modules: chat, sessions, context panel, catalog, and tool-result renderers. Shared event contracts live under `gui/shared/` so server producers and browser consumers stay aligned.
+- `GET /health` returns whether the process is alive and whether it is the session `writer` or a read-only `follower`.
+- `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
+- `GET /api/sessions` lists saved sessions.
+- `GET /api/session/events` returns the current projected chat events.
+- `POST /api/chat/run` streams one chat run.
+- `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
-## Key Design Principles
+Only one GUI process writes to a session at a time. A writer can run chat, answer follow-ups, save provider/model setup, toggle tools, and manage sessions. Followers can view the same state but cannot mutate it.
 
-- **Tools fetch + format. LLM synthesizes.** Tools never analyze or draw conclusions.
-- **Adapters normalize.** Each sentiment source has an adapter that maps to `SentinelRecord`.
-- **Pipeline is source-agnostic.** Scorer, store, and trends work on `SentinelRecord[]` regardless of origin.
-- **Cascade with circuit breakers.** `withFallback()` + `wrapProvider()` handle provider failures gracefully.
-- **Stale cache as safety net.** Providers and tools that opt into stale cache can return the last known value with clear degraded-state metadata.
-- **Evidence before confidence.** Runtime records and tool details should make source, freshness, and degradation visible before the assistant synthesizes.
+## Local State
+
+OpenCandle state defaults to `~/.opencandle/`.
+
+Common files:
+
+- `config.json` for provider keys and file-backed settings.
+- `watchlist.json`, `portfolio.json`, and `predictions.json` for local finance state.
+- `state.db` for memory and workflow state.
+- `sentinel.db` for sentiment trend state.
+- `browser-profile/` for browser-backed sentiment flows such as Twitter/X.
+
+Pi owns its own runtime config and session storage separately. OpenCandle should not depend on repo-local `.pi/extensions/` artifacts.
+
+## Validation
+
+OpenCandle uses layered validation:
+
+- Unit tests for deterministic logic, mocked providers, and GUI state helpers.
+- End-to-end tests for CLI, credential flows, and live provider/tool behavior when needed.
+- Browser smoke tests for the local GUI.
+- Full-session evals that check whether the agent chose the right investigation path, used relevant tools, disclosed gaps, framed risk, and answered the user directly.
+- Competitive evals that compare OpenCandle against generic agents on realistic finance prompts.
+
+See [Testing and Evals](./testing-and-evals.md) and [Benchmarking](./benchmarking.md).

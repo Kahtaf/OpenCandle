@@ -9,6 +9,8 @@ This path assumes you want the fastest successful run: connect one AI model, ask
 
 Model credentials and market-data provider keys are separate. OpenCandle needs a model before chat can start. A keyless market-data prompt means the market data source does not need an OpenCandle provider key; it does not mean the agent can run without model access.
 
+Pi is the bundled local agent runtime that handles model sign-in, model keys, the terminal shell, and saved sessions. OpenCandle uses Pi for that runtime layer and adds the finance-specific tools and GUI.
+
 ## Five-Minute Path
 
 1. Install and start OpenCandle.
@@ -56,7 +58,7 @@ OpenCandle is research software, not a financial advisor. Treat warnings, stale-
 
 ## Model Setup Expectations
 
-OpenCandle uses Pi for model credentials and model selection. You can connect with sign-in or with an API key for a supported model provider. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
+OpenCandle uses Pi for model credentials and model selection. You can connect with sign-in or with an API key for OpenAI, Anthropic, or Google models. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
 
 Use `/setup` later if you want to reconnect auth or choose a different model setup path. Use `/model` when you only want to switch among models that are already available.
 

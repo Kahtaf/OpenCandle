@@ -45,8 +45,9 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
       `**${chain.symbol} Options Chain** — Expiry: ${chain.expirationDate}`,
       `Underlying: $${chain.underlyingPrice.toFixed(2)}`,
       `Quote status: ${chain.quoteStatus.marketSession} / ${chain.quoteStatus.bidAskState}`,
+      "Option bid/ask and last prices are quoted per share; multiply by 100 for one standard contract premium.",
       ...(chain.quoteStatus.warning
-        ? [`⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification.`]
+        ? [`⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification; do not stop at the stale quote caveat. Disclose the gap, avoid naming tradable live premiums, and finish the strategy explanation with mechanics, assignment outcomes, labeled hypotheticals, and what live broker quotes would change.`]
         : []),
       `Available expirations: ${formatAvailableExpirations(chain.expirationDates)}`,
       "",
@@ -57,7 +58,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
 
     if (showCalls && chain.calls.length > 0) {
       lines.push(`**CALLS** (${chain.calls.length} contracts, volume: ${chain.totalCallVolume.toLocaleString()})`);
-      lines.push("Strike | Bid/Ask | Last | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
+      lines.push("Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
       const topCalls = sortByVolume(chain.calls).slice(0, 10);
       for (const c of topCalls) {
         lines.push(formatContract(c));
@@ -67,7 +68,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
 
     if (showPuts && chain.puts.length > 0) {
       lines.push(`**PUTS** (${chain.puts.length} contracts, volume: ${chain.totalPutVolume.toLocaleString()})`);
-      lines.push("Strike | Bid/Ask | Last | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
+      lines.push("Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
       const topPuts = sortByVolume(chain.puts).slice(0, 10);
       for (const c of topPuts) {
         lines.push(formatContract(c));

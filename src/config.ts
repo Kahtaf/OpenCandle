@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
+import type { PlanningBehaviorMode, TaskFamily } from "./routing/planning.js";
 
 export interface SentimentConfig {
   retentionDays: number;
@@ -10,6 +11,7 @@ export interface SentimentConfig {
 
 export type RouterMode = "rules" | "llm";
 export type ToolScopeMode = "observe" | "enforce";
+export type PlanningMigrationStatuses = Partial<Record<TaskFamily, PlanningBehaviorMode>>;
 
 export interface Config {
   alphaVantageApiKey?: string;
@@ -21,8 +23,9 @@ export interface Config {
   debate?: boolean;
   /**
    * Intent-router mode. `"llm"` (default) runs the LLM router ahead of prompt
-   * assembly. `"rules"` runs the legacy regex `classifyIntent` +
-   * `extractPreferences` path. Controlled by `OPENCANDLE_ROUTER_MODE`.
+   * assembly. `"rules"` is the explicit legacy rule-router rollback path
+   * (`classifyIntent` + `extractPreferences`). Controlled by
+   * `OPENCANDLE_ROUTER_MODE`.
    */
   routerMode: RouterMode;
   /**
@@ -31,6 +34,12 @@ export interface Config {
    * for the turn via `pi.setActiveTools`.
    */
   toolScopeMode: ToolScopeMode;
+  /**
+   * Per-task planning behavior rollback/activation overrides. Controlled by
+   * `OPENCANDLE_PLANNING_MIGRATION_STATUSES`, e.g.
+   * `asset_compare=dual_run,single_asset_decision=observe_only`.
+   */
+  planningMigrationStatuses?: PlanningMigrationStatuses;
   sentiment?: SentimentConfig;
 }
 
@@ -91,6 +100,30 @@ const SENTIMENT_DEFAULTS: SentimentConfig = {
   divergenceThreshold: 0.4,
 };
 
+const PLANNING_TASK_FAMILIES = [
+  "single_asset_decision",
+  "asset_compare",
+  "portfolio_build",
+  "portfolio_review",
+  "macro_allocation_review",
+  "options_strategy",
+  "current_event_explanation",
+  "ticker_disambiguation",
+  "filing_thesis_review",
+  "sentiment_snapshot",
+  "concept_explainer",
+  "retail_finance_tradeoff",
+  "stateful_tracking_update",
+  "backtest_review",
+  "general_fallback",
+] as const satisfies readonly TaskFamily[];
+
+const PLANNING_BEHAVIOR_MODES = [
+  "observe_only",
+  "dual_run",
+  "replacement_active",
+] as const satisfies readonly PlanningBehaviorMode[];
+
 function resolveRouterMode(): RouterMode {
   const raw = process.env.OPENCANDLE_ROUTER_MODE;
   if (raw === undefined || raw === "") return "llm";
@@ -109,6 +142,39 @@ function resolveToolScopeMode(): ToolScopeMode {
   );
 }
 
+function resolvePlanningMigrationStatuses(): PlanningMigrationStatuses | undefined {
+  const raw = process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES;
+  if (raw === undefined || raw.trim() === "") return undefined;
+
+  const statuses: PlanningMigrationStatuses = {};
+  for (const entry of raw.split(",")) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+
+    const parts = trimmed.split("=");
+    const taskFamily = parts[0]?.trim();
+    const behaviorMode = parts[1]?.trim();
+    if (
+      parts.length !== 2 ||
+      !isPlanningTaskFamily(taskFamily) ||
+      !isPlanningBehaviorMode(behaviorMode)
+    ) {
+      throw new Error(`Invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES entry "${trimmed}".`);
+    }
+    statuses[taskFamily] = behaviorMode;
+  }
+
+  return Object.keys(statuses).length > 0 ? statuses : undefined;
+}
+
+function isPlanningTaskFamily(value: string | undefined): value is TaskFamily {
+  return PLANNING_TASK_FAMILIES.includes(value as TaskFamily);
+}
+
+function isPlanningBehaviorMode(value: string | undefined): value is PlanningBehaviorMode {
+  return PLANNING_BEHAVIOR_MODES.includes(value as PlanningBehaviorMode);
+}
+
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
   const debateEnv = process.env.OPENCANDLE_DEBATE;
   const fileSentiment = fileConfig.sentiment;
@@ -122,6 +188,7 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
     routerMode: resolveRouterMode(),
     toolScopeMode: resolveToolScopeMode(),
+    planningMigrationStatuses: resolvePlanningMigrationStatuses(),
     sentiment: {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,
