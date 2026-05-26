@@ -566,7 +566,7 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("If DCF, fundamentals");
   });
 
-  it("uses the macro allocation policy with legacy macro clauses during dual run", () => {
+  it("uses the macro allocation policy with generic fallback context during dual run", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
@@ -609,10 +609,11 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Macro Allocation Review Policy");
-    expect(result).toContain("For macro, rates, inflation, sector, or portfolio-allocation prompts");
-    expect(result).toContain("For macro-policy impact prompts");
-    expect(result).toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
+    expect(result).toContain("For macro outlook, inflation, Fed, rates, recession, or balanced-portfolio prompts");
+    expect(result).toContain("Explain the mechanism from policy shift");
+    expect(result).toContain("Preserve the portfolio review shape when the user asks about allocation");
     expect(result).toContain("If web search returns no results");
+    expect(result).not.toContain("For macro-risk prompts");
   });
 
   it("uses the macro allocation policy without retaining legacy macro clauses after replacement activation", () => {
@@ -900,169 +901,22 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Federal Funds futures");
   });
 
-  it("tells fallback sentiment answers to include source-coverage risk", () => {
+  it("keeps the fallback playbook generic so competitive fixes do not recreate a broad mega prompt", () => {
     const result = buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
       missingRequired: [],
     });
 
-    expect(result).toContain("sentiment-only");
-    expect(result).toContain("score scale");
-    expect(result).toContain("why those missing sources matter");
-    expect(result).toContain("source-coverage risk");
-    expect(result).toContain("low sample counts");
-    expect(result).toContain("downgrade confidence");
-    expect(result).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
-    expect(result).toContain("whether sentiment diverges from price action");
-  });
-
-  it("tells fallback sector research to include segmentation and scenario confidence", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("industry or sector structure");
-    expect(result).toContain("lead with a 2-3 sentence thesis");
-    expect(result).toContain("segmentation table");
-    expect(result).toContain("key company examples/types");
-    expect(result).toContain("technology or business-model timeline");
-    expect(result).toContain("likely winners/losers");
-    expect(result).toContain("scenario");
-    expect(result).toContain("confidence");
-    expect(result).toContain("key indicators");
-    expect(result).toContain("geopolitical");
-    expect(result).toContain("technology impact");
-    expect(result).toContain("Infer the relevant technologies");
-    expect(result).toContain("constraints, moats, company strategies");
-    expect(result).toContain("fetched evidence");
-    expect(result).toContain("investor or strategic takeaways");
-    expect(result).toContain("not a generic follow-up offer");
-    expect(result).toContain("value-chain impact");
-    expect(result).not.toContain("semiconductors");
-    expect(result).not.toContain("CUDA");
-    expect(result).not.toContain("silicon photonics");
-  });
-
-  it("tells broad research to degrade gracefully after web search gaps", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("web search returns no results");
-    expect(result).toContain("credential-required provider tags");
-    expect(result).toContain("continue with the best high-level analysis");
-    expect(result).toContain("Label the live-data gap");
-    expect(result).toContain("Do not stop with a tool-failure apology");
-    expect(result).toContain("Do not turn a missing-provider tag into a final answer that only asks the user to connect a provider");
-    expect(result).toContain("For macro-risk prompts, produce a ranked risk list");
-    expect(result).toContain("Never say you cannot provide an assessment at this time");
-    expect(result).toContain("For portfolio-allocation macro prompts, critique structural exposures");
-    expect(result).toContain("stock-bond correlation");
-    expect(result).toContain("specific percentage or trigger");
-    expect(result).toContain("scenario table");
-    expect(result).toContain("portfolio exposure map");
-    expect(result).toContain("Do not describe the analysis as hypothetical");
-    expect(result).toContain("name the provider or source family and observation date");
-    expect(result).toContain("compact structural-bias read");
-    expect(result).toContain("what it does not fix");
-    expect(result).toContain("state the trend direction");
-    expect(result).toContain("estimate the order of magnitude of the impact");
-    expect(result).toContain("End macro portfolio answers with a short bottom line");
-    expect(result).toContain("If the exact Fed announcement cannot be verified");
-    expect(result).toContain("official Federal Reserve or FOMC source");
-    expect(result).toContain("Hard official-source gate");
-    expect(result).toContain("federalreserve.gov");
-    expect(result).toContain("treat non-official search results as market commentary only");
-    expect(result).toContain("Ignore general web claims about Fed leadership");
-    expect(result).toContain("omit named policymakers and leadership changes entirely");
-    expect(result).toContain("Do not name specific geopolitical events");
-    expect(result).toContain("Do not call a 10Y > 2Y curve inverted");
-    expect(result).toContain("Verified announcement status");
-    expect(result).toContain("do not stop at rate datapoints");
-    expect(result).toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
-    expect(result).toContain("Structural portfolio read");
-    expect(result).toContain("What this does not fix");
-    expect(result).toContain("Do not begin with process narration");
-    expect(result).toContain("weave each current datapoint into the relevant sleeve");
-  });
-
-  it("tells filing thesis prompts to distinguish filing evidence from adjacent sources", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("SEC filing or thesis-change prompts");
-    expect(result).toContain("call get_sec_filings first");
-    expect(result).toContain("targeted search_web queries");
-    expect(result).toContain("risk factors");
-    expect(result).toContain("MD&A");
-    expect(result).toContain("litigation");
-    expect(result).toContain("regulatory disclosures");
-    expect(result).toContain("revenue concentration");
-    expect(result).toContain("Separate what came from filing metadata");
-    expect(result).toContain("If the full filing body was not parsed");
-    expect(result).toContain("Do not treat search_web/news results as SEC filing evidence");
-    expect(result).toContain("Do not claim an Item 5.02, management change, risk-factor change, or thesis-changing event unless that fact appears in get_sec_filings output");
-    expect(result).toContain("thesis-changing deltas");
-  });
-
-  it("tells single-asset recommendations to disclose data freshness and fallback valuation lenses", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("single-asset recommendation prompts");
-    expect(result).toContain("right now");
-    expect(result).toContain("state the quote or tool-output date");
-    expect(result).toContain("market is closed");
-    expect(result).toContain("last available quote");
-    expect(result).toContain("valuation model is unavailable or not meaningful");
-    expect(result).toContain("do not treat that absence as the valuation conclusion");
-    expect(result).toContain("Do not make missing fundamentals the main thesis");
-    expect(result).toContain("position sizing");
-    expect(result).toContain("entry strategy");
-    expect(result).toContain("relative multiples");
-    expect(result).toContain("growth-adjusted multiples");
-    expect(result).toContain("cash-flow quality");
-    expect(result).toContain("If core fundamentals or financials fail");
-    expect(result).toContain("business model");
-    expect(result).toContain("dividend profile");
-    expect(result).toContain("official filings");
-    expect(result).toContain("financial-health, stability, revenue-trend, or profit-trend prompts");
-    expect(result).toContain("targeted web earnings context or SEC filing evidence");
-  });
-
-  it("tells retail account and product-selection answers not to punt when no live tool exists", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("brokerage, account, fund-platform, robo-advisor, or financial-product selection prompts");
-    expect(result).toContain("Do not punt just because no dedicated live-data tool exists");
-    expect(result).toContain("cash sweep yields");
-    expect(result).toContain("fractional shares");
-    expect(result).toContain("fund minimums");
-    expect(result).toContain("ETF tax efficiency");
-    expect(result).toContain("simple next step");
-    expect(result).toContain("direct comparison table");
-    expect(result).toContain("cash drag");
-    expect(result).toContain("verify current fees");
-    expect(result).toContain("Debt payoff prompts");
-    expect(result).toContain("avalanche");
-    expect(result).toContain("snowball");
-    expect(result).toContain("monthly interest cost");
-    expect(result).toContain("High-risk speculation prompts");
-    expect(result).toContain("limited capital");
-    expect(result).toContain("opportunity cost");
-    expect(result).toContain("play-money bucket");
-    expect(result).toContain("safer alternatives");
-    expect(result).toContain("do not use Practical workflow, Cross-checks, or Quick checklist");
-    expect(result).toContain("Why the win story is misleading");
+    expect(result.length).toBeLessThanOrEqual(4_500);
+    expect(result).toContain("Tool-first");
+    expect(result).toContain("Label data gaps");
+    expect(result).toContain("Do not add task-specific instructions here");
+    expect(result).not.toContain("For macro-risk prompts");
+    expect(result).not.toContain("For brokerage, account");
+    expect(result).not.toContain("For SEC filing");
+    expect(result).not.toContain("For conceptual or educational finance prompts");
+    expect(result).not.toContain("For single-asset recommendation prompts");
+    expect(result).not.toContain("For ticker-alias");
   });
 
   it("moves unknown-ticker earnings guidance to the ticker-disambiguation policy card", () => {
@@ -1080,38 +934,29 @@ describe("PromptContextBuilder", () => {
     expect(buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
       missingRequired: [],
-    })).toContain("ticker lookup fails");
+    })).not.toContain("ticker lookup fails");
   });
 
-  it("tells crypto sizing answers to include drawdown math and implementation rules", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("crypto position-sizing");
-    expect(result).toContain("allocation range");
-    expect(result).toContain("drawdown");
-    expect(result).toContain("sleep test");
-    expect(result).toContain("dollar-cost averaging");
-    expect(result).toContain("rebalancing rules");
-    expect(result).toContain("emergency fund");
+  it("keeps crypto sizing obligations in the universal safety rules", () => {
     const fullPrompt = new PromptContextBuilder().populateFromOptions({}).build();
     expect(fullPrompt).toContain("For crypto position-sizing prompts");
+    expect(fullPrompt).toContain("allocation range");
+    expect(fullPrompt).toContain("drawdown impact");
+    expect(fullPrompt).toContain("sleep test");
+    expect(fullPrompt).toContain("dollar-cost averaging");
+    expect(fullPrompt).toContain("rebalancing rules");
+    expect(fullPrompt).toContain("emergency-fund");
     expect(fullPrompt).toContain("history period");
     expect(fullPrompt).toContain("sparse or unavailable history");
   });
 
-  it("tells today-move answers to check market status before causal claims", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
+  it("keeps today-move obligations in the current-event policy card", () => {
+    const result = getPolicyCard("current_event_explanation").content;
 
     expect(result).toContain("\"today\"");
-    expect(result).toContain("market status");
-    expect(result).toContain("weekend or market holiday");
-    expect(result).toContain("lead with that");
+    expect(result).toContain("market-status evidence");
+    expect(result).toContain("weekend");
+    expect(result).toContain("holiday");
     expect(result).toContain("do not invent");
     expect(result).toContain("most recent trading day");
   });
@@ -1130,25 +975,7 @@ describe("PromptContextBuilder", () => {
     expect(buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
       missingRequired: [],
-    })).toContain("ticker-alias or alternate-symbol prompts");
-  });
-
-  it("keeps ticker-disambiguation legacy fallback clauses unless explicitly disabled", () => {
-    const generic = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-    const migrated = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    }, {
-      includeTickerDisambiguationClause: false,
-    });
-
-    expect(generic).toContain("ticker-alias or alternate-symbol prompts");
-    expect(generic).toContain("ticker lookup fails");
-    expect(migrated).not.toContain("ticker-alias or alternate-symbol prompts");
-    expect(migrated).not.toContain("ticker lookup fails");
+    })).not.toContain("ticker-alias or alternate-symbol prompts");
   });
 
   it("uses the current-event policy without retaining the legacy today-move clause after replacement activation", () => {
@@ -1246,7 +1073,7 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Core mental model");
   });
 
-  it("uses the sentiment policy with the legacy sentiment clause during dual run", () => {
+  it("uses the sentiment policy with generic fallback context during dual run", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
@@ -1289,9 +1116,13 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Sentiment Snapshot Policy");
-    expect(result).toContain("For sentiment-only prompts: final answer must include");
+    expect(result).toContain("For sentiment-only prompts, include");
     expect(result).toContain("source-coverage risk");
     expect(result).toContain("whether sentiment diverges from price action");
+    expect(buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    })).not.toContain("For ticker-specific sentiment prompts, call get_stock_quote");
   });
 
   it("uses the sentiment policy without retaining the legacy sentiment clause after replacement activation", () => {
@@ -1386,7 +1217,7 @@ describe("PromptContextBuilder", () => {
     const result = builder.build();
     expect(result).toContain("Filing Thesis Review Policy");
     expect(result).toContain("For SEC filing or thesis-change prompts");
-    expect(result).toContain("Do not treat search_web/news results as SEC filing evidence");
+    expect(result).toContain("Do not treat search_web or news results as SEC filing evidence");
   });
 
   it("uses the filing policy without retaining the legacy SEC filing clause after replacement activation", () => {
@@ -1532,74 +1363,6 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("FDIC/SIPC/Treasury");
   });
 
-  it("tells educational finance prompts to include behavioral and practical frameworks", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("conceptual or educational finance prompts");
-    expect(result).toContain("decision-framework shape");
-    expect(result).toContain("Do not fetch live data unless the user asks for current examples");
-    expect(result).toContain("do not mention OpenCandle tool names");
-    expect(result).toContain("Bottom line");
-    expect(result).toContain("simple numerical example");
-    expect(result).toContain("common misconception cases");
-    expect(result).toContain("typical ranges or rules of thumb");
-    expect(result).toContain("For pure definition or interpretation prompts");
-    expect(result).toContain("do not force the Practical workflow");
-    expect(result).toContain("options-implied annualized volatility");
-    expect(result).toContain("VIX / sqrt(252)");
-    expect(result).toContain("small range table");
-    expect(result).toContain("direct Q&A");
-    expect(result).toContain("Practical takeaways");
-    expect(result).toContain("thermometer, not a forecast");
-    expect(result).toContain("term structure");
-    expect(result).toContain("behavioral or implementation tradeoff");
-    expect(result).toContain("simple self-check questions");
-    expect(result).toContain("different investor profiles");
-    expect(result).toContain("common traps to avoid");
-    expect(result).toContain("practical middle-ground");
-    expect(result).toContain("Data gap:");
-    expect(result).toContain("future-horizon macro/rate education");
-    expect(result).toContain("For \"how to use [metric] without over-relying\" prompts");
-    expect(result).toContain("the final answer must use these sections");
-    expect(result).toContain("include a one-sentence Core mental model");
-    expect(result).toContain("Bottom line must frame the metric as a starting point or question generator");
-    expect(result).toContain("the workflow section must be numbered question-driven application steps");
-    expect(result).toContain("not a second limitations list");
-    expect(result).toContain("Where it misleads section must cover common traps");
-    expect(result).toContain("quality of earnings distortions");
-    expect(result).toContain("final checklist should reinforce the decision framework");
-    expect(result).toContain("\"Practical workflow\"");
-    expect(result).toContain("\"Where it misleads\"");
-    expect(result).toContain("\"Cross-checks\"");
-    expect(result).toContain("\"Quick checklist\"");
-    expect(result).toContain("valuation-metric education");
-    expect(result).toContain("screening tool or question generator");
-    expect(result).toContain("short step-by-step checklist");
-    expect(result).toContain("compact cross-check table");
-    expect(result).toContain("metric/lens");
-    expect(result).toContain("when to use it");
-    expect(result).toContain("perfect\" multiple");
-    expect(result).toContain("cyclicals at peak/trough earnings");
-    expect(result).toContain("one-time or non-cash earnings");
-    expect(result).toContain("capital-structure differences");
-    expect(result).toContain("GAAP vs adjusted");
-    expect(result).toContain("free cash flow");
-    expect(result).toContain("interest-rate regime shifts");
-    expect(result).toContain("stock-based compensation");
-    expect(result).toContain("cyclically adjusted ratios such as Shiller/CAPE");
-    expect(result).toContain("Do not use \"Commitment\"");
-    expect(result).toContain("education rather than a trade");
-    expect(result).toContain("For conceptual education answers, use the educational section order above");
-    expect(result).toContain("keep tool names out of the final answer");
-    expect(result).toContain("Conceptual education prompts are not committal responses");
-    expect(result).toContain("Do not append \"Analyst View\"");
-    expect(result).toContain("explanation, definition, or learning framework");
-    expect(result).toContain("do not add analyst commitment/confidence/invalidation labels");
-  });
-
   it("documents supported search freshness values and forbids unsupported ranges", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});
@@ -1608,34 +1371,6 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Supported freshness values are hours, day, week, and month");
     expect(result).toContain("category general with freshness month");
     expect(result).toContain("never pass unsupported values such as all, year, 3mo");
-  });
-
-  it("tells fallback macro-policy research to map mechanisms and country examples", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("mechanism map");
-    expect(result).toContain("country");
-    expect(result).toContain("currency");
-    expect(result).toContain("capital flows");
-  });
-
-  it("tells U.S. macro fallbacks to search direct U.S. sources and market indicators", () => {
-    const result = buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    });
-
-    expect(result).toContain("For U.S. macro or U.S.-heavy portfolio prompts");
-    expect(result).toContain("Federal Reserve SEP");
-    expect(result).toContain("BLS CPI");
-    expect(result).toContain("BEA PCE");
-    expect(result).toContain("Treasury yield");
-    expect(result).toContain("DXY");
-    expect(result).toContain("IG OAS");
-    expect(result).toContain("avoid broad global-only searches");
   });
 
   it("renders clarification playbook from resolved route context", () => {

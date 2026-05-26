@@ -175,8 +175,10 @@ describe("Router fixtures drive prompt assembly correctly", () => {
           // The playbook must carry the block as context, but should not tell
           // the model to reproduce fallback assumptions verbatim in the answer.
           expect(playbook).toContain(assumptionsBlock);
-          expect(playbook).toContain("same-month year-over-year inflation");
-          expect(playbook).toContain("instead of searching only for provider-specific series identifiers");
+          expect(playbook).toContain("Keep this fallback generic");
+          expect(playbook).toContain("Do not add task-specific instructions here");
+          expect(playbook).not.toContain("same-month year-over-year inflation");
+          expect(playbook).not.toContain("instead of searching only for provider-specific series identifiers");
           expect(playbook).not.toContain("Start with the Assumptions block");
           expect(playbook).not.toContain("Reproduce the block in your response exactly");
         }

@@ -99,6 +99,28 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("keeps unknown ticker earnings-risk prompts out of options strategy routing", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "I hold 300 shares of ZZZZ and earnings are tonight. Should I trim, hedge, or hold through it?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["ZZZZ"] },
+        tool_bundles: ["core_market", "options"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("ticker_disambiguation");
+    expect(planning.policyCardId).toBe("ticker_disambiguation");
+    expect(planning.capabilityGapIds).toContain("earnings_event_risk");
+    expect(planning.commitmentMode).toBe("decision");
+  });
+
   it("can activate only the current-event slice without changing unrelated task families", () => {
     const currentEvent = buildPlanningEnvelope(
       {
@@ -426,6 +448,23 @@ describe("planning layer", () => {
     expect(planning.answerContractId).toBe("options_strategy");
     expect(planning.commitmentMode).toBe("decision");
     expect(planning.behaviorMode).toBe("replacement_active");
+  });
+
+  it("keeps covered-call prompts in options strategy even when earnings timing is mentioned", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "NVDA earnings are today. If I have DRAM at a $51 cost basis, what is the best covered call to sell right now?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["NVDA", "DRAM"] },
+      tool_bundles: ["core_market", "options"],
+    });
+
+    expect(planning.taskFamily).toBe("options_strategy");
+    expect(planning.policyCardId).toBe("options_strategy");
   });
 
   it("runs the macro allocation migration slice in replacement-active mode by default", () => {

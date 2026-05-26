@@ -519,6 +519,9 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (output.entities.symbols.length === 0 && isNoToolConceptEducationPrompt(lower)) {
     return "concept_explainer";
   }
+  if (isTickerDisambiguationPrompt(lower)) {
+    return "ticker_disambiguation";
+  }
   if (isOptionsStrategyPrompt(lower)) return "options_strategy";
   if (/\bbacktest(?:ing|ed)?\b/.test(lower)) {
     return "backtest_review";
@@ -534,9 +537,6 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   }
   if (/\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower)) {
     return "current_event_explanation";
-  }
-  if (/\b(?:ticker|symbol|formerly|old ticker|earnings are|earnings tonight)\b/.test(lower)) {
-    return "ticker_disambiguation";
   }
   if (/\b(?:filing|10-k|10-q|8-k|sec)\b/.test(lower)) {
     return "filing_thesis_review";
@@ -668,7 +668,14 @@ function isOptionsEducationPrompt(lower: string): boolean {
 
 function isOptionsStrategyPrompt(lower: string): boolean {
   return /\b(?:covered\s+calls?|protective\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|options?\s+income|option\s+strategy|hedge|collar)\b/.test(lower) &&
-    /\b(?:own|shares?|position|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge)\b/.test(lower);
+    /\b(?:own|have|shares?|position|cost\s+basis|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge|sell)\b/.test(lower);
+}
+
+function isTickerDisambiguationPrompt(lower: string): boolean {
+  if (/\b(?:ticker|symbol|formerly|old ticker)\b/.test(lower)) return true;
+  return /\b(?:earnings are|earnings tonight)\b/.test(lower) &&
+    /\b(?:trim|hedge|hold|event[-\s]?risk|position\s+size)\b/.test(lower) &&
+    !/\b(?:covered\s+calls?|protective\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|option\s+chain|strike|expiration|premium)\b/.test(lower);
 }
 
 function isInflationCashEducationPrompt(lower: string): boolean {
