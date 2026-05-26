@@ -498,6 +498,10 @@ function isPortfolioTradeoffComparisonRequest(text: string): boolean {
 
 function isCryptoSizingRequest(text: string): boolean {
   const lower = text.toLowerCase();
+  const hasPortfolioConstructionIntent =
+    /\b(?:build|create|construct|put\s+together)\b/.test(lower) &&
+    /\b(?:portfolio|allocation)\b/.test(lower);
+  if (hasPortfolioConstructionIntent) return false;
   return /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
     /\b(?:allocation|range|position\s+size|sizing|exposure|drawdown)\b/.test(lower);
 }

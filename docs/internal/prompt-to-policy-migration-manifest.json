@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "change": "prompt-to-policy-agent-planning",
   "createdAt": "2026-05-24",
-  "purpose": "Fixed before-migration prompt set for prompt-to-policy parity comparisons. Prompt text and expected hard assertions must not drift silently.",
+  "purpose": "Fixed before-migration prompt set for prompt-to-policy parity comparisons. Prompt text and deterministic hard assertions must not drift silently; qualitative answer expectations live in optionalJudgeAssertions.",
   "modelMetadata": {
     "openCandleRouterMode": "llm",
     "openCandleVersion": "0.4.0",
@@ -23,14 +23,11 @@
         "toolBundles": [],
         "requiredEvidence": ["capability_gap:brokerage_comparison"],
         "finalAnswerHardAssertions": [
-          "does not punt because a dedicated live brokerage tool is missing",
-          "compares fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss harvesting support, transfer/account fees, support quality, and ease of recurring investment",
-          "labels provider-site facts that must be verified",
-          "gives a practical default or next step"
+          "does not punt because a dedicated live brokerage tool is missing"
         ],
         "providerGapDisclosure": ["brokerage_comparison"]
       },
-      "optionalJudgeAssertions": ["practical retail default", "clear taxable-account caveats"],
+      "optionalJudgeAssertions": ["practical retail default", "clear taxable-account caveats", "compares fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss harvesting support, transfer/account fees, support quality, and ease of recurring investment", "labels provider-site facts that must be verified", "gives a practical default or next step"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-21-00-764Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-21-00-764Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -49,13 +46,11 @@
         "requiredEvidence": ["compare metrics include overlap when extracted", "holdings_overlap_tool_when_available"],
         "finalAnswerHardAssertions": [
           "compares requested ETFs before portfolio construction",
-          "uses holdings overlap tool when available and discloses partial provider coverage if unavailable",
-          "still gives a useful diversification framework using available quote/fund context",
-          "followup preserves comparison shape and replaces SCHD with VYM"
+          "uses holdings overlap tool when available and discloses partial provider coverage if unavailable"
         ],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["tradeoff clarity", "does not claim exact overlap if unavailable"],
+      "optionalJudgeAssertions": ["tradeoff clarity", "does not claim exact overlap if unavailable", "still gives a useful diversification framework using available quote/fund context", "followup preserves comparison shape and replaces SCHD with VYM"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-30-50-516Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-30-50-516Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -74,12 +69,11 @@
         "requiredEvidence": ["ticker lookup or company overview when available"],
         "finalAnswerHardAssertions": [
           "distinguishes legacy ticker from current primary ticker before less-common interpretations",
-          "labels any ambiguity if lookup/company overview is unavailable",
           "explains durable business model without fabricating listing facts"
         ],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["clear legacy/current ticker relationship", "business model specificity"],
+      "optionalJudgeAssertions": ["clear legacy/current ticker relationship", "business model specificity", "labels any ambiguity if lookup/company overview is unavailable"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-43-27-171Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-43-27-171Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -120,14 +114,10 @@
         "commitmentMode": "decision",
         "toolBundles": ["core_market"],
         "requiredEvidence": ["crypto price/history when available"],
-        "finalAnswerHardAssertions": [
-          "starts with a concrete allocation range and dollar amount",
-          "shows drawdown math against the stated portfolio value",
-          "includes sleep test, DCA, rebalancing rules, position caps, tax tracking, custody/exchange considerations, and emergency fund/high-interest-debt prerequisites"
-        ],
+        "finalAnswerHardAssertions": [],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["specific sizing discipline", "risk math clarity"],
+      "optionalJudgeAssertions": ["specific sizing discipline", "risk math clarity", "starts with a concrete allocation range and dollar amount", "shows drawdown math against the stated portfolio value", "includes sleep test, DCA, rebalancing rules, position caps, tax tracking, custody/exchange considerations, and emergency fund/high-interest-debt prerequisites"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-36-05-634Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-36-05-634Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -145,14 +135,11 @@
         "toolBundles": ["core_market"],
         "requiredEvidence": ["market_status", "quote freshness", "news/event evidence when available"],
         "finalAnswerHardAssertions": [
-          "checks current date and market status before causal claims",
-          "does not invent an intraday move on weekends or holidays",
-          "offers the most recent trading day when market is closed",
-          "ties cause only to fetched quote/news/event evidence"
+          "does not invent an intraday move on weekends or holidays"
         ],
         "providerGapDisclosure": ["market_calendar"]
       },
-      "optionalJudgeAssertions": ["causal restraint", "freshness clarity"],
+      "optionalJudgeAssertions": ["causal restraint", "freshness clarity", "checks current date and market status before causal claims", "offers the most recent trading day when market is closed", "ties cause only to fetched quote/news/event evidence"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-38-04-569Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-38-04-569Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -170,14 +157,11 @@
         "toolBundles": ["core_market"],
         "requiredEvidence": ["quote or tool-output date when available"],
         "finalAnswerHardAssertions": [
-          "states the quote or tool-output date",
-          "preserves market-closed, delayed, or last available quote caveats",
-          "does not make missing fundamentals or unavailable DCF the main thesis",
-          "gives a clear call with key risks, position sizing or entry strategy, confidence, and invalidation"
+          "does not make missing fundamentals or unavailable DCF the main thesis"
         ],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["direct buy/wait/avoid call", "risk-first entry strategy"],
+      "optionalJudgeAssertions": ["direct buy/wait/avoid call", "risk-first entry strategy", "states the quote or tool-output date", "preserves market-closed, delayed, or last available quote caveats", "gives a clear call with key risks, position sizing or entry strategy, confidence, and invalidation"],
       "baselineOpenCandleReportPath": "tests/evals/product/cases.ts#single-asset-nvda-recommendation",
       "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
       "cachedCompetitorAnswersAllowed": false
@@ -194,16 +178,10 @@
         "commitmentMode": "framework",
         "toolBundles": ["core_market", "sentiment"],
         "requiredEvidence": ["stock quote", "sentiment summary or source-level sentiment"],
-        "finalAnswerHardAssertions": [
-          "includes direction and strength of sentiment signal",
-          "states score scale when provided",
-          "discloses missing sources and why they matter",
-          "mentions source-coverage risk and low sample counts",
-          "states whether sentiment diverges from price action"
-        ],
+        "finalAnswerHardAssertions": [],
         "providerGapDisclosure": ["sentiment_sample_depth"]
       },
-      "optionalJudgeAssertions": ["confidence appropriately downgraded for missing sources"],
+      "optionalJudgeAssertions": ["confidence appropriately downgraded for missing sources", "includes direction and strength of sentiment signal", "states score scale when provided", "discloses missing sources and why they matter", "mentions source-coverage risk and low sample counts", "states whether sentiment diverges from price action"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T16-04-56-986Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T16-04-56-986Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -222,13 +200,11 @@
         "requiredEvidence": ["SEC filing metadata", "filing evidence or explicit filing-body gap"],
         "finalAnswerHardAssertions": [
           "calls or uses SEC filing evidence before final answer",
-          "separates filing metadata, filing-section summaries, adjacent news, and market data",
-          "does not claim an Item 5.02 or filing-section change unless SEC evidence supports it",
-          "prioritizes thesis-changing deltas, dates, source type, and 6-12 month impact"
+          "does not claim an Item 5.02 or filing-section change unless SEC evidence supports it"
         ],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["thesis relevance", "anti-fabrication"],
+      "optionalJudgeAssertions": ["thesis relevance", "anti-fabrication", "separates filing metadata, filing-section summaries, adjacent news, and market data", "prioritizes thesis-changing deltas, dates, source type, and 6-12 month impact"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T15-56-34-698Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T15-56-34-698Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -246,14 +222,11 @@
         "toolBundles": ["core_market", "macro", "sentiment"],
         "requiredEvidence": ["quote or fund context when available", "holdings_overlap_tool_when_available for ETF/fund overlap"],
         "finalAnswerHardAssertions": [
-          "does not route as portfolio construction requiring a budget",
-          "compares dividend/income and growth-oriented ETFs",
-          "covers tax/asset-location caveats for taxable accounts where relevant",
-          "gives a clear practical default based on horizon and goal"
+          "does not route as portfolio construction requiring a budget"
         ],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["tradeoff framing", "horizon fit"],
+      "optionalJudgeAssertions": ["tradeoff framing", "horizon fit", "compares dividend/income and growth-oriented ETFs", "covers tax/asset-location caveats for taxable accounts where relevant", "gives a clear practical default based on horizon and goal"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-18-42-168Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-18-42-168Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -271,14 +244,11 @@
         "toolBundles": [],
         "requiredEvidence": ["capability_gap:cash_yield_products"],
         "finalAnswerHardAssertions": [
-          "does not fabricate live yields",
-          "compares liquidity, FDIC/SIPC/Treasury risk, rate risk, taxes, minimums, and access timing",
-          "labels current yield facts as needing verification",
-          "gives a default hierarchy for 6-12 month cash"
+          "does not fabricate live yields"
         ],
         "providerGapDisclosure": ["cash_yield_products"]
       },
-      "optionalJudgeAssertions": ["practical cash hierarchy"],
+      "optionalJudgeAssertions": ["practical cash hierarchy", "compares liquidity, FDIC/SIPC/Treasury risk, rate risk, taxes, minimums, and access timing", "labels current yield facts as needing verification", "gives a default hierarchy for 6-12 month cash"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json#safe-cash",
       "cachedCompetitorAnswersAllowed": true
@@ -295,14 +265,10 @@
         "commitmentMode": "compare_tradeoffs",
         "toolBundles": [],
         "requiredEvidence": [],
-        "finalAnswerHardAssertions": [
-          "compares guaranteed after-tax debt return versus uncertain market return",
-          "covers liquidity, emergency fund, taxes, risk tolerance, time horizon, and hybrid split",
-          "gives a practical default based on the 6.8% rate"
-        ],
+        "finalAnswerHardAssertions": [],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["clear financial tradeoff", "not over-tooled"],
+      "optionalJudgeAssertions": ["clear financial tradeoff", "not over-tooled", "compares guaranteed after-tax debt return versus uncertain market return", "covers liquidity, emergency fund, taxes, risk tolerance, time horizon, and hybrid split", "gives a practical default based on the 6.8% rate"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-24T06-11-06-068Z_competitive-finance.json#mortgage",
       "cachedCompetitorAnswersAllowed": true
@@ -319,15 +285,10 @@
         "commitmentMode": "decision",
         "toolBundles": ["core_market", "options", "sentiment", "clarification"],
         "requiredEvidence": ["owned underlying DRAM", "catalyst symbol NVDA", "options chain when available"],
-        "finalAnswerHardAssertions": [
-          "uses DRAM as the covered-call underlying",
-          "preserves NVDA as catalyst context, not the option-chain symbol",
-          "preserves cost basis and event-week DTE hint",
-          "frames covered-call assignment/downside/opportunity-cost risk"
-        ],
+        "finalAnswerHardAssertions": [],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["strategy/risk framing"],
+      "optionalJudgeAssertions": ["strategy/risk framing", "uses DRAM as the covered-call underlying", "preserves NVDA as catalyst context, not the option-chain symbol", "preserves cost basis and event-week DTE hint", "frames covered-call assignment/downside/opportunity-cost risk"],
       "baselineOpenCandleReportPath": "tests/unit/routing/router.test.ts",
       "competitorBaselineReportPathOrHash": "not-applicable-router-boundary",
       "cachedCompetitorAnswersAllowed": false
@@ -344,15 +305,10 @@
         "commitmentMode": "decision",
         "toolBundles": ["core_market", "options", "sentiment", "clarification"],
         "requiredEvidence": ["owned underlying AMD", "catalyst symbol NVDA", "share quantity", "options chain when available"],
-        "finalAnswerHardAssertions": [
-          "uses AMD as protective-put underlying",
-          "preserves NVDA as catalyst context",
-          "preserves 200-share hedge quantity and month DTE hint",
-          "frames hedge floor, premium, Greeks, liquidity, and protective-put risks"
-        ],
+        "finalAnswerHardAssertions": [],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["cost-sensitive hedge quality"],
+      "optionalJudgeAssertions": ["cost-sensitive hedge quality", "uses AMD as protective-put underlying", "preserves NVDA as catalyst context", "preserves 200-share hedge quantity and month DTE hint", "frames hedge floor, premium, Greeks, liquidity, and protective-put risks"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-21T23-40-58-459Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-21T23-40-58-459Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -370,10 +326,7 @@
         "toolBundles": ["core_market", "macro", "sentiment", "sec", "clarification"],
         "requiredEvidence": ["macro evidence when available", "provider gap disclosure when macro providers are unavailable"],
         "finalAnswerHardAssertions": [
-          "does not ask for a portfolio budget",
-          "starts with a bottom-line portfolio risk/reward read",
-          "includes current macro evidence, structural portfolio read, sleeve-by-sleeve implications, key risks/opportunities, actionable adjustment, what it does not fix, and watchlist/invalidation",
-          "names exact unavailable macro data rather than blocking"
+          "does not ask for a portfolio budget"
         ],
         "providerGapDisclosure": ["market_calendar", "forward_rate_probabilities"],
         "acceptedObservedChanges": [
@@ -391,7 +344,7 @@
           }
         ]
       },
-      "optionalJudgeAssertions": ["macro mechanism clarity", "actionable adjustment quality"],
+      "optionalJudgeAssertions": ["macro mechanism clarity", "actionable adjustment quality", "starts with a bottom-line portfolio risk/reward read", "includes current macro evidence, structural portfolio read, sleeve-by-sleeve implications, key risks/opportunities, actionable adjustment, what it does not fix, and watchlist/invalidation", "names exact unavailable macro data rather than blocking"],
       "baselineOpenCandleReportPath": "tests/evals/runs/2026-05-23T01-30-00-478Z_competitive-finance.json",
       "competitorBaselineReportPathOrHash": "tests/evals/runs/2026-05-23T01-30-00-478Z_competitive-finance.json",
       "cachedCompetitorAnswersAllowed": true
@@ -410,14 +363,11 @@
         "requiredEvidence": [],
         "finalAnswerHardAssertions": [
           "does not ask for a portfolio budget",
-          "does not route as portfolio construction requiring a budget",
-          "starts with a bottom-line structural portfolio read",
-          "critiques diversification, concentration, geography, duration, credit, liquidity, taxes, horizon fit, and rebalance discipline",
-          "gives one practical adjustment or watchlist trigger without building a new portfolio from scratch"
+          "does not route as portfolio construction requiring a budget"
         ],
         "providerGapDisclosure": []
       },
-      "optionalJudgeAssertions": ["structural allocation critique", "does not over-construct"],
+      "optionalJudgeAssertions": ["structural allocation critique", "does not over-construct", "starts with a bottom-line structural portfolio read", "critiques diversification, concentration, geography, duration, credit, liquidity, taxes, horizon fit, and rebalance discipline", "gives one practical adjustment or watchlist trigger without building a new portfolio from scratch"],
       "baselineOpenCandleReportPath": "not-applicable-new-prompt-policy-case",
       "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
       "cachedCompetitorAnswersAllowed": false
@@ -435,9 +385,6 @@
         "toolBundles": ["core_market", "macro", "sentiment", "sec", "clarification"],
         "requiredEvidence": ["macro/sentiment evidence when available", "structured provider gaps when unavailable"],
         "finalAnswerHardAssertions": [
-          "preserves `/connect` remediation semantics where credential-required tags occur",
-          "continues with a useful macro/portfolio framework when live data is unavailable",
-          "names specific current facts that would improve the answer",
           "does not answer only with a missing-provider apology"
         ],
         "providerGapDisclosure": ["forward_rate_probabilities", "sentiment_sample_depth"],
@@ -456,7 +403,7 @@
           }
         ]
       },
-      "optionalJudgeAssertions": ["honest but useful degradation"],
+      "optionalJudgeAssertions": ["honest but useful degradation", "preserves `/connect` remediation semantics where credential-required tags occur", "continues with a useful macro/portfolio framework when live data is unavailable", "names specific current facts that would improve the answer"],
       "baselineOpenCandleReportPath": "docs/internal/competitive-benchmark-history.md",
       "competitorBaselineReportPathOrHash": "not-applicable-provider-degradation",
       "cachedCompetitorAnswersAllowed": false
@@ -473,12 +420,7 @@
         "commitmentMode": "decision",
         "toolBundles": ["core_market", "options", "sentiment", "sec", "clarification"],
         "requiredEvidence": [],
-        "finalAnswerHardAssertions": [
-          "reports strategy return, buy-and-hold return, outperformance, trade count, win rate, and max drawdown",
-          "includes Sharpe or Sortino when available or says they were unavailable",
-          "explains why the strategy worked or failed in the tested regime",
-          "discusses trading costs/slippage when asked whether the edge is practical"
-        ],
+        "finalAnswerHardAssertions": [],
         "providerGapDisclosure": [],
         "acceptedObservedChanges": [
           {
@@ -513,7 +455,7 @@
           }
         ]
       },
-      "optionalJudgeAssertions": ["backtest metric completeness", "practical edge discussion"],
+      "optionalJudgeAssertions": ["backtest metric completeness", "practical edge discussion", "reports strategy return, buy-and-hold return, outperformance, trade count, win rate, and max drawdown", "includes Sharpe or Sortino when available or says they were unavailable", "explains why the strategy worked or failed in the tested regime", "discusses trading costs/slippage when asked whether the edge is practical"],
       "baselineOpenCandleReportPath": "tests/evals/cases/faithfulness.eval.ts#backtest-metrics",
       "competitorBaselineReportPathOrHash": "not-applicable-router-boundary",
       "cachedCompetitorAnswersAllowed": false
@@ -532,7 +474,6 @@
         "requiredEvidence": [],
         "finalAnswerHardAssertions": [
           "uses track_prediction to persist the prediction",
-          "confirms AAPL, bullish direction, entry price, conviction, and 30-day timeframe",
           "does not turn the state update into a buy/sell recommendation"
         ],
         "providerGapDisclosure": [],
@@ -557,7 +498,7 @@
           }
         ]
       },
-      "optionalJudgeAssertions": ["state confirmation clarity"],
+      "optionalJudgeAssertions": ["state confirmation clarity", "confirms AAPL, bullish direction, entry price, conviction, and 30-day timeframe"],
       "baselineOpenCandleReportPath": "tests/e2e/cli.test.ts#Record prediction",
       "competitorBaselineReportPathOrHash": "not-applicable-stateful-tool",
       "cachedCompetitorAnswersAllowed": false

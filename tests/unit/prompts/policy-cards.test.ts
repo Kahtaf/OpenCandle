@@ -34,6 +34,7 @@ describe("policy cards", () => {
       "sentiment_snapshot",
       "filing_thesis_review",
       "asset_compare",
+      "portfolio_build",
       "portfolio_review",
       "portfolio_rebalance_review",
       "macro_allocation_review",
@@ -45,6 +46,7 @@ describe("policy cards", () => {
       "concept_options_education",
       "concept_inflation_cash_education",
       "concept_valuation_metric_education",
+      "general_fallback",
     ]);
   });
 
@@ -59,12 +61,19 @@ describe("policy cards", () => {
     expect(getPolicyCard("concept_inflation_cash_education").status).toBe("implemented");
     expect(getPolicyCard("concept_valuation_metric_education").status).toBe("implemented");
     expect(getPolicyCard("asset_compare").status).toBe("implemented");
+    expect(getPolicyCard("portfolio_build").status).toBe("placeholder");
     expect(getPolicyCard("portfolio_review").status).toBe("implemented");
     expect(getPolicyCard("portfolio_rebalance_review").status).toBe("implemented");
     expect(getPolicyCard("macro_allocation_review").status).toBe("implemented");
     expect(getPolicyCard("options_strategy").status).toBe("implemented");
     expect(getPolicyCard("backtest_review").status).toBe("implemented");
     expect(getPolicyCard("stateful_tracking_update").status).toBe("implemented");
+    expect(getPolicyCard("general_fallback")).toMatchObject({
+      id: "general_fallback",
+      taskFamily: "general_fallback",
+      status: "placeholder",
+      content: "",
+    });
   });
 
   it("renders only the selected concept education subtype policy card", () => {
@@ -146,8 +155,8 @@ describe("policy cards", () => {
 
     expect(rendered).toContain("explicitly say whether the supplied symbol is still the current primary ticker");
     expect(rendered).toContain("Do not call ask_user merely because a supplied ticker-like symbol is unverified");
-    expect(rendered).toContain("If any clarification attempt returns no usable answer");
-    expect(rendered).toContain("unresolved-ticker event-risk framework");
+    expect(rendered).toContain("If the supplied ticker cannot be confirmed by lookup or quote evidence");
+    expect(rendered).toContain("risk-first trim/hedge/hold framework");
   });
 
   it("renders asset-compare policy only after the slice leaves observe-only mode", () => {

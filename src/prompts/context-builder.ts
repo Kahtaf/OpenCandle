@@ -144,8 +144,8 @@ export class PromptContextBuilder {
  * Instructs tool-first, commit-with-reasoning, ask_user when required slots
  * are missing. Contains NO refusal or hedging language.
  */
-export function buildFallbackPlaybook(ctx: FallbackContext): string {
-  return buildAgentTaskPlaybook(ctx);
+export function buildFallbackPlaybook(ctx: FallbackContext, options: AgentTaskPlaybookOptions = {}): string {
+  return buildAgentTaskPlaybook(ctx, options);
 }
 
 export function buildRoutePlaybook(ctx: ResolvedTurnContext): string {
@@ -194,6 +194,9 @@ ${assumptionsBlock}`;
     includeSingleAssetClause:
       ctx.planning?.taskFamily !== "single_asset_decision" ||
       ctx.planning?.behaviorMode !== "replacement_active",
+    includeTickerDisambiguationClause:
+      ctx.planning?.policyCardId === undefined ||
+      ctx.planning?.policyCardId === "ticker_disambiguation",
     includeMacroAllocationClauses:
       ctx.planning?.taskFamily !== "macro_allocation_review" ||
       ctx.planning?.behaviorMode !== "replacement_active",
@@ -229,6 +232,7 @@ interface AgentTaskPlaybookOptions {
   includeRetailTradeoffClause?: boolean;
   includeTodayMoveClause?: boolean;
   includeSingleAssetClause?: boolean;
+  includeTickerDisambiguationClause?: boolean;
   includeMacroAllocationClauses?: boolean;
 }
 
@@ -252,7 +256,11 @@ const SINGLE_ASSET_PLAYBOOK_ITEM = `16. For single-asset recommendation prompts,
 
 const RETAIL_TRADEOFF_PLAYBOOK_ITEM = `17. For brokerage, account, fund-platform, or financial-product selection prompts: Do not punt just because no dedicated live-data tool exists. Give durable public decision criteria, label facts that should be verified on the provider site, and compare fees, expense ratios, cash sweep yields, fractional shares, fund minimums, tax-loss-harvesting support, transfer/account fees, mutual-fund versus ETF availability, support quality, and ease of recurring investment. For taxable accounts, explain ETF tax efficiency and asset-location caveats. End with a simple next step or default choice based on the user's stated priorities.`;
 
-const TODAY_MOVE_PLAYBOOK_ITEM = `19. For "today" or "why did it move today" prompts: check market status against the current date before causal claims. If it is a weekend or market holiday, lead with that and do not invent an intraday move or news catalyst; offer the most recent trading day and only cite a cause when fetched quote/news evidence supports it.`;
+const TICKER_EVENT_RISK_PLAYBOOK_ITEM = `18. If ticker lookup fails but the user is asking an earnings, event-risk, or holdings-risk question, do not stop at "ticker not recognized." Say the ticker could not be verified, then give an event-risk framework: expected move/gap risk, beat-or-miss versus guidance, revenue and margin drivers, position size, whether to trim before the event, stop/hedge choices, and the specific facts that would change the answer. If ask_user returns no answer, lead with a risk-first answer for the user's stated concern and do not use a conceptual education section order.`;
+
+const TICKER_ALIAS_PLAYBOOK_ITEM = `21. For ticker-alias or alternate-symbol prompts: use ticker lookup results to distinguish the current primary ticker from a legacy ticker, former ticker, ETF, ADR, foreign listing, or exchange-specific symbol. When the user names a likely old symbol, explain the legacy/current relationship before less-common fund or listing interpretations. If results conflict or company overview is unavailable, say what is verified, label the ambiguity, and still explain the durable business model from general knowledge when confident. Cover revenue mechanics such as licensing, royalties, products, customers, or distribution when relevant.`;
+
+const TODAY_MOVE_PLAYBOOK_ITEM = `20. For "today" or "why did it move today" prompts: check market status against the current date before causal claims. If it is a weekend or market holiday, lead with that and do not invent an intraday move or news catalyst; offer the most recent trading day and only cite a cause when fetched quote/news evidence supports it.`;
 
 function buildAgentTaskPlaybook(ctx: FallbackContext, options: AgentTaskPlaybookOptions = {}): string {
   const missingLine =
@@ -272,7 +280,7 @@ ${options.includeMacroAllocationClauses === false ? "" : `${MACRO_ALLOCATION_PLA
 ${options.includeFilingThesisClause === false ? "" : `${FILING_THESIS_PLAYBOOK_ITEM}\n`}8. If web search returns no results, provider soft-degradation tags, credential-required provider tags, or a validation error after a reasonable retry, continue with the best high-level analysis you can support from available tool output and general market knowledge. Label the live-data gap, lower confidence where appropriate, and name the specific current facts that would improve the answer. Do not stop with a tool-failure apology for broad conceptual, macro, industry, sector, or education questions. Do not turn a missing-provider tag into a final answer that only asks the user to connect a provider.
 9. When calling search_web, use only supported freshness values: hours, day, week, or month. For broad industry structure or non-breaking-news context, prefer category general with freshness month; never pass unsupported values such as all, year, 3mo, quarter, or custom date ranges.
 ${options.includeMacroAllocationClauses === false ? "" : `${MACRO_POLICY_IMPACT_PLAYBOOK_ITEM}\n${US_MACRO_PLAYBOOK_ITEM}\n${NON_US_MACRO_PLAYBOOK_ITEM}\n${PORTFOLIO_EVALUATION_PLAYBOOK_ITEM}\n`}
-${options.includeConceptEducationClause === false ? "" : `${CONCEPT_EDUCATION_PLAYBOOK_ITEM}\n`}${options.includeSentimentSourceClause === false ? "" : `${SENTIMENT_SOURCE_PLAYBOOK_ITEM}\n`}${options.includeSingleAssetClause === false ? "" : `${SINGLE_ASSET_PLAYBOOK_ITEM}\n`}${options.includeRetailTradeoffClause === false ? "" : `${RETAIL_TRADEOFF_PLAYBOOK_ITEM}\n`}18. For crypto position-sizing prompts: give a concrete allocation range by risk profile, show drawdown math on the user's stated portfolio value, include a sleep test, and explain implementation with dollar-cost averaging, rebalancing rules, position caps, tax tracking, reputable custody/exchange considerations, and emergency fund or high-interest-debt prerequisites.${options.includeTodayMoveClause === false ? "" : `\n${TODAY_MOVE_PLAYBOOK_ITEM}`}
+${options.includeConceptEducationClause === false ? "" : `${CONCEPT_EDUCATION_PLAYBOOK_ITEM}\n`}${options.includeSentimentSourceClause === false ? "" : `${SENTIMENT_SOURCE_PLAYBOOK_ITEM}\n`}${options.includeSingleAssetClause === false ? "" : `${SINGLE_ASSET_PLAYBOOK_ITEM}\n`}${options.includeRetailTradeoffClause === false ? "" : `${RETAIL_TRADEOFF_PLAYBOOK_ITEM}\n`}${options.includeTickerDisambiguationClause === false ? "" : `${TICKER_EVENT_RISK_PLAYBOOK_ITEM}\n`}19. For crypto position-sizing prompts: give a concrete allocation range by risk profile, show drawdown math on the user's stated portfolio value, include a sleep test, and explain implementation with dollar-cost averaging, rebalancing rules, position caps, tax tracking, reputable custody/exchange considerations, and emergency fund or high-interest-debt prerequisites.${options.includeTodayMoveClause === false ? "" : `\n${TODAY_MOVE_PLAYBOOK_ITEM}`}${options.includeTickerDisambiguationClause === false ? "" : `\n${TICKER_ALIAS_PLAYBOOK_ITEM}`}
 
 ## Assumptions Context
 ${ctx.assumptionsBlock}

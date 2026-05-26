@@ -4,7 +4,7 @@ const directAnswer: ProductEvalDimension = {
   id: "direct_answer",
   description: "Answers the user's actual decision or request directly.",
   requiredPatterns: [
-    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom line|commitment)\b/i,
+    /\b(yes|no|use|compare|reasonable|valid|recommend|rank|screen|build|focus|buy|sell|hold|avoid|prefer|choose|overweight|underweight|current read|our read|most pertinent|most important|top risks?|bottom line)\b/i,
   ],
   mandatory: true,
 };
@@ -24,7 +24,7 @@ const missingDataHonesty: ProductEvalDimension = {
 const riskFraming: ProductEvalDimension = {
   id: "risk_framing",
   description: "Names downside, uncertainty, invalidation, or tradeoffs.",
-  requiredPatterns: [/\b(risks?|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss|caution|incomplete)\b/i],
+  requiredPatterns: [/\b(risks?|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss)\b/i],
   mandatory: true,
 };
 

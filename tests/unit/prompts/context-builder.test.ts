@@ -219,9 +219,8 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Ticker Disambiguation Policy");
-    expect(result).toContain("event-risk framework");
-    expect(result).not.toContain("For ticker-alias or alternate-symbol prompts");
-    expect(result).not.toContain("If ticker lookup fails but the user is asking an earnings, event-risk, or holdings-risk question");
+    expect(result).toContain("For ticker-alias or alternate-symbol prompts");
+    expect(result).toContain("If ticker lookup fails but the user is asking an earnings, event-risk, or holdings-risk question");
     expect(result).not.toContain("Sentiment Snapshot Policy");
     expect(result).not.toContain("Asset Compare Policy");
   });
@@ -1038,17 +1037,19 @@ describe("PromptContextBuilder", () => {
   it("moves unknown-ticker earnings guidance to the ticker-disambiguation policy card", () => {
     const result = getPolicyCard("ticker_disambiguation").content;
 
-    expect(result).toContain("lookup or company overview evidence is unavailable");
+    expect(result).toContain("lookup, quote, or company overview evidence is unavailable");
     expect(result).toContain("earnings");
-    expect(result).toContain("event-risk framework");
+    expect(result).toContain("risk-first trim/hedge/hold framework");
     expect(result).toContain("gap risk");
     expect(result).toContain("guidance");
     expect(result).toContain("position size");
-    expect(result).toContain("trim");
+    expect(result).toContain("ticker could not be verified");
+    expect(result).toContain("avoid conceptual education section order");
+    expect(result).toContain("trim/hedge/hold");
     expect(buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
       missingRequired: [],
-    })).not.toContain("ticker lookup fails");
+    })).toContain("ticker lookup fails");
   });
 
   it("tells crypto sizing answers to include drawdown math and implementation rules", () => {
@@ -1098,7 +1099,25 @@ describe("PromptContextBuilder", () => {
     expect(buildFallbackPlaybook({
       assumptionsBlock: "No assumptions.",
       missingRequired: [],
-    })).not.toContain("ticker-alias or alternate-symbol prompts");
+    })).toContain("ticker-alias or alternate-symbol prompts");
+  });
+
+  it("keeps ticker-disambiguation legacy fallback clauses unless explicitly disabled", () => {
+    const generic = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    });
+    const migrated = buildFallbackPlaybook({
+      assumptionsBlock: "No assumptions.",
+      missingRequired: [],
+    }, {
+      includeTickerDisambiguationClause: false,
+    });
+
+    expect(generic).toContain("ticker-alias or alternate-symbol prompts");
+    expect(generic).toContain("ticker lookup fails");
+    expect(migrated).not.toContain("ticker-alias or alternate-symbol prompts");
+    expect(migrated).not.toContain("ticker lookup fails");
   });
 
   it("uses the current-event policy without retaining the legacy today-move clause after replacement activation", () => {

@@ -24,6 +24,7 @@ export interface PromptPolicyCase {
     assertion: string;
     passed: boolean;
     reason: string;
+    deterministic?: boolean;
   }>;
 }
 

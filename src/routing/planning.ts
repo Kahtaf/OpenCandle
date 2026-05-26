@@ -28,7 +28,6 @@ export type TaskFamily =
   | "retail_finance_tradeoff"
   | "stateful_tracking_update"
   | "backtest_review"
-  | "macro_allocation_review"
   | "general_fallback";
 
 export type CommitmentMode =

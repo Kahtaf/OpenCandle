@@ -189,10 +189,10 @@ ${disclosureBlock}
 
 Response format:
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
-- Then start the analysis with a sentence beginning exactly "Bottom line: I would build" to directly answer the portfolio-construction request.
+- Then start the analysis with "Bottom line:" and directly say what portfolio you would build for the user.
 - Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
 - Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
-- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff for the stated time horizon, and include the words "duration" or "forward-looking" where relevant.
+- After the table, add a brief "Why this fits the horizon" summary explaining the growth/stability tradeoff and horizon-specific risks for the stated time horizon.
 - Include a risk summary (portfolio volatility, diversification quality) and an invalidation condition for the overall draft ("revisit if correlation exceeds 0.7 across the core ETFs" or equivalent).
 - Include practical implementation notes: rebalance cadence, low-cost/liquid implementation, and tax/account caveats where relevant.
 - Suggest what to change for more growth or more safety.`;

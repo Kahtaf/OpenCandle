@@ -297,6 +297,31 @@ describe("route()", () => {
     }));
   });
 
+  it("preserves portfolio construction when bitcoin is one sleeve in an explicit build request", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Build me a $75k portfolio with a small bitcoin allocation.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "portfolio_builder",
+        entities: { symbols: ["BTC"], budget: 75_000 },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        diagnostics: [],
+        reasoning: "portfolio build with bitcoin sleeve",
+      })),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("portfolio_builder");
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
+      code: "crypto_sizing_corrected_to_agent_task",
+    }));
+  });
+
   it("retries once on validation failure", async () => {
     const bad = JSON.stringify({ route: "nope" });
     const good = JSON.stringify({

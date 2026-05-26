@@ -12,6 +12,7 @@ export const POLICY_CARD_IDS = [
   "sentiment_snapshot",
   "filing_thesis_review",
   "asset_compare",
+  "portfolio_build",
   "portfolio_review",
   "portfolio_rebalance_review",
   "macro_allocation_review",
@@ -23,6 +24,7 @@ export const POLICY_CARD_IDS = [
   "concept_options_education",
   "concept_inflation_cash_education",
   "concept_valuation_metric_education",
+  "general_fallback",
 ] as const;
 
 export type PromptPolicyCardId = typeof POLICY_CARD_IDS[number];
@@ -42,7 +44,7 @@ const POLICY_CARDS: Record<PromptPolicyCardId, PolicyCard> = {
     status: "implemented",
     capabilityGapIds: ["earnings_event_risk"],
     content: `## Ticker Disambiguation Policy
-Use ticker lookup evidence to distinguish the current primary ticker from a legacy ticker, former ticker, ETF, ADR, foreign listing, or exchange-specific symbol. For old-symbol or "is this still the right ticker" prompts, explicitly say whether the supplied symbol is still the current primary ticker and name the current primary ticker when evidence supports one. Explain the current-vs-legacy relationship before less-common interpretations. If lookup or company overview evidence is unavailable or conflicts, disclose the ambiguity and do not invent listing facts. For unresolved earnings, event-risk, or holdings-risk questions, do not stop with a clarification question as the final output. Do not call ask_user merely because a supplied ticker-like symbol is unverified; treat the supplied symbol as unresolved evidence and continue. If any clarification attempt returns no usable answer, say the ticker could not be verified, avoid current earnings claims, then give an unresolved-ticker event-risk framework covering expected move/gap risk, beat-or-miss versus guidance, revenue and margin drivers, position size, trim/hedge/stop choices, and the specific facts that would change the answer. For business-model questions, explain durable mechanics such as licensing, royalties, products, customers, or distribution only when supported by fetched evidence or stable general knowledge.`,
+Use ticker lookup evidence to distinguish the current primary ticker from a legacy ticker, former ticker, ETF, ADR, foreign listing, or exchange-specific symbol. For old-symbol or "is this still the right ticker" prompts, explicitly say whether the supplied symbol is still the current primary ticker and name the current primary ticker when evidence supports one. Explain the current-vs-legacy relationship before less-common interpretations. If lookup, quote, or company overview evidence is unavailable or conflicts, disclose the ambiguity and do not invent listing facts. For unresolved earnings, event-risk, or holdings-risk questions, do not stop with a clarification question as the final output. Do not call ask_user merely because a supplied ticker-like symbol is unverified; treat the supplied symbol as unresolved evidence and continue. If the supplied ticker cannot be confirmed by lookup or quote evidence, explicitly say the ticker could not be verified, avoid current earnings claims, avoid conceptual education section order, and lead with a risk-first trim/hedge/hold framework covering expected move/gap risk, beat-or-miss versus guidance, revenue and margin drivers, position size, stop/hedge choices, and the specific facts that would change the answer. For business-model questions, explain durable mechanics such as licensing, royalties, products, customers, or distribution only when supported by fetched evidence or stable general knowledge.`,
   },
   single_asset_decision: {
     id: "single_asset_decision",
@@ -84,6 +86,7 @@ For SEC filing or thesis-change prompts, call get_sec_filings first, then use ta
     content: `## Asset Compare Policy
 Compare the requested assets before portfolio construction. For ETF overlap, diversification, dividend-vs-growth, or income-vs-total-return prompts, keep the answer in comparison mode unless the user explicitly asks to build a portfolio. Use available quote, risk, correlation, technical, and fund context; for ETF/fund overlap prompts, use provider-backed holdings-overlap evidence when available and disclose partial or unavailable provider coverage. Do not imply exact constituent-level overlap, top shared holdings, sector weights, expense ratios, yields, or distribution facts unless fetched evidence supports them. Cover diversification impact, concentration risk, growth versus income tradeoffs, tax and asset-location caveats, horizon fit, and a practical default or next step tied to the user's stated goal.`,
   },
+  portfolio_build: placeholder("portfolio_build", "portfolio_build", []),
   portfolio_review: {
     id: "portfolio_review",
     taskFamily: "portfolio_review",
@@ -172,17 +175,11 @@ For no-symbol inflation, cash, savings, or purchasing-power education, explain n
     content: `## Valuation Metric Education Policy
 For valuation-metric education, start with Bottom line and a one-sentence Core mental model. Then explain Practical workflow, Where it misleads, Cross-checks, and a Quick checklist. Frame P/E, P/S, EV/EBITDA, trailing, forward, normalized, or cyclically adjusted metrics as screening tools and question generators, not verdicts. Cover earnings-quality distortions, cyclicality, balance-sheet differences, capital intensity, growth quality, margin durability, accounting noise, and cross-checks such as cash flow, enterprise-value lenses, historical ranges, and peer context. Do not add entry levels, confidence bands, or invalidation boilerplate for pure education prompts.`,
   },
+  general_fallback: placeholder("general_fallback", "general_fallback", []),
 };
 
 export function getPolicyCard(id: PolicyCardId): PolicyCard {
-  if (isPromptPolicyCardId(id)) return POLICY_CARDS[id];
-  return {
-    id: "concept_explainer",
-    taskFamily: "concept_explainer",
-    status: "placeholder",
-    capabilityGapIds: [],
-    content: "",
-  };
+  return POLICY_CARDS[id];
 }
 
 export function renderPolicyCardForPlanning(planning: PlanningEnvelope | undefined): string {
@@ -220,8 +217,4 @@ function placeholder(
     capabilityGapIds,
     content: "",
   };
-}
-
-function isPromptPolicyCardId(id: PolicyCardId): id is PromptPolicyCardId {
-  return (POLICY_CARD_IDS as readonly string[]).includes(id);
 }

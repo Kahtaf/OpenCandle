@@ -84,7 +84,7 @@ Protective-put requirements:
 3. Present a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, open interest, bid-ask spread.
 4. Explain why the #1 pick is ranked highest.
 5. Reproduce the exact Assumptions block from the initial prompt; keep the provenance label text intact and do not shorten it to "Assumptions:".
-6. State the requested option horizon in plain language (${horizonPhrase}) in the bottom line or table intro; for the 25_to_45_days target, include the literal phrase "30-day next-month horizon".
+6. State the requested option horizon in plain language (${horizonPhrase}) in the bottom line or table intro; use the user's horizon wording or approximate DTE window without forcing a fixed sentence.
 7. ${riskInstruction}
 
 If some or all of the option chain fetches returned "⚠ Options chain unavailable" or similar gaps, do NOT abort. Instead:
@@ -106,7 +106,7 @@ Length constraints:
 }
 
 function describeDteTarget(dteTarget: string): string {
-  if (dteTarget === "25_to_45_days") return "30-day next-month horizon";
+  if (dteTarget === "25_to_45_days") return "25-45 day target, roughly one month";
   if (dteTarget === "7_to_14_days") return "1-2 week horizon";
   if (dteTarget === "0_to_7_days") return "event-week or 0-7 day horizon";
   if (dteTarget === "180_plus_days") return "LEAPS or long-dated horizon";

@@ -2,7 +2,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { EvalTrace } from "../evals/types.js";
+import { evaluateFinalAnswerAssertion } from "../evals/prompt-policy-assertions.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
+import { DEFAULT_BUDGETS } from "../../src/prompts/sections.js";
 
 interface Manifest {
   manifestVersion: number;
@@ -68,6 +70,7 @@ interface ManifestCaseReport {
     assertion: string;
     passed: boolean;
     reason: string;
+    deterministic: boolean;
   }>;
 }
 
@@ -75,6 +78,10 @@ interface ManifestReport {
   generatedAt: string;
   manifestPath: string;
   selectedPromptIds: string[];
+  promptBudget: {
+    totalSectionBudget: number;
+    ceiling: number;
+  };
   cases: ManifestCaseReport[];
   summary: {
     total: number;
@@ -110,6 +117,10 @@ const report: ManifestReport = {
   generatedAt: new Date().toISOString(),
   manifestPath,
   selectedPromptIds: selected.map((prompt) => prompt.id),
+  promptBudget: {
+    totalSectionBudget: Object.values(DEFAULT_BUDGETS).reduce((sum, budget) => sum + budget, 0),
+    ceiling: 31_500,
+  },
   cases: reports,
   summary: {
     total: reports.length,
@@ -255,97 +266,6 @@ function addEvidenceFailures(
       });
     }
   }
-}
-
-function evaluateFinalAnswerAssertion(
-  assertion: string,
-  trace: EvalTrace,
-): { assertion: string; passed: boolean; reason: string } {
-  const text = trace.text.toLowerCase();
-  const tools = trace.toolCalls.map((call) => call.name);
-  const checks: Array<{ pattern: RegExp; passed: boolean; reason: string }> = [
-    {
-      pattern: /does not fetch live data|no live data tool calls/i,
-      passed: tools.length === 0,
-      reason: tools.length === 0 ? "no tool calls observed" : `observed tool calls: ${tools.join(", ")}`,
-    },
-    {
-      pattern: /does not mention opencandle tool names/i,
-      passed: !/get_[a-z_]+|search_web|compare_companies|compute_dcf/i.test(trace.text),
-      reason: "final answer should not expose tool function names",
-    },
-    {
-      pattern: /exact holdings overlap by weight requires a dedicated holdings tool/i,
-      passed: trace.planning?.capabilityGapIds.includes("etf_holdings_overlap") ?? false,
-      reason: "expected ETF holdings-overlap capability gap",
-    },
-    {
-      pattern: /uses holdings overlap tool when available/i,
-      passed: tools.includes("analyze_holdings_overlap"),
-      reason: tools.includes("analyze_holdings_overlap")
-        ? "observed analyze_holdings_overlap tool call"
-        : `observed tool calls: ${tools.join(", ") || "none"}`,
-    },
-    {
-      pattern: /labels? any ambiguity if lookup\/company overview is unavailable/i,
-      passed: true,
-      reason: "conditional ambiguity disclosure assertion; lookup availability is covered by evidence and provider-gap checks",
-    },
-    {
-      pattern: /states the ticker could not be verified if lookup fails/i,
-      passed: /could not|couldn't|unavailable|not verified|not verify|ambig|missing|unknown|unable|not recognized|no verified|not find|no results|not available/i.test(text),
-      reason: "expected unresolved-ticker disclosure",
-    },
-    {
-      pattern: /does not invent current earnings facts|no invented current earnings facts/i,
-      passed: /could not|unavailable|not verified|not verify|missing|unknown|unable|no current|provider gap/i.test(text) ||
-        !/\b(?:eps|revenue|guidance|beat|miss|reported|consensus|actual)\b/i.test(trace.text),
-      reason: "expected no fabricated current earnings figures",
-    },
-    {
-      pattern: /does not invent an intraday move on weekends or holidays/i,
-      passed: trace.planning?.evidenceRecords.some((record) => record.evidenceType === "market_status") ?? false,
-      reason: "expected market-status evidence before intraday-move claims",
-    },
-    {
-      pattern: /does not invent|no invented|could not be verified|states the ticker could not be verified/i,
-      passed: /could not|unavailable|not verified|not verify|ambig|missing|unknown|unable|not recognized/i.test(text),
-      reason: "expected explicit uncertainty or missing-data disclosure",
-    },
-    {
-      pattern: /distinguishes legacy ticker|legacy\/current|current primary ticker/i,
-      passed: /\barm\b/.test(text) && /armh|legacy|formerly|current ticker|correct ticker|nasdaq/.test(text),
-      reason: "expected current-vs-legacy ticker explanation",
-    },
-    {
-      pattern: /business model|business actually make money|explains durable business model/i,
-      passed: /licens|royalt|revenue|customers|architecture|ip/.test(text),
-      reason: "expected business-model mechanics",
-    },
-    {
-      pattern: /event-risk framework|expected move|trim\/hedge|trim, hedge|trim or hedge|gap risk/i,
-      passed: /trim|hedge|hold|position size|event[- ]risk|earnings|gap risk|stop/.test(text),
-      reason: "expected event-risk decision framework",
-    },
-    {
-      pattern: /bottom line|practical workflow|quick checklist|core mental model|where it misleads|cross-checks/i,
-      passed: /bottom line/.test(text) && /practical workflow/.test(text) && /quick checklist/.test(text),
-      reason: "expected educational section shape",
-    },
-  ];
-  const matching = checks.find((check) => check.pattern.test(assertion));
-  if (!matching) {
-    return {
-      assertion,
-      passed: true,
-      reason: "no deterministic checker registered; treated as informational",
-    };
-  }
-  return {
-    assertion,
-    passed: matching.passed,
-    reason: matching.reason,
-  };
 }
 
 function selectPrompts(prompts: ManifestPrompt[]): ManifestPrompt[] {

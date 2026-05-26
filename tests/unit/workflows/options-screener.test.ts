@@ -69,12 +69,13 @@ describe("buildOptionsScreenerWorkflow", () => {
     expect(followUp).toContain("rho");
   });
 
-  it("follow-up prompt requires plain-language horizon wording for product evals", () => {
+  it("follow-up prompt requires plain-language horizon context without a fixed answer phrase", () => {
     const workflow = buildOptionsScreenerWorkflow(makeResolution({ dteTarget: "25_to_45_days" }));
     const followUp = workflow.followUps[0];
 
     expect(followUp).toContain("State the requested option horizon in plain language");
-    expect(followUp).toContain("literal phrase \"30-day next-month horizon\"");
+    expect(followUp).toContain("25-45 day target");
+    expect(followUp).not.toContain("literal phrase");
   });
 
   it("follow-up prompt preserves max premium caps", () => {

@@ -57,6 +57,27 @@ describe("OpenCandle superiority scorecard", () => {
     expect(scorecard.status).toBe("at_main_parity");
     expect(scorecard.blockers.map((blocker) => blocker.layer)).not.toContain("architectureSignals");
     expect(scorecard.layers.architectureSignals.reasons).toContain("observe-only structured check failures observed: assumption_disclosed");
+    expect(scorecard.layers.architectureSignals.reasons).toContain("structured diagnostics use regex-inferred final-answer metadata; keep them observe-only until typed metadata is available");
+  });
+
+  it("blocks when prompt section budgets exceed the migration ceiling", () => {
+    const scorecard = buildOcSuperiorityScorecard({
+      generatedAt: "2026-05-25T12:00:00.000Z",
+      productReplay: productReplay({ aggregateDelta: 0, passDelta: 0 }),
+      competitiveReplay: competitiveReplay({ openCandleWinDelta: 0, lossDelta: 0, regressed: false }),
+      promptPolicy: promptPolicy({
+        failed: 0,
+        artifactContracts: ["portfolio_exposure_map"],
+        structuredFailures: [],
+        promptBudget: { totalSectionBudget: 32_000, ceiling: 31_500 },
+      }),
+    });
+
+    expect(scorecard.status).toBe("below_main_parity");
+    expect(scorecard.blockers).toContainEqual(expect.objectContaining({
+      layer: "architectureSignals",
+      reason: "prompt section budget 32000 exceeds ceiling 31500",
+    }));
   });
 });
 
@@ -146,6 +167,7 @@ function promptPolicy(input: {
   artifactContracts: string[];
   evidenceTypes?: string[];
   structuredFailures: string[];
+  promptBudget?: { totalSectionBudget: number; ceiling: number };
 }) {
   return {
     generatedAt: "2026-05-25T11:00:00.000Z",
@@ -156,6 +178,7 @@ function promptPolicy(input: {
       passed: input.failed === 0 ? 1 : 0,
       failed: input.failed,
     },
+    promptBudget: input.promptBudget,
     cases: [{
       id: "case-1",
       passed: input.failed === 0,

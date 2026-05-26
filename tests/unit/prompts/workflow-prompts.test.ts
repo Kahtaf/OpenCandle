@@ -101,9 +101,10 @@ describe("buildPortfolioPrompt", () => {
 
   it("requires a direct bottom-line portfolio commitment after assumptions", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
-    expect(prompt).toContain("Then start the analysis with a sentence beginning exactly");
-    expect(prompt).toContain("Bottom line: I would build");
-    expect(prompt).toContain('words "duration" or "forward-looking"');
+    expect(prompt).toContain("Then start the analysis with \"Bottom line:\"");
+    expect(prompt).toContain("directly say what portfolio you would build");
+    expect(prompt).toContain("horizon-specific risks");
+    expect(prompt).not.toContain("beginning exactly");
   });
 
   it("includes position count", () => {

@@ -41,6 +41,10 @@ export interface PromptPolicyManifestLike {
     passed?: number;
     failed?: number;
   };
+  promptBudget?: {
+    totalSectionBudget?: number;
+    ceiling?: number;
+  };
   cases?: unknown[];
 }
 
@@ -147,8 +151,16 @@ function classifyArchitectureSignals(report: PromptPolicyManifestLike | undefine
     reasons.push("artifact-contract or evidence-plan signals missing from prompt-policy report");
   }
   const blockingReasons = [...reasons];
+  const totalSectionBudget = Number(report.promptBudget?.totalSectionBudget ?? 0);
+  const promptBudgetCeiling = Number(report.promptBudget?.ceiling ?? 0);
+  if (totalSectionBudget > 0 && promptBudgetCeiling > 0 && totalSectionBudget > promptBudgetCeiling) {
+    const reason = `prompt section budget ${totalSectionBudget} exceeds ceiling ${promptBudgetCeiling}`;
+    reasons.push(reason);
+    blockingReasons.push(reason);
+  }
   if (structuredFailures.length > 0) {
     reasons.push(`observe-only structured check failures observed: ${[...new Set(structuredFailures)].join(", ")}`);
+    reasons.push("structured diagnostics use regex-inferred final-answer metadata; keep them observe-only until typed metadata is available");
   }
   return {
     status: blockingReasons.length > 0 ? "fail" : "pass",
