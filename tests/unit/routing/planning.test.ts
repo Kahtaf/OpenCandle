@@ -173,6 +173,46 @@ describe("planning layer", () => {
     expect(planning.behaviorMode).toBe("replacement_active");
   });
 
+  it("routes add-to-existing-holdings decisions to portfolio review instead of current event", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "I'm thinking about buying NVDA because of AI. I already own AAPL and TSLA. My goal is 5+ year growth. Does adding NVDA make sense right now?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["NVDA", "AAPL", "TSLA"] },
+        tool_bundles: ["core_market", "macro", "sentiment"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+  });
+
+  it("routes crash-protection questions about an existing portfolio to portfolio review", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "I've got about $50,000 invested, mostly in SPY and a little MSFT. I'm 40 and planning for retirement in 25 years. I'm worried about a big market crash. Does this portfolio look too risky and what's a simple way to protect myself without missing growth?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: ["SPY", "MSFT"] },
+        tool_bundles: ["core_market"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+  });
+
   it("selects valuation-metric education policy for valuation concept prompts", () => {
     const planning = buildPlanningEnvelope(
       {

@@ -546,6 +546,31 @@ describe("route()", () => {
     }));
   });
 
+  it("corrects compare-assets output for existing-portfolio crash-risk prompts", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I've got about $50,000 invested, mostly in SPY and a little MSFT. I'm 40 and planning for retirement in 25 years. I'm worried about a big market crash. Does this portfolio look too risky and what's a simple way to protect myself without missing growth?",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["SPY", "MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "misread portfolio review as asset comparison",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+    }));
+  });
+
   it("corrects portfolio-builder clarification for existing-allocation rebalance prompts", async () => {
     const result = await route(
       {

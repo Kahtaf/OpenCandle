@@ -532,7 +532,7 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
     return "sentiment_snapshot";
   }
-  if (isPortfolioRebalancePrompt(lower)) {
+  if (isPortfolioRebalancePrompt(lower) || isAddToExistingHoldingsPrompt(lower, output.entities.symbols.length)) {
     return "portfolio_review";
   }
   if (/\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower)) {
@@ -594,7 +594,7 @@ function refinePlanningSelectionForPrompt(
 
   if (
     selection.taskFamily === "portfolio_review" &&
-    isPortfolioRebalancePrompt(lower) &&
+    (isPortfolioRebalancePrompt(lower) || isAddToExistingHoldingsPrompt(lower, 2)) &&
     !isExistingRetirementAllocationReviewPrompt(lower)
   ) {
     return {
@@ -689,11 +689,17 @@ function isValuationMetricEducationPrompt(lower: string): boolean {
 
 function isPortfolioRebalancePrompt(lower: string): boolean {
   return /\b(?:portfolio|allocation|holdings?|sleeves?|ira|etfs?|funds?|s&p\s*500|index|equity|bonds?|cash)\b/.test(lower) &&
-    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth)\b/.test(lower);
+    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
+}
+
+function isAddToExistingHoldingsPrompt(lower: string, symbolCount: number): boolean {
+  return symbolCount >= 2 &&
+    /\b(?:already\s+own|already\s+hold|current(?:ly)?\s+own|existing\s+(?:holdings?|portfolio|position)|my\s+portfolio)\b/.test(lower) &&
+    /\b(?:add(?:ing)?|buy(?:ing)?|make\s+sense|fit|long[-\s]?term|growth)\b/.test(lower);
 }
 
 function isExistingRetirementAllocationReviewPrompt(lower: string): boolean {
-  return /\b(?:401k|401\(k\)|retirement|target[-\s]?date|tdf)\b/.test(lower) &&
+  return /\b(?:401k|401\(k\)|target[-\s]?date|tdf)\b/.test(lower) &&
     /\b(?:mostly|current(?:ly)?|already|have|holding|invested|allocation)\b/.test(lower) &&
     /\b(?:review|solid|worried|inflation|diversify|boost returns?|other options?|without taking crazy risks?|risk)\b/.test(lower);
 }

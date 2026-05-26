@@ -55,6 +55,7 @@
 
 ### Fixed
 
+- Competitive prompt regressions now route existing-holdings growth additions and crash-protection reviews into portfolio-review planning, give company/ticker mismatch hype prompts a scoped verification framework, and label option premiums as per-share quotes with standard-contract math.
 - Retail mortgage-vs-investing policy guidance now uses the supplied debt rate instead of carrying benchmark-specific mortgage-rate text into production prompts.
 - Ambiguous ticker prompt-policy evals now accept an `ask_user` ticker clarification as valid unresolved-ticker handling without growing the fallback playbook.
 - Fallback prompt debt guard now keeps fallback-route guidance generic, with domain-specific competitive fixes enforced through policy cards, safety rules, tool/evidence normalization, answer contracts, or structured checks instead of rebuilding a broad playbook.

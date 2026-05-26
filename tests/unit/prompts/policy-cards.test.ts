@@ -191,6 +191,19 @@ describe("policy cards", () => {
     expect(rendered).toContain("risk-first trim/hedge/hold framework");
   });
 
+  it("treats company-name and ticker mismatches as a speculative-red-flag framework", () => {
+    const rendered = renderPolicyCardForPlanning(planning({
+      behaviorMode: "replacement_active",
+    }));
+
+    expect(rendered).toContain("If the supplied company name and ticker resolve to different businesses");
+    expect(rendered).toContain("red flag");
+    expect(rendered).toContain("rumor-driven short-squeeze");
+    expect(rendered).toContain("SEC filings");
+    expect(rendered).toContain("short interest");
+    expect(rendered).toContain("should not act on the hype until the company identity is verified");
+  });
+
   it("renders asset-compare policy only after the slice leaves observe-only mode", () => {
     const assetPlanning = planning({
       taskFamily: "asset_compare",

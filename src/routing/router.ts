@@ -346,6 +346,21 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (next.workflow === "compare_assets" && isPortfolioEvaluationRequest(text)) {
+    diagnostics.push({
+      code: "portfolio_evaluation_corrected_to_agent_task",
+      message: "existing portfolio/allocation risk review should not be reduced to asset comparison",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      diagnostics,
+    };
+  }
+
   if (
     next.routeKind === "agent_task" &&
     !next.workflow &&
@@ -500,7 +515,7 @@ function isCoveredCallRequest(text: string): boolean {
 function isPortfolioEvaluationRequest(text: string): boolean {
   const lower = text.toLowerCase();
   const hasEvaluationIntent =
-    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift)\b/.test(lower);
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|risky|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
   const hasPortfolioObject =
     /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
   const hasConstructionIntent =
