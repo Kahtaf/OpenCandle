@@ -14,11 +14,15 @@ OpenCandle is an open source financial investigator: a terminal agent and local 
 
 ### Terminal UI
 
-<video src="https://raw.githubusercontent.com/Kahtaf/opencandle/main/assets/opencandle-tui.mp4" controls muted playsinline title="OpenCandle terminal UI demo"></video>
+[![OpenCandle terminal UI demo](./assets/opencandle-tui-poster.png)](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-tui.mp4)
+
+[Watch the terminal UI demo](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
 
 ### Local GUI
 
-<video src="https://raw.githubusercontent.com/Kahtaf/opencandle/main/assets/opencandle-gui.mp4" controls muted playsinline title="OpenCandle local GUI demo"></video>
+[![OpenCandle local GUI demo](./assets/opencandle-gui-poster.png)](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-gui.mp4)
+
+[Watch the local GUI demo](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
 
 ## Why OpenCandle
 
