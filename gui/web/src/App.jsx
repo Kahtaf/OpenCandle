@@ -3,6 +3,7 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ChatPanel } from "./features/chat/ChatPanel.jsx";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
+import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
 import { routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
@@ -22,9 +23,9 @@ export function AppShell() {
   const [liveBaseEntryCount, setLiveBaseEntryCount] = useState(0);
   const chatRun = useChatRun({
     setToast: gui.setToast,
-    onRunStart: useCallback(() => {
+    onRunStart: useCallback((prompt) => {
       setLiveBaseEntryCount(gui.entries.length);
-      setLiveEvents([]);
+      setLiveEvents(createOptimisticUserMessageEvents(prompt));
     }, [gui.entries.length]),
     onEvent: useCallback((event) => {
       setLiveEvents((current) => [...current, event]);

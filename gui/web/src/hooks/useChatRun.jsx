@@ -11,7 +11,7 @@ export function useChatRun({ setToast, onEvent, onRunStart }) {
     setLastPrompt(trimmed);
     setRunState("connecting");
     setToast("");
-    onRunStart?.();
+    onRunStart?.(trimmed);
     const abort = new AbortController();
     abortRef.current = abort;
 

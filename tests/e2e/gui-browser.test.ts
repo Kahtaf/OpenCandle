@@ -284,6 +284,45 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
+  it("shows the submitted user message before delayed server run events", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+    await mocked.addInitScript(() => {
+      window.fetch = () => {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(controller) {
+            await new Promise((resolve) => {
+              window.__releaseDelayedRun = resolve;
+            });
+            const send = (payload) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            send({ type: "run.started", runId: "delayed-run", sessionId: "mock-session", seq: 1 });
+            send({ type: "message.created", messageId: "assistant-live", role: "assistant", seq: 2 });
+            send({ type: "message.delta", messageId: "assistant-live", text: "Delayed answer", seq: 3 });
+            send({ type: "run.completed", runId: "delayed-run", seq: 4 });
+            controller.close();
+          },
+        });
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await mocked.getByLabel("Message OpenCandle").fill("Delayed prompt");
+    await mocked.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(mocked.getByText("Delayed prompt"));
+    await expectVisible(mocked.getByText("Working"));
+    await expect(mocked.getByText("Delayed answer").count()).resolves.toBe(0);
+
+    await mocked.evaluate(() => window.__releaseDelayedRun?.());
+    await expectVisible(mocked.getByText("Delayed answer"));
+    await mocked.close();
+  }, 30_000);
+
   it("routes a home prompt to the server-emitted run session", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
