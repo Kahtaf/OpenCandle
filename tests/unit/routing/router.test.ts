@@ -1028,4 +1028,29 @@ describe("ResolvedTurnContext", () => {
     expect(context.planning.version).toBe("planning-v1");
     expect(context.planning.taskFamily).toBe("single_asset_decision");
   });
+
+  it("applies planning migration status overrides to the resolved context", async () => {
+    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
+      routeKind: "agent_task",
+      entities: { symbols: ["AAPL"] },
+      slots: {
+        symbol: { value: "AAPL", source: "user", confidence: "high" },
+      },
+      preference_updates: [],
+      missing_required: [],
+      diagnostics: [],
+      reasoning: "single asset decision",
+    })));
+    const context = buildResolvedTurnContext(BASE_INPUT, output, {
+      availableToolNames: ["get_stock_quote", "search_ticker"],
+      planning: {
+        migrationStatuses: {
+          single_asset_decision: "dual_run",
+        },
+      },
+    });
+
+    expect(context.planning.taskFamily).toBe("single_asset_decision");
+    expect(context.planning.behaviorMode).toBe("dual_run");
+  });
 });

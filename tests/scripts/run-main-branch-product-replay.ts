@@ -2,7 +2,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { spawnSync } from "node:child_process";
 import type { ProductEvalReport } from "../evals/product/types.js";
 import {
   buildProductReplayComparison,
@@ -11,10 +10,12 @@ import {
   unsupportedProductReplayRun,
   writeProductReplayComparisonReport,
 } from "../evals/main-branch-replay.js";
+import { runSubprocess, type SubprocessResult } from "../evals/subprocess-runner.js";
 
 const cwd = process.cwd();
 const baseRef = argValue("--base-ref") ?? process.env.PRODUCT_REPLAY_BASE_REF ?? "origin/main";
 const currentRef = currentGitRef(cwd);
+const productReplayTimeoutMs = numberFromEnv("PRODUCT_REPLAY_TIMEOUT_MS") ?? 1_000_000;
 
 const currentRun = runProductEval(cwd, currentRef);
 const baseWorktree = mkdtempSync(join(tmpdir(), "oc-product-replay-base-"));
@@ -54,10 +55,17 @@ console.log(`Report: ${outputPath}`);
 
 function runProductEval(workdir: string, ref: string) {
   const before = findLatestProductEvalReport(workdir);
-  const result = run("npm", ["run", "test:evals:product"], workdir, "inherit");
+  const result = run("npm", ["run", "test:evals:product"], workdir, "inherit", {
+    timeoutMs: productReplayTimeoutMs,
+  });
+  if (result.timedOut) {
+    const reason = outputSummary(result, workdir);
+    if (workdir === cwd) throw new Error(reason);
+    return unsupportedProductReplayRun(ref, reason);
+  }
   const reportPath = findLatestProductEvalReport(workdir);
   if (!reportPath || reportPath === before) {
-    const reason = outputSummary(result) || `product eval did not produce a report for ${ref}`;
+    const reason = outputSummary(result, workdir) || `product eval did not produce a report for ${ref}`;
     if (workdir === cwd) throw new Error(reason);
     return unsupportedProductReplayRun(ref, reason);
   }
@@ -102,25 +110,33 @@ function run(
   args: string[],
   workdir: string,
   stdio: "inherit" | "pipe",
-): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync(command, args, {
-    cwd: workdir,
-    env: process.env,
-    encoding: "utf-8",
+  options: { timeoutMs?: number } = {},
+): SubprocessResult {
+  return runSubprocess(command, args, {
+    workdir,
     stdio,
+    timeoutMs: options.timeoutMs,
   });
-  return {
-    status: result.status,
-    stdout: typeof result.stdout === "string" ? result.stdout : "",
-    stderr: typeof result.stderr === "string" ? result.stderr : "",
-  };
 }
 
-function outputSummary(result: { status: number | null; stdout: string; stderr: string }): string {
+function outputSummary(result: SubprocessResult, workdir = process.cwd()): string {
+  if (result.timedOut) {
+    return `${basename(workdir)} command timed out after ${result.timeoutMs ?? "unknown"}ms`;
+  }
   const output = `${result.stderr}\n${result.stdout}`.trim();
   const lastLine = output.split("\n").map((line) => line.trim()).filter(Boolean).at(-1);
-  if (lastLine) return `${basename(process.cwd())} command exited ${result.status}: ${lastLine}`;
+  if (lastLine) return `${basename(workdir)} command exited ${result.status}: ${lastLine}`;
   return result.status === 0 ? "" : `command exited ${result.status}`;
+}
+
+function numberFromEnv(name: string): number | undefined {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid ${name}="${value}". Expected a positive number of milliseconds.`);
+  }
+  return parsed;
 }
 
 function formatDelta(value: number): string {

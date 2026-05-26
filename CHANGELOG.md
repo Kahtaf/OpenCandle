@@ -52,6 +52,8 @@
 
 ### Fixed
 
+- Planning migration rollback overrides can now be applied at runtime with `OPENCANDLE_PLANNING_MIGRATION_STATUSES`, so replacement-active task families can be demoted to `dual_run` or `observe_only` without editing the planning manifest.
+- Main-branch product replay subprocesses now have a bounded timeout, preventing stale eval processes from hanging replay comparison and worktree cleanup indefinitely.
 - Production prompt assembly now reports per-section lengths and prevents active non-memory section truncation across standard, fallback, workflow dispatch, clarification, pass-through, and no-tool variants.
 - Exact SEC filing lookups now filter EDGAR search results to the requested company, resolve common tickers through the SEC submissions feed, and avoid text-search decoys.
 - Covered-call recommendations no longer use long-call premium-paid max-loss framing; weekly and `1-2 week` horizons normalize to 7-to-14-day expirations, and fallback guidance keeps usable candidates when option quotes are stale or incomplete.
