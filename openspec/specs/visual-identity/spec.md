@@ -7,7 +7,7 @@
 - Logo uses a candle or candlestick motif consistent with the project name
 - Demo videos show the real TUI and local GUI experiences
 - README displays poster images in or near the intro that link to the demo videos
-- README video links use GitHub blob/raw URLs so the demos are reachable from GitHub and npmjs.com
+- README video links use CDN URLs that serve `video/mp4`, with GitHub raw URLs as download fallbacks
 - `assets/` is NOT included in the npm tarball - `package.json` `files` remains `["dist"]`
 
 ### Acceptance

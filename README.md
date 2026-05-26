@@ -14,15 +14,15 @@ OpenCandle is an open source financial investigator: a terminal agent and local 
 
 ### Terminal UI
 
-[![OpenCandle terminal UI demo](./assets/opencandle-tui-poster.png)](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-tui.mp4)
+[![OpenCandle terminal UI demo](./assets/opencandle-tui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4)
 
-[Watch the terminal UI demo](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
+[Watch the terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
 
 ### Local GUI
 
-[![OpenCandle local GUI demo](./assets/opencandle-gui-poster.png)](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-gui.mp4)
+[![OpenCandle local GUI demo](./assets/opencandle-gui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4)
 
-[Watch the local GUI demo](https://github.com/Kahtaf/OpenCandle/blob/main/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
+[Watch the local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
 
 ## Why OpenCandle
 
