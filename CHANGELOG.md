@@ -4,49 +4,30 @@
 
 ### Added
 
-- **Scoped improvement guardrails** — competitive-regression docs and a local unit guard now steer future fixes toward the narrowest durable layer: task selection, entity extraction, tool capability, evidence clarity, answer shape, structured checks, eval assertions, or harness behavior.
-- **Traceable finance answer framework** — OpenCandle now records task family, answer intent, evidence-plan IDs, capability gaps, diagnostics, and structured-check results in traces so reviewers can see why a run chose its evidence path and answer shape.
-- **Finance-specific answer guidance** — ticker disambiguation, current events, concept education, sentiment, filings, retail tradeoffs, asset comparison, single-asset decisions, macro allocation, options, portfolio review, backtests, and state-tracking prompts now have scoped answer guidance and test coverage.
-- **Competitive quality evidence** — reference replay reports, product scorecards, semantic answer checks, and competitive benchmark summaries make OpenCandle's finance-agent quality measurable without baking one-off prompt text into production behavior.
-- **ETF holdings overlap tool** — `analyze_holdings_overlap` fetches Yahoo fund top-holdings data and computes pairwise ETF/fund overlap by weight, giving portfolio and ETF comparison prompts a provider-backed alternative to generic correlation-only overlap checks.
-- **ETF overlap workflow coverage** — asset-comparison prompts now use holdings-overlap evidence for ETF/fund diversification checks before relying on correlation-only evidence.
-- **Product eval hardening** — product eval scoring now recognizes commitment-led portfolio answers, 30-day/next-month options horizons, incomplete/caution sentiment risk framing, family-aware output shapes, and unregistered hard assertions.
-- **Competitive finance benchmark loop** — `npm run test:evals:competitive` compares OpenCandle against generic no-tool Claude, Codex, and Gemini baselines through `acpx`, generates broad finance prompts at runtime, supports fixed-prompt reruns, judges results with a configured model, and writes ignored JSON reports under `tests/evals/runs/`. The loop is documented in `docs/internal/competitive-benchmarking.md`, including the iteration pattern for turning generic-agent wins or OC quality gaps into targeted product fixes.
-- **Shared in-process OpenCandle test harness** — `tests/harness/opencandle-runner.ts` runs OpenCandle sessions without driving the TTY, captures tool calls, `ask_user` interactions, workflow/request-understanding entries, and eval traces, and is now reused by eval suites and the competitive benchmark runner.
-- **GUI `ask_user` bridge** — the local GUI now renders pending clarification prompts, accepts text/select/confirm answers, supports cancellation, scopes prompts to the active session, and broadcasts prompt state to connected browser clients.
-- **Session helpers for the GUI** — browser routes now hide stale transcript entries during session switches, start a fresh home session when appropriate, and keep pending `ask_user` prompts tied to the correct session.
-- **Newcomer documentation revamp** — README, docs index, and the docs site now cover first run setup, TUI usage, GUI preview, configuration files, environment variables, benchmarking, evals, screenshots, and the difference between OpenCandle's finance-specific strengths and generic agents.
-- **SEC filing evidence snippets** — SEC filing search can now include primary document URLs, 8-K item metadata, ticker-to-CIK submissions feed lookup, and short evidence snippets for filing-thesis and risk prompts.
+- **Layered financial request understanding** — OpenCandle now breaks user questions into traceable financial tasks, entities, clarification needs, evidence plans, tool capability gaps, and answer-shape guidance. This makes complex prompts easier to inspect, test, and improve without relying on one broad instruction surface.
+- **Stronger finance answers across real retail workflows** — OpenCandle is better at ticker disambiguation, current-event questions, concept education, sentiment reads, filing reviews, asset comparisons, options, portfolio reviews, backtests, and state-tracking prompts. Answers are more direct about what evidence was gathered, what is missing, and what risks could change the conclusion.
+- **GUI clarification flow** — the local browser GUI now supports `ask_user` follow-ups, including text, select, and confirm answers. Pending questions stay scoped to the active session and can be answered without leaving the GUI.
+- **ETF holdings overlap analysis** — `analyze_holdings_overlap` fetches Yahoo fund holdings and computes pairwise ETF/fund overlap by weight, giving ETF diversification questions a direct holdings-based signal instead of relying only on correlation.
+- **Quality and parity evaluation harnesses** — OpenCandle now has in-process session replay, competitive finance benchmarking, semantic answer checks, and product scorecards that compare OpenCandle against generic no-tool agents and preserve evidence for regression review.
+- **Newcomer documentation and docs site refresh** — README, docs, and the published site now explain OpenCandle in plain language, show a populated GUI workflow, document first-run setup, and include favicon, sitemap, and robots metadata.
 
 ### Changed
 
-- **Request understanding** — OpenCandle now keeps task selection, entity extraction, clarification, tool-bundle suggestions, and answer-shape guidance traceable for review.
-- **Prompt assembly diagnostics** — production prompt assembly now reports per-section lengths and prevents active non-memory section truncation across standard, workflow dispatch, clarification, pass-through, and no-tool variants.
-- **Macro and portfolio handling** — macro/rates/portfolio prompts ask the agent to convert raw economic series into interpretable rates or trends and to search for direct regional macro facts before declaring data unavailable.
-- **Competitive runner portability** — the benchmark runner no longer contains user-specific executable or Node paths, resolves Claude from `CLAUDE_CODE_EXECUTABLE` or `PATH`, prefers useful stdout answers over stderr diagnostics on non-zero adapter exits, and keeps unavailable baselines in `skippedCompetitors` unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
-- **Finance workflow evidence** — sentiment, backtest, rate-cut, SEC filing, bull/bear, options, compare, and owned-holdings risk prompts now land on more useful tool-backed paths. Compare workflows can request sentiment evidence; options screener output now includes full Greeks in the final table.
-- **Open-source hygiene** — package metadata, license text, and archived OpenSpec examples no longer contain personal repository URLs or local home-directory paths.
-- **Covered-call workflow context** — options screener prompts now preserve cost basis, owned-underlying context, catalyst tickers, natural-language DTE hints, stale quote caveats, and broker-verification guidance.
+- **Evidence-first workflow selection** — prompts involving sentiment, filings, macro context, options, holdings, ETF overlap, and portfolio risk now route toward more useful evidence paths before synthesis.
+- **More practical answer framing** — educational, portfolio, options, and single-asset prompts now favor decision frameworks, confidence bands, invalidation levels, and explicit downside risks over generic market commentary.
+- **Better macro and portfolio interpretation** — macro, rates, regional housing, mortgage-vs-investing, and allocation prompts now turn raw series into rates, trends, tradeoffs, and caveats that are easier to act on.
+- **Portable competitive benchmarking** — eval and benchmark tooling is easier to run across machines, handles missing competitors more gracefully, and records skipped baselines separately from OpenCandle quality failures.
+- **Open-source release hygiene** — package metadata, docs, archived examples, and release-facing copy were cleaned up for public consumption.
 
 ### Fixed
 
-- GUI chat submission now shows the user's message bubble immediately before the working indicator and eventual response.
-- Docs site newcomer flow now uses a populated GUI screenshot, aligns homepage install commands with the package install path, defines Pi earlier, names supported model providers, adds finance boundaries, and emits favicon, robots, and sitemap files.
-- Existing-holdings growth additions and crash-protection reviews now use portfolio-review behavior instead of single-asset or simple comparison behavior.
-- Company/ticker mismatch hype prompts now warn that identity is unverified and give a verification checklist before discussing speculative catalysts.
-- Option-chain output now labels bid/ask and last prices as per-share quotes and states the 100-share contract math.
-- Retail mortgage-vs-investing guidance now uses the user's supplied debt rate instead of benchmark-specific wording.
-- Ambiguous ticker event-risk prompts now accept an `ask_user` clarification as valid unresolved-ticker handling and continue with a risk framework when the symbol cannot be verified.
-- Product replay subprocesses now have a bounded timeout, preventing stale eval processes from hanging comparison and worktree cleanup indefinitely.
-- Exact SEC filing lookups now filter EDGAR search results to the requested company, resolve common tickers through the SEC submissions feed, and avoid text-search decoys.
-- Covered-call recommendations no longer use long-call premium-paid max-loss framing; weekly and `1-2 week` horizons normalize to 7-to-14-day expirations, and fallback guidance keeps usable candidates when option quotes are stale or incomplete.
-- Portfolio slot resolution now honors ETF-focused scope and explicit multi-year horizons from the user prompt.
-- GUI options follow-up prompts no longer drop gamma, theta, vega, and rho from the ranked contract table.
-- Generic finance workflow selection no longer leaks benchmark-specific macro-hedge guidance, misreads lowercase asset-class or macro nouns as tickers, treats cost basis as portfolio budget, or strands the GUI home screen when HTTP fallback mode cannot issue session actions.
-- Competitive Codex baseline preflight now uses the ACP adapter's advertised model id syntax by default.
-- Competitive judge parsing now repairs common missing-comma JSON so benchmark runs are less likely to abort after model formatting glitches.
-- Retail-investor prompts now handle brokerage selection, ETF tradeoffs/overlap, ticker aliases, unknown-ticker earnings risk, crypto position sizing, and market-closed "today" move questions with more direct guidance instead of punting or sending tradeoffs to portfolio construction.
-- Task metadata now normalizes dispatchable compare workflows, keeps crypto sizing in advisory behavior instead of portfolio construction, and prefers specific sentiment, SEC filing, current-event, ticker-disambiguation, retail, and macro task families over generic single-asset metadata.
+- GUI chat submissions now show the user's message immediately, then the working indicator, then the streamed response.
+- Ambiguous or unverified tickers now trigger clearer clarification and risk-framework behavior instead of invented facts.
+- SEC filing lookups now resolve common tickers more reliably, filter results to the requested company, and avoid text-search decoys.
+- Options and covered-call outputs now preserve owned-underlying context, natural-language horizons, cost basis, stale quote caveats, full Greeks, and correct per-share versus per-contract pricing language.
+- Existing-holdings and portfolio prompts now respect explicit time horizons, ETF-focused scope, and crash-protection intent.
+- Retail-investor prompts now handle brokerage selection, ETF overlap, crypto sizing, market-closed movement questions, and mortgage-vs-investing tradeoffs with more direct guidance.
+- Product replay and competitive-judge tooling now have stronger timeouts and JSON repair paths, reducing flaky eval failures during release validation.
 
 ## [0.4.0] - 2026-05-16
 
