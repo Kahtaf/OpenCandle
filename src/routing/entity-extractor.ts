@@ -277,6 +277,8 @@ function extractTimeHorizon(input: string): string | undefined {
 function extractAssetScope(input: string): string | undefined {
   const lower = input.toLowerCase();
   if (/\betfs?\b/.test(lower)) return "etf_focused";
+  if (/\bfunds?\b/.test(lower)) return "fund_focused";
+  if (/\bindex\s+(?:funds?|products?)\b/.test(lower)) return "index_focused";
   return undefined;
 }
 

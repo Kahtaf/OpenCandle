@@ -3,6 +3,8 @@ import { buildCompareAssetsPrompt } from "../prompts/workflow-prompts.js";
 import type { WorkflowPlan } from "./types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
+import { areLikelyFundOrIndexSymbols, isFundOrIndexAssetScope } from "../routing/fund-symbols.js";
+import { isLongInvestmentHorizon } from "../routing/horizon.js";
 
 export function buildCompareAssetsWorkflowDefinition(
   resolution: SlotResolution<CompareAssetsSlots>,
@@ -12,10 +14,16 @@ export function buildCompareAssetsWorkflowDefinition(
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
   const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
   const isOverlapComparison = resolution.resolved.metrics?.includes("overlap") ?? false;
+  const hasFundContext =
+    isFundOrIndexAssetScope(resolution.resolved.assetScope) ||
+    areLikelyFundOrIndexSymbols(resolution.resolved.symbols);
+  const shouldProbeFundOverlap = !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
   const evidenceList = resolution.resolved.metrics?.includes("sentiment")
     ? "price, technical, risk, and sentiment data"
     : isOverlapComparison
       ? "quote, holdings-overlap, and correlation data"
+      : shouldProbeFundOverlap
+        ? "price, technical, risk, correlation, and holdings-overlap data when applicable"
     : "price, technical, and risk data";
   const horizonGuidance = timeHorizon
     ? `
@@ -40,9 +48,19 @@ export function buildCompareAssetsWorkflowDefinition(
 - For ETF overlap prompts, synthesize the holdings-overlap and shared-exposure evidence first, with correlation only as supporting diversification context.
 - State the diversification implication directly: deliberate factor tilt, accidental duplication, or genuinely differentiated exposure.
 - If provider holdings coverage was partial or unavailable, say that before giving the practical next step.`
+    : shouldProbeFundOverlap
+      ? `
+- If these assets are ETFs, funds, or index products, synthesize holdings-overlap and shared-exposure evidence before correlation when that provider evidence is available.
+- Compare fund role, broad style or sector tilt, dividend/income versus growth tradeoffs, taxable-account dividend drag, and any fetched expense ratio, yield, or AUM evidence.
+- If expense ratio, yield, AUM, or constituent detail is unavailable, name that verification gap instead of filling it with approximate fund facts.
+- If provider holdings coverage was partial or unavailable, say that before giving the practical next step.`
     : "";
   const verdictInstruction = isOverlapComparison
     ? "End with a concise verdict on whether the added fund improves diversification or mostly duplicates existing exposure."
+    : shouldProbeFundOverlap
+      ? "End with a concise verdict tied to the user's horizon, fund roles, and diversification needs rather than short-term timing."
+      : timeHorizon
+        ? `End with a concise verdict on which asset best fits the ${timeHorizon} horizon and why.`
     : "End with a concise verdict on which asset looks strongest right now and why.";
 
   return {

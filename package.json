@@ -107,6 +107,7 @@
     "test:evals:product": "tsx tests/scripts/run-product-evals.ts",
     "test:evals:competitive": "tsx tests/scripts/run-competitive-finance-eval.ts",
     "eval:competitive:analyze": "tsx tests/scripts/analyze-competitive-finance-report.ts",
+    "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --base origin/main --prompt-file .agents/skills/autoreview/references/opencandle-review.md",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
     "version:major": "npm version major --no-git-tag-version",

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import { getFundHoldings } from "../../../src/providers/yahoo-finance.js";
+import { clearCrumbCache, getFundHoldings } from "../../../src/providers/yahoo-finance.js";
 import type { FundHoldings } from "../../../src/types/portfolio.js";
 import vooFixture from "../../fixtures/yahoo/VOO-holdings.json";
 
@@ -9,6 +9,7 @@ describe("Yahoo fund holdings provider", () => {
 
   beforeEach(() => {
     cache.clear();
+    clearCrumbCache();
   });
 
   afterEach(() => {
@@ -88,6 +89,71 @@ describe("Yahoo fund holdings provider", () => {
       { symbol: "AAPL", name: "Apple", weight: 0.072 },
     ]);
     expect(holdings.sectorWeights).toEqual({ technology: 0.31 });
+  });
+
+  it("normalizes Yahoo raw/fmt numeric wrapper weights", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        quoteSummary: {
+          result: [{
+            price: { symbol: "ETF", shortName: "ETF" },
+            topHoldings: {
+              holdings: [
+                { symbol: "AAPL", holdingName: "Apple", holdingPercent: { raw: 0.072, fmt: "7.20%" } },
+                { symbol: "MSFT", holdingName: "Microsoft", holdingPercent: { raw: 6.5, fmt: "6.50%" } },
+              ],
+              equityHoldings: {
+                sectorWeightings: [
+                  { technology: { raw: 0.31, fmt: "31.00%" } },
+                ],
+              },
+            },
+          }],
+          error: null,
+        },
+      }),
+    });
+
+    const holdings = await getFundHoldings("ETF");
+
+    expect(holdings.holdings).toEqual([
+      { symbol: "AAPL", name: "Apple", weight: 0.072 },
+      { symbol: "MSFT", name: "Microsoft", weight: 0.065 },
+    ]);
+    expect(holdings.sectorWeights).toEqual({ technology: 0.31 });
+  });
+
+  it("retries quoteSummary holdings with Yahoo crumb auth after an auth failure", async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        text: () => Promise.resolve("Unauthorized"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => "A1=session-cookie; Path=/;" },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve("crumb123"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(vooFixture),
+      });
+
+    const holdings = await getFundHoldings("VOO");
+
+    expect(holdings.holdings[0]).toEqual({ symbol: "AAPL", name: "Apple Inc.", weight: 0.072 });
+    expect(fetch).toHaveBeenLastCalledWith(
+      expect.stringContaining("crumb=crumb123"),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Cookie: "A1=session-cookie" }),
+      }),
+    );
   });
 
   it("returns a stale cached holdings payload when the provider fails", async () => {

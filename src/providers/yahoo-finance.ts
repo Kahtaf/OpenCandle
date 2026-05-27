@@ -1,4 +1,4 @@
-import { httpGet } from "../infra/http-client.js";
+import { HttpError, httpGet } from "../infra/http-client.js";
 import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { StealthBrowser } from "../infra/browser.js";
@@ -9,6 +9,8 @@ import { computeGreeks } from "../tools/options/greeks.js";
 
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
+
+type YahooNumber = number | { raw?: number; fmt?: string };
 
 interface YahooChartResponse {
   chart: {
@@ -42,10 +44,10 @@ interface YahooQuoteSummaryResponse {
         holdings?: Array<{
           symbol?: string;
           holdingName?: string;
-          holdingPercent?: number;
+          holdingPercent?: YahooNumber;
         }>;
         equityHoldings?: {
-          sectorWeightings?: Array<Record<string, number>>;
+          sectorWeightings?: Array<Record<string, YahooNumber>>;
         };
       };
     }>;
@@ -162,11 +164,7 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
   try {
     await rateLimiter.acquire("yahoo");
 
-    const modules = encodeURIComponent("price,topHoldings");
-    const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(normalizedSymbol)}?modules=${modules}`;
-    const data = await httpGet<YahooQuoteSummaryResponse>(url, {
-      headers: { "User-Agent": "OpenCandle/1.0" },
-    });
+    const data = await getFundHoldingsSummary(normalizedSymbol);
     const result = data.quoteSummary.result?.[0];
     if (data.quoteSummary.error) {
       throw new Error(`Yahoo Finance: ${data.quoteSummary.error.description ?? data.quoteSummary.error.code ?? "quoteSummary error"}`);
@@ -204,13 +202,54 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
   }
 }
 
-function normalizeHoldingWeight(value: number | undefined): number | undefined {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
-  return value > 1 ? roundWeight(value / 100) : roundWeight(value);
+async function getFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
+  try {
+    return await fetchFundHoldingsSummary(symbol);
+  } catch (error) {
+    if (!isYahooAuthError(error)) throw error;
+    return fetchFundHoldingsSummaryWithCrumb(symbol);
+  }
+}
+
+async function fetchFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
+  const modules = encodeURIComponent("price,topHoldings");
+  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}`;
+  return httpGet<YahooQuoteSummaryResponse>(url, {
+    headers: { "User-Agent": "OpenCandle/1.0" },
+  });
+}
+
+async function fetchFundHoldingsSummaryWithCrumb(symbol: string): Promise<YahooQuoteSummaryResponse> {
+  const modules = encodeURIComponent("price,topHoldings");
+  const { crumb, cookie } = await getYahooCrumb();
+  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
+  try {
+    return await httpGet<YahooQuoteSummaryResponse>(url, {
+      headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
+    });
+  } catch (error) {
+    if (!isYahooAuthError(error)) throw error;
+    clearCrumbCache();
+    const fresh = await getYahooCrumb();
+    const retryUrl = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(fresh.crumb)}`;
+    return httpGet<YahooQuoteSummaryResponse>(retryUrl, {
+      headers: { "User-Agent": BROWSER_UA, Cookie: fresh.cookie },
+    });
+  }
+}
+
+function isYahooAuthError(error: unknown): boolean {
+  return error instanceof HttpError && (error.status === 401 || error.status === 429);
+}
+
+function normalizeHoldingWeight(value: YahooNumber | undefined): number | undefined {
+  const numeric = typeof value === "number" ? value : value?.raw;
+  if (numeric === undefined || !Number.isFinite(numeric) || numeric <= 0) return undefined;
+  return numeric > 1 ? roundWeight(numeric / 100) : roundWeight(numeric);
 }
 
 function normalizeSectorWeights(
-  sectors: Array<Record<string, number>> | undefined,
+  sectors: Array<Record<string, YahooNumber>> | undefined,
 ): Record<string, number> | undefined {
   if (!sectors?.length) return undefined;
   const weights: Record<string, number> = {};

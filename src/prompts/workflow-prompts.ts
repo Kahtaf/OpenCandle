@@ -7,6 +7,8 @@ import type {
 } from "../routing/types.js";
 import type { RouterOutput } from "../routing/router-types.js";
 import { parseDteTarget } from "../routing/defaults.js";
+import { areLikelyFundOrIndexSymbols, isFundOrIndexAssetScope } from "../routing/fund-symbols.js";
+import { isLongInvestmentHorizon } from "../routing/horizon.js";
 
 function tag(source: string | undefined): string {
   switch (source) {
@@ -336,10 +338,13 @@ export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAsset
   const symbols = resolution.resolved.symbols;
   const symbolList = symbols.join(", ");
   const timeHorizon = resolution.resolved.timeHorizon;
+  const budget = resolution.resolved.budget;
   const includeSentiment = resolution.resolved.metrics?.includes("sentiment") ?? false;
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
   const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
   const isOverlapComparison = resolution.resolved.metrics?.includes("overlap") ?? false;
+  const hasFundContext = isFundOrIndexAssetScope(resolution.resolved.assetScope) || areLikelyFundOrIndexSymbols(symbols);
+  const shouldProbeFundOverlap = !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
   const sentimentStep = includeSentiment
     ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
@@ -365,6 +370,15 @@ ETF overlap guidance:
 - Use provider top holdings and overlap weights when available. If provider coverage is partial or unavailable, say so directly and fall back to plain-language fund structure.
 - Discuss top holdings, shared mega-cap names, sector concentration, and whether the position is a deliberate tilt or accidental duplication.
 - avoid treating price, RSI, or generic risk metrics as the main answer.`
+    : shouldProbeFundOverlap
+      ? `
+ETF/fund overlap check:
+- If these assets are ETFs, funds, or index products, use provider-backed holdings-overlap evidence before making diversification claims.
+- Compare fund role, style/factor tilt, concentration, and broad sector exposure when available; do not invent exact holdings or weights.
+- For dividend/income funds versus growth funds over multi-year horizons, explain taxable account dividend drag: dividends can be taxed annually even when reinvested, while more return may be deferred as capital gains in growth-oriented funds. Contrast that with tax-advantaged accounts.
+- Include expense ratios, dividend yields, and AUM only when fetched evidence supports them; otherwise tell the user to verify current fund facts before acting.
+- Treat holdings overlap and sector concentration as different from correlation; correlation is supporting evidence, not a substitute for constituent exposure.
+- If provider holdings coverage is partial or unavailable, say so directly and continue with the available price, risk, and correlation evidence.`
     : "";
   const macroHedgeSteps = isMacroHedge
     ? `
@@ -380,16 +394,24 @@ macro hedge decision guidance:
     ? "- Present a comparison table with hedge-relevant columns: hedge role, macro drivers, volatility/drawdown evidence, correlation regime, liquidity/risk-on sensitivity, current data, and missing evidence."
     : isOverlapComparison
       ? "- Present an ETF overlap table with columns: fund role, shared top holdings/overlap weight from provider when available, sector concentration, what exposure is duplicated, what exposure is new, and diversification implication."
+      : shouldProbeFundOverlap
+        ? "- Present a long-horizon fund comparison table with columns: fund role/style, dividend/income versus growth tradeoff, risk evidence, holdings-overlap availability, tax and expense/yield/AUM verification gaps, and horizon fit."
     : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
 - Highlight which asset is stronger on each metric.`;
   const technicalRiskSteps = isOverlapComparison
     ? `3. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
 4. Use analyze_correlation across [${symbolList}] only as supporting diversification evidence; do not substitute correlation for holdings overlap.
 5. Skip momentum/risk tool calls unless the user asks about timing or trade setup; the core question is top holdings and sector overlap.`
+    : shouldProbeFundOverlap
+      ? `3. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
+4. Use analyze_correlation across [${symbolList}] as supporting diversification evidence.
+5. Use analyze_risk for each to compare long-horizon risk context.
+6. Use get_technical_indicators only as secondary timing context; do not let RSI or short-term momentum dominate the long-horizon fund decision.`
     : `3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
 5. Use analyze_correlation across [${symbolList}] to check diversification.`;
   const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";
+  const budgetLine = budget !== undefined ? `\nBudget: ${formatBudget(budget)}` : "";
   const horizonSteps = timeHorizon
     ? `
 6. Adapt the comparison to the ${timeHorizon} horizon: prioritize near-term catalysts, earnings/guidance, estimate revisions, sentiment, and forward-looking valuation evidence over long-term historical averages.
@@ -406,6 +428,8 @@ macro hedge decision guidance:
     {
       symbols: symbolList,
       ...(timeHorizon ? { timeHorizon } : {}),
+      ...(budget !== undefined ? { budget: formatBudget(budget) } : {}),
+      ...(resolution.resolved.assetScope ? { assetScope: resolution.resolved.assetScope } : {}),
       ...(resolution.resolved.metrics ? { metrics: resolution.resolved.metrics.join(", ") } : {}),
     },
     resolution.sources as Record<string, SlotSource | undefined>,
@@ -413,7 +437,7 @@ macro hedge decision guidance:
 
   return `Current date: ${todayStr()}
 
-Compare these assets side by side: ${symbolList}${horizonLine}
+Compare these assets side by side: ${symbolList}${horizonLine}${budgetLine}
 
 Steps:
 1. Use get_stock_quote for each of: ${symbolList}.
