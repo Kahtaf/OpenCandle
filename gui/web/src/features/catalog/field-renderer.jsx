@@ -1,23 +1,19 @@
 import { Input } from "../../components/ui/input.jsx";
 import {
-  DAYS_PRESETS,
   DateInput,
   EnumSelect,
   Field,
   FreeText,
-  FRESHNESS_OPTIONS,
-  HOURS_PRESETS,
   MoneyInput,
   MultiSelectChips,
   NumberWithChips,
   PercentInput,
-  PERIOD_OPTIONS,
-  RANGE_OPTIONS,
   SegmentedControl,
   SuggestionCloud,
   SymbolChips,
   SymbolInput,
 } from "./form-primitives.jsx";
+import { DAYS_PRESETS, FRESHNESS_OPTIONS, HOURS_PRESETS, PERIOD_OPTIONS, RANGE_OPTIONS } from "./form-presets.js";
 
 const PRESET_REGISTRY = {
   DAYS_PRESETS,
@@ -55,7 +51,7 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
     case "symbols":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <SymbolChips value={value || []} onChange={setValue} min={field.min} max={field.max} placeholder={field.placeholder} />
+          <SymbolChips value={value || []} onChange={setValue} min={field.min} max={field.max} placeholder={field.placeholder} ariaLabel={field.label} />
         </Field>
       );
 
@@ -97,7 +93,7 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
     case "freetext":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <FreeText value={value} onChange={setValue} placeholder={field.placeholder} maxLength={field.maxLength} rows={field.rows} />
+          <FreeText value={value} onChange={setValue} placeholder={field.placeholder} maxLength={field.maxLength} rows={field.rows} ariaLabel={field.label} />
         </Field>
       );
 
@@ -136,29 +132,3 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
 }
 
 // Resolve initial form values from a field array, honoring `default` and falling back to undefined.
-export function defaultValuesFor(fields) {
-  const out = {};
-  for (const field of fields) {
-    if (field.default !== undefined) out[field.name] = field.default;
-  }
-  return out;
-}
-
-// Validate required fields are filled. Returns an array of human messages
-// (empty if the form is submittable).
-export function validateRequired(fields, values) {
-  const issues = [];
-  for (const field of fields) {
-    if (!field.required) continue;
-    const value = values[field.name];
-    if (value == null || value === "") {
-      issues.push(`${field.label} is required.`);
-      continue;
-    }
-    if (Array.isArray(value)) {
-      if (value.length === 0) issues.push(`${field.label} is required.`);
-      else if (field.min != null && value.length < field.min) issues.push(`${field.label} needs at least ${field.min} entr${field.min === 1 ? "y" : "ies"}.`);
-    }
-  }
-  return issues;
-}

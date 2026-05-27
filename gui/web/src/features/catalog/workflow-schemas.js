@@ -3,7 +3,7 @@
 // classifier can pick up. The slot fields here mirror the typed slot shapes in
 // src/routing/types.ts (PortfolioSlots, OptionsScreenerSlots, CompareAssetsSlots).
 
-export const WORKFLOW_SCHEMAS = {
+const WORKFLOW_SCHEMAS = {
   // Single-asset multi-analyst breakdown. Slot is just the symbol; the routing
   // layer fills in defaults for analyst depth from session preferences.
   comprehensive_analysis: {

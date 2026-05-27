@@ -12,7 +12,7 @@ const QUERY_TICKER_OR_TOPIC = (overrides = {}) => ({
   name: "query", kind: "text", label: "Ticker or topic", required: true, placeholder: "AAPL or AI infrastructure", ...overrides,
 });
 
-export const TOOL_SCHEMAS = {
+const TOOL_SCHEMAS = {
   // -----------------------------------------------------------------------
   // Market
   // -----------------------------------------------------------------------

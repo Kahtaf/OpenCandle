@@ -5,10 +5,8 @@ import { forwardRef } from "react";
 import { cn } from "../../lib/utils.js";
 
 export const Dialog = DialogPrimitive.Root;
-export const DialogTrigger = DialogPrimitive.Trigger;
-export const DialogClose = DialogPrimitive.Close;
 
-export const DialogOverlay = forwardRef(function DialogOverlay({ className, ...props }, ref) {
+const DialogOverlay = forwardRef(function DialogOverlay({ className, ...props }, ref) {
   return (
     <DialogPrimitive.Overlay
       ref={ref}

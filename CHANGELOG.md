@@ -5,6 +5,7 @@
 ### Fixed
 
 - Local GUI shutdown now exits cleanly from a single `Ctrl+C` by closing browser connections before waiting on the HTTP server.
+- Local GUI React modules now keep component exports separate from helper exports, clear React Doctor error diagnostics, and preserve catalog builder hook order.
 - Published docs site now exposes AI-readable metadata, structured data, `llms.txt`, markdown mirrors, sitemap dates, and comparison/FAQ content for AI crawlers.
 
 ## [0.5.0] - 2026-05-26

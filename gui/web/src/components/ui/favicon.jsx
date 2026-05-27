@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Globe } from "lucide-react";
 import { cn } from "../../lib/utils.js";
+import { hostFrom } from "./favicon-utils.js";
 
 const SIZE_CLASS = {
   xs: "size-3.5",
@@ -39,23 +40,4 @@ export function Favicon({ url, size = "sm", className }) {
       <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-foreground/10" />
     </span>
   );
-}
-
-export function hostFrom(url) {
-  if (!url) return "";
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return String(url).replace(/^www\./, "").split("/")[0] || "";
-  }
-}
-
-export function shortHost(url) {
-  const host = hostFrom(url);
-  if (!host) return "";
-  // Drop the TLD for chip display: "synthesia.io" -> "synthesia".
-  // We keep the second-level segment to stay recognizable.
-  const parts = host.split(".");
-  if (parts.length <= 1) return host;
-  return parts.slice(-2, -1)[0] || host;
 }

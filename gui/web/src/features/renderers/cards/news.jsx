@@ -1,7 +1,9 @@
 import { Badge } from "../../../components/ui/badge.jsx";
-import { Favicon, hostFrom } from "../../../components/ui/favicon.jsx";
+import { Favicon } from "../../../components/ui/favicon.jsx";
+import { hostFrom } from "../../../components/ui/favicon-utils.js";
 import { SourcePill } from "../../../components/ui/source-pill.jsx";
-import { MoneyTile, PlainOutput, Sparkline, StackBar, ToolCard, extractDetails, formatDateShort, formatLargeNumber, relativeTime } from "./_shared.jsx";
+import { MoneyTile, PlainOutput, Sparkline, StackBar, ToolCard } from "./_shared.jsx";
+import { extractDetails, formatDateShort, formatLargeNumber, relativeTime } from "./card-format.js";
 
 export function WebSearchCard({ message, header, text }) {
   const d = extractDetails(message);

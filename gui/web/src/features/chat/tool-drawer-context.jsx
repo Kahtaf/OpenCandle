@@ -40,13 +40,3 @@ export function useToolDrawer() {
   if (!ctx) throw new Error("useToolDrawer must be used inside ToolDrawerProvider");
   return ctx;
 }
-
-// When the same run keeps updating (new steps arrive while drawer is open),
-// keep the drawer in sync with the latest snapshot of that run. Call this
-// from any component that has the freshest run list.
-export function useSyncOpenRun(allRuns) {
-  const { run, open } = useContext(ToolDrawerContext) || {};
-  if (!run || !allRuns?.length) return;
-  const latest = allRuns.find((r) => r.id === run.id);
-  if (latest && latest !== run) open(latest);
-}

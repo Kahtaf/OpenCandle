@@ -51,17 +51,6 @@ export function ToolDrawerOverlay() {
   );
 }
 
-// Backwards-compatible default export used by any test or page that imports
-// `ToolDrawer` directly. Picks the right variant for the current viewport.
-export function ToolDrawer() {
-  return (
-    <>
-      <ToolDrawerInline />
-      <ToolDrawerOverlay />
-    </>
-  );
-}
-
 function DrawerHeader({ run, onClose }) {
   const title = summarizeRunTitle(run.steps.map((s) => s.name));
   // Escape-to-close — installed only while the drawer is open. Lives in the

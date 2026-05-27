@@ -81,7 +81,7 @@ export function toolMeta(name) {
   return TOOL_META[name] || { icon: Wrench, label: prettifyToolName(name), group: "tool" };
 }
 
-export function prettifyToolName(name) {
+function prettifyToolName(name) {
   return String(name || "tool").replace(/^get_/, "").replace(/_/g, " ");
 }
 

@@ -93,9 +93,10 @@ function ModelSetupBody({ modelSetup, send, setToast }) {
                 Uses <code>{provider.envVar}</code> or a saved local key. Default model: <code>{provider.defaultModel}</code>.
               </p>
             </div>
-            <label className="grid gap-1.5">
+            <label className="grid gap-1.5" htmlFor={`${provider.id}-api-key`}>
               <span className="text-xs font-medium text-muted-foreground">API key</span>
               <Input
+                id={`${provider.id}-api-key`}
                 type="password"
                 name={`${provider.id}-api-key`}
                 value={keys[provider.id] || ""}

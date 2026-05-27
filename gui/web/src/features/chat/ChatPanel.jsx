@@ -145,8 +145,8 @@ function AskUserPromptControls({ prompt, draft, setDraft, disabled, onSubmit, on
   if (prompt.questionType === "confirm") {
     return (
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" disabled={disabled} onClick={() => onSubmit("Yes")}>Yes</Button>
-        <Button size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit("No")}>No</Button>
+        <Button size="sm" disabled={disabled} onClick={() => onSubmit("Yes")}>Answer yes</Button>
+        <Button size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit("No")}>Answer no</Button>
         <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
           <X />
         </Button>

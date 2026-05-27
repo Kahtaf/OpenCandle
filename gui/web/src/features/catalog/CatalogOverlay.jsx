@@ -5,7 +5,8 @@ import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Badge } from "../../components/ui/badge.jsx";
-import { defaultValuesFor, FieldRenderer, validateRequired } from "./field-renderer.jsx";
+import { FieldRenderer } from "./field-renderer.jsx";
+import { defaultValuesFor, validateRequired } from "./field-utils.js";
 import { schemaForTool, DOMAIN_LABELS } from "./tool-schemas.js";
 import { schemaForWorkflow } from "./workflow-schemas.js";
 
@@ -354,8 +355,14 @@ function BuilderBody({ selection, catalog, send, setToast, startChatRun, fillCom
 
 function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToast, lookupSymbol }) {
   const schema = schemaForWorkflow(workflow.id);
-  const [values, setValues] = useState(() => (schema ? defaultValuesFor(schema.fields) : {}));
+  const fields = schema?.fields ?? [];
+  const [values, setValues] = useState(() => defaultValuesFor(fields));
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const setField = useCallback((name, value) => setValues((prev) => ({ ...prev, [name]: value })), []);
+  const issues = validateRequired(fields, values);
+  const prompt = useMemo(() => schema ? safeBuildPrompt(schema, values) : workflow.prompt || workflow.name, [schema, values, workflow]);
+  const baseFields = fields.filter((f) => !f.advanced);
+  const advancedFields = fields.filter((f) => f.advanced);
 
   if (!schema) {
     return (
@@ -367,11 +374,6 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
       </div>
     );
   }
-  const setField = useCallback((name, value) => setValues((prev) => ({ ...prev, [name]: value })), []);
-  const issues = validateRequired(schema.fields, values);
-  const prompt = useMemo(() => safeBuildPrompt(schema, values), [schema, values]);
-  const baseFields = schema.fields.filter((f) => !f.advanced);
-  const advancedFields = schema.fields.filter((f) => f.advanced);
 
   const submit = (mode) => {
     if (issues.length > 0) { setToast?.(issues[0]); return; }
