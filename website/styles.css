@@ -428,11 +428,6 @@ button:focus-visible {
   scrollbar-width: none;
 }
 
-.signal-table {
-  max-width: 900px;
-  margin-top: 34px;
-}
-
 .proof-marquee article {
   flex: 0 0 282px;
   min-height: 132px;
@@ -609,24 +604,6 @@ button:focus-visible {
 
 .faq-section h2 {
   max-width: 900px;
-}
-
-.author-signals {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 900px;
-  margin: 34px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.author-signals li {
-  padding: 18px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--body);
 }
 
 .faq-grid {
@@ -1064,7 +1041,6 @@ blockquote {
 
   .provider-grid,
   .oss-grid,
-  .author-signals,
   .faq-grid {
     grid-template-columns: 1fr;
     margin-top: 28px;

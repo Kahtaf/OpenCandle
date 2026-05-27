@@ -505,8 +505,8 @@ function landingShell(buildDate) {
         <div class="float-tile tile-logo" aria-hidden="true"><img src="assets/logo.svg" alt="" width="52" height="52"></div>
         <div class="hero-copy">
           <h1>The open-source control plane for market research.</h1>
-          <div class="hero-lede">Orchestrate quotes, filings, macro data, sentiment, options, and portfolio tools from one local surface. Works with OpenAI, Anthropic, and Google model keys.</div>
-          <div class="hero-note">Read-only research software. Not investment advice. No order routing.</div>
+          <p class="hero-lede">Orchestrate quotes, filings, macro data, sentiment, options, and portfolio tools from one local surface. Works with OpenAI, Anthropic, and Google model keys.</p>
+          <p class="hero-note">Read-only research software. Not investment advice. No order routing.</p>
           <div class="hero-actions">
             <a class="button-primary" href="docs/getting-started.html">Install OpenCandle</a>
             <a class="button-secondary" href="https://github.com/Kahtaf/OpenCandle">Star on GitHub</a>
@@ -519,22 +519,8 @@ function landingShell(buildDate) {
       </section>
 
       <section class="landing-band social-proof">
-        <div class="page-meta">Last updated <time datetime="${escapeHtml(buildDate)}">${escapeHtml(buildDate)}</time> by <a rel="author" href="https://github.com/Kahtaf">Kahtaf</a>.</div>
         <h2>Built for research that needs receipts.</h2>
-        <p>OpenCandle is built for market research questions where the answer should name the evidence trail, not just produce a polished paragraph. A user can ask for a quote, filing review, macro read, options chain, sentiment summary, or portfolio check from the terminal or local browser GUI. OpenCandle routes the request, gathers provider-backed data, records missing keys or degraded sources, and then asks the model to synthesize the result with risks visible. This makes it a practical alternative to copying figures between finance websites, spreadsheets, and a general chatbot when the important question is what data was used, how fresh it was, and what caveats came with it.</p>
-        <table class="signal-table">
-          <thead>
-            <tr><th>Signal</th><th>OpenCandle surface</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>2 interfaces</td><td>Terminal agent and local browser GUI</td></tr>
-            <tr><td>10+ data domains</td><td>Quotes, filings, macro, options, sentiment, fundamentals, crypto, and portfolio context</td></tr>
-            <tr><td>17 docs pages</td><td>Install, first run, GUI, data sources, architecture, testing, benchmarking, comparisons, security, and contribution docs</td></tr>
-            <tr><td>153 test files</td><td>The current local suite passes 1,624 Vitest tests before deployment</td></tr>
-            <tr><td>2 AI guide files</td><td>Root llms.txt and llms-full.txt give crawlers concise and full markdown context</td></tr>
-            <tr><td>0 order routing</td><td>Read-only research software with no trade execution path</td></tr>
-          </tbody>
-        </table>
+        <p>Real workflows for people who want evidence before synthesis.</p>
         <div class="proof-marquee">
           <article><span>Quote snapshots that keep provider and freshness visible.</span></article>
           <article><span>Filings, macro, options, and sentiment in the same thread.</span></article>
@@ -548,7 +534,7 @@ function landingShell(buildDate) {
       <section id="providers" class="landing-band provider-section">
         <div>
           <h2>Bring your own data stack</h2>
-          <p>OpenCandle does not hide setup behind magic. Pi handles local model setup and sessions; OpenCandle adds finance tools on top, so the same prompt can use keyless sources such as Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo, Reddit, and the crypto Fear and Greed index, then expand when optional provider keys are present. Add Alpha Vantage for fundamentals, FRED for macro series, Brave or Exa for web search, and Finnhub for company news when those sources matter. The goal is straightforward: keep provider boundaries visible, preserve local state, and avoid making a finance answer look more complete than the gathered data supports.</p>
+          <p>OpenCandle does not hide setup behind magic. Pi handles local model setup and sessions; OpenCandle adds finance tools on top. Add optional market data keys where needed and keep keyless sources working by default.</p>
         </div>
         <div class="provider-grid">
           <div><strong>OpenAI</strong><code>model access</code></div>
@@ -576,7 +562,7 @@ function landingShell(buildDate) {
         </div>
         <div>
           <h2>One prompt to gather, cite, and caveat.</h2>
-          <p>OpenCandle routes requests into workflows, calls explicit tools, records degradation, and only then lets the model synthesize. That sequence matters because finance questions often fail at the evidence layer before they fail at the writing layer: a stale quote changes an options answer, a missing FRED key changes a macro answer, and a filing search without the right company match can mislead the summary. OpenCandle keeps those gaps in the session so the final response can say what was gathered, what was unavailable, which assumptions came from the user, and which risks could change the interpretation before capital is at risk.</p>
+          <p>OpenCandle routes requests into workflows, calls explicit tools, records degradation, and only then lets the model synthesize.</p>
           <ul>
             <li>Auto-routes tickers, macro series, filings, and sentiment.</li>
             <li>Shows the evidence trail before the final answer.</li>
@@ -589,7 +575,7 @@ function landingShell(buildDate) {
       <section id="open-source" class="landing-band open-source-section">
         <div class="section-kicker">Open source</div>
         <h2>If you do not like something, fork it.</h2>
-        <p>OpenCandle is TypeScript, MIT licensed, and designed around explicit tool contracts. Add providers, publish tool packages, or change the GUI because the evidence path is yours to inspect. The public project includes fixture-backed unit tests, browser GUI build checks, e2e harnesses, provider boundaries, and generated docs so contributors can change one layer without guessing how the whole agent behaves. That structure is useful for a finance agent because tool output must stay separate from model judgment, provider failures should be visible instead of silently softened by prose, and public changes should be easy to validate before release or publication by anyone.</p>
+        <p>OpenCandle is TypeScript, MIT licensed, and designed around explicit tool contracts. Add providers, publish tool packages, or change the GUI because the evidence path is yours to inspect.</p>
         <div class="oss-layout">
           <div class="code-window">
             <div class="code-title">~/opencandle</div>
@@ -611,18 +597,6 @@ function landingShell(buildDate) {
         </div>
       </section>
 
-      <section id="maintainer" class="landing-band maintainer-section">
-        <div class="section-kicker">Author Bio</div>
-        <h2>Author Bio: maintained in the open.</h2>
-        <p>Author bio: OpenCandle is maintained by <a rel="author" href="https://github.com/Kahtaf">Kahtaf</a>, the OpenCandle maintainer, as an open source TypeScript project for finance-agent workflows. The maintainer profile is intentionally tied to the public GitHub repository instead of unsupported third-party profile claims. The project documentation, test harnesses, changelog, security policy, contribution guide, npm package, and generated website are public so users and AI crawlers can verify what the software does, which providers it integrates, how it is tested, and where the evidence boundaries sit. That public project record is the source used for maintainer identity and author attribution on this website and its documentation pages.</p>
-        <ul class="author-signals">
-          <li>Role: OpenCandle maintainer.</li>
-          <li>Project: MIT-licensed TypeScript finance-agent software.</li>
-          <li>Public code: GitHub repository and npm package metadata.</li>
-          <li>Verification: docs-site build, 153 test files, and 1,624 passing tests in the latest local run.</li>
-        </ul>
-      </section>
-
       <section id="faq" class="landing-band faq-section">
         <div class="section-kicker">FAQ</div>
         <h2>Direct answers for AI and humans.</h2>
@@ -633,7 +607,7 @@ function landingShell(buildDate) {
 
       <section class="cta-band">
         <h2>Your market research deserves better than a tab pile.</h2>
-        <p>OpenCandle is free, open source, and local-first. Install it with npm, launch the terminal agent or GUI, and let your agent gather evidence before it writes. The project is most useful when a question needs more than one source: a current quote plus an SEC filing, a macro series plus a portfolio exposure, an options chain plus risk context, or sentiment plus company news. OpenCandle will not replace judgment or execute trades, but it gives the research conversation a cleaner starting point than manually reconciling tabs, pasted screenshots, stale watchlists, disconnected notes, and one-off prompts alone during market research workflows.</p>
+        <p>OpenCandle is free, open source, and local-first. Install it, launch the GUI, and let your agent gather evidence before it writes.</p>
         <div class="hero-actions">
           <a class="button-primary" href="docs/getting-started.html">Install OpenCandle</a>
           <a class="button-secondary" href="docs/">Read the docs</a>
@@ -644,7 +618,6 @@ function landingShell(buildDate) {
       <span>OpenCandle</span>
       <nav>
         <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
-        <a rel="author" href="https://github.com/Kahtaf">Maintainer</a>
         <a href="docs/">Docs</a>
         <a href="docs/getting-started.html">Install</a>
       </nav>
