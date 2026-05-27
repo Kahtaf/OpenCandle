@@ -17,7 +17,8 @@ const CATALOG_DRAWERS = new Set(["catalog", "tools", "workflows", "providers"]);
 
 export function AppShell() {
   const navigate = useNavigate();
-  const location = useRouterState({ select: (state) => state.location });
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const search = useRouterState({ select: (state) => state.location.search });
   const gui = useGuiConnection();
   const [liveEvents, setLiveEvents] = useState([]);
   const [liveBaseEntryCount, setLiveBaseEntryCount] = useState(0);
@@ -32,24 +33,24 @@ export function AppShell() {
       if (event.type !== "run.started" || !event.sessionId) return;
       const sessionId = String(event.sessionId);
       const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
-      if (location.pathname === sessionPath) return;
+      if (pathname === sessionPath) return;
       void navigate({
         to: "/sessions/$sessionId",
         params: { sessionId },
         search: (current) => ({ ...current, drawer: undefined }),
       });
-    }, [location.pathname, navigate]),
+    }, [pathname, navigate]),
   });
-  const activeDrawer = location.search?.drawer;
+  const activeDrawer = search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
-  const sessionsOpen = activeDrawer === "history" || location.pathname === "/history";
+  const sessionsOpen = activeDrawer === "history" || pathname === "/history";
   const contextOpen = activeDrawer === "context";
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const homeResetSessionRef = useRef("");
   const sessionView = routeSessionView({
-    pathname: location.pathname,
+    pathname,
     currentSessionId: gui.currentSessionId,
     entries: gui.entries,
     runState: chatRun.runState,
@@ -96,12 +97,12 @@ export function AppShell() {
   }, [gui.currentSessionId, gui.sessions, gui.send, sessionView.routeSessionId]);
 
   useEffect(() => {
-    if (location.pathname !== "/") {
+    if (pathname !== "/") {
       homeResetSessionRef.current = "";
       return;
     }
     if (!shouldStartFreshHomeSession({
-      pathname: location.pathname,
+      pathname,
       role: gui.role,
       currentSessionId: gui.currentSessionId,
       entryCount: gui.entries.length,
@@ -110,7 +111,7 @@ export function AppShell() {
     })) return;
     homeResetSessionRef.current = gui.currentSessionId;
     gui.send("session.new");
-  }, [location.pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send, gui.supportsSessionActions]);
+  }, [pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send, gui.supportsSessionActions]);
 
   useEffect(() => {
     if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;

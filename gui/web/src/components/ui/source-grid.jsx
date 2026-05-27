@@ -1,4 +1,5 @@
-import { Favicon, hostFrom } from "./favicon.jsx";
+import { Favicon } from "./favicon.jsx";
+import { hostFrom } from "./favicon-utils.js";
 import { cn } from "../../lib/utils.js";
 
 // 4-column source summary grid; on mobile collapses to 2 columns. The fourth

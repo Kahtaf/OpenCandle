@@ -40,18 +40,6 @@ export function Sheet({ open, onOpenChange, children }) {
   );
 }
 
-export const SheetTrigger = function SheetTrigger(props) {
-  const { isDesktop } = useContext(SheetContext);
-  const Trigger = isDesktop ? DialogPrimitive.Trigger : Drawer.Trigger;
-  return <Trigger {...props} />;
-};
-
-export const SheetClose = function SheetClose(props) {
-  const { isDesktop } = useContext(SheetContext);
-  const Close = isDesktop ? DialogPrimitive.Close : Drawer.Close;
-  return <Close {...props} />;
-};
-
 const desktopWidthClasses = {
   sm: "w-[calc(100vw-32px)] max-w-[420px]",
   md: "w-[calc(100vw-32px)] max-w-[560px]",
@@ -109,7 +97,7 @@ export function SheetContent({ children, className, width = "md", handleLabel = 
   );
 }
 
-export function SheetHandle({ className }) {
+function SheetHandle({ className }) {
   return (
     <div
       className={cn("mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard", className)}

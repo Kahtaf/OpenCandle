@@ -1,5 +1,6 @@
 import { useMemo } from "react";
-import { PlainOutput, ToolCard, extractDetails } from "./_shared.jsx";
+import { PlainOutput, ToolCard } from "./_shared.jsx";
+import { extractDetails } from "./card-format.js";
 import { cn } from "../../../lib/utils.js";
 
 // Technical indicators card. The tool returns a human-readable summary in

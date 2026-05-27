@@ -1,6 +1,7 @@
 import { Badge } from "../../../components/ui/badge.jsx";
 import { Favicon } from "../../../components/ui/favicon.jsx";
-import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard, extractDetails, formatDateShort, formatLargeNumber, formatPercent, formatPrice, relativeTime } from "./_shared.jsx";
+import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard } from "./_shared.jsx";
+import { extractDetails, formatDateShort, formatLargeNumber, formatPercent, formatPrice, relativeTime } from "./card-format.js";
 
 export function PortfolioCard({ message, header, text }) {
   const d = extractDetails(message);
@@ -143,7 +144,7 @@ export function CorrelationCard({ message, header, text }) {
       </p>
       {warnings.length > 0 ? (
         <ul className="grid gap-1 text-[11px] text-muted-foreground">
-          {warnings.map((w, i) => <li key={i}>· {w}</li>)}
+          {warnings.map((w, index) => <li key={`${w}-${index}`}>· {w}</li>)}
         </ul>
       ) : null}
     </ToolCard>

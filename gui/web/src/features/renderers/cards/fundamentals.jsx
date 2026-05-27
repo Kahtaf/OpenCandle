@@ -1,5 +1,6 @@
 import { Badge } from "../../../components/ui/badge.jsx";
-import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard, extractDetails, formatDateShort, formatLargeNumber, formatPercent, formatPrice } from "./_shared.jsx";
+import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard } from "./_shared.jsx";
+import { extractDetails, formatDateShort, formatLargeNumber, formatPercent, formatPrice } from "./card-format.js";
 
 export function CompanyOverviewCard({ message, header }) {
   const d = extractDetails(message);

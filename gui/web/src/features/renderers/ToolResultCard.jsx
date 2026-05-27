@@ -1,5 +1,6 @@
 import { GenericCard, rendererFor } from "./cards/index.jsx";
-import { RawDetails, ToolHeader, WarningRow, extractDetails } from "./cards/_shared.jsx";
+import { RawDetails, ToolHeader, WarningRow } from "./cards/_shared.jsx";
+import { extractDetails } from "./cards/card-format.js";
 import { textContent } from "../../rendering/text.js";
 
 export function ToolResultCard({ message }) {

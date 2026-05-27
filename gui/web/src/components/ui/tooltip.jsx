@@ -3,10 +3,8 @@ import { forwardRef } from "react";
 import { cn } from "../../lib/utils.js";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
-export const TooltipRoot = TooltipPrimitive.Root;
-export const TooltipTrigger = TooltipPrimitive.Trigger;
 
-export const TooltipContent = forwardRef(function TooltipContent({ className, sideOffset = 6, ...props }, ref) {
+const TooltipContent = forwardRef(function TooltipContent({ className, sideOffset = 6, ...props }, ref) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -25,9 +23,9 @@ export const TooltipContent = forwardRef(function TooltipContent({ className, si
 export function Tooltip({ children, content, side = "top", sideOffset }) {
   if (!content) return children;
   return (
-    <TooltipRoot delayDuration={120}>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <TooltipPrimitive.Root delayDuration={120}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
       <TooltipContent side={side} sideOffset={sideOffset}>{content}</TooltipContent>
-    </TooltipRoot>
+    </TooltipPrimitive.Root>
   );
 }

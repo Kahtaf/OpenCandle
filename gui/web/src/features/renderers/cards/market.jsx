@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { DeltaChip, MoneyTile, PlainOutput, RangeBar, ToolCard, extractDetails, formatDateShort, formatLargeNumber, formatPrice } from "./_shared.jsx";
+import { DeltaChip, MoneyTile, PlainOutput, RangeBar, ToolCard } from "./_shared.jsx";
+import { extractDetails, formatDateShort, formatLargeNumber, formatPrice } from "./card-format.js";
 
 export function StockQuoteCard({ message, header }) {
   const d = extractDetails(message);
@@ -259,11 +260,12 @@ export function CompareCard({ message, header, text }) {
     <ToolCard>
       {header}
       <div className="grid gap-2">
-        {rows.map((row, i) => {
-          const symbol = row.symbol || row.ticker || `#${i + 1}`;
+        {rows.map((row, index) => {
+          const symbol = row.symbol || row.ticker || row.name || row.id || `#${index + 1}`;
           const price = row.price ?? row.last ?? row.close;
+          const rowKey = row.symbol || row.ticker || row.id || `${symbol}-${index}`;
           return (
-            <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5" key={`${symbol}-${i}`}>
+            <div className="flex items-center justify-between rounded-md bg-secondary px-3 py-2.5" key={rowKey}>
               <span className="font-mono text-sm font-medium text-foreground">{symbol}</span>
               <span className="tabular-nums text-sm font-medium text-foreground">{formatPrice(price)}</span>
               <DeltaChip value={row.change} percent={row.changePercent ?? row.changePct} />

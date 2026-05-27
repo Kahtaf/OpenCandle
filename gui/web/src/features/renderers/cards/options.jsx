@@ -1,4 +1,5 @@
-import { MoneyTile, PlainOutput, StackBar, ToolCard, extractDetails, formatDateShort, formatLargeNumber, formatPrice } from "./_shared.jsx";
+import { MoneyTile, PlainOutput, StackBar, ToolCard } from "./_shared.jsx";
+import { extractDetails, formatDateShort, formatLargeNumber, formatPrice } from "./card-format.js";
 
 export function OptionsChainCard({ message, header, text }) {
   const d = extractDetails(message);

@@ -2,7 +2,7 @@ import { BookOpen } from "lucide-react";
 import { Button } from "../ui/button.jsx";
 import { Kbd } from "../ui/kbd.jsx";
 
-export const DEFAULT_PROMPTS = [
+const DEFAULT_PROMPTS = [
   ["Analyze NVDA", "/analyze NVDA"],
   ["Build portfolio", "Build me a portfolio for long-term growth"],
   ["Options chain for NVDA", "Show options chain for NVDA"],
@@ -36,7 +36,7 @@ export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog
   );
 }
 
-export function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = false }) {
+function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = false }) {
   return (
     <div className="flex w-full flex-wrap justify-center gap-2">
       {prompts.map(([label, prompt]) => (

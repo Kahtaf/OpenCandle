@@ -27,23 +27,3 @@ export function CustomMessage({ customType, content }) {
     </div>
   );
 }
-
-export function ToolCallMessage({ toolCalls }) {
-  return (
-    <div className="flex max-w-[760px] flex-wrap items-start gap-2.5 text-sm text-muted-foreground">
-      <Badge>Using {toolCalls.length === 1 ? "tool" : "tools"}</Badge>
-      <div className="grid min-w-0 gap-1">
-        {toolCalls.map((toolCall) => (
-          <span className="flex flex-wrap items-center gap-2" key={toolCall.id}>
-            <strong className="text-sm font-medium text-foreground">{prettyToolName(toolCall.name)}</strong>
-            <code>{JSON.stringify(toolCall.arguments || {})}</code>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function prettyToolName(name) {
-  return String(name || "").replace(/^get_/, "").replace(/_/g, " ");
-}

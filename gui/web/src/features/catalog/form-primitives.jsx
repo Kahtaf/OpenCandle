@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Plus, X } from "lucide-react";
 import { cn } from "../../lib/utils.js";
 import { Input } from "../../components/ui/input.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { useStableId } from "./use-stable-id.js";
 
 // ---------------------------------------------------------------------------
 // Field — wraps every input with a hairline-spaced label, hint, and required mark
@@ -203,7 +204,7 @@ export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ari
 // SymbolChips — multi-ticker chip input with per-chip remove and inline add
 // ---------------------------------------------------------------------------
 
-export function SymbolChips({ value = [], onChange, placeholder = "Add ticker", min, max }) {
+export function SymbolChips({ value = [], onChange, placeholder = "Add ticker", min, max, ariaLabel = "Ticker symbols" }) {
   const [draft, setDraft] = useState("");
   const limitReached = max != null && value.length >= max;
 
@@ -245,6 +246,7 @@ export function SymbolChips({ value = [], onChange, placeholder = "Add ticker", 
           </span>
         ))}
         <input
+          aria-label={ariaLabel}
           value={draft}
           onChange={(event) => setDraft(event.target.value.toUpperCase())}
           onKeyDown={onKeyDown}
@@ -325,10 +327,11 @@ export function DateInput({ value, onChange, min, max, placeholder = "YYYY-MM-DD
 // FreeText — long-form input for goals/objectives/queries with character hint
 // ---------------------------------------------------------------------------
 
-export function FreeText({ value, onChange, placeholder, rows = 3, maxLength }) {
+export function FreeText({ value, onChange, placeholder, rows = 3, maxLength, ariaLabel = "Text input" }) {
   return (
     <div>
       <textarea
+        aria-label={ariaLabel}
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
@@ -456,57 +459,4 @@ export function SuggestionCloud({ suggestions, onPick, label = "Suggestions" }) 
       </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Common preset arrays used by multiple builders
-// ---------------------------------------------------------------------------
-
-export const RANGE_OPTIONS = [
-  { value: "1mo", label: "1M" },
-  { value: "3mo", label: "3M" },
-  { value: "6mo", label: "6M" },
-  { value: "1y", label: "1Y" },
-  { value: "2y", label: "2Y" },
-  { value: "5y", label: "5Y" },
-  { value: "max", label: "Max" },
-];
-
-export const INTERVAL_OPTIONS = [
-  { value: "1d", label: "Daily" },
-  { value: "1wk", label: "Weekly" },
-  { value: "1mo", label: "Monthly" },
-];
-
-export const PERIOD_OPTIONS = [
-  { value: "6mo", label: "6M" },
-  { value: "1y", label: "1Y" },
-  { value: "2y", label: "2Y" },
-];
-
-export const FRESHNESS_OPTIONS = [
-  { value: "hours", label: "Hours" },
-  { value: "day", label: "Day" },
-  { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
-];
-
-export const HOURS_PRESETS = [
-  { value: 6, label: "6h" },
-  { value: 24, label: "24h" },
-  { value: 72, label: "3d" },
-  { value: 168, label: "7d" },
-];
-
-export const DAYS_PRESETS = [
-  { value: 7, label: "7d" },
-  { value: 30, label: "30d" },
-  { value: 90, label: "90d" },
-  { value: 180, label: "6M" },
-  { value: 365, label: "1Y" },
-];
-
-export function useStableId(prefix = "field") {
-  const id = useMemo(() => `${prefix}-${Math.random().toString(36).slice(2, 8)}`, [prefix]);
-  return id;
 }
