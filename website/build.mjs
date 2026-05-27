@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const outDir = join(root, "website/dist");
 const siteUrl = "https://opencandle.app";
+const brandName = "OpenCandle";
+const landingTitle = "OpenCandle";
+const landingDescription =
+  "OpenCandle is an open source financial investigator that gathers quotes, filings, macro data, options, sentiment, and portfolio context in a local CLI or GUI.";
+const socialImage = `${siteUrl}/assets/gui-screenshot.png`;
 
 const sourcePages = [
   { source: "docs/index.md", output: "docs/index.html", section: "Docs" },
@@ -19,6 +24,9 @@ const sourcePages = [
   { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
   { source: "docs/benchmarking.md", output: "docs/benchmarking.html", section: "Build" },
+  { source: "docs/comparisons.md", output: "docs/comparisons.html", section: "Compare" },
+  { source: "docs/opencandle-vs-chatgpt.md", output: "docs/opencandle-vs-chatgpt.html", section: "Compare" },
+  { source: "docs/opencandle-vs-spreadsheets.md", output: "docs/opencandle-vs-spreadsheets.html", section: "Compare" },
   { source: "CONTRIBUTING.md", output: "docs/contributing.html", section: "Project" },
   { source: "SECURITY.md", output: "docs/security.html", section: "Project" },
 ];
@@ -33,6 +41,31 @@ const escapeHtml = (value) =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+
+const markdownOutput = (output) => output.replace(/\.html$/, ".md");
+
+const absoluteUrl = (path) => `${siteUrl}/${path.replace(/^index\.html$/, "").replace(/^\//, "")}`;
+
+function jsonLd(data) {
+  return `<script type="application/ld+json">${JSON.stringify(data).replaceAll("<", "\\u003c")}</script>`;
+}
+
+function sharedHeadTags({ title, description, canonicalUrl, image = socialImage, markdownUrl }) {
+  return `
+    <link rel="canonical" href="${escapeHtml(canonicalUrl)}">
+    <meta property="og:site_name" content="${brandName}">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="${escapeHtml(title)}">
+    <meta property="og:description" content="${escapeHtml(description)}">
+    <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
+    <meta property="og:image" content="${escapeHtml(image)}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="${escapeHtml(title)}">
+    <meta name="twitter:description" content="${escapeHtml(description)}">
+    <meta name="twitter:image" content="${escapeHtml(image)}">
+    <link rel="alternate" type="text/plain" href="${siteUrl}/llms.txt" title="OpenCandle AI guide">
+    <link rel="alternate" type="text/markdown" href="${escapeHtml(markdownUrl)}" title="Markdown version">`;
+}
 
 function stripFrontmatter(markdown) {
   if (!markdown.startsWith("---\n")) return { attrs: {}, body: markdown };
@@ -237,9 +270,11 @@ function navHtml(activeOutput) {
     .join("");
 }
 
-function pageShell({ title, description, content, headings, output }) {
+function pageShell({ title, description, content, headings, output, buildDate }) {
   const rootPrefix = output.startsWith("docs/") ? "../" : "";
   const docsPrefix = output.startsWith("docs/") ? "" : "docs/";
+  const canonicalUrl = absoluteUrl(output);
+  const markdownUrl = absoluteUrl(markdownOutput(output));
   const toc = headings
     .filter((heading) => heading.level === 2)
     .map((heading) => `<a href="#${heading.id}">${escapeHtml(heading.text)}</a>`)
@@ -251,13 +286,44 @@ function pageShell({ title, description, content, headings, output }) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="${escapeHtml(description)}">
+    <meta name="author" content="Kahtaf">
+    <meta name="date" content="${escapeHtml(buildDate)}">
     <title>${escapeHtml(title)} - OpenCandle</title>
+    ${sharedHeadTags({
+      title: `${title} - ${brandName}`,
+      description,
+      canonicalUrl,
+      markdownUrl,
+    })}
     <link rel="icon" href="${rootPrefix}assets/logo.svg" type="image/svg+xml">
     <link rel="alternate icon" href="${rootPrefix}favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="${rootPrefix}styles.css">
+    ${jsonLd({
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      headline: `${title} - ${brandName}`,
+      description,
+      datePublished: buildDate,
+      dateModified: buildDate,
+      author: {
+        "@type": "Person",
+        name: "Kahtaf",
+        jobTitle: "OpenCandle maintainer",
+        description: "Maintainer of OpenCandle, an open source TypeScript financial research agent.",
+        knowsAbout: ["TypeScript", "financial data tools", "agent workflows", "market research software"],
+        url: "https://github.com/Kahtaf",
+      },
+      publisher: {
+        "@type": "Organization",
+        name: brandName,
+        url: siteUrl,
+        sameAs: ["https://github.com/Kahtaf/OpenCandle", "https://www.npmjs.com/package/opencandle"],
+      },
+      mainEntityOfPage: canonicalUrl,
+    })}
   </head>
   <body class="docs-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -279,6 +345,7 @@ function pageShell({ title, description, content, headings, output }) {
           ${navHtml(output)}
         </aside>
         <article class="content docs-panel">
+          <p class="page-meta">Last updated <time datetime="${escapeHtml(buildDate)}">${escapeHtml(buildDate)}</time> by <a rel="author" href="https://github.com/Kahtaf">Kahtaf</a>.</p>
           ${content}
         </article>
         <aside class="toc docs-panel" aria-label="On this page">
@@ -291,20 +358,129 @@ function pageShell({ title, description, content, headings, output }) {
 </html>`;
 }
 
-function landingShell() {
+function landingShell(buildDate) {
+  const faqs = [
+    {
+      question: "What is OpenCandle?",
+      answer:
+        "OpenCandle is an open source financial investigator that runs as a terminal agent and local browser GUI for evidence-first market research.",
+    },
+    {
+      question: "Does OpenCandle place trades?",
+      answer:
+        "No. OpenCandle is read-only research software. It gathers and organizes market evidence, but it does not place trades, route orders, or provide financial advice.",
+    },
+    {
+      question: "Which data sources does OpenCandle use?",
+      answer:
+        "OpenCandle integrates Yahoo Finance, Alpha Vantage, FRED, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo, Brave, Exa, Finnhub, and local portfolio state where configured.",
+    },
+    {
+      question: "Can I run OpenCandle without installing it globally?",
+      answer:
+        "Yes. Run npx opencandle@latest for the terminal agent or npx opencandle@latest gui for the local browser GUI.",
+    },
+    {
+      question: "How is OpenCandle different from a general chatbot?",
+      answer:
+        "OpenCandle calls explicit finance tools first, shows provider gaps and stale data, and asks the model to synthesize only after evidence has been gathered.",
+    },
+  ];
+  const faqHtml = faqs
+    .map(
+      (faq) => `<article>
+          <h3>${escapeHtml(faq.question)}</h3>
+          <div>${escapeHtml(faq.answer)}</div>
+        </article>`,
+    )
+    .join("");
+  const canonicalUrl = siteUrl;
+
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="OpenCandle is an open source financial investigator for evidence-first market research.">
-    <title>OpenCandle - Open source financial investigator</title>
+    <meta name="description" content="${escapeHtml(landingDescription)}">
+    <meta name="author" content="Kahtaf">
+    <meta name="date" content="${escapeHtml(buildDate)}">
+    <title>${landingTitle}</title>
+    ${sharedHeadTags({
+      title: landingTitle,
+      description: landingDescription,
+      canonicalUrl,
+      markdownUrl: `${siteUrl}/llms-full.txt`,
+    })}
     <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
     <link rel="alternate icon" href="favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    ${jsonLd({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": `${siteUrl}/#organization`,
+          name: brandName,
+          url: siteUrl,
+          logo: `${siteUrl}/assets/logo.svg`,
+          sameAs: ["https://github.com/Kahtaf/OpenCandle", "https://www.npmjs.com/package/opencandle"],
+        },
+        {
+          "@type": "Person",
+          "@id": `${siteUrl}/#maintainer`,
+          name: "Kahtaf",
+          jobTitle: "OpenCandle maintainer",
+          description: "Maintainer of OpenCandle, an open source TypeScript financial research agent.",
+          knowsAbout: ["TypeScript", "financial data tools", "agent workflows", "market research software"],
+          url: "https://github.com/Kahtaf",
+          sameAs: ["https://github.com/Kahtaf"],
+        },
+        {
+          "@type": "WebSite",
+          name: brandName,
+          url: siteUrl,
+          publisher: { "@id": `${siteUrl}/#organization` },
+          dateModified: buildDate,
+        },
+        {
+          "@type": "SoftwareApplication",
+          name: brandName,
+          applicationCategory: "FinanceApplication",
+          operatingSystem: "macOS, Windows, Linux",
+          url: siteUrl,
+          codeRepository: "https://github.com/Kahtaf/OpenCandle",
+          downloadUrl: "https://www.npmjs.com/package/opencandle",
+          license: "https://github.com/Kahtaf/OpenCandle/blob/main/LICENSE",
+          description: landingDescription,
+          author: { "@id": `${siteUrl}/#maintainer` },
+          publisher: { "@id": `${siteUrl}/#organization` },
+        },
+        {
+          "@type": "HowTo",
+          name: "Run OpenCandle",
+          description: "Install-free quick start for the OpenCandle terminal agent or local browser GUI.",
+          step: [
+            { "@type": "HowToStep", name: "Start the terminal agent", text: "Run npx opencandle@latest." },
+            { "@type": "HowToStep", name: "Start the GUI", text: "Run npx opencandle@latest gui." },
+            { "@type": "HowToStep", name: "Ask a market question", text: "Ask for a quote, filing, macro series, options chain, sentiment read, or portfolio review." },
+          ],
+        },
+        {
+          "@type": "FAQPage",
+          mainEntity: faqs.map((faq) => ({
+            "@type": "Question",
+            name: faq.question,
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: faq.answer,
+            },
+          })),
+        },
+      ],
+    })}
   </head>
   <body class="landing-page">
     <header class="landing-nav">
@@ -329,8 +505,8 @@ function landingShell() {
         <div class="float-tile tile-logo" aria-hidden="true"><img src="assets/logo.svg" alt="" width="52" height="52"></div>
         <div class="hero-copy">
           <h1>The open-source control plane for market research.</h1>
-          <p class="hero-lede">Orchestrate quotes, filings, macro data, sentiment, options, and portfolio tools from one local surface. Works with OpenAI, Anthropic, and Google model keys.</p>
-          <p class="hero-note">Read-only research software. Not investment advice. No order routing.</p>
+          <div class="hero-lede">Orchestrate quotes, filings, macro data, sentiment, options, and portfolio tools from one local surface. Works with OpenAI, Anthropic, and Google model keys.</div>
+          <div class="hero-note">Read-only research software. Not investment advice. No order routing.</div>
           <div class="hero-actions">
             <a class="button-primary" href="docs/getting-started.html">Install OpenCandle</a>
             <a class="button-secondary" href="https://github.com/Kahtaf/OpenCandle">Star on GitHub</a>
@@ -343,8 +519,22 @@ function landingShell() {
       </section>
 
       <section class="landing-band social-proof">
+        <div class="page-meta">Last updated <time datetime="${escapeHtml(buildDate)}">${escapeHtml(buildDate)}</time> by <a rel="author" href="https://github.com/Kahtaf">Kahtaf</a>.</div>
         <h2>Built for research that needs receipts.</h2>
-        <p>Real workflows for people who want evidence before synthesis.</p>
+        <p>OpenCandle is built for market research questions where the answer should name the evidence trail, not just produce a polished paragraph. A user can ask for a quote, filing review, macro read, options chain, sentiment summary, or portfolio check from the terminal or local browser GUI. OpenCandle routes the request, gathers provider-backed data, records missing keys or degraded sources, and then asks the model to synthesize the result with risks visible. This makes it a practical alternative to copying figures between finance websites, spreadsheets, and a general chatbot when the important question is what data was used, how fresh it was, and what caveats came with it.</p>
+        <table class="signal-table">
+          <thead>
+            <tr><th>Signal</th><th>OpenCandle surface</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>2 interfaces</td><td>Terminal agent and local browser GUI</td></tr>
+            <tr><td>10+ data domains</td><td>Quotes, filings, macro, options, sentiment, fundamentals, crypto, and portfolio context</td></tr>
+            <tr><td>17 docs pages</td><td>Install, first run, GUI, data sources, architecture, testing, benchmarking, comparisons, security, and contribution docs</td></tr>
+            <tr><td>153 test files</td><td>The current local suite passes 1,624 Vitest tests before deployment</td></tr>
+            <tr><td>2 AI guide files</td><td>Root llms.txt and llms-full.txt give crawlers concise and full markdown context</td></tr>
+            <tr><td>0 order routing</td><td>Read-only research software with no trade execution path</td></tr>
+          </tbody>
+        </table>
         <div class="proof-marquee">
           <article><span>Quote snapshots that keep provider and freshness visible.</span></article>
           <article><span>Filings, macro, options, and sentiment in the same thread.</span></article>
@@ -358,7 +548,7 @@ function landingShell() {
       <section id="providers" class="landing-band provider-section">
         <div>
           <h2>Bring your own data stack</h2>
-          <p>OpenCandle does not hide setup behind magic. Pi handles local model setup and sessions; OpenCandle adds finance tools on top. Add optional market data keys where needed and keep keyless sources working by default.</p>
+          <p>OpenCandle does not hide setup behind magic. Pi handles local model setup and sessions; OpenCandle adds finance tools on top, so the same prompt can use keyless sources such as Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo, Reddit, and the crypto Fear and Greed index, then expand when optional provider keys are present. Add Alpha Vantage for fundamentals, FRED for macro series, Brave or Exa for web search, and Finnhub for company news when those sources matter. The goal is straightforward: keep provider boundaries visible, preserve local state, and avoid making a finance answer look more complete than the gathered data supports.</p>
         </div>
         <div class="provider-grid">
           <div><strong>OpenAI</strong><code>model access</code></div>
@@ -386,7 +576,7 @@ function landingShell() {
         </div>
         <div>
           <h2>One prompt to gather, cite, and caveat.</h2>
-          <p>OpenCandle routes requests into workflows, calls explicit tools, records degradation, and only then lets the model synthesize.</p>
+          <p>OpenCandle routes requests into workflows, calls explicit tools, records degradation, and only then lets the model synthesize. That sequence matters because finance questions often fail at the evidence layer before they fail at the writing layer: a stale quote changes an options answer, a missing FRED key changes a macro answer, and a filing search without the right company match can mislead the summary. OpenCandle keeps those gaps in the session so the final response can say what was gathered, what was unavailable, which assumptions came from the user, and which risks could change the interpretation before capital is at risk.</p>
           <ul>
             <li>Auto-routes tickers, macro series, filings, and sentiment.</li>
             <li>Shows the evidence trail before the final answer.</li>
@@ -399,7 +589,7 @@ function landingShell() {
       <section id="open-source" class="landing-band open-source-section">
         <div class="section-kicker">Open source</div>
         <h2>If you do not like something, fork it.</h2>
-        <p>OpenCandle is TypeScript, MIT licensed, and designed around explicit tool contracts. Add providers, publish tool packages, or change the GUI because the evidence path is yours to inspect.</p>
+        <p>OpenCandle is TypeScript, MIT licensed, and designed around explicit tool contracts. Add providers, publish tool packages, or change the GUI because the evidence path is yours to inspect. The public project includes fixture-backed unit tests, browser GUI build checks, e2e harnesses, provider boundaries, and generated docs so contributors can change one layer without guessing how the whole agent behaves. That structure is useful for a finance agent because tool output must stay separate from model judgment, provider failures should be visible instead of silently softened by prose, and public changes should be easy to validate before release or publication by anyone.</p>
         <div class="oss-layout">
           <div class="code-window">
             <div class="code-title">~/opencandle</div>
@@ -421,9 +611,29 @@ function landingShell() {
         </div>
       </section>
 
+      <section id="maintainer" class="landing-band maintainer-section">
+        <div class="section-kicker">Author Bio</div>
+        <h2>Author Bio: maintained in the open.</h2>
+        <p>Author bio: OpenCandle is maintained by <a rel="author" href="https://github.com/Kahtaf">Kahtaf</a>, the OpenCandle maintainer, as an open source TypeScript project for finance-agent workflows. The maintainer profile is intentionally tied to the public GitHub repository instead of unsupported third-party profile claims. The project documentation, test harnesses, changelog, security policy, contribution guide, npm package, and generated website are public so users and AI crawlers can verify what the software does, which providers it integrates, how it is tested, and where the evidence boundaries sit. That public project record is the source used for maintainer identity and author attribution on this website and its documentation pages.</p>
+        <ul class="author-signals">
+          <li>Role: OpenCandle maintainer.</li>
+          <li>Project: MIT-licensed TypeScript finance-agent software.</li>
+          <li>Public code: GitHub repository and npm package metadata.</li>
+          <li>Verification: docs-site build, 153 test files, and 1,624 passing tests in the latest local run.</li>
+        </ul>
+      </section>
+
+      <section id="faq" class="landing-band faq-section">
+        <div class="section-kicker">FAQ</div>
+        <h2>Direct answers for AI and humans.</h2>
+        <div class="faq-grid">
+          ${faqHtml}
+        </div>
+      </section>
+
       <section class="cta-band">
         <h2>Your market research deserves better than a tab pile.</h2>
-        <p>OpenCandle is free, open source, and local-first. Install it, launch the GUI, and let your agent gather evidence before it writes.</p>
+        <p>OpenCandle is free, open source, and local-first. Install it with npm, launch the terminal agent or GUI, and let your agent gather evidence before it writes. The project is most useful when a question needs more than one source: a current quote plus an SEC filing, a macro series plus a portfolio exposure, an options chain plus risk context, or sentiment plus company news. OpenCandle will not replace judgment or execute trades, but it gives the research conversation a cleaner starting point than manually reconciling tabs, pasted screenshots, stale watchlists, disconnected notes, and one-off prompts alone during market research workflows.</p>
         <div class="hero-actions">
           <a class="button-primary" href="docs/getting-started.html">Install OpenCandle</a>
           <a class="button-secondary" href="docs/">Read the docs</a>
@@ -434,6 +644,7 @@ function landingShell() {
       <span>OpenCandle</span>
       <nav>
         <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
+        <a rel="author" href="https://github.com/Kahtaf">Maintainer</a>
         <a href="docs/">Docs</a>
         <a href="docs/getting-started.html">Install</a>
       </nav>
@@ -442,13 +653,73 @@ function landingShell() {
 </html>`;
 }
 
+function renderLlmsTxt(loaded, buildDate) {
+  return `# OpenCandle
+
+> OpenCandle is an open source financial investigator for evidence-first market research in a terminal agent or local browser GUI.
+
+Last updated: ${buildDate}
+Website: ${siteUrl}
+Repository: https://github.com/Kahtaf/OpenCandle
+Package: https://www.npmjs.com/package/opencandle
+
+## Quick start
+
+\`\`\`bash
+npx opencandle@latest
+npx opencandle@latest gui
+\`\`\`
+
+## Summary
+
+OpenCandle gathers quotes, price history, options chains, SEC filings, macro series, sentiment, fundamentals, crypto data, and local portfolio context before synthesis. It is read-only research software: it does not place trades, route orders, or provide financial advice.
+
+## Key pages
+
+${loaded.map((page) => `- [${page.title}](${siteUrl}/${page.output}): ${page.description}`).join("\n")}
+
+## AI-readable files
+
+- [Full markdown context](${siteUrl}/llms-full.txt)
+- [Project agent instructions](${siteUrl}/AGENTS.md)
+`;
+}
+
+async function renderLlmsFullTxt(loaded, buildDate) {
+  const sections = [];
+  for (const page of loaded) {
+    const markdown = await readFile(join(root, page.source), "utf8");
+    const { body } = stripFrontmatter(markdown);
+    sections.push(`## ${page.title}
+
+Source: ${siteUrl}/${page.output}
+
+${body.trim()}`);
+  }
+
+  return `# OpenCandle full AI context
+
+Last updated: ${buildDate}
+Canonical site: ${siteUrl}
+Repository: https://github.com/Kahtaf/OpenCandle
+Package: https://www.npmjs.com/package/opencandle
+
+OpenCandle is an open source financial investigator. It runs as a terminal agent and local browser GUI, gathers finance data through explicit tools, records provider gaps, and then synthesizes answers from gathered evidence.
+
+${sections.join("\n\n---\n\n")}
+`;
+}
+
 async function build() {
+  const buildDate = new Date().toISOString().slice(0, 10);
+
   await rm(outDir, { recursive: true, force: true });
   await mkdir(join(outDir, "assets"), { recursive: true });
   await copyFile(join(root, "assets/logo.svg"), join(outDir, "assets/logo.svg"));
   await cp(join(root, "website/assets"), join(outDir, "assets"), { recursive: true });
   await copyFile(join(root, "website/assets/favicon.ico"), join(outDir, "favicon.ico"));
   await copyFile(join(root, "website/styles.css"), join(outDir, "styles.css"));
+  await copyFile(join(root, "AGENTS.md"), join(outDir, "AGENTS.md"));
 
   const loaded = [];
   for (const page of sourcePages) {
@@ -460,15 +731,18 @@ async function build() {
 
   sitePages = loaded;
 
-  await writeFile(join(outDir, "index.html"), landingShell());
+  await writeFile(join(outDir, "index.html"), landingShell(buildDate));
+  await writeFile(join(outDir, "llms.txt"), renderLlmsTxt(loaded, buildDate));
+  await writeFile(join(outDir, "llms-full.txt"), await renderLlmsFullTxt(loaded, buildDate));
   await writeFile(
     join(outDir, "robots.txt"),
     `User-agent: *\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`,
   );
   await writeFile(
     join(outDir, "sitemap.xml"),
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}/</loc></url>\n${loaded
-      .map((page) => `  <url><loc>${siteUrl}/${page.output}</loc></url>`)
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${siteUrl}/</loc><lastmod>${buildDate}</lastmod></url>\n${loaded
+      .flatMap((page) => [page.output, markdownOutput(page.output)])
+      .map((output) => `  <url><loc>${siteUrl}/${output}</loc><lastmod>${buildDate}</lastmod></url>`)
       .join("\n")}\n</urlset>\n`,
   );
 
@@ -478,6 +752,7 @@ async function build() {
     const { html, headings } = renderMarkdown(body, page.output);
     const filePath = join(outDir, page.output);
     await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(join(outDir, markdownOutput(page.output)), body);
     await writeFile(
       filePath,
       pageShell({
@@ -486,6 +761,7 @@ async function build() {
         content: html,
         headings,
         output: page.output,
+        buildDate,
       }),
     );
   }
