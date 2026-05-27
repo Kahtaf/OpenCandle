@@ -9,10 +9,15 @@ Explain the problem being solved and the user or maintainer impact.
 ## Validation
 
 - [ ] `npm test`
+- [ ] `npm run review:pr` (optional local autoreview)
 - [ ] Docs updated if behavior or workflow changed
 - [ ] Tests added or updated for behavior changes
 
 List any other checks you ran.
+
+Autoreview findings accepted/rejected:
+
+Runtime/eval proof for behavior changes:
 
 ## Risks / Follow-ups
 

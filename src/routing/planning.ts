@@ -667,7 +667,10 @@ function isOptionsEducationPrompt(lower: string): boolean {
 }
 
 function isOptionsStrategyPrompt(lower: string): boolean {
-  return /\b(?:covered\s+calls?|protective\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|options?\s+income|option\s+strategy|hedge|collar)\b/.test(lower) &&
+  const explicitOptionsStrategy = /\b(?:covered\s+calls?|protective\s+puts?|buy(?:ing)?\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|options?\s+income|option\s+strategy|options?\s+hedge|collar)\b/.test(lower);
+  const optionsHedge = /\bhedg(?:e|ing)\b.{0,80}\b(?:puts|put\s+options?|options?)\b/.test(lower) ||
+    /\b(?:puts|put\s+options?|options?)\b.{0,80}\bhedg(?:e|ing)\b/.test(lower);
+  return (explicitOptionsStrategy || optionsHedge) &&
     /\b(?:own|have|shares?|position|cost\s+basis|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge|sell)\b/.test(lower);
 }
 
@@ -689,7 +692,7 @@ function isValuationMetricEducationPrompt(lower: string): boolean {
 
 function isPortfolioRebalancePrompt(lower: string): boolean {
   return /\b(?:portfolio|allocation|holdings?|sleeves?|ira|etfs?|funds?|s&p\s*500|index|equity|bonds?|cash)\b/.test(lower) &&
-    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
+    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|hedge|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
 }
 
 function isAddToExistingHoldingsPrompt(lower: string, symbolCount: number): boolean {

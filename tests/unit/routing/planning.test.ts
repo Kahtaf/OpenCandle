@@ -507,6 +507,85 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("options_strategy");
   });
 
+  it("keeps explicit put hedge prompts in options strategy", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "I own 100 shares of NVDA. Should I hedge with puts next month?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["NVDA"] },
+      tool_bundles: ["core_market", "options"],
+    });
+
+    expect(planning.taskFamily).toBe("options_strategy");
+    expect(planning.policyCardId).toBe("options_strategy");
+  });
+
+  it("keeps explicit options hedge prompts in options strategy when the hedge object is named", () => {
+    const portfolioOptions = buildPlanningEnvelope({
+      ...input,
+      text: "How should I hedge my portfolio with options?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "options"],
+    });
+    const stockPuts = buildPlanningEnvelope({
+      ...input,
+      text: "Should I use puts to hedge my NVDA position?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["NVDA"] },
+      tool_bundles: ["core_market", "options"],
+    });
+
+    expect(portfolioOptions.taskFamily).toBe("options_strategy");
+    expect(stockPuts.taskFamily).toBe("options_strategy");
+  });
+
+  it("does not route generic macro hedge prompts to options strategy", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "For the next 6 months, should I use BTC or GLD as a macro hedge?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: ["BTC", "GLD"] },
+      tool_bundles: ["core_market", "macro"],
+    });
+
+    expect(planning.taskFamily).toBe("macro_allocation_review");
+    expect(planning.policyCardId).toBe("macro_allocation_review");
+  });
+
+  it("routes generic portfolio hedge prompts to portfolio review", () => {
+    const planning = buildPlanningEnvelope({
+      ...input,
+      text: "How should I hedge my portfolio without giving up all the upside?",
+    }, {
+      ...compareOutput,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      entities: { symbols: [] },
+      tool_bundles: ["core_market", "macro"],
+    });
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+  });
+
   it("runs the macro allocation migration slice in replacement-active mode by default", () => {
     const planning = buildPlanningEnvelope({
       ...input,

@@ -63,6 +63,8 @@ export interface CompareAssetsSlots {
   symbols: string[];
   timeHorizon?: string;
   metrics?: string[];
+  budget?: number;
+  assetScope?: string;
 }
 
 export type SlotSource = "user" | "preference" | "default" | "prior_context" | "memory";
