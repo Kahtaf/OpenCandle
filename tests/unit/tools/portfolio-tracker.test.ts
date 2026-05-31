@@ -79,6 +79,43 @@ describe("portfolioTrackerTool", () => {
     });
   });
 
+  it("discloses zero-filled quote data and excludes the row from current-value totals", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("VTI", 0, {
+      volume: 0,
+      week52High: 0,
+      week52Low: 0,
+    }));
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("Quote unavailable: Yahoo returned no valid market data.");
+    expect(result.details).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+      positions: [
+        expect.objectContaining({
+          symbol: "VTI",
+          currentPrice: null,
+          marketValue: null,
+          includedInTotals: false,
+          quoteStatus: "unavailable",
+        }),
+      ],
+      excludedFromTotals: [
+        expect.objectContaining({
+          symbol: "VTI",
+          reason: "Quote unavailable: Yahoo returned no valid market data.",
+        }),
+      ],
+    });
+  });
+
   it("excludes unsupported mixed-currency rows from base-currency totals", async () => {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);

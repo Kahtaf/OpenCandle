@@ -4,7 +4,7 @@ import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
-import { resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
+import { isZeroFilledQuote, resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
 
 const params = Type.Object({
   action: Type.Union(
@@ -125,9 +125,12 @@ export const watchlistTool: AgentTool<typeof params> = {
         items.map(async (item) => {
           const result = await wrapProvider("yahoo", () => getQuote(item.symbol));
           if (result.status === "unavailable") {
-            return { ...item, currentPrice: 0, alerts: [`UNAVAILABLE: ${result.reason}`], statuses: [] };
+            return { ...item, currentPrice: null, alerts: [`UNAVAILABLE: ${result.reason}`], statuses: [] };
           }
           const quote = result.data;
+          if (isZeroFilledQuote(quote)) {
+            return { ...item, currentPrice: null, alerts: ["UNAVAILABLE: Yahoo returned no valid market data."], statuses: [] };
+          }
           const alerts: string[] = [];
           const statuses: string[] = [];
           if (item.targetPrice && quote.price >= item.targetPrice) {
@@ -155,7 +158,8 @@ export const watchlistTool: AgentTool<typeof params> = {
         const statusStr = c.statuses.length > 0 ? ` | ${c.statuses.join(" | ")}` : "";
         const targetStr = c.targetPrice ? ` | Target: $${c.targetPrice}` : "";
         const stopStr = c.stopPrice ? ` | Stop: $${c.stopPrice}` : "";
-        lines.push(`  ${c.symbol}: $${c.currentPrice.toFixed(2)}${targetStr}${stopStr}${statusStr}${alertStr}`);
+        const priceStr = typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
+        lines.push(`  ${c.symbol}: ${priceStr}${targetStr}${stopStr}${statusStr}${alertStr}`);
       }
 
       return {

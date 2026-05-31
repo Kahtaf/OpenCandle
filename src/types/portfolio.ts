@@ -9,12 +9,13 @@ export interface Position {
 export interface PortfolioSummary {
   positions: Array<
     Position & {
-      currentPrice: number;
-      marketValue: number;
+      currentPrice: number | null;
+      marketValue: number | null;
       totalCost: number;
-      pnl: number;
-      pnlPercent: number;
+      pnl: number | null;
+      pnlPercent: number | null;
       includedInTotals: boolean;
+      quoteStatus?: "ok" | "unavailable";
       exclusionReason?: string;
     }
   >;

@@ -135,6 +135,28 @@ describe("watchlistTool", () => {
     expect(result.content[0].text).toContain("180");
   });
 
+  it("treats zero-filled quote data as unavailable during watchlist checks", async () => {
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 0, {
+      volume: 0,
+      week52High: 0,
+      week52Low: 0,
+    }));
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("UNAVAILABLE: Yahoo returned no valid market data.");
+    expect(result.details?.items[0]).toMatchObject({
+      symbol: "AAPL",
+      currentPrice: null,
+      alerts: ["UNAVAILABLE: Yahoo returned no valid market data."],
+    });
+  });
+
   it("flags when target price is hit", async () => {
     await watchlistTool.execute("test", {
       action: "add",

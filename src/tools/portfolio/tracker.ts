@@ -5,12 +5,18 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { Position, PortfolioSummary } from "../../types/portfolio.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
-import { resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
+import { isZeroFilledQuote, resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
 
-async function getCurrentPrice(symbol: string): Promise<number | null> {
+async function getCurrentPrice(symbol: string): Promise<
+  | { status: "ok"; price: number }
+  | { status: "unavailable"; reason: string }
+> {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
-  if (result.status === "unavailable") return null;
-  return result.data.price;
+  if (result.status === "unavailable") return { status: "unavailable", reason: result.reason };
+  if (isZeroFilledQuote(result.data)) {
+    return { status: "unavailable", reason: "Yahoo returned no valid market data." };
+  }
+  return { status: "ok", price: result.data.price };
 }
 
 const params = Type.Object({
@@ -135,13 +141,19 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       const baseCurrency = portfolio.baseCurrency ?? "USD";
       const enriched = await Promise.all(
         lots.map(async (p) => {
-          const currentPrice = await getCurrentPrice(p.symbol) ?? p.avgCost;
-          const marketValue = currentPrice * p.quantity;
+          const quote = await getCurrentPrice(p.symbol);
+          const currentPrice = quote.status === "ok" ? quote.price : null;
+          const marketValue = currentPrice == null ? null : currentPrice * p.quantity;
           const totalCost = p.avgCost * p.quantity;
           const lotCurrency = p.currency || baseCurrency;
           const quoteCurrency = p.instrumentCurrency || lotCurrency;
-          const includedInTotals = lotCurrency === baseCurrency && quoteCurrency === baseCurrency;
+          const includedInTotals = quote.status === "ok" && lotCurrency === baseCurrency && quoteCurrency === baseCurrency;
           const exclusionCurrency = lotCurrency === baseCurrency ? quoteCurrency : lotCurrency;
+          const exclusionReason = quote.status === "unavailable"
+            ? `Quote unavailable: ${quote.reason}`
+            : includedInTotals
+              ? undefined
+              : `No FX conversion from ${exclusionCurrency} to ${baseCurrency}`;
           const position: Position = {
             symbol: p.symbol,
             shares: p.quantity,
@@ -154,12 +166,11 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
             currentPrice,
             marketValue,
             totalCost,
-            pnl: marketValue - totalCost,
-            pnlPercent: ((marketValue - totalCost) / totalCost) * 100,
+            pnl: marketValue == null ? null : marketValue - totalCost,
+            pnlPercent: marketValue == null ? null : ((marketValue - totalCost) / totalCost) * 100,
             includedInTotals,
-            exclusionReason: includedInTotals
-              ? undefined
-              : `No FX conversion from ${exclusionCurrency} to ${baseCurrency}`,
+            quoteStatus: quote.status,
+            exclusionReason,
           };
         }),
       );
@@ -172,7 +183,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           currency: p.currency,
           reason: p.exclusionReason ?? `No FX conversion from ${p.currency} to ${baseCurrency}`,
         }));
-      const totalValue = included.reduce((s, p) => s + p.marketValue, 0);
+      const totalValue = included.reduce((s, p) => s + (p.marketValue ?? 0), 0);
       const totalCost = included.reduce((s, p) => s + p.totalCost, 0);
 
       const summary: PortfolioSummary = {
@@ -187,8 +198,11 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
 
       const header = `**Portfolio** — ${enriched.length} positions | Value: ${formatMoney(totalValue, baseCurrency)} | P&L: ${formatMoney(summary.totalPnl, baseCurrency)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
       const rows = enriched.map((p) => {
+        const excluded = p.includedInTotals ? "" : ` [excluded from ${baseCurrency} totals: ${p.exclusionReason}]`;
+        if (p.currentPrice == null || p.pnl == null || p.pnlPercent == null) {
+          return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → unavailable | P&L: unavailable${excluded}`;
+        }
         const sign = p.pnlPercent >= 0 ? "+" : "";
-        const excluded = p.includedInTotals ? "" : ` [excluded from ${baseCurrency} totals]`;
         return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → ${formatMoney(p.currentPrice, p.currency)} | P&L: ${formatMoney(p.pnl, p.currency)} (${sign}${p.pnlPercent.toFixed(2)}%)${excluded}`;
       });
 
