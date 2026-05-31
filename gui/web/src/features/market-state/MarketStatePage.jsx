@@ -199,7 +199,7 @@ function Portfolios({ state, readOnly, invokeTool }) {
           <EmptyState icon={BriefcaseBusiness} title="No holdings yet" action="Add a holding or use watchlists without a portfolio." />
         ) : (
           <DataTable
-            columns={["Lot", "Symbol", "Quantity", "Avg cost", "Current", "Value", "P&L", "Quote", "Currency", "Notes", ""]}
+            columns={["Lot", "Symbol", "Quantity", "Avg cost", "Current", "Value", "Allocation", "P&L", "Quote", "Currency", "Notes", ""]}
             rows={state.portfolio.map((lot) => {
               const quote = quotesByLot.get(lot.id);
               return [
@@ -209,6 +209,7 @@ function Portfolios({ state, readOnly, invokeTool }) {
                 moneyOrDash(lot.avgCost),
                 portfolioCurrentCell(quote),
                 portfolioValueCell(quote),
+                allocationCell(quote),
                 portfolioPnlCell(quote),
                 quoteFreshness(quote),
                 lot.currency,
@@ -718,6 +719,13 @@ function portfolioPnlCell(quote) {
   if (quote.status !== "ok") return "Unavailable";
   const sign = quote.pnl >= 0 ? "+" : "";
   return `${moneyWithCurrency(quote.pnl, quote.currency)} (${sign}${Number(quote.pnlPercent ?? 0).toFixed(2)}%)`;
+}
+
+function allocationCell(quote) {
+  if (!quote) return "Not checked";
+  if (quote.status !== "ok") return "Unavailable";
+  if (typeof quote.allocationPercent !== "number") return "Excluded";
+  return `${quote.allocationPercent.toFixed(1)}%`;
 }
 
 function formatNumber(value) {

@@ -38,6 +38,7 @@ export interface MarketStateQuoteSnapshot {
     totalCost: number;
     pnl?: number;
     pnlPercent?: number;
+    allocationPercent?: number;
     currency: string;
     includedInTotals: boolean;
     fetchedAt?: string;
@@ -148,7 +149,14 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
     const included = portfolioQuotes.filter((quote) => quote.status === "ok" && quote.includedInTotals);
     const totalValue = included.reduce((sum, quote) => sum + (quote.marketValue ?? 0), 0);
     const totalCost = included.reduce((sum, quote) => sum + quote.totalCost, 0);
-    const excludedFromTotals = portfolioQuotes
+    const portfolioQuotesWithAllocation = portfolioQuotes.map((quote) => {
+      if (quote.status !== "ok" || !quote.includedInTotals || totalValue <= 0) return quote;
+      return {
+        ...quote,
+        allocationPercent: ((quote.marketValue ?? 0) / totalValue) * 100,
+      };
+    });
+    const excludedFromTotals = portfolioQuotesWithAllocation
       .filter((quote) => quote.status !== "ok" || !quote.includedInTotals)
       .map((quote) => ({
         symbol: quote.symbol,
@@ -159,7 +167,7 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
     return {
       generatedAt,
       watchlistQuotes,
-      portfolioQuotes,
+      portfolioQuotes: portfolioQuotesWithAllocation,
       portfolioSummary: {
         baseCurrency,
         totalValue,

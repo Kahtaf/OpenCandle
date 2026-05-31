@@ -113,8 +113,21 @@ describe("market-state API helpers", () => {
       avgCost: 250,
       currency: "USD",
     });
+    const secondLot = service.addPortfolioLot({
+      instrument: {
+        symbol: "MSFT",
+        assetType: "equity",
+        name: "Microsoft Corporation",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 1,
+      avgCost: 350,
+      currency: "USD",
+    });
     vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
-      quote(symbol, symbol === "AAPL" ? 190 : 300),
+      quote(symbol, symbol === "AAPL" ? 190 : symbol === "MSFT" ? 400 : 300),
     );
 
     const snapshot = await buildMarketStateQuoteSnapshot(db);
@@ -135,13 +148,23 @@ describe("market-state API helpers", () => {
         currentPrice: 300,
         marketValue: 600,
         pnl: 100,
+        allocationPercent: 60,
+      }),
+      expect.objectContaining({
+        lotId: secondLot.id,
+        symbol: "MSFT",
+        status: "ok",
+        currentPrice: 400,
+        marketValue: 400,
+        pnl: 50,
+        allocationPercent: 40,
       }),
     ]);
     expect(snapshot.portfolioSummary).toMatchObject({
       baseCurrency: "USD",
-      totalValue: 600,
-      totalCost: 500,
-      totalPnl: 100,
+      totalValue: 1000,
+      totalCost: 850,
+      totalPnl: 150,
     });
     db.close();
   });
