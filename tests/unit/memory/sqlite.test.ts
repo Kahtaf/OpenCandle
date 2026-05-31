@@ -6,6 +6,10 @@ import Database from "better-sqlite3";
 import { initDatabase, getTableNames, getSchemaVersion } from "../../../src/memory/sqlite.js";
 import { MemoryStorage } from "../../../src/memory/storage.js";
 
+function rowCount(db: Database.Database, tableName: string): number {
+  return (db.prepare(`SELECT COUNT(*) AS n FROM ${tableName}`).get() as { n: number }).n;
+}
+
 describe("initDatabase", () => {
   let db: Database.Database;
 
@@ -346,6 +350,235 @@ describe("v4 → v5 market-state migration", () => {
 });
 
 describe("v5 → v6 import provenance migration", () => {
+  it("preserves existing market-state rows while adding import provenance columns", () => {
+    const base = mkdtempSync(join(tmpdir(), "vantage-v5-market-state-preserve-"));
+    const dbPath = join(base, "state.db");
+
+    const v5 = new Database(dbPath);
+    v5.pragma("journal_mode = WAL");
+    v5.pragma("foreign_keys = ON");
+    v5.exec(`
+      CREATE TABLE schema_version (version INTEGER NOT NULL);
+      INSERT INTO schema_version (version) VALUES (5);
+
+      CREATE TABLE instruments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT NOT NULL,
+        asset_type TEXT NOT NULL,
+        name TEXT,
+        exchange TEXT,
+        currency TEXT,
+        provider TEXT NOT NULL,
+        provider_metadata_json TEXT,
+        last_resolved_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE watchlists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE watchlist_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        watchlist_id INTEGER NOT NULL,
+        instrument_id INTEGER NOT NULL,
+        thesis TEXT,
+        notes TEXT,
+        tags_json TEXT,
+        target_price REAL,
+        stop_price REAL,
+        price_currency TEXT,
+        source TEXT,
+        source_row_id TEXT,
+        source_metadata_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (watchlist_id) REFERENCES watchlists(id) ON DELETE CASCADE,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE portfolios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        base_currency TEXT NOT NULL DEFAULT 'USD',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE portfolio_lots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        portfolio_id INTEGER NOT NULL,
+        instrument_id INTEGER NOT NULL,
+        quantity REAL NOT NULL,
+        avg_cost REAL NOT NULL,
+        currency TEXT NOT NULL,
+        opened_at TEXT,
+        notes TEXT,
+        source TEXT,
+        source_account_ref TEXT,
+        source_lot_id TEXT,
+        source_row_id TEXT,
+        source_metadata_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE prediction_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        instrument_id INTEGER NOT NULL,
+        direction TEXT NOT NULL,
+        conviction REAL NOT NULL,
+        entry_price REAL NOT NULL,
+        target_price REAL,
+        opened_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        resolved_at TEXT,
+        result_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE alert_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope_type TEXT NOT NULL,
+        scope_id INTEGER,
+        instrument_id INTEGER,
+        condition_type TEXT NOT NULL,
+        condition_version INTEGER NOT NULL,
+        condition_json TEXT NOT NULL,
+        timeframe TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        check_interval_seconds INTEGER,
+        next_check_at TEXT,
+        last_checked_at TEXT,
+        last_observed_json TEXT,
+        cooldown_seconds INTEGER,
+        last_triggered_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE alert_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_rule_id INTEGER NOT NULL,
+        instrument_id INTEGER,
+        observed_value_json TEXT,
+        triggered_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        message TEXT,
+        FOREIGN KEY (alert_rule_id) REFERENCES alert_rules(id) ON DELETE CASCADE,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE report_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        report_type TEXT NOT NULL,
+        cadence TEXT NOT NULL,
+        timezone TEXT NOT NULL,
+        local_time TEXT NOT NULL,
+        config_json TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        last_run_at TEXT,
+        next_run_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE report_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_id INTEGER,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL,
+        artifact_path TEXT,
+        summary_json TEXT,
+        errors_json TEXT,
+        FOREIGN KEY (template_id) REFERENCES report_templates(id) ON DELETE SET NULL
+      );
+
+      CREATE TABLE import_batches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        source_label TEXT,
+        imported_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        raw_metadata_json TEXT
+      );
+
+      CREATE TABLE import_rows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER NOT NULL,
+        row_type TEXT NOT NULL,
+        source_symbol TEXT,
+        normalized_instrument_id INTEGER,
+        status TEXT NOT NULL,
+        error TEXT,
+        raw_json TEXT,
+        FOREIGN KEY (batch_id) REFERENCES import_batches(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO instruments (symbol, asset_type, name, exchange, currency, provider, last_resolved_at, created_at, updated_at)
+      VALUES ('AAPL', 'EQUITY', 'Apple Inc.', 'NMS', 'USD', 'yahoo', '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO watchlists (name, is_default, created_at, updated_at)
+      VALUES ('Default Watchlist', 1, '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO watchlist_items (watchlist_id, instrument_id, notes, target_price, created_at, updated_at)
+      VALUES (1, 1, 'core thesis', 220, '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO portfolios (name, base_currency, is_default, created_at, updated_at)
+      VALUES ('Default Portfolio', 'USD', 1, '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO portfolio_lots (portfolio_id, instrument_id, quantity, avg_cost, currency, created_at, updated_at)
+      VALUES (1, 1, 2, 180, 'USD', '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO prediction_records (instrument_id, direction, conviction, entry_price, opened_at, expires_at, status, created_at, updated_at)
+      VALUES (1, 'bullish', 8, 180, '2026-05-31', '2026-06-30', 'open', '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO alert_rules (scope_type, instrument_id, condition_type, condition_version, condition_json, timeframe, cooldown_seconds, created_at, updated_at)
+      VALUES ('instrument', 1, 'price_crosses_above', 1, '{"threshold":220}', 'quote', 3600, '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO alert_events (alert_rule_id, instrument_id, observed_value_json, triggered_at, status, message)
+      VALUES (1, 1, '{"value":221,"field":"price"}', '2026-05-31T12:01:00.000Z', 'triggered', 'AAPL crossed 220');
+      INSERT INTO report_templates (name, report_type, cadence, timezone, local_time, config_json, created_at, updated_at)
+      VALUES ('Morning Watchlist', 'watchlist_daily', 'daily', 'America/Toronto', '08:00', '{"targets":{"default_watchlist":true}}', '2026-05-31T12:00:00.000Z', '2026-05-31T12:00:00.000Z');
+      INSERT INTO report_runs (template_id, started_at, completed_at, status, summary_json)
+      VALUES (1, '2026-05-31T12:02:00.000Z', '2026-05-31T12:02:03.000Z', 'completed', '{"symbols":1}');
+      INSERT INTO import_batches (source, source_label, imported_at, status)
+      VALUES ('tradingview', 'TV export', '2026-05-31T12:00:00.000Z', 'completed');
+      INSERT INTO import_rows (batch_id, row_type, source_symbol, normalized_instrument_id, status, raw_json)
+      VALUES (1, 'watchlist_item', 'NASDAQ:AAPL', 1, 'imported', '{"Symbol":"NASDAQ:AAPL"}');
+    `);
+    v5.close();
+
+    const migrated = initDatabase(dbPath);
+
+    expect(getSchemaVersion(migrated)).toBe(6);
+    expect(rowCount(migrated, "instruments")).toBe(1);
+    expect(rowCount(migrated, "watchlist_items")).toBe(1);
+    expect(rowCount(migrated, "portfolio_lots")).toBe(1);
+    expect(rowCount(migrated, "prediction_records")).toBe(1);
+    expect(rowCount(migrated, "alert_rules")).toBe(1);
+    expect(rowCount(migrated, "alert_events")).toBe(1);
+    expect(rowCount(migrated, "report_templates")).toBe(1);
+    expect(rowCount(migrated, "report_runs")).toBe(1);
+    expect(rowCount(migrated, "import_rows")).toBe(1);
+
+    const watchlistItem = migrated.prepare("SELECT notes, target_price FROM watchlist_items").get() as {
+      notes: string;
+      target_price: number;
+    };
+    expect(watchlistItem).toEqual({ notes: "core thesis", target_price: 220 });
+
+    migrated.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+
   it("adds import-row provenance columns without dropping existing rows", () => {
     const base = mkdtempSync(join(tmpdir(), "vantage-v5-import-provenance-"));
     const dbPath = join(base, "state.db");

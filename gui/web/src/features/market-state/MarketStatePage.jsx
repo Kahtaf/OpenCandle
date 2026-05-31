@@ -381,27 +381,7 @@ function Predictions({ state, readOnly, invokeTool }) {
 function SymbolActionPanel({ title, fields, disabled, onSubmit }) {
   const [values, setValues] = useState({});
   const [query, setQuery] = useState("");
-  const [candidates, setCandidates] = useState([]);
   const [selected, setSelected] = useState("");
-
-  useEffect(() => {
-    let disposed = false;
-    if (query.trim().length < 2) {
-      setCandidates([]);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      searchInstruments(query).then((items) => {
-        if (!disposed) setCandidates(items.slice(0, 5));
-      }).catch(() => {
-        if (!disposed) setCandidates([]);
-      });
-    }, 180);
-    return () => {
-      disposed = true;
-      window.clearTimeout(timer);
-    };
-  }, [query]);
 
   const submit = (event) => {
     event.preventDefault();
@@ -411,44 +391,18 @@ function SymbolActionPanel({ title, fields, disabled, onSubmit }) {
     setValues({});
     setQuery("");
     setSelected("");
-    setCandidates([]);
   };
 
   return (
     <Panel title={title} meta={selected ? `Selected ${selected}` : "Search Yahoo candidates before saving"}>
       <form className="grid gap-3 lg:grid-cols-[minmax(220px,1.2fr)_repeat(3,minmax(120px,0.7fr))_auto]" onSubmit={submit}>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" />
-          <Input
-            className="pl-9"
-            placeholder="Search ticker or company"
-            value={query}
-            disabled={disabled}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setSelected("");
-            }}
-          />
-          {candidates.length ? (
-            <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-subtle-md">
-              {candidates.map((candidate) => (
-                <button
-                  key={`${candidate.provider}:${candidate.symbol}:${candidate.exchange}`}
-                  type="button"
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-secondary"
-                  onClick={() => {
-                    setSelected(candidate.symbol);
-                    setQuery(`${candidate.symbol} - ${candidate.name || candidate.quoteType}`);
-                    setCandidates([]);
-                  }}
-                >
-                  <span className="font-medium text-foreground">{candidate.symbol}</span>
-                  <span className="truncate text-muted-foreground">{candidate.name || candidate.quoteType}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <SymbolSearchInput
+          query={query}
+          selected={selected}
+          disabled={disabled}
+          onQueryChange={setQuery}
+          onSelectedChange={setSelected}
+        />
         {fields.map((field) => (
           <Input
             key={field.name}
@@ -466,32 +420,102 @@ function SymbolActionPanel({ title, fields, disabled, onSubmit }) {
   );
 }
 
+function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
+  const [candidates, setCandidates] = useState([]);
+
+  useEffect(() => {
+    let disposed = false;
+    if (query.trim().length < 2 || selected) {
+      setCandidates([]);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      searchInstruments(query).then((items) => {
+        if (!disposed) setCandidates(items.slice(0, 5));
+      }).catch(() => {
+        if (!disposed) setCandidates([]);
+      });
+    }, 180);
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [query, selected]);
+
+  return (
+    <div className="relative">
+      <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" />
+      <Input
+        className="pl-9"
+        placeholder="Search ticker or company"
+        value={query}
+        disabled={disabled}
+        onChange={(event) => {
+          onQueryChange(event.target.value);
+          onSelectedChange("");
+        }}
+      />
+      {candidates.length ? (
+        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-subtle-md">
+          {candidates.map((candidate) => (
+            <button
+              key={`${candidate.provider}:${candidate.symbol}:${candidate.exchange}`}
+              type="button"
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-secondary"
+              onClick={() => {
+                onSelectedChange(candidate.symbol);
+                onQueryChange(`${candidate.symbol} - ${candidate.name || candidate.quoteType}`);
+                setCandidates([]);
+              }}
+            >
+              <span className="font-medium text-foreground">{candidate.symbol}</span>
+              <span className="truncate text-muted-foreground">{candidate.name || candidate.quoteType}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AlertCreateForm({ disabled, invokeTool }) {
-  const [symbol, setSymbol] = useState("");
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState("");
   const [threshold, setThreshold] = useState("");
   const [condition, setCondition] = useState("create_price_above");
   const [period, setPeriod] = useState("14");
+  const [cooldown, setCooldown] = useState("3600");
   const needsThreshold = !condition.includes("_sma");
   const needsPeriod = condition.includes("_sma") || condition.includes("_rsi_") || condition === "create_volume_spike";
   return (
     <form
-      className="grid gap-3 sm:grid-cols-[1fr_150px_120px_170px_auto]"
+      className="grid gap-3 lg:grid-cols-[minmax(220px,1.2fr)_140px_120px_140px_170px_auto]"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!symbol.trim() || (needsThreshold && !threshold)) return;
+        const symbol = selected || query.trim().toUpperCase();
+        if (!symbol || (needsThreshold && !threshold)) return;
         invokeTool("manage_alerts", {
           action: condition,
-          symbol: symbol.trim().toUpperCase(),
+          symbol,
           threshold: needsThreshold ? Number(threshold) : undefined,
           period: needsPeriod ? Number(period) : undefined,
+          cooldown_seconds: numberOrUndefined(cooldown),
         });
-        setSymbol("");
+        setQuery("");
+        setSelected("");
         setThreshold("");
       }}
     >
-      <Input placeholder="Symbol" value={symbol} disabled={disabled} onChange={(event) => setSymbol(event.target.value)} />
+      <SymbolSearchInput
+        query={query}
+        selected={selected}
+        disabled={disabled}
+        onQueryChange={setQuery}
+        onSelectedChange={setSelected}
+      />
       <Input type="number" placeholder={needsThreshold ? "Threshold" : "No threshold"} value={threshold} disabled={disabled || !needsThreshold} onChange={(event) => setThreshold(event.target.value)} />
       <Input type="number" placeholder="Period" value={period} disabled={disabled || !needsPeriod} onChange={(event) => setPeriod(event.target.value)} />
+      <Input type="number" placeholder="Cooldown sec" value={cooldown} disabled={disabled} onChange={(event) => setCooldown(event.target.value)} />
       <select
         className="h-11 rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
         value={condition}
@@ -506,7 +530,7 @@ function AlertCreateForm({ disabled, invokeTool }) {
         <option value="create_rsi_below">RSI below</option>
         <option value="create_volume_spike">Volume spike</option>
       </select>
-      <Button type="submit" variant="brand" disabled={disabled || !symbol.trim() || (needsThreshold && !threshold)}>Create</Button>
+      <Button type="submit" variant="brand" disabled={disabled || !query.trim() || (needsThreshold && !threshold)}>Create</Button>
     </form>
   );
 }
