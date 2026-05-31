@@ -136,6 +136,17 @@ export interface ReportTemplateRecord {
   updatedAt: string;
 }
 
+export interface ReportRunRecord {
+  id: number;
+  templateId: number | null;
+  startedAt: string;
+  completedAt: string | null;
+  status: string;
+  artifactPath: string | null;
+  summaryJson: unknown;
+  errorsJson: unknown;
+}
+
 interface WatchlistRow {
   id: number;
   name: string;
@@ -259,6 +270,17 @@ type ReportTemplateRow = {
   next_run_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type ReportRunRow = {
+  id: number;
+  template_id: number | null;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  artifact_path: string | null;
+  summary_json: string | null;
+  errors_json: string | null;
 };
 
 export class MarketStateService {
@@ -654,6 +676,49 @@ export class MarketStateService {
     return this.getReportTemplate(Number(result.lastInsertRowid));
   }
 
+  listReportTemplates(): ReportTemplateRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM report_templates ORDER BY created_at, id")
+      .all() as ReportTemplateRow[];
+    return rows.map(mapReportTemplate);
+  }
+
+  recordReportRun(params: {
+    templateId?: number | null;
+    startedAt?: string;
+    completedAt?: string | null;
+    status: string;
+    artifactPath?: string | null;
+    summary?: unknown;
+    errors?: unknown;
+  }): ReportRunRecord {
+    const startedAt = params.startedAt ?? new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO report_runs (
+           template_id, started_at, completed_at, status, artifact_path, summary_json, errors_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.templateId ?? null,
+        startedAt,
+        params.completedAt ?? null,
+        params.status,
+        params.artifactPath ?? null,
+        params.summary == null ? null : JSON.stringify(params.summary),
+        params.errors == null ? null : JSON.stringify(params.errors),
+      );
+    return this.getReportRun(Number(result.lastInsertRowid));
+  }
+
+  listReportRuns(): ReportRunRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM report_runs ORDER BY started_at DESC, id DESC")
+      .all() as ReportRunRow[];
+    return rows.map(mapReportRun);
+  }
+
   private upsertInstrument(input: InstrumentInput): InstrumentRow {
     const symbol = input.symbol.trim().toUpperCase();
     const assetType = input.assetType.trim().toLowerCase();
@@ -765,6 +830,11 @@ export class MarketStateService {
       .prepare("SELECT * FROM report_templates WHERE id = ?")
       .get(id) as ReportTemplateRow;
     return mapReportTemplate(row);
+  }
+
+  private getReportRun(id: number): ReportRunRecord {
+    const row = this.db.prepare("SELECT * FROM report_runs WHERE id = ?").get(id) as ReportRunRow;
+    return mapReportRun(row);
   }
 }
 
@@ -900,6 +970,19 @@ function mapReportTemplate(row: ReportTemplateRow): ReportTemplateRecord {
     nextRunAt: row.next_run_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapReportRun(row: ReportRunRow): ReportRunRecord {
+  return {
+    id: row.id,
+    templateId: row.template_id,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    status: row.status,
+    artifactPath: row.artifact_path,
+    summaryJson: row.summary_json == null ? null : JSON.parse(row.summary_json),
+    errorsJson: row.errors_json == null ? null : JSON.parse(row.errors_json),
   };
 }
 

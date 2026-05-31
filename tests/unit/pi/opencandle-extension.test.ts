@@ -89,9 +89,10 @@ describe("opencandle extension", () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);
 
-    expect(fake.tools).toHaveLength(31);
+    expect(fake.tools).toHaveLength(32);
     expect(fake.tools.map((tool) => tool.name)).toContain("analyze_holdings_overlap");
     expect(fake.tools.map((tool) => tool.name)).toContain("manage_alerts");
+    expect(fake.tools.map((tool) => tool.name)).toContain("daily_watchlist_report");
     expect(fake.commands.has("analyze")).toBe(true);
     expect(fake.commands.has("setup")).toBe(true);
   });

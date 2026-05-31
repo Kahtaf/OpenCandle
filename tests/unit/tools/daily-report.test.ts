@@ -1,0 +1,89 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
+import { dailyReportTool } from "../../../src/tools/portfolio/daily-report.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import type { StockQuote } from "../../../src/types/market.js";
+
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
+}));
+
+describe("dailyReportTool", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-report-test-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol.toUpperCase(), symbol.toUpperCase() === "MSFT" ? 420 : 180),
+    );
+  });
+
+  afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    rmSync(openCandleHome, { recursive: true, force: true });
+    vi.clearAllMocks();
+  });
+
+  it("generates and records a default watchlist report", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
+    await watchlistTool.execute("test", { action: "add", symbol: "MSFT" });
+
+    const result = await dailyReportTool.execute("test", { action: "run" });
+
+    expect(result.content[0].text).toContain("Daily Watchlist Report");
+    expect(result.content[0].text).toContain("Target watchlist: Default");
+    expect(result.content[0].text).toContain("Quote freshness");
+    expect(result.content[0].text).toContain("Major movers");
+    expect(result.content[0].text).toContain("Recent alerts");
+    expect(result.content[0].text).toContain("Technical snapshot");
+    expect(result.content[0].text).toContain("Data gaps");
+    expect(result.details).toMatchObject({ status: "completed" });
+
+    const history = await dailyReportTool.execute("test", { action: "history" });
+    expect(history.content[0].text).toContain("completed");
+  });
+
+  it("configures the morning report with timezone and local time", async () => {
+    const result = await dailyReportTool.execute("test", {
+      action: "configure",
+      timezone: "America/Toronto",
+      local_time: "08:00",
+    });
+
+    expect(result.details).toMatchObject({
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+    });
+  });
+});
+
+function quote(symbol: string, price: number): StockQuote {
+  return {
+    symbol,
+    price,
+    change: price === 420 ? 5 : -1,
+    changePercent: price === 420 ? 1.2 : -0.5,
+    open: price,
+    high: price,
+    low: price,
+    previousClose: price,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: price + 10,
+    week52Low: price - 10,
+    timestamp: Date.now(),
+  };
+}
