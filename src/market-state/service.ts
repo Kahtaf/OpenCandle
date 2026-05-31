@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 export type AssetType = "equity" | "etf" | "fund" | "crypto" | "index" | "option" | "unknown";
 export type PredictionDirection = "bullish" | "bearish" | "neutral";
 export type PredictionStatus = "open" | "resolved" | "expired" | "cancelled";
+export type AlertScopeType = "instrument" | "watchlist" | "portfolio";
 
 export interface InstrumentInput {
   symbol: string;
@@ -74,6 +75,41 @@ export interface PredictionRecord {
   status: PredictionStatus;
   resolvedAt: string | null;
   resultJson: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertRuleRecord {
+  id: number;
+  scopeType: AlertScopeType;
+  scopeId: number | null;
+  instrumentId: number | null;
+  conditionType: string;
+  conditionVersion: number;
+  conditionJson: unknown;
+  timeframe: string;
+  enabled: boolean;
+  checkIntervalSeconds: number | null;
+  nextCheckAt: string | null;
+  lastCheckedAt: string | null;
+  lastObservedJson: unknown;
+  cooldownSeconds: number | null;
+  lastTriggeredAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ReportTemplateRecord {
+  id: number;
+  name: string;
+  reportType: string;
+  cadence: string;
+  timezone: string;
+  localTime: string;
+  configJson: unknown;
+  enabled: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -154,6 +190,41 @@ type PredictionRow = {
   status: PredictionStatus;
   resolved_at: string | null;
   result_json: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type AlertRuleRow = {
+  id: number;
+  scope_type: AlertScopeType;
+  scope_id: number | null;
+  instrument_id: number | null;
+  condition_type: string;
+  condition_version: number;
+  condition_json: string;
+  timeframe: string;
+  enabled: number;
+  check_interval_seconds: number | null;
+  next_check_at: string | null;
+  last_checked_at: string | null;
+  last_observed_json: string | null;
+  cooldown_seconds: number | null;
+  last_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ReportTemplateRow = {
+  id: number;
+  name: string;
+  report_type: string;
+  cadence: string;
+  timezone: string;
+  local_time: string;
+  config_json: string;
+  enabled: number;
+  last_run_at: string | null;
+  next_run_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -402,6 +473,88 @@ export class MarketStateService {
     return rows.map(mapPrediction);
   }
 
+  createAlertRule(params: {
+    scopeType: AlertScopeType;
+    scopeId?: number;
+    instrumentId?: number;
+    conditionType: string;
+    conditionVersion: number;
+    condition: unknown;
+    timeframe: string;
+    enabled?: boolean;
+    checkIntervalSeconds?: number;
+    nextCheckAt?: string;
+    cooldownSeconds?: number;
+  }): AlertRuleRecord {
+    const now = new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO alert_rules (
+           scope_type, scope_id, instrument_id, condition_type, condition_version,
+           condition_json, timeframe, enabled, check_interval_seconds, next_check_at,
+           cooldown_seconds, created_at, updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.scopeType,
+        params.scopeId ?? null,
+        params.instrumentId ?? null,
+        params.conditionType,
+        params.conditionVersion,
+        JSON.stringify(params.condition),
+        params.timeframe,
+        params.enabled === false ? 0 : 1,
+        params.checkIntervalSeconds ?? null,
+        params.nextCheckAt ?? null,
+        params.cooldownSeconds ?? null,
+        now,
+        now,
+      );
+    return this.getAlertRule(Number(result.lastInsertRowid));
+  }
+
+  listAlertRules(): AlertRuleRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM alert_rules ORDER BY created_at, id")
+      .all() as AlertRuleRow[];
+    return rows.map(mapAlertRule);
+  }
+
+  createReportTemplate(params: {
+    name: string;
+    reportType: string;
+    cadence: string;
+    timezone: string;
+    localTime: string;
+    config: unknown;
+    enabled?: boolean;
+    nextRunAt?: string;
+  }): ReportTemplateRecord {
+    const now = new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO report_templates (
+           name, report_type, cadence, timezone, local_time, config_json,
+           enabled, next_run_at, created_at, updated_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.name,
+        params.reportType,
+        params.cadence,
+        params.timezone,
+        params.localTime,
+        JSON.stringify(params.config),
+        params.enabled === false ? 0 : 1,
+        params.nextRunAt ?? null,
+        now,
+        now,
+      );
+    return this.getReportTemplate(Number(result.lastInsertRowid));
+  }
+
   private upsertInstrument(input: InstrumentInput): InstrumentRow {
     const symbol = input.symbol.trim().toUpperCase();
     const assetType = input.assetType.trim().toLowerCase();
@@ -497,6 +650,18 @@ export class MarketStateService {
       .get(id) as PredictionRow;
     return mapPrediction(row);
   }
+
+  private getAlertRule(id: number): AlertRuleRecord {
+    const row = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(id) as AlertRuleRow;
+    return mapAlertRule(row);
+  }
+
+  private getReportTemplate(id: number): ReportTemplateRecord {
+    const row = this.db
+      .prepare("SELECT * FROM report_templates WHERE id = ?")
+      .get(id) as ReportTemplateRow;
+    return mapReportTemplate(row);
+  }
 }
 
 function mapCollection(row: WatchlistRow): CollectionRecord {
@@ -564,6 +729,45 @@ function mapPrediction(row: PredictionRow): PredictionRecord {
     status: row.status,
     resolvedAt: row.resolved_at,
     resultJson: row.result_json,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapAlertRule(row: AlertRuleRow): AlertRuleRecord {
+  return {
+    id: row.id,
+    scopeType: row.scope_type,
+    scopeId: row.scope_id,
+    instrumentId: row.instrument_id,
+    conditionType: row.condition_type,
+    conditionVersion: row.condition_version,
+    conditionJson: JSON.parse(row.condition_json),
+    timeframe: row.timeframe,
+    enabled: row.enabled === 1,
+    checkIntervalSeconds: row.check_interval_seconds,
+    nextCheckAt: row.next_check_at,
+    lastCheckedAt: row.last_checked_at,
+    lastObservedJson: row.last_observed_json == null ? null : JSON.parse(row.last_observed_json),
+    cooldownSeconds: row.cooldown_seconds,
+    lastTriggeredAt: row.last_triggered_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapReportTemplate(row: ReportTemplateRow): ReportTemplateRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    reportType: row.report_type,
+    cadence: row.cadence,
+    timezone: row.timezone,
+    localTime: row.local_time,
+    configJson: JSON.parse(row.config_json),
+    enabled: row.enabled === 1,
+    lastRunAt: row.last_run_at,
+    nextRunAt: row.next_run_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
