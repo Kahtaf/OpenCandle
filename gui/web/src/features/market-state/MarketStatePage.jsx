@@ -329,6 +329,23 @@ function Reports({ state, readOnly, invokeTool }) {
           </Button>
         </div>
       </Panel>
+      <Panel title="Report Templates" count={state.reportTemplates.length}>
+        {state.reportTemplates.length === 0 ? (
+          <EmptyState icon={FileText} title="No report template configured" action="Configure the morning report to preserve schedule metadata." />
+        ) : (
+          <DataTable
+            columns={["Name", "Type", "Cadence", "Local time", "Timezone", "Status"]}
+            rows={state.reportTemplates.map((template) => [
+              template.name,
+              template.reportType,
+              template.cadence,
+              template.localTime,
+              template.timezone,
+              template.enabled ? "Enabled" : "Disabled",
+            ])}
+          />
+        )}
+      </Panel>
       <Panel title="Report Runs" count={state.reportRuns.length}>
         {state.reportRuns.length === 0 ? (
           <EmptyState icon={FileText} title="No reports generated" action="Generate today's watchlist report to create history." />

@@ -16,4 +16,16 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("No holdings yet");
     expect(html).toContain("Skip For Now");
   });
+
+  it("renders report templates as durable report state", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "reports",
+      role: "writer",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+    }));
+
+    expect(html).toContain("Report Templates");
+  });
 });
