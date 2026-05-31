@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -134,6 +134,10 @@ const CURRENT_SCHEMA = `
     FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
   );
 
+  CREATE INDEX IF NOT EXISTS idx_watchlist_items_source_row
+    ON watchlist_items(source, source_row_id)
+    WHERE source IS NOT NULL AND source_row_id IS NOT NULL;
+
   CREATE TABLE IF NOT EXISTS portfolios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -166,6 +170,13 @@ const CURRENT_SCHEMA = `
     FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE,
     FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
   );
+
+  CREATE INDEX IF NOT EXISTS idx_portfolio_lots_source_row
+    ON portfolio_lots(source, source_row_id)
+    WHERE source IS NOT NULL AND source_row_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_portfolio_lots_source_lot
+    ON portfolio_lots(source, source_lot_id)
+    WHERE source IS NOT NULL AND source_lot_id IS NOT NULL;
 
   CREATE TABLE IF NOT EXISTS prediction_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,13 +269,20 @@ const CURRENT_SCHEMA = `
     batch_id INTEGER NOT NULL,
     row_type TEXT NOT NULL,
     source_symbol TEXT,
+    source_row_id TEXT,
+    source_account_ref TEXT,
     normalized_instrument_id INTEGER,
     status TEXT NOT NULL,
     error TEXT,
+    source_metadata_json TEXT,
     raw_json TEXT,
     FOREIGN KEY (batch_id) REFERENCES import_batches(id) ON DELETE CASCADE,
     FOREIGN KEY (normalized_instrument_id) REFERENCES instruments(id) ON DELETE SET NULL
   );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_import_rows_batch_source_row
+    ON import_rows(batch_id, source_row_id)
+    WHERE source_row_id IS NOT NULL;
 `;
 
 export function initDatabase(path: string): Database.Database {
@@ -293,22 +311,30 @@ function ensureCurrentSchema(db: Database.Database): void {
     return;
   }
 
+  if (currentVersion === 5) {
+    migrateV5ToV6(db);
+    return;
+  }
+
   if (currentVersion === 4) {
     migrateV4ToV5(db);
+    migrateV5ToV6(db);
     return;
   }
 
   if (currentVersion === 3) {
     migrateV3ToV4(db);
     migrateV4ToV5(db);
+    migrateV5ToV6(db);
     return;
   }
 
-  // Additive v2 → v3 → v4 → v5 migration without dropping data.
+  // Additive v2 → v3 → v4 → v5 → v6 migration without dropping data.
   if (currentVersion === 2) {
     migrateV2ToV3(db);
     migrateV3ToV4(db);
     migrateV4ToV5(db);
+    migrateV5ToV6(db);
     return;
   }
 
@@ -345,7 +371,30 @@ function migrateV4ToV5(db: Database.Database): void {
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(5);
+}
+
+function migrateV5ToV6(db: Database.Database): void {
+  addColumnIfMissing(db, "import_rows", "source_row_id", "TEXT");
+  addColumnIfMissing(db, "import_rows", "source_account_ref", "TEXT");
+  addColumnIfMissing(db, "import_rows", "source_metadata_json", "TEXT");
+
+  db.exec(CURRENT_SCHEMA);
+
+  db.prepare("DELETE FROM schema_version").run();
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
+}
+
+function addColumnIfMissing(
+  db: Database.Database,
+  tableName: string,
+  columnName: string,
+  definition: string,
+): void {
+  const cols = (db.pragma(`table_info(${tableName})`) as Array<{ name: string }>).map((c) => c.name);
+  if (!cols.includes(columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
 }
 
 function readSchemaVersion(db: Database.Database): number | null {

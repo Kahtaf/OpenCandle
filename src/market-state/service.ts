@@ -52,6 +52,9 @@ export interface WatchlistItemRecord {
   thesis: string | null;
   notes: string | null;
   tags: string[] | null;
+  source: string | null;
+  sourceRowId: string | null;
+  sourceMetadata: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -70,6 +73,11 @@ export interface PortfolioLotRecord {
   currency: string;
   openedAt: string | null;
   notes: string | null;
+  source: string | null;
+  sourceAccountRef: string | null;
+  sourceLotId: string | null;
+  sourceRowId: string | null;
+  sourceMetadata: unknown;
   createdAt: string;
   updatedAt: string;
 }
@@ -147,6 +155,29 @@ export interface ReportRunRecord {
   errorsJson: unknown;
 }
 
+export interface ImportBatchRecord {
+  id: number;
+  source: string;
+  sourceLabel: string | null;
+  importedAt: string;
+  status: string;
+  rawMetadata: unknown;
+}
+
+export interface ImportRowRecord {
+  id: number;
+  batchId: number;
+  rowType: string;
+  sourceSymbol: string | null;
+  sourceRowId: string | null;
+  sourceAccountRef: string | null;
+  normalizedInstrumentId: number | null;
+  status: string;
+  error: string | null;
+  sourceMetadata: unknown;
+  raw: unknown;
+}
+
 interface WatchlistRow {
   id: number;
   name: string;
@@ -188,6 +219,9 @@ type WatchlistItemRow = {
   thesis: string | null;
   notes: string | null;
   tags_json: string | null;
+  source: string | null;
+  source_row_id: string | null;
+  source_metadata_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -206,6 +240,11 @@ type PortfolioLotRow = {
   currency: string;
   opened_at: string | null;
   notes: string | null;
+  source: string | null;
+  source_account_ref: string | null;
+  source_lot_id: string | null;
+  source_row_id: string | null;
+  source_metadata_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -283,6 +322,29 @@ type ReportRunRow = {
   errors_json: string | null;
 };
 
+type ImportBatchRow = {
+  id: number;
+  source: string;
+  source_label: string | null;
+  imported_at: string;
+  status: string;
+  raw_metadata_json: string | null;
+};
+
+type ImportRowRow = {
+  id: number;
+  batch_id: number;
+  row_type: string;
+  source_symbol: string | null;
+  source_row_id: string | null;
+  source_account_ref: string | null;
+  normalized_instrument_id: number | null;
+  status: string;
+  error: string | null;
+  source_metadata_json: string | null;
+  raw_json: string | null;
+};
+
 export class MarketStateService {
   constructor(private readonly db: Database.Database) {}
 
@@ -330,6 +392,9 @@ export class MarketStateService {
     thesis?: string;
     notes?: string;
     tags?: string[];
+    source?: string;
+    sourceRowId?: string;
+    sourceMetadata?: unknown;
   }): WatchlistItemRecord {
     const tx = this.db.transaction(() => {
       const watchlistId = params.watchlistId ?? this.getDefaultWatchlist().id;
@@ -347,7 +412,8 @@ export class MarketStateService {
           .prepare(
             `UPDATE watchlist_items
              SET target_price = ?, stop_price = ?, price_currency = ?, thesis = ?,
-                 notes = ?, tags_json = ?, updated_at = ?
+                 notes = ?, tags_json = ?, source = ?, source_row_id = ?,
+                 source_metadata_json = ?, updated_at = ?
              WHERE id = ?`,
           )
           .run(
@@ -357,6 +423,9 @@ export class MarketStateService {
             params.thesis ?? null,
             params.notes ?? null,
             params.tags == null ? null : JSON.stringify(params.tags),
+            normalizeNullable(params.source),
+            normalizeNullable(params.sourceRowId),
+            params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
             now,
             existing.id,
           );
@@ -367,9 +436,10 @@ export class MarketStateService {
         .prepare(
           `INSERT INTO watchlist_items (
              watchlist_id, instrument_id, thesis, notes, tags_json,
-             target_price, stop_price, price_currency, created_at, updated_at
+             target_price, stop_price, price_currency, source, source_row_id,
+             source_metadata_json, created_at, updated_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           watchlistId,
@@ -380,6 +450,9 @@ export class MarketStateService {
           params.targetPrice ?? null,
           params.stopPrice ?? null,
           params.priceCurrency ?? params.instrument.currency ?? null,
+          normalizeNullable(params.source),
+          normalizeNullable(params.sourceRowId),
+          params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
           now,
           now,
         );
@@ -421,6 +494,11 @@ export class MarketStateService {
     currency: string;
     openedAt?: string;
     notes?: string;
+    source?: string;
+    sourceAccountRef?: string;
+    sourceLotId?: string;
+    sourceRowId?: string;
+    sourceMetadata?: unknown;
   }): PortfolioLotRecord {
     const tx = this.db.transaction(() => {
       const portfolioId = params.portfolioId ?? this.getDefaultPortfolio().id;
@@ -430,9 +508,10 @@ export class MarketStateService {
         .prepare(
           `INSERT INTO portfolio_lots (
              portfolio_id, instrument_id, quantity, avg_cost, currency,
-             opened_at, notes, created_at, updated_at
+             opened_at, notes, source, source_account_ref, source_lot_id,
+             source_row_id, source_metadata_json, created_at, updated_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           portfolioId,
@@ -442,6 +521,11 @@ export class MarketStateService {
           params.currency.toUpperCase(),
           params.openedAt ?? now,
           params.notes ?? null,
+          normalizeNullable(params.source),
+          normalizeNullable(params.sourceAccountRef),
+          normalizeNullable(params.sourceLotId),
+          normalizeNullable(params.sourceRowId),
+          params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
           now,
           now,
         );
@@ -736,6 +820,66 @@ export class MarketStateService {
     return rows.map(mapReportRun);
   }
 
+  recordImportBatch(params: {
+    source: string;
+    sourceLabel?: string;
+    importedAt?: string;
+    status: string;
+    rawMetadata?: unknown;
+  }): ImportBatchRecord {
+    const importedAt = params.importedAt ?? new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO import_batches (
+           source, source_label, imported_at, status, raw_metadata_json
+         )
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(
+        normalizeNullable(params.source) ?? "unknown",
+        normalizeNullable(params.sourceLabel),
+        importedAt,
+        params.status,
+        params.rawMetadata == null ? null : JSON.stringify(params.rawMetadata),
+      );
+    return this.getImportBatch(Number(result.lastInsertRowid));
+  }
+
+  recordImportRow(params: {
+    batchId: number;
+    rowType: string;
+    sourceSymbol?: string;
+    sourceRowId?: string;
+    sourceAccountRef?: string;
+    normalizedInstrumentId?: number | null;
+    status: string;
+    error?: string;
+    sourceMetadata?: unknown;
+    raw?: unknown;
+  }): ImportRowRecord {
+    const result = this.db
+      .prepare(
+        `INSERT INTO import_rows (
+           batch_id, row_type, source_symbol, source_row_id, source_account_ref,
+           normalized_instrument_id, status, error, source_metadata_json, raw_json
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.batchId,
+        params.rowType,
+        normalizeNullable(params.sourceSymbol),
+        normalizeNullable(params.sourceRowId),
+        normalizeNullable(params.sourceAccountRef),
+        params.normalizedInstrumentId ?? null,
+        params.status,
+        normalizeNullable(params.error),
+        params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
+        params.raw == null ? null : JSON.stringify(params.raw),
+      );
+    return this.getImportRow(Number(result.lastInsertRowid));
+  }
+
   private upsertInstrument(input: InstrumentInput): InstrumentRow {
     const symbol = input.symbol.trim().toUpperCase();
     const assetType = input.assetType.trim().toLowerCase();
@@ -853,6 +997,16 @@ export class MarketStateService {
     const row = this.db.prepare("SELECT * FROM report_runs WHERE id = ?").get(id) as ReportRunRow;
     return mapReportRun(row);
   }
+
+  private getImportBatch(id: number): ImportBatchRecord {
+    const row = this.db.prepare("SELECT * FROM import_batches WHERE id = ?").get(id) as ImportBatchRow;
+    return mapImportBatch(row);
+  }
+
+  private getImportRow(id: number): ImportRowRecord {
+    const row = this.db.prepare("SELECT * FROM import_rows WHERE id = ?").get(id) as ImportRowRow;
+    return mapImportRow(row);
+  }
 }
 
 function mapCollection(row: WatchlistRow): CollectionRecord {
@@ -895,6 +1049,9 @@ function mapWatchlistItem(row: WatchlistItemRow): WatchlistItemRecord {
     thesis: row.thesis,
     notes: row.notes,
     tags: row.tags_json == null ? null : JSON.parse(row.tags_json) as string[],
+    source: row.source,
+    sourceRowId: row.source_row_id,
+    sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -915,6 +1072,11 @@ function mapPortfolioLot(row: PortfolioLotRow): PortfolioLotRecord {
     currency: row.currency,
     openedAt: row.opened_at,
     notes: row.notes,
+    source: row.source,
+    sourceAccountRef: row.source_account_ref,
+    sourceLotId: row.source_lot_id,
+    sourceRowId: row.source_row_id,
+    sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -1000,6 +1162,33 @@ function mapReportRun(row: ReportRunRow): ReportRunRecord {
     artifactPath: row.artifact_path,
     summaryJson: row.summary_json == null ? null : JSON.parse(row.summary_json),
     errorsJson: row.errors_json == null ? null : JSON.parse(row.errors_json),
+  };
+}
+
+function mapImportBatch(row: ImportBatchRow): ImportBatchRecord {
+  return {
+    id: row.id,
+    source: row.source,
+    sourceLabel: row.source_label,
+    importedAt: row.imported_at,
+    status: row.status,
+    rawMetadata: row.raw_metadata_json == null ? null : JSON.parse(row.raw_metadata_json),
+  };
+}
+
+function mapImportRow(row: ImportRowRow): ImportRowRecord {
+  return {
+    id: row.id,
+    batchId: row.batch_id,
+    rowType: row.row_type,
+    sourceSymbol: row.source_symbol,
+    sourceRowId: row.source_row_id,
+    sourceAccountRef: row.source_account_ref,
+    normalizedInstrumentId: row.normalized_instrument_id,
+    status: row.status,
+    error: row.error,
+    sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
+    raw: row.raw_json == null ? null : JSON.parse(row.raw_json),
   };
 }
 

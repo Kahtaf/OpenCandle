@@ -42,8 +42,8 @@ describe("initDatabase", () => {
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 5", () => {
-    expect(getSchemaVersion(db)).toBe(5);
+  it("sets schema version to 6", () => {
+    expect(getSchemaVersion(db)).toBe(6);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -118,7 +118,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(5);
+    expect(getSchemaVersion(resetDb)).toBe(6);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
@@ -231,7 +231,7 @@ describe("v2 → v3 additive migration", () => {
     // Run the migration.
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(5);
+    expect(getSchemaVersion(migrated)).toBe(6);
 
     // (a) zero row loss
     const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
@@ -327,13 +327,79 @@ describe("v4 → v5 market-state migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(5);
+    expect(getSchemaVersion(migrated)).toBe(6);
     expect(getTableNames(migrated)).toContain("watchlist_items");
     expect(getTableNames(migrated)).toContain("portfolio_lots");
     expect(getTableNames(migrated)).toContain("prediction_records");
 
     const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
     expect(prefCount).toBe(1);
+
+    migrated.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+});
+
+describe("v5 → v6 import provenance migration", () => {
+  it("adds import-row provenance columns without dropping existing rows", () => {
+    const base = mkdtempSync(join(tmpdir(), "vantage-v5-import-provenance-"));
+    const dbPath = join(base, "state.db");
+
+    const v5 = new Database(dbPath);
+    v5.pragma("journal_mode = WAL");
+    v5.pragma("foreign_keys = ON");
+    v5.exec(`
+      CREATE TABLE schema_version (version INTEGER NOT NULL);
+      INSERT INTO schema_version (version) VALUES (5);
+
+      CREATE TABLE import_batches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        source_label TEXT,
+        imported_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        raw_metadata_json TEXT
+      );
+
+      CREATE TABLE import_rows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER NOT NULL,
+        row_type TEXT NOT NULL,
+        source_symbol TEXT,
+        normalized_instrument_id INTEGER,
+        status TEXT NOT NULL,
+        error TEXT,
+        raw_json TEXT,
+        FOREIGN KEY (batch_id) REFERENCES import_batches(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO import_batches (source, source_label, imported_at, status, raw_metadata_json)
+      VALUES ('tradingview', 'TV export', '2026-05-31T13:00:00.000Z', 'completed', '{"file":"watchlist.csv"}');
+
+      INSERT INTO import_rows (batch_id, row_type, source_symbol, status, raw_json)
+      VALUES (1, 'watchlist_item', 'NASDAQ:AAPL', 'imported', '{"Symbol":"NASDAQ:AAPL"}');
+    `);
+    v5.close();
+
+    const migrated = initDatabase(dbPath);
+
+    expect(getSchemaVersion(migrated)).toBe(6);
+
+    const cols = (migrated.pragma("table_info(import_rows)") as Array<{ name: string }>).map((c) => c.name);
+    expect(cols).toEqual(expect.arrayContaining([
+      "source_row_id",
+      "source_account_ref",
+      "source_metadata_json",
+    ]));
+
+    const row = migrated.prepare("SELECT source_symbol, raw_json FROM import_rows").get() as {
+      source_symbol: string;
+      raw_json: string;
+    };
+    expect(row).toEqual({
+      source_symbol: "NASDAQ:AAPL",
+      raw_json: '{"Symbol":"NASDAQ:AAPL"}',
+    });
 
     migrated.close();
     rmSync(base, { recursive: true, force: true });

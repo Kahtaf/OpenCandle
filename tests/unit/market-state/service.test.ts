@@ -96,6 +96,76 @@ describe("MarketStateService", () => {
     expect(lots[0].symbol).toBe("VTI");
   });
 
+  it("represents import provenance on import rows and saved market-state rows", () => {
+    const batch = service.recordImportBatch({
+      source: "tradingview",
+      sourceLabel: "TradingView watchlist export",
+      importedAt: "2026-05-31T13:00:00.000Z",
+      status: "completed",
+      rawMetadata: { filename: "watchlist.csv" },
+    });
+    const importRow = service.recordImportRow({
+      batchId: batch.id,
+      rowType: "watchlist_item",
+      sourceSymbol: "NASDAQ:AAPL",
+      sourceRowId: "tv-row-1",
+      status: "imported",
+      raw: { Symbol: "NASDAQ:AAPL" },
+      sourceMetadata: { watchlist: "Growth" },
+    });
+
+    const watchlistItem = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      source: "tradingview",
+      sourceRowId: importRow.sourceRowId ?? undefined,
+      sourceMetadata: { importRowId: importRow.id },
+    });
+    const portfolioLot = service.addPortfolioLot({
+      instrument: {
+        symbol: "IBKR",
+        assetType: "equity",
+        name: "Interactive Brokers Group, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 4,
+      avgCost: 100,
+      currency: "USD",
+      source: "interactive_brokers",
+      sourceAccountRef: "account-ending-1234",
+      sourceLotId: "lot-9",
+      sourceRowId: "ib-row-9",
+      sourceMetadata: { importRowId: 9 },
+    });
+
+    expect(batch.rawMetadata).toEqual({ filename: "watchlist.csv" });
+    expect(importRow).toMatchObject({
+      sourceRowId: "tv-row-1",
+      sourceMetadata: { watchlist: "Growth" },
+      raw: { Symbol: "NASDAQ:AAPL" },
+    });
+    expect(watchlistItem).toMatchObject({
+      source: "tradingview",
+      sourceRowId: "tv-row-1",
+      sourceMetadata: { importRowId: importRow.id },
+    });
+    expect(portfolioLot).toMatchObject({
+      source: "interactive_brokers",
+      sourceAccountRef: "account-ending-1234",
+      sourceLotId: "lot-9",
+      sourceRowId: "ib-row-9",
+      sourceMetadata: { importRowId: 9 },
+    });
+  });
+
   it("records predictions as open rows", () => {
     const prediction = service.recordPrediction({
       instrument: {
