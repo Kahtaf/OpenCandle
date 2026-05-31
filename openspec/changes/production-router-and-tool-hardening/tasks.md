@@ -67,5 +67,5 @@
 
 ## 9. Proposal housekeeping
 
-- [ ] 9.1 Confirm spec deltas in `openspec/changes/production-router-and-tool-hardening/specs/` align with `src/` changes after implementation; reconcile any drift before merge.
-- [ ] 9.2 Open follow-up changes: `forget-command` (priorTurns scrub) and `remove-rule-router` (post-release).
+- [x] 9.1 Confirm spec deltas in `openspec/changes/production-router-and-tool-hardening/specs/` align with `src/` changes after implementation; reconcile any drift before merge.
+- [x] 9.2 Open follow-up changes: `forget-command` (priorTurns scrub) and `remove-rule-router` (post-release).
