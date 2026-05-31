@@ -371,7 +371,7 @@ function Predictions({ state, readOnly, invokeTool }) {
           <EmptyState icon={TrendingUp} title="No predictions recorded" action="Record a thesis and check outcomes later." />
         ) : (
           <DataTable
-            columns={["Symbol", "Direction", "Conviction", "Entry", "Target", "Expires", "Status"]}
+            columns={["Symbol", "Direction", "Conviction", "Entry", "Target", "Expires", "Status", ""]}
             rows={state.predictions.map((prediction) => [
               <TickerCell key="symbol" symbol={prediction.symbol} />,
               prediction.direction,
@@ -380,6 +380,13 @@ function Predictions({ state, readOnly, invokeTool }) {
               moneyOrDash(prediction.targetPrice),
               shortDate(prediction.expiresAt),
               prediction.status,
+              <RowActions
+                key="actions"
+                disabled={readOnly || prediction.status !== "open"}
+                actions={[
+                  ["Cancel", () => invokeTool("track_prediction", { action: "cancel", id: prediction.id })],
+                ]}
+              />,
             ])}
           />
         )}

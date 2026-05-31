@@ -204,6 +204,33 @@ describe("predictionsTool check", () => {
       correct: true,
     }));
   });
+
+  it("cancels an open prediction without scoring it later", async () => {
+    const recordResult = await predictionsTool.execute("test", {
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 180,
+      timeframe_days: 30,
+    });
+    const predictionId = (recordResult.details as { id: number }).id;
+
+    const cancelResult = await predictionsTool.execute("test", {
+      action: "cancel",
+      id: predictionId,
+    });
+
+    expect(cancelResult.content[0].text).toContain(`Cancelled prediction #${predictionId}`);
+    expect(cancelResult.details).toMatchObject({
+      id: predictionId,
+      status: "cancelled",
+      resultJson: JSON.stringify({ reason: "user_cancelled" }),
+    });
+
+    const checkResult = await predictionsTool.execute("test", { action: "check" });
+    expect(checkResult.content[0].text).toContain("No open predictions to check.");
+  });
 });
 
 describe("checkPredictions", () => {

@@ -139,9 +139,13 @@ export function checkPredictions(
 
 const params = Type.Object({
   action: Type.Union(
-    [Type.Literal("record"), Type.Literal("check")],
-    { description: "record: save a new prediction. check: evaluate all predictions against current prices." },
+    [Type.Literal("record"), Type.Literal("check"), Type.Literal("cancel")],
+    {
+      description:
+        "record: save a new prediction. check: evaluate all predictions against current prices. cancel: close an open prediction without scoring it.",
+    },
   ),
+  id: Type.Optional(Type.Number({ description: "Prediction id (required for cancel)" })),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for record)" })),
   direction: Type.Optional(
     Type.Union(
@@ -170,6 +174,42 @@ export const predictionsTool: AgentTool<typeof params> = {
     "Track your analysis predictions and measure accuracy over time. Record: save a directional prediction with conviction. Check: evaluate all predictions against current prices, compute hit rate and conviction-weighted accuracy. Inspired by ATLAS's Darwinian scoring approach.",
   parameters: params,
   async execute(_toolCallId, args) {
+    if (args.action === "cancel") {
+      if (args.id == null) {
+        throw new Error("id is required for cancel action.");
+      }
+      const db = initDefaultDatabase();
+      try {
+        const service = new MarketStateService(db);
+        const existing = service.listPredictions().find((record) => record.id === args.id);
+        if (existing == null) {
+          return {
+            content: [{ type: "text", text: `Prediction #${args.id} not found.` }],
+            details: null,
+          };
+        }
+        if (existing.status !== "open") {
+          return {
+            content: [{ type: "text", text: `Prediction #${args.id} is already ${existing.status}.` }],
+            details: existing,
+          };
+        }
+        const now = new Date().toISOString();
+        const cancelled = service.updatePredictionOutcome({
+          id: args.id,
+          status: "cancelled",
+          resolvedAt: now,
+          result: { reason: "user_cancelled" },
+        });
+        return {
+          content: [{ type: "text", text: `Cancelled prediction #${args.id} for ${cancelled.symbol}.` }],
+          details: cancelled,
+        };
+      } finally {
+        db.close();
+      }
+    }
+
     if (args.action === "record") {
       if (!args.symbol || !args.direction || !args.conviction || !args.entry_price) {
         throw new Error("symbol, direction, conviction, and entry_price are required for record action.");
