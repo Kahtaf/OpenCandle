@@ -79,7 +79,7 @@ export function MarketStatePage({ domain, role, send, navigate, setToast }) {
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
           {readOnly ? <StatusBand>Follower mode: read-only. Take over the session to mutate saved state.</StatusBand> : null}
           {active.id === "watchlists" ? <Watchlists state={state} readOnly={readOnly} invokeTool={invokeTool} /> : null}
-          {active.id === "portfolios" ? <Portfolios state={state} readOnly={readOnly} invokeTool={invokeTool} /> : null}
+          {active.id === "portfolios" ? <Portfolios state={state} readOnly={readOnly} invokeTool={invokeTool} navigate={navigate} /> : null}
           {active.id === "alerts" ? <Alerts state={state} readOnly={readOnly} invokeTool={invokeTool} /> : null}
           {active.id === "reports" ? <Reports state={state} readOnly={readOnly} invokeTool={invokeTool} /> : null}
           {active.id === "predictions" ? <Predictions state={state} readOnly={readOnly} invokeTool={invokeTool} /> : null}
@@ -167,7 +167,7 @@ function Watchlists({ state, readOnly, invokeTool }) {
   );
 }
 
-function Portfolios({ state, readOnly, invokeTool }) {
+function Portfolios({ state, readOnly, invokeTool, navigate }) {
   const totalCost = state.portfolio.reduce((sum, lot) => sum + (Number(lot.quantity) * Number(lot.avgCost)), 0);
   const quotesByLot = useMemo(() => groupByOne(state.quoteSnapshot?.portfolioQuotes, "lotId"), [state.quoteSnapshot]);
   const summary = state.quoteSnapshot?.portfolioSummary;
@@ -196,7 +196,15 @@ function Portfolios({ state, readOnly, invokeTool }) {
         meta={summary ? `Value ${moneyWithCurrency(summary.totalValue, summary.baseCurrency)} | P&L ${moneyWithCurrency(summary.totalPnl, summary.baseCurrency)}` : totalCost > 0 ? `Cost basis $${totalCost.toFixed(2)}` : undefined}
       >
         {state.portfolio.length === 0 ? (
-          <EmptyState icon={BriefcaseBusiness} title="No holdings yet" action="Add a holding or use watchlists without a portfolio." />
+          <EmptyState
+            icon={BriefcaseBusiness}
+            title="No holdings yet"
+            action="Add a holding when you are ready, or keep using watchlists without a portfolio."
+            cta={{
+              label: "Skip For Now",
+              onClick: () => navigate({ to: "/watchlists" }),
+            }}
+          />
         ) : (
           <DataTable
             columns={["Lot", "Symbol", "Quantity", "Avg cost", "Current", "Value", "Allocation", "P&L", "Quote", "Currency", "Notes", ""]}
@@ -592,16 +600,21 @@ function DataTable({ columns, rows }) {
   );
 }
 
-function EmptyState({ icon: Icon, title, action }) {
+function EmptyState({ icon: Icon, title, action, cta }) {
   return (
     <div className="flex min-h-[120px] items-center gap-3 rounded-md border border-dashed border-border bg-secondary/50 px-4 py-4">
       <span className="inline-flex size-9 items-center justify-center rounded-md bg-card text-muted-foreground">
         <Icon className="size-4" aria-hidden="true" />
       </span>
-      <div>
+      <div className="min-w-0 flex-1">
         <div className="text-sm font-medium text-foreground">{title}</div>
         <div className="text-xs text-muted-foreground">{action}</div>
       </div>
+      {cta ? (
+        <Button type="button" variant="bordered" size="sm" onClick={cta.onClick}>
+          {cta.label}
+        </Button>
+      ) : null}
     </div>
   );
 }
