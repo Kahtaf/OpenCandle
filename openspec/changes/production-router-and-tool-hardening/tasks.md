@@ -69,7 +69,7 @@
 - [x] 8.2 Run positive-control scenarios: "compare $IV with $TICK" and "compare KO, the IV ticker, and PEP". Confirm IV survives the disambiguator and is treated as a ticker. Evidence: `/tmp/oc-hardening-compare-cashtag-TdPXig/trace.json` and `/tmp/oc-hardening-positive-ZEG5YB/trace.json` show IV entered workflow symbols before resolver preflight dropped it as an unavailable ticker; `/tmp/oc-hardening-cashtag2-h1h7Or/trace.json` shows `$IV` reached `get_stock_quote`.
 - [x] 8.3 Run the SEC-as-regulator and FED-as-bank scenarios. Confirm both are dropped from `entities.symbols`. Evidence: `/tmp/oc-hardening-sec-eJmVjb/trace.json` and `/tmp/oc-hardening-fed-4047Ba/trace.json`.
 - [x] 8.4 Run a 3-symbol correlation where one symbol is bogus. Confirm the matrix returns over the 2 valid symbols with the third surfaced as a drop. Evidence: `/tmp/oc-hardening-corr3-DYvTTJ/trace.json`.
-- [ ] 8.5 Document each scenario's `trace.json` evidence in the PR description.
+- [x] 8.5 Document each scenario's `trace.json` evidence in the PR description.
 
 ## 9. Proposal housekeeping
 
