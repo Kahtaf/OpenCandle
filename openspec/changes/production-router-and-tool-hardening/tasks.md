@@ -46,9 +46,9 @@
 
 ## 6. `analyze_correlation` partial success
 
-- [ ] 6.1 In `src/tools/portfolio/correlation.ts::execute`, replace the all-fail short-circuit with: collect `unavailable` per symbol, build the matrix only over `succeeded`. If `succeeded.length >= 2`, compute as today and append a "Symbols dropped:" section listing each dropped symbol with the wrapped reason. If `succeeded.length < 2`, emit unavailable with the same per-symbol breakdown.
-- [ ] 6.2 Unit test in `tests/unit/tools/correlation.test.ts`: (a) 3 symbols, 1 fails → matrix over 2, drop noted; (b) 3 symbols, 2 fail → unavailable with 2 reasons; (c) 2 symbols both succeed → unchanged behavior.
-- [ ] 6.3 Update tool docstring/`description` to mention partial-success behavior so the LLM doesn't re-fetch the workflow on partial drops.
+- [x] 6.1 In `src/tools/portfolio/correlation.ts::execute`, replace the all-fail short-circuit with: collect `unavailable` per symbol, build the matrix only over `succeeded`. If `succeeded.length >= 2`, compute as today and append a "Symbols dropped:" section listing each dropped symbol with the wrapped reason. If `succeeded.length < 2`, emit unavailable with the same per-symbol breakdown.
+- [x] 6.2 Unit test in `tests/unit/tools/correlation.test.ts`: (a) 3 symbols, 1 fails → matrix over 2, drop noted; (b) 3 symbols, 2 fail → unavailable with 2 reasons; (c) 2 symbols both succeed → unchanged behavior.
+- [x] 6.3 Update tool docstring/`description` to mention partial-success behavior so the LLM doesn't re-fetch the workflow on partial drops.
 
 ## 7. Verify or Revert the Default
 

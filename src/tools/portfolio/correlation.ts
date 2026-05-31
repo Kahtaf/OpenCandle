@@ -84,7 +84,7 @@ export const correlationTool: AgentTool<typeof params> = {
   name: "analyze_correlation",
   label: "Correlation Matrix",
   description:
-    "Compute pairwise return correlations between 2+ stocks. Identifies highly correlated positions (|r| > 0.7) as concentration risk. Useful for portfolio diversification analysis.",
+    "Compute pairwise return correlations between 2+ stocks. If one symbol cannot be fetched, computes over the remaining 2+ symbols and lists dropped symbols. Identifies highly correlated positions (|r| > 0.7) as concentration risk. Useful for portfolio diversification analysis.",
   parameters: params,
   async execute(_toolCallId, args) {
     const symbols = args.symbols.map((s) => s.toUpperCase());
@@ -102,10 +102,21 @@ export const correlationTool: AgentTool<typeof params> = {
       })),
     );
 
-    const unavailable = results.filter((r) => r.result.status === "unavailable");
-    if (unavailable.length === results.length) {
+    const dropped = results.flatMap((r) =>
+      r.result.status === "unavailable"
+        ? [{ symbol: r.symbol, reason: r.result.reason }]
+        : [],
+    );
+    const succeeded = results.filter((r) => r.result.status === "ok");
+    if (succeeded.length < 2) {
+      const droppedText = dropped.length > 0
+        ? `\n\nSymbols dropped:\n${dropped.map((d) => `  - ${d.symbol}: ${d.reason}`).join("\n")}`
+        : "";
       return {
-        content: [{ type: "text", text: `⚠ Correlation analysis unavailable — could not fetch history for any symbol.` }],
+        content: [{
+          type: "text",
+          text: `⚠ Correlation analysis unavailable — need at least 2 symbols with usable history.${droppedText}`,
+        }],
         details: null as any,
       };
     }
@@ -116,14 +127,15 @@ export const correlationTool: AgentTool<typeof params> = {
     }
 
     const returnsBySymbol = alignReturnsByDate(historiesBySymbol);
+    const survivorSymbols = [...historiesBySymbol.keys()];
 
     // Build correlation matrix
     const matrix: Record<string, Record<string, number>> = {};
     const warnings: string[] = [];
 
-    for (const a of symbols) {
+    for (const a of survivorSymbols) {
       matrix[a] = {};
-      for (const b of symbols) {
+      for (const b of survivorSymbols) {
         if (a === b) {
           matrix[a][b] = 1.0;
         } else if (matrix[b]?.[a] != null) {
@@ -140,13 +152,17 @@ export const correlationTool: AgentTool<typeof params> = {
 
     // Format output
     const header = `**Correlation Matrix** (${period} daily returns)`;
-    const colHeader = `${"".padEnd(8)} ${symbols.map((s) => s.padStart(8)).join("")}`;
-    const rows = symbols.map((a) => {
-      const cells = symbols.map((b) => matrix[a][b].toFixed(2).padStart(8));
+    const colHeader = `${"".padEnd(8)} ${survivorSymbols.map((s) => s.padStart(8)).join("")}`;
+    const rows = survivorSymbols.map((a) => {
+      const cells = survivorSymbols.map((b) => matrix[a][b].toFixed(2).padStart(8));
       return `${a.padEnd(8)} ${cells.join("")}`;
     });
 
     const lines = [header, "", colHeader, ...rows];
+    if (dropped.length > 0) {
+      lines.push("", "Symbols dropped:");
+      for (const drop of dropped) lines.push(`  - ${drop.symbol}: ${drop.reason}`);
+    }
     if (warnings.length > 0) {
       lines.push("", "**Concentration Warnings:**");
       for (const w of warnings) lines.push(`  - ${w}`);
@@ -156,7 +172,7 @@ export const correlationTool: AgentTool<typeof params> = {
 
     return {
       content: [{ type: "text", text: lines.join("\n") }],
-      details: { matrix, warnings },
+      details: { matrix, warnings, dropped },
     };
   },
 };

@@ -1,6 +1,17 @@
-import { describe, it, expect } from "vitest";
-import { computeCorrelation, alignReturnsByDate } from "../../../src/tools/portfolio/correlation.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { getHistory } from "../../../src/providers/yahoo-finance.js";
+import { computeCorrelation, alignReturnsByDate, correlationTool } from "../../../src/tools/portfolio/correlation.js";
 import type { OHLCV } from "../../../src/types/market.js";
+
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getHistory: vi.fn(),
+}));
+
+const mockedGetHistory = vi.mocked(getHistory);
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("computeCorrelation", () => {
   it("returns 1.0 for perfectly correlated data", () => {
@@ -99,5 +110,53 @@ describe("alignReturnsByDate", () => {
     expect(() =>
       alignReturnsByDate(new Map([["A", barsA], ["B", barsB]]))
     ).toThrow();
+  });
+});
+
+describe("correlationTool", () => {
+  function makeBars(symbolOffset: number): OHLCV[] {
+    return Array.from({ length: 30 }, (_, i) => ({
+      date: `2025-01-${String(i + 1).padStart(2, "0")}`,
+      open: 100 + symbolOffset + i,
+      high: 101 + symbolOffset + i,
+      low: 99 + symbolOffset + i,
+      close: 100 + symbolOffset + i,
+      volume: 1_000_000,
+    }));
+  }
+
+  it("computes a matrix over survivors and reports one dropped symbol", async () => {
+    mockedGetHistory.mockImplementation(async (symbol: string) => {
+      if (symbol === "BAD") throw new Error("Invalid symbol BAD for yahoo");
+      return makeBars(symbol === "AAPL" ? 0 : 10);
+    });
+
+    const result = await correlationTool.execute("test", {
+      symbols: ["AAPL", "BAD", "MSFT"],
+      period: "1y",
+    });
+
+    expect(result.content[0].text).toContain("Symbols dropped:");
+    expect(result.content[0].text).toContain("BAD: Invalid symbol BAD for yahoo");
+    expect(result.details.matrix).toHaveProperty("AAPL");
+    expect(result.details.matrix).toHaveProperty("MSFT");
+    expect(result.details.matrix).not.toHaveProperty("BAD");
+  });
+
+  it("returns unavailable when fewer than two symbols have history", async () => {
+    mockedGetHistory.mockImplementation(async (symbol: string) => {
+      if (symbol === "AAPL") return makeBars(0);
+      throw new Error(`Invalid symbol ${symbol} for yahoo`);
+    });
+
+    const result = await correlationTool.execute("test", {
+      symbols: ["AAPL", "BAD1", "BAD2"],
+      period: "1y",
+    });
+
+    expect(result.content[0].text).toContain("⚠ Correlation analysis unavailable");
+    expect(result.content[0].text).toContain("BAD1: Invalid symbol BAD1 for yahoo");
+    expect(result.content[0].text).toContain("BAD2: Invalid symbol BAD2 for yahoo");
+    expect(result.details).toBeNull();
   });
 });
