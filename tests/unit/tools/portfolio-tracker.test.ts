@@ -4,12 +4,16 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { httpGet } from "../../../src/infra/http-client.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
+}));
+vi.mock("../../../src/infra/http-client.js", () => ({
+  httpGet: vi.fn(),
 }));
 
 describe("portfolioTrackerTool", () => {
@@ -21,6 +25,7 @@ describe("portfolioTrackerTool", () => {
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-portfolio-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol.toUpperCase(), 300));
+    vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
 
   afterEach(() => {
@@ -163,6 +168,40 @@ describe("portfolioTrackerTool", () => {
     });
   });
 
+  it("returns candidate matches for an unverified add without mutating the portfolio", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(httpGet).mockResolvedValue({
+      quotes: [
+        {
+          symbol: "AAPL",
+          longname: "Apple Inc.",
+          quoteType: "EQUITY",
+          exchange: "NMS",
+          score: 101,
+        },
+      ],
+    });
+
+    const result = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "APL",
+      shares: 2,
+      avg_cost: 150,
+    });
+
+    expect(result.content[0].text).toContain("Could not verify APL");
+    expect(result.details).toMatchObject({
+      status: "needs_selection",
+      query: "APL",
+      candidates: [
+        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
+      ],
+    });
+
+    const view = await portfolioTrackerTool.execute("test", { action: "view" });
+    expect(view.content[0].text.toLowerCase()).toContain("empty");
+  });
+
   it("removes all lots for a symbol", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",
@@ -187,7 +226,7 @@ describe("portfolioTrackerTool", () => {
   });
 });
 
-function quote(symbol: string, price: number): StockQuote {
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
     price,
@@ -203,5 +242,6 @@ function quote(symbol: string, price: number): StockQuote {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    ...overrides,
   };
 }

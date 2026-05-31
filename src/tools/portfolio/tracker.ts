@@ -5,7 +5,7 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { Position, PortfolioSummary } from "../../types/portfolio.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
-import { resolveYahooInstrument } from "../../market-state/resolve.js";
+import { resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
 
 async function getCurrentPrice(symbol: string): Promise<number | null> {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
@@ -52,10 +52,19 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         if (!args.symbol || !args.shares || !args.avg_cost) {
           throw new Error("symbol, shares, and avg_cost are required for add action.");
         }
-        const instrument = await resolveYahooInstrument(args.symbol);
-        const currency = (args.currency?.trim() || instrument.currency || "USD").toUpperCase();
+        const instrument = await resolveForMutation(args.symbol);
+        if (instrument.status === "needs_selection") {
+          return {
+            content: [{
+              type: "text",
+              text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the portfolio.`,
+            }],
+            details: instrument,
+          };
+        }
+        const currency = (args.currency?.trim() || instrument.instrument.currency || "USD").toUpperCase();
         const lot = service.addPortfolioLot({
-          instrument,
+          instrument: instrument.instrument,
           quantity: args.shares,
           avgCost: args.avg_cost,
           currency,
@@ -193,6 +202,22 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
     }
   },
 };
+
+async function resolveForMutation(symbol: string): Promise<
+  | { status: "resolved"; instrument: Awaited<ReturnType<typeof resolveYahooInstrument>> }
+  | { status: "needs_selection"; query: string; candidates: Awaited<ReturnType<typeof searchYahooInstruments>> }
+> {
+  try {
+    return { status: "resolved", instrument: await resolveYahooInstrument(symbol) };
+  } catch (error) {
+    const query = symbol.trim();
+    const candidates = await searchYahooInstruments(query);
+    if (candidates.length > 0) {
+      return { status: "needs_selection", query, candidates };
+    }
+    throw error;
+  }
+}
 
 function formatMoney(value: number, currency: string): string {
   if (currency === "USD") return `$${value.toFixed(2)}`;

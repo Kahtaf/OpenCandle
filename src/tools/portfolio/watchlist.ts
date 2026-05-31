@@ -4,7 +4,7 @@ import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
-import { resolveYahooInstrument } from "../../market-state/resolve.js";
+import { resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
 
 const params = Type.Object({
   action: Type.Union(
@@ -46,9 +46,18 @@ export const watchlistTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for add action.");
         }
-        const instrument = await resolveYahooInstrument(args.symbol);
+        const instrument = await resolveForMutation(args.symbol);
+        if (instrument.status === "needs_selection") {
+          return {
+            content: [{
+              type: "text",
+              text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the watchlist.`,
+            }],
+            details: instrument,
+          };
+        }
         const item = service.addWatchlistItem({
-          instrument,
+          instrument: instrument.instrument,
           targetPrice: args.target_price,
           stopPrice: args.stop_price,
           notes: args.notes,
@@ -158,3 +167,19 @@ export const watchlistTool: AgentTool<typeof params> = {
     }
   },
 };
+
+async function resolveForMutation(symbol: string): Promise<
+  | { status: "resolved"; instrument: Awaited<ReturnType<typeof resolveYahooInstrument>> }
+  | { status: "needs_selection"; query: string; candidates: Awaited<ReturnType<typeof searchYahooInstruments>> }
+> {
+  try {
+    return { status: "resolved", instrument: await resolveYahooInstrument(symbol) };
+  } catch (error) {
+    const query = symbol.trim();
+    const candidates = await searchYahooInstruments(query);
+    if (candidates.length > 0) {
+      return { status: "needs_selection", query, candidates };
+    }
+    throw error;
+  }
+}
