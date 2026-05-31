@@ -444,7 +444,7 @@ function AlertCreateForm({ disabled, invokeTool }) {
   const [condition, setCondition] = useState("create_price_above");
   const [period, setPeriod] = useState("14");
   const needsThreshold = !condition.includes("_sma");
-  const needsPeriod = condition.includes("_sma") || condition.includes("_rsi_");
+  const needsPeriod = condition.includes("_sma") || condition.includes("_rsi_") || condition === "create_volume_spike";
   return (
     <form
       className="grid gap-3 sm:grid-cols-[1fr_150px_120px_170px_auto]"
@@ -476,6 +476,7 @@ function AlertCreateForm({ disabled, invokeTool }) {
         <option value="create_price_below_sma">Price below SMA</option>
         <option value="create_rsi_above">RSI above</option>
         <option value="create_rsi_below">RSI below</option>
+        <option value="create_volume_spike">Volume spike</option>
       </select>
       <Button type="submit" variant="brand" disabled={disabled || !symbol.trim() || (needsThreshold && !threshold)}>Create</Button>
     </form>

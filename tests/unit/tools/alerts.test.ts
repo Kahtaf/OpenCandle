@@ -108,6 +108,36 @@ describe("alertsTool", () => {
     });
   });
 
+  it("creates and manually checks volume-spike alerts", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_volume_spike",
+      symbol: "AAPL",
+      threshold: 2,
+      period: 5,
+    });
+
+    expect(created.details).toMatchObject({
+      conditionType: "volume_spike",
+      conditionJson: { lookback_period: 5, multiplier: 2 },
+      timeframe: "1d",
+    });
+
+    vi.mocked(getHistory).mockResolvedValue(historyWithVolumes(
+      [100, 101, 102, 103, 104, 105],
+      [100, 100, 100, 100, 100, 150],
+    ));
+    const seeded = await alertsTool.execute("test", { action: "check" });
+    expect(seeded.content[0].text).toContain("seeded");
+
+    vi.mocked(getHistory).mockResolvedValue(historyWithVolumes(
+      [100, 101, 102, 103, 104, 105],
+      [100, 100, 100, 100, 100, 250],
+    ));
+    const triggered = await alertsTool.execute("test", { action: "check" });
+    expect(triggered.content[0].text).toContain("TRIGGERED");
+    expect(triggered.details).toMatchObject({ checked: 1, triggered: 1 });
+  });
+
   it("does not seed or trigger on zero-filled quote data", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",
@@ -183,5 +213,16 @@ function history(closes: number[]): OHLCV[] {
     low: close,
     close,
     volume: 1_000,
+  }));
+}
+
+function historyWithVolumes(closes: number[], volumes: number[]): OHLCV[] {
+  return closes.map((close, index) => ({
+    date: `2026-05-${String(index + 1).padStart(2, "0")}`,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: volumes[index] ?? 0,
   }));
 }

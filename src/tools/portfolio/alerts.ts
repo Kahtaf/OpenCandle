@@ -12,6 +12,7 @@ import {
   priceCrossesBelow,
   priceCrossesSma,
   rsiThreshold,
+  volumeSpike,
 } from "../../market-state/alert-conditions.js";
 
 const params = Type.Object({
@@ -23,6 +24,7 @@ const params = Type.Object({
       Type.Literal("create_price_below_sma"),
       Type.Literal("create_rsi_above"),
       Type.Literal("create_rsi_below"),
+      Type.Literal("create_volume_spike"),
       Type.Literal("list"),
       Type.Literal("check"),
     ],
@@ -121,6 +123,32 @@ export const alertsTool: AgentTool<typeof params> = {
           content: [{
             type: "text",
             text: `Created manual alert rsi_threshold for ${item.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
+          }],
+          details: rule,
+        };
+      }
+
+      if (args.action === "create_volume_spike") {
+        if (!args.symbol) {
+          throw new Error("symbol is required for volume-spike alert actions.");
+        }
+        const period = args.period ?? 20;
+        const multiplier = args.threshold ?? 2;
+        const instrument = await resolveYahooInstrument(args.symbol);
+        const item = service.addWatchlistItem({ instrument });
+        const rule = service.createAlertRule({
+          scopeType: "instrument",
+          instrumentId: item.instrumentId,
+          conditionType: "volume_spike",
+          conditionVersion: ALERT_CONDITION_VERSION,
+          condition: volumeSpike(period, multiplier),
+          timeframe: "1d",
+          cooldownSeconds: args.cooldown_seconds ?? 3600,
+        });
+        return {
+          content: [{
+            type: "text",
+            text: `Created manual alert volume_spike for ${item.symbol}: volume > ${multiplier}x ${period}-bar average.`,
           }],
           details: rule,
         };
@@ -269,6 +297,30 @@ async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<
     };
   }
 
+  if (rule.conditionType === "volume_spike") {
+    const condition = rule.conditionJson as { lookback_period?: unknown };
+    const period = typeof condition.lookback_period === "number" ? condition.lookback_period : 20;
+    const barsResult = await wrapProvider("yahoo", () => getHistory(symbol, "6mo", "1d"));
+    if (barsResult.status === "unavailable") return { status: "unavailable", reason: barsResult.reason };
+    const bars = barsResult.data;
+    const latest = bars[bars.length - 1];
+    const prior = bars.slice(Math.max(0, bars.length - 1 - period), bars.length - 1);
+    if (latest == null || prior.length < period) {
+      return { status: "unavailable", reason: `insufficient history for volume spike (${period})` };
+    }
+    const averageVolume = prior.reduce((sum, bar) => sum + bar.volume, 0) / prior.length;
+    if (averageVolume <= 0) {
+      return { status: "unavailable", reason: "average volume is unavailable" };
+    }
+    const ratio = latest.volume / averageVolume;
+    return {
+      status: "ok",
+      value: ratio,
+      field: "volume_ratio",
+      display: `volume ${ratio.toFixed(2)}x ${period}-bar average`,
+    };
+  }
+
   return { status: "unavailable", reason: `unsupported condition ${rule.conditionType}` };
 }
 
@@ -299,6 +351,11 @@ function crosses(rule: AlertRuleRecord, previous: number | null, current: number
     const direction = (rule.conditionJson as { direction?: unknown }).direction;
     if (direction === "above") return previous <= condition.threshold && current > condition.threshold;
     if (direction === "below") return previous >= condition.threshold && current < condition.threshold;
+  }
+  if (rule.conditionType === "volume_spike") {
+    const multiplier = (rule.conditionJson as { multiplier?: unknown }).multiplier;
+    if (typeof multiplier !== "number") return false;
+    return previous <= multiplier && current > multiplier;
   }
   return false;
 }
