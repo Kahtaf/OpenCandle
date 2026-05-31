@@ -123,6 +123,34 @@ describe("portfolioTrackerTool", () => {
     ]);
   });
 
+  it("updates an existing portfolio lot through an explicit update action", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+
+    const update = await portfolioTrackerTool.execute("test", {
+      action: "update",
+      symbol: "VTI",
+      shares: 3,
+      avg_cost: 240,
+      currency: "USD",
+    });
+
+    expect(update.content[0].text).toContain("Updated VTI");
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+    expect(result.details?.positions[0]).toMatchObject({
+      symbol: "VTI",
+      shares: 3,
+      avgCost: 240,
+      totalCost: 720,
+      marketValue: 900,
+    });
+  });
+
   it("removes all lots for a symbol", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",

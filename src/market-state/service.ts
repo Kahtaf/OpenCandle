@@ -486,6 +486,51 @@ export class MarketStateService {
     return result.changes > 0;
   }
 
+  updateWatchlistItemBySymbol(
+    symbol: string,
+    params: {
+      watchlistId?: number;
+      targetPrice?: number;
+      stopPrice?: number;
+      priceCurrency?: string;
+      thesis?: string;
+      notes?: string;
+      tags?: string[];
+    },
+  ): WatchlistItemRecord | null {
+    const watchlistId = params.watchlistId ?? this.getDefaultWatchlist().id;
+    const existing = this.db
+      .prepare(
+        `SELECT wi.*
+         FROM watchlist_items wi
+         JOIN instruments i ON i.id = wi.instrument_id
+         WHERE wi.watchlist_id = ? AND i.symbol = ?
+         LIMIT 1`,
+      )
+      .get(watchlistId, symbol.trim().toUpperCase()) as WatchlistItemRow | undefined;
+    if (existing == null) return null;
+
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE watchlist_items
+         SET target_price = ?, stop_price = ?, price_currency = ?, thesis = ?,
+             notes = ?, tags_json = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        params.targetPrice ?? existing.target_price,
+        params.stopPrice ?? existing.stop_price,
+        params.priceCurrency ?? existing.price_currency,
+        params.thesis ?? existing.thesis,
+        params.notes ?? existing.notes,
+        params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
+        now,
+        existing.id,
+      );
+    return this.getWatchlistItem(existing.id);
+  }
+
   addPortfolioLot(params: {
     instrument: InstrumentInput;
     portfolioId?: number;
@@ -557,6 +602,67 @@ export class MarketStateService {
       )
       .run(portfolioId, symbol.trim().toUpperCase());
     return result.changes > 0;
+  }
+
+  updatePortfolioLot(
+    id: number,
+    params: {
+      quantity?: number;
+      avgCost?: number;
+      currency?: string;
+      openedAt?: string;
+      notes?: string;
+    },
+  ): PortfolioLotRecord | null {
+    const existing = this.db.prepare("SELECT * FROM portfolio_lots WHERE id = ?").get(id) as
+      | PortfolioLotRow
+      | undefined;
+    if (existing == null) return null;
+
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE portfolio_lots
+         SET quantity = ?, avg_cost = ?, currency = ?, opened_at = ?, notes = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        params.quantity ?? existing.quantity,
+        params.avgCost ?? existing.avg_cost,
+        params.currency == null ? existing.currency : params.currency.toUpperCase(),
+        params.openedAt ?? existing.opened_at,
+        params.notes ?? existing.notes,
+        now,
+        id,
+      );
+    return this.getPortfolioLot(id);
+  }
+
+  updatePortfolioLotsBySymbol(
+    symbol: string,
+    params: {
+      portfolioId?: number;
+      quantity?: number;
+      avgCost?: number;
+      currency?: string;
+      openedAt?: string;
+      notes?: string;
+    },
+  ): PortfolioLotRecord[] {
+    const portfolioId = params.portfolioId ?? this.getDefaultPortfolio().id;
+    const rows = this.db
+      .prepare(
+        `SELECT pl.*
+         FROM portfolio_lots pl
+         JOIN instruments i ON i.id = pl.instrument_id
+         WHERE pl.portfolio_id = ? AND i.symbol = ?
+         ORDER BY pl.id`,
+      )
+      .all(portfolioId, symbol.trim().toUpperCase()) as PortfolioLotRow[];
+    return rows.flatMap((row) => {
+      const updated = this.updatePortfolioLot(row.id, params);
+      return updated == null ? [] : [updated];
+    });
   }
 
   recordPrediction(params: {

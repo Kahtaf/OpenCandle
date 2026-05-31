@@ -8,8 +8,8 @@ import { resolveYahooInstrument } from "../../market-state/resolve.js";
 
 const params = Type.Object({
   action: Type.Union(
-    [Type.Literal("add"), Type.Literal("remove"), Type.Literal("check")],
-    { description: "One of: 'add', 'remove', or 'check'" },
+    [Type.Literal("add"), Type.Literal("update"), Type.Literal("remove"), Type.Literal("check")],
+    { description: "One of: 'add', 'update', 'remove', or 'check'" },
   ),
   symbol: Type.Optional(
     Type.String({ description: "Ticker symbol (required for add/remove)" }),
@@ -22,6 +22,12 @@ const params = Type.Object({
   ),
   notes: Type.Optional(
     Type.String({ description: "Optional notes for why you're watching this" }),
+  ),
+  thesis: Type.Optional(
+    Type.String({ description: "Optional thesis for why you're watching this" }),
+  ),
+  tags: Type.Optional(
+    Type.Array(Type.String(), { description: "Optional tags for organizing the watchlist item" }),
   ),
 });
 
@@ -71,6 +77,30 @@ export const watchlistTool: AgentTool<typeof params> = {
         return {
           content: [{ type: "text", text: `Removed ${symbol} from watchlist` }],
           details: null,
+        };
+      }
+
+      if (args.action === "update") {
+        if (!args.symbol) {
+          throw new Error("symbol is required for update action.");
+        }
+        const symbol = args.symbol.toUpperCase();
+        const item = service.updateWatchlistItemBySymbol(symbol, {
+          targetPrice: args.target_price,
+          stopPrice: args.stop_price,
+          notes: args.notes,
+          thesis: args.thesis,
+          tags: args.tags,
+        });
+        if (item == null) {
+          return {
+            content: [{ type: "text", text: `${symbol} not found in watchlist` }],
+            details: null,
+          };
+        }
+        return {
+          content: [{ type: "text", text: `Updated ${item.symbol} in watchlist` }],
+          details: item,
         };
       }
 

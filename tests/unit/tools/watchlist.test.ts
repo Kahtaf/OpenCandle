@@ -79,6 +79,31 @@ describe("watchlistTool", () => {
     expect(check.content[0].text.match(/AAPL/g)).toHaveLength(1);
   });
 
+  it("updates watchlist metadata through an explicit update action", async () => {
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+      stop_price: 150,
+      notes: "Initial note",
+    });
+
+    const result = await watchlistTool.execute("test", {
+      action: "update",
+      symbol: "AAPL",
+      target_price: 220,
+      notes: "Revised thesis",
+    });
+
+    expect(result.content[0].text).toContain("Updated AAPL");
+    expect(result.details).toMatchObject({
+      symbol: "AAPL",
+      targetPrice: 220,
+      stopPrice: 150,
+      notes: "Revised thesis",
+    });
+  });
+
   it("removes a symbol from the SQLite watchlist", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
 

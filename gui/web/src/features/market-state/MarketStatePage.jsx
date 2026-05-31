@@ -105,6 +105,22 @@ function Watchlists({ state, readOnly, invokeTool }) {
           notes: values.notes || undefined,
         })}
       />
+      <SymbolActionPanel
+        title="Update ticker"
+        disabled={readOnly}
+        fields={[
+          { name: "target_price", label: "Target", type: "number" },
+          { name: "stop_price", label: "Stop", type: "number" },
+          { name: "notes", label: "Notes" },
+        ]}
+        onSubmit={(values) => invokeTool("manage_watchlist", {
+          action: "update",
+          symbol: values.symbol,
+          target_price: numberOrUndefined(values.target_price),
+          stop_price: numberOrUndefined(values.stop_price),
+          notes: values.notes || undefined,
+        })}
+      />
       <Panel title="Default Watchlist" count={state.watchlist.length}>
         {state.watchlist.length === 0 ? (
           <EmptyState icon={ListPlus} title="No tickers yet" action="Use Add ticker to start the default watchlist." />
@@ -154,13 +170,15 @@ function Portfolios({ state, readOnly, invokeTool }) {
           currency: values.currency || undefined,
         })}
       />
+      <PortfolioUpdatePanel disabled={readOnly} invokeTool={invokeTool} />
       <Panel title="Default Portfolio" count={state.portfolio.length} meta={totalCost > 0 ? `Cost basis $${totalCost.toFixed(2)}` : undefined}>
         {state.portfolio.length === 0 ? (
           <EmptyState icon={BriefcaseBusiness} title="No holdings yet" action="Add a holding or use watchlists without a portfolio." />
         ) : (
           <DataTable
-            columns={["Symbol", "Quantity", "Avg cost", "Currency", "Notes", ""]}
+            columns={["Lot", "Symbol", "Quantity", "Avg cost", "Currency", "Notes", ""]}
             rows={state.portfolio.map((lot) => [
+              `#${lot.id}`,
               <TickerCell key="symbol" symbol={lot.symbol} sub={lot.exchange || lot.assetType} />,
               formatNumber(lot.quantity),
               moneyOrDash(lot.avgCost),
@@ -176,6 +194,48 @@ function Portfolios({ state, readOnly, invokeTool }) {
         )}
       </Panel>
     </>
+  );
+}
+
+function PortfolioUpdatePanel({ disabled, invokeTool }) {
+  const [values, setValues] = useState({});
+
+  const submit = (event) => {
+    event.preventDefault();
+    const lotId = numberOrUndefined(values.lot_id);
+    if (lotId == null) return;
+    invokeTool("track_portfolio", {
+      action: "update",
+      lot_id: lotId,
+      shares: numberOrUndefined(values.shares),
+      avg_cost: numberOrUndefined(values.avg_cost),
+      currency: values.currency || undefined,
+    });
+    setValues({});
+  };
+
+  return (
+    <Panel title="Update holding" meta="Use the lot id shown in the portfolio table">
+      <form className="grid gap-3 sm:grid-cols-[120px_1fr_1fr_1fr_auto]" onSubmit={submit}>
+        {[
+          { name: "lot_id", label: "Lot ID", type: "number", required: true },
+          { name: "shares", label: "Quantity", type: "number" },
+          { name: "avg_cost", label: "Avg cost", type: "number" },
+          { name: "currency", label: "Currency" },
+        ].map((field) => (
+          <Input
+            key={field.name}
+            type={field.type || "text"}
+            placeholder={field.label}
+            value={values[field.name] || ""}
+            disabled={disabled}
+            required={field.required}
+            onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
+          />
+        ))}
+        <Button type="submit" variant="brand" disabled={disabled || numberOrUndefined(values.lot_id) == null}>Save</Button>
+      </form>
+    </Panel>
   );
 }
 

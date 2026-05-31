@@ -16,9 +16,13 @@ async function getCurrentPrice(symbol: string): Promise<number | null> {
 const params = Type.Object({
   action: Type.Union([
     Type.Literal("add"),
+    Type.Literal("update"),
     Type.Literal("remove"),
     Type.Literal("view"),
-  ], { description: "Action: add a position, remove a position, or view portfolio" }),
+  ], { description: "Action: add a position, update a lot, remove a position, or view portfolio" }),
+  lot_id: Type.Optional(
+    Type.Number({ description: "Portfolio lot id for precise update" }),
+  ),
   symbol: Type.Optional(
     Type.String({ description: "Ticker symbol — stocks (AAPL, MSFT) or crypto with -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker to find the right ticker." }),
   ),
@@ -75,6 +79,31 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
         }
         return {
           content: [{ type: "text", text: `Removed ${symbol} from portfolio` }],
+          details: null,
+        };
+      }
+
+      if (args.action === "update") {
+        if (!args.lot_id && !args.symbol) {
+          throw new Error("lot_id or symbol is required for update action.");
+        }
+        const updateParams = {
+          quantity: args.shares,
+          avgCost: args.avg_cost,
+          currency: args.currency?.trim() || undefined,
+        };
+        const updated = args.lot_id
+          ? service.updatePortfolioLot(args.lot_id, updateParams)
+          : service.updatePortfolioLotsBySymbol(args.symbol!, updateParams)[0] ?? null;
+        if (updated == null) {
+          const target = args.lot_id ? `lot ${args.lot_id}` : args.symbol?.toUpperCase();
+          return {
+            content: [{ type: "text", text: `${target} not found in portfolio` }],
+            details: null,
+          };
+        }
+        return {
+          content: [{ type: "text", text: `Updated ${updated.symbol} portfolio lot ${updated.id}` }],
           details: null,
         };
       }
