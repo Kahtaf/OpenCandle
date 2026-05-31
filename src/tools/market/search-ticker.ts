@@ -1,23 +1,12 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { httpGet } from "../../infra/http-client.js";
+import { searchYahooInstruments } from "../../market-state/resolve.js";
 
 const params = Type.Object({
   query: Type.String({
     description: "Search query — company name, ticker symbol, or crypto name (e.g. 'apple', 'AAPL', 'ethereum', 'bitcoin')",
   }),
 });
-
-interface YahooSearchResponse {
-  quotes: Array<{
-    symbol: string;
-    shortname?: string;
-    longname?: string;
-    quoteType: string;
-    exchange: string;
-    score: number;
-  }>;
-}
 
 export const searchTickerTool: AgentTool<typeof params> = {
   name: "search_ticker",
@@ -26,12 +15,7 @@ export const searchTickerTool: AgentTool<typeof params> = {
     "Search for any ticker symbol — stocks, crypto, ETFs, indices, forex. Returns matching symbols with names and exchange info. Use this when you don't know the exact ticker for an asset.",
   parameters: params,
   async execute(_toolCallId, args) {
-    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(args.query)}&quotesCount=10&newsCount=0`;
-    const data = await httpGet<YahooSearchResponse>(url, {
-      headers: { "User-Agent": "OpenCandle/1.0" },
-    });
-
-    const quotes = data.quotes ?? [];
+    const quotes = await searchYahooInstruments(args.query);
     if (quotes.length === 0) {
       return {
         content: [{ type: "text", text: `No results found for "${args.query}"` }],
@@ -44,7 +28,7 @@ export const searchTickerTool: AgentTool<typeof params> = {
       "",
       ...quotes.map(
         (q) =>
-          `  ${q.symbol} — ${q.longname || q.shortname || "N/A"} (${q.quoteType}, ${q.exchange})`,
+          `  ${q.symbol} — ${q.name || "N/A"} (${q.quoteType}, ${q.exchange || "N/A"})`,
       ),
     ];
 

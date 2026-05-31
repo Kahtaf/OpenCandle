@@ -1,7 +1,53 @@
 import { getQuote } from "../providers/yahoo-finance.js";
 import { wrapProvider } from "../providers/wrap-provider.js";
+import { httpGet } from "../infra/http-client.js";
 import type { StockQuote } from "../types/market.js";
 import type { InstrumentInput } from "./service.js";
+
+export interface InstrumentCandidate {
+  symbol: string;
+  name: string | null;
+  quoteType: string;
+  assetType: string;
+  exchange: string | null;
+  provider: "yahoo";
+  score: number | null;
+}
+
+interface YahooSearchResponse {
+  quotes?: Array<{
+    symbol?: string;
+    shortname?: string;
+    longname?: string;
+    quoteType?: string;
+    exchange?: string;
+    score?: number;
+  }>;
+}
+
+export async function searchYahooInstruments(query: string): Promise<InstrumentCandidate[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(trimmed)}&quotesCount=10&newsCount=0`;
+  const data = await httpGet<YahooSearchResponse>(url, {
+    headers: { "User-Agent": "OpenCandle/1.0" },
+  });
+
+  return (data.quotes ?? []).flatMap((quote) => {
+    if (!quote.symbol) return [];
+    const quoteType = quote.quoteType ?? "UNKNOWN";
+    return [{
+      symbol: quote.symbol.toUpperCase(),
+      name: quote.longname ?? quote.shortname ?? null,
+      quoteType,
+      assetType: assetTypeFromQuoteType(quoteType, quote.symbol),
+      exchange: quote.exchange ?? null,
+      provider: "yahoo" as const,
+      score: quote.score ?? null,
+    }];
+  });
+}
 
 export async function resolveYahooInstrument(symbol: string): Promise<InstrumentInput> {
   const normalized = symbol.trim().toUpperCase();
@@ -47,4 +93,14 @@ function inferAssetType(symbol: string): string {
   if (symbol.endsWith("-USD")) return "crypto";
   if (symbol.startsWith("^")) return "index";
   return "equity";
+}
+
+function assetTypeFromQuoteType(quoteType: string, symbol: string): string {
+  const normalized = quoteType.toLowerCase();
+  if (normalized.includes("etf")) return "etf";
+  if (normalized.includes("mutualfund")) return "fund";
+  if (normalized.includes("crypto")) return "crypto";
+  if (normalized.includes("index")) return "index";
+  if (normalized.includes("equity")) return "equity";
+  return inferAssetType(symbol.toUpperCase());
 }
