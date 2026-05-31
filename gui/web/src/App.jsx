@@ -5,6 +5,7 @@ import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
 import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
+import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
 import { routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
 import { useChatRun } from "./hooks/useChatRun.jsx";
@@ -169,6 +170,7 @@ export function AppShell() {
   const sidebarProps = {
     sessions: gui.sessions,
     currentSessionId: sessionView.activeSessionId,
+    currentPath: pathname,
     collapsed: sidebarCollapsed,
     onCollapse: () => setSidebarCollapsed(true),
     onOpenSession: openSession,
@@ -184,33 +186,44 @@ export function AppShell() {
       : activeDrawer === "workflows"
         ? "workflows"
         : "workflows";
+  const marketDomain = domainFromPath(pathname);
   return (
     <ToolDrawerProvider>
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
-        <ChatPanel
-          entries={sessionView.entries}
-          liveEvents={liveEvents}
-          askUserPrompts={visibleAskUserPrompts}
-          modelSetup={gui.modelSetup}
-          role={gui.role}
-          inputDisabled={inputDisabled}
-          runState={chatRun.runState}
-          lastPrompt={chatRun.lastPrompt}
-          catalog={gui.catalog}
-          send={gui.send}
-          startChatRun={startRoutedChatRun}
-          stopRun={chatRun.stopRun}
-          retryRun={chatRun.retryRun}
-          setToast={gui.setToast}
-          draft={draft}
-          setDraft={setDraft}
-          onOpenCommandPalette={openCatalog}
-          onOpenSidebar={() => openDrawer("history")}
-          onOpenContext={() => openDrawer("context")}
-          sidebarCollapsed={sidebarCollapsed}
-          onExpandSidebar={() => setSidebarCollapsed(false)}
-        />
+        {marketDomain ? (
+          <MarketStatePage
+            domain={marketDomain}
+            role={gui.role}
+            send={gui.send}
+            navigate={navigate}
+            setToast={gui.setToast}
+          />
+        ) : (
+          <ChatPanel
+            entries={sessionView.entries}
+            liveEvents={liveEvents}
+            askUserPrompts={visibleAskUserPrompts}
+            modelSetup={gui.modelSetup}
+            role={gui.role}
+            inputDisabled={inputDisabled}
+            runState={chatRun.runState}
+            lastPrompt={chatRun.lastPrompt}
+            catalog={gui.catalog}
+            send={gui.send}
+            startChatRun={startRoutedChatRun}
+            stopRun={chatRun.stopRun}
+            retryRun={chatRun.retryRun}
+            setToast={gui.setToast}
+            draft={draft}
+            setDraft={setDraft}
+            onOpenCommandPalette={openCatalog}
+            onOpenSidebar={() => openDrawer("history")}
+            onOpenContext={() => openDrawer("context")}
+            sidebarCollapsed={sidebarCollapsed}
+            onExpandSidebar={() => setSidebarCollapsed(false)}
+          />
+        )}
         <ToolDrawerInline />
       </div>
       <ToolDrawerOverlay />
@@ -241,4 +254,13 @@ export function AppShell() {
       </Suspense>
     </ToolDrawerProvider>
   );
+}
+
+function domainFromPath(pathname) {
+  if (pathname === "/watchlists") return "watchlists";
+  if (pathname === "/portfolios") return "portfolios";
+  if (pathname === "/alerts") return "alerts";
+  if (pathname === "/reports") return "reports";
+  if (pathname === "/predictions") return "predictions";
+  return "";
 }

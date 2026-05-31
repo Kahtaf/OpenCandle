@@ -29,7 +29,47 @@ const settingsRoute = createRoute({
   validateSearch: validateGuiSearch,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, sessionRoute, historyRoute, settingsRoute]);
+const watchlistsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/watchlists",
+  validateSearch: validateGuiSearch,
+});
+
+const portfoliosRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/portfolios",
+  validateSearch: validateGuiSearch,
+});
+
+const alertsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/alerts",
+  validateSearch: validateGuiSearch,
+});
+
+const reportsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reports",
+  validateSearch: validateGuiSearch,
+});
+
+const predictionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/predictions",
+  validateSearch: validateGuiSearch,
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  sessionRoute,
+  historyRoute,
+  settingsRoute,
+  watchlistsRoute,
+  portfoliosRoute,
+  alertsRoute,
+  reportsRoute,
+  predictionsRoute,
+]);
 
 export const router = createRouter({
   routeTree,
