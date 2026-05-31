@@ -233,6 +233,10 @@ export function AppShell() {
         state={gui.dashboard}
         catalog={gui.catalog}
         onClose={closeDrawer}
+        onOpenMarketState={(path) => {
+          closeDrawer();
+          void navigate({ to: path, search: (current) => ({ ...current, drawer: undefined }) });
+        }}
         onConfigureProvider={() => {
           closeDrawer();
           openCatalog("providers");

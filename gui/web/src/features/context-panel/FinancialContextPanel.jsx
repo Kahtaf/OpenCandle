@@ -16,12 +16,21 @@ const WORKFLOW_NAMES = {
   general_finance_qa: "General Q&A",
 };
 
-export function FinancialContextDrawer({ open, state, catalog, onClose, onConfigureProvider }) {
+const MARKET_STATE_LINKS = [
+  { path: "/watchlists", label: "Watchlists" },
+  { path: "/portfolios", label: "Portfolios" },
+  { path: "/alerts", label: "Alerts" },
+  { path: "/reports", label: "Reports" },
+  { path: "/predictions", label: "Predictions" },
+];
+
+export function FinancialContextDrawer({ open, state, catalog, onClose, onConfigureProvider, onOpenMarketState }) {
   return (
     <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <SheetContent width="sm" handleLabel="Context" className="bg-card p-0">
         <Header state={state} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <MarketStateShortcuts onOpenMarketState={onOpenMarketState} />
           <Watchlist rows={state?.watchlist ?? []} />
           <Analyses rows={state?.activeAnalyses ?? []} />
           <Research rows={state?.recentResearch ?? []} />
@@ -29,6 +38,27 @@ export function FinancialContextDrawer({ open, state, catalog, onClose, onConfig
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function MarketStateShortcuts({ onOpenMarketState }) {
+  if (!onOpenMarketState) return null;
+
+  return (
+    <Section title="Saved state">
+      <div className="flex flex-wrap gap-1.5">
+        {MARKET_STATE_LINKS.map((item) => (
+          <Button
+            key={item.path}
+            size="xs"
+            variant="bordered"
+            onClick={() => onOpenMarketState(item.path)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+    </Section>
   );
 }
 
