@@ -18,6 +18,8 @@ export function buildAlertRows(alerts = [], alertEvents = []) {
       lastObserved: observedLabel(rule.lastObservedJson),
       latestEvent: eventLabel(event),
       status: statusLabel(rule, event),
+      enabled: rule.enabled !== false,
+      toggleLabel: rule.enabled === false ? "Enable" : "Disable",
     };
   });
 }

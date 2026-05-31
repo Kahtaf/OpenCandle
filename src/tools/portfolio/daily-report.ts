@@ -111,6 +111,10 @@ async function generateDailyReport(service: MarketStateService): Promise<{
         dataGaps.push(`${item.symbol}: ${result.reason}`);
         return null;
       }
+      if (result.stale) {
+        dataGaps.push(`${item.symbol}: provider returned stale market data`);
+        return null;
+      }
       if (isZeroFilledQuote(result.data)) {
         dataGaps.push(`${item.symbol}: Yahoo returned no valid market data.`);
         return null;

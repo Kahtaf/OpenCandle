@@ -26,6 +26,7 @@ const params = Type.Object({
       Type.Literal("create_rsi_above"),
       Type.Literal("create_rsi_below"),
       Type.Literal("create_volume_spike"),
+      Type.Literal("set_enabled"),
       Type.Literal("list"),
       Type.Literal("check"),
     ],
@@ -37,6 +38,8 @@ const params = Type.Object({
   cooldown_seconds: Type.Optional(
     Type.Number({ description: "Cooldown between repeated trigger events. Default: 3600" }),
   ),
+  id: Type.Optional(Type.Number({ description: "Alert rule id for update actions" })),
+  enabled: Type.Optional(Type.Boolean({ description: "Whether an alert rule is enabled" })),
 });
 
 export const alertsTool: AgentTool<typeof params> = {
@@ -174,6 +177,20 @@ export const alertsTool: AgentTool<typeof params> = {
         return { content: [{ type: "text", text: lines.join("\n") }], details: rules };
       }
 
+      if (args.action === "set_enabled") {
+        if (args.id == null || args.enabled == null) {
+          throw new Error("id and enabled are required for set_enabled.");
+        }
+        const rule = service.setAlertRuleEnabled(args.id, args.enabled);
+        return {
+          content: [{
+            type: "text",
+            text: `${rule.enabled ? "Enabled" : "Disabled"} alert #${rule.id}.`,
+          }],
+          details: rule,
+        };
+      }
+
       const result = await checkAlerts(service);
       return {
         content: [{ type: "text", text: result.lines.join("\n") }],
@@ -263,6 +280,7 @@ async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<
   if (rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below") {
     const quoteResult = await wrapProvider("yahoo", () => getQuote(symbol));
     if (quoteResult.status === "unavailable") return { status: "unavailable", reason: quoteResult.reason };
+    if (quoteResult.stale) return { status: "unavailable", reason: "provider returned stale market data" };
     if (isZeroFilledQuote(quoteResult.data)) {
       return { status: "unavailable", reason: "Yahoo returned no valid market data." };
     }
@@ -279,6 +297,7 @@ async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<
     const period = typeof condition.period === "number" ? condition.period : 50;
     const barsResult = await wrapProvider("yahoo", () => getHistory(symbol, "1y", "1d"));
     if (barsResult.status === "unavailable") return { status: "unavailable", reason: barsResult.reason };
+    if (barsResult.stale) return { status: "unavailable", reason: "provider returned stale market data" };
     const closes = barsResult.data.map((bar) => bar.close);
     const sma = computeSMA(closes, period);
     const latestClose = closes[closes.length - 1];
@@ -299,6 +318,7 @@ async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<
     const period = typeof condition.period === "number" ? condition.period : 14;
     const barsResult = await wrapProvider("yahoo", () => getHistory(symbol, "6mo", "1d"));
     if (barsResult.status === "unavailable") return { status: "unavailable", reason: barsResult.reason };
+    if (barsResult.stale) return { status: "unavailable", reason: "provider returned stale market data" };
     const rsi = computeRSI(barsResult.data.map((bar) => bar.close), period);
     const latestRsi = rsi[rsi.length - 1];
     if (latestRsi == null) {
@@ -317,6 +337,7 @@ async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<
     const period = typeof condition.lookback_period === "number" ? condition.lookback_period : 20;
     const barsResult = await wrapProvider("yahoo", () => getHistory(symbol, "6mo", "1d"));
     if (barsResult.status === "unavailable") return { status: "unavailable", reason: barsResult.reason };
+    if (barsResult.stale) return { status: "unavailable", reason: "provider returned stale market data" };
     const bars = barsResult.data;
     const latest = bars[bars.length - 1];
     const prior = bars.slice(Math.max(0, bars.length - 1 - period), bars.length - 1);

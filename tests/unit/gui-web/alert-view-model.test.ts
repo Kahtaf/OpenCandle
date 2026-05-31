@@ -41,6 +41,8 @@ describe("alert view model", () => {
         lastObserved: "last_price: 251.25 at 2026-05-31 12:00:00Z",
         latestEvent: "2026-05-31 12:00:00Z triggered: AAPL price crossed above $250",
         status: "triggered",
+        enabled: true,
+        toggleLabel: "Disable",
       }),
     ]);
   });
@@ -66,6 +68,31 @@ describe("alert view model", () => {
       lastObserved: "Not checked",
       latestEvent: "None",
       status: "Needs review: v2",
+      enabled: true,
+      toggleLabel: "Disable",
+    });
+  });
+
+  it("offers an enable action for paused alert rows", () => {
+    const rows = buildAlertRows([
+      {
+        id: 3,
+        scopeType: "instrument",
+        instrumentId: 7,
+        conditionType: "price_crosses_below",
+        conditionVersion: 1,
+        conditionJson: { threshold: 100 },
+        enabled: false,
+        checkIntervalSeconds: null,
+        lastCheckedAt: null,
+        lastObservedJson: null,
+      },
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      status: "Disabled",
+      enabled: false,
+      toggleLabel: "Enable",
     });
   });
 });

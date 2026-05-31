@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import { dailyReportTool } from "../../../src/tools/portfolio/daily-report.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { cache } from "../../../src/infra/cache.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
@@ -20,6 +21,8 @@ describe("dailyReportTool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cache.clear();
+    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-report-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
@@ -34,6 +37,8 @@ describe("dailyReportTool", () => {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
     rmSync(openCandleHome, { recursive: true, force: true });
+    cache.clear();
+    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -90,6 +95,26 @@ describe("dailyReportTool", () => {
         dataGapCount: 1,
       },
       errorsJson: ["AAPL: Yahoo returned no valid market data."],
+    });
+  });
+
+  it("reports stale quote rows as data gaps instead of valid report data", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
+    cache.set("test-stale-report-quote", quote("AAPL", 260), -1);
+    cache.getStale("test-stale-report-quote", 60_000);
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 260));
+
+    const result = await dailyReportTool.execute("test", { action: "run" });
+
+    expect(result.content[0].text).toContain("No quote data available");
+    expect(result.content[0].text).toContain("AAPL: provider returned stale market data");
+    expect(result.details).toMatchObject({
+      status: "completed",
+      summaryJson: {
+        quoteCount: 0,
+        dataGapCount: 1,
+      },
+      errorsJson: ["AAPL: provider returned stale market data"],
     });
   });
 

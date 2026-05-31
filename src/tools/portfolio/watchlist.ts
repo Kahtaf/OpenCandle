@@ -130,6 +130,9 @@ export const watchlistTool: AgentTool<typeof params> = {
           if (result.status === "unavailable") {
             return { ...item, currentPrice: null, alerts: [`UNAVAILABLE: ${result.reason}`], statuses: [] };
           }
+          if (result.stale) {
+            return { ...item, currentPrice: null, alerts: ["UNAVAILABLE: provider returned stale market data"], statuses: [] };
+          }
           const quote = result.data;
           if (isZeroFilledQuote(quote)) {
             return { ...item, currentPrice: null, alerts: ["UNAVAILABLE: Yahoo returned no valid market data."], statuses: [] };

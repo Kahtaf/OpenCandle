@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import { httpGet } from "../../../src/infra/http-client.js";
+import { cache } from "../../../src/infra/cache.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
@@ -22,6 +23,8 @@ describe("portfolioTrackerTool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cache.clear();
+    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-portfolio-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol.toUpperCase(), 300));
@@ -35,6 +38,8 @@ describe("portfolioTrackerTool", () => {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
     rmSync(openCandleHome, { recursive: true, force: true });
+    cache.clear();
+    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -120,6 +125,41 @@ describe("portfolioTrackerTool", () => {
         expect.objectContaining({
           symbol: "VTI",
           reason: "Quote unavailable: Yahoo returned no valid market data.",
+        }),
+      ],
+    });
+  });
+
+  it("discloses stale quote data and excludes the row from current-value totals", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    cache.set("test-stale-portfolio-quote", quote("VTI", 300), -1);
+    cache.getStale("test-stale-portfolio-quote", 60_000);
+    vi.mocked(getQuote).mockResolvedValue(quote("VTI", 300));
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("Quote unavailable: provider returned stale market data");
+    expect(result.details).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+      positions: [
+        expect.objectContaining({
+          symbol: "VTI",
+          currentPrice: null,
+          marketValue: null,
+          includedInTotals: false,
+          quoteStatus: "unavailable",
+        }),
+      ],
+      excludedFromTotals: [
+        expect.objectContaining({
+          symbol: "VTI",
+          reason: "Quote unavailable: provider returned stale market data",
         }),
       ],
     });

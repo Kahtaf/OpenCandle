@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
 import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
 import { httpGet } from "../../../src/infra/http-client.js";
+import { cache } from "../../../src/infra/cache.js";
 import type { OHLCV, StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
@@ -23,6 +24,8 @@ describe("alertsTool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cache.clear();
+    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-alerts-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
@@ -37,6 +40,8 @@ describe("alertsTool", () => {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
     rmSync(openCandleHome, { recursive: true, force: true });
+    cache.clear();
+    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -134,6 +139,36 @@ describe("alertsTool", () => {
     const service = new MarketStateService(db);
     expect(service.listAlertEvents()).toHaveLength(1);
     db.close();
+  });
+
+  it("can disable and re-enable alert rules before manual checks", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+    });
+
+    const disabled = await alertsTool.execute("test", {
+      action: "set_enabled",
+      id: created.details.id,
+      enabled: false,
+    });
+
+    expect(disabled.content[0].text).toContain("Disabled alert");
+    expect(disabled.details).toMatchObject({ enabled: false });
+
+    const skipped = await alertsTool.execute("test", { action: "check" });
+    expect(skipped.content[0].text).toContain("No enabled alert rules");
+    expect(vi.mocked(getQuote)).toHaveBeenCalledTimes(1);
+
+    const enabled = await alertsTool.execute("test", {
+      action: "set_enabled",
+      id: created.details.id,
+      enabled: true,
+    });
+
+    expect(enabled.content[0].text).toContain("Enabled alert");
+    expect(enabled.details).toMatchObject({ enabled: true });
   });
 
   it("suppresses a fresh crossing while the alert is inside cooldown", async () => {
@@ -248,6 +283,30 @@ describe("alertsTool", () => {
     expect(checked.content[0].text).toMatch(/unavailable/i);
     expect(checked.content[0].text).toMatch(/no valid market data/i);
     expect(checked.details).toMatchObject({ checked: 1, triggered: 0 });
+  });
+
+  it("does not seed or trigger on stale provider data", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+    });
+    cache.set("test-stale-alert-quote", quote("AAPL", 260), -1);
+    cache.getStale("test-stale-alert-quote", 60_000);
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 260));
+
+    const checked = await alertsTool.execute("test", { action: "check" });
+
+    expect(checked.content[0].text).toMatch(/unavailable/i);
+    expect(checked.content[0].text).toMatch(/stale/i);
+    expect(checked.details).toMatchObject({ checked: 1, triggered: 0 });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const [rule] = service.listAlertRules();
+    expect(rule.lastObservedJson).toBeNull();
+    expect(service.listAlertEvents()).toHaveLength(0);
+    db.close();
   });
 
   it("reports unsupported condition versions as needing review", async () => {

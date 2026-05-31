@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import { httpGet } from "../../../src/infra/http-client.js";
+import { cache } from "../../../src/infra/cache.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
@@ -20,6 +21,8 @@ describe("watchlistTool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cache.clear();
+    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-watchlist-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
@@ -33,6 +36,8 @@ describe("watchlistTool", () => {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
     rmSync(openCandleHome, { recursive: true, force: true });
+    cache.clear();
+    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -169,6 +174,27 @@ describe("watchlistTool", () => {
       symbol: "AAPL",
       currentPrice: null,
       alerts: ["UNAVAILABLE: Yahoo returned no valid market data."],
+    });
+  });
+
+  it("treats stale quote data as unavailable during watchlist checks", async () => {
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+    });
+    cache.set("test-stale-watchlist-quote", quote("AAPL", 210), -1);
+    cache.getStale("test-stale-watchlist-quote", 60_000);
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 210));
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("UNAVAILABLE: provider returned stale market data");
+    expect(result.content[0].text).not.toContain("TARGET HIT");
+    expect(result.details?.items[0]).toMatchObject({
+      symbol: "AAPL",
+      currentPrice: null,
+      alerts: ["UNAVAILABLE: provider returned stale market data"],
     });
   });
 

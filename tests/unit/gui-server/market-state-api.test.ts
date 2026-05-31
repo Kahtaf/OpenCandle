@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../../../gui/server/market-state-api.js";
 import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { cache } from "../../../src/infra/cache.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/market-state/resolve.js", async (importOriginal) => {
@@ -22,6 +23,18 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
 }));
 
 describe("market-state API helpers", () => {
+  beforeEach(() => {
+    cache.clear();
+    cache.consumeStaleFlag();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cache.clear();
+    cache.consumeStaleFlag();
+    vi.clearAllMocks();
+  });
+
   it("builds a durable market-state snapshot from SQLite", () => {
     const db = initDatabase(":memory:");
     const service = new MarketStateService(db);
@@ -165,6 +178,65 @@ describe("market-state API helpers", () => {
       totalValue: 1000,
       totalCost: 850,
       totalPnl: 150,
+    });
+    db.close();
+  });
+
+  it("marks stale quote snapshot rows unavailable and excludes them from portfolio totals", async () => {
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    const watchlist = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    const lot = service.addPortfolioLot({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 150,
+      currency: "USD",
+    });
+    cache.set("test-stale-market-state-api-quote", quote("AAPL", 200), -1);
+    cache.getStale("test-stale-market-state-api-quote", 60_000);
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 200));
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.watchlistQuotes).toEqual([
+      expect.objectContaining({
+        itemId: watchlist.id,
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+      }),
+    ]);
+    expect(snapshot.portfolioQuotes).toEqual([
+      expect.objectContaining({
+        lotId: lot.id,
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+        includedInTotals: false,
+      }),
+    ]);
+    expect(snapshot.portfolioSummary).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+      excludedFromTotals: [
+        expect.objectContaining({ symbol: "AAPL", reason: "provider returned stale market data" }),
+      ],
     });
     db.close();
   });

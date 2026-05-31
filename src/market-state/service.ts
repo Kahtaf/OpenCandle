@@ -840,6 +840,18 @@ export class MarketStateService {
     return rows.map(mapAlertRule);
   }
 
+  setAlertRuleEnabled(id: number, enabled: boolean): AlertRuleRecord {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE alert_rules
+         SET enabled = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(enabled ? 1 : 0, now, id);
+    return this.getAlertRule(id);
+  }
+
   getInstrument(id: number): InstrumentRecord | null {
     const row = this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(id) as
       | InstrumentRow

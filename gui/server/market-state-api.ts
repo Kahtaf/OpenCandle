@@ -124,7 +124,7 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
           status: "unavailable" as const,
           totalCost,
           currency: lotCurrency,
-          includedInTotals,
+          includedInTotals: false,
           reason: quote?.reason ?? "quote unavailable",
         };
       }
@@ -200,6 +200,7 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
 > {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
   if (result.status === "unavailable") return { status: "unavailable", reason: result.reason };
+  if (result.stale) return { status: "unavailable", reason: "provider returned stale market data" };
   if (isZeroFilledQuote(result.data)) {
     return { status: "unavailable", reason: "Yahoo returned no valid market data." };
   }

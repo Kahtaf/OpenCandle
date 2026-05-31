@@ -299,7 +299,7 @@ function Alerts({ state, readOnly, invokeTool }) {
           <EmptyState icon={Bell} title="No alerts yet" action="Create a manual price alert, then run checks explicitly." />
         ) : (
           <DataTable
-            columns={["Rule", "Scope", "Mode", "Last checked", "Last observed", "Latest event", "Status"]}
+            columns={["Rule", "Scope", "Mode", "Last checked", "Last observed", "Latest event", "Status", "Actions"]}
             rows={alertRows.map((row) => [
               row.rule,
               row.scope,
@@ -308,6 +308,12 @@ function Alerts({ state, readOnly, invokeTool }) {
               row.lastObserved,
               row.latestEvent,
               row.status,
+              <RowActions
+                disabled={readOnly}
+                actions={[
+                  [row.toggleLabel, () => invokeTool("manage_alerts", { action: "set_enabled", id: row.id, enabled: !row.enabled })],
+                ]}
+              />,
             ])}
           />
         )}
