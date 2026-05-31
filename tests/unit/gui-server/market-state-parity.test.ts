@@ -1,0 +1,115 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import type { Message } from "@earendil-works/pi-ai";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
+import { buildMarketStateSnapshot } from "../../../gui/server/market-state-api.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
+import { predictionsTool } from "../../../src/tools/portfolio/predictions.js";
+import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
+import type { StockQuote } from "../../../src/types/market.js";
+
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
+}));
+
+describe("market-state GUI/TUI parity", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string;
+  let messages: Message[];
+  let sessionManager: SessionManager;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-parity-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+    messages = [];
+    sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol.toUpperCase(), 180));
+  });
+
+  afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    rmSync(openCandleHome, { recursive: true, force: true });
+    vi.clearAllMocks();
+  });
+
+  it("shares persisted rows between UI-originated tool calls, direct TUI tools, and GUI snapshots", async () => {
+    await invokeToolFromUi(
+      sessionManager,
+      watchlistTool,
+      { action: "add", symbol: "AAPL", target_price: 220 },
+      "ui",
+    );
+
+    const tuiWatchlist = await watchlistTool.execute("test", { action: "check" });
+    expect(tuiWatchlist.content[0].text).toContain("AAPL");
+
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 150,
+    });
+
+    await invokeToolFromUi(
+      sessionManager,
+      predictionsTool,
+      {
+        action: "record",
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 8,
+        entry_price: 180,
+        timeframe_days: 30,
+      },
+      "ui",
+    );
+
+    const db = initDefaultDatabase();
+    const snapshot = buildMarketStateSnapshot(db);
+    db.close();
+
+    expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
+    expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
+    expect(snapshot.predictions.map((prediction) => prediction.symbol)).toEqual(["AAPL"]);
+    expect(messages.some((message) =>
+      message.role === "toolResult" &&
+      message.toolName === "track_prediction" &&
+      message.details?.stateChange?.source === "ui" &&
+      typeof message.details.stateChange.targetId === "number" &&
+      typeof message.details.stateChange.instrumentId === "number"
+    )).toBe(true);
+  });
+});
+
+function quote(symbol: string, price: number): StockQuote {
+  return {
+    symbol,
+    price,
+    change: 0,
+    changePercent: 0,
+    open: price,
+    high: price,
+    low: price,
+    previousClose: price,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: price + 10,
+    week52Low: price - 10,
+    timestamp: Date.now(),
+  };
+}
