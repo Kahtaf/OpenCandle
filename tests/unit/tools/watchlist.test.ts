@@ -48,6 +48,9 @@ describe("watchlistTool", () => {
       symbol: "AAPL",
       target_price: 200,
       stop_price: 150,
+      thesis: "Services growth offsets hardware cycles",
+      notes: "Core watch",
+      tags: ["mega-cap", "quality"],
     });
 
     expect(result.content[0].text).toContain("AAPL");
@@ -55,6 +58,9 @@ describe("watchlistTool", () => {
       symbol: "AAPL",
       targetPrice: 200,
       stopPrice: 150,
+      thesis: "Services growth offsets hardware cycles",
+      notes: "Core watch",
+      tags: ["mega-cap", "quality"],
     });
     expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
     expect(existsSync(join(openCandleHome, "watchlist.json"))).toBe(false);

@@ -61,7 +61,9 @@ export const watchlistTool: AgentTool<typeof params> = {
           instrument: instrument.instrument,
           targetPrice: args.target_price,
           stopPrice: args.stop_price,
+          thesis: args.thesis,
           notes: args.notes,
+          tags: args.tags,
         });
         const alerts = [];
         if (args.target_price) alerts.push(`target: $${args.target_price}`);

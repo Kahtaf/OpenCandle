@@ -100,14 +100,18 @@ function Watchlists({ state, readOnly, invokeTool }) {
         fields={[
           { name: "target_price", label: "Target", type: "number" },
           { name: "stop_price", label: "Stop", type: "number" },
+          { name: "thesis", label: "Thesis" },
           { name: "notes", label: "Notes" },
+          { name: "tags", label: "Tags" },
         ]}
         onSubmit={(values) => invokeTool("manage_watchlist", {
           action: "add",
           symbol: values.symbol,
           target_price: numberOrUndefined(values.target_price),
           stop_price: numberOrUndefined(values.stop_price),
+          thesis: values.thesis || undefined,
           notes: values.notes || undefined,
+          tags: parseTags(values.tags),
         })}
       />
       <SymbolActionPanel
@@ -116,14 +120,18 @@ function Watchlists({ state, readOnly, invokeTool }) {
         fields={[
           { name: "target_price", label: "Target", type: "number" },
           { name: "stop_price", label: "Stop", type: "number" },
+          { name: "thesis", label: "Thesis" },
           { name: "notes", label: "Notes" },
+          { name: "tags", label: "Tags" },
         ]}
         onSubmit={(values) => invokeTool("manage_watchlist", {
           action: "update",
           symbol: values.symbol,
           target_price: numberOrUndefined(values.target_price),
           stop_price: numberOrUndefined(values.stop_price),
+          thesis: values.thesis || undefined,
           notes: values.notes || undefined,
+          tags: parseTags(values.tags),
         })}
       />
       <Panel title="Default Watchlist" count={state.watchlist.length}>
@@ -131,7 +139,7 @@ function Watchlists({ state, readOnly, invokeTool }) {
           <EmptyState icon={ListPlus} title="No tickers yet" action="Use Add ticker to start the default watchlist." />
         ) : (
           <DataTable
-            columns={["Symbol", "Name", "Quote", "Freshness", "Target", "Stop", "Notes", "Alert status", ""]}
+            columns={["Symbol", "Name", "Quote", "Freshness", "Target", "Stop", "Thesis", "Notes", "Tags", "Alert status", ""]}
             rows={state.watchlist.map((item) => [
               <TickerCell key="symbol" symbol={item.symbol} sub={item.exchange || item.assetType} />,
               item.name || "N/A",
@@ -139,7 +147,9 @@ function Watchlists({ state, readOnly, invokeTool }) {
               quoteFreshness(quotesByItem.get(item.id)),
               moneyOrDash(item.targetPrice),
               moneyOrDash(item.stopPrice),
+              item.thesis || "N/A",
               item.notes || "N/A",
+              item.tags?.length ? item.tags.join(", ") : "N/A",
               alertStatus(alertsByInstrument.get(item.instrumentId)),
               <RowActions
                 key="actions"
@@ -716,4 +726,12 @@ function numberOrUndefined(value) {
   if (value === "" || value == null) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseTags(value) {
+  const tags = String(value ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+  return tags.length ? tags : undefined;
 }
