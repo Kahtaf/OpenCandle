@@ -107,6 +107,36 @@ describe("dailyReportTool", () => {
       localTime: "08:00",
     });
   });
+
+  it("updates the existing morning report template instead of duplicating it", async () => {
+    await dailyReportTool.execute("test", {
+      action: "configure",
+      timezone: "America/Toronto",
+      local_time: "08:00",
+    });
+
+    const result = await dailyReportTool.execute("test", {
+      action: "configure",
+      timezone: "America/New_York",
+      local_time: "07:30",
+    });
+
+    expect(result.details).toMatchObject({
+      timezone: "America/New_York",
+      localTime: "07:30",
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const templates = service.listReportTemplates();
+    db.close();
+
+    expect(templates).toHaveLength(1);
+    expect(templates[0]).toMatchObject({
+      timezone: "America/New_York",
+      localTime: "07:30",
+    });
+  });
 });
 
 function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {

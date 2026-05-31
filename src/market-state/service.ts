@@ -941,6 +941,40 @@ export class MarketStateService {
     return this.getReportTemplate(Number(result.lastInsertRowid));
   }
 
+  updateReportTemplate(id: number, params: {
+    name?: string;
+    reportType?: string;
+    cadence?: string;
+    timezone?: string;
+    localTime?: string;
+    config?: unknown;
+    enabled?: boolean;
+    nextRunAt?: string | null;
+  }): ReportTemplateRecord {
+    const existing = this.getReportTemplate(id);
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE report_templates
+         SET name = ?, report_type = ?, cadence = ?, timezone = ?, local_time = ?,
+             config_json = ?, enabled = ?, next_run_at = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        params.name ?? existing.name,
+        params.reportType ?? existing.reportType,
+        params.cadence ?? existing.cadence,
+        params.timezone ?? existing.timezone,
+        params.localTime ?? existing.localTime,
+        JSON.stringify(params.config ?? existing.configJson),
+        params.enabled == null ? (existing.enabled ? 1 : 0) : params.enabled ? 1 : 0,
+        params.nextRunAt === undefined ? existing.nextRunAt : params.nextRunAt,
+        now,
+        id,
+      );
+    return this.getReportTemplate(id);
+  }
+
   listReportTemplates(): ReportTemplateRecord[] {
     const rows = this.db
       .prepare("SELECT * FROM report_templates ORDER BY created_at, id")

@@ -31,7 +31,7 @@ export const dailyReportTool: AgentTool<typeof params> = {
 
     try {
       if (args.action === "configure") {
-        const template = service.createReportTemplate({
+        const templateParams = {
           name: "Morning watchlist",
           reportType: "watchlist_daily",
           cadence: "daily",
@@ -39,7 +39,14 @@ export const dailyReportTool: AgentTool<typeof params> = {
           localTime: args.local_time ?? "08:00",
           config: { targets: { default_watchlist: true } },
           enabled: true,
-        });
+        };
+        const existing = service.listReportTemplates().find((template) =>
+          template.reportType === "watchlist_daily" &&
+          targetsDefaultWatchlist(template.configJson)
+        );
+        const template = existing
+          ? service.updateReportTemplate(existing.id, templateParams)
+          : service.createReportTemplate(templateParams);
         return {
           content: [{
             type: "text",
@@ -78,6 +85,13 @@ export const dailyReportTool: AgentTool<typeof params> = {
     }
   },
 };
+
+function targetsDefaultWatchlist(config: unknown): boolean {
+  if (typeof config !== "object" || config === null) return false;
+  const targets = (config as { targets?: unknown }).targets;
+  if (typeof targets !== "object" || targets === null) return false;
+  return (targets as { default_watchlist?: unknown }).default_watchlist === true;
+}
 
 async function generateDailyReport(service: MarketStateService): Promise<{
   generatedAt: string;
