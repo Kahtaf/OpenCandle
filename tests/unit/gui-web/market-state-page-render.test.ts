@@ -74,4 +74,17 @@ describe("MarketStatePage rendering", () => {
       args: { action: "create_price_above", symbol: "AAPL", threshold: 250 },
     }]);
   });
+
+  it("allows decimal financial number inputs", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "portfolios",
+      role: "writer",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+    }));
+
+    expect(html).toContain('type="number"');
+    expect(html).toContain('step="any"');
+  });
 });

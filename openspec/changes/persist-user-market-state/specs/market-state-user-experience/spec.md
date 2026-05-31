@@ -88,6 +88,12 @@ OpenCandle SHALL make saved portfolios useful beyond raw lot entry.
 - **AND** it excludes unsupported mixed-currency rows from base-currency totals unless an explicit FX conversion source is available
 - **AND** the portfolio summary discloses which rows were excluded or need FX support
 
+#### Scenario: Quote currency mismatch does not fabricate row P&L
+
+- **WHEN** a portfolio lot's quote currency differs from the lot currency and no FX conversion source is available
+- **THEN** OpenCandle does not calculate row-level value or P&L by subtracting unlike currencies
+- **AND** the row shows the data gap or FX requirement instead of a fabricated same-currency result
+
 #### Scenario: Missing quote data is visible
 
 - **WHEN** current quote data is unavailable or stale for a holding

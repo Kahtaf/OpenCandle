@@ -128,6 +128,25 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
           reason: quote?.reason ?? "quote unavailable",
         };
       }
+      const resolvedQuoteCurrency = quote.currency ?? quoteCurrency;
+      if (resolvedQuoteCurrency !== lotCurrency) {
+        return {
+          lotId: lot.id,
+          instrumentId: lot.instrumentId,
+          symbol: lot.symbol,
+          status: "unavailable" as const,
+          currentPrice: null,
+          marketValue: null,
+          totalCost,
+          pnl: null,
+          pnlPercent: null,
+          currency: lotCurrency,
+          includedInTotals: false,
+          reason: `No FX conversion from ${resolvedQuoteCurrency} to ${lotCurrency}`,
+          fetchedAt: quote.fetchedAt,
+          stale: quote.stale,
+        };
+      }
       const marketValue = quote.price * lot.quantity;
       return {
         lotId: lot.id,
@@ -204,7 +223,7 @@ export async function searchInstrumentCandidates(query: string): Promise<{
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<
-  | { status: "ok"; price: number; changePercent: number; fetchedAt: string; stale?: boolean }
+  | { status: "ok"; price: number; changePercent: number; fetchedAt: string; stale?: boolean; currency: string | null }
   | { status: "unavailable"; reason: string }
 > {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
@@ -219,5 +238,6 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
     changePercent: result.data.changePercent,
     fetchedAt: result.timestamp,
     stale: result.stale,
+    currency: result.data.currency ?? null,
   };
 }

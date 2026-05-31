@@ -196,7 +196,9 @@ describe("portfolioTrackerTool", () => {
     });
     db.close();
     vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
-      quote(symbol.toUpperCase(), symbol.toUpperCase() === "SHOP.TO" ? 120 : 300),
+      symbol.toUpperCase() === "SHOP.TO"
+        ? quote("SHOP.TO", 120, { currency: "CAD" })
+        : quote(symbol.toUpperCase(), 300),
     );
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
@@ -216,6 +218,47 @@ describe("portfolioTrackerTool", () => {
         currency: "CAD",
         includedInTotals: false,
         marketValue: 360,
+      }),
+    ]);
+  });
+
+  it("does not compute row value or P&L when quote and lot currencies differ", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "SHOP.TO",
+        assetType: "equity",
+        name: "Shopify Inc.",
+        exchange: "TOR",
+        currency: "CAD",
+        provider: "yahoo",
+      },
+      quantity: 3,
+      avgCost: 100,
+      currency: "USD",
+    });
+    db.close();
+    vi.mocked(getQuote).mockResolvedValue(quote("SHOP.TO", 120, { currency: "CAD" }));
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("P&L: unavailable");
+    expect(result.details?.positions).toEqual([
+      expect.objectContaining({
+        symbol: "SHOP.TO",
+        currency: "USD",
+        currentPrice: null,
+        marketValue: null,
+        pnl: null,
+        pnlPercent: null,
+        includedInTotals: false,
+      }),
+    ]);
+    expect(result.details?.excludedFromTotals).toEqual([
+      expect.objectContaining({
+        symbol: "SHOP.TO",
+        reason: "No FX conversion from CAD to USD",
       }),
     ]);
   });
@@ -271,16 +314,17 @@ describe("portfolioTrackerTool", () => {
   });
 
   it("updates an existing portfolio lot through an explicit update action", async () => {
-    await portfolioTrackerTool.execute("test", {
+    const add = await portfolioTrackerTool.execute("test", {
       action: "add",
       symbol: "VTI",
       shares: 2,
       avg_cost: 250,
     });
+    const lotId = (add.details as { id: number }).id;
 
     const update = await portfolioTrackerTool.execute("test", {
       action: "update",
-      symbol: "VTI",
+      lot_id: lotId,
       shares: 3,
       avg_cost: 240,
       currency: "USD",
@@ -302,6 +346,37 @@ describe("portfolioTrackerTool", () => {
       totalCost: 720,
       marketValue: 900,
     });
+  });
+
+  it("requires lot_id for portfolio updates and leaves same-symbol lots unchanged", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 3,
+      avg_cost: 240,
+    });
+
+    const update = await portfolioTrackerTool.execute("test", {
+      action: "update",
+      symbol: "VTI",
+      shares: 10,
+      avg_cost: 100,
+    });
+
+    expect(update.content[0].text).toContain("lot_id is required");
+    expect(update.details).toMatchObject({ status: "needs_lot_id", symbol: "VTI" });
+
+    const view = await portfolioTrackerTool.execute("test", { action: "view" });
+    expect(view.details?.positions).toEqual([
+      expect.objectContaining({ symbol: "VTI", shares: 2, avgCost: 250 }),
+      expect.objectContaining({ symbol: "VTI", shares: 3, avgCost: 240 }),
+    ]);
   });
 
   it("returns candidate matches for an unverified add without mutating the portfolio", async () => {

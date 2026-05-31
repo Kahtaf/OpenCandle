@@ -118,6 +118,12 @@ OpenCandle's TUI SHALL expose workflows equivalent to the GUI market-state pages
 - **THEN** the TUI or agent tool can remove or update a single selected lot by lot id
 - **AND** symbol-level removal is treated as an explicit bulk action rather than the default row action
 
+#### Scenario: Portfolio update requires a lot id
+
+- **WHEN** the user updates a portfolio lot's quantity, cost, currency, or notes
+- **THEN** OpenCandle requires the target `portfolio_lot.id`
+- **AND** a symbol-only update does not rewrite every same-symbol lot
+
 #### Scenario: TUI parity is semantic rather than visual
 
 - **WHEN** GUI and TUI flows differ in layout

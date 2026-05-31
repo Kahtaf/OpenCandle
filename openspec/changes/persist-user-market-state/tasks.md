@@ -56,6 +56,7 @@
 - [x] 5.17 Verify deferred workflows requested from TUI, such as imports or minute monitoring, do not create GUI-invisible partial state.
 - [x] 5.18 Verify row-level portfolio removal targets a selected lot id and does not remove other same-symbol lots by default.
 - [x] 5.19 Verify GUI saved-state polling preserves a refreshed quote/P&L snapshot until a newer quote snapshot replaces it.
+- [x] 5.20 Verify portfolio updates require `lot_id` and do not rewrite every same-symbol lot.
 
 ## 6. Alerts and Reports
 
@@ -98,6 +99,7 @@
 - [x] 8.11 Verify mixed-currency portfolio rows are disclosed and excluded from base-currency totals unless FX conversion is explicitly available.
 - [x] 8.12 Verify quote-unavailable prediction checks surface a data gap and keep expired open predictions retryable.
 - [x] 8.13 Verify stale/zero-filled quotes do not score predictions and watchlist row alert shortcuts require an explicit target threshold.
+- [x] 8.14 Verify quote/lot currency mismatches do not fabricate row-level P&L and GUI number inputs accept decimal financial values.
 
 ## 9. Verification
 

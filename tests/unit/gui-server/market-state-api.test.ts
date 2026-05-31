@@ -250,9 +250,48 @@ describe("market-state API helpers", () => {
     });
     db.close();
   });
+
+  it("does not compute row P&L when quote and lot currencies differ", async () => {
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    const lot = service.addPortfolioLot({
+      instrument: {
+        symbol: "SHOP.TO",
+        assetType: "equity",
+        name: "Shopify Inc.",
+        exchange: "TOR",
+        currency: "CAD",
+        provider: "yahoo",
+      },
+      quantity: 3,
+      avgCost: 100,
+      currency: "USD",
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("SHOP.TO", 120, { currency: "CAD" }));
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.portfolioQuotes).toEqual([
+      expect.objectContaining({
+        lotId: lot.id,
+        symbol: "SHOP.TO",
+        status: "unavailable",
+        reason: "No FX conversion from CAD to USD",
+        includedInTotals: false,
+        marketValue: null,
+        pnl: null,
+        pnlPercent: null,
+      }),
+    ]);
+    expect(snapshot.portfolioSummary).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+    });
+    db.close();
+  });
 });
 
-function quote(symbol: string, price: number): StockQuote {
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
     price,
@@ -268,5 +307,7 @@ function quote(symbol: string, price: number): StockQuote {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    currency: "USD",
+    ...overrides,
   };
 }

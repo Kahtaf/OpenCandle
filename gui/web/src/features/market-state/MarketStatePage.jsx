@@ -267,6 +267,7 @@ function PortfolioUpdatePanel({ disabled, invokeTool }) {
           <Input
             key={field.name}
             type={field.type || "text"}
+            step={field.type === "number" ? "any" : undefined}
             placeholder={field.label}
             value={values[field.name] || ""}
             disabled={disabled}
@@ -469,6 +470,7 @@ function SymbolActionPanel({ title, fields, disabled, onSubmit }) {
           <Input
             key={field.name}
             type={field.type || "text"}
+            step={field.type === "number" ? "any" : undefined}
             placeholder={field.label}
             value={values[field.name] || ""}
             disabled={disabled}
@@ -575,9 +577,9 @@ function AlertCreateForm({ disabled, invokeTool }) {
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
-      <Input type="number" placeholder={needsThreshold ? "Threshold" : "No threshold"} value={threshold} disabled={disabled || !needsThreshold} onChange={(event) => setThreshold(event.target.value)} />
-      <Input type="number" placeholder="Period" value={period} disabled={disabled || !needsPeriod} onChange={(event) => setPeriod(event.target.value)} />
-      <Input type="number" placeholder="Cooldown sec" value={cooldown} disabled={disabled} onChange={(event) => setCooldown(event.target.value)} />
+      <Input type="number" step="any" placeholder={needsThreshold ? "Threshold" : "No threshold"} value={threshold} disabled={disabled || !needsThreshold} onChange={(event) => setThreshold(event.target.value)} />
+      <Input type="number" step="any" placeholder="Period" value={period} disabled={disabled || !needsPeriod} onChange={(event) => setPeriod(event.target.value)} />
+      <Input type="number" step="any" placeholder="Cooldown sec" value={cooldown} disabled={disabled} onChange={(event) => setCooldown(event.target.value)} />
       <select
         className="h-11 rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
         value={condition}

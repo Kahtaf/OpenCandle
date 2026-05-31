@@ -9,7 +9,7 @@ import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 
 async function getCurrentPrice(symbol: string): Promise<
-  | { status: "ok"; price: number }
+  | { status: "ok"; price: number; currency: string | null }
   | { status: "unavailable"; reason: string }
 > {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));
@@ -18,7 +18,7 @@ async function getCurrentPrice(symbol: string): Promise<
   if (isZeroFilledQuote(result.data)) {
     return { status: "unavailable", reason: "Yahoo returned no valid market data." };
   }
-  return { status: "ok", price: result.data.price };
+  return { status: "ok", price: result.data.price, currency: result.data.currency ?? null };
 }
 
 const params = Type.Object({
@@ -133,17 +133,21 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       }
 
       if (args.action === "update") {
-        if (!args.lot_id && !args.symbol) {
-          throw new Error("lot_id or symbol is required for update action.");
+        if (!args.lot_id) {
+          return {
+            content: [{ type: "text", text: "lot_id is required for update action. Use view to find the lot id before updating a holding." }],
+            details: {
+              status: "needs_lot_id",
+              symbol: args.symbol?.toUpperCase(),
+            },
+          };
         }
         const updateParams = {
           quantity: args.shares,
           avgCost: args.avg_cost,
           currency: args.currency?.trim() || undefined,
         };
-        const updated = args.lot_id
-          ? service.updatePortfolioLot(args.lot_id, updateParams)
-          : service.updatePortfolioLotsBySymbol(args.symbol!, updateParams)[0] ?? null;
+        const updated = service.updatePortfolioLot(args.lot_id, updateParams);
         if (updated == null) {
           const target = args.lot_id ? `lot ${args.lot_id}` : args.symbol?.toUpperCase();
           return {
@@ -170,18 +174,22 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       const enriched = await Promise.all(
         lots.map(async (p) => {
           const quote = await getCurrentPrice(p.symbol);
-          const currentPrice = quote.status === "ok" ? quote.price : null;
-          const marketValue = currentPrice == null ? null : currentPrice * p.quantity;
           const totalCost = p.avgCost * p.quantity;
           const lotCurrency = p.currency || baseCurrency;
-          const quoteCurrency = p.instrumentCurrency || lotCurrency;
-          const includedInTotals = quote.status === "ok" && lotCurrency === baseCurrency && quoteCurrency === baseCurrency;
-          const exclusionCurrency = lotCurrency === baseCurrency ? quoteCurrency : lotCurrency;
+          const quoteCurrency = quote.status === "ok"
+            ? quote.currency ?? p.instrumentCurrency ?? lotCurrency
+            : p.instrumentCurrency ?? lotCurrency;
+          const canValueRow = quote.status === "ok" && quoteCurrency === lotCurrency;
+          const currentPrice = canValueRow ? quote.price : null;
+          const marketValue = currentPrice == null ? null : currentPrice * p.quantity;
+          const includedInTotals = canValueRow && lotCurrency === baseCurrency;
           const exclusionReason = quote.status === "unavailable"
             ? `Quote unavailable: ${quote.reason}`
             : includedInTotals
               ? undefined
-              : `No FX conversion from ${exclusionCurrency} to ${baseCurrency}`;
+              : canValueRow
+                ? `No FX conversion from ${lotCurrency} to ${baseCurrency}`
+                : `No FX conversion from ${quoteCurrency} to ${lotCurrency}`;
           const position: Position = {
             symbol: p.symbol,
             shares: p.quantity,

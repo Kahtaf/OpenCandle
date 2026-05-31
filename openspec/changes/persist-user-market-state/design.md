@@ -100,12 +100,13 @@ Foreign-key behavior should be explicit:
 
 Closed lots, realized P&L, tax lots, and account history are deferred.
 
-Portfolio summaries should avoid inventing FX conversions in V1. If a lot's currency
-or quote currency differs from the portfolio `base_currency`, OpenCandle should show
-the row-level value/P&L when it can do so in the row currency, but exclude that row
-from base-currency totals unless an explicit FX conversion source is added. Summary
-UI should disclose excluded mixed-currency rows rather than silently aggregating unlike
-currencies.
+Portfolio summaries should avoid inventing FX conversions in V1. If a lot's quote
+currency differs from the lot currency, row-level current value and P&L should be
+unavailable or explicitly split by currency until an FX conversion source exists.
+If the lot currency matches the quote currency but differs from the portfolio
+`base_currency`, OpenCandle can show row-level value/P&L in the lot currency but
+must exclude that row from base-currency totals. Summary UI should disclose excluded
+mixed-currency rows rather than silently aggregating unlike currencies.
 
 ## 4. Search and Add Flow
 
