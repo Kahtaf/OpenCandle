@@ -277,6 +277,17 @@ export class MarketStateService {
     return rows.map(mapWatchlistItem);
   }
 
+  removeWatchlistItemBySymbol(symbol: string, watchlistId = this.getDefaultWatchlist().id): boolean {
+    const result = this.db
+      .prepare(
+        `DELETE FROM watchlist_items
+         WHERE watchlist_id = ?
+           AND instrument_id IN (SELECT id FROM instruments WHERE symbol = ?)`,
+      )
+      .run(watchlistId, symbol.trim().toUpperCase());
+    return result.changes > 0;
+  }
+
   addPortfolioLot(params: {
     instrument: InstrumentInput;
     portfolioId?: number;
@@ -328,6 +339,17 @@ export class MarketStateService {
     return rows.map(mapPortfolioLot);
   }
 
+  removePortfolioLotsBySymbol(symbol: string, portfolioId = this.getDefaultPortfolio().id): boolean {
+    const result = this.db
+      .prepare(
+        `DELETE FROM portfolio_lots
+         WHERE portfolio_id = ?
+           AND instrument_id IN (SELECT id FROM instruments WHERE symbol = ?)`,
+      )
+      .run(portfolioId, symbol.trim().toUpperCase());
+    return result.changes > 0;
+  }
+
   recordPrediction(params: {
     instrument: InstrumentInput;
     direction: PredictionDirection;
@@ -366,6 +388,18 @@ export class MarketStateService {
     });
 
     return this.getPrediction(tx());
+  }
+
+  listPredictions(): PredictionRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT pr.*, i.symbol
+         FROM prediction_records pr
+         JOIN instruments i ON i.id = pr.instrument_id
+         ORDER BY pr.opened_at, pr.id`,
+      )
+      .all() as PredictionRow[];
+    return rows.map(mapPrediction);
   }
 
   private upsertInstrument(input: InstrumentInput): InstrumentRow {

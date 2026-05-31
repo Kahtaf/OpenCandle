@@ -1,30 +1,30 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import {
   recordPrediction,
   checkPredictions,
   type Prediction,
 } from "../../../src/tools/portfolio/predictions.js";
-import * as fs from "node:fs";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import type { StockQuote } from "../../../src/types/market.js";
 
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
 }));
 
 describe("recordPrediction", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
-  const openCandleHome = "/tmp/opencandle-predictions-test";
+  let openCandleHome: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-predictions-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
-    vi.mocked(fs.readFileSync).mockReturnValue("[]");
-    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol.toUpperCase(), symbol.toUpperCase() === "MSFT" ? 400 : 180),
+    );
   });
 
   afterEach(() => {
@@ -33,11 +33,12 @@ describe("recordPrediction", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
+    rmSync(openCandleHome, { recursive: true, force: true });
     vi.clearAllMocks();
   });
 
-  it("saves a prediction with required fields", () => {
-    recordPrediction({
+  it("saves a prediction with required fields in SQLite", async () => {
+    const prediction = await recordPrediction({
       symbol: "AAPL",
       direction: "bullish",
       conviction: 8,
@@ -45,38 +46,26 @@ describe("recordPrediction", () => {
       timeframeDays: 30,
     });
 
-    expect(fs.writeFileSync).toHaveBeenCalled();
-    expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(
-      join(openCandleHome, "predictions.json"),
-    );
-    const written: Prediction[] = JSON.parse(
-      vi.mocked(fs.writeFileSync).mock.calls[0][1] as string,
-    );
-    expect(written).toHaveLength(1);
-    expect(written[0].symbol).toBe("AAPL");
-    expect(written[0].direction).toBe("bullish");
-    expect(written[0].conviction).toBe(8);
-    expect(written[0].entryPrice).toBe(180);
-    expect(written[0]).toHaveProperty("date");
-    expect(written[0]).toHaveProperty("expiresAt");
+    expect(prediction.symbol).toBe("AAPL");
+    expect(prediction.direction).toBe("bullish");
+    expect(prediction.conviction).toBe(8);
+    expect(prediction.entryPrice).toBe(180);
+    expect(prediction).toHaveProperty("date");
+    expect(prediction).toHaveProperty("expiresAt");
+    expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
+    expect(existsSync(join(openCandleHome, "predictions.json"))).toBe(false);
   });
 
-  it("appends to existing predictions", () => {
-    const existing: Prediction[] = [
-      {
-        symbol: "MSFT",
-        direction: "bearish",
-        conviction: 6,
-        entryPrice: 400,
-        date: "2026-03-01",
-        expiresAt: "2026-03-31",
-        timeframeDays: 30,
-      },
-    ];
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(existing));
+  it("appends to existing predictions", async () => {
+    await recordPrediction({
+      symbol: "MSFT",
+      direction: "bearish",
+      conviction: 6,
+      entryPrice: 400,
+      timeframeDays: 30,
+    });
 
-    recordPrediction({
+    const prediction = await recordPrediction({
       symbol: "AAPL",
       direction: "bullish",
       conviction: 8,
@@ -84,10 +73,7 @@ describe("recordPrediction", () => {
       timeframeDays: 30,
     });
 
-    const written: Prediction[] = JSON.parse(
-      vi.mocked(fs.writeFileSync).mock.calls[0][1] as string,
-    );
-    expect(written).toHaveLength(2);
+    expect(prediction.symbol).toBe("AAPL");
   });
 });
 
@@ -276,3 +262,22 @@ describe("checkPredictions", () => {
     expect(result.hitRate).toBe(1.0);
   });
 });
+
+function quote(symbol: string, price: number): StockQuote {
+  return {
+    symbol,
+    price,
+    change: 0,
+    changePercent: 0,
+    open: price,
+    high: price,
+    low: price,
+    previousClose: price,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: price + 10,
+    week52Low: price - 10,
+    timestamp: Date.now(),
+  };
+}

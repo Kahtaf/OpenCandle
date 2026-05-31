@@ -1,9 +1,10 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import { ensureParentDir, getPredictionsPath } from "../../infra/opencandle-paths.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
+import { MarketStateService, type PredictionRecord } from "../../market-state/service.js";
+import { resolveYahooInstrument } from "../../market-state/resolve.js";
 
 export interface Prediction {
   symbol: string;
@@ -35,49 +36,30 @@ export interface PredictionCheckResult {
   }>;
 }
 
-function loadPredictions(): Prediction[] {
-  const predictionsPath = getPredictionsPath();
-  if (!existsSync(predictionsPath)) return [];
-  try {
-    return JSON.parse(readFileSync(predictionsPath, "utf-8"));
-  } catch {
-    return [];
-  }
-}
-
-function savePredictions(predictions: Prediction[]): void {
-  const predictionsPath = getPredictionsPath();
-  ensureParentDir(predictionsPath);
-  writeFileSync(predictionsPath, JSON.stringify(predictions, null, 2));
-}
-
-export function recordPrediction(params: {
+export async function recordPrediction(params: {
   symbol: string;
   direction: "bullish" | "bearish" | "neutral";
   conviction: number;
   entryPrice: number;
   targetPrice?: number;
   timeframeDays: number;
-}): Prediction {
-  const predictions = loadPredictions();
-  const now = new Date();
-  const expires = new Date(now);
-  expires.setDate(expires.getDate() + params.timeframeDays);
-
-  const prediction: Prediction = {
-    symbol: params.symbol.toUpperCase(),
-    direction: params.direction,
-    conviction: params.conviction,
-    entryPrice: params.entryPrice,
-    targetPrice: params.targetPrice,
-    date: now.toISOString().split("T")[0],
-    expiresAt: expires.toISOString().split("T")[0],
-    timeframeDays: params.timeframeDays,
-  };
-
-  predictions.push(prediction);
-  savePredictions(predictions);
-  return prediction;
+}): Promise<Prediction> {
+  const db = initDefaultDatabase();
+  const service = new MarketStateService(db);
+  try {
+    const instrument = await resolveYahooInstrument(params.symbol);
+    const record = service.recordPrediction({
+      instrument,
+      direction: params.direction,
+      conviction: params.conviction,
+      entryPrice: params.entryPrice,
+      targetPrice: params.targetPrice,
+      timeframeDays: params.timeframeDays,
+    });
+    return predictionRecordToPrediction(record, params.timeframeDays);
+  } finally {
+    db.close();
+  }
 }
 
 export function checkPredictions(
@@ -190,7 +172,7 @@ export const predictionsTool: AgentTool<typeof params> = {
         throw new Error("symbol, direction, conviction, and entry_price are required for record action.");
       }
 
-      const prediction = recordPrediction({
+      const prediction = await recordPrediction({
         symbol: args.symbol,
         direction: args.direction,
         conviction: args.conviction,
@@ -205,49 +187,74 @@ export const predictionsTool: AgentTool<typeof params> = {
       };
     }
 
-    // Check action
-    const predictions = loadPredictions();
-    if (predictions.length === 0) {
+    const db = initDefaultDatabase();
+    try {
+      const service = new MarketStateService(db);
+      const predictions = service
+        .listPredictions()
+        .map((record) => predictionRecordToPrediction(record));
+      if (predictions.length === 0) {
+        return {
+          content: [{ type: "text", text: "No predictions recorded yet. Use record action to track your calls." }],
+          details: null,
+        };
+      }
+
+      const symbols = [...new Set(predictions.map((p) => p.symbol))];
+      const priceMap = new Map<string, number>();
+      await Promise.all(
+        symbols.map(async (sym) => {
+          const result = await wrapProvider("yahoo", () => getQuote(sym));
+          if (result.status === "ok") {
+            priceMap.set(sym, result.data.price);
+          }
+        }),
+      );
+
+      const result = checkPredictions(predictions, priceMap);
+
+      const resolved = result.correct + result.wrong;
+      const lines = [
+        `**Prediction Scorecard** — ${result.total} predictions (${resolved} resolved, ${result.open} open)`,
+        ``,
+        `Hit Rate: ${(result.hitRate * 100).toFixed(0)}% (${result.correct}/${resolved})`,
+        `Weighted Hit Rate: ${(result.weightedHitRate * 100).toFixed(0)}% (by conviction)`,
+        ``,
+        ...result.details.map((d) => {
+          const icon = d.status === "open" ? "~" : d.correct ? "+" : "-";
+          const sign = d.pnlPercent >= 0 ? "+" : "";
+          const label = d.status === "open" ? " (open)" : "";
+          return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
+        }),
+      ];
+
       return {
-        content: [{ type: "text", text: "No predictions recorded yet. Use record action to track your calls." }],
-        details: null,
+        content: [{ type: "text", text: lines.join("\n") }],
+        details: result,
       };
+    } finally {
+      db.close();
     }
-
-    // Fetch current prices for all symbols
-    const symbols = [...new Set(predictions.map((p) => p.symbol))];
-    const priceMap = new Map<string, number>();
-    await Promise.all(
-      symbols.map(async (sym) => {
-        const result = await wrapProvider("yahoo", () => getQuote(sym));
-        if (result.status === "ok") {
-          priceMap.set(sym, result.data.price);
-        } else {
-          // Skip symbols that are unavailable
-        }
-      }),
-    );
-
-    const result = checkPredictions(predictions, priceMap);
-
-    const resolved = result.correct + result.wrong;
-    const lines = [
-      `**Prediction Scorecard** — ${result.total} predictions (${resolved} resolved, ${result.open} open)`,
-      ``,
-      `Hit Rate: ${(result.hitRate * 100).toFixed(0)}% (${result.correct}/${resolved})`,
-      `Weighted Hit Rate: ${(result.weightedHitRate * 100).toFixed(0)}% (by conviction)`,
-      ``,
-      ...result.details.map((d) => {
-        const icon = d.status === "open" ? "~" : d.correct ? "+" : "-";
-        const sign = d.pnlPercent >= 0 ? "+" : "";
-        const label = d.status === "open" ? " (open)" : "";
-        return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
-      }),
-    ];
-
-    return {
-      content: [{ type: "text", text: lines.join("\n") }],
-      details: result,
-    };
   },
 };
+
+function predictionRecordToPrediction(
+  record: PredictionRecord,
+  explicitTimeframeDays?: number,
+): Prediction {
+  const openedAt = new Date(record.openedAt);
+  const expiresAt = new Date(record.expiresAt);
+  const timeframeDays =
+    explicitTimeframeDays ?? Math.round((expiresAt.getTime() - openedAt.getTime()) / 86_400_000);
+
+  return {
+    symbol: record.symbol,
+    direction: record.direction,
+    conviction: record.conviction,
+    entryPrice: record.entryPrice,
+    targetPrice: record.targetPrice ?? undefined,
+    date: record.openedAt.split("T")[0],
+    expiresAt: record.expiresAt.split("T")[0],
+    timeframeDays,
+  };
+}

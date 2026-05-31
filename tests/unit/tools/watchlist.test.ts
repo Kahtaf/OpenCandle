@@ -1,15 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
-import * as fs from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
-
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-}));
+import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -17,16 +12,13 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
 
 describe("watchlistTool", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
-  const openCandleHome = "/tmp/opencandle-watchlist-test";
+  let openCandleHome: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-watchlist-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
-    vi.mocked(fs.readFileSync).mockReturnValue("[]");
-    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
-    vi.mocked(getQuote).mockResolvedValue({ price: 180 } as any);
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
   });
 
   afterEach(() => {
@@ -35,6 +27,7 @@ describe("watchlistTool", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
+    rmSync(openCandleHome, { recursive: true, force: true });
     vi.clearAllMocks();
   });
 
@@ -44,7 +37,7 @@ describe("watchlistTool", () => {
     expect(watchlistTool.description).toBeTruthy();
   });
 
-  it("adds a symbol to the watchlist", async () => {
+  it("adds a resolved symbol to SQLite without creating watchlist.json", async () => {
     const result = await watchlistTool.execute("test", {
       action: "add",
       symbol: "AAPL",
@@ -52,72 +45,89 @@ describe("watchlistTool", () => {
       stop_price: 150,
     });
 
-    expect(fs.writeFileSync).toHaveBeenCalled();
-    expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(
-      join(openCandleHome, "watchlist.json"),
-    );
-    const written = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
-    expect(written).toHaveLength(1);
-    expect(written[0].symbol).toBe("AAPL");
-    expect(written[0].targetPrice).toBe(200);
-    expect(written[0].stopPrice).toBe(150);
     expect(result.content[0].text).toContain("AAPL");
+    expect(result.details).toMatchObject({
+      symbol: "AAPL",
+      targetPrice: 200,
+      stopPrice: 150,
+    });
+    expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
+    expect(existsSync(join(openCandleHome, "watchlist.json"))).toBe(false);
   });
 
-  it("removes a symbol from the watchlist", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify([{ symbol: "AAPL", addedAt: "2024-01-01" }]),
-    );
+  it("updates an existing watchlist item instead of duplicating it", async () => {
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+    });
+    const result = await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      stop_price: 150,
+      notes: "Updated thesis",
+    });
+
+    expect(result.details).toMatchObject({
+      symbol: "AAPL",
+      targetPrice: null,
+      stopPrice: 150,
+      notes: "Updated thesis",
+    });
+
+    const check = await watchlistTool.execute("test", { action: "check" });
+    expect(check.content[0].text.match(/AAPL/g)).toHaveLength(1);
+  });
+
+  it("removes a symbol from the SQLite watchlist", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
 
     const result = await watchlistTool.execute("test", {
       action: "remove",
       symbol: "AAPL",
     });
 
-    const written = JSON.parse(vi.mocked(fs.writeFileSync).mock.calls[0][1] as string);
-    expect(written).toHaveLength(0);
     expect(result.content[0].text).toContain("Removed");
+    const check = await watchlistTool.execute("test", { action: "check" });
+    expect(check.content[0].text.toLowerCase()).toContain("empty");
   });
 
   it("checks watchlist and reports current prices", async () => {
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify([
-        { symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 200, stopPrice: 150 },
-      ]),
-    );
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+      stop_price: 150,
+    });
 
     const result = await watchlistTool.execute("test", { action: "check" });
     expect(result.content[0].text).toContain("AAPL");
-    expect(result.content[0].text).toContain("180"); // mocked price
+    expect(result.content[0].text).toContain("180");
   });
 
   it("flags when target price is hit", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ price: 210 } as any);
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify([
-        { symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 200, stopPrice: 150 },
-      ]),
-    );
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+      stop_price: 150,
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 210));
 
     const result = await watchlistTool.execute("test", { action: "check" });
     expect(result.content[0].text.toLowerCase()).toMatch(/target|alert|hit/);
     expect(result.content[0].text).toContain("Stop OK");
   });
 
-  it("flags when stop price is hit", async () => {
-    vi.mocked(getQuote).mockResolvedValue({ price: 140 } as any);
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      JSON.stringify([
-        { symbol: "AAPL", addedAt: "2024-01-01", stopPrice: 150 },
-      ]),
-    );
+  it("rejects zero-filled provider responses before saving", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+
+    await expect(
+      watchlistTool.execute("test", { action: "add", symbol: "APL" }),
+    ).rejects.toThrow(/could not resolve/i);
 
     const result = await watchlistTool.execute("test", { action: "check" });
-    expect(result.content[0].text.toLowerCase()).toMatch(/stop|alert|below/);
+    expect(result.content[0].text.toLowerCase()).toContain("empty");
   });
 
   it("reports empty watchlist", async () => {
@@ -125,3 +135,27 @@ describe("watchlistTool", () => {
     expect(result.content[0].text.toLowerCase()).toContain("empty");
   });
 });
+
+function quote(
+  symbol: string,
+  price: number,
+  overrides: Partial<StockQuote> = {},
+): StockQuote {
+  return {
+    symbol,
+    price,
+    change: 0,
+    changePercent: 0,
+    open: price,
+    high: price,
+    low: price,
+    previousClose: price,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: price + 10,
+    week52Low: price - 10,
+    timestamp: Date.now(),
+    ...overrides,
+  };
+}

@@ -31,18 +31,6 @@ export function ensureParentDir(path: string): string {
   return parent;
 }
 
-export function getWatchlistPath(): string {
-  return resolveOpenCandlePath("watchlist.json");
-}
-
-export function getPortfolioPath(): string {
-  return resolveOpenCandlePath("portfolio.json");
-}
-
-export function getPredictionsPath(): string {
-  return resolveOpenCandlePath("predictions.json");
-}
-
 export function getConfigPath(): string {
   return resolveOpenCandlePath("config.json");
 }
