@@ -144,12 +144,14 @@ function Portfolios({ state, readOnly, invokeTool }) {
         fields={[
           { name: "shares", label: "Quantity", type: "number", required: true },
           { name: "avg_cost", label: "Avg cost", type: "number", required: true },
+          { name: "currency", label: "Currency" },
         ]}
         onSubmit={(values) => invokeTool("track_portfolio", {
           action: "add",
           symbol: values.symbol,
           shares: Number(values.shares),
           avg_cost: Number(values.avg_cost),
+          currency: values.currency || undefined,
         })}
       />
       <Panel title="Default Portfolio" count={state.portfolio.length} meta={totalCost > 0 ? `Cost basis $${totalCost.toFixed(2)}` : undefined}>

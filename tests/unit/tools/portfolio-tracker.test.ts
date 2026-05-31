@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -64,6 +66,61 @@ describe("portfolioTrackerTool", () => {
       currentPrice: 300,
       marketValue: 600,
     });
+  });
+
+  it("excludes unsupported mixed-currency rows from base-currency totals", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "VTI",
+        assetType: "etf",
+        name: "Vanguard Total Stock Market ETF",
+        exchange: "PCX",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 250,
+      currency: "USD",
+    });
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "SHOP.TO",
+        assetType: "equity",
+        name: "Shopify Inc.",
+        exchange: "TOR",
+        currency: "CAD",
+        provider: "yahoo",
+      },
+      quantity: 3,
+      avgCost: 100,
+      currency: "CAD",
+    });
+    db.close();
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol.toUpperCase(), symbol.toUpperCase() === "SHOP.TO" ? 120 : 300),
+    );
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("Value: $600.00");
+    expect(result.content[0].text).toContain("Excluded from USD totals: SHOP.TO (CAD)");
+    expect(result.details?.totalValue).toBe(600);
+    expect(result.details?.positions).toEqual([
+      expect.objectContaining({
+        symbol: "VTI",
+        currency: "USD",
+        includedInTotals: true,
+        marketValue: 600,
+      }),
+      expect.objectContaining({
+        symbol: "SHOP.TO",
+        currency: "CAD",
+        includedInTotals: false,
+        marketValue: 360,
+      }),
+    ]);
   });
 
   it("removes all lots for a symbol", async () => {

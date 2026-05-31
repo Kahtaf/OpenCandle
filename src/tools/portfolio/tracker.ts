@@ -26,7 +26,10 @@ const params = Type.Object({
     Type.Number({ description: "Number of shares/units (required for add)" }),
   ),
   avg_cost: Type.Optional(
-    Type.Number({ description: "Average cost per share/unit in USD (required for add)" }),
+    Type.Number({ description: "Average cost per share/unit in the lot currency (required for add)" }),
+  ),
+  currency: Type.Optional(
+    Type.String({ description: "Lot currency, such as USD or CAD (defaults to the resolved instrument currency)" }),
   ),
 });
 
@@ -46,14 +49,15 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
           throw new Error("symbol, shares, and avg_cost are required for add action.");
         }
         const instrument = await resolveYahooInstrument(args.symbol);
+        const currency = (args.currency?.trim() || instrument.currency || "USD").toUpperCase();
         const lot = service.addPortfolioLot({
           instrument,
           quantity: args.shares,
           avgCost: args.avg_cost,
-          currency: instrument.currency ?? "USD",
+          currency,
         });
         return {
-          content: [{ type: "text", text: `Added ${args.shares} shares of ${lot.symbol} at $${args.avg_cost.toFixed(2)}` }],
+          content: [{ type: "text", text: `Added ${args.shares} shares of ${lot.symbol} at ${formatMoney(args.avg_cost, lot.currency)}` }],
           details: null,
         };
       }
@@ -83,15 +87,22 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
         };
       }
 
+      const portfolio = service.getDefaultPortfolio();
+      const baseCurrency = portfolio.baseCurrency ?? "USD";
       const enriched = await Promise.all(
         lots.map(async (p) => {
           const currentPrice = await getCurrentPrice(p.symbol) ?? p.avgCost;
           const marketValue = currentPrice * p.quantity;
           const totalCost = p.avgCost * p.quantity;
+          const lotCurrency = p.currency || baseCurrency;
+          const quoteCurrency = p.instrumentCurrency || lotCurrency;
+          const includedInTotals = lotCurrency === baseCurrency && quoteCurrency === baseCurrency;
+          const exclusionCurrency = lotCurrency === baseCurrency ? quoteCurrency : lotCurrency;
           const position: Position = {
             symbol: p.symbol,
             shares: p.quantity,
             avgCost: p.avgCost,
+            currency: lotCurrency,
             addedAt: p.createdAt,
           };
           return {
@@ -101,31 +112,54 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
             totalCost,
             pnl: marketValue - totalCost,
             pnlPercent: ((marketValue - totalCost) / totalCost) * 100,
+            includedInTotals,
+            exclusionReason: includedInTotals
+              ? undefined
+              : `No FX conversion from ${exclusionCurrency} to ${baseCurrency}`,
           };
         }),
       );
 
-      const totalValue = enriched.reduce((s, p) => s + p.marketValue, 0);
-      const totalCost = enriched.reduce((s, p) => s + p.totalCost, 0);
+      const included = enriched.filter((p) => p.includedInTotals);
+      const excludedFromTotals = enriched
+        .filter((p) => !p.includedInTotals)
+        .map((p) => ({
+          symbol: p.symbol,
+          currency: p.currency,
+          reason: p.exclusionReason ?? `No FX conversion from ${p.currency} to ${baseCurrency}`,
+        }));
+      const totalValue = included.reduce((s, p) => s + p.marketValue, 0);
+      const totalCost = included.reduce((s, p) => s + p.totalCost, 0);
 
       const summary: PortfolioSummary = {
         positions: enriched,
+        baseCurrency,
         totalValue,
         totalCost,
         totalPnl: totalValue - totalCost,
         totalPnlPercent: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
+        excludedFromTotals,
       };
 
-      const header = `**Portfolio** — ${enriched.length} positions | Value: $${totalValue.toFixed(2)} | P&L: $${summary.totalPnl.toFixed(2)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
+      const header = `**Portfolio** — ${enriched.length} positions | Value: ${formatMoney(totalValue, baseCurrency)} | P&L: ${formatMoney(summary.totalPnl, baseCurrency)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
       const rows = enriched.map((p) => {
         const sign = p.pnlPercent >= 0 ? "+" : "";
-        return `  ${p.symbol}: ${p.shares} @ $${p.avgCost.toFixed(2)} → $${p.currentPrice.toFixed(2)} | P&L: $${p.pnl.toFixed(2)} (${sign}${p.pnlPercent.toFixed(2)}%)`;
+        const excluded = p.includedInTotals ? "" : ` [excluded from ${baseCurrency} totals]`;
+        return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → ${formatMoney(p.currentPrice, p.currency)} | P&L: ${formatMoney(p.pnl, p.currency)} (${sign}${p.pnlPercent.toFixed(2)}%)${excluded}`;
       });
 
-      const text = [header, ...rows].join("\n");
+      const exclusions = excludedFromTotals.length === 0
+        ? []
+        : [`Excluded from ${baseCurrency} totals: ${excludedFromTotals.map((p) => `${p.symbol} (${p.currency})`).join(", ")}`];
+      const text = [header, ...rows, ...exclusions].join("\n");
       return { content: [{ type: "text", text }], details: summary };
     } finally {
       db.close();
     }
   },
 };
+
+function formatMoney(value: number, currency: string): string {
+  if (currency === "USD") return `$${value.toFixed(2)}`;
+  return `${currency} ${value.toFixed(2)}`;
+}
