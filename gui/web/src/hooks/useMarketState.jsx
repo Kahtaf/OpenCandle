@@ -8,6 +8,7 @@ const EMPTY_MARKET_STATE = {
   alertEvents: [],
   reportTemplates: [],
   reportRuns: [],
+  quoteSnapshot: null,
 };
 
 export function useMarketState({ pollMs = 4000 } = {}) {
@@ -29,6 +30,18 @@ export function useMarketState({ pollMs = 4000 } = {}) {
     }
   }, []);
 
+  const refreshQuotes = useCallback(async () => {
+    try {
+      const response = await fetch("/api/market-state/quotes");
+      if (!response.ok) throw new Error(response.statusText || "Failed to load market quotes");
+      const quoteSnapshot = await response.json();
+      setState((current) => ({ ...current, quoteSnapshot }));
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     const run = async () => {
@@ -42,7 +55,10 @@ export function useMarketState({ pollMs = 4000 } = {}) {
     };
   }, [pollMs, refresh]);
 
-  return useMemo(() => ({ state, loading, error, refresh }), [state, loading, error, refresh]);
+  return useMemo(
+    () => ({ state, loading, error, refresh, refreshQuotes }),
+    [state, loading, error, refresh, refreshQuotes],
+  );
 }
 
 export async function searchInstruments(query) {

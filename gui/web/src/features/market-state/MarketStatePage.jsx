@@ -24,7 +24,7 @@ const DOMAINS = [
 ];
 
 export function MarketStatePage({ domain, role, send, navigate, setToast }) {
-  const { state, loading, error, refresh } = useMarketState();
+  const { state, loading, error, refresh, refreshQuotes } = useMarketState();
   const readOnly = role === "follower";
   const active = DOMAINS.find((item) => item.id === domain) ?? DOMAINS[0];
 
@@ -51,6 +51,9 @@ export function MarketStatePage({ domain, role, send, navigate, setToast }) {
             </div>
             <Button variant="bordered" size="sm" prefixIcon={RefreshCw} onClick={refresh} disabled={loading}>
               Refresh
+            </Button>
+            <Button variant="bordered" size="sm" prefixIcon={Activity} onClick={refreshQuotes} disabled={loading}>
+              Quotes
             </Button>
           </div>
           <nav className="flex gap-1 overflow-x-auto" aria-label="Market state sections">
@@ -87,6 +90,7 @@ export function MarketStatePage({ domain, role, send, navigate, setToast }) {
 
 function Watchlists({ state, readOnly, invokeTool }) {
   const alertsByInstrument = useMemo(() => groupBy(state.alerts, "instrumentId"), [state.alerts]);
+  const quotesByItem = useMemo(() => groupByOne(state.quoteSnapshot?.watchlistQuotes, "itemId"), [state.quoteSnapshot]);
   return (
     <>
       <SymbolActionPanel
@@ -126,10 +130,12 @@ function Watchlists({ state, readOnly, invokeTool }) {
           <EmptyState icon={ListPlus} title="No tickers yet" action="Use Add ticker to start the default watchlist." />
         ) : (
           <DataTable
-            columns={["Symbol", "Name", "Target", "Stop", "Notes", "Alert status", ""]}
+            columns={["Symbol", "Name", "Quote", "Freshness", "Target", "Stop", "Notes", "Alert status", ""]}
             rows={state.watchlist.map((item) => [
               <TickerCell key="symbol" symbol={item.symbol} sub={item.exchange || item.assetType} />,
               item.name || "N/A",
+              quoteCell(quotesByItem.get(item.id)),
+              quoteFreshness(quotesByItem.get(item.id)),
               moneyOrDash(item.targetPrice),
               moneyOrDash(item.stopPrice),
               item.notes || "N/A",
@@ -152,6 +158,8 @@ function Watchlists({ state, readOnly, invokeTool }) {
 
 function Portfolios({ state, readOnly, invokeTool }) {
   const totalCost = state.portfolio.reduce((sum, lot) => sum + (Number(lot.quantity) * Number(lot.avgCost)), 0);
+  const quotesByLot = useMemo(() => groupByOne(state.quoteSnapshot?.portfolioQuotes, "lotId"), [state.quoteSnapshot]);
+  const summary = state.quoteSnapshot?.portfolioSummary;
   return (
     <>
       <SymbolActionPanel
@@ -171,27 +179,43 @@ function Portfolios({ state, readOnly, invokeTool }) {
         })}
       />
       <PortfolioUpdatePanel disabled={readOnly} invokeTool={invokeTool} />
-      <Panel title="Default Portfolio" count={state.portfolio.length} meta={totalCost > 0 ? `Cost basis $${totalCost.toFixed(2)}` : undefined}>
+      <Panel
+        title="Default Portfolio"
+        count={state.portfolio.length}
+        meta={summary ? `Value ${moneyWithCurrency(summary.totalValue, summary.baseCurrency)} | P&L ${moneyWithCurrency(summary.totalPnl, summary.baseCurrency)}` : totalCost > 0 ? `Cost basis $${totalCost.toFixed(2)}` : undefined}
+      >
         {state.portfolio.length === 0 ? (
           <EmptyState icon={BriefcaseBusiness} title="No holdings yet" action="Add a holding or use watchlists without a portfolio." />
         ) : (
           <DataTable
-            columns={["Lot", "Symbol", "Quantity", "Avg cost", "Currency", "Notes", ""]}
-            rows={state.portfolio.map((lot) => [
-              `#${lot.id}`,
-              <TickerCell key="symbol" symbol={lot.symbol} sub={lot.exchange || lot.assetType} />,
-              formatNumber(lot.quantity),
-              moneyOrDash(lot.avgCost),
-              lot.currency,
-              lot.notes || "N/A",
-              <RowActions
-                key="actions"
-                disabled={readOnly}
-                actions={[["Remove", () => invokeTool("track_portfolio", { action: "remove", symbol: lot.symbol })]]}
-              />,
-            ])}
+            columns={["Lot", "Symbol", "Quantity", "Avg cost", "Current", "Value", "P&L", "Quote", "Currency", "Notes", ""]}
+            rows={state.portfolio.map((lot) => {
+              const quote = quotesByLot.get(lot.id);
+              return [
+                `#${lot.id}`,
+                <TickerCell key="symbol" symbol={lot.symbol} sub={lot.exchange || lot.assetType} />,
+                formatNumber(lot.quantity),
+                moneyOrDash(lot.avgCost),
+                portfolioCurrentCell(quote),
+                portfolioValueCell(quote),
+                portfolioPnlCell(quote),
+                quoteFreshness(quote),
+                lot.currency,
+                lot.notes || "N/A",
+                <RowActions
+                  key="actions"
+                  disabled={readOnly}
+                  actions={[["Remove", () => invokeTool("track_portfolio", { action: "remove", symbol: lot.symbol })]]}
+                />,
+              ];
+            })}
           />
         )}
+        {summary?.excludedFromTotals?.length ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Excluded from totals: {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
+          </p>
+        ) : null}
       </Panel>
     </>
   );
@@ -582,6 +606,16 @@ function groupBy(items, key) {
   return map;
 }
 
+function groupByOne(items, key) {
+  const map = new Map();
+  for (const item of items || []) {
+    const id = item?.[key];
+    if (id == null) continue;
+    map.set(id, item);
+  }
+  return map;
+}
+
 function alertStatus(alerts) {
   if (!alerts?.length) return "No rule";
   if (alerts.some((alert) => alert.lastTriggeredAt)) return "Triggered";
@@ -603,6 +637,42 @@ function summarize(value) {
 
 function moneyOrDash(value) {
   return typeof value === "number" ? `$${value.toFixed(2)}` : "N/A";
+}
+
+function moneyWithCurrency(value, currency = "USD") {
+  if (typeof value !== "number") return "N/A";
+  return currency === "USD" ? `$${value.toFixed(2)}` : `${currency} ${value.toFixed(2)}`;
+}
+
+function quoteCell(quote) {
+  if (!quote) return "Not checked";
+  if (quote.status !== "ok") return "Unavailable";
+  return moneyOrDash(quote.price);
+}
+
+function quoteFreshness(quote) {
+  if (!quote) return "Not checked";
+  if (quote.status !== "ok") return quote.reason || "Unavailable";
+  return quote.stale ? `Stale ${shortDate(quote.fetchedAt)}` : `Fetched ${shortDate(quote.fetchedAt)}`;
+}
+
+function portfolioCurrentCell(quote) {
+  if (!quote) return "Not checked";
+  if (quote.status !== "ok") return "Unavailable";
+  return moneyWithCurrency(quote.currentPrice, quote.currency);
+}
+
+function portfolioValueCell(quote) {
+  if (!quote) return "Not checked";
+  if (quote.status !== "ok") return "Unavailable";
+  return moneyWithCurrency(quote.marketValue, quote.currency);
+}
+
+function portfolioPnlCell(quote) {
+  if (!quote) return "Not checked";
+  if (quote.status !== "ok") return "Unavailable";
+  const sign = quote.pnl >= 0 ? "+" : "";
+  return `${moneyWithCurrency(quote.pnl, quote.currency)} (${sign}${Number(quote.pnlPercent ?? 0).toFixed(2)}%)`;
 }
 
 function formatNumber(value) {
