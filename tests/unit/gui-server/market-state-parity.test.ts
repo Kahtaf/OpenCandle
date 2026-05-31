@@ -93,6 +93,39 @@ describe("market-state GUI/TUI parity", () => {
       typeof message.details.stateChange.instrumentId === "number"
     )).toBe(true);
   });
+
+  it("makes GUI-originated portfolio lots visible to later TUI reads", async () => {
+    await invokeToolFromUi(
+      sessionManager,
+      portfolioTrackerTool,
+      {
+        action: "add",
+        symbol: "VTI",
+        shares: 2,
+        avg_cost: 150,
+      },
+      "ui",
+    );
+
+    const tuiPortfolio = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(tuiPortfolio.content[0].text).toContain("VTI");
+    expect(tuiPortfolio.details?.positions).toEqual([
+      expect.objectContaining({
+        symbol: "VTI",
+        shares: 2,
+        avgCost: 150,
+      }),
+    ]);
+    expect(messages.some((message) =>
+      message.role === "toolResult" &&
+      message.toolName === "track_portfolio" &&
+      message.details?.stateChange?.source === "ui" &&
+      message.details.stateChange.domain === "portfolio" &&
+      typeof message.details.stateChange.targetId === "number" &&
+      typeof message.details.stateChange.instrumentId === "number"
+    )).toBe(true);
+  });
 });
 
 function quote(symbol: string, price: number): StockQuote {
