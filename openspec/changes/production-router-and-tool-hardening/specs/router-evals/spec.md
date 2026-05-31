@@ -6,7 +6,8 @@ The deterministic router fixture suite SHALL include fixtures that exercise the 
 
 - Bare finance acronym treated as the metric/concept it represents (IV-as-Implied-Volatility, SEC-as-regulator, FED-as-bank, CPI-as-metric).
 - Acronym retained when a positive ticker signal is present (`$IV`).
-- Acronym retained when listed alongside non-dictionary candidates (`compare KO, IV, PEP`).
+- Acronym dropped when it is bare in a list alongside non-dictionary candidates (`compare KO, IV, PEP`).
+- Acronym retained when a local ticker phrase is present (`compare KO, the IV ticker, and PEP`).
 
 Each fixture SHALL include the expected post-filter outcome in `expectedRouterOutput.entities.symbols` (i.e., the dictionary tokens are absent when no signal is present, retained when at least one signal is present).
 
@@ -22,10 +23,16 @@ Each fixture SHALL include the expected post-filter outcome in `expectedRouterOu
 - **THEN** there is a fixture whose input contains `$IV` AND whose `expectedRouterOutput.entities.symbols` includes `"IV"`
 - **AND** the fixture's `tags` array contains `acronym-disambiguation`
 
-#### Scenario: List-context fixture exists
+#### Scenario: Bare-list fixture exists
 
 - **WHEN** the fixture suite is loaded
-- **THEN** there is a fixture whose input contains an acronym listed alongside non-dictionary candidates AND whose `expectedRouterOutput.entities.symbols` retains the acronym
+- **THEN** there is a fixture whose input contains a bare acronym listed alongside non-dictionary candidates AND whose `expectedRouterOutput.entities.symbols` excludes the acronym
+- **AND** the fixture's `tags` array contains `acronym-disambiguation`
+
+#### Scenario: Local ticker phrase fixture exists
+
+- **WHEN** the fixture suite is loaded
+- **THEN** there is a fixture whose input contains a local phrase such as "IV ticker" AND whose `expectedRouterOutput.entities.symbols` includes `"IV"`
 - **AND** the fixture's `tags` array contains `acronym-disambiguation`
 
 ### Requirement: Live-Eval Baseline Archived per Run
