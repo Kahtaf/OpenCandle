@@ -632,6 +632,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     });
 
     pi.appendEntry("opencandle-router", { output });
+    appendRouterSymbolDropEntries(output);
     pi.appendEntry("opencandle-route-context", resolvedTurnContext);
     coordinator.setPendingResolvedTurnContext(resolvedTurnContext);
     applyRouteToolScope(resolvedTurnContext);
@@ -794,6 +795,19 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       extraContext: `Router classified as ${workflow} but declined to dispatch. Symbols: ${entities.symbols.join(", ") || "(none)"}.`,
     });
     return false;
+  }
+
+  function appendRouterSymbolDropEntries(output: RouterOutput): void {
+    for (const diagnostic of output.diagnostics) {
+      if (diagnostic.code !== "symbol_dropped") continue;
+      const details = diagnostic.details ?? {};
+      pi.appendEntry("opencandle-symbol-dropped", {
+        token: details.token,
+        reason: details.reason,
+        signalsChecked: details.signalsChecked,
+        source: details.source,
+      });
+    }
   }
 
   function mergeRouterSlotsIntoEntities(output: RouterOutput): ExtractedEntities {

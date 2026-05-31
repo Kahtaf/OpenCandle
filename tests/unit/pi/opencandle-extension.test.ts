@@ -757,6 +757,52 @@ describe("opencandle extension", () => {
       expect(call).toBeDefined();
       expect((call![1] as { dropped: unknown[] }).dropped).toHaveLength(1);
     });
+
+    it("logs router symbol drops as custom entries", async () => {
+      const symbolDropOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["IV", "ASTS"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare assets",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { routerLlmClient: mockClient(symbolDropOutput) });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      await inputHandler!(
+        { type: "input", text: "Compare these assets: IV, ASTS", source: "interactive" },
+        ctx,
+      );
+
+      const call = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === "opencandle-symbol-dropped",
+      );
+      expect(call).toBeDefined();
+      expect(call![1]).toMatchObject({
+        token: "IV",
+        reason: "no positive ticker signal",
+        source: "llm",
+      });
+    });
   });
 
   describe("soft-degradation accumulator wiring", () => {

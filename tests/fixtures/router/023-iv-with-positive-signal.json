@@ -1,0 +1,31 @@
+{
+  "input": "Get me a quote on $IV",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "agent_task",
+    "route": "fallback",
+    "workflow": "single_asset_analysis",
+    "entities": {
+      "symbols": [
+        "IV"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "options",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "$IV is an explicit ticker signal."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "positive-signal"
+  ]
+}

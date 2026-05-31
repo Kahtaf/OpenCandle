@@ -33,6 +33,7 @@ export interface RouterPreferenceUpdate {
 export interface RouterDiagnostic {
   code: string;
   message: string;
+  details?: Record<string, unknown>;
 }
 
 /**

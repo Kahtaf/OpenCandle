@@ -1,6 +1,7 @@
 import { extractEntities, isAmbiguousConceptUsage } from "./entity-extractor.js";
 import { classifyWithLegacyRules } from "./legacy-rule-router.js";
 import { buildRouterPrompt } from "./router-prompt.js";
+import { disambiguateSymbols } from "./symbol-disambiguator.js";
 import {
   computeMissingRequiredSlots,
   isDispatchableWorkflow,
@@ -442,6 +443,30 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  const disambiguated = disambiguateSymbols(next.entities.symbols, text);
+  if (disambiguated.dropped.length > 0) {
+    for (const drop of disambiguated.dropped) {
+      diagnostics.push({
+        code: "symbol_dropped",
+        message: `${drop.token} dropped: ${drop.reason}`,
+        details: {
+          token: drop.token,
+          reason: drop.reason,
+          signalsChecked: drop.signalsChecked,
+          source: "llm",
+        },
+      });
+    }
+    next = {
+      ...next,
+      entities: {
+        ...next.entities,
+        symbols: disambiguated.kept,
+      },
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -671,10 +696,14 @@ function validateDiagnostics(raw: unknown): RouterDiagnostic[] {
     if (typeof diagnostic.message !== "string") {
       throw new Error(`diagnostics[${idx}].message must be a string`);
     }
-    return {
+    const out: RouterDiagnostic = {
       code: diagnostic.code,
       message: diagnostic.message,
     };
+    if (diagnostic.details && typeof diagnostic.details === "object" && !Array.isArray(diagnostic.details)) {
+      out.details = diagnostic.details as Record<string, unknown>;
+    }
+    return out;
   });
 }
 

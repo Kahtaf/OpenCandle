@@ -74,6 +74,23 @@ Fixtures 013–018 cover the six required classes from the router-evals spec:
 - `017-pref-conflict.json` — preference conflict
 - `018-dollar-phrase.json` — dollar-phrase preservation
 
+## Acronym disambiguation fixtures
+
+Fixtures 019-025 cover the finance-acronym dictionary and signal rules from
+`src/routing/symbol-disambiguator.ts`.
+
+- `019-iv-as-volatility.json` — drops bare IV in a compare prompt after prior implied-volatility context.
+- `020-sec-as-regulator.json` — keeps TSLA while treating SEC as the regulator.
+- `021-fed-as-bank.json` — keeps TLT while treating FED as macro policy context.
+- `022-cpi-as-metric.json` — keeps SPY while treating CPI as a macro metric.
+- `023-iv-with-positive-signal.json` — keeps IV when written as `$IV`.
+- `024-iv-bare-list-dropped.json` — drops bare IV even inside `KO, IV, PEP`.
+- `025-iv-local-ticker-phrase.json` — keeps IV when the local phrase says `IV ticker`.
+
+Bare comma-list or `and`-list adjacency is not enough to retain a dictionary
+token. Use a cashtag or local ticker phrase when a dictionary token really is
+the intended symbol.
+
 ## Privacy notes
 
 Conversational text in `priorTurns` is NOT governed by `src/memory/types.ts::NEVER_TRUST_FROM_MEMORY`. That set controls market-sensitive *structured* memory keys (`stock_price`, `target_price`, `entry_price`, `stop_loss`, `crypto_price`, `market_thesis`) — it does not cover free-form conversational text that the router sees via `priorTurns`.

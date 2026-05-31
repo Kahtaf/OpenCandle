@@ -109,6 +109,13 @@ describe("extractEntities", () => {
       expect(extractEntities("analyze $CPI as a stock").symbols).toEqual(["CPI"]);
     });
 
+    it("does not extract finance acronym concepts as bare uppercase symbols", () => {
+      expect(extractEntities("Compare these assets: IV, ASTS").symbols).toEqual(["ASTS"]);
+      expect(extractEntities("What did the SEC say about TSLA filings?").symbols).toEqual(["TSLA"]);
+      expect(extractEntities("How does FED policy affect TLT?").symbols).toEqual(["TLT"]);
+      expect(extractEntities("Show CPI vs SPY YTD").symbols).toEqual(["SPY"]);
+    });
+
     it("identifies the owned underlying and cost basis in catalyst-driven covered-call prompts", () => {
       const result = extractEntities(
         "NVDA earnings are today. If I have DRAM, what is the best covered call to sell right now? Cost basis is $51.",

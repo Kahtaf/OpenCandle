@@ -12,8 +12,10 @@ const COMMON_WORDS = new Set([
   "SMA", "EMA", "RSI", "MACD", "OBV", "ATR", "ADX", "VWAP",
   // Fundamental analysis acronyms
   "DCF", "FCF", "ROE", "ROA", "ROI", "EPS", "NAV", "WACC", "EBIT",
-  // Regulatory / source acronyms that are not tickers in natural language
-  "SEC",
+  // Regulatory / source / finance acronyms that are not tickers in natural language
+  "IV", "HV", "ITM", "OTM", "ATM", "IPO", "SEC", "FED", "FOMC", "IRS",
+  "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "MA", "NDA",
+  "YTD",
   "BEST", "WHAT", "WITH", "THAT", "THIS", "FROM", "HAVE", "BEEN", "SOME",
   "THEM", "THAN", "LIKE", "JUST", "OVER", "ALSO", "BACK", "MUCH", "MOST",
   "ONLY", "VERY", "WHEN", "COME", "MAKE", "FIND", "HERE", "KNOW", "TAKE",
@@ -22,6 +24,10 @@ const COMMON_WORDS = new Set([
 ]);
 
 const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
+const EXPLICIT_FINANCE_ACRONYM_TICKERS = new Set([
+  "IV", "HV", "ITM", "OTM", "ATM", "IPO", "SEC", "FED", "FOMC", "IRS",
+  "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "MA", "NDA",
+]);
 const LOWERCASE_FINANCE_TERMS = new Set([
   "bond", "bonds", "cash", "rate", "rates", "cuts", "gold", "oil", "stock", "stocks",
   "fund", "funds", "etf", "etfs", "puts", "calls", "option", "options",
@@ -97,7 +103,10 @@ function isNonBudgetDollarAmount(input: string, start: number, length: number): 
 
 function extractSymbols(input: string): string[] {
   const symbols: string[] = [];
-  const addSymbol = (raw: string | undefined, options: { lowercaseContext?: boolean } = {}) => {
+  const addSymbol = (
+    raw: string | undefined,
+    options: { lowercaseContext?: boolean; explicitTicker?: boolean } = {},
+  ) => {
     const symbol = raw?.toUpperCase();
     if (options.lowercaseContext && LOWERCASE_FINANCE_TERMS.has(String(raw || "").toLowerCase())) {
       return;
@@ -107,7 +116,7 @@ function extractSymbols(input: string): string[] {
       symbol.length >= 1 &&
       symbol.length <= 5 &&
       /^[A-Z]+$/.test(symbol) &&
-      !COMMON_WORDS.has(symbol) &&
+      (!COMMON_WORDS.has(symbol) || (options.explicitTicker && EXPLICIT_FINANCE_ACRONYM_TICKERS.has(symbol))) &&
       !isAmbiguousConceptUsage(input, symbol) &&
       !symbols.includes(symbol)
     ) {
@@ -118,7 +127,7 @@ function extractSymbols(input: string): string[] {
   // Match $TICKER patterns
   const dollarTickers = input.matchAll(/\$([A-Za-z]{1,5})\b/g);
   for (const match of dollarTickers) {
-    addSymbol(match[1]);
+    addSymbol(match[1], { explicitTicker: true });
   }
 
   // Match explicit lowercase ticker contexts without treating arbitrary short
@@ -130,7 +139,7 @@ function extractSymbols(input: string): string[] {
   }
   const lowercaseTickerContext = input.matchAll(/\b(?:analy[sz]e|quote|ticker)\s+\$?([a-z]{1,5})\b|\b\$?([a-z]{1,5})\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\b/gi);
   for (const match of lowercaseTickerContext) {
-    addSymbol(match[1] ?? match[2], { lowercaseContext: true });
+    addSymbol(match[1] ?? match[2], { lowercaseContext: true, explicitTicker: true });
   }
   const lowercaseHeldPosition = input.matchAll(/\b(?:own|hold|holding|long|protect|hedge|have)\s+\d+(?:,\d{3})*\s+shares?\s+(?:of\s+)?\$?([a-z]{1,5})\b|\b\d+(?:,\d{3})*\s+shares?\s+of\s+\$?([a-z]{1,5})\b/gi);
   for (const match of lowercaseHeldPosition) {

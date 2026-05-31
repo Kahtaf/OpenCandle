@@ -441,6 +441,56 @@ describe("route()", () => {
     expect(result.entities.symbols).toEqual(["AI"]);
   });
 
+  it("drops finance acronyms without a direct ticker signal from LLM output", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Compare these assets: IV, ASTS",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["IV", "ASTS"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare requested assets",
+      })),
+    );
+
+    expect(result.entities.symbols).toEqual(["ASTS"]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "symbol_dropped",
+      message: expect.stringContaining("IV"),
+    }));
+  });
+
+  it("keeps finance acronym tickers with a direct ticker phrase", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare KO, the IV ticker, and PEP",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["KO", "IV", "PEP"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare requested assets",
+      })),
+    );
+
+    expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+  });
+
   it("corrects macro data prompts misread as ticker comparisons", async () => {
     const result = await route(
       {
