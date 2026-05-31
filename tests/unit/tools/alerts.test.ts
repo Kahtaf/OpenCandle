@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
 import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { OHLCV, StockQuote } from "../../../src/types/market.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -105,9 +107,55 @@ describe("alertsTool", () => {
       timeframe: "1d",
     });
   });
+
+  it("does not seed or trigger on zero-filled quote data", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+
+    const checked = await alertsTool.execute("test", { action: "check" });
+
+    expect(checked.content[0].text).toMatch(/unavailable/i);
+    expect(checked.content[0].text).toMatch(/no valid market data/i);
+    expect(checked.details).toMatchObject({ checked: 1, triggered: 0 });
+  });
+
+  it("reports unsupported condition versions as needing review", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const item = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: item.instrumentId,
+      conditionType: "price_crosses_above",
+      conditionVersion: 999,
+      condition: { threshold: 250, field: "last_price" },
+      timeframe: "quote",
+      cooldownSeconds: 3600,
+    });
+    db.close();
+
+    const checked = await alertsTool.execute("test", { action: "check" });
+
+    expect(checked.content[0].text).toMatch(/needs review/i);
+    expect(checked.content[0].text).toContain("version 999");
+    expect(checked.details).toMatchObject({ checked: 1, triggered: 0 });
+  });
 });
 
-function quote(symbol: string, price: number): StockQuote {
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
     price,
@@ -123,6 +171,7 @@ function quote(symbol: string, price: number): StockQuote {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    ...overrides,
   };
 }
 

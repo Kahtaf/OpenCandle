@@ -4,7 +4,7 @@ import { getHistory, getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService, type AlertRuleRecord } from "../../market-state/service.js";
-import { resolveYahooInstrument } from "../../market-state/resolve.js";
+import { isZeroFilledQuote, resolveYahooInstrument } from "../../market-state/resolve.js";
 import { computeRSI, computeSMA } from "../technical/indicators.js";
 import {
   ALERT_CONDITION_VERSION,
@@ -171,6 +171,10 @@ async function checkAlerts(service: MarketStateService): Promise<{
       lines.push(`  #${rule.id}: unavailable instrument`);
       continue;
     }
+    if (rule.conditionVersion !== ALERT_CONDITION_VERSION) {
+      lines.push(`  ${instrument.symbol}: needs review (unsupported condition version ${rule.conditionVersion})`);
+      continue;
+    }
 
     const observation = await observeRule(rule, instrument.symbol);
     if (observation.status === "unavailable") {
@@ -216,6 +220,9 @@ async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<
   if (rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below") {
     const quoteResult = await wrapProvider("yahoo", () => getQuote(symbol));
     if (quoteResult.status === "unavailable") return { status: "unavailable", reason: quoteResult.reason };
+    if (isZeroFilledQuote(quoteResult.data)) {
+      return { status: "unavailable", reason: "Yahoo returned no valid market data." };
+    }
     return {
       status: "ok",
       value: quoteResult.data.price,
