@@ -25,6 +25,18 @@ export interface CollectionRecord {
   updatedAt: string;
 }
 
+export interface InstrumentRecord {
+  id: number;
+  symbol: string;
+  assetType: string;
+  name: string | null;
+  exchange: string | null;
+  currency: string | null;
+  provider: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface WatchlistItemRecord {
   id: number;
   watchlistId: number;
@@ -97,6 +109,16 @@ export interface AlertRuleRecord {
   lastTriggeredAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AlertEventRecord {
+  id: number;
+  alertRuleId: number;
+  instrumentId: number | null;
+  observedValueJson: unknown;
+  triggeredAt: string;
+  status: string;
+  message: string | null;
 }
 
 export interface ReportTemplateRecord {
@@ -212,6 +234,16 @@ type AlertRuleRow = {
   last_triggered_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type AlertEventRow = {
+  id: number;
+  alert_rule_id: number;
+  instrument_id: number | null;
+  observed_value_json: string | null;
+  triggered_at: string;
+  status: string;
+  message: string | null;
 };
 
 type ReportTemplateRow = {
@@ -521,6 +553,73 @@ export class MarketStateService {
     return rows.map(mapAlertRule);
   }
 
+  getInstrument(id: number): InstrumentRecord | null {
+    const row = this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(id) as
+      | InstrumentRow
+      | undefined;
+    return row == null ? null : mapInstrument(row);
+  }
+
+  updateAlertObservation(params: {
+    ruleId: number;
+    observed: unknown;
+    checkedAt?: string;
+    triggeredAt?: string;
+  }): AlertRuleRecord {
+    const checkedAt = params.checkedAt ?? new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE alert_rules
+         SET last_checked_at = ?,
+             last_observed_json = ?,
+             last_triggered_at = COALESCE(?, last_triggered_at),
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        checkedAt,
+        JSON.stringify(params.observed),
+        params.triggeredAt ?? null,
+        checkedAt,
+        params.ruleId,
+      );
+    return this.getAlertRule(params.ruleId);
+  }
+
+  recordAlertEvent(params: {
+    alertRuleId: number;
+    instrumentId?: number | null;
+    observedValue: unknown;
+    status: string;
+    message: string;
+    triggeredAt?: string;
+  }): AlertEventRecord {
+    const triggeredAt = params.triggeredAt ?? new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO alert_events (
+           alert_rule_id, instrument_id, observed_value_json, triggered_at, status, message
+         )
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.alertRuleId,
+        params.instrumentId ?? null,
+        JSON.stringify(params.observedValue),
+        triggeredAt,
+        params.status,
+        params.message,
+      );
+    return this.getAlertEvent(Number(result.lastInsertRowid));
+  }
+
+  listAlertEvents(): AlertEventRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM alert_events ORDER BY triggered_at, id")
+      .all() as AlertEventRow[];
+    return rows.map(mapAlertEvent);
+  }
+
   createReportTemplate(params: {
     name: string;
     reportType: string;
@@ -656,6 +755,11 @@ export class MarketStateService {
     return mapAlertRule(row);
   }
 
+  private getAlertEvent(id: number): AlertEventRecord {
+    const row = this.db.prepare("SELECT * FROM alert_events WHERE id = ?").get(id) as AlertEventRow;
+    return mapAlertEvent(row);
+  }
+
   private getReportTemplate(id: number): ReportTemplateRecord {
     const row = this.db
       .prepare("SELECT * FROM report_templates WHERE id = ?")
@@ -669,6 +773,20 @@ function mapCollection(row: WatchlistRow): CollectionRecord {
     id: row.id,
     name: row.name,
     isDefault: row.is_default === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapInstrument(row: InstrumentRow): InstrumentRecord {
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    assetType: row.asset_type,
+    name: row.name,
+    exchange: row.exchange,
+    currency: row.currency,
+    provider: row.provider,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -753,6 +871,18 @@ function mapAlertRule(row: AlertRuleRow): AlertRuleRecord {
     lastTriggeredAt: row.last_triggered_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapAlertEvent(row: AlertEventRow): AlertEventRecord {
+  return {
+    id: row.id,
+    alertRuleId: row.alert_rule_id,
+    instrumentId: row.instrument_id,
+    observedValueJson: row.observed_value_json == null ? null : JSON.parse(row.observed_value_json),
+    triggeredAt: row.triggered_at,
+    status: row.status,
+    message: row.message,
   };
 }
 
