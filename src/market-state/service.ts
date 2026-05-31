@@ -14,6 +14,24 @@ export interface InstrumentInput {
   provider: string;
   providerMetadata?: unknown;
   resolvedAt?: Date;
+  aliases?: InstrumentAliasInput[];
+}
+
+export interface InstrumentAliasInput {
+  source: string;
+  sourceSymbol: string;
+  sourceExchange?: string | null;
+  sourceAssetType?: string | null;
+  sourceId?: string | null;
+  raw?: unknown;
+}
+
+export interface InstrumentAliasLookup {
+  source: string;
+  sourceSymbol?: string;
+  sourceExchange?: string | null;
+  sourceAssetType?: string | null;
+  sourceId?: string | null;
 }
 
 export interface CollectionRecord {
@@ -204,6 +222,11 @@ interface InstrumentRow {
   updated_at: string;
 }
 
+interface InstrumentAliasRow {
+  id: number;
+  instrument_id: number;
+}
+
 type WatchlistItemRow = {
   id: number;
   watchlist_id: number;
@@ -381,6 +404,41 @@ export class MarketStateService {
       ...mapCollection(row),
       baseCurrency: row.base_currency,
     };
+  }
+
+  findInstrumentByAlias(lookup: InstrumentAliasLookup): InstrumentRecord | null {
+    const source = normalizeSource(lookup.source);
+    const sourceId = normalizeNullable(lookup.sourceId);
+    const alias = sourceId == null
+      ? this.db
+        .prepare(
+          `SELECT id, instrument_id FROM instrument_aliases
+           WHERE source = ?
+             AND source_symbol = ?
+             AND IFNULL(source_exchange, '') = IFNULL(?, '')
+             AND IFNULL(source_asset_type, '') = IFNULL(?, '')
+           LIMIT 1`,
+        )
+        .get(
+          source,
+          normalizeSourceSymbol(lookup.sourceSymbol ?? ""),
+          normalizeExchange(lookup.sourceExchange),
+          normalizeAssetType(lookup.sourceAssetType),
+        ) as InstrumentAliasRow | undefined
+      : this.db
+        .prepare(
+          `SELECT id, instrument_id FROM instrument_aliases
+           WHERE source = ? AND source_id = ?
+           LIMIT 1`,
+        )
+        .get(source, sourceId) as InstrumentAliasRow | undefined;
+
+    if (alias == null) return null;
+
+    const row = this.db
+      .prepare("SELECT * FROM instruments WHERE id = ?")
+      .get(alias.instrument_id) as InstrumentRow | undefined;
+    return row == null ? null : mapInstrument(row);
   }
 
   addWatchlistItem(params: {
@@ -1020,6 +1078,7 @@ export class MarketStateService {
           now,
           existing.id,
         );
+      this.upsertInstrumentAliases(existing.id, input.aliases ?? []);
       return this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(existing.id) as InstrumentRow;
     }
 
@@ -1043,7 +1102,82 @@ export class MarketStateService {
         now,
         now,
       );
-    return this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(result.lastInsertRowid) as InstrumentRow;
+    const instrumentId = Number(result.lastInsertRowid);
+    this.upsertInstrumentAliases(instrumentId, input.aliases ?? []);
+    return this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(instrumentId) as InstrumentRow;
+  }
+
+  private upsertInstrumentAliases(instrumentId: number, aliases: InstrumentAliasInput[]): void {
+    if (aliases.length === 0) return;
+
+    const now = new Date().toISOString();
+    for (const alias of aliases) {
+      const source = normalizeSource(alias.source);
+      const sourceSymbol = normalizeSourceSymbol(alias.sourceSymbol);
+      const sourceExchange = normalizeExchange(alias.sourceExchange);
+      const sourceAssetType = normalizeAssetType(alias.sourceAssetType);
+      const sourceId = normalizeNullable(alias.sourceId);
+      const rawJson = alias.raw == null ? null : JSON.stringify(alias.raw);
+      const existing = sourceId == null
+        ? this.db
+          .prepare(
+            `SELECT id, instrument_id FROM instrument_aliases
+             WHERE source = ?
+               AND source_symbol = ?
+               AND IFNULL(source_exchange, '') = IFNULL(?, '')
+               AND IFNULL(source_asset_type, '') = IFNULL(?, '')
+             LIMIT 1`,
+          )
+          .get(source, sourceSymbol, sourceExchange, sourceAssetType) as InstrumentAliasRow | undefined
+        : this.db
+          .prepare(
+            `SELECT id, instrument_id FROM instrument_aliases
+             WHERE source = ? AND source_id = ?
+             LIMIT 1`,
+          )
+          .get(source, sourceId) as InstrumentAliasRow | undefined;
+
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE instrument_aliases
+             SET instrument_id = ?, source_symbol = ?, source_exchange = ?,
+                 source_asset_type = ?, source_id = ?, raw_json = ?, updated_at = ?
+             WHERE id = ?`,
+          )
+          .run(
+            instrumentId,
+            sourceSymbol,
+            sourceExchange,
+            sourceAssetType,
+            sourceId,
+            rawJson,
+            now,
+            existing.id,
+          );
+        continue;
+      }
+
+      this.db
+        .prepare(
+          `INSERT INTO instrument_aliases (
+             instrument_id, source, source_symbol, source_exchange,
+             source_asset_type, source_id, raw_json, created_at, updated_at
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          instrumentId,
+          source,
+          sourceSymbol,
+          sourceExchange,
+          sourceAssetType,
+          sourceId,
+          rawJson,
+          now,
+          now,
+        );
+    }
   }
 
   private getWatchlistItem(id: number): WatchlistItemRecord {
@@ -1301,4 +1435,20 @@ function mapImportRow(row: ImportRowRow): ImportRowRecord {
 function normalizeNullable(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function normalizeSource(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function normalizeSourceSymbol(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+function normalizeExchange(value: string | null | undefined): string | null {
+  return normalizeNullable(value)?.toUpperCase() ?? null;
+}
+
+function normalizeAssetType(value: string | null | undefined): string | null {
+  return normalizeNullable(value)?.toLowerCase() ?? null;
 }

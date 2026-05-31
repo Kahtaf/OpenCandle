@@ -198,6 +198,48 @@ describe("MarketStateService", () => {
     });
   });
 
+  it("stores source-native aliases for future import reconciliation", () => {
+    const item = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+        aliases: [
+          {
+            source: "tradingview",
+            sourceSymbol: "NASDAQ:AAPL",
+            sourceExchange: "NASDAQ",
+            sourceAssetType: "stock",
+            sourceId: "tv-symbol-apple",
+            raw: { Symbol: "NASDAQ:AAPL" },
+          },
+          {
+            source: "interactive_brokers",
+            sourceSymbol: "AAPL",
+            sourceExchange: "NASDAQ",
+            sourceAssetType: "stock",
+            raw: { conid: "265598" },
+          },
+        ],
+      },
+    });
+
+    expect(service.findInstrumentByAlias({
+      source: "tradingview",
+      sourceSymbol: "NASDAQ:AAPL",
+      sourceId: "tv-symbol-apple",
+    })?.id).toBe(item.instrumentId);
+    expect(service.findInstrumentByAlias({
+      source: "interactive_brokers",
+      sourceSymbol: "AAPL",
+      sourceExchange: "NASDAQ",
+      sourceAssetType: "stock",
+    })?.id).toBe(item.instrumentId);
+  });
+
   it("records predictions as open rows", () => {
     const prediction = service.recordPrediction({
       instrument: {
