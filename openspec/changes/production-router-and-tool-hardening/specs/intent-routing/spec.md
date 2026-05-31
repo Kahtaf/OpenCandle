@@ -74,6 +74,7 @@ Bare comma-list or "and"-list adjacency is not a positive ticker signal.
 - **WHEN** the LLM router emits a dropped token in both `entities.symbols` and `slots.symbols`
 - **THEN** OpenCandle SHALL remove the token from workflow dispatch symbols
 - **AND** router slot merging SHALL NOT reintroduce a token already reported by `symbol_dropped`
+- **AND** missing-required-slot checks SHALL use sanitized symbol slots so a single survivor cannot satisfy a multi-symbol workflow
 
 #### Scenario: MA ticker survives plain comparison
 

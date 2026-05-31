@@ -51,7 +51,7 @@ These settings are for debugging request understanding and tool availability. Ke
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENCANDLE_ROUTER_MODE` | `llm` | Advanced request-understanding mode. Use `rules` only when comparing deterministic behavior during development. Invalid values fail startup config loading. |
+| `OPENCANDLE_ROUTER_MODE` | `rules` | Advanced request-understanding mode. Set `llm` to opt into the LLM router during development or eval runs. Invalid values fail startup config loading. |
 | `OPENCANDLE_TOOL_SCOPE_MODE` | `observe` | Tool-scope diagnostic mode. `observe` records selected bundles and active-tool candidates; `enforce` applies Pi active tools for each turn. Invalid values fail startup config loading. |
 
 ## File Config

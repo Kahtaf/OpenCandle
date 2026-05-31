@@ -463,6 +463,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         ...next.entities,
         symbols: disambiguated.kept,
       },
+      slots: removeDroppedSymbolSlots(next.slots, disambiguated.dropped.map((drop) => drop.token)),
       diagnostics,
     };
   }
@@ -678,6 +679,36 @@ function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {
 function validateToolBundles(raw: unknown): ToolBundleName[] {
   const bundles = validateStringArray(raw, "tool_bundles");
   return bundles.filter(isToolBundleName);
+}
+
+function removeDroppedSymbolSlots(
+  slots: Record<string, RouterSlot>,
+  droppedTokens: string[],
+): Record<string, RouterSlot> {
+  if (droppedTokens.length === 0) return slots;
+  const dropped = new Set(droppedTokens.map((token) => token.toUpperCase()));
+  const next = { ...slots };
+
+  for (const key of ["symbol", "symbols"]) {
+    const slot = next[key];
+    if (!slot) continue;
+    if (Array.isArray(slot.value)) {
+      const value = slot.value.filter(
+        (item) => typeof item !== "string" || !dropped.has(item.toUpperCase()),
+      );
+      if (value.length === 0) {
+        delete next[key];
+      } else {
+        next[key] = { ...slot, value };
+      }
+      continue;
+    }
+    if (typeof slot.value === "string" && dropped.has(slot.value.toUpperCase())) {
+      delete next[key];
+    }
+  }
+
+  return next;
 }
 
 function validateDiagnostics(raw: unknown): RouterDiagnostic[] {

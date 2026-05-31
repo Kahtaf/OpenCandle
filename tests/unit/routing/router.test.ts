@@ -468,6 +468,34 @@ describe("route()", () => {
     }));
   });
 
+  it("removes dropped finance acronyms from router symbol slots before missing-slot checks", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Compare these assets: IV, ASTS",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["IV", "ASTS"] },
+        slots: {
+          symbols: { value: ["IV", "ASTS"], source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare requested assets",
+      })),
+    );
+
+    expect(result.routeKind).toBe("clarification");
+    expect(result.entities.symbols).toEqual(["ASTS"]);
+    expect(result.slots.symbols?.value).toEqual(["ASTS"]);
+    expect(result.missing_required).toEqual(["symbols"]);
+  });
+
   it("keeps finance acronym tickers with a direct ticker phrase", async () => {
     const result = await route(
       {

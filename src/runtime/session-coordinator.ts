@@ -315,7 +315,7 @@ export class SessionCoordinator {
         resolvedTurnContext?.workflow ?? workflowType ?? resolvedTurnContext?.routeKind ?? "unclassified",
       )
       : undefined;
-    const savedMarketStateContext = this.db
+    const savedMarketStateContext = this.db && shouldIncludeSavedMarketStateContext(workflowType, resolvedTurnContext)
       ? buildSavedMarketStateContext(this.db)
       : "";
     const combinedMemoryContext = [savedMarketStateContext, memoryContext]
@@ -576,6 +576,16 @@ function buildSavedMarketStateContext(db: Database.Database): string {
   } catch {
     return "";
   }
+}
+
+function shouldIncludeSavedMarketStateContext(
+  workflowType: string | undefined,
+  resolvedTurnContext: ResolvedTurnContext | undefined,
+): boolean {
+  if (resolvedTurnContext) {
+    return resolvedTurnContext.routeKind !== "pass_through";
+  }
+  return workflowType != null;
 }
 
 function formatMoney(value: number, currency: string): string {

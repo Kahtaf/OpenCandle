@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
@@ -464,7 +465,7 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
 
     const coord = new SessionCoordinator();
     coord.initSession("test-session");
-    const prompt = coord.buildSystemPrompt("base");
+    const prompt = coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("agent_task"));
 
     expect(prompt).toContain("Saved Market State");
     expect(prompt).toContain("ASTS");
@@ -477,4 +478,53 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     expect(prompt).toContain("bullish conv 8/10");
     expect(prompt).toContain("space, satellite");
   });
+
+  it("does not inject saved market state into unrelated prompts without route context", () => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "ASTS",
+        assetType: "equity",
+        name: "AST SpaceMobile, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 40,
+      avgCost: 28,
+      currency: "USD",
+    });
+    db.close();
+
+    const coord = new SessionCoordinator();
+    coord.initSession("test-session");
+
+    expect(coord.buildSystemPrompt("base")).not.toContain("Saved Market State");
+    expect(coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("pass_through")))
+      .not.toContain("Saved Market State");
+  });
 });
+
+function resolvedTurnContext(routeKind: "agent_task" | "pass_through") {
+  return buildResolvedTurnContext({
+    text: routeKind === "pass_through" ? "write a poem" : "how does space sector news affect me?",
+    priorTurns: [],
+    profileSnapshot: {},
+    recentWorkflowRuns: [],
+  }, {
+    routeKind,
+    route: "fallback",
+    workflow: routeKind === "pass_through" ? undefined : "general_finance_qa",
+    entities: { symbols: [] },
+    slots: {},
+    preference_updates: [],
+    missing_required: [],
+    tool_bundles: [],
+    diagnostics: [],
+    reasoning: "test context",
+  });
+}

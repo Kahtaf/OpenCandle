@@ -13,6 +13,7 @@
 - [x] 2.5 Extend `COMMON_WORDS` in `src/routing/entity-extractor.ts` with the same dictionary entries — defense in depth so the regex doesn't even produce these as candidates in the rules path.
 - [x] 2.6 Unit tests in `tests/unit/routing/symbol-disambiguator.test.ts`: one case per signal rule (positive and negative), one for each dictionary entry, edge cases for `$IV`, "compare AAPL and SEC", "the IV ticker", and "IV crush" (no signal → dropped).
 - [x] 2.7 Ensure LLM-router slot merging cannot reintroduce symbols already dropped by acronym disambiguation.
+- [x] 2.8 Ensure dropped LLM-router symbols are removed from `symbol`/`symbols` slots before missing-slot checks and fallback context rendering.
 
 ## 3. Acronym disambiguation eval fixtures
 

@@ -29,6 +29,8 @@
 - Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
 - Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
 - Rules-mode compare preflight aborts now preserve clarification context instead of falling through to the raw prompt.
+- Saved market-state prompt context is now gated to finance/market-state turns so unrelated pass-through prompts do not receive local portfolio or watchlist data.
+- LLM-router acronym drops now sanitize matching symbol slots before missing-slot checks, preventing dropped tokens from reappearing in fallback context.
 - Yahoo instrument search now uses the shared cache and Yahoo rate limiter for autocomplete and workflow preflight.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.
 - Router mode remains on the `rules` default because the live LLM-router acceptance gate could not be run with credentials; use `OPENCANDLE_ROUTER_MODE=llm` to opt in.

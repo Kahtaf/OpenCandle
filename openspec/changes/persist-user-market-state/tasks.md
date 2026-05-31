@@ -58,6 +58,7 @@
 - [x] 5.19 Verify GUI saved-state polling preserves a refreshed quote/P&L snapshot until a newer quote snapshot replaces it.
 - [x] 5.20 Verify portfolio updates require `lot_id` and do not rewrite every same-symbol lot.
 - [x] 5.21 Verify resolved prediction history remains visible in later scorecard checks.
+- [x] 5.22 Verify saved market-state prompt context is gated to finance/market-state routes and excluded from pass-through prompts.
 
 ## 6. Alerts and Reports
 

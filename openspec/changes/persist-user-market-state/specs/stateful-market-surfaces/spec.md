@@ -4,6 +4,12 @@
 
 OpenCandle SHALL expose one shared market-state service for watchlist, portfolio, and prediction mutations, and both TUI tools and GUI actions SHALL use that service.
 
+#### Scenario: Saved market state is prompt-scoped
+
+- **WHEN** OpenCandle builds the prompt for a pass-through or unrelated non-finance turn
+- **THEN** it SHALL NOT inject saved watchlist, portfolio, alert, report, or prediction state into the model context
+- **AND** saved market state may be injected only for finance or market-state route context where it can be relevant to the user request
+
 #### Scenario: TUI-created watchlist item appears in GUI
 
 - **WHEN** a user adds a symbol to the default watchlist through the TUI or agent tool
