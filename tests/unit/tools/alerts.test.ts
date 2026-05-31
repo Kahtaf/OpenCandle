@@ -3,11 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import type { StockQuote } from "../../../src/types/market.js";
+import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
+import type { OHLCV, StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
+  getHistory: vi.fn(),
 }));
 
 describe("alertsTool", () => {
@@ -19,6 +20,7 @@ describe("alertsTool", () => {
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-alerts-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
+    vi.mocked(getHistory).mockResolvedValue(history([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114]));
   });
 
   afterEach(() => {
@@ -68,6 +70,41 @@ describe("alertsTool", () => {
     expect(triggered.content[0].text).toContain("TRIGGERED");
     expect(triggered.details).toMatchObject({ checked: 1, triggered: 1 });
   });
+
+  it("creates and manually checks RSI threshold alerts", async () => {
+    await alertsTool.execute("test", {
+      action: "create_rsi_below",
+      symbol: "AAPL",
+      threshold: 30,
+      period: 14,
+    });
+    vi.mocked(getHistory).mockResolvedValue(history([
+      100, 98, 96, 94, 92, 90, 88, 86, 84, 82, 80, 78, 76, 74, 72,
+    ]));
+
+    const seeded = await alertsTool.execute("test", { action: "check" });
+    expect(seeded.content[0].text).toContain("seeded");
+
+    vi.mocked(getHistory).mockResolvedValue(history([
+      72, 74, 73, 75, 74, 76, 75, 77, 76, 78, 77, 79, 78, 80, 60,
+    ]));
+    const checked = await alertsTool.execute("test", { action: "check" });
+    expect(checked.details.checked).toBe(1);
+  });
+
+  it("creates SMA crossing alerts with canonical condition JSON", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_price_above_sma",
+      symbol: "AAPL",
+      period: 50,
+    });
+
+    expect(created.details).toMatchObject({
+      conditionType: "price_crosses_sma",
+      conditionJson: { period: 50, direction: "above", price_field: "close" },
+      timeframe: "1d",
+    });
+  });
 });
 
 function quote(symbol: string, price: number): StockQuote {
@@ -87,4 +124,15 @@ function quote(symbol: string, price: number): StockQuote {
     week52Low: price - 10,
     timestamp: Date.now(),
   };
+}
+
+function history(closes: number[]): OHLCV[] {
+  return closes.map((close, index) => ({
+    date: `2026-05-${String(index + 1).padStart(2, "0")}`,
+    open: close,
+    high: close,
+    low: close,
+    close,
+    volume: 1_000,
+  }));
 }

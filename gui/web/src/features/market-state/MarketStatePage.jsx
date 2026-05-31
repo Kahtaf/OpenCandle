@@ -379,34 +379,43 @@ function SymbolActionPanel({ title, fields, disabled, onSubmit }) {
 function AlertCreateForm({ disabled, invokeTool }) {
   const [symbol, setSymbol] = useState("");
   const [threshold, setThreshold] = useState("");
-  const [direction, setDirection] = useState("create_price_above");
+  const [condition, setCondition] = useState("create_price_above");
+  const [period, setPeriod] = useState("14");
+  const needsThreshold = !condition.includes("_sma");
+  const needsPeriod = condition.includes("_sma") || condition.includes("_rsi_");
   return (
     <form
-      className="grid gap-3 sm:grid-cols-[1fr_140px_160px_auto]"
+      className="grid gap-3 sm:grid-cols-[1fr_150px_120px_170px_auto]"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!symbol.trim() || !threshold) return;
+        if (!symbol.trim() || (needsThreshold && !threshold)) return;
         invokeTool("manage_alerts", {
-          action: direction,
+          action: condition,
           symbol: symbol.trim().toUpperCase(),
-          threshold: Number(threshold),
+          threshold: needsThreshold ? Number(threshold) : undefined,
+          period: needsPeriod ? Number(period) : undefined,
         });
         setSymbol("");
         setThreshold("");
       }}
     >
       <Input placeholder="Symbol" value={symbol} disabled={disabled} onChange={(event) => setSymbol(event.target.value)} />
-      <Input type="number" placeholder="Threshold" value={threshold} disabled={disabled} onChange={(event) => setThreshold(event.target.value)} />
+      <Input type="number" placeholder={needsThreshold ? "Threshold" : "No threshold"} value={threshold} disabled={disabled || !needsThreshold} onChange={(event) => setThreshold(event.target.value)} />
+      <Input type="number" placeholder="Period" value={period} disabled={disabled || !needsPeriod} onChange={(event) => setPeriod(event.target.value)} />
       <select
         className="h-11 rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
-        value={direction}
+        value={condition}
         disabled={disabled}
-        onChange={(event) => setDirection(event.target.value)}
+        onChange={(event) => setCondition(event.target.value)}
       >
-        <option value="create_price_above">Crosses above</option>
-        <option value="create_price_below">Crosses below</option>
+        <option value="create_price_above">Price above</option>
+        <option value="create_price_below">Price below</option>
+        <option value="create_price_above_sma">Price above SMA</option>
+        <option value="create_price_below_sma">Price below SMA</option>
+        <option value="create_rsi_above">RSI above</option>
+        <option value="create_rsi_below">RSI below</option>
       </select>
-      <Button type="submit" variant="brand" disabled={disabled || !symbol.trim() || !threshold}>Create</Button>
+      <Button type="submit" variant="brand" disabled={disabled || !symbol.trim() || (needsThreshold && !threshold)}>Create</Button>
     </form>
   );
 }
