@@ -71,6 +71,22 @@ function createFakeApi() {
   return { api, tools, commands, handlers, sendUserMessage };
 }
 
+function exactSymbolSearch(validSymbols: string[]) {
+  const valid = new Set(validSymbols.map((symbol) => symbol.toUpperCase()));
+  return async (query: string) =>
+    valid.has(query.toUpperCase())
+      ? [{
+          symbol: query.toUpperCase(),
+          name: query.toUpperCase(),
+          quoteType: "EQUITY",
+          assetType: "equity",
+          exchange: "NMS",
+          provider: "yahoo" as const,
+          score: 1,
+        }]
+      : [];
+}
+
 describe("opencandle extension", () => {
   beforeEach(() => {
     vi.stubEnv("OPENCANDLE_ROUTER_MODE", "rules");
@@ -237,7 +253,7 @@ describe("opencandle extension", () => {
 
   it("routes compare prompts through the deterministic workflow", async () => {
     const fake = createFakeApi();
-    openCandleExtension(fake.api);
+    openCandleExtension(fake.api, { symbolSearch: exactSymbolSearch(["AAPL", "MSFT"]) });
 
     const inputHandler = fake.handlers.get("input")?.[0];
     const ctx = {
@@ -633,7 +649,10 @@ describe("opencandle extension", () => {
         reasoning: "memory supplies comparison set",
       };
       const fake = createFakeApi();
-      openCandleExtension(fake.api, { routerLlmClient: mockClient(slotOnlySymbolsOutput) });
+      openCandleExtension(fake.api, {
+        routerLlmClient: mockClient(slotOnlySymbolsOutput),
+        symbolSearch: exactSymbolSearch(["SPY", "QQQ"]),
+      });
 
       const sessionStart = fake.handlers.get("session_start")?.[0];
       await sessionStart!(
@@ -657,6 +676,107 @@ describe("opencandle extension", () => {
       expect(result).toEqual(expect.objectContaining({ action: "transform" }));
       expect(result.text).toContain("Compare these assets side by side: SPY, QQQ");
       expect(result.text).toContain("From memory: symbols");
+    });
+
+    it("preflights compare workflow symbols before dispatch", async () => {
+      const compareOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["AAPL", "XXFAKEXX", "MSFT"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare requested assets",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, {
+        routerLlmClient: mockClient(compareOutput),
+        symbolSearch: exactSymbolSearch(["AAPL", "MSFT"]),
+      });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "compare AAPL, XXFAKEXX, MSFT", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
+      expect(result.text).toContain("[Pre-flight: dropped 1 unknown symbol - XXFAKEXX");
+      expect(result.text).toContain("Compare these assets side by side: AAPL, MSFT");
+      expect(result.text).not.toContain("AAPL, XXFAKEXX, MSFT");
+
+      const call = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === "opencandle-symbol-preflight-dropped",
+      );
+      expect(call).toBeDefined();
+      expect(call![1]).toMatchObject({
+        symbol: "XXFAKEXX",
+        reason: "no matching ticker found via resolver search",
+      });
+    });
+
+    it("aborts compare workflow dispatch when preflight leaves too few symbols", async () => {
+      const compareOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["ZZZBAD", "XXFAKEXX"] },
+        slots: {},
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare requested assets",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, {
+        routerLlmClient: mockClient(compareOutput),
+        symbolSearch: exactSymbolSearch([]),
+      });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "compare ZZZBAD and XXFAKEXX", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      const call = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === "opencandle-workflow-aborted",
+      );
+      expect(call).toBeDefined();
+      expect(call![1]).toMatchObject({
+        reason: "preflight-insufficient-symbols",
+      });
     });
 
     it("returns undefined for fallback turns so the main agent runs", async () => {

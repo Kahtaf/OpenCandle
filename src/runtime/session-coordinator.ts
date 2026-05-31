@@ -25,6 +25,7 @@ import type { MemoryEntry } from "../memory/types.js";
 import type { FilteredMemoryEntry } from "../memory/manager.js";
 import type Database from "better-sqlite3";
 import { MarketStateService } from "../market-state/service.js";
+import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -103,6 +104,7 @@ export class SessionCoordinator {
   private eventLogger: WorkflowEventLogger | null = null;
   private runner: WorkflowRunner;
   private providerTracker: ProviderTracker;
+  private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
   constructor() {
@@ -117,6 +119,14 @@ export class SessionCoordinator {
 
   getRunner(): WorkflowRunner {
     return this.runner;
+  }
+
+  getTickerValidationCache(): SymbolValidationCache {
+    return this.tickerValidationCache;
+  }
+
+  clearTickerValidationCache(): void {
+    this.tickerValidationCache.clear();
   }
 
   /** Initialize session: database, memory, event logger, workflow runner. */

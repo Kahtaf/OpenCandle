@@ -27,10 +27,15 @@ import type {
 } from "../routing/types.js";
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
 import {
+  formatPreflightDropAnnotation,
+  preflightSymbols,
+} from "../prompts/symbol-preflight.js";
+import {
   buildPortfolioWorkflowDefinition,
   buildOptionsScreenerWorkflowDefinition,
   buildCompareAssetsWorkflowDefinition,
 } from "../workflows/index.js";
+import type { InstrumentCandidate } from "../market-state/resolve.js";
 import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
 import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
@@ -62,6 +67,7 @@ export interface OpenCandleExtensionOptions {
    * of the pi-ai-backed default. Intended for tests + offline eval runners.
    */
   routerLlmClient?: RouterLlmClient;
+  symbolSearch?: (query: string) => Promise<InstrumentCandidate[]>;
 }
 
 export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
@@ -490,6 +496,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   // Input handling — branches on OPENCANDLE_ROUTER_MODE.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
+    coordinator.clearTickerValidationCache();
 
     // Check for comprehensive analysis pattern — same in both modes.
     const analysis = isAnalysisRequest(event.text);
@@ -559,7 +566,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       };
       coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
-      const definition = buildCompareAssetsWorkflowDefinition(resolution);
+      const preflight = await preflightCompareResolution(resolution);
+      if (!preflight) return undefined;
+      const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
+      applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
@@ -687,10 +697,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     return false;
   }
 
-  function dispatchRouterWorkflow(
+  async function dispatchRouterWorkflow(
     output: RouterOutput,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): { action: "transform"; text: string } | false {
+  ): Promise<{ action: "transform"; text: string } | false> {
     const workflow = output.workflow!;
     const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
@@ -773,7 +783,24 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         workflow: "compare_assets",
         symbols: entities.symbols,
       });
-      const definition = buildCompareAssetsWorkflowDefinition(resolution);
+      const preflight = await preflightCompareResolution(resolution);
+      if (!preflight) {
+        coordinator.recordWorkflowRun(
+          "fallback",
+          output.entities,
+          Object.fromEntries(Object.entries(output.slots).map(([k, v]) => [k, v.value])),
+          [],
+          output.routeKind,
+        );
+        coordinator.setPendingFallbackContext({
+          assumptionsBlock: buildAssumptionsBlockFromRouter(output.slots),
+          missingRequired: ["symbols"],
+          extraContext: "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers.",
+        });
+        return false;
+      }
+      const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
+      applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       return prompt ? { action: "transform", text: prompt } : false;
     }
@@ -808,6 +835,46 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         source: details.source,
       });
     }
+  }
+
+  async function preflightCompareResolution(
+    resolution: SlotResolution<CompareAssetsSlots>,
+  ): Promise<{ resolution: SlotResolution<CompareAssetsSlots>; dropped: Array<{ symbol: string; reason: string }> } | null> {
+    const result = await preflightSymbols(resolution.resolved.symbols, {
+      cache: coordinator.getTickerValidationCache(),
+      search: options?.symbolSearch,
+    });
+    for (const drop of result.dropped) {
+      pi.appendEntry("opencandle-symbol-preflight-dropped", drop);
+    }
+    if (result.valid.length < 2) {
+      pi.appendEntry("opencandle-workflow-aborted", {
+        reason: "preflight-insufficient-symbols",
+        dropped: result.dropped,
+      });
+      return null;
+    }
+    return {
+      resolution: {
+        ...resolution,
+        resolved: {
+          ...resolution.resolved,
+          symbols: result.valid,
+        },
+      },
+      dropped: result.dropped,
+    };
+  }
+
+  function applyPreflightAnnotation(
+    definition: ReturnType<typeof buildCompareAssetsWorkflowDefinition>,
+    dropped: Array<{ symbol: string; reason: string }>,
+  ): void {
+    if (dropped.length === 0 || definition.steps.length === 0) return;
+    definition.steps[0] = {
+      ...definition.steps[0],
+      prompt: `${formatPreflightDropAnnotation(dropped)}\n\n${definition.steps[0].prompt}`,
+    };
   }
 
   function mergeRouterSlotsIntoEntities(output: RouterOutput): ExtractedEntities {

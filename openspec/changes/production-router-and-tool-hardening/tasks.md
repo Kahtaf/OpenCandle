@@ -37,12 +37,12 @@
 
 ## 5. Pre-flight ticker validation in workflow templating
 
-- [ ] 5.1 Add `preflightSymbols(symbols: string[]): Promise<{ valid: string[]; dropped: Array<{ symbol: string; reason: string }> }>` to `src/prompts/workflow-prompts.ts` (or a sibling module if it grows). Implementation calls resolver-layer search (`searchYahooInstruments` or a thin helper around it), not the `search_ticker` AgentTool object. Cache results per turn via a `Map<string, boolean>` passed in from the session coordinator.
-- [ ] 5.2 Hook into the multi-symbol workflow templates (`compare_assets`, `analyze_correlation`-bearing prompts, peer screens). Drop unknown symbols, append a `[Pre-flight: dropped ...]` annotation to the templated prompt for each drop.
-- [ ] 5.3 If a comparison workflow ends up with `< 2` valid symbols after pre-flight, do not template the workflow. Instead emit a fallback that instructs the main agent to invoke `ask_user` with the dropped-symbol context.
-- [ ] 5.4 Per-turn cache: extend `SessionCoordinator` with a `tickerValidationCache: Map<string, { valid: boolean; checkedAt: number }>` cleared at turn boundaries.
-- [ ] 5.5 Unit tests in `tests/unit/prompts/workflow-prompts.test.ts`: (a) all valid → no drops; (b) one invalid → annotated drop; (c) all invalid → workflow not templated, ask_user steered; (d) cache hit on second call within the same turn.
-- [ ] 5.6 Emit `opencandle-symbol-preflight-dropped` custom entry per drop for observability.
+- [x] 5.1 Add `preflightSymbols(symbols: string[]): Promise<{ valid: string[]; dropped: Array<{ symbol: string; reason: string }> }>` to `src/prompts/workflow-prompts.ts` (or a sibling module if it grows). Implementation calls resolver-layer search (`searchYahooInstruments` or a thin helper around it), not the `search_ticker` AgentTool object. Cache results per turn via a `Map<string, boolean>` passed in from the session coordinator.
+- [x] 5.2 Hook into the multi-symbol workflow templates (`compare_assets`, `analyze_correlation`-bearing prompts, peer screens). Drop unknown symbols, append a `[Pre-flight: dropped ...]` annotation to the templated prompt for each drop.
+- [x] 5.3 If a comparison workflow ends up with `< 2` valid symbols after pre-flight, do not template the workflow. Instead emit a fallback that instructs the main agent to invoke `ask_user` with the dropped-symbol context.
+- [x] 5.4 Per-turn cache: extend `SessionCoordinator` with a `tickerValidationCache: Map<string, { valid: boolean; checkedAt: number }>` cleared at turn boundaries.
+- [x] 5.5 Unit tests in `tests/unit/prompts/workflow-prompts.test.ts`: (a) all valid → no drops; (b) one invalid → annotated drop; (c) all invalid → workflow not templated, ask_user steered; (d) cache hit on second call within the same turn.
+- [x] 5.6 Emit `opencandle-symbol-preflight-dropped` custom entry per drop for observability.
 
 ## 6. `analyze_correlation` partial success
 
