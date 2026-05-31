@@ -1,19 +1,19 @@
 ## MODIFIED Requirements
 
-### Requirement: Default Router Mode is LLM
+### Requirement: Router Default Remains Gated
 
-The system SHALL default `OPENCANDLE_ROUTER_MODE` to `"llm"` only when the production-router acceptance gate is green. The `"rules"` value SHALL remain a valid configuration for one release as a rollback escape hatch, after which it is removed by a separate change. If the gate fails during this change, the default SHALL be reverted to `"rules"` before merge and the LLM-default promotion SHALL move to a follow-up change.
+The system SHALL default `OPENCANDLE_ROUTER_MODE` to `"rules"` until a credentialed production-router acceptance gate is green in a follow-up change. The `"llm"` value SHALL remain a valid opt-in configuration for development and evaluation, but this change SHALL NOT promote it to the unset-env default without the gate evidence.
 
-#### Scenario: Unset env var resolves to llm after gate passes
+#### Scenario: Unset env var resolves to rules before gate passes
 
-- **WHEN** the acceptance gate has passed and `OPENCANDLE_ROUTER_MODE` is unset
-- **THEN** `getConfig().routerMode === "llm"`
-
-#### Scenario: Failed gate reverts unset env var to rules
-
-- **WHEN** the acceptance gate has not passed before merge
-- **THEN** `src/config.ts` defaults `routerMode` to `"rules"`
+- **WHEN** the acceptance gate has not passed and `OPENCANDLE_ROUTER_MODE` is unset
+- **THEN** `getConfig().routerMode === "rules"`
 - **AND** a follow-up LLM-default promotion change owns any later default change
+
+#### Scenario: Explicit llm opt-in still works
+
+- **WHEN** `OPENCANDLE_ROUTER_MODE=llm` is set
+- **THEN** `getConfig().routerMode === "llm"` and the LLM router path executes with the same post-extraction safety nets
 
 #### Scenario: Explicit rules opt-in still works
 
@@ -61,9 +61,9 @@ Bare comma-list or "and"-list adjacency is not a positive ticker signal.
 - **THEN** the post-filter still removes IV before the output reaches the main agent
 - **AND** the same drop logic and observability entries apply identically to rules-mode extraction
 
-### Requirement: Numeric Acceptance Gate for Keeping LLM Default
+### Requirement: Numeric Acceptance Gate for Promoting LLM Default
 
-Keeping the production default of `OPENCANDLE_ROUTER_MODE="llm"` SHALL require demonstrated achievement of all three measured targets on the full deterministic fixture set:
+Promoting the production default to `OPENCANDLE_ROUTER_MODE="llm"` SHALL require a follow-up change with demonstrated achievement of all three measured targets on the full deterministic fixture set:
 
 | Metric | Threshold |
 |---|---|

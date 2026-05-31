@@ -26,14 +26,14 @@ Promoting the LLM router alone doesn't fix #1 or #2; both sit below the router a
 
 ### Modified Capabilities
 
-- `intent-routing` — default mode remains `llm` only after the numeric acceptance gate is satisfied; otherwise this change reverts to `rules` and leaves the promotion to a later proposal. Acronym disambiguation post-filter runs against extracted symbols regardless of mode.
+- `intent-routing` — default mode remains `rules` in this change because the numeric acceptance gate was not satisfied with credentials present; `llm` remains opt-in and any later default promotion belongs to a follow-up proposal. Acronym disambiguation post-filter runs against extracted symbols regardless of mode.
 - `provider-registry` — `getQuote` and `getOptionsChain` MUST surface `unavailable` for zero-result responses rather than emitting zero-filled successes.
 - `router-evals` — fixture set MUST include acronym-class disambiguation cases (IV/SEC/FED/CPI) covering both standalone-acronym and acronym-in-compare-list shapes.
 
 ## Impact
 
 - **Code:**
-  - `src/config.ts` — verify current `llm` default and rollback documentation, or revert to `rules` if the acceptance gate fails.
+  - `src/config.ts` — keep `rules` as the unset-env default because the credentialed acceptance gate was not completed; document `OPENCANDLE_ROUTER_MODE=llm` as opt-in.
   - `src/routing/symbol-disambiguator.ts` — new post-filter module.
   - `src/routing/entity-extractor.ts` — extend `COMMON_WORDS` with the missing finance acronyms (defense-in-depth alongside the post-filter).
   - `src/routing/router.ts` — call the post-filter on the symbols field for both rules and LLM paths.

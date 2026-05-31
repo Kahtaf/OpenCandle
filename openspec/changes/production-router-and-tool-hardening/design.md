@@ -1,16 +1,16 @@
 ## Context
 
-This change builds on `router-context-and-observability` (29/31 complete), which wired `priorTurns` into the LLM router and made `opencandle-*` custom entries visible in `trace.json`. With those two primitives in place, the LLM router can finally be evaluated and operated as a production component. This change is the production-promotion plus the safety nets that keep promotion from regressing observed live failures.
+This change builds on `router-context-and-observability` (29/31 complete), which wired `priorTurns` into the LLM router and made `opencandle-*` custom entries visible in `trace.json`. With those two primitives in place, the LLM router can finally be evaluated as a production candidate. This change ships the deterministic safety nets now and keeps default promotion gated until credentialed acceptance evidence exists.
 
 Three failure classes from one live trace drove the scope:
 - IV-as-Implied-Volatility tagged as a ticker, then run through `compare_companies` against ASTS.
 - `getQuote("IV")` returning a zero-filled `StockQuote` that downstream tools treated as success.
-- LLM router default needs production proof and deterministic safety nets before this branch can safely ship with `llm` as the default.
+- LLM router default needs production proof and deterministic safety nets before a branch can safely ship with `llm` as the default.
 
 ## Goals / Non-Goals
 
 ### Goals
-- Keep the LLM router as the default only behind a measurable acceptance gate, not vibes.
+- Keep the LLM router as an opt-in mode until a measurable acceptance gate passes.
 - Add a guard at the entity layer so finance acronyms (IV, SEC, FED, CPI, …) require positive ticker signal before being treated as symbols, regardless of router mode.
 - Stop the provider layer from emitting zero-filled "successful" quotes for invalid symbols.
 - Catch invalid symbols at workflow-templating time so failed multi-symbol comparisons get a clarifying turn instead of garbage data.
@@ -20,7 +20,7 @@ Three failure classes from one live trace drove the scope:
 - Removing the rules-router code path. Deferred to `remove-rule-router` after one release with `llm` default green.
 - Rewriting ticker search/autocomplete. We consume the existing resolver/search layer.
 - Adding new providers, new languages, or expanding the workflow taxonomy.
-- `/forget` command. Tracked as a follow-up; keeping LLM-router default does not block on it because priorTurns are not persisted across sessions.
+- `/forget` command. Tracked as a follow-up; LLM-router opt-in does not block on it because priorTurns are not persisted across sessions.
 - Changing the LLM router prompt structure (rendering of priorTurns, slot definitions, etc.). Existing prompt is the contract.
 
 ## Decisions
@@ -107,7 +107,7 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 | Pre-flight resolver search adds latency to comparison workflows | Templating-only scope (single round of validation per workflow); cache validation results within a turn |
 | Silent-zero heuristic false-positive on a legitimate near-zero ticker | Heuristic requires all five fields to be zero simultaneously; documented in Decision 2 with explicit confirmation that no observed Yahoo response matches |
 | `IV` is technically a real ticker (InvestView Inc., OTC) — disambiguation might block legitimate use | Post-filter retains the symbol when `$IV` or "the IV ticker" is in the input; the bare-acronym case is the one we want dropped. Documented in fixture 019 |
-| LLM default ships while prod LLM credentials are misconfigured | Acceptance gate must run with credentials present; rules path remains the explicit opt-in fallback for one release; `OPENCANDLE_ROUTER_MODE=rules` documented as the rollback knob |
+| LLM default ships while prod LLM credentials are misconfigured | Acceptance gate must run with credentials present before promotion; this change keeps `rules` as the default and documents `OPENCANDLE_ROUTER_MODE=llm` as opt-in |
 | Acceptance gate of 90% chosen on intuition, not measured baseline | Task 1.1 measures actual baseline; if 90% is unrealistic, gate is renegotiated in design.md before keeping `llm` as the default |
 
 ## Migration Plan
@@ -115,7 +115,7 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 1. Land acronym/provider/pre-flight/correlation hardening with `rules` as the default and `llm` opt-in.
 2. Run `eval:router-live` with credentials; record baseline. (Task 1.1)
 3. Triage failures, fix or document. (Task 1.2)
-4. If all three numeric targets are green for one continuous verification run, keep `src/config.ts` defaulting to `llm`. If not, revert the default to `rules` before merge and open a follow-up LLM-default promotion change.
+4. If all three numeric targets are green for one continuous verification run in a later change, promote `src/config.ts` to default `llm`. Until then, keep the default at `rules`.
 5. Monitor for one release window. Track silent-zero hits, acronym drops, pre-flight aborts via the `opencandle-*` custom entries.
 6. Open `remove-rule-router` once stable.
 
