@@ -25,6 +25,7 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
+import { disambiguateSymbols } from "../routing/symbol-disambiguator.js";
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
 import {
   formatPreflightDropAnnotation,
@@ -523,7 +524,87 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
 
     // Classify intent
-    const classification = classifyWithLegacyRules(event.text);
+    let classification = classifyWithLegacyRules(event.text);
+    const ruleModeDisambiguation = disambiguateRulesModeSymbols(
+      event.text,
+      classification.entities.symbols,
+    );
+    appendSymbolDropEntries(ruleModeDisambiguation.dropped, "rules");
+    classification = {
+      ...classification,
+      entities: {
+        ...classification.entities,
+        symbols: ruleModeDisambiguation.kept,
+      },
+    };
+    if (
+      isComparePrompt(event.text) &&
+      ruleModeDisambiguation.dropped.length > 0 &&
+      classification.entities.symbols.length < 2
+    ) {
+      pi.appendEntry("opencandle-workflow-aborted", {
+        reason: "symbol-disambiguation-insufficient-symbols",
+        dropped: ruleModeDisambiguation.dropped,
+        validSymbols: classification.entities.symbols,
+      });
+      const base = coordinator.buildRouterContextBase(ctx.sessionManager);
+      const output: RouterOutput = {
+        routeKind: "clarification",
+        route: "fallback",
+        workflow: "compare_assets",
+        entities: classification.entities,
+        slots: {},
+        preference_updates: [],
+        missing_required: ["symbols"],
+        tool_bundles: ["clarification"],
+        diagnostics: ruleModeDisambiguation.dropped.map((drop) => ({
+          code: "symbol_dropped",
+          message: `${drop.token} dropped: ${drop.reason}`,
+          details: {
+            token: drop.token,
+            reason: drop.reason,
+            signalsChecked: drop.signalsChecked,
+            source: "rules",
+          },
+        })),
+        reasoning: "rules-mode acronym disambiguation left fewer than two symbols for comparison",
+      };
+      const resolvedTurnContext = buildResolvedTurnContext(
+        { text: event.text, ...base },
+        output,
+        {
+          availableToolNames: safeGetAllToolNames(),
+          planning: {
+            migrationStatuses: getConfig().planningMigrationStatuses,
+          },
+        },
+      );
+      coordinator.setPendingResolvedTurnContext({
+        ...resolvedTurnContext,
+        diagnostics: [
+          ...resolvedTurnContext.diagnostics,
+          {
+            code: "compare_workflow_aborted",
+            message: "compare workflow needs at least two validated symbols after acronym disambiguation",
+          },
+        ],
+      });
+      coordinator.setPendingFallbackContext({
+        assumptionsBlock: [
+          "Assumptions Context:",
+          classification.entities.symbols.length > 0
+            ? `  valid symbols: ${classification.entities.symbols.join(", ")} (user)`
+            : "  valid symbols: (none)",
+          `  dropped ambiguous ticker-like tokens: ${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")} (no positive ticker signal)`,
+        ].join("\n"),
+        missingRequired: ["symbols"],
+        extraContext: "Dropped ambiguous ticker-like tokens: "
+          + `${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")}. `
+          + "Ask the user which ticker symbols they want compared before calling comparison tools.",
+      });
+      applyRouteToolScope(resolvedTurnContext);
+      return undefined;
+    }
 
     if (classification.workflow === "portfolio_builder") {
       const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);
@@ -828,13 +909,55 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     for (const diagnostic of output.diagnostics) {
       if (diagnostic.code !== "symbol_dropped") continue;
       const details = diagnostic.details ?? {};
+      appendSymbolDropEntries([{
+        token: String(details.token ?? ""),
+        reason: String(details.reason ?? ""),
+        signalsChecked: Array.isArray(details.signalsChecked)
+          ? details.signalsChecked.map(String)
+          : [],
+      }], String(details.source ?? "llm"));
+    }
+  }
+
+  function appendSymbolDropEntries(
+    dropped: Array<{ token: string; reason: string; signalsChecked: string[] }>,
+    source: string,
+  ): void {
+    for (const drop of dropped) {
       pi.appendEntry("opencandle-symbol-dropped", {
-        token: details.token,
-        reason: details.reason,
-        signalsChecked: details.signalsChecked,
-        source: details.source,
+        token: drop.token,
+        reason: drop.reason,
+        signalsChecked: drop.signalsChecked,
+        source,
       });
     }
+  }
+
+  function disambiguateRulesModeSymbols(
+    text: string,
+    extractedSymbols: string[],
+  ): { kept: string[]; dropped: Array<{ token: string; reason: string; signalsChecked: string[] }> } {
+    const candidates = mergeSymbols(extractedSymbols, rawTickerLikeTokens(text));
+    const disambiguated = disambiguateSymbols(candidates, text);
+    return {
+      kept: disambiguated.kept.filter((symbol) => extractedSymbols.includes(symbol)),
+      dropped: disambiguated.dropped,
+    };
+  }
+
+  function rawTickerLikeTokens(text: string): string[] {
+    const tokens: string[] = [];
+    for (const match of text.matchAll(/\$?([A-Za-z]{1,5})\b/g)) {
+      const raw = match[1];
+      if (raw !== raw.toUpperCase()) continue;
+      const token = raw.toUpperCase();
+      if (!tokens.includes(token)) tokens.push(token);
+    }
+    return tokens;
+  }
+
+  function isComparePrompt(text: string): boolean {
+    return /\b(?:compare|vs\.?|versus|which\s+is\s+better)\b/i.test(text);
   }
 
   async function preflightCompareResolution(

@@ -471,6 +471,59 @@ describe("opencandle extension", () => {
     expect(calls).toContain(getComprehensiveAnalysisPrompts("AAPL")[1]);
   });
 
+  it("clarifies rules-mode compare prompts when acronym drops leave too few symbols", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api, { symbolSearch: exactSymbolSearch(["ASTS"]) });
+
+    const sessionStart = fake.handlers.get("session_start")?.[0];
+    await sessionStart!(
+      { type: "session_start" },
+      { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+    );
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      ui: { notify: vi.fn() },
+      sessionManager: { getBranch: () => [], getSessionId: () => "sid" },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "Compare these assets: IV, ASTS", source: "interactive" },
+      ctx,
+    );
+
+    expect(result).toBeUndefined();
+
+    const symbolDrop = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "opencandle-symbol-dropped",
+    );
+    expect(symbolDrop).toBeDefined();
+    expect(symbolDrop![1]).toMatchObject({
+      token: "IV",
+      reason: "no positive ticker signal",
+      source: "rules",
+    });
+
+    const aborted = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "opencandle-workflow-aborted",
+    );
+    expect(aborted).toBeDefined();
+    expect(aborted![1]).toMatchObject({
+      reason: "symbol-disambiguation-insufficient-symbols",
+      validSymbols: ["ASTS"],
+    });
+
+    const beforeAgentStart = fake.handlers.get("before_agent_start")?.[0];
+    const promptResult = await beforeAgentStart!(
+      { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
+      {},
+    );
+    expect(promptResult.systemPrompt).toContain("Clarification Playbook");
+    expect(promptResult.systemPrompt).toContain("ask_user");
+    expect(promptResult.systemPrompt).toContain("Dropped ambiguous ticker-like tokens: IV");
+  });
+
   describe("llm router mode dispatch signal", () => {
     // Regression guard: in llm mode, when the router dispatches a workflow,
     // the input handler MUST transform the current prompt into the first

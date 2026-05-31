@@ -150,12 +150,23 @@ export function buildFallbackPlaybook(ctx: FallbackContext): string {
 
 export function buildRoutePlaybook(ctx: ResolvedTurnContext): string {
   const assumptionsBlock = buildResolvedAssumptionsBlock(ctx);
+  const droppedSymbols = ctx.diagnostics
+    .filter((diagnostic) => diagnostic.code === "symbol_dropped")
+    .map((diagnostic) => diagnostic.details?.token)
+    .filter((token): token is string => typeof token === "string" && token.length > 0);
+  const dropContext = droppedSymbols.length > 0
+    ? `Dropped ambiguous ticker-like tokens: ${droppedSymbols.join(", ")}.`
+    : undefined;
+  const extraContext = [
+    ctx.entities.symbols.length > 0
+      ? `Router-extracted symbols: ${ctx.entities.symbols.join(", ")}. Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`
+      : `Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`,
+    dropContext,
+  ].filter((part): part is string => Boolean(part)).join(" ");
   const fallbackContext: FallbackContext = {
     assumptionsBlock,
     missingRequired: ctx.missingRequired,
-    extraContext: ctx.entities.symbols.length > 0
-      ? `Router-extracted symbols: ${ctx.entities.symbols.join(", ")}. Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`
-      : `Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`,
+    extraContext,
   };
 
   if (ctx.routeKind === "clarification") {

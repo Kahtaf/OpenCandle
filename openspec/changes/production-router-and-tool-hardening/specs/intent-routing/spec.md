@@ -39,6 +39,14 @@ Bare comma-list or "and"-list adjacency is not a positive ticker signal.
 - **THEN** `entities.symbols === ["ASTS"]` and IV is dropped via the post-filter
 - **AND** an `opencandle-symbol-dropped` custom entry is appended with `{ token: "IV", reason: "no positive ticker signal", source: <mode> }`
 
+#### Scenario: Rules-mode compare prompt clarifies when a drop leaves too few symbols
+
+- **WHEN** default rules mode receives "Compare these assets: IV, ASTS"
+- **AND** IV is dropped as an ambiguous finance acronym
+- **THEN** OpenCandle SHALL NOT pass the raw prompt through to the main agent as a comparison request
+- **AND** it SHALL append `opencandle-workflow-aborted` with reason `symbol-disambiguation-insufficient-symbols`
+- **AND** the next agent turn SHALL receive clarification context instructing it to call `ask_user` before comparison tools
+
 #### Scenario: Acronym with `$`-prefix is retained
 
 - **WHEN** the user says "Get me a quote on $IV"

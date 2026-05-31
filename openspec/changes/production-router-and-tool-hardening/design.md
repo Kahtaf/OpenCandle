@@ -44,6 +44,8 @@ Bare comma-list or "and"-list adjacency is **not** a positive signal. "Compare t
 
 If no positive signal, the token is dropped from `entities.symbols`, with the drop logged as an `opencandle-symbol-dropped` custom entry containing `{ token, reason, signalsChecked }` for observability.
 
+In rules mode, a compare-style prompt can drop from two apparent assets to one real symbol before workflow dispatch. That case must not fall through to the main agent with the original raw prompt, because the main agent can reintroduce the ambiguous acronym as a tool argument. Instead, the extension records `opencandle-workflow-aborted`, injects clarification context, and steers the next agent turn to `ask_user` before any comparison tool is called.
+
 ### Decision 2 — Silent-zero detection is provider-side, not tool-side
 
 **Choice.** Throw a typed `InvalidSymbolError` from `getQuote`/`getOptionsChain` when the response shape matches the zero-result heuristic. `wrapProvider` catches the error and returns `unavailable`; `withFallback` propagates the same unavailable shape for fallback-backed tools. Tools see only the existing `unavailable` status; no per-tool change required.
@@ -107,6 +109,7 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 | Pre-flight resolver search adds latency to comparison workflows | Templating-only scope (single round of validation per workflow); cache validation results within a turn |
 | Silent-zero heuristic false-positive on a legitimate near-zero ticker | Heuristic requires all five fields to be zero simultaneously; documented in Decision 2 with explicit confirmation that no observed Yahoo response matches |
 | `IV` is technically a real ticker (InvestView Inc., OTC) — disambiguation might block legitimate use | Post-filter retains the symbol when `$IV` or "the IV ticker" is in the input; the bare-acronym case is the one we want dropped. Documented in fixture 019 |
+| Rules-mode pass-through can reintroduce a dropped acronym through main-agent tool choice | Compare prompts that drop below two symbols are converted to clarification context before the main agent starts |
 | LLM default ships while prod LLM credentials are misconfigured | Acceptance gate must run with credentials present before promotion; this change keeps `rules` as the default and documents `OPENCANDLE_ROUTER_MODE=llm` as opt-in |
 | Acceptance gate of 90% chosen on intuition, not measured baseline | Task 1.1 measures actual baseline; if 90% is unrealistic, gate is renegotiated in design.md before keeping `llm` as the default |
 

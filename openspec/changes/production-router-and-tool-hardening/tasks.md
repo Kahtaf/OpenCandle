@@ -32,7 +32,7 @@
 - [x] 4.3 Same heuristic applied in `getOptionsChain`: if `result.options` is empty and `quote.regularMarketPrice` is missing/zero, throw `InvalidSymbolError`.
 - [x] 4.4 Verify `src/providers/wrap-provider.ts` maps `InvalidSymbolError` to `unavailable` with the error message included in `reason`, and that `src/providers/with-fallback.ts` preserves that reason when all providers fail. If not, add the mapping.
 - [x] 4.5 Unit test `tests/unit/providers/yahoo-finance.test.ts`: feed the provider a recorded sparse-meta fixture (capture from real Yahoo for a known-bogus ticker like `XXFAKEXX`) and assert `InvalidSymbolError` is thrown with `symbol === "XXFAKEXX"` and `provider === "yahoo"`.
-- [ ] 4.6 Integration check: invoke `get_stock_quote` tool with `symbol: "XXFAKEXX"` against the harness, assert tool output contains "⚠ Stock quote unavailable" with the symbol, and that no zero-filled `details` object leaks.
+- [x] 4.6 Integration check: invoke `get_stock_quote` tool with `symbol: "XXFAKEXX"` against the harness, assert tool output contains "⚠ Stock quote unavailable" with the symbol, and that no zero-filled `details` object leaks. Evidence: `/tmp/oc-hardening-invalid-tool-IFxvvI/trace.json`.
 - [x] 4.7 Regression checks for direct `wrapProvider` Yahoo callers: watchlist check, portfolio view, alert check, daily report run, and prediction check should surface unavailable/data-gap status for an invalid symbol rather than zero-filled quote data.
 
 ## 5. Pre-flight ticker validation in workflow templating
@@ -59,10 +59,10 @@
 
 ## 8. Live verification (real-runtime, gating per CLAUDE.md §5)
 
-- [ ] 8.1 Start the dev agent locally with default config. Run the IV-as-vol scenario from the original session. Confirm: (a) "Compare these assets: IV, ASTS" results in IV being dropped with an annotated `customEntries` entry; (b) `get_stock_quote("IV")` returns "⚠ Stock quote unavailable" if IV reaches the quote tool; (c) the agent does not produce a comparison verdict against `$0.00`.
-- [ ] 8.2 Run positive-control scenarios: "compare $IV with $TICK" and "compare KO, the IV ticker, and PEP". Confirm IV survives the disambiguator and is treated as a ticker.
-- [ ] 8.3 Run the SEC-as-regulator and FED-as-bank scenarios. Confirm both are dropped from `entities.symbols`.
-- [ ] 8.4 Run a 3-symbol correlation where one symbol is bogus. Confirm the matrix returns over the 2 valid symbols with the third surfaced as a drop.
+- [x] 8.1 Start the dev agent locally with default config. Run the IV-as-vol scenario from the original session. Confirm: (a) "Compare these assets: IV, ASTS" results in IV being dropped with an annotated `customEntries` entry; (b) `get_stock_quote("IV")` returns "⚠ Stock quote unavailable" if IV reaches the quote tool; (c) the agent does not produce a comparison verdict against `$0.00`. Evidence: `/tmp/oc-hardening-iv-jMxjB0/trace.json` and `/tmp/oc-hardening-cashtag2-h1h7Or/trace.json`.
+- [x] 8.2 Run positive-control scenarios: "compare $IV with $TICK" and "compare KO, the IV ticker, and PEP". Confirm IV survives the disambiguator and is treated as a ticker. Evidence: `/tmp/oc-hardening-compare-cashtag-TdPXig/trace.json` and `/tmp/oc-hardening-positive-ZEG5YB/trace.json` show IV entered workflow symbols before resolver preflight dropped it as an unavailable ticker; `/tmp/oc-hardening-cashtag2-h1h7Or/trace.json` shows `$IV` reached `get_stock_quote`.
+- [x] 8.3 Run the SEC-as-regulator and FED-as-bank scenarios. Confirm both are dropped from `entities.symbols`. Evidence: `/tmp/oc-hardening-sec-eJmVjb/trace.json` and `/tmp/oc-hardening-fed-4047Ba/trace.json`.
+- [x] 8.4 Run a 3-symbol correlation where one symbol is bogus. Confirm the matrix returns over the 2 valid symbols with the third surfaced as a drop. Evidence: `/tmp/oc-hardening-corr3-DYvTTJ/trace.json`.
 - [ ] 8.5 Document each scenario's `trace.json` evidence in the PR description.
 
 ## 9. Proposal housekeeping

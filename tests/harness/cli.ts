@@ -16,6 +16,7 @@ import { cache } from "../../src/infra/cache.js";
 import { IpcChannel } from "./ipc.js";
 import { createIpcAskHandler } from "./ipc-ask-handler.js";
 import { createTraceCollector } from "./trace-collector.js";
+import type { CustomEntryTrace } from "./types.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {};
@@ -102,7 +103,10 @@ async function cmdRun() {
       shutdownRequested = true;
       console.error("Shutdown requested, writing partial trace...");
       if (collector) {
-        ipc.writeTrace(collector.getTrace());
+        ipc.writeTrace({
+          ...collector.getTrace(),
+          customEntries: drainOpenCandleCustomEntries(session.sessionManager),
+        });
       }
       session.dispose();
       rmSync(openCandleHome, { recursive: true, force: true });
@@ -123,7 +127,10 @@ async function cmdRun() {
       void session.prompt(prompt);
     });
 
-    ipc.writeTrace(collector.getTrace());
+    ipc.writeTrace({
+      ...collector.getTrace(),
+      customEntries: drainOpenCandleCustomEntries(session.sessionManager),
+    });
     console.log(`IPC dir: ${ipcDir}`);
     console.log("Session complete. Trace written.");
 
@@ -139,6 +146,23 @@ async function cmdRun() {
     rmSync(openCandleHome, { recursive: true, force: true });
     process.exit(1);
   }
+}
+
+function drainOpenCandleCustomEntries(
+  sessionManager: { getEntries(): Array<Record<string, unknown>> },
+): CustomEntryTrace[] {
+  return sessionManager
+    .getEntries()
+    .filter((entry) =>
+      entry.type === "custom" &&
+      typeof entry.customType === "string" &&
+      entry.customType.startsWith("opencandle-")
+    )
+    .map((entry) => ({
+      customType: String(entry.customType),
+      data: entry.data,
+      timestamp: String(entry.timestamp),
+    }));
 }
 
 async function cmdWait() {
