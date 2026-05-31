@@ -16,6 +16,16 @@ import {
   volumeSpike,
 } from "../../market-state/alert-conditions.js";
 
+const ACTION_DESCRIPTION = [
+  "One of: create_price_above, create_price_below, create_price_above_sma,",
+  "create_price_below_sma, create_rsi_above, create_rsi_below,",
+  "create_volume_spike, set_enabled, list, check.",
+  "Use create_price_above/create_price_below for price alerts,",
+  "create_price_above_sma/create_price_below_sma for SMA crossing alerts,",
+  "create_rsi_above/create_rsi_below for RSI alerts,",
+  "create_volume_spike for volume alerts, and set_enabled to enable or disable an alert.",
+].join(" ");
+
 const params = Type.Object({
   action: Type.Union(
     [
@@ -30,7 +40,7 @@ const params = Type.Object({
       Type.Literal("list"),
       Type.Literal("check"),
     ],
-    { description: "Create, list, or manually check alert rules" },
+    { description: ACTION_DESCRIPTION },
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol for create actions" })),
   threshold: Type.Optional(Type.Number({ description: "Price or indicator threshold for create actions" })),
@@ -46,7 +56,7 @@ export const alertsTool: AgentTool<typeof params> = {
   name: "manage_alerts",
   label: "Alerts",
   description:
-    "Create and manually check durable price alerts. V1 alerts are manually checked and do not imply continuous background monitoring.",
+    "Create and manually check durable alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, and check. V1 alerts are manually checked and do not imply continuous background monitoring.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();

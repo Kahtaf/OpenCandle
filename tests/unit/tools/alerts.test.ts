@@ -45,6 +45,18 @@ describe("alertsTool", () => {
     vi.clearAllMocks();
   });
 
+  it("describes exact alert action literals for agent routing", () => {
+    const actionDescription = alertsTool.parameters.properties.action.description ?? "";
+
+    expect(alertsTool.description).toContain("create_price_above");
+    expect(alertsTool.description).toContain("create_rsi_below");
+    expect(alertsTool.description).toContain("set_enabled");
+    expect(actionDescription).toContain("create_price_above");
+    expect(actionDescription).toContain("create_price_below_sma");
+    expect(actionDescription).toContain("create_rsi_below");
+    expect(actionDescription).toContain("set_enabled");
+  });
+
   it("creates and lists manual price alerts", async () => {
     const created = await alertsTool.execute("test", {
       action: "create_price_above",
