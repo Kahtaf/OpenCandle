@@ -32,6 +32,7 @@
 - [x] 4.4 Add tests for exchange-prefixed aliases, ambiguous search results, no-result searches, and misspelled ticker-like input such as `APL` for Apple.
 - [x] 4.5 Add tests proving zero-filled Yahoo chart/quote responses are rejected as invalid instruments before insertion.
 - [x] 4.6 Define non-interactive behavior for ambiguous candidate results, returning structured candidates instead of mutating state.
+- [x] 4.7 Verify provider currency is preserved and unknown portfolio lot currency requires explicit input instead of silently defaulting to USD.
 
 ## 5. TUI and GUI Parity
 
@@ -53,6 +54,7 @@
 - [x] 5.16 Verify concurrent same-row edits return/refetch the final committed SQLite row and do not leave either surface showing stale saved state.
 - [x] 5.17 Verify deferred workflows requested from TUI, such as imports or minute monitoring, do not create GUI-invisible partial state.
 - [x] 5.18 Verify row-level portfolio removal targets a selected lot id and does not remove other same-symbol lots by default.
+- [x] 5.19 Verify GUI saved-state polling preserves a refreshed quote/P&L snapshot until a newer quote snapshot replaces it.
 
 ## 6. Alerts and Reports
 

@@ -70,7 +70,20 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
             details: instrument,
           };
         }
-        const currency = (args.currency?.trim() || instrument.instrument.currency || "USD").toUpperCase();
+        const resolvedCurrency = args.currency?.trim() || instrument.instrument.currency?.trim();
+        if (!resolvedCurrency) {
+          return {
+            content: [{
+              type: "text",
+              text: `Could not determine currency for ${instrument.instrument.symbol}. Supply currency explicitly before adding it to the portfolio.`,
+            }],
+            details: {
+              status: "needs_currency",
+              symbol: instrument.instrument.symbol,
+            },
+          };
+        }
+        const currency = resolvedCurrency.toUpperCase();
         const lot = service.addPortfolioLot({
           instrument: instrument.instrument,
           quantity: args.shares,

@@ -134,7 +134,7 @@ This resolution layer is the right home for imported symbols too. TradingView ma
 
 Normal add flows should use provider-backed resolution before mutating state. A user-entered symbol or name should become a saved instrument only after it maps to a selected search result or validated exact symbol. Name searches, ambiguous inputs, misspellings, and provider failures should not silently create unresolved instruments.
 
-The initial resolver can build on the existing Yahoo Finance search endpoint already used by `search_ticker`: `query1.finance.yahoo.com/v1/finance/search`. Search results provide symbol, name, quote type, exchange, and score, which are enough for GUI autocomplete and TUI candidate selection. Exact-symbol validation must also reject Yahoo chart responses that are effectively zero-result payloads, such as a quote with zero price, zero volume, and missing 52-week range. Those responses should not be treated as valid instruments.
+The initial resolver can build on the existing Yahoo Finance search endpoint already used by `search_ticker`: `query1.finance.yahoo.com/v1/finance/search`. Search results provide symbol, name, quote type, exchange, and score, which are enough for GUI autocomplete and TUI candidate selection. Exact-symbol validation must preserve provider currency when available and leave currency unknown when it is not available; portfolio add flows must require explicit lot currency rather than defaulting unknown instruments to USD. Exact-symbol validation must also reject Yahoo chart responses that are effectively zero-result payloads, such as a quote with zero price, zero volume, and missing 52-week range. Those responses should not be treated as valid instruments.
 
 ## 5. Alerts
 
@@ -338,7 +338,7 @@ Alerts must be explicit about delivery expectations. V1 alert rules should be la
 
 Daily reports should have a stable shape rather than being an arbitrary quote dump. V1 morning reports should include generated timestamp, target watchlist, quote freshness, major movers, alert summary, technical snapshot when available, and data gaps.
 
-Quote freshness shown on watchlist and portfolio pages may come from the latest provider response, existing cache metadata, or a small quote-snapshot/read-model table introduced during implementation. It should not be confused with the durable instrument row itself: stale or unavailable quotes must be visible in rows and summaries rather than silently omitted.
+Quote freshness shown on watchlist and portfolio pages may come from the latest provider response, existing cache metadata, or a small quote-snapshot/read-model table introduced during implementation. It should not be confused with the durable instrument row itself: stale or unavailable quotes must be visible in rows and summaries rather than silently omitted. A regular saved-state poll must not clear a quote/P&L snapshot that was just refreshed; it should remain visible until replaced by a newer quote snapshot or marked stale/unavailable.
 
 Prediction checks should preserve user-authored records when market data is temporarily unavailable. An expired prediction can only be marked `expired` or `resolved` when the check has enough current quote data to evaluate the outcome; otherwise the check result should report a data gap and leave the prediction open for a later retry.
 

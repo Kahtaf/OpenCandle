@@ -11,6 +11,16 @@ const EMPTY_MARKET_STATE = {
   quoteSnapshot: null,
 };
 
+export function mergeMarketStateSnapshot(current, data) {
+  return {
+    ...EMPTY_MARKET_STATE,
+    ...data,
+    quoteSnapshot: Object.prototype.hasOwnProperty.call(data, "quoteSnapshot")
+      ? data.quoteSnapshot
+      : current?.quoteSnapshot ?? null,
+  };
+}
+
 export function useMarketState({ pollMs = 4000 } = {}) {
   const [state, setState] = useState(EMPTY_MARKET_STATE);
   const [loading, setLoading] = useState(true);
@@ -21,7 +31,7 @@ export function useMarketState({ pollMs = 4000 } = {}) {
       const response = await fetch("/api/market-state");
       if (!response.ok) throw new Error(response.statusText || "Failed to load market state");
       const data = await response.json();
-      setState({ ...EMPTY_MARKET_STATE, ...data });
+      setState((current) => mergeMarketStateSnapshot(current, data));
       setError("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

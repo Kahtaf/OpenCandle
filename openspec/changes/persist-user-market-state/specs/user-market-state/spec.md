@@ -133,6 +133,18 @@ OpenCandle SHALL provide a shared search/resolve path for adding instruments to 
 - **THEN** OpenCandle resolves the symbol to an instrument
 - **AND** adds that instrument to the requested or default watchlist
 
+#### Scenario: Provider currency is preserved
+
+- **WHEN** exact-symbol resolution returns a provider currency such as `CAD`
+- **THEN** OpenCandle stores that currency on the normalized instrument
+- **AND** it does not overwrite the instrument currency with `USD`
+
+#### Scenario: Unknown portfolio currency requires explicit input
+
+- **WHEN** a user adds a portfolio lot without an explicit lot currency and the resolver cannot determine the instrument currency
+- **THEN** OpenCandle asks for or returns a structured need for currency
+- **AND** it does not create a USD-denominated lot by default
+
 #### Scenario: Ambiguous search asks for selection
 
 - **WHEN** the user searches for a name or symbol that resolves to multiple plausible instruments

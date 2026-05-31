@@ -144,5 +144,6 @@ function quote(symbol: string, price: number): StockQuote {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    currency: "USD",
   };
 }

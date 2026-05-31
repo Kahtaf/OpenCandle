@@ -34,6 +34,12 @@ OpenCandle SHALL expose one shared market-state service for watchlist, portfolio
 - **THEN** the GUI refreshes, polls, or invalidates its market-state read model so the durable page can show the SQLite-backed change without restarting the GUI
 - **AND** any stale row state is visibly refreshed before the user performs a conflicting edit
 
+#### Scenario: GUI polling preserves quote refreshes
+
+- **WHEN** the GUI refreshes quote and P&L data for watchlist or portfolio rows
+- **THEN** a later saved-state poll that does not contain a quote snapshot preserves the displayed quote snapshot
+- **AND** quote and P&L cells are not reset to an unchecked state until a newer quote snapshot, stale state, or unavailable state replaces them
+
 #### Scenario: TUI reflects GUI changes on next read
 
 - **WHEN** a user mutates watchlist, portfolio, prediction, alert, or report state through the GUI

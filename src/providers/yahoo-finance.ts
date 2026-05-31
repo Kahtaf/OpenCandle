@@ -100,6 +100,9 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       week52High: meta.fiftyTwoWeekHigh ?? 0,
       week52Low: meta.fiftyTwoWeekLow ?? 0,
       timestamp: Date.now(),
+      currency: typeof meta.currency === "string" && meta.currency.trim() !== ""
+        ? meta.currency.trim().toUpperCase()
+        : null,
     };
 
     if (isZeroResultQuote(quote)) {

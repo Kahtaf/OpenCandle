@@ -69,6 +69,12 @@ Bare comma-list or "and"-list adjacency is not a positive ticker signal.
 - **THEN** the post-filter still removes IV before the output reaches the main agent
 - **AND** the same drop logic and observability entries apply identically to rules-mode extraction
 
+#### Scenario: Dropped symbols are not restored from slots
+
+- **WHEN** the LLM router emits a dropped token in both `entities.symbols` and `slots.symbols`
+- **THEN** OpenCandle SHALL remove the token from workflow dispatch symbols
+- **AND** router slot merging SHALL NOT reintroduce a token already reported by `symbol_dropped`
+
 #### Scenario: MA ticker survives plain comparison
 
 - **WHEN** the user says "compare V and MA"

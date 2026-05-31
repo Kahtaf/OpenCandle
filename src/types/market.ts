@@ -13,6 +13,7 @@ export interface StockQuote {
   week52High: number;
   week52Low: number;
   timestamp: number;
+  currency?: string | null;
 }
 
 export interface OHLCV {

@@ -220,6 +220,56 @@ describe("portfolioTrackerTool", () => {
     ]);
   });
 
+  it("uses provider currency for foreign listings when no lot currency is supplied", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("SHOP.TO", 120, { currency: "CAD" }));
+
+    const add = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "SHOP.TO",
+      shares: 3,
+      avg_cost: 100,
+    });
+
+    expect(add.details).toMatchObject({
+      symbol: "SHOP.TO",
+      currency: "CAD",
+      instrumentCurrency: "CAD",
+    });
+
+    const view = await portfolioTrackerTool.execute("test", { action: "view" });
+    expect(view.content[0].text).toContain("Excluded from USD totals: SHOP.TO (CAD)");
+    expect(view.details).toMatchObject({
+      totalValue: 0,
+      positions: [
+        expect.objectContaining({
+          symbol: "SHOP.TO",
+          currency: "CAD",
+          includedInTotals: false,
+        }),
+      ],
+    });
+  });
+
+  it("does not save a holding with an unknown currency unless one is supplied", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("SHOP.TO", 120, { currency: null }));
+
+    const add = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "SHOP.TO",
+      shares: 3,
+      avg_cost: 100,
+    });
+
+    expect(add.content[0].text).toContain("Could not determine currency");
+    expect(add.details).toMatchObject({
+      status: "needs_currency",
+      symbol: "SHOP.TO",
+    });
+
+    const view = await portfolioTrackerTool.execute("test", { action: "view" });
+    expect(view.content[0].text.toLowerCase()).toContain("empty");
+  });
+
   it("updates an existing portfolio lot through an explicit update action", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",
@@ -369,6 +419,7 @@ function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    currency: "USD",
     ...overrides,
   };
 }

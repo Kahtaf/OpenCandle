@@ -1,9 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { httpGet } from "../../../src/infra/http-client.js";
-import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
+import { resolveYahooInstrument, searchYahooInstruments } from "../../../src/market-state/resolve.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/infra/http-client.js", () => ({
   httpGet: vi.fn(),
+}));
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
 }));
 
 describe("searchYahooInstruments", () => {
@@ -53,4 +58,36 @@ describe("searchYahooInstruments", () => {
     expect(results[0].symbol).toBe("APLD");
     expect(results[0].symbol).not.toBe("APL");
   });
+
+  it("preserves provider quote currency when resolving an exact symbol", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("SHOP.TO", 120, { currency: "CAD" }));
+
+    const instrument = await resolveYahooInstrument("SHOP.TO");
+
+    expect(instrument).toMatchObject({
+      symbol: "SHOP.TO",
+      currency: "CAD",
+      provider: "yahoo",
+    });
+  });
 });
+
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
+  return {
+    symbol,
+    price,
+    change: 0,
+    changePercent: 0,
+    open: price,
+    high: price,
+    low: price,
+    previousClose: price,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: price + 10,
+    week52Low: price - 10,
+    timestamp: Date.now(),
+    ...overrides,
+  };
+}

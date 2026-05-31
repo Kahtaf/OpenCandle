@@ -1010,12 +1010,26 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       entities.budget = output.slots.budget.value;
     }
 
-    const slotSymbols = symbolsFromRouterSlots(output);
+    const droppedSymbols = droppedSymbolsFromDiagnostics(output);
+    const slotSymbols = symbolsFromRouterSlots(output)
+      .filter((symbol) => !droppedSymbols.has(symbol));
     if (slotSymbols.length > 0 && slotSymbols.length > entities.symbols.length) {
       entities.symbols = mergeSymbols(slotSymbols, entities.symbols);
     }
 
     return entities;
+  }
+
+  function droppedSymbolsFromDiagnostics(output: RouterOutput): Set<string> {
+    const dropped = new Set<string>();
+    for (const diagnostic of output.diagnostics) {
+      if (diagnostic.code !== "symbol_dropped") continue;
+      const token = diagnostic.details?.token;
+      if (typeof token === "string" && token.trim() !== "") {
+        dropped.add(token.toUpperCase());
+      }
+    }
+    return dropped;
   }
 
   function withRouterSlotSources<T extends object>(

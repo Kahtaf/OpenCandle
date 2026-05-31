@@ -976,6 +976,53 @@ describe("opencandle extension", () => {
         source: "llm",
       });
     });
+
+    it("does not reintroduce dropped LLM symbols from router slots", async () => {
+      const symbolDropOutput: RouterOutput = {
+        routeKind: "workflow_dispatch",
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["IV", "ASTS"] },
+        slots: {
+          symbols: { value: ["IV", "ASTS"], source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: [],
+        diagnostics: [],
+        reasoning: "compare assets",
+      };
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, {
+        routerLlmClient: mockClient(symbolDropOutput),
+        symbolSearch: exactSymbolSearch(["IV", "ASTS"]),
+      });
+
+      const sessionStart = fake.handlers.get("session_start")?.[0];
+      await sessionStart!(
+        { type: "session_start" },
+        { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+      );
+
+      const inputHandler = fake.handlers.get("input")?.[0];
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: emptySessionManager,
+      };
+
+      const result = await inputHandler!(
+        { type: "input", text: "Compare these assets: IV, ASTS", source: "interactive" },
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+        "opencandle-workflow",
+        expect.objectContaining({ symbols: ["IV", "ASTS"] }),
+      );
+    });
   });
 
   describe("soft-degradation accumulator wiring", () => {
