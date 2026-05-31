@@ -6,6 +6,9 @@ import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import { dailyReportTool } from "../../../src/tools/portfolio/daily-report.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { isZeroFilledQuote } from "../../../src/market-state/resolve.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -53,6 +56,43 @@ describe("dailyReportTool", () => {
     expect(history.content[0].text).toContain("completed");
   });
 
+  it("reports zero-filled quote rows as data gaps instead of valid report data", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    db.close();
+    vi.mocked(getQuote).mockReset();
+    const zeroQuote = quote("AAPL", 0, {
+      volume: 0,
+      week52High: 0,
+      week52Low: 0,
+    });
+    expect(isZeroFilledQuote(zeroQuote)).toBe(true);
+    vi.mocked(getQuote).mockResolvedValue(zeroQuote);
+
+    const result = await dailyReportTool.execute("test", { action: "run" });
+
+    expect(result.content[0].text).toContain("No quote data available");
+    expect(result.content[0].text).toContain("AAPL: Yahoo returned no valid market data.");
+    expect(result.details).toMatchObject({
+      status: "completed",
+      summaryJson: {
+        quoteCount: 0,
+        dataGapCount: 1,
+      },
+      errorsJson: ["AAPL: Yahoo returned no valid market data."],
+    });
+  });
+
   it("configures the morning report with timezone and local time", async () => {
     const result = await dailyReportTool.execute("test", {
       action: "configure",
@@ -69,7 +109,7 @@ describe("dailyReportTool", () => {
   });
 });
 
-function quote(symbol: string, price: number): StockQuote {
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
     price,
@@ -85,5 +125,6 @@ function quote(symbol: string, price: number): StockQuote {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    ...overrides,
   };
 }

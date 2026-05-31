@@ -4,6 +4,7 @@ import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
+import { isZeroFilledQuote } from "../../market-state/resolve.js";
 
 const params = Type.Object({
   action: Type.Union(
@@ -94,6 +95,10 @@ async function generateDailyReport(service: MarketStateService): Promise<{
       const result = await wrapProvider("yahoo", () => getQuote(item.symbol));
       if (result.status === "unavailable") {
         dataGaps.push(`${item.symbol}: ${result.reason}`);
+        return null;
+      }
+      if (isZeroFilledQuote(result.data)) {
+        dataGaps.push(`${item.symbol}: Yahoo returned no valid market data.`);
         return null;
       }
       return { item, quote: result.data };
