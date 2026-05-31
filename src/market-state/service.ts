@@ -870,6 +870,10 @@ export class MarketStateService {
     return row == null ? null : mapInstrument(row);
   }
 
+  upsertInstrumentRecord(input: InstrumentInput): InstrumentRecord {
+    return mapInstrument(this.upsertInstrument(input));
+  }
+
   updateAlertObservation(params: {
     ruleId: number;
     observed: unknown;
@@ -921,6 +925,72 @@ export class MarketStateService {
         params.message,
       );
     return this.getAlertEvent(Number(result.lastInsertRowid));
+  }
+
+  recordAlertCheckResult(params: {
+    ruleId: number;
+    observed: unknown;
+    checkedAt: string;
+    trigger?: {
+      expectedPreviousValue: number | null;
+      expectedLastTriggeredAt: string | null;
+      instrumentId: number | null;
+      message: string;
+      triggeredAt: string;
+    };
+  }): { triggered: boolean; rule: AlertRuleRecord } {
+    const tx = this.db.transaction(() => {
+      const row = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(params.ruleId) as
+        | AlertRuleRow
+        | undefined;
+      if (row == null) {
+        throw new Error(`alert rule ${params.ruleId} not found`);
+      }
+
+      const currentPrevious = lastObservedValueFromJson(row.last_observed_json);
+      const currentLastTriggeredAt = row.last_triggered_at ?? null;
+      const canTrigger = params.trigger != null &&
+        currentPrevious === params.trigger.expectedPreviousValue &&
+        currentLastTriggeredAt === params.trigger.expectedLastTriggeredAt;
+
+      if (canTrigger && params.trigger) {
+        this.db
+          .prepare(
+            `INSERT INTO alert_events (
+               alert_rule_id, instrument_id, observed_value_json, triggered_at, status, message
+             )
+             VALUES (?, ?, ?, ?, 'triggered', ?)`,
+          )
+          .run(
+            params.ruleId,
+            params.trigger.instrumentId,
+            JSON.stringify(params.observed),
+            params.trigger.triggeredAt,
+            params.trigger.message,
+          );
+      }
+
+      this.db
+        .prepare(
+          `UPDATE alert_rules
+           SET last_checked_at = ?,
+               last_observed_json = ?,
+               last_triggered_at = COALESCE(?, last_triggered_at),
+               updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          params.checkedAt,
+          JSON.stringify(params.observed),
+          canTrigger && params.trigger ? params.trigger.triggeredAt : null,
+          params.checkedAt,
+          params.ruleId,
+        );
+
+      return canTrigger;
+    });
+    const triggered = tx();
+    return { triggered, rule: this.getAlertRule(params.ruleId) };
   }
 
   listAlertEvents(): AlertEventRecord[] {
@@ -1500,6 +1570,12 @@ function mapImportRow(row: ImportRowRow): ImportRowRecord {
 function normalizeNullable(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function lastObservedValueFromJson(value: string | null): number | null {
+  if (value == null) return null;
+  const parsed = JSON.parse(value) as { value?: unknown } | null;
+  return typeof parsed?.value === "number" ? parsed.value : null;
 }
 
 function normalizeSource(value: string): string {

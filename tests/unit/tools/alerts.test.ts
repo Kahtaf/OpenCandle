@@ -115,6 +115,25 @@ describe("alertsTool", () => {
     verifyDb.close();
   });
 
+  it("creates instrument-scoped alerts without adding the symbol to the watchlist", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "MSFT",
+      threshold: 450,
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listWatchlistItems()).toHaveLength(0);
+    expect(service.listAlertRules()).toEqual([
+      expect.objectContaining({
+        conditionType: "price_crosses_above",
+        instrumentId: expect.any(Number),
+      }),
+    ]);
+    db.close();
+  });
+
   it("returns candidate matches for an unverified alert symbol without creating a rule", async () => {
     vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
     vi.mocked(httpGet).mockResolvedValue({

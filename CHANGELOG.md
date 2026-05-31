@@ -23,6 +23,8 @@
 - Portfolio updates now require a lot id so same-symbol tax lots are not rewritten by a symbol-only update.
 - Portfolio views now avoid row-level value/P&L math when quote currency and lot currency differ without FX conversion.
 - GUI financial number fields now allow decimal values.
+- Instrument-scoped alert creation now resolves symbols without adding them to the default watchlist as a side effect.
+- Manual alert checks now persist trigger events conditionally with the observed rule state, suppressing duplicate events from concurrent checks.
 - Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
 - Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.

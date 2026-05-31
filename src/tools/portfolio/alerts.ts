@@ -69,11 +69,11 @@ export const alertsTool: AgentTool<typeof params> = {
         }
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
-        const item = service.addWatchlistItem({ instrument: resolution.instrument });
+        const instrument = service.upsertInstrumentRecord(resolution.instrument);
         const isAbove = args.action === "create_price_above";
         const rule = service.createAlertRule({
           scopeType: "instrument",
-          instrumentId: item.instrumentId,
+          instrumentId: instrument.id,
           conditionType: isAbove ? "price_crosses_above" : "price_crosses_below",
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: isAbove
@@ -85,7 +85,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return {
           content: [{
             type: "text",
-            text: `Created manual alert ${rule.conditionType} for ${item.symbol} at $${args.threshold}.`,
+            text: `Created manual alert ${rule.conditionType} for ${instrument.symbol} at $${args.threshold}.`,
           }],
           details: rule,
         };
@@ -98,11 +98,11 @@ export const alertsTool: AgentTool<typeof params> = {
         const period = args.period ?? 50;
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
-        const item = service.addWatchlistItem({ instrument: resolution.instrument });
+        const instrument = service.upsertInstrumentRecord(resolution.instrument);
         const direction = args.action === "create_price_above_sma" ? "above" : "below";
         const rule = service.createAlertRule({
           scopeType: "instrument",
-          instrumentId: item.instrumentId,
+          instrumentId: instrument.id,
           conditionType: "price_crosses_sma",
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: priceCrossesSma(period, direction),
@@ -112,7 +112,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return {
           content: [{
             type: "text",
-            text: `Created manual alert price_crosses_sma for ${item.symbol} using SMA(${period}).`,
+            text: `Created manual alert price_crosses_sma for ${instrument.symbol} using SMA(${period}).`,
           }],
           details: rule,
         };
@@ -125,11 +125,11 @@ export const alertsTool: AgentTool<typeof params> = {
         const period = args.period ?? 14;
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
-        const item = service.addWatchlistItem({ instrument: resolution.instrument });
+        const instrument = service.upsertInstrumentRecord(resolution.instrument);
         const direction = args.action === "create_rsi_above" ? "above" : "below";
         const rule = service.createAlertRule({
           scopeType: "instrument",
-          instrumentId: item.instrumentId,
+          instrumentId: instrument.id,
           conditionType: "rsi_threshold",
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: rsiThreshold(period, args.threshold, direction),
@@ -139,7 +139,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return {
           content: [{
             type: "text",
-            text: `Created manual alert rsi_threshold for ${item.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
+            text: `Created manual alert rsi_threshold for ${instrument.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
           }],
           details: rule,
         };
@@ -153,10 +153,10 @@ export const alertsTool: AgentTool<typeof params> = {
         const multiplier = args.threshold ?? 2;
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
-        const item = service.addWatchlistItem({ instrument: resolution.instrument });
+        const instrument = service.upsertInstrumentRecord(resolution.instrument);
         const rule = service.createAlertRule({
           scopeType: "instrument",
-          instrumentId: item.instrumentId,
+          instrumentId: instrument.id,
           conditionType: "volume_spike",
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: volumeSpike(period, multiplier),
@@ -166,7 +166,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return {
           content: [{
             type: "text",
-            text: `Created manual alert volume_spike for ${item.symbol}: volume > ${multiplier}x ${period}-bar average.`,
+            text: `Created manual alert volume_spike for ${instrument.symbol}: volume > ${multiplier}x ${period}-bar average.`,
           }],
           details: rule,
         };
@@ -246,25 +246,27 @@ async function checkAlerts(service: MarketStateService): Promise<{
     const previous = lastObservedValue(rule);
     const didTrigger = crosses(rule, previous, observation.value) && outsideCooldown(rule);
     if (didTrigger) {
-      triggered++;
       const message = `${instrument.symbol} ${rule.conditionType} at ${formatObserved(observation)}`;
-      service.recordAlertEvent({
-        alertRuleId: rule.id,
-        instrumentId: instrument.id,
-        observedValue: observed,
-        status: "triggered",
-        message,
-        triggeredAt: observed.at,
-      });
-      service.updateAlertObservation({
+      const result = service.recordAlertCheckResult({
         ruleId: rule.id,
         observed,
         checkedAt: observed.at,
-        triggeredAt: observed.at,
+        trigger: {
+          expectedPreviousValue: previous,
+          expectedLastTriggeredAt: rule.lastTriggeredAt,
+          instrumentId: instrument.id,
+          message,
+          triggeredAt: observed.at,
+        },
       });
-      lines.push(`  TRIGGERED: ${message}`);
+      if (result.triggered) {
+        triggered++;
+        lines.push(`  TRIGGERED: ${message}`);
+      } else {
+        lines.push(`  ${instrument.symbol}: checked at ${formatObserved(observation)}`);
+      }
     } else {
-      service.updateAlertObservation({ ruleId: rule.id, observed, checkedAt: observed.at });
+      service.recordAlertCheckResult({ ruleId: rule.id, observed, checkedAt: observed.at });
       const seeded = previous == null ? "seeded" : "checked";
       lines.push(`  ${instrument.symbol}: ${seeded} at ${formatObserved(observation)}`);
     }

@@ -6,9 +6,15 @@ OpenCandle SHALL store alert rules and alert trigger events in SQLite.
 
 #### Scenario: Price alert rule is stored
 
-- **WHEN** a user creates a price crossing alert for a watchlisted instrument
+- **WHEN** a user creates a price crossing alert for a resolved instrument
 - **THEN** OpenCandle stores an enabled alert rule with condition type, condition version, condition JSON, scope, check cadence metadata, and cooldown metadata
 - **AND** the rule can be listed later without reading session history
+
+#### Scenario: Instrument alert creation does not mutate watchlists
+
+- **WHEN** a user creates an instrument-scoped alert for a resolved symbol that is not on any watchlist
+- **THEN** OpenCandle stores or reuses the canonical instrument row needed by the alert rule
+- **AND** it does not create a watchlist item as a side effect
 
 #### Scenario: Indicator alert rule is stored
 
@@ -82,7 +88,8 @@ OpenCandle SHALL support explicit alert checks independently of whether a backgr
 #### Scenario: Concurrent manual checks do not duplicate events
 
 - **WHEN** two manual alert checks evaluate the same due rule at nearly the same time
-- **THEN** OpenCandle serializes or deduplicates event creation for the same rule and observed crossing
+- **THEN** OpenCandle creates the trigger event only if the persisted previous observation and `last_triggered_at` still match the check's decision point
+- **AND** it stores the final observation atomically with event creation
 - **AND** it does not create duplicate user-visible alert events for the same observation
 
 #### Scenario: Unsupported condition version needs review

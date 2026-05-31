@@ -182,11 +182,13 @@ V1 alert scopes should use a small vocabulary:
 - `watchlist`: evaluate the instruments in one watchlist;
 - `portfolio`: reserved for portfolio-level rules, not required for V1 evaluation unless implemented.
 
+Creating an instrument-scoped alert should resolve and persist the canonical `instruments` row directly. It must not add the symbol to the default watchlist merely to obtain an `instrument_id`; watchlist membership is a user-visible collection choice, not an alerting prerequisite.
+
 V1 timeframes should be finite and provider-feasible, initially `quote`, `1d`, and common daily-bar windows needed for SMA/RSI conditions.
 
 Indicator alerts should compute locally from quote/OHLCV bars when possible. A provider that returns current quotes and history is enough for many SMA/RSI conditions. Provider-native indicator APIs can be useful, but should not be required by the data model.
 
-Crossing-style alerts require `last_observed_json`; otherwise OC will keep firing every check while the condition remains true.
+Crossing-style alerts require `last_observed_json`; otherwise OC will keep firing every check while the condition remains true. Manual or future heartbeat evaluation should persist a check result transactionally: event creation should be conditional on the stored `last_observed_json` and `last_triggered_at` still matching the observation used to decide the crossing, then update check metadata and the latest observation in the same transaction.
 
 Target and stop prices on watchlist items are V1 display/manual-check metadata. They are not background executable alerts until a V2 rule-authoring flow explicitly creates corresponding `alert_rules`.
 

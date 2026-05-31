@@ -68,6 +68,60 @@ describe("market-state alerts and reports", () => {
     });
   });
 
+  it("suppresses duplicate trigger events when the previous observation changed first", () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const rule = service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      cooldownSeconds: 3600,
+    });
+    service.updateAlertObservation({
+      ruleId: rule.id,
+      observed: { value: 240, field: "last_price", at: "2026-05-31T12:00:00.000Z" },
+      checkedAt: "2026-05-31T12:00:00.000Z",
+    });
+
+    const first = service.recordAlertCheckResult({
+      ruleId: rule.id,
+      observed: { value: 260, field: "last_price", at: "2026-05-31T12:01:00.000Z" },
+      checkedAt: "2026-05-31T12:01:00.000Z",
+      trigger: {
+        expectedPreviousValue: 240,
+        expectedLastTriggeredAt: null,
+        instrumentId: instrument.id,
+        message: "AAPL price_crosses_above at $260.00",
+        triggeredAt: "2026-05-31T12:01:00.000Z",
+      },
+    });
+    const duplicate = service.recordAlertCheckResult({
+      ruleId: rule.id,
+      observed: { value: 260, field: "last_price", at: "2026-05-31T12:01:00.000Z" },
+      checkedAt: "2026-05-31T12:01:00.000Z",
+      trigger: {
+        expectedPreviousValue: 240,
+        expectedLastTriggeredAt: null,
+        instrumentId: instrument.id,
+        message: "AAPL price_crosses_above at $260.00",
+        triggeredAt: "2026-05-31T12:01:00.000Z",
+      },
+    });
+
+    expect(first.triggered).toBe(true);
+    expect(duplicate.triggered).toBe(false);
+    expect(service.listAlertEvents()).toHaveLength(1);
+  });
+
   it("stores daily report template timezone and local time", () => {
     const template = service.createReportTemplate({
       name: "Morning watchlist",

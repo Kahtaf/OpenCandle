@@ -74,6 +74,8 @@
 - [x] 6.12 Verify alert creation UX captures scope, timeframe, condition, cooldown, and manual-check status for price/SMA/RSI-style rules.
 - [x] 6.13 Add tests for canonical V1 condition JSON shapes and unsupported condition-version rejection.
 - [x] 6.14 Add tests that report templates preserve timezone/local-time metadata for future scheduled execution.
+- [x] 6.15 Verify instrument-scoped alert creation does not add the symbol to any watchlist as a side effect.
+- [x] 6.16 Verify trigger-event creation is conditional on the persisted previous observation to suppress concurrent duplicate manual-check events.
 
 ## 7. Imports and Provenance
 
