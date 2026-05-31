@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
@@ -64,6 +64,15 @@ describe("watchlistTool", () => {
     });
     expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
     expect(existsSync(join(openCandleHome, "watchlist.json"))).toBe(false);
+  });
+
+  it("ignores pre-existing watchlist.json as a state source", async () => {
+    writeFileSync(join(openCandleHome, "watchlist.json"), JSON.stringify([{ symbol: "MSFT" }]));
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text.toLowerCase()).toContain("empty");
+    expect(result.content[0].text).not.toContain("MSFT");
   });
 
   it("updates an existing watchlist item instead of duplicating it", async () => {

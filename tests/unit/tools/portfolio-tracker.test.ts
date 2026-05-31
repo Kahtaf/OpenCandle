@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
@@ -55,6 +55,15 @@ describe("portfolioTrackerTool", () => {
     });
     expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
     expect(existsSync(join(openCandleHome, "portfolio.json"))).toBe(false);
+  });
+
+  it("ignores pre-existing portfolio.json as a state source", async () => {
+    writeFileSync(join(openCandleHome, "portfolio.json"), JSON.stringify([{ symbol: "VTI", shares: 2 }]));
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).toContain("Portfolio is empty");
+    expect(result.content[0].text).not.toContain("VTI");
   });
 
   it("views persisted holdings with live P&L", async () => {

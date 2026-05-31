@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -84,6 +84,15 @@ describe("recordPrediction", () => {
     });
 
     expect(prediction.symbol).toBe("AAPL");
+  });
+
+  it("ignores pre-existing predictions.json as a state source", async () => {
+    writeFileSync(join(openCandleHome, "predictions.json"), JSON.stringify([{ symbol: "MSFT" }]));
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("No predictions recorded yet.");
+    expect(result.content[0].text).not.toContain("MSFT");
   });
 
   it("returns prediction ids in tool details for GUI state-change metadata", async () => {
