@@ -993,6 +993,50 @@ export class MarketStateService {
     return { triggered, rule: this.getAlertRule(params.ruleId) };
   }
 
+  recordAlertUnavailable(params: {
+    ruleId: number;
+    instrumentId?: number | null;
+    reason: string;
+    checkedAt: string;
+  }): { event: AlertEventRecord; rule: AlertRuleRecord } {
+    const tx = this.db.transaction(() => {
+      const row = this.db.prepare("SELECT id FROM alert_rules WHERE id = ?").get(params.ruleId) as
+        | { id: number }
+        | undefined;
+      if (row == null) {
+        throw new Error(`alert rule ${params.ruleId} not found`);
+      }
+
+      const result = this.db
+        .prepare(
+          `INSERT INTO alert_events (
+             alert_rule_id, instrument_id, observed_value_json, triggered_at, status, message
+           )
+           VALUES (?, ?, ?, ?, 'unavailable', ?)`,
+        )
+        .run(
+          params.ruleId,
+          params.instrumentId ?? null,
+          JSON.stringify({ status: "unavailable", reason: params.reason, at: params.checkedAt }),
+          params.checkedAt,
+          `Alert unavailable: ${params.reason}`,
+        );
+
+      this.db
+        .prepare(
+          `UPDATE alert_rules
+           SET last_checked_at = ?,
+               updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(params.checkedAt, params.checkedAt, params.ruleId);
+
+      return Number(result.lastInsertRowid);
+    });
+    const eventId = tx();
+    return { event: this.getAlertEvent(eventId), rule: this.getAlertRule(params.ruleId) };
+  }
+
   listAlertEvents(): AlertEventRecord[] {
     const rows = this.db
       .prepare("SELECT * FROM alert_events ORDER BY triggered_at, id")

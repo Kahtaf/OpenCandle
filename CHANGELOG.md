@@ -25,6 +25,7 @@
 - GUI financial number fields now allow decimal values.
 - Instrument-scoped alert creation now resolves symbols without adding them to the default watchlist as a side effect.
 - Manual alert checks now persist trigger events conditionally with the observed rule state, suppressing duplicate events from concurrent checks.
+- Manual alert checks now persist unavailable/stale provider checks as durable alert events without overwriting the last valid observation.
 - Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
 - Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.

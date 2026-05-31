@@ -190,6 +190,8 @@ Indicator alerts should compute locally from quote/OHLCV bars when possible. A p
 
 Crossing-style alerts require `last_observed_json`; otherwise OC will keep firing every check while the condition remains true. Manual or future heartbeat evaluation should persist a check result transactionally: event creation should be conditional on the stored `last_observed_json` and `last_triggered_at` still matching the observation used to decide the crossing, then update check metadata and the latest observation in the same transaction.
 
+Unavailable, stale, or invalid provider data should still leave a durable check trail. The evaluator should update `last_checked_at` and record an `alert_events.status = "unavailable"` event carrying the reason, while preserving the previous valid `last_observed_json`.
+
 Target and stop prices on watchlist items are V1 display/manual-check metadata. They are not background executable alerts until a V2 rule-authoring flow explicitly creates corresponding `alert_rules`.
 
 ## 6. Runner Modes

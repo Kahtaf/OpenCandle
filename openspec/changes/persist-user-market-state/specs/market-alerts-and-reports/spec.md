@@ -71,7 +71,8 @@ OpenCandle SHALL preserve enough previous observation state to evaluate crossing
 #### Scenario: Invalid provider data does not trigger alerts
 
 - **WHEN** alert evaluation receives missing, stale beyond the rule's acceptable freshness, or zero-filled provider data
-- **THEN** OpenCandle records the check as unavailable or degraded
+- **THEN** OpenCandle updates the rule's `last_checked_at`
+- **AND** it records the check as an unavailable or degraded alert event with the reason
 - **AND** it does not create a trigger event
 - **AND** it does not overwrite `last_observed_json` with the invalid value
 

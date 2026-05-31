@@ -238,6 +238,12 @@ async function checkAlerts(service: MarketStateService): Promise<{
 
     const observation = await observeRule(rule, instrument.symbol);
     if (observation.status === "unavailable") {
+      service.recordAlertUnavailable({
+        ruleId: rule.id,
+        instrumentId: instrument.id,
+        reason: observation.reason,
+        checkedAt: new Date().toISOString(),
+      });
       lines.push(`  ${instrument.symbol}: unavailable (${observation.reason})`);
       continue;
     }

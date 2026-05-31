@@ -352,6 +352,19 @@ describe("alertsTool", () => {
     expect(checked.content[0].text).toMatch(/unavailable/i);
     expect(checked.content[0].text).toMatch(/no valid market data/i);
     expect(checked.details).toMatchObject({ checked: 1, triggered: 0 });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const [rule] = service.listAlertRules();
+    expect(rule.lastCheckedAt).not.toBeNull();
+    expect(rule.lastObservedJson).toBeNull();
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        status: "unavailable",
+        message: expect.stringMatching(/no valid market data/i),
+      }),
+    ]);
+    db.close();
   });
 
   it("does not seed or trigger on stale provider data", async () => {
@@ -373,8 +386,14 @@ describe("alertsTool", () => {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
     const [rule] = service.listAlertRules();
+    expect(rule.lastCheckedAt).not.toBeNull();
     expect(rule.lastObservedJson).toBeNull();
-    expect(service.listAlertEvents()).toHaveLength(0);
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        status: "unavailable",
+        message: expect.stringMatching(/stale/i),
+      }),
+    ]);
     db.close();
   });
 
