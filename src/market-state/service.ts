@@ -352,7 +352,7 @@ export class MarketStateService {
     const now = new Date().toISOString();
     this.db
       .prepare(
-        `INSERT INTO watchlists (name, is_default, created_at, updated_at)
+        `INSERT OR IGNORE INTO watchlists (name, is_default, created_at, updated_at)
          SELECT 'Default', 1, ?, ?
          WHERE NOT EXISTS (SELECT 1 FROM watchlists WHERE is_default = 1)`,
       )
@@ -368,7 +368,7 @@ export class MarketStateService {
     const now = new Date().toISOString();
     this.db
       .prepare(
-        `INSERT INTO portfolios (name, base_currency, is_default, created_at, updated_at)
+        `INSERT OR IGNORE INTO portfolios (name, base_currency, is_default, created_at, updated_at)
          SELECT 'Default', 'USD', 1, ?, ?
          WHERE NOT EXISTS (SELECT 1 FROM portfolios WHERE is_default = 1)`,
       )

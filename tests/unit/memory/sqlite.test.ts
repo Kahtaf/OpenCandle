@@ -53,6 +53,11 @@ describe("initDatabase", () => {
     db2.close();
   });
 
+  it("sets a busy timeout so concurrent writers can wait for normal locks", () => {
+    const busyTimeout = db.pragma("busy_timeout", { simple: true });
+    expect(busyTimeout).toBe(5000);
+  });
+
   it("creates parent directories for file-backed databases", () => {
     const base = join(tmpdir(), `vantage-sqlite-test-${Date.now()}`);
     const dbPath = join(base, "nested", "state.db");

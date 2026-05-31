@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 
@@ -31,6 +34,35 @@ describe("MarketStateService", () => {
     const portfolioCount = db.prepare("SELECT COUNT(*) AS n FROM portfolios").get() as { n: number };
     expect(watchlistCount.n).toBe(1);
     expect(portfolioCount.n).toBe(1);
+  });
+
+  it("keeps lazy default rows singular across multiple sqlite connections", () => {
+    const base = mkdtempSync(join(tmpdir(), "opencandle-market-state-defaults-"));
+    const dbPath = join(base, "state.db");
+    const firstDb = initDatabase(dbPath);
+    const secondDb = initDatabase(dbPath);
+
+    try {
+      const firstService = new MarketStateService(firstDb);
+      const secondService = new MarketStateService(secondDb);
+
+      const firstWatchlist = firstService.getDefaultWatchlist();
+      const secondWatchlist = secondService.getDefaultWatchlist();
+      const firstPortfolio = firstService.getDefaultPortfolio();
+      const secondPortfolio = secondService.getDefaultPortfolio();
+
+      expect(secondWatchlist.id).toBe(firstWatchlist.id);
+      expect(secondPortfolio.id).toBe(firstPortfolio.id);
+
+      const watchlistCount = firstDb.prepare("SELECT COUNT(*) AS n FROM watchlists").get() as { n: number };
+      const portfolioCount = firstDb.prepare("SELECT COUNT(*) AS n FROM portfolios").get() as { n: number };
+      expect(watchlistCount.n).toBe(1);
+      expect(portfolioCount.n).toBe(1);
+    } finally {
+      firstDb.close();
+      secondDb.close();
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 
   it("adds or updates one watchlist row per instrument", () => {
