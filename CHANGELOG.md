@@ -17,6 +17,9 @@
 - Portfolio adds now preserve provider quote currency and require explicit currency when a resolver cannot determine it, avoiding silent USD aggregation for foreign listings.
 - LLM-router acronym drops now also filter router slot symbols so dropped tokens cannot be reintroduced during workflow dispatch.
 - GUI market-state polling now preserves refreshed quote/P&L snapshots until a newer quote snapshot replaces them.
+- Prediction checks now treat stale cached quotes and zero-filled quote payloads as unavailable so expired predictions remain retryable until fresh data is available.
+- GUI instrument autocomplete now returns an empty candidate response on provider search failure instead of leaving the request unresolved.
+- Watchlist row alert shortcuts now require a saved target price and no longer create price-above-zero alerts.
 - Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
 - Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.

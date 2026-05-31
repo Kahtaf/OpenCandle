@@ -4,7 +4,7 @@ import { getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService, type PredictionRecord } from "../../market-state/service.js";
-import { resolveYahooInstrument } from "../../market-state/resolve.js";
+import { isZeroFilledQuote, resolveYahooInstrument } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 
 export interface Prediction {
@@ -288,7 +288,7 @@ export const predictionsTool: AgentTool<typeof params> = {
       await Promise.all(
         symbols.map(async (sym) => {
           const result = await wrapProvider("yahoo", () => getQuote(sym));
-          if (result.status === "ok") {
+          if (result.status === "ok" && !result.stale && !isZeroFilledQuote(result.data)) {
             priceMap.set(sym, result.data.price);
           }
         }),

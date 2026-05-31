@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MarketStatePage } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
+import {
+  buildWatchlistRowActions,
+  MarketStatePage,
+} from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
 describe("MarketStatePage rendering", () => {
   it("offers a skip-for-now path on the empty portfolio page", () => {
@@ -39,5 +42,36 @@ describe("MarketStatePage rendering", () => {
     }));
 
     expect(html).toContain("Alert Events");
+  });
+
+  it("does not create a watchlist alert without an explicit target", () => {
+    const invokeTool = () => {
+      throw new Error("unexpected invoke");
+    };
+
+    const actions = buildWatchlistRowActions({
+      symbol: "AAPL",
+      targetPrice: null,
+    }, invokeTool);
+
+    expect(actions[0]).toEqual(expect.objectContaining({
+      label: "Set target first",
+      disabled: true,
+    }));
+  });
+
+  it("creates a watchlist alert with the saved target as threshold", () => {
+    const calls = [];
+    const actions = buildWatchlistRowActions({
+      symbol: "AAPL",
+      targetPrice: 250,
+    }, (toolName, args) => calls.push({ toolName, args }));
+
+    actions[0].onClick();
+
+    expect(calls).toEqual([{
+      toolName: "manage_alerts",
+      args: { action: "create_price_above", symbol: "AAPL", threshold: 250 },
+    }]);
   });
 });

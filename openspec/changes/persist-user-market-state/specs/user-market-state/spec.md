@@ -181,6 +181,12 @@ OpenCandle SHALL provide a shared search/resolve path for adding instruments to 
 - **THEN** OpenCandle reports the resolution failure
 - **AND** it does not create a saved watchlist item, portfolio lot, or unresolved instrument
 
+#### Scenario: Autocomplete provider failure completes safely
+
+- **WHEN** GUI autocomplete search cannot reach the provider
+- **THEN** OpenCandle returns a controlled empty-candidate result with error context
+- **AND** the HTTP request does not hang or create saved state
+
 #### Scenario: Alias hit avoids re-resolution
 
 - **WHEN** the user adds a source-specific symbol that already exists in `instrument_aliases`
@@ -245,6 +251,12 @@ OpenCandle SHALL represent prediction status and check behavior consistently acr
 - **WHEN** a prediction check cannot obtain current quote data for an open prediction
 - **THEN** OpenCandle reports a data gap for that prediction
 - **AND** it leaves the prediction `open` with no resolved timestamp or final result so a later check can retry it
+
+#### Scenario: Stale or zero-filled prediction quote remains retryable
+
+- **WHEN** a prediction check receives stale cached quote data or a zero-filled quote payload
+- **THEN** OpenCandle treats that quote as unavailable for prediction scoring
+- **AND** it leaves the prediction `open` with no resolved timestamp or final result
 
 #### Scenario: Expired prediction is marked explicitly
 

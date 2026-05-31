@@ -185,13 +185,22 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
 export async function searchInstrumentCandidates(query: string): Promise<{
   query: string;
   candidates: Awaited<ReturnType<typeof searchYahooInstruments>>;
+  error?: string;
 }> {
   const trimmed = query.trim();
   if (!trimmed) return { query: "", candidates: [] };
-  return {
-    query: trimmed,
-    candidates: await searchYahooInstruments(trimmed),
-  };
+  try {
+    return {
+      query: trimmed,
+      candidates: await searchYahooInstruments(trimmed),
+    };
+  } catch (err) {
+    return {
+      query: trimmed,
+      candidates: [],
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<

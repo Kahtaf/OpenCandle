@@ -54,6 +54,12 @@ OpenCandle SHALL make saved watchlists usable as a daily working surface.
 - **THEN** the GUI and TUI present those fields as watchlist context or manual-check inputs
 - **AND** they do not imply that OpenCandle is continuously monitoring those levels
 
+#### Scenario: Row alert shortcut requires a target
+
+- **WHEN** a watchlist row has no target price
+- **THEN** the GUI row action does not create a price alert with an implicit zero threshold
+- **AND** the user must enter or save an explicit threshold before an alert rule is persisted
+
 #### Scenario: Watchlist prevents accidental invalid symbols
 
 - **WHEN** a user enters misspelled or ambiguous input

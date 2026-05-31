@@ -154,10 +154,7 @@ function Watchlists({ state, readOnly, invokeTool }) {
               <RowActions
                 key="actions"
                 disabled={readOnly}
-                actions={[
-                  ["Create alert", () => invokeTool("manage_alerts", { action: "create_price_above", symbol: item.symbol, threshold: item.targetPrice ?? 0 })],
-                  ["Remove", () => invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol })],
-                ]}
+                actions={buildWatchlistRowActions(item, invokeTool)}
               />,
             ])}
           />
@@ -671,15 +668,55 @@ function StatusBand({ tone = "default", children }) {
   );
 }
 
+export function buildWatchlistRowActions(item, invokeTool) {
+  const actions = [];
+  if (item.targetPrice == null) {
+    actions.push({
+      label: "Set target first",
+      disabled: true,
+      onClick: () => undefined,
+    });
+  } else {
+    actions.push({
+      label: "Create alert",
+      onClick: () => invokeTool("manage_alerts", {
+        action: "create_price_above",
+        symbol: item.symbol,
+        threshold: item.targetPrice,
+      }),
+    });
+  }
+  actions.push({
+    label: "Remove",
+    onClick: () => invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol }),
+  });
+  return actions;
+}
+
 function RowActions({ actions, disabled }) {
   return (
     <div className="flex justify-end gap-1">
-      {actions.map(([label, onClick]) => (
-        <Button key={label} type="button" variant="ghost" size="xs" disabled={disabled} onClick={onClick}>
-          {label}
-        </Button>
+      {actions.map((action) => (
+        <RowActionButton key={Array.isArray(action) ? action[0] : action.label} action={action} disabled={disabled} />
       ))}
     </div>
+  );
+}
+
+function RowActionButton({ action, disabled }) {
+  const normalized = Array.isArray(action)
+    ? { label: action[0], onClick: action[1], disabled: false }
+    : action;
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="xs"
+      disabled={disabled || normalized.disabled}
+      onClick={normalized.onClick}
+    >
+      {normalized.label}
+    </Button>
   );
 }
 

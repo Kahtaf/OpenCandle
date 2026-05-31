@@ -13,6 +13,7 @@ import { httpGet } from "../../../src/infra/http-client.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { cache } from "../../../src/infra/cache.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -158,6 +159,8 @@ describe("predictionsTool check", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cache.clear();
+    cache.consumeStaleFlag();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-predictions-check-test-"));
@@ -173,6 +176,8 @@ describe("predictionsTool check", () => {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
     rmSync(openCandleHome, { recursive: true, force: true });
+    cache.clear();
+    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -216,6 +221,84 @@ describe("predictionsTool check", () => {
 
   it("keeps expired predictions open when quotes are temporarily unavailable", async () => {
     vi.mocked(getQuote).mockRejectedValueOnce(new Error("temporary outage"));
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("0 resolved, 1 open");
+    expect(result.content[0].text).toContain("quote unavailable");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("open");
+    expect(prediction.resolvedAt).toBeNull();
+    expect(prediction.resultJson).toBeNull();
+  });
+
+  it("keeps expired predictions open when quote data is stale", async () => {
+    cache.set("test-stale-prediction-quote", quote("AAPL", 200), -1);
+    cache.getStale("test-stale-prediction-quote", 60_000);
+    vi.mocked(getQuote).mockResolvedValueOnce(quote("AAPL", 200));
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("0 resolved, 1 open");
+    expect(result.content[0].text).toContain("quote unavailable");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("open");
+    expect(prediction.resolvedAt).toBeNull();
+    expect(prediction.resultJson).toBeNull();
+  });
+
+  it("keeps expired predictions open when quote data is zero-filled", async () => {
+    vi.mocked(getQuote).mockResolvedValueOnce(quote("AAPL", 0, {
+      volume: 0,
+      week52High: 0,
+      week52Low: 0,
+    }));
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
     service.recordPrediction({

@@ -33,6 +33,7 @@
 - [x] 4.5 Add tests proving zero-filled Yahoo chart/quote responses are rejected as invalid instruments before insertion.
 - [x] 4.6 Define non-interactive behavior for ambiguous candidate results, returning structured candidates instead of mutating state.
 - [x] 4.7 Verify provider currency is preserved and unknown portfolio lot currency requires explicit input instead of silently defaulting to USD.
+- [x] 4.8 Verify GUI autocomplete provider failures return controlled empty-candidate responses instead of hanging.
 
 ## 5. TUI and GUI Parity
 
@@ -96,6 +97,7 @@
 - [x] 8.10 Keep V1 collection management scoped to default watchlist/portfolio unless create/rename/switch/copy/move flows are implemented with GUI/TUI parity.
 - [x] 8.11 Verify mixed-currency portfolio rows are disclosed and excluded from base-currency totals unless FX conversion is explicitly available.
 - [x] 8.12 Verify quote-unavailable prediction checks surface a data gap and keep expired open predictions retryable.
+- [x] 8.13 Verify stale/zero-filled quotes do not score predictions and watchlist row alert shortcuts require an explicit target threshold.
 
 ## 9. Verification
 

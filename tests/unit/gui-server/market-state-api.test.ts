@@ -100,6 +100,16 @@ describe("market-state API helpers", () => {
     });
   });
 
+  it("returns an empty autocomplete result when provider search fails", async () => {
+    vi.mocked(searchYahooInstruments).mockRejectedValueOnce(new Error("rate limited"));
+
+    await expect(searchInstrumentCandidates(" apple ")).resolves.toEqual({
+      query: "apple",
+      candidates: [],
+      error: "rate limited",
+    });
+  });
+
   it("builds explicit quote snapshots for watchlist and portfolio rows", async () => {
     const db = initDatabase(":memory:");
     const service = new MarketStateService(db);
