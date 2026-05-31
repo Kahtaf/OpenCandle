@@ -28,4 +28,16 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain("Report Templates");
   });
+
+  it("renders alert event history as durable alert state", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "alerts",
+      role: "writer",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+    }));
+
+    expect(html).toContain("Alert Events");
+  });
 });

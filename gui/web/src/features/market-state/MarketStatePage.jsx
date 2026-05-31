@@ -312,6 +312,22 @@ function Alerts({ state, readOnly, invokeTool }) {
           />
         )}
       </Panel>
+      <Panel title="Alert Events" count={state.alertEvents.length}>
+        {state.alertEvents.length === 0 ? (
+          <EmptyState icon={Bell} title="No alert events" action="Run a manual check after creating alerts to record events." />
+        ) : (
+          <DataTable
+            columns={["Triggered", "Rule", "Instrument", "Status", "Message"]}
+            rows={state.alertEvents.map((event) => [
+              shortDate(event.triggeredAt),
+              `#${event.alertRuleId}`,
+              event.instrumentId ? `#${event.instrumentId}` : "N/A",
+              event.status,
+              event.message || "N/A",
+            ])}
+          />
+        )}
+      </Panel>
     </>
   );
 }
