@@ -1,6 +1,6 @@
 ## 1. Establish LLM router baseline (gating evidence)
 
-- [ ] 1.1 Run `npm run eval:router-live` with `ANTHROPIC_API_KEY` present against the current 18-fixture suite. Record per-fixture pass/fail, latency p50/p95, and total cost. Save the run output to `tests/fixtures/router/eval-baselines/<date>.txt`. Note: a prior run produced 1/18 passing solely because credentials were missing; that run is inadmissible.
+- [ ] 1.1 Run `npm run eval:router-live` with `ANTHROPIC_API_KEY` present against the current 26-fixture suite. Record per-fixture pass/fail, latency p50/p95, and total cost. Save the run output to `tests/fixtures/router/eval-baselines/<date>.txt`. Note: local runs without `ANTHROPIC_API_KEY` are inadmissible and require keeping or reverting the default to `rules`.
 - [ ] 1.2 For each failing fixture from 1.1, classify: (a) router defect — open a sub-task to fix; (b) fixture defect — record the corrected expected output with rationale in a PR comment; (c) accepted known-failure — document in `BASELINE.json` with reason. The acceptance gate (≥90% pass) is computed after this triage.
 - [ ] 1.3 Decide per-prompt: is 1500 ms p95 achievable on `claude-haiku-4-5`? If not, document in design.md "Risks / Trade-offs" and either widen the budget or pick a faster model.
 
@@ -52,10 +52,10 @@
 
 ## 7. Verify or Revert the Default
 
-- [ ] 7.1 Verify `src/config.ts::resolveRouterMode` currently defaults to `"llm"` and documents `OPENCANDLE_ROUTER_MODE=rules` as the rollback flag.
-- [ ] 7.2 Gate keeping the `"llm"` default on tasks 1, 2, 3, 4, 5, 6 all green AND the acceptance gate from 1.1/1.2 met (≥90% pass-rate, p95 ≤ 1500ms, cost ≤ $0.005/call). If any condition slips, revert the default to `"rules"` before merge and open a follow-up LLM-default promotion change.
-- [ ] 7.3 Update `AGENTS.md` ENV FLAGS section: describe the new default and the rollback flag.
-- [ ] 7.4 Update `CHANGELOG.md` (Unreleased): one-line entry crediting the verified LLM-router default and the silent-zero/disambiguation safety nets, or noting that the default was reverted if the gate failed.
+- [x] 7.1 Verify `src/config.ts::resolveRouterMode` defaults to `"rules"` after the credentialed acceptance gate could not be completed; document `OPENCANDLE_ROUTER_MODE=llm` as the opt-in flag.
+- [x] 7.2 Gate keeping the `"llm"` default on tasks 1, 2, 3, 4, 5, 6 all green AND the acceptance gate from 1.1/1.2 met (≥90% pass-rate, p95 ≤ 1500ms, cost ≤ $0.005/call). If any condition slips, revert the default to `"rules"` before merge and open a follow-up LLM-default promotion change.
+- [x] 7.3 Update `AGENTS.md` ENV FLAGS section: describe the new default and the rollback flag.
+- [x] 7.4 Update `CHANGELOG.md` (Unreleased): one-line entry crediting the verified LLM-router default and the silent-zero/disambiguation safety nets, or noting that the default was reverted if the gate failed.
 
 ## 8. Live verification (real-runtime, gating per CLAUDE.md §5)
 

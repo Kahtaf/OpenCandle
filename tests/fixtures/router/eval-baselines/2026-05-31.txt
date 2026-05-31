@@ -1,0 +1,166 @@
+
+> opencandle@0.5.0 eval:router-live
+> tsx tests/scripts/run-live-router-eval.ts
+
+Running live router eval against 26 fixtures with model=claude-haiku-4-5...
+
+FAIL 001-portfolio-builder-aggressive.json (93ms)
+  .entities.timeHorizon: expected "3y", got undefined
+  .slots.budget: expected {"value":25000,"source":"user","confidence":"high"}, got undefined
+  .slots.risk_profile: expected {"value":"aggressive","source":"user","confidence":"high"}, got undefined
+  .slots.time_horizon: expected {"value":"3y","source":"user","confidence":"high"}, got undefined
+  .preference_updates.0: expected {"key":"risk_profile","value":"aggressive","confidence":"high","source":"inferred"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected portfolio_builder after router validation failure"}
+FAIL 002-portfolio-builder-diversified.json (2ms)
+  .slots.budget: expected {"value":50000,"source":"user","confidence":"high"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected portfolio_builder after router validation failure"}
+FAIL 003-options-screener-calls.json (1ms)
+  .entities.symbols.1: expected undefined, got "DTE"
+  .entities.dteHint: expected "month", got "30-45 days"
+  .slots.symbol: expected {"value":"NVDA","source":"user","confidence":"high"}, got undefined
+  .slots.direction: expected {"value":"bullish","source":"user","confidence":"high"}, got undefined
+  .slots.dte_target: expected {"value":"25_to_45_days","source":"user","confidence":"high"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected options_screener after router validation failure"}
+FAIL 004-options-missing-symbol.json (0ms)
+  .routeKind: expected "clarification", got "agent_task"
+  .workflow: expected "options_screener", got undefined
+  .slots.direction: expected {"value":"bullish","source":"user","confidence":"high"}, got undefined
+  .missing_required.0: expected "symbol", got undefined
+  .tool_bundles.0: expected "clarification", got "core_market"
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 005-compare-assets.json (1ms)
+  .slots.symbols: expected {"value":["AAPL","MSFT"],"source":"user","confidence":"high"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected compare_assets after router validation failure"}
+FAIL 006-fallback-entry-levels.json (0ms)
+  .entities.dteHint: expected undefined, got "month"
+  .slots.symbol: expected {"value":"ASTS","source":"user","confidence":"high"}, got undefined
+  .slots.time_horizon: expected {"value":"6mo","source":"user","confidence":"high"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 007-fallback-data-fetch.json (0ms)
+  .slots.symbol: expected {"value":"AAPL","source":"user","confidence":"high"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 008-single-asset-analysis.json (1ms)
+  .slots.symbol: expected {"value":"TSLA","source":"user","confidence":"high"}, got undefined
+  .diagnostics.0.code: expected "route_kind_corrected_to_agent_task", got "router_validation_failed"
+  .diagnostics.0.message: expected "single_asset_analysis is not a dispatchable workflow", got "router validation failed persistently; emitted minimal fallback"
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected single_asset_analysis after router validation failure"}
+FAIL 009-general-qa.json (0ms)
+  .diagnostics.0.code: expected "route_kind_corrected_to_agent_task", got "router_validation_failed"
+  .diagnostics.0.message: expected "general_finance_qa is not a dispatchable workflow", got "router validation failed persistently; emitted minimal fallback"
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected general_finance_qa after router validation failure"}
+FAIL 010-preference-from-memory.json (0ms)
+  .slots.budget: expected {"value":30000,"source":"user","confidence":"high"}, got undefined
+  .slots.risk_profile: expected {"value":"conservative","source":"preference","confidence":"high"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected portfolio_builder after router validation failure"}
+FAIL 011-fallback-missing-symbol.json (0ms)
+  .routeKind: expected "clarification", got "agent_task"
+  .missing_required.0: expected "symbol", got undefined
+  .tool_bundles.0: expected "clarification", got "core_market"
+  .tool_bundles.1: expected undefined, got "macro"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected general_finance_qa after router validation failure"}
+  .workflow: expected undefined, got "general_finance_qa"
+FAIL 012-preference-write-etf.json (0ms)
+  .routeKind: expected "workflow_dispatch", got "agent_task"
+  .route: expected "workflow", got "fallback"
+  .workflow: expected "portfolio_builder", got "watchlist_or_tracking"
+  .slots.budget: expected {"value":20000,"source":"user","confidence":"high"}, got undefined
+  .slots.asset_scope: expected {"value":"etf_focused","source":"user","confidence":"high"}, got undefined
+  .preference_updates.0: expected {"key":"asset_scope","value":"etf_focused","confidence":"high","source":"inferred"}, got undefined
+  .tool_bundles.1: expected "macro", got "clarification"
+  .tool_bundles.2: expected "sentiment", got undefined
+  .tool_bundles.3: expected "clarification", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected watchlist_or_tracking after router validation failure"}
+FAIL 013-coreference-price.json (0ms)
+  .entities.symbols.0: expected "NVDA", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 014-carried-budget.json (0ms)
+  .routeKind: expected "workflow_dispatch", got "agent_task"
+  .route: expected "workflow", got "fallback"
+  .workflow: expected "portfolio_builder", got undefined
+  .entities.budget: expected 20000, got undefined
+  .slots.risk_profile: expected {"value":"aggressive","source":"user","confidence":"high"}, got undefined
+  .preference_updates.0: expected {"key":"risk_profile","value":"aggressive","confidence":"high","source":"inferred"}, got undefined
+  .tool_bundles.1: expected "macro", got undefined
+  .tool_bundles.2: expected "sentiment", got undefined
+  .tool_bundles.3: expected "clarification", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 015-topic-shift.json (0ms)
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 016-ticker-correction.json (1ms)
+  .workflow: expected "single_asset_analysis", got undefined
+  .slots.symbol: expected {"value":"TSLAQ","source":"user","confidence":"high"}, got undefined
+  .tool_bundles.1: expected "options", got undefined
+  .tool_bundles.2: expected "sentiment", got undefined
+  .tool_bundles.3: expected "sec", got undefined
+  .tool_bundles.4: expected "clarification", got undefined
+  .diagnostics.0.code: expected "route_kind_corrected_to_agent_task", got "router_validation_failed"
+  .diagnostics.0.message: expected "single_asset_analysis is not a dispatchable workflow", got "router validation failed persistently; emitted minimal fallback"
+FAIL 017-pref-conflict.json (0ms)
+  .slots.risk_profile: expected {"value":"conservative","source":"user","confidence":"high"}, got undefined
+  .preference_updates.0: expected {"key":"risk_profile","value":"conservative","confidence":"high","source":"inferred"}, got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 018-dollar-phrase.json (0ms)
+  .entities.symbols.1: expected "SPY", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 019-iv-as-volatility.json (0ms)
+  .routeKind: expected "clarification", got "agent_task"
+  .workflow: expected "compare_assets", got undefined
+  .missing_required.0: expected "symbols", got undefined
+  .tool_bundles.0: expected "clarification", got "core_market"
+  .diagnostics.0.code: expected "symbol_dropped", got "router_validation_failed"
+  .diagnostics.0.message: expected "IV dropped: no positive ticker signal", got "router validation failed persistently; emitted minimal fallback"
+  .diagnostics.0.details: expected {"token":"IV","reason":"no positive ticker signal","signalsChecked":["cashtag","local ticker phrase"],"source":"llm"}, got undefined
+  .diagnostics.1: expected {"code":"route_kind_corrected_to_clarification","message":"missing required slots: symbols"}, got undefined
+FAIL 020-sec-as-regulator.json (0ms)
+  .workflow: expected "general_finance_qa", got undefined
+  .tool_bundles.1: expected "macro", got undefined
+  .tool_bundles.2: expected "sentiment", got undefined
+  .tool_bundles.3: expected "sec", got undefined
+  .tool_bundles.4: expected "clarification", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 021-fed-as-bank.json (0ms)
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected general_finance_qa after router validation failure"}
+FAIL 022-cpi-as-metric.json (0ms)
+  .workflow: expected "general_finance_qa", got undefined
+  .tool_bundles.1: expected "macro", got undefined
+  .tool_bundles.2: expected "sentiment", got undefined
+  .tool_bundles.3: expected "sec", got undefined
+  .tool_bundles.4: expected "clarification", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 023-iv-with-positive-signal.json (1ms)
+  .workflow: expected "single_asset_analysis", got undefined
+  .tool_bundles.1: expected "options", got undefined
+  .tool_bundles.2: expected "sentiment", got undefined
+  .tool_bundles.3: expected "sec", got undefined
+  .tool_bundles.4: expected "clarification", got undefined
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+FAIL 024-iv-bare-list-dropped.json (0ms)
+  .diagnostics.0.code: expected "symbol_dropped", got "router_validation_failed"
+  .diagnostics.0.message: expected "IV dropped: no positive ticker signal", got "router validation failed persistently; emitted minimal fallback"
+  .diagnostics.0.details: expected {"token":"IV","reason":"no positive ticker signal","signalsChecked":["cashtag","local ticker phrase"],"source":"llm"}, got undefined
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected compare_assets after router validation failure"}
+FAIL 025-iv-local-ticker-phrase.json (0ms)
+  .entities.symbols.0: expected "KO", got "IV"
+  .entities.symbols.1: expected "IV", got "KO"
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+  .diagnostics.1: expected undefined, got {"code":"deterministic_failure_recovery","message":"deterministic classifier selected compare_assets after router validation failure"}
+FAIL 026-pass-through-non-finance.json (0ms)
+  .routeKind: expected "pass_through", got "agent_task"
+  .tool_bundles.0: expected undefined, got "core_market"
+  .diagnostics.0: expected undefined, got {"code":"router_validation_failed","message":"router validation failed persistently; emitted minimal fallback"}
+
+--- Summary ---
+pass: 0/26 (passRate=0.000)
+latency p50=0ms p95=2ms
+failures: 001-portfolio-builder-aggressive.json, 002-portfolio-builder-diversified.json, 003-options-screener-calls.json, 004-options-missing-symbol.json, 005-compare-assets.json, 006-fallback-entry-levels.json, 007-fallback-data-fetch.json, 008-single-asset-analysis.json, 009-general-qa.json, 010-preference-from-memory.json, 011-fallback-missing-symbol.json, 012-preference-write-etf.json, 013-coreference-price.json, 014-carried-budget.json, 015-topic-shift.json, 016-ticker-correction.json, 017-pref-conflict.json, 018-dollar-phrase.json, 019-iv-as-volatility.json, 020-sec-as-regulator.json, 021-fed-as-bank.json, 022-cpi-as-metric.json, 023-iv-with-positive-signal.json, 024-iv-bare-list-dropped.json, 025-iv-local-ticker-phrase.json, 026-pass-through-non-finance.json

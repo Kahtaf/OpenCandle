@@ -82,6 +82,9 @@ export const cache = new Cache();
 - Use `cache` and `rateLimiter` from `src/infra/` for all external calls.
 - Tests mock `globalThis.fetch` with fixture JSON. No live API calls in unit tests.
 
+## ENV FLAGS
+- `OPENCANDLE_ROUTER_MODE` defaults to `rules`. Set `OPENCANDLE_ROUTER_MODE=llm` to opt into the LLM router while the live router acceptance gate is incomplete.
+
 ## BOUNDARIES
 
 **Always (do autonomously):**

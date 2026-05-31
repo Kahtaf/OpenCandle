@@ -126,10 +126,10 @@ const PLANNING_BEHAVIOR_MODES = [
 
 function resolveRouterMode(): RouterMode {
   const raw = process.env.OPENCANDLE_ROUTER_MODE;
-  if (raw === undefined || raw === "") return "llm";
+  if (raw === undefined || raw === "") return "rules";
   if (raw === "rules" || raw === "llm") return raw;
   throw new Error(
-    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "llm" (default) or "rules".`,
+    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "rules" (default) or "llm".`,
   );
 }
 

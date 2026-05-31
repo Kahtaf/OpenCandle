@@ -94,7 +94,7 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 | p95 router latency | ≤ 1500 ms | Adds at most one network round-trip's latency to the user's perceived response time. |
 | Cost per router call | ≤ $0.005 | claude-haiku-4-5 input+output for a typical fixture is well under this. Tracks regressions if we widen the prompt. |
 
-**Process.** Task 1.1 establishes the current baseline with credentials present. Task 1.2 lists which fixtures (if any) fail and decides per-fixture: fix the router, fix the fixture (if recorded answer is wrong), or accept as known-failure with documented reason. The current branch already defaults `routerMode` to `llm`; Task 7 verifies that this default may remain. If the gate is not green, Task 7 reverts the default to `rules` and leaves the LLM default promotion to a later change.
+**Process.** Task 1.1 establishes the current baseline with credentials present. Task 1.2 lists which fixtures (if any) fail and decides per-fixture: fix the router, fix the fixture (if recorded answer is wrong), or accept as known-failure with documented reason. A local run without `ANTHROPIC_API_KEY` is inadmissible, so Task 7 keeps `routerMode` defaulting to `rules` and leaves the LLM default promotion to a later change.
 
 **Concrete starting evidence.** A run on this branch produced `1/18` pass-rate and 0–40ms latencies — but with no `ANTHROPIC_API_KEY` in the shell, so the router fell through to the deterministic minimal-fallback path on every call. That run is documented as inadmissible evidence in Task 1.1.
 
@@ -112,7 +112,7 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 
 ## Migration Plan
 
-1. Land acronym/provider/pre-flight/correlation hardening with the current branch default noted explicitly.
+1. Land acronym/provider/pre-flight/correlation hardening with `rules` as the default and `llm` opt-in.
 2. Run `eval:router-live` with credentials; record baseline. (Task 1.1)
 3. Triage failures, fix or document. (Task 1.2)
 4. If all three numeric targets are green for one continuous verification run, keep `src/config.ts` defaulting to `llm`. If not, revert the default to `rules` before merge and open a follow-up LLM-default promotion change.
