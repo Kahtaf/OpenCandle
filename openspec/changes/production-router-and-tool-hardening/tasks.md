@@ -6,7 +6,7 @@
 
 ## 2. Acronym disambiguation post-filter
 
-- [x] 2.1 Create `src/routing/symbol-disambiguator.ts` exporting `FINANCE_ACRONYM_DICTIONARY: Set<string>` and `disambiguateSymbols(candidates: string[], rawInput: string): { kept: string[]; dropped: Array<{ token: string; reason: string }> }`. Initial dictionary: IV, HV, ITM, OTM, ATM, IPO, SEC, FED, FOMC, IRS, ECB, BOE, BOJ, GDP, CPI, PPI, FX, MA, NDA. Keep separate from `COMMON_WORDS` so the regex extractor can stay narrow.
+- [x] 2.1 Create `src/routing/symbol-disambiguator.ts` exporting `FINANCE_ACRONYM_DICTIONARY: Set<string>` and `disambiguateSymbols(candidates: string[], rawInput: string): { kept: string[]; dropped: Array<{ token: string; reason: string }> }`. Initial dictionary: IV, HV, ITM, OTM, ATM, IPO, SEC, FED, FOMC, IRS, ECB, BOE, BOJ, GDP, CPI, PPI, FX, NDA. Keep separate from `COMMON_WORDS` so the regex extractor can stay narrow; do not blanket-drop the common Mastercard ticker `MA`.
 - [x] 2.2 Implement signal rules per design.md Decision 1: keep token only if `$<token>` appears in raw input (case-insensitive), or if a local per-token phrase marks it as a ticker/stock/symbol (examples: "IV ticker", "ticker IV", "IV stock", "symbol IV"). Bare comma/and-list adjacency is not a positive signal.
 - [x] 2.3 Wire into `src/routing/router.ts` after both branches converge on `entities.symbols`. Apply to rules and LLM paths uniformly.
 - [x] 2.4 Emit an `opencandle-symbol-dropped` custom entry per drop containing `{ token, reason, signalsChecked, source: "rules" | "llm" }`.

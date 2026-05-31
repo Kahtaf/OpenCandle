@@ -16,7 +16,6 @@ export const FINANCE_ACRONYM_DICTIONARY = new Set([
   "CPI",
   "PPI",
   "FX",
-  "MA",
   "NDA",
 ]);
 

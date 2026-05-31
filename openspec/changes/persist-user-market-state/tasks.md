@@ -52,6 +52,7 @@
 - [x] 5.15 Verify open GUI pages refresh or invalidate stale market-state rows after TUI mutations without requiring restart.
 - [x] 5.16 Verify concurrent same-row edits return/refetch the final committed SQLite row and do not leave either surface showing stale saved state.
 - [x] 5.17 Verify deferred workflows requested from TUI, such as imports or minute monitoring, do not create GUI-invisible partial state.
+- [x] 5.18 Verify row-level portfolio removal targets a selected lot id and does not remove other same-symbol lots by default.
 
 ## 6. Alerts and Reports
 
@@ -92,6 +93,7 @@
 - [x] 8.9 Ensure manual report generation shows the result immediately and stores a report-run history row visible from GUI and TUI.
 - [x] 8.10 Keep V1 collection management scoped to default watchlist/portfolio unless create/rename/switch/copy/move flows are implemented with GUI/TUI parity.
 - [x] 8.11 Verify mixed-currency portfolio rows are disclosed and excluded from base-currency totals unless FX conversion is explicitly available.
+- [x] 8.12 Verify quote-unavailable prediction checks surface a data gap and keep expired open predictions retryable.
 
 ## 9. Verification
 

@@ -78,6 +78,12 @@ OpenCandle's GUI SHALL expose durable market-state domains through persistent na
 - **THEN** the page shows the default portfolio in V1
 - **AND** supports adding, removing, and updating lots through the shared resolver and market-state service
 
+#### Scenario: Portfolio row removal targets one lot
+
+- **WHEN** the user removes a visible portfolio row from the GUI
+- **THEN** OpenCandle removes the selected `portfolio_lot.id`
+- **AND** it does not remove other lots for the same symbol unless the user chose an explicit remove-all-symbol action
+
 #### Scenario: Alerts and reports pages manage durable automation state
 
 - **WHEN** the user opens Alerts or Reports
@@ -99,6 +105,12 @@ OpenCandle's TUI SHALL expose workflows equivalent to the GUI market-state pages
 - **WHEN** a user works only in the TUI
 - **THEN** they can list, add, remove, update, and check watchlist and portfolio state where supported by V1
 - **AND** they can record/check predictions, run manual alert checks, and run daily reports where supported by V1
+
+#### Scenario: TUI can address a specific portfolio lot
+
+- **WHEN** a portfolio contains multiple lots for the same symbol
+- **THEN** the TUI or agent tool can remove or update a single selected lot by lot id
+- **AND** symbol-level removal is treated as an explicit bulk action rather than the default row action
 
 #### Scenario: TUI parity is semantic rather than visual
 

@@ -24,7 +24,7 @@ The system SHALL default `OPENCANDLE_ROUTER_MODE` to `"rules"` until a credentia
 
 After entity extraction (in either router mode), the system SHALL apply an acronym disambiguation post-filter to `entities.symbols` that removes tokens belonging to a finance-acronym dictionary unless at least one positive ticker signal is present in the raw user input.
 
-The dictionary SHALL include at minimum: IV, HV, ITM, OTM, ATM, IPO, SEC, FED, FOMC, IRS, ECB, BOE, BOJ, GDP, CPI, PPI, FX, MA, NDA.
+The dictionary SHALL include at minimum: IV, HV, ITM, OTM, ATM, IPO, SEC, FED, FOMC, IRS, ECB, BOE, BOJ, GDP, CPI, PPI, FX, NDA. `MA` SHALL NOT be blanket-dropped because it is the common Mastercard ticker; moving-average or M&A usage SHALL be handled with context-specific rules instead.
 
 A positive ticker signal is defined as one of:
 - The raw input contains `$<token>` (case-insensitive),
@@ -68,6 +68,16 @@ Bare comma-list or "and"-list adjacency is not a positive ticker signal.
 - **WHEN** the LLM router emits `entities.symbols: ["IV","ASTS"]` for input "Compare these assets: IV, ASTS"
 - **THEN** the post-filter still removes IV before the output reaches the main agent
 - **AND** the same drop logic and observability entries apply identically to rules-mode extraction
+
+#### Scenario: MA ticker survives plain comparison
+
+- **WHEN** the user says "compare V and MA"
+- **THEN** OpenCandle SHALL retain `MA` as the Mastercard ticker
+
+#### Scenario: MA moving-average usage is not a ticker
+
+- **WHEN** the user says "compare the 20 day MA and 50 day MA for SPY"
+- **THEN** OpenCandle SHALL NOT treat `MA` as a ticker symbol
 
 ### Requirement: Numeric Acceptance Gate for Promoting LLM Default
 

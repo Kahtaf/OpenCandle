@@ -214,6 +214,42 @@ describe("predictionsTool check", () => {
     }));
   });
 
+  it("keeps expired predictions open when quotes are temporarily unavailable", async () => {
+    vi.mocked(getQuote).mockRejectedValueOnce(new Error("temporary outage"));
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("0 resolved, 1 open");
+    expect(result.content[0].text).toContain("quote unavailable");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("open");
+    expect(prediction.resolvedAt).toBeNull();
+    expect(prediction.resultJson).toBeNull();
+  });
+
   it("cancels an open prediction without scoring it later", async () => {
     const recordResult = await predictionsTool.execute("test", {
       action: "record",

@@ -225,7 +225,7 @@ function Portfolios({ state, readOnly, invokeTool, navigate }) {
                 <RowActions
                   key="actions"
                   disabled={readOnly}
-                  actions={[["Remove", () => invokeTool("track_portfolio", { action: "remove", symbol: lot.symbol })]]}
+                  actions={[["Remove", () => invokeTool("track_portfolio", { action: "remove", lot_id: lot.id })]]}
                 />,
               ];
             })}

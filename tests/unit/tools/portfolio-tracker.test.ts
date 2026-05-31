@@ -310,6 +310,47 @@ describe("portfolioTrackerTool", () => {
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
     expect(view.content[0].text.toLowerCase()).toContain("empty");
   });
+
+  it("removes only the selected lot when lot_id is supplied", async () => {
+    const first = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    const second = await portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 3,
+      avg_cost: 240,
+    });
+
+    const firstLotId = (first.details as { id: number }).id;
+    const secondLotId = (second.details as { id: number }).id;
+    const remove = await portfolioTrackerTool.execute("test", {
+      action: "remove",
+      lot_id: firstLotId,
+    });
+
+    expect(remove.content[0].text).toContain(`Removed VTI portfolio lot ${firstLotId}`);
+    expect(remove.details).toMatchObject({
+      id: firstLotId,
+      symbol: "VTI",
+    });
+
+    const view = await portfolioTrackerTool.execute("test", { action: "view" });
+    expect(view.details).toMatchObject({
+      positions: [
+        expect.objectContaining({
+          symbol: "VTI",
+          shares: 3,
+          avgCost: 240,
+        }),
+      ],
+    });
+    expect((view.details as { positions: unknown[] }).positions).toHaveLength(1);
+    expect(secondLotId).not.toBe(firstLotId);
+  });
 });
 
 function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {

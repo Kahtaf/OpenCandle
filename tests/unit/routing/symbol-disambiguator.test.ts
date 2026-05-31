@@ -34,6 +34,13 @@ describe("disambiguateSymbols", () => {
     expect(result.dropped).toEqual([]);
   });
 
+  it("does not blanket-drop the common Mastercard ticker MA", () => {
+    const result = disambiguateSymbols(["V", "MA"], "compare V and MA");
+
+    expect(result.kept).toEqual(["V", "MA"]);
+    expect(result.dropped).toEqual([]);
+  });
+
   it("covers the initial finance acronym dictionary", () => {
     expect([...FINANCE_ACRONYM_DICTIONARY].sort()).toEqual([
       "ATM",
@@ -50,7 +57,6 @@ describe("disambiguateSymbols", () => {
       "IRS",
       "ITM",
       "IV",
-      "MA",
       "NDA",
       "OTM",
       "PPI",

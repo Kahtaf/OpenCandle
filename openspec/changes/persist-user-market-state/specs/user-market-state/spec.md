@@ -228,11 +228,23 @@ OpenCandle SHALL represent prediction status and check behavior consistently acr
 - **THEN** OpenCandle compares each open prediction against current quote data when available
 - **AND** it reports unresolved predictions without fabricating results when quote data is unavailable
 
+#### Scenario: Quote-unavailable prediction remains retryable
+
+- **WHEN** a prediction check cannot obtain current quote data for an open prediction
+- **THEN** OpenCandle reports a data gap for that prediction
+- **AND** it leaves the prediction `open` with no resolved timestamp or final result so a later check can retry it
+
 #### Scenario: Expired prediction is marked explicitly
 
 - **WHEN** an open prediction is past its expiration time during a check
-- **THEN** OpenCandle marks it `expired` or `resolved` according to the defined prediction outcome policy
+- **THEN** OpenCandle marks it `expired` or `resolved` according to the defined prediction outcome policy only when current quote data is available
 - **AND** stores result metadata needed to explain the outcome later
+
+#### Scenario: Expired prediction with missing quote remains open
+
+- **WHEN** an open prediction is past its expiration time during a check but current quote data is unavailable
+- **THEN** OpenCandle reports the unavailable quote as a data gap
+- **AND** it does not mark the prediction `expired` until a later check can evaluate it with market data
 
 #### Scenario: Prediction can be cancelled without outcome
 

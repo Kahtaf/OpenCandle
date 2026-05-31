@@ -666,6 +666,13 @@ export class MarketStateService {
     return result.changes > 0;
   }
 
+  removePortfolioLot(id: number): PortfolioLotRecord | null {
+    const existing = this.getPortfolioLotOrNull(id);
+    if (existing == null) return null;
+    this.db.prepare("DELETE FROM portfolio_lots WHERE id = ?").run(id);
+    return existing;
+  }
+
   updatePortfolioLot(
     id: number,
     params: {
@@ -1243,6 +1250,14 @@ export class MarketStateService {
   }
 
   private getPortfolioLot(id: number): PortfolioLotRecord {
+    const row = this.getPortfolioLotOrNull(id);
+    if (row == null) {
+      throw new Error(`portfolio lot ${id} not found`);
+    }
+    return row;
+  }
+
+  private getPortfolioLotOrNull(id: number): PortfolioLotRecord | null {
     const row = this.db
       .prepare(
         `SELECT pl.*, i.symbol, i.name, i.asset_type, i.exchange, i.currency AS instrument_currency
@@ -1250,8 +1265,8 @@ export class MarketStateService {
          JOIN instruments i ON i.id = pl.instrument_id
          WHERE pl.id = ?`,
       )
-      .get(id) as PortfolioLotRow;
-    return mapPortfolioLot(row);
+      .get(id) as PortfolioLotRow | undefined;
+    return row == null ? null : mapPortfolioLot(row);
   }
 
   private getPrediction(id: number): PredictionRecord {

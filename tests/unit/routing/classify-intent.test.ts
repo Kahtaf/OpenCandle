@@ -162,6 +162,12 @@ describe("classifyIntent", () => {
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
     });
 
+    it("keeps Mastercard MA as a ticker in plain comparisons", () => {
+      const result = classifyIntent("compare V and MA");
+      expect(result.workflow).toBe("compare_assets");
+      expect(result.entities.symbols).toEqual(["V", "MA"]);
+    });
+
     it("keeps multi-symbol sentiment comparisons on compare_assets", () => {
       const result = classifyIntent("Compare AAPL and MSFT sentiment");
       expect(result.workflow).toBe("compare_assets");
@@ -181,6 +187,11 @@ describe("classifyIntent", () => {
       const result = classifyIntent("compare bonds and cash");
       expect(result.workflow).not.toBe("compare_assets");
       expect(result.entities.symbols).toEqual([]);
+    });
+
+    it("does not treat moving-average MA usage as the Mastercard ticker", () => {
+      const result = classifyIntent("compare the 20 day MA and 50 day MA for SPY");
+      expect(result.entities.symbols).toEqual(["SPY"]);
     });
   });
 

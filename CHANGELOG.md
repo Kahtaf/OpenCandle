@@ -11,6 +11,9 @@
 
 - Router symbol extraction now drops bare finance acronyms such as IV, SEC, FED, and CPI unless the user provides a direct ticker signal such as `$IV` or `IV ticker`.
 - Rules-mode compare prompts now clarify instead of passing the raw prompt through when acronym disambiguation leaves fewer than two valid symbols.
+- Portfolio row removal now targets the selected SQLite lot id instead of removing every lot for that symbol.
+- Prediction checks now keep expired predictions open when quotes are temporarily unavailable, so they can be scored on a later successful check.
+- Mastercard's `MA` ticker now survives plain ticker comparisons while moving-average/M&A wording remains filtered as non-ticker usage.
 - Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
 - Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.

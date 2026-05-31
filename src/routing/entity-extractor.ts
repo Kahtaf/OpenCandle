@@ -14,7 +14,7 @@ const COMMON_WORDS = new Set([
   "DCF", "FCF", "ROE", "ROA", "ROI", "EPS", "NAV", "WACC", "EBIT",
   // Regulatory / source / finance acronyms that are not tickers in natural language
   "IV", "HV", "ITM", "OTM", "ATM", "IPO", "SEC", "FED", "FOMC", "IRS",
-  "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "MA", "NDA",
+  "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "NDA",
   "YTD",
   "BEST", "WHAT", "WITH", "THAT", "THIS", "FROM", "HAVE", "BEEN", "SOME",
   "THEM", "THAN", "LIKE", "JUST", "OVER", "ALSO", "BACK", "MUCH", "MOST",
@@ -23,10 +23,10 @@ const COMMON_WORDS = new Set([
   "NEXT", "SHOW", "LAST",
 ]);
 
-const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
+const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI", "MA"]);
 const EXPLICIT_FINANCE_ACRONYM_TICKERS = new Set([
   "IV", "HV", "ITM", "OTM", "ATM", "IPO", "SEC", "FED", "FOMC", "IRS",
-  "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "MA", "NDA",
+  "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "NDA",
 ]);
 const LOWERCASE_FINANCE_TERMS = new Set([
   "bond", "bonds", "cash", "rate", "rates", "cuts", "gold", "oil", "stock", "stocks",
@@ -164,6 +164,9 @@ function extractSymbols(input: string): string[] {
 export function isAmbiguousConceptUsage(input: string, symbol: string): boolean {
   if (!AMBIGUOUS_CONCEPT_TICKERS.has(symbol)) return false;
   if (new RegExp(`\\$${symbol}\\b`).test(input)) return false;
+  if (symbol === "MA") {
+    return isMovingAverageUsage(input);
+  }
   if (
     new RegExp(
       `\\b(?:analyze|quote|ticker|stock|shares?|options?|calls?|puts?)\\s+${symbol}\\b|\\b${symbol}\\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\\b`,
@@ -173,6 +176,13 @@ export function isAmbiguousConceptUsage(input: string, symbol: string): boolean 
     return false;
   }
   return true;
+}
+
+function isMovingAverageUsage(input: string): boolean {
+  return /\bmoving\s+averages?\b/i.test(input) ||
+    /\b(?:simple|exponential|weighted|day|daily|week|weekly|month|monthly|\d+\s*(?:d|day|days|w|week|weeks)?)\s+MA\b/i.test(input) ||
+    /\bMA\s+(?:crossover|cross|signal|signals|strategy|trend|trends|line|lines)\b/i.test(input) ||
+    /\bM&A\b/.test(input);
 }
 
 function extractMaxPremium(input: string): number | undefined {

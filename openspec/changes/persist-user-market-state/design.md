@@ -298,7 +298,7 @@ GUI app
 Page responsibilities:
 
 - **Watchlists:** default watchlist view in V1, symbol search/autocomplete, add/remove/update item, target/stop metadata, notes/thesis/tags, current quote/last checked fields when available.
-- **Portfolios:** default portfolio view in V1, add/remove/update lot, quantity/cost/currency fields, current value/P&L summary when quotes are available, provenance/source metadata when present.
+- **Portfolios:** default portfolio view in V1, add/remove/update lot, quantity/cost/currency fields, current value/P&L summary when quotes are available, provenance/source metadata when present. Row-level remove/update actions should target the selected `portfolio_lot.id`; symbol-level removal is a bulk operation and must be explicit so one same-symbol lot is not accidentally treated as every lot for that instrument.
 - **Alerts:** list durable alert rules and events, create/edit manual-checkable price/indicator rules, enable/disable rules, run an explicit check. Background heartbeat controls remain V2+.
 - **Reports:** configure the default watchlist morning report, run a report manually, show report-run history and latest summaries.
 - **Predictions:** list tracked predictions, record new predictions, check/update outcomes.
@@ -332,13 +332,15 @@ First-use empty states should guide the user toward real actions:
 Watchlist and portfolio pages should be dense working tables with clear status:
 
 - Watchlists should support add/remove/update, notes/thesis/tags, target/stop metadata, current quote when available, data freshness, and a row action to create an alert.
-- Portfolios should support add/remove/update lots, quantity/cost/currency, current value and unrealized P&L when quotes are available, allocation summary, and stale/unavailable quote states.
+- Portfolios should support add/remove/update lots, quantity/cost/currency, current value and unrealized P&L when quotes are available, allocation summary, and stale/unavailable quote states. If several lots share a symbol, removing one visible row should remove only that lot unless the user chose an explicit remove-all-symbol action.
 
 Alerts must be explicit about delivery expectations. V1 alert rules should be labeled as manually checked unless a future runner is enabled. Alert detail should show condition configuration, last checked time, last observed value, latest event, and data/error status.
 
 Daily reports should have a stable shape rather than being an arbitrary quote dump. V1 morning reports should include generated timestamp, target watchlist, quote freshness, major movers, alert summary, technical snapshot when available, and data gaps.
 
 Quote freshness shown on watchlist and portfolio pages may come from the latest provider response, existing cache metadata, or a small quote-snapshot/read-model table introduced during implementation. It should not be confused with the durable instrument row itself: stale or unavailable quotes must be visible in rows and summaries rather than silently omitted.
+
+Prediction checks should preserve user-authored records when market data is temporarily unavailable. An expired prediction can only be marked `expired` or `resolved` when the check has enough current quote data to evaluate the outcome; otherwise the check result should report a data gap and leave the prediction open for a later retry.
 
 Chat and pages should stay connected as a user-facing invariant:
 

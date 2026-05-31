@@ -32,10 +32,11 @@ export interface PredictionCheckResult {
     direction: string;
     conviction: number;
     entryPrice: number;
-    currentPrice: number;
-    pnlPercent: number;
+    currentPrice: number | null;
+    pnlPercent: number | null;
     correct: boolean;
     status: "open" | "resolved";
+    dataGap?: string;
   }>;
 }
 
@@ -83,7 +84,21 @@ export function checkPredictions(
 
   for (const p of predictions) {
     const currentPrice = currentPrices.get(p.symbol);
-    if (currentPrice == null) continue;
+    if (currentPrice == null) {
+      openCount++;
+      details.push({
+        symbol: p.symbol,
+        direction: p.direction,
+        conviction: p.conviction,
+        entryPrice: p.entryPrice,
+        currentPrice: null,
+        pnlPercent: null,
+        correct: false,
+        status: "open",
+        dataGap: "quote unavailable",
+      });
+      continue;
+    }
 
     const isExpired = p.expiresAt <= nowStr;
     const pnlPercent = (currentPrice - p.entryPrice) / p.entryPrice;
@@ -291,6 +306,9 @@ export const predictionsTool: AgentTool<typeof params> = {
         ``,
         ...result.details.map((d) => {
           const icon = d.status === "open" ? "~" : d.correct ? "+" : "-";
+          if (d.currentPrice == null || d.pnlPercent == null) {
+            return `${icon} ${d.symbol} ${d.direction}: quote unavailable (open)`;
+          }
           const sign = d.pnlPercent >= 0 ? "+" : "";
           const label = d.status === "open" ? " (open)" : "";
           return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;

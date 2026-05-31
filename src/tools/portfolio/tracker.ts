@@ -29,7 +29,7 @@ const params = Type.Object({
     Type.Literal("view"),
   ], { description: "Action: add a position, update a lot, remove a position, or view portfolio" }),
   lot_id: Type.Optional(
-    Type.Number({ description: "Portfolio lot id for precise update" }),
+    Type.Number({ description: "Portfolio lot id for precise update or single-lot removal" }),
   ),
   symbol: Type.Optional(
     Type.String({ description: "Ticker symbol — stocks (AAPL, MSFT) or crypto with -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker to find the right ticker." }),
@@ -84,8 +84,21 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       }
 
       if (args.action === "remove") {
+        if (args.lot_id) {
+          const removed = service.removePortfolioLot(args.lot_id);
+          if (removed == null) {
+            return {
+              content: [{ type: "text", text: `lot ${args.lot_id} not found in portfolio` }],
+              details: null,
+            };
+          }
+          return {
+            content: [{ type: "text", text: `Removed ${removed.symbol} portfolio lot ${removed.id}` }],
+            details: removed,
+          };
+        }
         if (!args.symbol) {
-          throw new Error("symbol is required for remove action.");
+          throw new Error("lot_id or symbol is required for remove action.");
         }
         const symbol = args.symbol.toUpperCase();
         const removedLots = service.listPortfolioLots().filter((lot) => lot.symbol === symbol);
