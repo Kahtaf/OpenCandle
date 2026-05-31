@@ -3,12 +3,15 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  predictionsTool,
   recordPrediction,
   checkPredictions,
   type Prediction,
 } from "../../../src/tools/portfolio/predictions.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -74,6 +77,69 @@ describe("recordPrediction", () => {
     });
 
     expect(prediction.symbol).toBe("AAPL");
+  });
+});
+
+describe("predictionsTool check", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-predictions-check-test-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 200));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    rmSync(openCandleHome, { recursive: true, force: true });
+    vi.clearAllMocks();
+  });
+
+  it("persists resolved outcomes when checking expired predictions", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("1 predictions (1 resolved, 0 open)");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("resolved");
+    expect(prediction.resolvedAt).toBe("2026-03-01T12:00:00.000Z");
+    expect(prediction.resultJson).toBe(JSON.stringify({
+      currentPrice: 200,
+      pnlPercent: 0.1111111111111111,
+      correct: true,
+    }));
   });
 });
 

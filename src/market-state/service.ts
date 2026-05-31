@@ -527,6 +527,23 @@ export class MarketStateService {
     return rows.map(mapPrediction);
   }
 
+  updatePredictionOutcome(params: {
+    id: number;
+    status: Exclude<PredictionStatus, "open">;
+    resolvedAt: string;
+    result: unknown;
+  }): PredictionRecord {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE prediction_records
+         SET status = ?, resolved_at = ?, result_json = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(params.status, params.resolvedAt, JSON.stringify(params.result), now, params.id);
+    return this.getPrediction(params.id);
+  }
+
   createAlertRule(params: {
     scopeType: AlertScopeType;
     scopeId?: number;

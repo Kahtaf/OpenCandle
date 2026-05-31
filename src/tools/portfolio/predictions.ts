@@ -190,13 +190,19 @@ export const predictionsTool: AgentTool<typeof params> = {
     const db = initDefaultDatabase();
     try {
       const service = new MarketStateService(db);
-      const predictions = service
-        .listPredictions()
-        .map((record) => predictionRecordToPrediction(record));
-      if (predictions.length === 0) {
+      const records = service.listPredictions();
+      const openRecords = records.filter((record) => record.status === "open");
+      const predictions = openRecords.map((record) => predictionRecordToPrediction(record));
+      if (records.length === 0) {
         return {
           content: [{ type: "text", text: "No predictions recorded yet. Use record action to track your calls." }],
           details: null,
+        };
+      }
+      if (openRecords.length === 0) {
+        return {
+          content: [{ type: "text", text: "No open predictions to check." }],
+          details: checkPredictions([], new Map()),
         };
       }
 
@@ -212,6 +218,7 @@ export const predictionsTool: AgentTool<typeof params> = {
       );
 
       const result = checkPredictions(predictions, priceMap);
+      persistPredictionOutcomes(service, openRecords, result);
 
       const resolved = result.correct + result.wrong;
       const lines = [
@@ -237,6 +244,66 @@ export const predictionsTool: AgentTool<typeof params> = {
     }
   },
 };
+
+function persistPredictionOutcomes(
+  service: MarketStateService,
+  records: PredictionRecord[],
+  result: PredictionCheckResult,
+): void {
+  const now = new Date().toISOString();
+  const usedRecordIds = new Set<number>();
+
+  for (const detail of result.details) {
+    if (detail.status !== "resolved") continue;
+    const record = findMatchingOpenRecord(records, detail, usedRecordIds);
+    if (record == null) continue;
+    usedRecordIds.add(record.id);
+    service.updatePredictionOutcome({
+      id: record.id,
+      status: "resolved",
+      resolvedAt: now,
+      result: {
+        currentPrice: detail.currentPrice,
+        pnlPercent: detail.pnlPercent,
+        correct: detail.correct,
+      },
+    });
+  }
+
+  for (const record of records) {
+    if (usedRecordIds.has(record.id)) continue;
+    if (record.expiresAt > now) continue;
+    if (result.details.some((detail) => detail.status === "open" && matchesPredictionRecord(record, detail))) {
+      continue;
+    }
+    service.updatePredictionOutcome({
+      id: record.id,
+      status: "expired",
+      resolvedAt: now,
+      result: { reason: "quote_unavailable" },
+    });
+  }
+}
+
+function findMatchingOpenRecord(
+  records: PredictionRecord[],
+  detail: PredictionCheckResult["details"][number],
+  usedRecordIds: Set<number>,
+): PredictionRecord | null {
+  return records.find((record) => !usedRecordIds.has(record.id) && matchesPredictionRecord(record, detail)) ?? null;
+}
+
+function matchesPredictionRecord(
+  record: PredictionRecord,
+  detail: Pick<PredictionCheckResult["details"][number], "symbol" | "direction" | "conviction" | "entryPrice">,
+): boolean {
+  return (
+    record.symbol === detail.symbol &&
+    record.direction === detail.direction &&
+    record.conviction === detail.conviction &&
+    record.entryPrice === detail.entryPrice
+  );
+}
 
 function predictionRecordToPrediction(
   record: PredictionRecord,
