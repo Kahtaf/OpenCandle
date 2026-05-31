@@ -47,6 +47,7 @@
 - [x] 5.6 Emit `opencandle-symbol-preflight-dropped` custom entry per drop for observability.
 - [x] 5.7 Ensure rules-mode preflight aborts set fallback clarification context rather than falling through with the raw prompt.
 - [x] 5.8 Ensure Yahoo instrument search uses the shared provider cache and Yahoo rate limiter.
+- [x] 5.9 Ensure resolver search outages do not cause workflow preflight to drop user-provided symbols as unknown tickers.
 
 ## 6. `analyze_correlation` partial success
 

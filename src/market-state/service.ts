@@ -1129,23 +1129,33 @@ export class MarketStateService {
     errors?: unknown;
   }): ReportRunRecord {
     const startedAt = params.startedAt ?? new Date().toISOString();
-    const result = this.db
-      .prepare(
-        `INSERT INTO report_runs (
-           template_id, started_at, completed_at, status, artifact_path, summary_json, errors_json
-         )
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        params.templateId ?? null,
-        startedAt,
-        params.completedAt ?? null,
-        params.status,
-        params.artifactPath ?? null,
-        params.summary == null ? null : JSON.stringify(params.summary),
-        params.errors == null ? null : JSON.stringify(params.errors),
-      );
-    return this.getReportRun(Number(result.lastInsertRowid));
+    const tx = this.db.transaction(() => {
+      const result = this.db
+        .prepare(
+          `INSERT INTO report_runs (
+             template_id, started_at, completed_at, status, artifact_path, summary_json, errors_json
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          params.templateId ?? null,
+          startedAt,
+          params.completedAt ?? null,
+          params.status,
+          params.artifactPath ?? null,
+          params.summary == null ? null : JSON.stringify(params.summary),
+          params.errors == null ? null : JSON.stringify(params.errors),
+        );
+
+      if (params.templateId != null) {
+        this.db
+          .prepare("UPDATE report_templates SET last_run_at = ?, updated_at = ? WHERE id = ?")
+          .run(startedAt, startedAt, params.templateId);
+      }
+
+      return Number(result.lastInsertRowid);
+    });
+    return this.getReportRun(tx());
   }
 
   listReportRuns(): ReportRunRecord[] {

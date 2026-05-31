@@ -79,6 +79,7 @@
 - [x] 6.15 Verify instrument-scoped alert creation does not add the symbol to any watchlist as a side effect.
 - [x] 6.16 Verify trigger-event creation is conditional on the persisted previous observation to suppress concurrent duplicate manual-check events.
 - [x] 6.17 Verify unavailable/stale/invalid alert checks update durable check status without overwriting the previous valid observation.
+- [x] 6.18 Verify manual daily report runs link to the default watchlist report template and update its latest-run timestamp.
 
 ## 7. Imports and Provenance
 

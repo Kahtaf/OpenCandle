@@ -54,6 +54,17 @@ describe("preflightSymbols", () => {
     expect(search).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps symbols when resolver search is temporarily unavailable", async () => {
+    const search = vi.fn(async () => {
+      throw new Error("rate limited");
+    });
+
+    const result = await preflightSymbols(["AAPL", "MSFT"], { search });
+
+    expect(result.valid).toEqual(["AAPL", "MSFT"]);
+    expect(result.dropped).toEqual([]);
+  });
+
   it("formats a prompt annotation for dropped symbols", () => {
     expect(formatPreflightDropAnnotation([
       { symbol: "XXFAKEXX", reason: "no matching ticker found via resolver search" },

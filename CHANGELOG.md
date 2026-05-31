@@ -32,9 +32,11 @@
 - Saved market-state prompt context is now gated to finance/market-state turns so unrelated pass-through prompts do not receive local portfolio or watchlist data.
 - LLM-router acronym drops now sanitize matching symbol slots before missing-slot checks, preventing dropped tokens from reappearing in fallback context.
 - Yahoo instrument search now uses the shared cache and Yahoo rate limiter for autocomplete and workflow preflight.
+- Workflow symbol preflight now preserves user-provided symbols during resolver outages instead of treating provider failures as unknown tickers.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.
 - Router mode remains on the `rules` default because the live LLM-router acceptance gate could not be run with credentials; use `OPENCANDLE_ROUTER_MODE=llm` to opt in.
 - TUI daily report requests now expose exact `daily_watchlist_report` action literals, steering report-history prompts to `history` instead of invalid `list` or `show_history` actions.
+- Manual daily report runs now link to the default watchlist report template and update its latest-run timestamp.
 - TUI alert requests now expose exact `manage_alerts` action literals and natural-language mappings, so the agent can create and enable price, SMA, RSI, and volume alerts instead of trying generic `create` or `add` actions.
 - Prediction checks now keep durable resolved-history scorecards visible after all predictions have been resolved.
 - Watchlist row alert creation no longer clears existing target, stop, thesis, notes, or tags on the saved watchlist item.

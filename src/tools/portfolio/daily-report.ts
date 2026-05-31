@@ -75,8 +75,10 @@ export const dailyReportTool: AgentTool<typeof params> = {
         return { content: [{ type: "text", text: lines.join("\n") }], details: runs };
       }
 
+      const template = getOrCreateDefaultWatchlistReportTemplate(service);
       const report = await generateDailyReport(service);
       const run = service.recordReportRun({
+        templateId: template.id,
         startedAt: report.generatedAt,
         completedAt: new Date().toISOString(),
         status: "completed",
@@ -92,6 +94,23 @@ export const dailyReportTool: AgentTool<typeof params> = {
     }
   },
 };
+
+function getOrCreateDefaultWatchlistReportTemplate(service: MarketStateService) {
+  const existing = service.listReportTemplates().find((template) =>
+    template.reportType === "watchlist_daily" &&
+    targetsDefaultWatchlist(template.configJson)
+  );
+  if (existing) return existing;
+  return service.createReportTemplate({
+    name: "Morning watchlist",
+    reportType: "watchlist_daily",
+    cadence: "daily",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    localTime: "08:00",
+    config: { targets: { default_watchlist: true } },
+    enabled: true,
+  });
+}
 
 function targetsDefaultWatchlist(config: unknown): boolean {
   if (typeof config !== "object" || config === null) return false;

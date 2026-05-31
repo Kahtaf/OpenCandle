@@ -153,6 +153,8 @@ OpenCandle SHALL store daily report templates and report run history in SQLite.
 
 - **WHEN** OpenCandle generates a daily report
 - **THEN** it records a report run with start time, completion time, status, summary metadata, and any error metadata
+- **AND** the run references the configured default watchlist report template when one exists
+- **AND** the template records the run time as its latest run
 
 #### Scenario: Report generator can run manually
 

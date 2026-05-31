@@ -70,8 +70,8 @@ function validateSymbol(
       checkedAt: Date.now(),
     }))
     .catch((error) => ({
-      valid: false,
-      reason: error instanceof Error ? error.message : "resolver search failed",
+      valid: true,
+      reason: error instanceof Error ? `resolver search unavailable: ${error.message}` : "resolver search unavailable",
       checkedAt: Date.now(),
     }));
 }

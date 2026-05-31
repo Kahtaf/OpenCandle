@@ -34,3 +34,9 @@ This requirement applies to: `compare_assets` workflow, `analyze_correlation`-be
 - **WHEN** GUI autocomplete, TUI candidate resolution, or workflow preflight searches Yahoo instruments for the same query repeatedly
 - **THEN** repeated calls within the shared search TTL return cached candidates
 - **AND** cache misses acquire the Yahoo rate limiter before issuing the provider request
+
+#### Scenario: Resolver search outage does not invalidate user symbols
+
+- **WHEN** workflow preflight cannot complete resolver-layer search because the provider is unavailable or rate-limited
+- **THEN** OpenCandle SHALL keep the user-provided symbol in the templated workflow
+- **AND** downstream provider calls SHALL surface any unavailable data as normal tool data gaps rather than treating the symbol as definitively unknown

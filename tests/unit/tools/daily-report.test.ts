@@ -68,9 +68,20 @@ describe("dailyReportTool", () => {
     expect(result.content[0].text).toContain("Technical snapshot");
     expect(result.content[0].text).toContain("Data gaps");
     expect(result.details).toMatchObject({ status: "completed" });
+    expect(result.details.templateId).toEqual(expect.any(Number));
 
     const history = await dailyReportTool.execute("test", { action: "history" });
     expect(history.content[0].text).toContain("completed");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const [template] = service.listReportTemplates();
+    const [run] = service.listReportRuns();
+    db.close();
+
+    expect(template.reportType).toBe("watchlist_daily");
+    expect(template.lastRunAt).toBe(run.startedAt);
+    expect(run.templateId).toBe(template.id);
   });
 
   it("reports zero-filled quote rows as data gaps instead of valid report data", async () => {
@@ -173,6 +184,29 @@ describe("dailyReportTool", () => {
       timezone: "America/New_York",
       localTime: "07:30",
     });
+  });
+
+  it("links manual runs to the configured morning report template", async () => {
+    const configured = await dailyReportTool.execute("test", {
+      action: "configure",
+      timezone: "America/Toronto",
+      local_time: "07:15",
+    });
+
+    const run = await dailyReportTool.execute("test", { action: "run" });
+
+    expect(run.details).toMatchObject({
+      templateId: configured.details.id,
+      status: "completed",
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const [template] = service.listReportTemplates();
+    db.close();
+
+    expect(template.id).toBe(configured.details.id);
+    expect(template.lastRunAt).toBe(run.details.startedAt);
   });
 });
 
