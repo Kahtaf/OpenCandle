@@ -42,6 +42,12 @@ describe("portfolioTrackerTool", () => {
     });
 
     expect(result.content[0].text).toContain("VTI");
+    expect(result.details).toMatchObject({
+      symbol: "VTI",
+      instrumentId: expect.any(Number),
+      quantity: 2,
+      avgCost: 250,
+    });
     expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
     expect(existsSync(join(openCandleHome, "portfolio.json"))).toBe(false);
   });
@@ -140,6 +146,12 @@ describe("portfolioTrackerTool", () => {
     });
 
     expect(update.content[0].text).toContain("Updated VTI");
+    expect(update.details).toMatchObject({
+      symbol: "VTI",
+      instrumentId: expect.any(Number),
+      quantity: 3,
+      avgCost: 240,
+    });
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
     expect(result.details?.positions[0]).toMatchObject({
@@ -164,6 +176,11 @@ describe("portfolioTrackerTool", () => {
       symbol: "VTI",
     });
     expect(remove.content[0].text).toContain("Removed");
+    expect(remove.details).toMatchObject({
+      symbol: "VTI",
+      removedCount: 1,
+      removedLotIds: [expect.any(Number)],
+    });
 
     const view = await portfolioTrackerTool.execute("test", { action: "view" });
     expect(view.content[0].text.toLowerCase()).toContain("empty");

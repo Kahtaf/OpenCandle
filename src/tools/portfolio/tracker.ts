@@ -37,7 +37,7 @@ const params = Type.Object({
   ),
 });
 
-export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | null> = {
+export const portfolioTrackerTool: AgentTool<typeof params> = {
   name: "track_portfolio",
   label: "Portfolio Tracker",
   description:
@@ -62,7 +62,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
         });
         return {
           content: [{ type: "text", text: `Added ${args.shares} shares of ${lot.symbol} at ${formatMoney(args.avg_cost, lot.currency)}` }],
-          details: null,
+          details: lot,
         };
       }
 
@@ -71,6 +71,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
           throw new Error("symbol is required for remove action.");
         }
         const symbol = args.symbol.toUpperCase();
+        const removedLots = service.listPortfolioLots().filter((lot) => lot.symbol === symbol);
         if (!service.removePortfolioLotsBySymbol(symbol)) {
           return {
             content: [{ type: "text", text: `${symbol} not found in portfolio` }],
@@ -79,7 +80,12 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
         }
         return {
           content: [{ type: "text", text: `Removed ${symbol} from portfolio` }],
-          details: null,
+          details: {
+            symbol,
+            removedCount: removedLots.length,
+            removedLotIds: removedLots.map((lot) => lot.id),
+            instrumentIds: [...new Set(removedLots.map((lot) => lot.instrumentId))],
+          },
         };
       }
 
@@ -104,7 +110,7 @@ export const portfolioTrackerTool: AgentTool<typeof params, PortfolioSummary | n
         }
         return {
           content: [{ type: "text", text: `Updated ${updated.symbol} portfolio lot ${updated.id}` }],
-          details: null,
+          details: updated,
         };
       }
 

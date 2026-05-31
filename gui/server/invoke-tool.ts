@@ -99,7 +99,9 @@ function stateChangeDetails(
       action: typeof args.action === "string" ? args.action : "invoke",
       targetType: mapping.targetType,
       targetId: numericField(valueRecord, "id"),
+      targetIds: numericArrayField(valueRecord, "removedLotIds"),
       instrumentId: numericField(valueRecord, "instrumentId"),
+      instrumentIds: numericArrayField(valueRecord, "instrumentIds"),
       toolName,
     },
   };
@@ -129,6 +131,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function numericField(record: Record<string, unknown> | null, key: string): number | undefined {
   const value = record?.[key];
   return typeof value === "number" ? value : undefined;
+}
+
+function numericArrayField(record: Record<string, unknown> | null, key: string): number[] | undefined {
+  const value = record?.[key];
+  if (!Array.isArray(value)) return undefined;
+  const numbers = value.filter((item): item is number => typeof item === "number");
+  return numbers.length > 0 ? numbers : undefined;
 }
 
 function emptyUsage(): Usage {

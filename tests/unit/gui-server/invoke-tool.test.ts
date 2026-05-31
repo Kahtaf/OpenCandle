@@ -56,4 +56,52 @@ describe("invokeToolFromUi", () => {
       },
     });
   });
+
+  it("includes target ids for market-state removals that affect multiple rows", async () => {
+    const messages: Message[] = [];
+    const sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      action: Type.String(),
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "track_portfolio",
+      label: "Portfolio",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "Removed VTI" }],
+          details: {
+            symbol: "VTI",
+            removedCount: 2,
+            removedLotIds: [4, 5],
+            instrumentIds: [9],
+          },
+        };
+      },
+    };
+
+    await invokeToolFromUi(sessionManager, tool, { action: "remove", symbol: "VTI" }, "ui");
+
+    expect(messages[1]).toMatchObject({
+      role: "toolResult",
+      toolName: "track_portfolio",
+      details: {
+        stateChange: {
+          source: "ui",
+          domain: "portfolio",
+          action: "remove",
+          targetType: "portfolio_lot",
+          targetIds: [4, 5],
+          instrumentIds: [9],
+          toolName: "track_portfolio",
+        },
+      },
+    });
+  });
 });
