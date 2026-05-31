@@ -41,6 +41,7 @@ import { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
+import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 
 const cwd = process.cwd();
@@ -137,6 +138,16 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
       role: lockResult.role,
       events: currentChatEvents(),
     });
+    return;
+  }
+
+  if (url.pathname === "/api/market-state" && req.method === "GET") {
+    writeJson(res, buildMarketStateSnapshot());
+    return;
+  }
+
+  if (url.pathname === "/api/instruments/search" && req.method === "GET") {
+    writeJson(res, await searchInstrumentCandidates(url.searchParams.get("q") ?? ""));
     return;
   }
 
