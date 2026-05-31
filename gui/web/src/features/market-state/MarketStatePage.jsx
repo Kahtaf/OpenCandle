@@ -14,6 +14,7 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { cn } from "../../lib/utils.js";
 import { searchInstruments, useMarketState } from "../../hooks/useMarketState.jsx";
+import { buildAlertRows } from "./alert-view-model.js";
 
 const DOMAINS = [
   { id: "watchlists", label: "Watchlists", path: "/watchlists", icon: ListPlus },
@@ -264,6 +265,7 @@ function PortfolioUpdatePanel({ disabled, invokeTool }) {
 }
 
 function Alerts({ state, readOnly, invokeTool }) {
+  const alertRows = useMemo(() => buildAlertRows(state.alerts, state.alertEvents), [state.alerts, state.alertEvents]);
   return (
     <>
       <Panel title="Create Price Alert" meta="Manual checks in V1">
@@ -278,13 +280,15 @@ function Alerts({ state, readOnly, invokeTool }) {
           <EmptyState icon={Bell} title="No alerts yet" action="Create a manual price alert, then run checks explicitly." />
         ) : (
           <DataTable
-            columns={["Rule", "Scope", "Mode", "Last checked", "Last event"]}
-            rows={state.alerts.map((rule) => [
-              `${rule.conditionType} ${describeCondition(rule.conditionJson)}`,
-              rule.instrumentId ? `Instrument #${rule.instrumentId}` : rule.scopeType,
-              "Manual",
-              shortDate(rule.lastCheckedAt),
-              shortDate(rule.lastTriggeredAt),
+            columns={["Rule", "Scope", "Mode", "Last checked", "Last observed", "Latest event", "Status"]}
+            rows={alertRows.map((row) => [
+              row.rule,
+              row.scope,
+              row.mode,
+              row.lastChecked,
+              row.lastObserved,
+              row.latestEvent,
+              row.status,
             ])}
           />
         )}
