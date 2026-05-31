@@ -42,6 +42,18 @@ describe("dailyReportTool", () => {
     vi.clearAllMocks();
   });
 
+  it("describes exact action literals for agent routing", () => {
+    const actionDescription = dailyReportTool.parameters.properties.action.description ?? "";
+
+    expect(dailyReportTool.description).toContain("run");
+    expect(dailyReportTool.description).toContain("configure");
+    expect(dailyReportTool.description).toContain("history");
+    expect(actionDescription).toContain("run");
+    expect(actionDescription).toContain("configure");
+    expect(actionDescription).toContain("history");
+    expect(actionDescription).toContain("Use history");
+  });
+
   it("generates and records a default watchlist report", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
     await watchlistTool.execute("test", { action: "add", symbol: "MSFT" });

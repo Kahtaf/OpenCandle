@@ -6,10 +6,17 @@ import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 
+const ACTION_DESCRIPTION = [
+  "One of: run, configure, history.",
+  "Use run to generate the daily watchlist report now.",
+  "Use configure to save schedule metadata such as timezone and local_time.",
+  "Use history to show prior report runs; do not use list or show_history.",
+].join(" ");
+
 const params = Type.Object({
   action: Type.Union(
     [Type.Literal("run"), Type.Literal("configure"), Type.Literal("history")],
-    { description: "Run the daily watchlist report, configure its schedule metadata, or show history" },
+    { description: ACTION_DESCRIPTION },
   ),
   timezone: Type.Optional(
     Type.String({ description: "IANA timezone for future scheduled morning reports" }),
@@ -23,7 +30,7 @@ export const dailyReportTool: AgentTool<typeof params> = {
   name: "daily_watchlist_report",
   label: "Daily Report",
   description:
-    "Generate or configure the V1 daily watchlist report. Reports run manually in V1 and preserve schedule metadata for future heartbeat execution.",
+    "Generate, configure, or show history for the V1 daily watchlist report. Actions are run, configure, and history. Reports run manually in V1 and preserve schedule metadata for future heartbeat execution.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();

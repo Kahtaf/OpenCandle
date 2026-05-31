@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
@@ -376,5 +381,100 @@ describe("SessionCoordinator.buildRouterContextBase", () => {
     ]);
     expect(ctx.profileSnapshot).toEqual({});
     expect(ctx.recentWorkflowRuns).toEqual([]);
+  });
+});
+
+describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string | null = null;
+
+  afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    if (openCandleHome) {
+      rmSync(openCandleHome, { recursive: true, force: true });
+      openCandleHome = null;
+    }
+  });
+
+  it("includes portfolio, watchlist, alerts, reports, and predictions in prompt context", () => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const asts = {
+      symbol: "ASTS",
+      assetType: "equity",
+      name: "AST SpaceMobile, Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    };
+    const item = service.addWatchlistItem({
+      instrument: asts,
+      targetPrice: 55,
+      stopPrice: 22,
+      thesis: "Space-based broadband satellite network",
+      notes: "Watch launch cadence and carrier partnerships",
+      tags: ["space", "satellite"],
+    });
+    service.addPortfolioLot({
+      instrument: asts,
+      quantity: 40,
+      avgCost: 28,
+      currency: "USD",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: item.instrumentId,
+      conditionType: "price_crosses_above",
+      conditionVersion: 1,
+      condition: { threshold: 55, field: "last_price" },
+      timeframe: "quote",
+      cooldownSeconds: 3600,
+    });
+    const template = service.createReportTemplate({
+      name: "Morning watchlist",
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+      config: { targets: { default_watchlist: true } },
+      enabled: true,
+    });
+    service.recordReportRun({
+      templateId: template.id,
+      status: "completed",
+      summary: { symbols: ["ASTS"] },
+      errors: [],
+    });
+    service.recordPrediction({
+      instrument: asts,
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 30,
+      targetPrice: 60,
+      timeframeDays: 60,
+    });
+    db.close();
+
+    const coord = new SessionCoordinator();
+    coord.initSession("test-session");
+    const prompt = coord.buildSystemPrompt("base");
+
+    expect(prompt).toContain("Saved Market State");
+    expect(prompt).toContain("ASTS");
+    expect(prompt).toContain("40 @ $28.00");
+    expect(prompt).toContain("cost basis $1120.00");
+    expect(prompt).toContain("explicitly mention the saved quantity, average cost, and cost basis");
+    expect(prompt).toContain("target $55.00");
+    expect(prompt).toContain("price_crosses_above");
+    expect(prompt).toContain("Morning watchlist");
+    expect(prompt).toContain("bullish conv 8/10");
+    expect(prompt).toContain("space, satellite");
   });
 });

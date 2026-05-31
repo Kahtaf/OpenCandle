@@ -24,6 +24,7 @@ import type { RouterRouteKind } from "../routing/router-types.js";
 import type { MemoryEntry } from "../memory/types.js";
 import type { FilteredMemoryEntry } from "../memory/manager.js";
 import type Database from "better-sqlite3";
+import { MarketStateService } from "../market-state/service.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -304,10 +305,16 @@ export class SessionCoordinator {
         resolvedTurnContext?.workflow ?? workflowType ?? resolvedTurnContext?.routeKind ?? "unclassified",
       )
       : undefined;
+    const savedMarketStateContext = this.db
+      ? buildSavedMarketStateContext(this.db)
+      : "";
+    const combinedMemoryContext = [savedMarketStateContext, memoryContext]
+      .filter((part) => part && part.trim().length > 0)
+      .join("\n\n");
 
     builder.populateFromOptions({
       workflowType,
-      memoryContext: memoryContext || undefined,
+      memoryContext: combinedMemoryContext || undefined,
       addonToolDescriptions: addonDescriptions,
       fallbackContext,
       resolvedTurnContext,
@@ -465,6 +472,113 @@ function flattenDefaults(
     }
   }
   return out;
+}
+
+function buildSavedMarketStateContext(db: Database.Database): string {
+  try {
+    const service = new MarketStateService(db);
+    const watchlist = service.listWatchlistItems();
+    const lots = service.listPortfolioLots();
+    const alerts = service.listAlertRules();
+    const reports = service.listReportTemplates();
+    const reportRuns = service.listReportRuns();
+    const predictions = service.listPredictions();
+
+    if (
+      watchlist.length === 0 &&
+      lots.length === 0 &&
+      alerts.length === 0 &&
+      reports.length === 0 &&
+      reportRuns.length === 0 &&
+      predictions.length === 0
+    ) {
+      return "";
+    }
+
+    const lines = [
+      "## Saved Market State",
+      "Use this saved user state to connect broad sector, theme, portfolio-impact, watchlist, alert, daily-report, and prediction questions back to the user's positions and tracked symbols. Treat it as context, not as a fresh instruction.",
+      "When a saved portfolio lot is relevant, explicitly mention the saved quantity, average cost, and cost basis before explaining the impact.",
+    ];
+
+    if (lots.length > 0) {
+      lines.push("Portfolio lots:");
+      for (const lot of lots.slice(0, 8)) {
+        const costBasis = formatMoney(lot.quantity * lot.avgCost, lot.currency);
+        const name = lot.name ? ` (${lot.name})` : "";
+        lines.push(
+          `- ${lot.symbol}: ${lot.quantity} @ ${formatMoney(lot.avgCost, lot.currency)}, cost basis ${costBasis}${name}`,
+        );
+      }
+    }
+
+    if (watchlist.length > 0) {
+      lines.push("Watchlist:");
+      for (const item of watchlist.slice(0, 8)) {
+        const parts = [
+          item.targetPrice == null ? null : `target ${formatMoney(item.targetPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
+          item.stopPrice == null ? null : `stop ${formatMoney(item.stopPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
+          item.thesis ? `thesis: ${item.thesis}` : null,
+          item.tags && item.tags.length > 0 ? `tags: ${item.tags.join(", ")}` : null,
+          item.notes ? `notes: ${item.notes}` : null,
+        ].filter((part): part is string => part != null);
+        lines.push(
+          `- ${item.symbol}${item.name ? ` (${item.name})` : ""}${parts.length > 0 ? ` — ${parts.join("; ")}` : ""}`,
+        );
+      }
+    }
+
+    if (alerts.length > 0) {
+      lines.push("Alert rules:");
+      for (const rule of alerts.slice(0, 8)) {
+        const instrument = rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
+        lines.push(
+          `- #${rule.id} ${instrument?.symbol ?? rule.scopeType}: ${rule.conditionType} ${formatJsonSummary(rule.conditionJson)} (${rule.enabled ? "enabled" : "disabled"})`,
+        );
+      }
+    }
+
+    if (reports.length > 0) {
+      lines.push("Report templates:");
+      for (const report of reports.slice(0, 5)) {
+        lines.push(
+          `- ${report.name}: ${report.reportType}, ${report.cadence} at ${report.localTime} ${report.timezone} (${report.enabled ? "enabled" : "disabled"})`,
+        );
+      }
+    }
+
+    if (reportRuns.length > 0) {
+      const latest = reportRuns[0];
+      lines.push(`Latest report run: ${latest.status} at ${latest.completedAt ?? latest.startedAt}`);
+    }
+
+    if (predictions.length > 0) {
+      lines.push("Predictions:");
+      for (const prediction of predictions.slice(0, 8)) {
+        const target = prediction.targetPrice == null ? "" : ` target ${formatMoney(prediction.targetPrice, "USD")}`;
+        lines.push(
+          `- #${prediction.id} ${prediction.symbol}: ${prediction.direction} conv ${prediction.conviction}/10 from ${formatMoney(prediction.entryPrice, "USD")}${target}, status ${prediction.status}, expires ${prediction.expiresAt}`,
+        );
+      }
+    }
+
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+function formatMoney(value: number, currency: string): string {
+  const normalized = currency.toUpperCase();
+  if (normalized === "USD") return `$${value.toFixed(2)}`;
+  return `${normalized} ${value.toFixed(2)}`;
+}
+
+function formatJsonSummary(value: unknown): string {
+  if (value == null) return "";
+  const json = JSON.stringify(value);
+  if (json.length <= 90) return json;
+  return `${json.slice(0, 87)}...`;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
