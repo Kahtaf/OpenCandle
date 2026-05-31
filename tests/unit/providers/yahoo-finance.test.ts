@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getQuote, getHistory } from "../../../src/providers/yahoo-finance.js";
+import { InvalidSymbolError } from "../../../src/providers/errors.js";
 import { cache } from "../../../src/infra/cache.js";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
+import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 describe("yahoo-finance provider", () => {
   const originalFetch = globalThis.fetch;
@@ -72,6 +74,54 @@ describe("yahoo-finance provider", () => {
       });
 
       await expect(getQuote("INVALID")).rejects.toThrow("No data found");
+    });
+
+    it("throws InvalidSymbolError for sparse zero-result quote responses", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(invalidQuoteFixture),
+      });
+
+      await expect(getQuote("XXFAKEXX")).rejects.toMatchObject({
+        symbol: "XXFAKEXX",
+        provider: "yahoo",
+      });
+      await expect(getQuote("XXFAKEXX")).rejects.toBeInstanceOf(InvalidSymbolError);
+    });
+
+    it("preserves real low-priced quotes when at least one market field is non-zero", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          chart: {
+            result: [
+              {
+                meta: {
+                  symbol: "PENNY",
+                  regularMarketPrice: 0.04,
+                  chartPreviousClose: 0.03,
+                  regularMarketOpen: 0.03,
+                  regularMarketDayHigh: 0.05,
+                  regularMarketDayLow: 0.03,
+                  regularMarketVolume: 12000,
+                  marketCap: 50000,
+                  fiftyTwoWeekHigh: 0.2,
+                  fiftyTwoWeekLow: 0.01,
+                },
+                timestamp: [],
+                indicators: { quote: [{ open: [], high: [], low: [], close: [], volume: [] }] },
+              },
+            ],
+            error: null,
+          },
+        }),
+      });
+
+      const quote = await getQuote("PENNY");
+
+      expect(quote.price).toBe(0.04);
+      expect(quote.volume).toBe(12000);
+      expect(quote.marketCap).toBe(50000);
     });
   });
 

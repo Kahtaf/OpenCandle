@@ -27,13 +27,13 @@
 
 ## 4. Silent-zero guard at provider boundary
 
-- [ ] 4.1 Add `class InvalidSymbolError extends Error { constructor(public symbol: string, public provider: string) }` in `src/providers/errors.ts` (new file).
-- [ ] 4.2 In `src/providers/yahoo-finance.ts::getQuote`, after constructing the `StockQuote` object, check the zero-result heuristic from design.md Decision 2 (`price && volume && week52High && week52Low && marketCap` all zero). If matched, throw `InvalidSymbolError(symbol, "yahoo")` instead of caching/returning. Cache key still set so repeated invalid lookups are cheap.
-- [ ] 4.3 Same heuristic applied in `getOptionsChain`: if `result.options` is empty and `quote.regularMarketPrice` is missing/zero, throw `InvalidSymbolError`.
-- [ ] 4.4 Verify `src/providers/wrap-provider.ts` maps `InvalidSymbolError` to `unavailable` with the error message included in `reason`, and that `src/providers/with-fallback.ts` preserves that reason when all providers fail. If not, add the mapping.
-- [ ] 4.5 Unit test `tests/unit/providers/yahoo-finance.test.ts`: feed the provider a recorded sparse-meta fixture (capture from real Yahoo for a known-bogus ticker like `XXFAKEXX`) and assert `InvalidSymbolError` is thrown with `symbol === "XXFAKEXX"` and `provider === "yahoo"`.
+- [x] 4.1 Add `class InvalidSymbolError extends Error { constructor(public symbol: string, public provider: string) }` in `src/providers/errors.ts` (new file).
+- [x] 4.2 In `src/providers/yahoo-finance.ts::getQuote`, after constructing the `StockQuote` object, check the zero-result heuristic from design.md Decision 2 (`price && volume && week52High && week52Low && marketCap` all zero). If matched, throw `InvalidSymbolError(symbol, "yahoo")` instead of caching/returning. Cache key still set so repeated invalid lookups are cheap.
+- [x] 4.3 Same heuristic applied in `getOptionsChain`: if `result.options` is empty and `quote.regularMarketPrice` is missing/zero, throw `InvalidSymbolError`.
+- [x] 4.4 Verify `src/providers/wrap-provider.ts` maps `InvalidSymbolError` to `unavailable` with the error message included in `reason`, and that `src/providers/with-fallback.ts` preserves that reason when all providers fail. If not, add the mapping.
+- [x] 4.5 Unit test `tests/unit/providers/yahoo-finance.test.ts`: feed the provider a recorded sparse-meta fixture (capture from real Yahoo for a known-bogus ticker like `XXFAKEXX`) and assert `InvalidSymbolError` is thrown with `symbol === "XXFAKEXX"` and `provider === "yahoo"`.
 - [ ] 4.6 Integration check: invoke `get_stock_quote` tool with `symbol: "XXFAKEXX"` against the harness, assert tool output contains "⚠ Stock quote unavailable" with the symbol, and that no zero-filled `details` object leaks.
-- [ ] 4.7 Regression checks for direct `wrapProvider` Yahoo callers: watchlist check, portfolio view, alert check, daily report run, and prediction check should surface unavailable/data-gap status for an invalid symbol rather than zero-filled quote data.
+- [x] 4.7 Regression checks for direct `wrapProvider` Yahoo callers: watchlist check, portfolio view, alert check, daily report run, and prediction check should surface unavailable/data-gap status for an invalid symbol rather than zero-filled quote data.
 
 ## 5. Pre-flight ticker validation in workflow templating
 

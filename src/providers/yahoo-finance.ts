@@ -6,6 +6,7 @@ import type { StockQuote, OHLCV } from "../types/market.js";
 import type { OptionsChain, OptionContract, OptionsMarketSession, OptionsQuoteStatus } from "../types/options.js";
 import type { FundHoldings } from "../types/portfolio.js";
 import { computeGreeks } from "../tools/options/greeks.js";
+import { InvalidSymbolError } from "./errors.js";
 
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
@@ -101,6 +102,10 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       timestamp: Date.now(),
     };
 
+    if (isZeroResultQuote(quote)) {
+      throw new InvalidSymbolError(symbol.toUpperCase(), "yahoo");
+    }
+
     cache.set(cacheKey, quote, TTL.QUOTE);
     return quote;
   } catch (error) {
@@ -108,6 +113,14 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     if (stale) return stale.value;
     throw error;
   }
+}
+
+function isZeroResultQuote(quote: StockQuote): boolean {
+  return quote.price === 0 &&
+    quote.volume === 0 &&
+    quote.week52High === 0 &&
+    quote.week52Low === 0 &&
+    quote.marketCap === 0;
 }
 
 export async function getHistory(
@@ -488,6 +501,9 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
   const quote = result.quote;
   const underlyingPrice = quote.regularMarketPrice ?? 0;
   const opts = result.options[0];
+  if (!opts && underlyingPrice === 0) {
+    throw new InvalidSymbolError(result.underlyingSymbol, "yahoo");
+  }
   const riskFreeRate = 0.05;
 
   const expirationTs = opts.expirationDate;

@@ -21,6 +21,7 @@ export async function withFallback<T>(
 ): Promise<ProviderResult<T>> {
   const tracker = getProviderTracker();
   const attempted: string[] = [];
+  const failures: string[] = [];
 
   for (const entry of entries) {
     if (tracker?.isCircuitOpen(entry.provider)) continue;
@@ -28,13 +29,14 @@ export async function withFallback<T>(
 
     const result = await wrapProvider(entry.provider, entry.fn);
     if (result.status === "ok") return result;
+    failures.push(`${entry.provider}: ${result.reason}`);
     // wrapProvider already called recordFailure on the tracker
   }
 
   return {
     status: "unavailable",
     reason: attempted.length > 0
-      ? `all providers failed: ${attempted.join(", ")}`
+      ? `all providers failed: ${failures.join("; ")}`
       : `all providers circuit-open: ${entries.map((e) => e.provider).join(", ")}`,
     provider: entries[0]?.provider ?? "unknown",
   };

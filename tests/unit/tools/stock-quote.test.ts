@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
 import { cache } from "../../../src/infra/cache.js";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
+import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 describe("get_stock_quote tool", () => {
   const originalFetch = globalThis.fetch;
@@ -57,5 +58,19 @@ describe("get_stock_quote tool", () => {
       expect.stringContaining("AAPL"),
       expect.anything(),
     );
+  });
+
+  it("surfaces invalid sparse quote responses as unavailable without zero-filled details", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(invalidQuoteFixture),
+    });
+
+    const result = await stockQuoteTool.execute("call-4", { symbol: "XXFAKEXX" });
+
+    expect(result.content[0].type).toBe("text");
+    expect((result.content[0] as any).text).toContain("Stock quote unavailable for XXFAKEXX");
+    expect((result.content[0] as any).text).toContain("Invalid symbol XXFAKEXX for yahoo");
+    expect(result.details).toBeNull();
   });
 });

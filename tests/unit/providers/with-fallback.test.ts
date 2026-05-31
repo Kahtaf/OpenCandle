@@ -48,6 +48,19 @@ describe("withFallback", () => {
     }
   });
 
+  it("preserves provider failure reasons when all providers fail", async () => {
+    const result = await withFallback([
+      { provider: "yahoo", fn: async () => { throw new Error("Invalid symbol XXFAKEXX for yahoo"); } },
+      { provider: "alphavantage", fn: async () => { throw new Error("not found"); } },
+    ]);
+
+    expect(result.status).toBe("unavailable");
+    if (result.status === "unavailable") {
+      expect(result.reason).toContain("Invalid symbol XXFAKEXX for yahoo");
+      expect(result.reason).toContain("not found");
+    }
+  });
+
   it("skips circuit-open providers", async () => {
     const tracker = new ProviderTracker(1);
     tracker.recordFailure("yahoo"); // circuit open
