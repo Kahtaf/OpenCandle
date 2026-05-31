@@ -23,14 +23,27 @@ describe("initDatabase", () => {
     expect(tables).toContain("workflow_runs");
     expect(tables).toContain("recommendations");
     expect(tables).toContain("schema_version");
+    expect(tables).toContain("instruments");
+    expect(tables).toContain("instrument_aliases");
+    expect(tables).toContain("watchlists");
+    expect(tables).toContain("watchlist_items");
+    expect(tables).toContain("portfolios");
+    expect(tables).toContain("portfolio_lots");
+    expect(tables).toContain("prediction_records");
+    expect(tables).toContain("alert_rules");
+    expect(tables).toContain("alert_events");
+    expect(tables).toContain("report_templates");
+    expect(tables).toContain("report_runs");
+    expect(tables).toContain("import_batches");
+    expect(tables).toContain("import_rows");
     expect(tables).not.toContain("sessions");
     expect(tables).not.toContain("messages");
     expect(tables).not.toContain("tool_calls");
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 4", () => {
-    expect(getSchemaVersion(db)).toBe(4);
+  it("sets schema version to 5", () => {
+    expect(getSchemaVersion(db)).toBe(5);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -105,7 +118,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(4);
+    expect(getSchemaVersion(resetDb)).toBe(5);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
@@ -218,7 +231,7 @@ describe("v2 → v3 additive migration", () => {
     // Run the migration.
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(4);
+    expect(getSchemaVersion(migrated)).toBe(5);
 
     // (a) zero row loss
     const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
@@ -236,6 +249,91 @@ describe("v2 → v3 additive migration", () => {
 
     const legacyRows = migrated.prepare("SELECT turn_type FROM workflow_runs ORDER BY id").all() as Array<{ turn_type: string }>;
     expect(legacyRows).toEqual([{ turn_type: "workflow" }, { turn_type: "workflow" }]);
+
+    migrated.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+});
+
+describe("v4 → v5 market-state migration", () => {
+  it("adds market-state tables without dropping existing memory rows", () => {
+    const base = mkdtempSync(join(tmpdir(), "vantage-v4-market-state-"));
+    const dbPath = join(base, "state.db");
+
+    const v4 = new Database(dbPath);
+    v4.pragma("journal_mode = WAL");
+    v4.pragma("foreign_keys = ON");
+    v4.exec(`
+      CREATE TABLE schema_version (version INTEGER NOT NULL);
+      INSERT INTO schema_version (version) VALUES (4);
+
+      CREATE TABLE user_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        namespace TEXT NOT NULL DEFAULT 'global',
+        key TEXT NOT NULL,
+        value_json TEXT NOT NULL,
+        confidence TEXT DEFAULT 'medium',
+        source TEXT DEFAULT 'explicit',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(namespace, key)
+      );
+
+      CREATE TABLE workflow_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        workflow_type TEXT NOT NULL,
+        input_slots_json TEXT,
+        resolved_slots_json TEXT,
+        defaults_used_json TEXT,
+        output_summary TEXT,
+        created_at TEXT NOT NULL,
+        turn_type TEXT NOT NULL DEFAULT 'workflow'
+      );
+
+      CREATE TABLE recommendations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workflow_run_id INTEGER NOT NULL,
+        recommendation_type TEXT NOT NULL,
+        symbol TEXT,
+        payload_json TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id)
+      );
+
+      CREATE TABLE workflow_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        step_index INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        payload_json TEXT,
+        timestamp TEXT NOT NULL
+      );
+
+      CREATE INDEX idx_workflow_events_run_id ON workflow_events(run_id);
+
+      CREATE TABLE tool_defaults (
+        tool_name TEXT NOT NULL,
+        param_path TEXT NOT NULL,
+        value_json TEXT NOT NULL,
+        set_at TEXT NOT NULL,
+        PRIMARY KEY (tool_name, param_path)
+      );
+
+      INSERT INTO user_preferences (namespace, key, value_json, confidence, source, created_at, updated_at)
+      VALUES ('global', 'risk_profile', '"balanced"', 'high', 'explicit', '2026-01-01', '2026-01-01');
+    `);
+    v4.close();
+
+    const migrated = initDatabase(dbPath);
+
+    expect(getSchemaVersion(migrated)).toBe(5);
+    expect(getTableNames(migrated)).toContain("watchlist_items");
+    expect(getTableNames(migrated)).toContain("portfolio_lots");
+    expect(getTableNames(migrated)).toContain("prediction_records");
+
+    const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
+    expect(prefCount).toBe(1);
 
     migrated.close();
     rmSync(base, { recursive: true, force: true });

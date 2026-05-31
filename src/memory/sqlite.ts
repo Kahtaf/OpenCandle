@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -62,6 +62,209 @@ const CURRENT_SCHEMA = `
     set_at TEXT NOT NULL,
     PRIMARY KEY (tool_name, param_path)
   );
+
+  CREATE TABLE IF NOT EXISTS instruments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    asset_type TEXT NOT NULL,
+    name TEXT,
+    exchange TEXT,
+    currency TEXT,
+    provider TEXT NOT NULL,
+    provider_metadata_json TEXT,
+    last_resolved_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_instruments_symbol ON instruments(symbol);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_instruments_provider_identity
+    ON instruments(provider, symbol, asset_type, IFNULL(exchange, ''));
+
+  CREATE TABLE IF NOT EXISTS instrument_aliases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    instrument_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    source_symbol TEXT NOT NULL,
+    source_exchange TEXT,
+    source_asset_type TEXT,
+    source_id TEXT,
+    raw_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_instrument_aliases_source_id
+    ON instrument_aliases(source, source_id)
+    WHERE source_id IS NOT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_instrument_aliases_source_symbol
+    ON instrument_aliases(source, source_symbol, IFNULL(source_exchange, ''), IFNULL(source_asset_type, ''))
+    WHERE source_id IS NULL;
+
+  CREATE TABLE IF NOT EXISTS watchlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_watchlists_one_default
+    ON watchlists(is_default)
+    WHERE is_default = 1;
+
+  CREATE TABLE IF NOT EXISTS watchlist_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    watchlist_id INTEGER NOT NULL,
+    instrument_id INTEGER NOT NULL,
+    thesis TEXT,
+    notes TEXT,
+    tags_json TEXT,
+    target_price REAL,
+    stop_price REAL,
+    price_currency TEXT,
+    source TEXT,
+    source_row_id TEXT,
+    source_metadata_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(watchlist_id, instrument_id),
+    FOREIGN KEY (watchlist_id) REFERENCES watchlists(id) ON DELETE CASCADE,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS portfolios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    base_currency TEXT NOT NULL DEFAULT 'USD',
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolios_one_default
+    ON portfolios(is_default)
+    WHERE is_default = 1;
+
+  CREATE TABLE IF NOT EXISTS portfolio_lots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    portfolio_id INTEGER NOT NULL,
+    instrument_id INTEGER NOT NULL,
+    quantity REAL NOT NULL,
+    avg_cost REAL NOT NULL,
+    currency TEXT NOT NULL,
+    opened_at TEXT,
+    notes TEXT,
+    source TEXT,
+    source_account_ref TEXT,
+    source_lot_id TEXT,
+    source_row_id TEXT,
+    source_metadata_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS prediction_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    instrument_id INTEGER NOT NULL,
+    direction TEXT NOT NULL,
+    conviction REAL NOT NULL,
+    entry_price REAL NOT NULL,
+    target_price REAL,
+    opened_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    resolved_at TEXT,
+    result_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS alert_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope_type TEXT NOT NULL,
+    scope_id INTEGER,
+    instrument_id INTEGER,
+    condition_type TEXT NOT NULL,
+    condition_version INTEGER NOT NULL,
+    condition_json TEXT NOT NULL,
+    timeframe TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    check_interval_seconds INTEGER,
+    next_check_at TEXT,
+    last_checked_at TEXT,
+    last_observed_json TEXT,
+    cooldown_seconds INTEGER,
+    last_triggered_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS alert_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_rule_id INTEGER NOT NULL,
+    instrument_id INTEGER,
+    observed_value_json TEXT,
+    triggered_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT,
+    FOREIGN KEY (alert_rule_id) REFERENCES alert_rules(id) ON DELETE CASCADE,
+    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE TABLE IF NOT EXISTS report_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    report_type TEXT NOT NULL,
+    cadence TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    local_time TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_run_at TEXT,
+    next_run_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS report_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id INTEGER,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL,
+    artifact_path TEXT,
+    summary_json TEXT,
+    errors_json TEXT,
+    FOREIGN KEY (template_id) REFERENCES report_templates(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS import_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    source_label TEXT,
+    imported_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    raw_metadata_json TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS import_rows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL,
+    row_type TEXT NOT NULL,
+    source_symbol TEXT,
+    normalized_instrument_id INTEGER,
+    status TEXT NOT NULL,
+    error TEXT,
+    raw_json TEXT,
+    FOREIGN KEY (batch_id) REFERENCES import_batches(id) ON DELETE CASCADE,
+    FOREIGN KEY (normalized_instrument_id) REFERENCES instruments(id) ON DELETE SET NULL
+  );
 `;
 
 export function initDatabase(path: string): Database.Database {
@@ -90,15 +293,22 @@ function ensureCurrentSchema(db: Database.Database): void {
     return;
   }
 
-  if (currentVersion === 3) {
-    migrateV3ToV4(db);
+  if (currentVersion === 4) {
+    migrateV4ToV5(db);
     return;
   }
 
-  // Additive v2 → v3 → v4 migration without dropping data.
+  if (currentVersion === 3) {
+    migrateV3ToV4(db);
+    migrateV4ToV5(db);
+    return;
+  }
+
+  // Additive v2 → v3 → v4 → v5 migration without dropping data.
   if (currentVersion === 2) {
     migrateV2ToV3(db);
     migrateV3ToV4(db);
+    migrateV4ToV5(db);
     return;
   }
 
@@ -128,6 +338,13 @@ function migrateV3ToV4(db: Database.Database): void {
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(4);
+}
+
+function migrateV4ToV5(db: Database.Database): void {
+  db.exec(CURRENT_SCHEMA);
+
+  db.prepare("DELETE FROM schema_version").run();
   db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(CURRENT_SCHEMA_VERSION);
 }
 
@@ -147,6 +364,19 @@ function readSchemaVersion(db: Database.Database): number | null {
 
 function resetSchema(db: Database.Database): void {
   db.exec(`
+    DROP TABLE IF EXISTS import_rows;
+    DROP TABLE IF EXISTS import_batches;
+    DROP TABLE IF EXISTS report_runs;
+    DROP TABLE IF EXISTS report_templates;
+    DROP TABLE IF EXISTS alert_events;
+    DROP TABLE IF EXISTS alert_rules;
+    DROP TABLE IF EXISTS prediction_records;
+    DROP TABLE IF EXISTS portfolio_lots;
+    DROP TABLE IF EXISTS portfolios;
+    DROP TABLE IF EXISTS watchlist_items;
+    DROP TABLE IF EXISTS watchlists;
+    DROP TABLE IF EXISTS instrument_aliases;
+    DROP TABLE IF EXISTS instruments;
     DROP TABLE IF EXISTS recommendations;
     DROP TABLE IF EXISTS workflow_runs;
     DROP TABLE IF EXISTS user_preferences;
