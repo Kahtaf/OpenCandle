@@ -270,6 +270,7 @@ export const predictionsTool: AgentTool<typeof params> = {
       const records = service.listPredictions();
       const openRecords = records.filter((record) => record.status === "open");
       const predictions = openRecords.map((record) => predictionRecordToPrediction(record));
+      const historicalDetails = storedResolvedPredictionDetails(records);
       if (records.length === 0) {
         return {
           content: [{ type: "text", text: "No predictions recorded yet. Use record action to track your calls." }],
@@ -277,6 +278,13 @@ export const predictionsTool: AgentTool<typeof params> = {
         };
       }
       if (openRecords.length === 0) {
+        if (historicalDetails.length > 0) {
+          const result = predictionResultFromDetails(historicalDetails);
+          return {
+            content: [{ type: "text", text: formatPredictionScorecard(result) }],
+            details: result,
+          };
+        }
         return {
           content: [{ type: "text", text: "No open predictions to check." }],
           details: checkPredictions([], new Map()),
@@ -294,29 +302,12 @@ export const predictionsTool: AgentTool<typeof params> = {
         }),
       );
 
-      const result = checkPredictions(predictions, priceMap);
-      persistPredictionOutcomes(service, openRecords, result);
-
-      const resolved = result.correct + result.wrong;
-      const lines = [
-        `**Prediction Scorecard** — ${result.total} predictions (${resolved} resolved, ${result.open} open)`,
-        ``,
-        `Hit Rate: ${(result.hitRate * 100).toFixed(0)}% (${result.correct}/${resolved})`,
-        `Weighted Hit Rate: ${(result.weightedHitRate * 100).toFixed(0)}% (by conviction)`,
-        ``,
-        ...result.details.map((d) => {
-          const icon = d.status === "open" ? "~" : d.correct ? "+" : "-";
-          if (d.currentPrice == null || d.pnlPercent == null) {
-            return `${icon} ${d.symbol} ${d.direction}: quote unavailable (open)`;
-          }
-          const sign = d.pnlPercent >= 0 ? "+" : "";
-          const label = d.status === "open" ? " (open)" : "";
-          return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
-        }),
-      ];
+      const currentResult = checkPredictions(predictions, priceMap);
+      persistPredictionOutcomes(service, openRecords, currentResult);
+      const result = predictionResultFromDetails([...historicalDetails, ...currentResult.details]);
 
       return {
-        content: [{ type: "text", text: lines.join("\n") }],
+        content: [{ type: "text", text: formatPredictionScorecard(result) }],
         details: result,
       };
     } finally {
@@ -363,6 +354,72 @@ function persistPredictionOutcomes(
       result: { reason: "quote_unavailable" },
     });
   }
+}
+
+function storedResolvedPredictionDetails(records: PredictionRecord[]): PredictionCheckResult["details"] {
+  return records.flatMap((record) => {
+    if (record.status !== "resolved" || record.resultJson == null) return [];
+    const result = JSON.parse(record.resultJson) as {
+      currentPrice?: unknown;
+      pnlPercent?: unknown;
+      correct?: unknown;
+    };
+    if (
+      typeof result.currentPrice !== "number" ||
+      typeof result.pnlPercent !== "number" ||
+      typeof result.correct !== "boolean"
+    ) {
+      return [];
+    }
+    return [{
+      symbol: record.symbol,
+      direction: record.direction,
+      conviction: record.conviction,
+      entryPrice: record.entryPrice,
+      currentPrice: result.currentPrice,
+      pnlPercent: result.pnlPercent,
+      correct: result.correct,
+      status: "resolved" as const,
+    }];
+  });
+}
+
+function predictionResultFromDetails(details: PredictionCheckResult["details"]): PredictionCheckResult {
+  const resolved = details.filter((detail) => detail.status === "resolved");
+  const correct = resolved.filter((detail) => detail.correct);
+  const totalConviction = resolved.reduce((sum, detail) => sum + detail.conviction, 0);
+  const correctConviction = correct.reduce((sum, detail) => sum + detail.conviction, 0);
+
+  return {
+    total: details.length,
+    open: details.filter((detail) => detail.status === "open").length,
+    correct: correct.length,
+    wrong: resolved.length - correct.length,
+    hitRate: resolved.length > 0 ? correct.length / resolved.length : 0,
+    weightedHitRate: totalConviction > 0 ? correctConviction / totalConviction : 0,
+    details,
+  };
+}
+
+function formatPredictionScorecard(result: PredictionCheckResult): string {
+  const resolved = result.correct + result.wrong;
+  const lines = [
+    `**Prediction Scorecard** — ${result.total} predictions (${resolved} resolved, ${result.open} open)`,
+    ``,
+    `Hit Rate: ${(result.hitRate * 100).toFixed(0)}% (${result.correct}/${resolved})`,
+    `Weighted Hit Rate: ${(result.weightedHitRate * 100).toFixed(0)}% (by conviction)`,
+    ``,
+    ...result.details.map((d) => {
+      const icon = d.status === "open" ? "~" : d.correct ? "+" : "-";
+      if (d.currentPrice == null || d.pnlPercent == null) {
+        return `${icon} ${d.symbol} ${d.direction}: quote unavailable (open)`;
+      }
+      const sign = d.pnlPercent >= 0 ? "+" : "";
+      const label = d.status === "open" ? " (open)" : "";
+      return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
+    }),
+  ];
+  return lines.join("\n");
 }
 
 function findMatchingOpenRecord(

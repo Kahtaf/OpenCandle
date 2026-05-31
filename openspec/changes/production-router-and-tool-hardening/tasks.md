@@ -44,6 +44,8 @@
 - [x] 5.4 Per-turn cache: extend `SessionCoordinator` with a `tickerValidationCache: Map<string, { valid: boolean; checkedAt: number }>` cleared at turn boundaries.
 - [x] 5.5 Unit tests in `tests/unit/prompts/workflow-prompts.test.ts`: (a) all valid → no drops; (b) one invalid → annotated drop; (c) all invalid → workflow not templated, ask_user steered; (d) cache hit on second call within the same turn.
 - [x] 5.6 Emit `opencandle-symbol-preflight-dropped` custom entry per drop for observability.
+- [x] 5.7 Ensure rules-mode preflight aborts set fallback clarification context rather than falling through with the raw prompt.
+- [x] 5.8 Ensure Yahoo instrument search uses the shared provider cache and Yahoo rate limiter.
 
 ## 6. `analyze_correlation` partial success
 

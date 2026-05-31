@@ -2,7 +2,7 @@
 
 ### Requirement: Pre-Flight Symbol Validation in Workflow Templating
 
-Multi-symbol workflow prompts SHALL validate every candidate symbol through a resolver-layer search helper before being templated into the LLM prompt. The helper SHALL use `searchYahooInstruments` or a thin wrapper around it; it SHALL NOT import or execute the `search_ticker` AgentTool object from prompt templating. Symbols that fail validation SHALL be dropped from the templated symbol list and annotated in the rendered prompt so the main agent and downstream tools can see the drop. Validation results SHALL be cached per turn to avoid duplicate lookups within a single workflow.
+Multi-symbol workflow prompts SHALL validate every candidate symbol through a resolver-layer search helper before being templated into the LLM prompt. The helper SHALL use `searchYahooInstruments` or a thin wrapper around it; it SHALL NOT import or execute the `search_ticker` AgentTool object from prompt templating. The resolver-layer search helper SHALL use the shared provider cache and Yahoo rate limiter. Symbols that fail validation SHALL be dropped from the templated symbol list and annotated in the rendered prompt so the main agent and downstream tools can see the drop. Validation results SHALL be cached per turn to avoid duplicate lookups within a single workflow.
 
 This requirement applies to: `compare_assets` workflow, `analyze_correlation`-bearing workflow templates, peer-comparison screens, and any future workflow whose template substitutes a `${symbolList}` of length ≥ 2.
 
@@ -21,10 +21,16 @@ This requirement applies to: `compare_assets` workflow, `analyze_correlation`-be
 
 - **WHEN** the workflow templater receives `["IV","XXFAKEXX"]` for a comparison workflow and both fail resolver-layer search validation
 - **THEN** the workflow is NOT templated
-- **AND** the templater returns a fallback prompt instructing the main agent to invoke `ask_user` with a clarifying question that names the dropped symbols
+- **AND** the current router path sets fallback context instructing the main agent to invoke `ask_user` with a clarifying question that names the dropped symbols
 - **AND** an `opencandle-workflow-aborted` custom entry is appended with `{ reason: "preflight-insufficient-symbols", dropped: [...] }`
 
 #### Scenario: Per-turn validation cache hit
 
 - **WHEN** the workflow templater validates `AAPL` once during a turn, and a downstream prompt template within the same turn validates `AAPL` again
 - **THEN** the second validation reads from the per-turn cache without making a second resolver-layer search call
+
+#### Scenario: Resolver search uses shared provider controls
+
+- **WHEN** GUI autocomplete, TUI candidate resolution, or workflow preflight searches Yahoo instruments for the same query repeatedly
+- **THEN** repeated calls within the shared search TTL return cached candidates
+- **AND** cache misses acquire the Yahoo rate limiter before issuing the provider request

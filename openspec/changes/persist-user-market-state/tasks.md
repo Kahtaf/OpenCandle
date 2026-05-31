@@ -57,6 +57,7 @@
 - [x] 5.18 Verify row-level portfolio removal targets a selected lot id and does not remove other same-symbol lots by default.
 - [x] 5.19 Verify GUI saved-state polling preserves a refreshed quote/P&L snapshot until a newer quote snapshot replaces it.
 - [x] 5.20 Verify portfolio updates require `lot_id` and do not rewrite every same-symbol lot.
+- [x] 5.21 Verify resolved prediction history remains visible in later scorecard checks.
 
 ## 6. Alerts and Reports
 

@@ -648,7 +648,24 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
       pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
       const preflight = await preflightCompareResolution(resolution);
-      if (!preflight) return undefined;
+      if (!preflight) {
+        coordinator.recordWorkflowRun(
+          "fallback",
+          classification.entities,
+          resolution.resolved,
+          [],
+          "clarification",
+        );
+        coordinator.setPendingFallbackContext({
+          assumptionsBlock: [
+            "Assumptions Context:",
+            `  original symbols: ${classification.entities.symbols.join(", ")} (user)`,
+          ].join("\n"),
+          missingRequired: ["symbols"],
+          extraContext: "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers before calling comparison tools.",
+        });
+        return undefined;
+      }
       const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
       applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);

@@ -1,6 +1,8 @@
 import { getQuote } from "../providers/yahoo-finance.js";
 import { wrapProvider } from "../providers/wrap-provider.js";
 import { httpGet } from "../infra/http-client.js";
+import { cache, TTL } from "../infra/cache.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
 import type { StockQuote } from "../types/market.js";
 import type { InstrumentInput } from "./service.js";
 
@@ -29,12 +31,17 @@ export async function searchYahooInstruments(query: string): Promise<InstrumentC
   const trimmed = query.trim();
   if (!trimmed) return [];
 
+  const cacheKey = `yahoo:instrument-search:${trimmed.toLowerCase()}`;
+  const cached = cache.get<InstrumentCandidate[]>(cacheKey);
+  if (cached) return cached;
+
   const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(trimmed)}&quotesCount=10&newsCount=0`;
+  await rateLimiter.acquire("yahoo");
   const data = await httpGet<YahooSearchResponse>(url, {
     headers: { "User-Agent": "OpenCandle/1.0" },
   });
 
-  return (data.quotes ?? []).flatMap((quote) => {
+  const candidates = (data.quotes ?? []).flatMap((quote) => {
     if (!quote.symbol) return [];
     const quoteType = quote.quoteType ?? "UNKNOWN";
     return [{
@@ -47,6 +54,8 @@ export async function searchYahooInstruments(query: string): Promise<InstrumentC
       score: quote.score ?? null,
     }];
   });
+  cache.set(cacheKey, candidates, TTL.WEB_SEARCH);
+  return candidates;
 }
 
 export async function resolveYahooInstrument(symbol: string): Promise<InstrumentInput> {

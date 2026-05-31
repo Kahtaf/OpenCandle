@@ -28,10 +28,13 @@
 - Manual alert checks now persist unavailable/stale provider checks as durable alert events without overwriting the last valid observation.
 - Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
 - Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
+- Rules-mode compare preflight aborts now preserve clarification context instead of falling through to the raw prompt.
+- Yahoo instrument search now uses the shared cache and Yahoo rate limiter for autocomplete and workflow preflight.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.
 - Router mode remains on the `rules` default because the live LLM-router acceptance gate could not be run with credentials; use `OPENCANDLE_ROUTER_MODE=llm` to opt in.
 - TUI daily report requests now expose exact `daily_watchlist_report` action literals, steering report-history prompts to `history` instead of invalid `list` or `show_history` actions.
 - TUI alert requests now expose exact `manage_alerts` action literals and natural-language mappings, so the agent can create and enable price, SMA, RSI, and volume alerts instead of trying generic `create` or `add` actions.
+- Prediction checks now keep durable resolved-history scorecards visible after all predictions have been resolved.
 - Watchlist row alert creation no longer clears existing target, stop, thesis, notes, or tags on the saved watchlist item.
 - Yahoo fund holdings parsing now accepts live quoteSummary `{ raw, fmt }` numeric weights and retries quoteSummary with Yahoo crumb auth after 401/429 responses, so ETF overlap analysis is less likely to drop valid holdings.
 - Generic macro or portfolio hedge prompts no longer receive options-strategy policy guidance unless the prompt explicitly asks for options or put hedges.

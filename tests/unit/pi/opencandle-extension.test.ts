@@ -524,6 +524,47 @@ describe("opencandle extension", () => {
     expect(promptResult.systemPrompt).toContain("Dropped ambiguous ticker-like tokens: IV");
   });
 
+  it("clarifies rules-mode compare prompts when ticker preflight leaves too few valid symbols", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api, { symbolSearch: exactSymbolSearch(["AAPL"]) });
+
+    const sessionStart = fake.handlers.get("session_start")?.[0];
+    await sessionStart!(
+      { type: "session_start" },
+      { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
+    );
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      ui: { notify: vi.fn() },
+      sessionManager: { getBranch: () => [], getSessionId: () => "sid" },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "Compare AAPL and ZZZZ", source: "interactive" },
+      ctx,
+    );
+
+    expect(result).toBeUndefined();
+    const aborted = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "opencandle-workflow-aborted",
+    );
+    expect(aborted).toBeDefined();
+    expect(aborted![1]).toMatchObject({
+      reason: "preflight-insufficient-symbols",
+    });
+
+    const beforeAgentStart = fake.handlers.get("before_agent_start")?.[0];
+    const promptResult = await beforeAgentStart!(
+      { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
+      {},
+    );
+    expect(promptResult.systemPrompt).toContain("Fallback Playbook");
+    expect(promptResult.systemPrompt).toContain("ask_user");
+    expect(promptResult.systemPrompt).toContain("ticker preflight left fewer than two valid symbols");
+  });
+
   describe("llm router mode dispatch signal", () => {
     // Regression guard: in llm mode, when the router dispatches a workflow,
     // the input handler MUST transform the current prompt into the first

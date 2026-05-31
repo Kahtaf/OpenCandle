@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { cache } from "../../../src/infra/cache.js";
 import { httpGet } from "../../../src/infra/http-client.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { resolveYahooInstrument, searchYahooInstruments } from "../../../src/market-state/resolve.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
@@ -10,6 +12,21 @@ vi.mock("../../../src/infra/http-client.js", () => ({
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
 }));
+
+let acquireSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  cache.clear();
+  cache.consumeStaleFlag();
+  acquireSpy = vi.spyOn(rateLimiter, "acquire").mockResolvedValue();
+});
+
+afterEach(() => {
+  acquireSpy.mockRestore();
+  cache.clear();
+  cache.consumeStaleFlag();
+});
 
 describe("searchYahooInstruments", () => {
   it("returns normalized resolver candidates for autocomplete", async () => {
@@ -38,6 +55,27 @@ describe("searchYahooInstruments", () => {
         score: 101,
       },
     ]);
+    expect(acquireSpy).toHaveBeenCalledWith("yahoo");
+  });
+
+  it("caches Yahoo autocomplete results to avoid repeated provider calls", async () => {
+    vi.mocked(httpGet).mockResolvedValue({
+      quotes: [
+        {
+          symbol: "AAPL",
+          shortname: "Apple Inc.",
+          quoteType: "EQUITY",
+          exchange: "NMS",
+        },
+      ],
+    });
+
+    const first = await searchYahooInstruments("apple");
+    const second = await searchYahooInstruments("apple");
+
+    expect(first).toEqual(second);
+    expect(httpGet).toHaveBeenCalledTimes(1);
+    expect(acquireSpy).toHaveBeenCalledTimes(1);
   });
 
   it("returns candidate lists without mutating state for misspelled ticker-like input", async () => {

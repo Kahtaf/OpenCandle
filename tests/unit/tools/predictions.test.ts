@@ -217,6 +217,19 @@ describe("predictionsTool check", () => {
       pnlPercent: 0.1111111111111111,
       correct: true,
     }));
+
+    vi.mocked(getQuote).mockClear();
+    const history = await predictionsTool.execute("test", { action: "check" });
+
+    expect(history.content[0].text).toContain("1 predictions (1 resolved, 0 open)");
+    expect(history.content[0].text).not.toContain("No open predictions");
+    expect(history.details).toMatchObject({
+      total: 1,
+      correct: 1,
+      wrong: 0,
+      open: 0,
+    });
+    expect(getQuote).not.toHaveBeenCalled();
   });
 
   it("keeps expired predictions open when quotes are temporarily unavailable", async () => {

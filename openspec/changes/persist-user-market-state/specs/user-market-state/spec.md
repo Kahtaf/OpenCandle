@@ -264,6 +264,12 @@ OpenCandle SHALL represent prediction status and check behavior consistently acr
 - **THEN** OpenCandle marks it `expired` or `resolved` according to the defined prediction outcome policy only when current quote data is available
 - **AND** stores result metadata needed to explain the outcome later
 
+#### Scenario: Resolved prediction history remains visible
+
+- **WHEN** all tracked predictions have already been resolved and the user checks predictions again
+- **THEN** OpenCandle reports the durable historical scorecard from stored result metadata
+- **AND** it does not replace the scorecard with an empty "no open predictions" result
+
 #### Scenario: Expired prediction with missing quote remains open
 
 - **WHEN** an open prediction is past its expiration time during a check but current quote data is unavailable
