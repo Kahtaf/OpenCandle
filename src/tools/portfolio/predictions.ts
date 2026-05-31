@@ -7,6 +7,8 @@ import { MarketStateService, type PredictionRecord } from "../../market-state/se
 import { resolveYahooInstrument } from "../../market-state/resolve.js";
 
 export interface Prediction {
+  id?: number;
+  instrumentId?: number;
   symbol: string;
   direction: "bullish" | "bearish" | "neutral";
   conviction: number; // 1-10
@@ -315,6 +317,8 @@ function predictionRecordToPrediction(
     explicitTimeframeDays ?? Math.round((expiresAt.getTime() - openedAt.getTime()) / 86_400_000);
 
   return {
+    id: record.id,
+    instrumentId: record.instrumentId,
     symbol: record.symbol,
     direction: record.direction,
     conviction: record.conviction,

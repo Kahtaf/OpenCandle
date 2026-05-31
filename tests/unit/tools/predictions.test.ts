@@ -49,6 +49,8 @@ describe("recordPrediction", () => {
       timeframeDays: 30,
     });
 
+    expect(prediction.id).toEqual(expect.any(Number));
+    expect(prediction.instrumentId).toEqual(expect.any(Number));
     expect(prediction.symbol).toBe("AAPL");
     expect(prediction.direction).toBe("bullish");
     expect(prediction.conviction).toBe(8);
@@ -77,6 +79,24 @@ describe("recordPrediction", () => {
     });
 
     expect(prediction.symbol).toBe("AAPL");
+  });
+
+  it("returns prediction ids in tool details for GUI state-change metadata", async () => {
+    const result = await predictionsTool.execute("test", {
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 180,
+      timeframe_days: 30,
+    });
+
+    expect(result.details).toMatchObject({
+      id: expect.any(Number),
+      instrumentId: expect.any(Number),
+      symbol: "AAPL",
+      direction: "bullish",
+    });
   });
 });
 
