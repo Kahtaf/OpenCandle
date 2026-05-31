@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+import { Type } from "@sinclair/typebox";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
+
+describe("invokeToolFromUi", () => {
+  it("appends normalized market-state mutation metadata for UI tool results", async () => {
+    const messages: Message[] = [];
+    const sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      action: Type.String(),
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "manage_watchlist",
+      label: "Watchlist",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "Added AAPL" }],
+          details: {
+            id: 7,
+            instrumentId: 3,
+            symbol: "AAPL",
+          },
+        };
+      },
+    };
+
+    await invokeToolFromUi(sessionManager, tool, { action: "add", symbol: "AAPL" }, "ui");
+
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({
+      role: "toolResult",
+      toolName: "manage_watchlist",
+      details: {
+        source: "ui",
+        args: { action: "add", symbol: "AAPL" },
+        value: { id: 7, instrumentId: 3, symbol: "AAPL" },
+        stateChange: {
+          source: "ui",
+          domain: "watchlist",
+          action: "add",
+          targetType: "watchlist_item",
+          targetId: 7,
+          instrumentId: 3,
+          toolName: "manage_watchlist",
+        },
+      },
+    });
+  });
+});
