@@ -94,12 +94,50 @@ describe("MarketStateService", () => {
 
     expect(second.id).toBe(first.id);
     expect(second.symbol).toBe("AAPL");
-    expect(second.targetPrice).toBeNull();
+    expect(second.targetPrice).toBe(250);
     expect(second.stopPrice).toBe(180);
     expect(second.notes).toBe("Updated thesis");
 
     const itemCount = db.prepare("SELECT COUNT(*) AS n FROM watchlist_items").get() as { n: number };
     expect(itemCount.n).toBe(1);
+  });
+
+  it("preserves watchlist metadata when a duplicate add only supplies the instrument", () => {
+    const first = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      targetPrice: 260,
+      stopPrice: 175,
+      thesis: "Services growth",
+      notes: "Core watch",
+      tags: ["mega-cap", "quality"],
+    });
+
+    const second = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+
+    expect(second.id).toBe(first.id);
+    expect(second).toMatchObject({
+      targetPrice: 260,
+      stopPrice: 175,
+      thesis: "Services growth",
+      notes: "Core watch",
+      tags: ["mega-cap", "quality"],
+    });
   });
 
   it("stores portfolio lots under the default portfolio", () => {

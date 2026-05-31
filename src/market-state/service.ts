@@ -460,10 +460,10 @@ export class MarketStateService {
       const now = new Date().toISOString();
       const existing = this.db
         .prepare(
-          `SELECT id FROM watchlist_items
+          `SELECT * FROM watchlist_items
            WHERE watchlist_id = ? AND instrument_id = ?`,
         )
-        .get(watchlistId, instrument.id) as { id: number } | undefined;
+        .get(watchlistId, instrument.id) as WatchlistItemRow | undefined;
 
       if (existing) {
         this.db
@@ -475,15 +475,19 @@ export class MarketStateService {
              WHERE id = ?`,
           )
           .run(
-            params.targetPrice ?? null,
-            params.stopPrice ?? null,
-            params.priceCurrency ?? params.instrument.currency ?? null,
-            params.thesis ?? null,
-            params.notes ?? null,
-            params.tags == null ? null : JSON.stringify(params.tags),
-            normalizeNullable(params.source),
-            normalizeNullable(params.sourceRowId),
-            params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
+            params.targetPrice ?? existing.target_price,
+            params.stopPrice ?? existing.stop_price,
+            params.priceCurrency ?? existing.price_currency,
+            params.thesis ?? existing.thesis,
+            params.notes ?? existing.notes,
+            params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
+            params.source === undefined ? existing.source : normalizeNullable(params.source),
+            params.sourceRowId === undefined ? existing.source_row_id : normalizeNullable(params.sourceRowId),
+            params.sourceMetadata === undefined
+              ? existing.source_metadata_json
+              : params.sourceMetadata == null
+                ? null
+                : JSON.stringify(params.sourceMetadata),
             now,
             existing.id,
           );

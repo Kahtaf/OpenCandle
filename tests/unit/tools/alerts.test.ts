@@ -65,6 +65,44 @@ describe("alertsTool", () => {
     expect(listed.content[0].text).toContain("manually checked");
   });
 
+  it("does not wipe existing watchlist metadata when creating an alert", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      targetPrice: 260,
+      stopPrice: 175,
+      thesis: "Services growth",
+      notes: "Core watch",
+      tags: ["mega-cap", "quality"],
+    });
+    db.close();
+
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 260,
+    });
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    expect(verifyService.listWatchlistItems()[0]).toMatchObject({
+      targetPrice: 260,
+      stopPrice: 175,
+      thesis: "Services growth",
+      notes: "Core watch",
+      tags: ["mega-cap", "quality"],
+    });
+    verifyDb.close();
+  });
+
   it("returns candidate matches for an unverified alert symbol without creating a rule", async () => {
     vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
     vi.mocked(httpGet).mockResolvedValue({

@@ -95,7 +95,7 @@ describe("watchlistTool", () => {
 
     expect(result.details).toMatchObject({
       symbol: "AAPL",
-      targetPrice: null,
+      targetPrice: 200,
       stopPrice: 150,
       notes: "Updated thesis",
     });
