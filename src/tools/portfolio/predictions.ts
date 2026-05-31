@@ -5,6 +5,7 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService, type PredictionRecord } from "../../market-state/service.js";
 import { resolveYahooInstrument } from "../../market-state/resolve.js";
+import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 
 export interface Prediction {
   id?: number;
@@ -174,14 +175,33 @@ export const predictionsTool: AgentTool<typeof params> = {
         throw new Error("symbol, direction, conviction, and entry_price are required for record action.");
       }
 
-      const prediction = await recordPrediction({
-        symbol: args.symbol,
-        direction: args.direction,
-        conviction: args.conviction,
-        entryPrice: args.entry_price,
-        targetPrice: args.target_price,
-        timeframeDays: args.timeframe_days ?? 30,
-      });
+      const resolution = await resolveInstrumentForMutation(args.symbol);
+      if (resolution.status === "needs_selection") {
+        return {
+          content: [{
+            type: "text",
+            text: `Could not verify ${resolution.query}. Choose one of the returned candidates before recording the prediction.`,
+          }],
+          details: resolution,
+        };
+      }
+
+      const db = initDefaultDatabase();
+      let prediction: Prediction;
+      try {
+        const service = new MarketStateService(db);
+        const record = service.recordPrediction({
+          instrument: resolution.instrument,
+          direction: args.direction,
+          conviction: args.conviction,
+          entryPrice: args.entry_price,
+          targetPrice: args.target_price,
+          timeframeDays: args.timeframe_days ?? 30,
+        });
+        prediction = predictionRecordToPrediction(record, args.timeframe_days ?? 30);
+      } finally {
+        db.close();
+      }
 
       return {
         content: [{ type: "text", text: `Recorded: ${prediction.symbol} ${prediction.direction} (conviction ${prediction.conviction}/10) at $${prediction.entryPrice}. Expires ${prediction.expiresAt}.` }],

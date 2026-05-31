@@ -4,7 +4,8 @@ import { getHistory, getQuote } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService, type AlertRuleRecord } from "../../market-state/service.js";
-import { isZeroFilledQuote, resolveYahooInstrument } from "../../market-state/resolve.js";
+import { isZeroFilledQuote } from "../../market-state/resolve.js";
+import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 import { computeRSI, computeSMA } from "../technical/indicators.js";
 import {
   ALERT_CONDITION_VERSION,
@@ -53,8 +54,9 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol || args.threshold == null) {
           throw new Error("symbol and threshold are required for create alert actions.");
         }
-        const instrument = await resolveYahooInstrument(args.symbol);
-        const item = service.addWatchlistItem({ instrument });
+        const resolution = await resolveInstrumentForMutation(args.symbol);
+        if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
+        const item = service.addWatchlistItem({ instrument: resolution.instrument });
         const isAbove = args.action === "create_price_above";
         const rule = service.createAlertRule({
           scopeType: "instrument",
@@ -81,8 +83,9 @@ export const alertsTool: AgentTool<typeof params> = {
           throw new Error("symbol is required for SMA alert actions.");
         }
         const period = args.period ?? 50;
-        const instrument = await resolveYahooInstrument(args.symbol);
-        const item = service.addWatchlistItem({ instrument });
+        const resolution = await resolveInstrumentForMutation(args.symbol);
+        if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
+        const item = service.addWatchlistItem({ instrument: resolution.instrument });
         const direction = args.action === "create_price_above_sma" ? "above" : "below";
         const rule = service.createAlertRule({
           scopeType: "instrument",
@@ -107,8 +110,9 @@ export const alertsTool: AgentTool<typeof params> = {
           throw new Error("symbol and threshold are required for RSI alert actions.");
         }
         const period = args.period ?? 14;
-        const instrument = await resolveYahooInstrument(args.symbol);
-        const item = service.addWatchlistItem({ instrument });
+        const resolution = await resolveInstrumentForMutation(args.symbol);
+        if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
+        const item = service.addWatchlistItem({ instrument: resolution.instrument });
         const direction = args.action === "create_rsi_above" ? "above" : "below";
         const rule = service.createAlertRule({
           scopeType: "instrument",
@@ -134,8 +138,9 @@ export const alertsTool: AgentTool<typeof params> = {
         }
         const period = args.period ?? 20;
         const multiplier = args.threshold ?? 2;
-        const instrument = await resolveYahooInstrument(args.symbol);
-        const item = service.addWatchlistItem({ instrument });
+        const resolution = await resolveInstrumentForMutation(args.symbol);
+        if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
+        const item = service.addWatchlistItem({ instrument: resolution.instrument });
         const rule = service.createAlertRule({
           scopeType: "instrument",
           instrumentId: item.instrumentId,
@@ -239,6 +244,16 @@ async function checkAlerts(service: MarketStateService): Promise<{
   }
 
   return { checked: rules.length, triggered, lines };
+}
+
+function candidateResult(resolution: Extract<Awaited<ReturnType<typeof resolveInstrumentForMutation>>, { status: "needs_selection" }>, target: string) {
+  return {
+    content: [{
+      type: "text" as const,
+      text: `Could not verify ${resolution.query}. Choose one of the returned candidates before creating the ${target}.`,
+    }],
+    details: resolution,
+  };
 }
 
 async function observeRule(rule: AlertRuleRecord, symbol: string): Promise<

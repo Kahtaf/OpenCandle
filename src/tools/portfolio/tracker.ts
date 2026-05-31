@@ -5,7 +5,8 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { Position, PortfolioSummary } from "../../types/portfolio.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
-import { isZeroFilledQuote, resolveYahooInstrument, searchYahooInstruments } from "../../market-state/resolve.js";
+import { isZeroFilledQuote } from "../../market-state/resolve.js";
+import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 
 async function getCurrentPrice(symbol: string): Promise<
   | { status: "ok"; price: number }
@@ -58,7 +59,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         if (!args.symbol || !args.shares || !args.avg_cost) {
           throw new Error("symbol, shares, and avg_cost are required for add action.");
         }
-        const instrument = await resolveForMutation(args.symbol);
+        const instrument = await resolveInstrumentForMutation(args.symbol);
         if (instrument.status === "needs_selection") {
           return {
             content: [{
@@ -216,22 +217,6 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
     }
   },
 };
-
-async function resolveForMutation(symbol: string): Promise<
-  | { status: "resolved"; instrument: Awaited<ReturnType<typeof resolveYahooInstrument>> }
-  | { status: "needs_selection"; query: string; candidates: Awaited<ReturnType<typeof searchYahooInstruments>> }
-> {
-  try {
-    return { status: "resolved", instrument: await resolveYahooInstrument(symbol) };
-  } catch (error) {
-    const query = symbol.trim();
-    const candidates = await searchYahooInstruments(query);
-    if (candidates.length > 0) {
-      return { status: "needs_selection", query, candidates };
-    }
-    throw error;
-  }
-}
 
 function formatMoney(value: number, currency: string): string {
   if (currency === "USD") return `$${value.toFixed(2)}`;

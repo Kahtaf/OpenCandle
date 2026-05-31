@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
 import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
+import { httpGet } from "../../../src/infra/http-client.js";
 import type { OHLCV, StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
@@ -11,6 +12,9 @@ import { MarketStateService } from "../../../src/market-state/service.js";
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
   getHistory: vi.fn(),
+}));
+vi.mock("../../../src/infra/http-client.js", () => ({
+  httpGet: vi.fn(),
 }));
 
 describe("alertsTool", () => {
@@ -23,6 +27,7 @@ describe("alertsTool", () => {
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
     vi.mocked(getHistory).mockResolvedValue(history([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114]));
+    vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
 
   afterEach(() => {
@@ -53,6 +58,41 @@ describe("alertsTool", () => {
     const listed = await alertsTool.execute("test", { action: "list" });
     expect(listed.content[0].text).toContain("AAPL");
     expect(listed.content[0].text).toContain("manually checked");
+  });
+
+  it("returns candidate matches for an unverified alert symbol without creating a rule", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(httpGet).mockResolvedValue({
+      quotes: [
+        {
+          symbol: "AAPL",
+          longname: "Apple Inc.",
+          quoteType: "EQUITY",
+          exchange: "NMS",
+          score: 101,
+        },
+      ],
+    });
+
+    const result = await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "APL",
+      threshold: 250,
+    });
+
+    expect(result.content[0].text).toContain("Could not verify APL");
+    expect(result.details).toMatchObject({
+      status: "needs_selection",
+      query: "APL",
+      candidates: [
+        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
+      ],
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
   });
 
   it("seeds first observation before triggering on a later crossing", async () => {

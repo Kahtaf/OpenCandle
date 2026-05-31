@@ -9,12 +9,16 @@ import {
   type Prediction,
 } from "../../../src/tools/portfolio/predictions.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { httpGet } from "../../../src/infra/http-client.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
+}));
+vi.mock("../../../src/infra/http-client.js", () => ({
+  httpGet: vi.fn(),
 }));
 
 describe("recordPrediction", () => {
@@ -28,6 +32,7 @@ describe("recordPrediction", () => {
     vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
       quote(symbol.toUpperCase(), symbol.toUpperCase() === "MSFT" ? 400 : 180),
     );
+    vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
 
   afterEach(() => {
@@ -97,6 +102,44 @@ describe("recordPrediction", () => {
       symbol: "AAPL",
       direction: "bullish",
     });
+  });
+
+  it("returns candidate matches for an unverified prediction symbol without recording", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(httpGet).mockResolvedValue({
+      quotes: [
+        {
+          symbol: "AAPL",
+          longname: "Apple Inc.",
+          quoteType: "EQUITY",
+          exchange: "NMS",
+          score: 101,
+        },
+      ],
+    });
+
+    const result = await predictionsTool.execute("test", {
+      action: "record",
+      symbol: "APL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 180,
+      timeframe_days: 30,
+    });
+
+    expect(result.content[0].text).toContain("Could not verify APL");
+    expect(result.details).toMatchObject({
+      status: "needs_selection",
+      query: "APL",
+      candidates: [
+        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
+      ],
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listPredictions()).toHaveLength(0);
+    db.close();
   });
 });
 
@@ -349,7 +392,7 @@ describe("checkPredictions", () => {
   });
 });
 
-function quote(symbol: string, price: number): StockQuote {
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
     price,
@@ -365,5 +408,6 @@ function quote(symbol: string, price: number): StockQuote {
     week52High: price + 10,
     week52Low: price - 10,
     timestamp: Date.now(),
+    ...overrides,
   };
 }
