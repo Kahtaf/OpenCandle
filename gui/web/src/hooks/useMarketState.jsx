@@ -12,13 +12,42 @@ const EMPTY_MARKET_STATE = {
 };
 
 export function mergeMarketStateSnapshot(current, data) {
+  const quoteSnapshot = Object.prototype.hasOwnProperty.call(data, "quoteSnapshot")
+    ? data.quoteSnapshot
+    : mergePreservedQuoteSnapshot(current, data);
   return {
     ...EMPTY_MARKET_STATE,
     ...data,
-    quoteSnapshot: Object.prototype.hasOwnProperty.call(data, "quoteSnapshot")
-      ? data.quoteSnapshot
-      : current?.quoteSnapshot ?? null,
+    quoteSnapshot,
   };
+}
+
+function mergePreservedQuoteSnapshot(current, data) {
+  const quoteSnapshot = current?.quoteSnapshot ?? null;
+  if (!quoteSnapshot) return null;
+  if (!Object.prototype.hasOwnProperty.call(data, "portfolio")) return quoteSnapshot;
+  if (portfolioSignature(current?.portfolio ?? []) === portfolioSignature(data.portfolio ?? [])) {
+    return quoteSnapshot;
+  }
+  return {
+    ...quoteSnapshot,
+    portfolioQuotes: [],
+    portfolioSummary: null,
+  };
+}
+
+function portfolioSignature(portfolio) {
+  return portfolio
+    .map((lot) => [
+      lot.id,
+      lot.instrumentId,
+      lot.symbol,
+      lot.quantity,
+      lot.avgCost,
+      lot.currency,
+    ].join(":"))
+    .sort()
+    .join("|");
 }
 
 export function useMarketState({ pollMs = 4000 } = {}) {

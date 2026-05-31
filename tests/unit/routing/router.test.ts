@@ -1105,9 +1105,11 @@ describe("route capability manifest", () => {
       "get_stock_quote",
       "ask_user",
       "get_option_chain",
+      "manage_alerts",
+      "daily_watchlist_report",
     ]);
 
-    expect(tools).toEqual(["get_stock_quote", "ask_user"]);
+    expect(tools).toEqual(["get_stock_quote", "manage_alerts", "daily_watchlist_report", "ask_user"]);
     expect(TOOL_BUNDLE_TOOLS.options).toContain("get_option_chain");
   });
 

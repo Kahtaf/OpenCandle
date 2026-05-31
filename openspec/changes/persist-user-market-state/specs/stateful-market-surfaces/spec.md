@@ -46,6 +46,12 @@ OpenCandle SHALL expose one shared market-state service for watchlist, portfolio
 - **THEN** a later saved-state poll that does not contain a quote snapshot preserves the displayed quote snapshot
 - **AND** quote and P&L cells are not reset to an unchecked state until a newer quote snapshot, stale state, or unavailable state replaces them
 
+#### Scenario: Portfolio edits invalidate derived quote rows
+
+- **WHEN** a portfolio lot quantity, average cost, currency, or identity changes through saved-state polling after a GUI edit
+- **THEN** the GUI SHALL clear quote-derived portfolio values and summary totals for the stale snapshot
+- **AND** it SHALL preserve unrelated watchlist quote rows until a newer quote snapshot replaces them
+
 #### Scenario: TUI reflects GUI changes on next read
 
 - **WHEN** a user mutates watchlist, portfolio, prediction, alert, or report state through the GUI

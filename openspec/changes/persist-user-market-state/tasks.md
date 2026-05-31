@@ -59,6 +59,7 @@
 - [x] 5.20 Verify portfolio updates require `lot_id` and do not rewrite every same-symbol lot.
 - [x] 5.21 Verify resolved prediction history remains visible in later scorecard checks.
 - [x] 5.22 Verify saved market-state prompt context is gated to finance/market-state routes and excluded from pass-through prompts.
+- [x] 5.23 Verify GUI portfolio edits invalidate stale quote-derived portfolio rows and summary totals.
 
 ## 6. Alerts and Reports
 

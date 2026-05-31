@@ -37,6 +37,8 @@ export const TOOL_BUNDLE_TOOLS: Record<ToolBundleName, readonly string[]> = {
     "track_portfolio",
     "manage_watchlist",
     "track_prediction",
+    "manage_alerts",
+    "daily_watchlist_report",
     "search_web",
   ],
   options: ["get_option_chain", "get_stock_quote", "search_ticker", "search_web"],

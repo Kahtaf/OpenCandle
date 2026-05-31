@@ -22,6 +22,7 @@
 - Watchlist row alert shortcuts now require a saved target price and no longer create price-above-zero alerts.
 - Portfolio updates now require a lot id so same-symbol tax lots are not rewritten by a symbol-only update.
 - Portfolio views now avoid row-level value/P&L math when quote currency and lot currency differ without FX conversion.
+- GUI portfolio edits now clear stale quote-derived P&L rows and summary totals until quotes are refreshed.
 - GUI financial number fields now allow decimal values.
 - Instrument-scoped alert creation now resolves symbols without adding them to the default watchlist as a side effect.
 - Manual alert checks now persist trigger events conditionally with the observed rule state, suppressing duplicate events from concurrent checks.
@@ -31,6 +32,7 @@
 - Rules-mode compare preflight aborts now preserve clarification context instead of falling through to the raw prompt.
 - Saved market-state prompt context is now gated to finance/market-state turns so unrelated pass-through prompts do not receive local portfolio or watchlist data.
 - LLM-router acronym drops now sanitize matching symbol slots before missing-slot checks, preventing dropped tokens from reappearing in fallback context.
+- Routed core-market tool bundles now include alert and daily-report tools under tool-scope enforcement.
 - Yahoo instrument search now uses the shared cache and Yahoo rate limiter for autocomplete and workflow preflight.
 - Workflow symbol preflight now preserves user-provided symbols during resolver outages instead of treating provider failures as unknown tickers.
 - Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.
