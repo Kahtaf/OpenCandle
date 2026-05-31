@@ -73,6 +73,63 @@ describe("alertsTool", () => {
     expect(triggered.details).toMatchObject({ checked: 1, triggered: 1 });
   });
 
+  it("does not duplicate events when a manual check sees the same triggered value again", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+    });
+
+    await alertsTool.execute("test", { action: "check" });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 260));
+
+    const triggered = await alertsTool.execute("test", { action: "check" });
+    const duplicate = await alertsTool.execute("test", { action: "check" });
+
+    expect(triggered.details).toMatchObject({ triggered: 1 });
+    expect(duplicate.content[0].text).not.toContain("TRIGGERED");
+    expect(duplicate.details).toMatchObject({ checked: 1, triggered: 0 });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertEvents()).toHaveLength(1);
+    db.close();
+  });
+
+  it("suppresses a fresh crossing while the alert is inside cooldown", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+      cooldown_seconds: 3600,
+    });
+
+    await alertsTool.execute("test", { action: "check" });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 260));
+    await alertsTool.execute("test", { action: "check" });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const rule = service.listAlertRules()[0];
+    expect(rule.lastTriggeredAt).not.toBeNull();
+    service.updateAlertObservation({
+      ruleId: rule.id,
+      observed: { value: 240, field: "last_price", at: new Date().toISOString() },
+      checkedAt: new Date().toISOString(),
+    });
+    db.close();
+
+    const checked = await alertsTool.execute("test", { action: "check" });
+
+    expect(checked.content[0].text).not.toContain("TRIGGERED");
+    expect(checked.details).toMatchObject({ checked: 1, triggered: 0 });
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    expect(verifyService.listAlertEvents()).toHaveLength(1);
+    verifyDb.close();
+  });
+
   it("creates and manually checks RSI threshold alerts", async () => {
     await alertsTool.execute("test", {
       action: "create_rsi_below",
