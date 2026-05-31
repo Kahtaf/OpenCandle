@@ -87,13 +87,12 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | --- | --- |
 | `config.json` | OpenCandle provider config and file-backed settings. |
 | `onboarding.json` | Provider setup, snooze, never-ask, and welcome state. |
-| `watchlist.json` | Saved watchlist entries from `manage_watchlist`. |
-| `portfolio.json` | Saved portfolio positions from `track_portfolio`. |
-| `predictions.json` | Saved prediction records from `track_prediction`. |
-| `state.db` | SQLite memory store. |
+| `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, prediction records, alert rules/events, report history, and import provenance. |
 | `sentinel.db` | Sentiment trend store. |
 | `browser-profile/` | Browser profile data used by Twitter/X login flows. |
 | `logs/` | Reserved OpenCandle log directory. |
+
+Watchlists, portfolios, and predictions are not loaded from `watchlist.json`, `portfolio.json`, or `predictions.json`. Those filenames are intentionally unsupported state sources; OpenCandle uses `state.db` for durable market state.
 
 Pi runtime config and sessions remain separate under Pi's own agent directory. OpenCandle does not move Pi state into `$OPENCANDLE_HOME`.
 

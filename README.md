@@ -47,7 +47,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 | Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
 | Finance routing | Quote lookup, comparison, portfolio review, options strategy, filing checks, macro questions, sentiment reads, and educational prompts route differently. |
 | Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
-| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set. |
+| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set; durable market state is stored in SQLite at `state.db`. |
 | Extensible tools | TypeScript tool APIs, provider boundaries, workflow builders, and package exports for add-on tools. |
 | Eval harness | Unit tests, live provider checks, CLI e2e, GUI browser smoke tests, and competitive finance evals. |
 
