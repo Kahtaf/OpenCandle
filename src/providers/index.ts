@@ -1,4 +1,5 @@
 export { getQuote, getHistory, getOptionsChain, clearCrumbCache, getYahooCrumb, computeTimeToExpiry } from "./yahoo-finance.js";
+export { screenStocks, getQuotes } from "./tradingview.js";
 export { getOverview, getEarnings, getFinancials } from "./alpha-vantage.js";
 export { getSeries } from "./fred.js";
 export { getCryptoPrice, getCryptoHistory } from "./coingecko.js";

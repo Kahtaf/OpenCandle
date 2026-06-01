@@ -86,6 +86,13 @@ describe("system prompt — analyst stance", () => {
     expect(prompt).toContain("whether sentiment diverges from price action");
   });
 
+  it("guides stock screening separately from single-symbol quote tools", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("screen_stocks");
+    expect(prompt).toContain("breadth");
+    expect(prompt).toContain("single-security quote");
+  });
+
   it("exempts conceptual education from committal response labels", () => {
     const prompt = buildSystemPrompt();
     expect(prompt).toContain("For conceptual education questions");

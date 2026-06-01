@@ -1,0 +1,11 @@
+{
+  "totalCount": 1,
+  "fields": ["RSI|60", "name", "close"],
+  "symbols": [
+    {
+      "s": "NASDAQ:AAPL",
+      "f": [29.4, "AAPL", 190.5]
+    }
+  ],
+  "time": 1717000003
+}

@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import * as fs from "node:fs";
 import { join } from "node:path";
+import { cache } from "../../../src/infra/cache.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { getQuotes } from "../../../src/providers/tradingview.js";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
@@ -13,6 +15,10 @@ vi.mock("node:fs", () => ({
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
+}));
+
+vi.mock("../../../src/providers/tradingview.js", () => ({
+  getQuotes: vi.fn(),
 }));
 
 describe("watchlistTool", () => {
@@ -27,6 +33,8 @@ describe("watchlistTool", () => {
     vi.mocked(fs.readFileSync).mockReturnValue("[]");
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
     vi.mocked(getQuote).mockResolvedValue({ price: 180 } as any);
+    vi.mocked(getQuotes).mockResolvedValue([]);
+    cache.clear();
   });
 
   afterEach(() => {
@@ -91,6 +99,160 @@ describe("watchlistTool", () => {
     const result = await watchlistTool.execute("test", { action: "check" });
     expect(result.content[0].text).toContain("AAPL");
     expect(result.content[0].text).toContain("180"); // mocked price
+  });
+
+  it("checks equity watchlist symbols through a TradingView batch and fills suffix symbols with Yahoo", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify([
+        { symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 200 },
+        { symbol: "BTC-USD", addedAt: "2024-01-01" },
+      ]),
+    );
+    vi.mocked(getQuotes).mockResolvedValue([
+      {
+        requestedSymbol: "AAPL",
+        tvSymbol: "NASDAQ:AAPL",
+        symbol: "AAPL",
+        price: 190.5,
+        change: 2.35,
+        changePercent: 1.25,
+        volume: 123,
+        sourceProvider: "tradingview",
+        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+      },
+    ]);
+    vi.mocked(getQuote).mockResolvedValue({ price: 68000 } as any);
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(getQuotes).toHaveBeenCalledWith(["AAPL"]);
+    expect(getQuote).toHaveBeenCalledTimes(1);
+    expect(getQuote).toHaveBeenCalledWith("BTC-USD");
+    expect(result.content[0].text).toContain("AAPL: $190.50");
+    expect(result.content[0].text).toContain("BTC-USD: $68000.00");
+    expect(result.content[0].text).toContain("TradingView scanner data may be delayed");
+    expect((result.details as any).items).toEqual([
+      expect.objectContaining({ symbol: "AAPL", sourceProvider: "tradingview", dataCaveat: expect.stringContaining("TradingView") }),
+      expect.objectContaining({ symbol: "BTC-USD", sourceProvider: "yahoo", dataCaveat: undefined }),
+    ]);
+  });
+
+  it("checks 100+ equity symbols with one TradingView batch call", async () => {
+    const items = Array.from({ length: 101 }, (_, index) => ({
+      symbol: `SYM${index}`,
+      addedAt: "2024-01-01",
+    }));
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(items));
+    vi.mocked(getQuotes).mockResolvedValue(
+      items.map((item, index) => ({
+        requestedSymbol: item.symbol,
+        tvSymbol: `NASDAQ:${item.symbol}`,
+        symbol: item.symbol,
+        price: 100 + index,
+        change: 0,
+        changePercent: 0,
+        volume: 1000,
+        sourceProvider: "tradingview",
+        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+      })),
+    );
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(getQuotes).toHaveBeenCalledTimes(1);
+    expect(getQuotes).toHaveBeenCalledWith(items.map((item) => item.symbol));
+    expect(getQuote).not.toHaveBeenCalled();
+    expect((result.details as any).items).toHaveLength(101);
+    expect((result.details as any).items[100]).toEqual(
+      expect.objectContaining({ symbol: "SYM100", currentPrice: 200, sourceProvider: "tradingview" }),
+    );
+  });
+
+  it("labels stale TradingView watchlist quotes before using them for alerts", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify([{ symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 100 }]),
+    );
+    vi.mocked(getQuotes).mockResolvedValue([
+      {
+        requestedSymbol: "AAPL",
+        tvSymbol: "NASDAQ:AAPL",
+        symbol: "AAPL",
+        price: 190.5,
+        change: 2.35,
+        changePercent: 1.25,
+        volume: 123,
+        sourceProvider: "tradingview",
+        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+      },
+    ]);
+    cache.set("test:stale-flag", { ok: true }, -1);
+    cache.getStale("test:stale-flag", 60_000);
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("cached TradingView data from");
+    expect((result.details as any).items[0].dataCaveat).toContain("cached TradingView data from");
+    expect(result.content[0].text).toContain("TARGET HIT");
+  });
+
+  it("fills missing TradingView rows through Yahoo without discarding successful rows", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify([
+        { symbol: "AAPL", addedAt: "2024-01-01" },
+        { symbol: "UNKNOWN", addedAt: "2024-01-01" },
+      ]),
+    );
+    vi.mocked(getQuotes).mockResolvedValue([
+      {
+        requestedSymbol: "AAPL",
+        tvSymbol: "NASDAQ:AAPL",
+        symbol: "AAPL",
+        price: 190.5,
+        change: 2.35,
+        changePercent: 1.25,
+        volume: 123,
+        sourceProvider: "tradingview",
+        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+      },
+    ]);
+    vi.mocked(getQuote).mockResolvedValue({ price: 12.34 } as any);
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(getQuotes).toHaveBeenCalledWith(["AAPL", "UNKNOWN"]);
+    expect(getQuote).toHaveBeenCalledTimes(1);
+    expect(getQuote).toHaveBeenCalledWith("UNKNOWN");
+    expect((result.details as any).items).toEqual([
+      expect.objectContaining({ symbol: "AAPL", currentPrice: 190.5, sourceProvider: "tradingview" }),
+      expect.objectContaining({ symbol: "UNKNOWN", currentPrice: 12.34, sourceProvider: "yahoo" }),
+    ]);
+  });
+
+  it("falls back to Yahoo for the whole list when TradingView is unavailable", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify([
+        { symbol: "AAPL", addedAt: "2024-01-01" },
+        { symbol: "MSFT", addedAt: "2024-01-01" },
+      ]),
+    );
+    vi.mocked(getQuotes).mockRejectedValue(new Error("HTTP 429 Too Many Requests"));
+    vi.mocked(getQuote)
+      .mockResolvedValueOnce({ price: 190 } as any)
+      .mockResolvedValueOnce({ price: 420 } as any);
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(getQuotes).toHaveBeenCalledWith(["AAPL", "MSFT"]);
+    expect(getQuote).toHaveBeenCalledTimes(2);
+    expect((result.details as any).items).toEqual([
+      expect.objectContaining({ symbol: "AAPL", currentPrice: 190, sourceProvider: "yahoo" }),
+      expect.objectContaining({ symbol: "MSFT", currentPrice: 420, sourceProvider: "yahoo" }),
+    ]);
   });
 
   it("flags when target price is hit", async () => {

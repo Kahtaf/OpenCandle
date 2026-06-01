@@ -97,17 +97,32 @@ export function getAllTools(): AgentTool<any>[] {
 
 That's it — the tool is now available to the agent.
 
+If the tool should be available in normal OpenCandle conversations, also wire it into active-tool selection:
+
+- Add the tool name to the relevant bundle in `src/routing/route-manifest.ts` (for example, core market tools belong in `TOOL_BUNDLE_TOOLS.core_market`).
+- Update the tool catalog text in `src/prompts/context-builder.ts` and, when the global prompt mentions the same domain, `src/system-prompt.ts`.
+- Add tests showing the tool is present for the intended bundle and absent from unrelated bundles.
+- Add prompt or harness coverage proving the agent chooses the new tool for the intended prompt class and keeps existing tools for adjacent tasks.
+
+`screen_stocks` is the reference for a provider-backed tool that needed this wiring: it is exposed for breadth/screening prompts, while Yahoo-backed quote/history tools remain the right choice for single-security quote or history prompts.
+
 ## Using OpenCandle Infrastructure
 
 ### HTTP Client
 
 ```ts
-import { httpGet } from "../../infra/http-client.js";
+import { httpGet, httpPost } from "../../infra/http-client.js";
 
 const data = await httpGet<MyApiResponse>("https://api.example.com/data", {
   headers: { Authorization: `Bearer ${apiKey}` },
 });
+
+const posted = await httpPost<MyApiResponse>("https://api.example.com/search", {
+  query: "AAPL",
+});
 ```
+
+`httpPost` is internal first-party infrastructure at the moment; add-on packages should continue using the currently exported `opencandle/tool-kit` APIs unless that package subpath explicitly exports new HTTP helpers.
 
 ### Caching
 
@@ -135,8 +150,21 @@ if (stale) return stale.value; // serve stale data while provider is down
 ```ts
 import { rateLimiter } from "../../infra/rate-limiter.js";
 
-await rateLimiter.acquire("my-api", { maxPerMinute: 30 });
+await rateLimiter.acquire("my-api");
 ```
+
+Configure first-party provider buckets in `src/infra/rate-limiter.ts`, and use the provider ID consistently in tests and `wrapProvider()`.
+
+### New Provider Checklist
+
+For a first-party provider, follow the Yahoo provider pattern in `src/providers/yahoo-finance.ts`:
+
+- Put the API client in `src/providers/<provider>.ts` with verb-prefixed async functions that return typed objects.
+- Use shared `httpGet`/`httpPost`, `rateLimiter.acquire("<provider>")`, `cache`, TTLs, and stale-cache fallback instead of provider-local fetch/retry logic.
+- Export the provider functions from `src/providers/index.ts`.
+- Save deterministic fixtures in `tests/fixtures/<provider>/`; unit tests must mock `globalThis.fetch` and must not call live APIs.
+- Decode provider responses defensively and surface provider limits or freshness caveats in tool output.
+- If the provider backs a new tool, register the tool in `src/tools/index.ts`, route bundles, prompt catalog text, and focused tests.
 
 ### Provider Wrapping
 
