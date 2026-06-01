@@ -43,6 +43,7 @@ import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { createAutomationHeartbeatRunner, normalizeAutomationHeartbeatMs } from "./automation-heartbeat.js";
+import { isLoopbackAddress } from "./private-api-access.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
 import type { ChatEvent } from "../shared/chat-events.js";
@@ -147,11 +148,13 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/market-state" && req.method === "GET") {
+    if (!allowPrivateMarketStateApi(req, res)) return;
     writeJson(res, buildMarketStateSnapshot());
     return;
   }
 
   if (url.pathname === "/api/market-state/quotes" && req.method === "GET") {
+    if (!allowPrivateMarketStateApi(req, res)) return;
     writeJson(res, await buildMarketStateQuoteSnapshot());
     return;
   }
@@ -725,6 +728,13 @@ async function pollVisibleQuotes(): Promise<void> {
 function writeJson(res: ServerResponse, value: unknown): void {
   res.writeHead(200, { "content-type": "application/json" });
   res.end(JSON.stringify(value));
+}
+
+function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
+  if (isLoopbackAddress(req.socket.remoteAddress)) return true;
+  res.writeHead(403, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: "Market-state API is only available to local browser sessions." }));
+  return false;
 }
 
 function writeSse(res: ServerResponse, event: ChatEvent): void {
