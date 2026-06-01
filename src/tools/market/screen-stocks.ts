@@ -73,6 +73,7 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
 
     const lines = [
       `**Stock screen** — ${rows.length} TradingView result${rows.length === 1 ? "" : "s"}`,
+      ...(result.stale ? [`⚠ Using cached TradingView screen from ${result.timestamp}.`] : []),
       "Data caveat: TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       "",
       ...rows.map(formatRow),

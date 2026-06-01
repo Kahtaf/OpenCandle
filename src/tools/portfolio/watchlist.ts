@@ -131,8 +131,13 @@ export const watchlistTool: AgentTool<typeof params> = {
       `**Watchlist** — ${items.length} symbols${alertItems.length > 0 ? ` | ${alertItems.length} ALERT(S)` : ""}`,
       "",
     ];
-    if (checks.some((c) => c.sourceProvider === "tradingview")) {
-      lines.push("Data caveat: TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.", "");
+    const tradingViewCaveats = Array.from(new Set(
+      checks
+        .filter((c) => c.sourceProvider === "tradingview")
+        .map((c) => c.dataCaveat ?? "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint."),
+    ));
+    if (tradingViewCaveats.length > 0) {
+      lines.push(...tradingViewCaveats.map((caveat) => `Data caveat: ${caveat}`), "");
     }
 
     for (const c of checks) {
@@ -161,7 +166,12 @@ async function checkWatchlistPrices(items: WatchlistItem[]): Promise<WatchlistCh
     const result = await wrapProvider("tradingview", () => getQuotes(tradingViewSymbols));
     if (result.status === "ok" && result.data.length > 0) {
       for (const quote of result.data) {
-        tradingViewQuotes.set(quote.requestedSymbol.toUpperCase(), quote);
+        tradingViewQuotes.set(quote.requestedSymbol.toUpperCase(), {
+          ...quote,
+          dataCaveat: result.stale
+            ? `cached TradingView data from ${result.timestamp}; ${quote.dataCaveat}`
+            : quote.dataCaveat,
+        });
       }
     }
   }

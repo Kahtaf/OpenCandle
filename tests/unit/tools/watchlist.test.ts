@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import * as fs from "node:fs";
 import { join } from "node:path";
+import { cache } from "../../../src/infra/cache.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import { getQuotes } from "../../../src/providers/tradingview.js";
 
@@ -33,6 +34,7 @@ describe("watchlistTool", () => {
     vi.mocked(fs.writeFileSync).mockImplementation(() => {});
     vi.mocked(getQuote).mockResolvedValue({ price: 180 } as any);
     vi.mocked(getQuotes).mockResolvedValue([]);
+    cache.clear();
   });
 
   afterEach(() => {
@@ -166,6 +168,34 @@ describe("watchlistTool", () => {
     expect((result.details as any).items[100]).toEqual(
       expect.objectContaining({ symbol: "SYM100", currentPrice: 200, sourceProvider: "tradingview" }),
     );
+  });
+
+  it("labels stale TradingView watchlist quotes before using them for alerts", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify([{ symbol: "AAPL", addedAt: "2024-01-01", targetPrice: 100 }]),
+    );
+    vi.mocked(getQuotes).mockResolvedValue([
+      {
+        requestedSymbol: "AAPL",
+        tvSymbol: "NASDAQ:AAPL",
+        symbol: "AAPL",
+        price: 190.5,
+        change: 2.35,
+        changePercent: 1.25,
+        volume: 123,
+        sourceProvider: "tradingview",
+        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+      },
+    ]);
+    cache.set("test:stale-flag", { ok: true }, -1);
+    cache.getStale("test:stale-flag", 60_000);
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("cached TradingView data from");
+    expect((result.details as any).items[0].dataCaveat).toContain("cached TradingView data from");
+    expect(result.content[0].text).toContain("TARGET HIT");
   });
 
   it("fills missing TradingView rows through Yahoo without discarding successful rows", async () => {

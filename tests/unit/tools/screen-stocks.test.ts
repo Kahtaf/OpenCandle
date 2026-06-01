@@ -62,6 +62,27 @@ describe("screen_stocks tool", () => {
     expect(result.details).toHaveLength(1);
   });
 
+  it("labels stale cached TradingView screens with the cache timestamp", async () => {
+    vi.mocked(wrapProvider).mockResolvedValue({
+      status: "ok",
+      data: [
+        {
+          tvSymbol: "NASDAQ:AAPL",
+          symbol: "AAPL",
+          values: { close: 190.5 },
+          sourceProvider: "tradingview",
+          dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        },
+      ],
+      timestamp: "2026-06-01T00:00:00.000Z",
+      stale: true,
+    });
+
+    const result = await screenStocksTool.execute("call-stale", { market: "america" });
+
+    expect((result.content[0] as any).text).toContain("cached TradingView screen from 2026-06-01T00:00:00.000Z");
+  });
+
   it("returns structured unavailable text without fabricating rows", async () => {
     vi.mocked(wrapProvider).mockResolvedValue({
       status: "unavailable",
