@@ -890,6 +890,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           [],
           output.routeKind,
         );
+        coordinator.setPendingResolvedTurnContext(null);
         coordinator.setPendingFallbackContext({
           assumptionsBlock: buildAssumptionsBlockFromRouter(output.slots),
           missingRequired: ["symbols"],

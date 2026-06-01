@@ -873,6 +873,15 @@ describe("opencandle extension", () => {
       expect(call![1]).toMatchObject({
         reason: "preflight-insufficient-symbols",
       });
+
+      const beforeAgentStart = fake.handlers.get("before_agent_start")?.[0];
+      const promptResult = await beforeAgentStart!(
+        { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
+        {},
+      );
+      expect(promptResult.systemPrompt).toContain("Fallback Playbook");
+      expect(promptResult.systemPrompt).toContain("ticker preflight left fewer than two valid symbols");
+      expect(promptResult.systemPrompt).not.toContain("compare_assets");
     });
 
     it("returns undefined for fallback turns so the main agent runs", async () => {

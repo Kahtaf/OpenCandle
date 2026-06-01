@@ -43,7 +43,7 @@ import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { createAutomationHeartbeatRunner, normalizeAutomationHeartbeatMs } from "./automation-heartbeat.js";
-import { isLoopbackAddress } from "./private-api-access.js";
+import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
 import type { ChatEvent } from "../shared/chat-events.js";
@@ -731,9 +731,9 @@ function writeJson(res: ServerResponse, value: unknown): void {
 }
 
 function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
-  if (isLoopbackAddress(req.socket.remoteAddress)) return true;
+  if (isTrustedPrivateApiRequest(req.socket.remoteAddress, req.headers)) return true;
   res.writeHead(403, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "Market-state API is only available to local browser sessions." }));
+  res.end(JSON.stringify({ error: "Market-state API is only available to trusted GUI browser sessions." }));
   return false;
 }
 
