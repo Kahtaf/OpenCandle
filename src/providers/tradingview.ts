@@ -156,7 +156,8 @@ export async function getQuotes(symbols: string[]): Promise<TradingViewQuote[]> 
     const byTvSymbol = new Map(rows.map((row) => [row.tvSymbol.toUpperCase(), row]));
     for (const symbol of qualified) {
       const row = byTvSymbol.get(symbol);
-      if (row) resolved.set(symbol, rowToQuote(symbol, row));
+      const quote = row ? rowToQuote(symbol, row) : undefined;
+      if (quote) resolved.set(symbol, quote);
     }
   }
 
@@ -166,7 +167,8 @@ export async function getQuotes(symbols: string[]): Promise<TradingViewQuote[]> 
     const byName = groupRowsByName(rows);
     for (const symbol of bare) {
       const row = pickPrimaryListing(byName.get(symbol) ?? []);
-      if (row) resolved.set(symbol, rowToQuote(symbol, row));
+      const quote = row ? rowToQuote(symbol, row) : undefined;
+      if (quote) resolved.set(symbol, quote);
     }
   }
 
@@ -265,8 +267,9 @@ function decodeScannerRows(response: TradingViewResponse, requestedColumns: read
   });
 }
 
-function rowToQuote(requestedSymbol: string, row: DecodedRow): TradingViewQuote {
-  const price = numberValue(row.values.close) ?? 0;
+function rowToQuote(requestedSymbol: string, row: DecodedRow): TradingViewQuote | undefined {
+  const price = numberValue(row.values.close);
+  if (price === undefined) return undefined;
   const changePercent = numberValue(row.values.change) ?? 0;
   const changeAbs = numberValue(row.values.change_abs) ?? 0;
   return {

@@ -157,6 +157,21 @@ describe("TradingView provider", () => {
     });
   });
 
+  it("treats quote rows without a finite close as unresolved", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        fields: ["name", "volume", "exchange", "market", "description", "type", "typespecs"],
+        symbols: [{
+          s: "NASDAQ:AAPL",
+          f: ["AAPL", 1000, "NASDAQ", "america", "Apple Inc.", "stock", ["common"]],
+        }],
+      }),
+    });
+
+    await expect(getQuotes(["AAPL"])).resolves.toEqual([]);
+  });
+
   it("serves stale scanner data when a repeated request fails within the stale window", async () => {
     let now = new Date("2026-06-01T00:00:00.000Z").getTime();
     vi.spyOn(Date, "now").mockImplementation(() => now);
