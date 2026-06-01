@@ -734,7 +734,7 @@ function writeJson(res: ServerResponse, value: unknown): void {
 }
 
 function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
-  if (isTrustedPrivateApiRequest(req.socket.remoteAddress, req.headers, privateApiSessionToken)) return true;
+  if (isTrustedPrivateApiRequest(req.headers, privateApiSessionToken)) return true;
   res.writeHead(403, { "content-type": "application/json" });
   res.end(JSON.stringify({ error: "Market-state API is only available to trusted GUI browser sessions." }));
   return false;

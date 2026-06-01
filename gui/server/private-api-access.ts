@@ -13,12 +13,25 @@ export function isLoopbackAddress(remoteAddress: string | undefined): boolean {
 }
 
 export function isTrustedPrivateApiRequest(
-  remoteAddress: string | undefined,
   headers: IncomingHttpHeaders,
   sessionToken: string,
 ): boolean {
-  if (isLoopbackAddress(remoteAddress)) return true;
-  return cookieValue(headers.cookie, PRIVATE_API_COOKIE) === sessionToken;
+  if (cookieValue(headers.cookie, PRIVATE_API_COOKIE) !== sessionToken) return false;
+
+  const fetchSite = headerValue(headers["sec-fetch-site"]);
+  if (fetchSite != null && fetchSite !== "same-origin" && fetchSite !== "none") return false;
+
+  const origin = headerValue(headers.origin);
+  const host = headerValue(headers.host);
+  if (origin != null && host != null) {
+    try {
+      if (new URL(origin).host !== host) return false;
+    } catch {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 export function privateApiCookieHeader(sessionToken: string): string {
@@ -39,4 +52,8 @@ function cookieValue(header: string | string[] | undefined, name: string): strin
     }
   }
   return undefined;
+}
+
+function headerValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
