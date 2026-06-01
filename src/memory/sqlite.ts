@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -209,6 +209,11 @@ const CURRENT_SCHEMA = `
     next_check_at TEXT,
     last_checked_at TEXT,
     last_observed_json TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    retrigger_mode TEXT NOT NULL DEFAULT 'recurring',
+    last_condition_state TEXT NOT NULL DEFAULT 'unknown',
+    rule_revision INTEGER NOT NULL DEFAULT 1,
+    arm_cycle_id INTEGER NOT NULL DEFAULT 1,
     cooldown_seconds INTEGER,
     last_triggered_at TEXT,
     created_at TEXT NOT NULL,
@@ -222,10 +227,35 @@ const CURRENT_SCHEMA = `
     instrument_id INTEGER,
     observed_value_json TEXT,
     triggered_at TEXT NOT NULL,
+    observed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    provider_data_at TEXT,
+    source_provider TEXT,
+    cache_status TEXT NOT NULL DEFAULT 'live',
+    data_delay_ms INTEGER,
+    trigger_source TEXT NOT NULL DEFAULT 'manual',
+    dedupe_key TEXT,
     status TEXT NOT NULL,
     message TEXT,
     FOREIGN KEY (alert_rule_id) REFERENCES alert_rules(id) ON DELETE CASCADE,
     FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_events_dedupe
+    ON alert_events(dedupe_key)
+    WHERE dedupe_key IS NOT NULL;
+
+  CREATE TABLE IF NOT EXISTS alert_check_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL,
+    trigger_type TEXT NOT NULL,
+    checked_count INTEGER NOT NULL DEFAULT 0,
+    triggered_count INTEGER NOT NULL DEFAULT 0,
+    unavailable_count INTEGER NOT NULL DEFAULT 0,
+    owner_id TEXT,
+    error_json TEXT,
+    provider_status_json TEXT
   );
 
   CREATE TABLE IF NOT EXISTS report_templates (
@@ -249,10 +279,47 @@ const CURRENT_SCHEMA = `
     started_at TEXT NOT NULL,
     completed_at TEXT,
     status TEXT NOT NULL,
+    trigger_type TEXT NOT NULL DEFAULT 'manual',
+    scheduled_for TEXT,
+    owner_id TEXT,
     artifact_path TEXT,
     summary_json TEXT,
     errors_json TEXT,
     FOREIGN KEY (template_id) REFERENCES report_templates(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS automation_runner_leases (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    owner_id TEXT NOT NULL,
+    owner_kind TEXT NOT NULL,
+    acquired_at TEXT NOT NULL,
+    heartbeat_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS notification_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type TEXT NOT NULL,
+    source_id INTEGER,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    payload_json TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    acknowledged_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS notification_delivery_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notification_event_id INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    status TEXT NOT NULL,
+    attempted_at TEXT NOT NULL,
+    completed_at TEXT,
+    response_json TEXT,
+    error TEXT,
+    FOREIGN KEY (notification_event_id) REFERENCES notification_events(id) ON DELETE CASCADE
   );
 
   CREATE TABLE IF NOT EXISTS import_batches (
@@ -312,14 +379,21 @@ function ensureCurrentSchema(db: Database.Database): void {
     return;
   }
 
+  if (currentVersion === 6) {
+    migrateV6ToV7(db);
+    return;
+  }
+
   if (currentVersion === 5) {
     migrateV5ToV6(db);
+    migrateV6ToV7(db);
     return;
   }
 
   if (currentVersion === 4) {
     migrateV4ToV5(db);
     migrateV5ToV6(db);
+    migrateV6ToV7(db);
     return;
   }
 
@@ -327,6 +401,7 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV3ToV4(db);
     migrateV4ToV5(db);
     migrateV5ToV6(db);
+    migrateV6ToV7(db);
     return;
   }
 
@@ -336,6 +411,7 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV3ToV4(db);
     migrateV4ToV5(db);
     migrateV5ToV6(db);
+    migrateV6ToV7(db);
     return;
   }
 
@@ -380,6 +456,33 @@ function migrateV5ToV6(db: Database.Database): void {
   addColumnIfMissing(db, "import_rows", "source_account_ref", "TEXT");
   addColumnIfMissing(db, "import_rows", "source_metadata_json", "TEXT");
 
+  db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(6);
+}
+
+function migrateV6ToV7(db: Database.Database): void {
+  addColumnIfMissing(db, "alert_rules", "status", "TEXT NOT NULL DEFAULT 'active'");
+  addColumnIfMissing(db, "alert_rules", "retrigger_mode", "TEXT NOT NULL DEFAULT 'recurring'");
+  addColumnIfMissing(db, "alert_rules", "last_condition_state", "TEXT NOT NULL DEFAULT 'unknown'");
+  addColumnIfMissing(db, "alert_rules", "rule_revision", "INTEGER NOT NULL DEFAULT 1");
+  addColumnIfMissing(db, "alert_rules", "arm_cycle_id", "INTEGER NOT NULL DEFAULT 1");
+
+  addColumnIfMissing(db, "alert_events", "observed_at", "TEXT");
+  addColumnIfMissing(db, "alert_events", "provider_data_at", "TEXT");
+  addColumnIfMissing(db, "alert_events", "source_provider", "TEXT");
+  addColumnIfMissing(db, "alert_events", "cache_status", "TEXT NOT NULL DEFAULT 'live'");
+  addColumnIfMissing(db, "alert_events", "data_delay_ms", "INTEGER");
+  addColumnIfMissing(db, "alert_events", "trigger_source", "TEXT NOT NULL DEFAULT 'manual'");
+  addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
+
+  addColumnIfMissing(db, "report_runs", "trigger_type", "TEXT NOT NULL DEFAULT 'manual'");
+  addColumnIfMissing(db, "report_runs", "scheduled_for", "TEXT");
+  addColumnIfMissing(db, "report_runs", "owner_id", "TEXT");
+
+  if (tableExists(db, "alert_events")) {
+    db.exec("UPDATE alert_events SET observed_at = triggered_at WHERE observed_at IS NULL");
+  }
+
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();
@@ -393,9 +496,19 @@ function addColumnIfMissing(
   definition: string,
 ): void {
   const cols = (db.pragma(`table_info(${tableName})`) as Array<{ name: string }>).map((c) => c.name);
+  if (cols.length === 0) {
+    if (!tableExists(db, tableName)) return;
+  }
   if (!cols.includes(columnName)) {
     db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
   }
+}
+
+function tableExists(db: Database.Database, tableName: string): boolean {
+  const table = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName) as { name: string } | undefined;
+  return table != null;
 }
 
 function readSchemaVersion(db: Database.Database): number | null {
@@ -416,6 +529,10 @@ function resetSchema(db: Database.Database): void {
   db.exec(`
     DROP TABLE IF EXISTS import_rows;
     DROP TABLE IF EXISTS import_batches;
+    DROP TABLE IF EXISTS notification_delivery_attempts;
+    DROP TABLE IF EXISTS notification_events;
+    DROP TABLE IF EXISTS automation_runner_leases;
+    DROP TABLE IF EXISTS alert_check_runs;
     DROP TABLE IF EXISTS report_runs;
     DROP TABLE IF EXISTS report_templates;
     DROP TABLE IF EXISTS alert_events;

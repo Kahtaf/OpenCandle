@@ -131,6 +131,11 @@ export interface AlertRuleRecord {
   nextCheckAt: string | null;
   lastCheckedAt: string | null;
   lastObservedJson: unknown;
+  status: string;
+  retriggerMode: string;
+  lastConditionState: string;
+  ruleRevision: number;
+  armCycleId: number;
   cooldownSeconds: number | null;
   lastTriggeredAt: string | null;
   createdAt: string;
@@ -143,8 +148,65 @@ export interface AlertEventRecord {
   instrumentId: number | null;
   observedValueJson: unknown;
   triggeredAt: string;
+  observedAt: string;
+  providerDataAt: string | null;
+  sourceProvider: string | null;
+  cacheStatus: string;
+  dataDelayMs: number | null;
+  triggerSource: string;
+  dedupeKey: string | null;
   status: string;
   message: string | null;
+}
+
+export interface AutomationRunnerLeaseRecord {
+  ownerId: string;
+  ownerKind: string;
+  acquiredAt: string;
+  heartbeatAt: string;
+  expiresAt: string;
+}
+
+export interface AutomationRunnerLeaseResult extends AutomationRunnerLeaseRecord {
+  acquired: boolean;
+}
+
+export interface AlertCheckRunRecord {
+  id: number;
+  startedAt: string;
+  completedAt: string | null;
+  status: string;
+  triggerType: string;
+  checkedCount: number;
+  triggeredCount: number;
+  unavailableCount: number;
+  ownerId: string | null;
+  errorJson: unknown;
+  providerStatusJson: unknown;
+}
+
+export interface NotificationEventRecord {
+  id: number;
+  sourceType: string;
+  sourceId: number | null;
+  severity: string;
+  title: string;
+  body: string;
+  payloadJson: unknown;
+  status: string;
+  createdAt: string;
+  acknowledgedAt: string | null;
+}
+
+export interface NotificationDeliveryAttemptRecord {
+  id: number;
+  notificationEventId: number;
+  channel: string;
+  status: string;
+  attemptedAt: string;
+  completedAt: string | null;
+  responseJson: unknown;
+  error: string | null;
 }
 
 export interface ReportTemplateRecord {
@@ -168,6 +230,9 @@ export interface ReportRunRecord {
   startedAt: string;
   completedAt: string | null;
   status: string;
+  triggerType: string;
+  scheduledFor: string | null;
+  ownerId: string | null;
   artifactPath: string | null;
   summaryJson: unknown;
   errorsJson: unknown;
@@ -303,6 +368,11 @@ type AlertRuleRow = {
   next_check_at: string | null;
   last_checked_at: string | null;
   last_observed_json: string | null;
+  status: string;
+  retrigger_mode: string;
+  last_condition_state: string;
+  rule_revision: number;
+  arm_cycle_id: number;
   cooldown_seconds: number | null;
   last_triggered_at: string | null;
   created_at: string;
@@ -315,8 +385,61 @@ type AlertEventRow = {
   instrument_id: number | null;
   observed_value_json: string | null;
   triggered_at: string;
+  observed_at: string;
+  provider_data_at: string | null;
+  source_provider: string | null;
+  cache_status: string;
+  data_delay_ms: number | null;
+  trigger_source: string;
+  dedupe_key: string | null;
   status: string;
   message: string | null;
+};
+
+type AutomationRunnerLeaseRow = {
+  owner_id: string;
+  owner_kind: string;
+  acquired_at: string;
+  heartbeat_at: string;
+  expires_at: string;
+};
+
+type AlertCheckRunRow = {
+  id: number;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  trigger_type: string;
+  checked_count: number;
+  triggered_count: number;
+  unavailable_count: number;
+  owner_id: string | null;
+  error_json: string | null;
+  provider_status_json: string | null;
+};
+
+type NotificationEventRow = {
+  id: number;
+  source_type: string;
+  source_id: number | null;
+  severity: string;
+  title: string;
+  body: string;
+  payload_json: string | null;
+  status: string;
+  created_at: string;
+  acknowledged_at: string | null;
+};
+
+type NotificationDeliveryAttemptRow = {
+  id: number;
+  notification_event_id: number;
+  channel: string;
+  status: string;
+  attempted_at: string;
+  completed_at: string | null;
+  response_json: string | null;
+  error: string | null;
 };
 
 type ReportTemplateRow = {
@@ -340,6 +463,9 @@ type ReportRunRow = {
   started_at: string;
   completed_at: string | null;
   status: string;
+  trigger_type: string;
+  scheduled_for: string | null;
+  owner_id: string | null;
   artifact_path: string | null;
   summary_json: string | null;
   errors_json: string | null;
@@ -874,6 +1000,206 @@ export class MarketStateService {
     return mapInstrument(this.upsertInstrument(input));
   }
 
+  acquireAutomationRunnerLease(params: {
+    ownerId: string;
+    ownerKind: string;
+    now?: string;
+    ttlSeconds: number;
+  }): AutomationRunnerLeaseResult {
+    const now = params.now ?? new Date().toISOString();
+    const nowMs = new Date(now).getTime();
+    const expiresAt = new Date(nowMs + params.ttlSeconds * 1000).toISOString();
+    const tx = this.db.transaction(() => {
+      const current = this.db
+        .prepare("SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1")
+        .get() as AutomationRunnerLeaseRow | undefined;
+
+      if (current != null && current.owner_id !== params.ownerId && new Date(current.expires_at).getTime() > nowMs) {
+        return { acquired: false, ...mapAutomationRunnerLease(current) };
+      }
+
+      this.db
+        .prepare(
+          `INSERT INTO automation_runner_leases (
+             id, owner_id, owner_kind, acquired_at, heartbeat_at, expires_at
+           )
+           VALUES (1, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             owner_id = excluded.owner_id,
+             owner_kind = excluded.owner_kind,
+             acquired_at = excluded.acquired_at,
+             heartbeat_at = excluded.heartbeat_at,
+             expires_at = excluded.expires_at`,
+        )
+        .run(params.ownerId, params.ownerKind, now, now, expiresAt);
+
+      return {
+        acquired: true,
+        ownerId: params.ownerId,
+        ownerKind: params.ownerKind,
+        acquiredAt: now,
+        heartbeatAt: now,
+        expiresAt,
+      };
+    });
+    return tx();
+  }
+
+  startAlertCheckRun(params: {
+    ownerId?: string | null;
+    startedAt?: string;
+    triggerType: string;
+  }): AlertCheckRunRecord {
+    const startedAt = params.startedAt ?? new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO alert_check_runs (
+           started_at, status, trigger_type, owner_id
+         )
+         VALUES (?, 'running', ?, ?)`,
+      )
+      .run(startedAt, params.triggerType, params.ownerId ?? null);
+    return this.getAlertCheckRun(Number(result.lastInsertRowid));
+  }
+
+  completeAlertCheckRun(id: number, params: {
+    completedAt?: string;
+    status: string;
+    checkedCount: number;
+    triggeredCount: number;
+    unavailableCount: number;
+    error?: unknown;
+    providerStatus?: unknown;
+  }): AlertCheckRunRecord {
+    const completedAt = params.completedAt ?? new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE alert_check_runs
+         SET completed_at = ?,
+             status = ?,
+             checked_count = ?,
+             triggered_count = ?,
+             unavailable_count = ?,
+             error_json = ?,
+             provider_status_json = ?
+         WHERE id = ?`,
+      )
+      .run(
+        completedAt,
+        params.status,
+        params.checkedCount,
+        params.triggeredCount,
+        params.unavailableCount,
+        params.error == null ? null : JSON.stringify(params.error),
+        params.providerStatus == null ? null : JSON.stringify(params.providerStatus),
+        id,
+      );
+    return this.getAlertCheckRun(id);
+  }
+
+  getAlertCheckRun(id: number): AlertCheckRunRecord {
+    const row = this.db.prepare("SELECT * FROM alert_check_runs WHERE id = ?").get(id) as
+      | AlertCheckRunRow
+      | undefined;
+    if (row == null) throw new Error(`alert check run ${id} not found`);
+    return mapAlertCheckRun(row);
+  }
+
+  recordNotificationEvent(params: {
+    sourceType: string;
+    sourceId?: number | null;
+    severity: string;
+    title: string;
+    body: string;
+    payload?: unknown;
+    status?: string;
+    createdAt?: string;
+  }): NotificationEventRecord {
+    const createdAt = params.createdAt ?? new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO notification_events (
+           source_type, source_id, severity, title, body, payload_json, status, created_at
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.sourceType,
+        params.sourceId ?? null,
+        params.severity,
+        params.title,
+        params.body,
+        params.payload == null ? null : JSON.stringify(params.payload),
+        params.status ?? "unread",
+        createdAt,
+      );
+    return this.getNotificationEvent(Number(result.lastInsertRowid));
+  }
+
+  listNotificationEvents(): NotificationEventRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM notification_events ORDER BY created_at DESC, id DESC")
+      .all() as NotificationEventRow[];
+    return rows.map(mapNotificationEvent);
+  }
+
+  getNotificationEvent(id: number): NotificationEventRecord {
+    const row = this.db.prepare("SELECT * FROM notification_events WHERE id = ?").get(id) as
+      | NotificationEventRow
+      | undefined;
+    if (row == null) throw new Error(`notification event ${id} not found`);
+    return mapNotificationEvent(row);
+  }
+
+  recordNotificationDeliveryAttempt(params: {
+    notificationEventId: number;
+    channel: string;
+    status: string;
+    attemptedAt?: string;
+    completedAt?: string | null;
+    response?: unknown;
+    error?: string | null;
+  }): NotificationDeliveryAttemptRecord {
+    const attemptedAt = params.attemptedAt ?? new Date().toISOString();
+    const result = this.db
+      .prepare(
+        `INSERT INTO notification_delivery_attempts (
+           notification_event_id, channel, status, attempted_at, completed_at,
+           response_json, error
+         )
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        params.notificationEventId,
+        params.channel,
+        params.status,
+        attemptedAt,
+        params.completedAt ?? null,
+        params.response == null ? null : JSON.stringify(params.response),
+        params.error ?? null,
+      );
+    return this.getNotificationDeliveryAttempt(Number(result.lastInsertRowid));
+  }
+
+  listNotificationDeliveryAttempts(notificationEventId?: number): NotificationDeliveryAttemptRecord[] {
+    const rows = notificationEventId == null
+      ? this.db
+        .prepare("SELECT * FROM notification_delivery_attempts ORDER BY attempted_at DESC, id DESC")
+        .all()
+      : this.db
+        .prepare("SELECT * FROM notification_delivery_attempts WHERE notification_event_id = ? ORDER BY attempted_at DESC, id DESC")
+        .all(notificationEventId);
+    return (rows as NotificationDeliveryAttemptRow[]).map(mapNotificationDeliveryAttempt);
+  }
+
+  getNotificationDeliveryAttempt(id: number): NotificationDeliveryAttemptRecord {
+    const row = this.db
+      .prepare("SELECT * FROM notification_delivery_attempts WHERE id = ?")
+      .get(id) as NotificationDeliveryAttemptRow | undefined;
+    if (row == null) throw new Error(`notification delivery attempt ${id} not found`);
+    return mapNotificationDeliveryAttempt(row);
+  }
+
   updateAlertObservation(params: {
     ruleId: number;
     observed: unknown;
@@ -1124,6 +1450,9 @@ export class MarketStateService {
     startedAt?: string;
     completedAt?: string | null;
     status: string;
+    triggerType?: string;
+    scheduledFor?: string | null;
+    ownerId?: string | null;
     artifactPath?: string | null;
     summary?: unknown;
     errors?: unknown;
@@ -1133,15 +1462,19 @@ export class MarketStateService {
       const result = this.db
         .prepare(
           `INSERT INTO report_runs (
-             template_id, started_at, completed_at, status, artifact_path, summary_json, errors_json
+             template_id, started_at, completed_at, status, trigger_type, scheduled_for,
+             owner_id, artifact_path, summary_json, errors_json
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           params.templateId ?? null,
           startedAt,
           params.completedAt ?? null,
           params.status,
+          params.triggerType ?? "manual",
+          params.scheduledFor ?? null,
+          params.ownerId ?? null,
           params.artifactPath ?? null,
           params.summary == null ? null : JSON.stringify(params.summary),
           params.errors == null ? null : JSON.stringify(params.errors),
@@ -1545,6 +1878,11 @@ function mapAlertRule(row: AlertRuleRow): AlertRuleRecord {
     nextCheckAt: row.next_check_at,
     lastCheckedAt: row.last_checked_at,
     lastObservedJson: row.last_observed_json == null ? null : JSON.parse(row.last_observed_json),
+    status: row.status,
+    retriggerMode: row.retrigger_mode,
+    lastConditionState: row.last_condition_state,
+    ruleRevision: row.rule_revision,
+    armCycleId: row.arm_cycle_id,
     cooldownSeconds: row.cooldown_seconds,
     lastTriggeredAt: row.last_triggered_at,
     createdAt: row.created_at,
@@ -1559,8 +1897,69 @@ function mapAlertEvent(row: AlertEventRow): AlertEventRecord {
     instrumentId: row.instrument_id,
     observedValueJson: row.observed_value_json == null ? null : JSON.parse(row.observed_value_json),
     triggeredAt: row.triggered_at,
+    observedAt: row.observed_at,
+    providerDataAt: row.provider_data_at,
+    sourceProvider: row.source_provider,
+    cacheStatus: row.cache_status,
+    dataDelayMs: row.data_delay_ms,
+    triggerSource: row.trigger_source,
+    dedupeKey: row.dedupe_key,
     status: row.status,
     message: row.message,
+  };
+}
+
+function mapAutomationRunnerLease(row: AutomationRunnerLeaseRow): AutomationRunnerLeaseRecord {
+  return {
+    ownerId: row.owner_id,
+    ownerKind: row.owner_kind,
+    acquiredAt: row.acquired_at,
+    heartbeatAt: row.heartbeat_at,
+    expiresAt: row.expires_at,
+  };
+}
+
+function mapAlertCheckRun(row: AlertCheckRunRow): AlertCheckRunRecord {
+  return {
+    id: row.id,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    status: row.status,
+    triggerType: row.trigger_type,
+    checkedCount: row.checked_count,
+    triggeredCount: row.triggered_count,
+    unavailableCount: row.unavailable_count,
+    ownerId: row.owner_id,
+    errorJson: row.error_json == null ? null : JSON.parse(row.error_json),
+    providerStatusJson: row.provider_status_json == null ? null : JSON.parse(row.provider_status_json),
+  };
+}
+
+function mapNotificationEvent(row: NotificationEventRow): NotificationEventRecord {
+  return {
+    id: row.id,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    severity: row.severity,
+    title: row.title,
+    body: row.body,
+    payloadJson: row.payload_json == null ? null : JSON.parse(row.payload_json),
+    status: row.status,
+    createdAt: row.created_at,
+    acknowledgedAt: row.acknowledged_at,
+  };
+}
+
+function mapNotificationDeliveryAttempt(row: NotificationDeliveryAttemptRow): NotificationDeliveryAttemptRecord {
+  return {
+    id: row.id,
+    notificationEventId: row.notification_event_id,
+    channel: row.channel,
+    status: row.status,
+    attemptedAt: row.attempted_at,
+    completedAt: row.completed_at,
+    responseJson: row.response_json == null ? null : JSON.parse(row.response_json),
+    error: row.error,
   };
 }
 
@@ -1588,6 +1987,9 @@ function mapReportRun(row: ReportRunRow): ReportRunRecord {
     startedAt: row.started_at,
     completedAt: row.completed_at,
     status: row.status,
+    triggerType: row.trigger_type,
+    scheduledFor: row.scheduled_for,
+    ownerId: row.owner_id,
     artifactPath: row.artifact_path,
     summaryJson: row.summary_json == null ? null : JSON.parse(row.summary_json),
     errorsJson: row.errors_json == null ? null : JSON.parse(row.errors_json),

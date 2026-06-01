@@ -36,8 +36,12 @@ describe("initDatabase", () => {
     expect(tables).toContain("prediction_records");
     expect(tables).toContain("alert_rules");
     expect(tables).toContain("alert_events");
+    expect(tables).toContain("alert_check_runs");
     expect(tables).toContain("report_templates");
     expect(tables).toContain("report_runs");
+    expect(tables).toContain("automation_runner_leases");
+    expect(tables).toContain("notification_events");
+    expect(tables).toContain("notification_delivery_attempts");
     expect(tables).toContain("import_batches");
     expect(tables).toContain("import_rows");
     expect(tables).not.toContain("sessions");
@@ -46,8 +50,8 @@ describe("initDatabase", () => {
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 6", () => {
-    expect(getSchemaVersion(db)).toBe(6);
+  it("sets schema version to 7", () => {
+    expect(getSchemaVersion(db)).toBe(7);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -127,7 +131,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(6);
+    expect(getSchemaVersion(resetDb)).toBe(7);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
@@ -240,7 +244,7 @@ describe("v2 → v3 additive migration", () => {
     // Run the migration.
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(6);
+    expect(getSchemaVersion(migrated)).toBe(7);
 
     // (a) zero row loss
     const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
@@ -336,7 +340,7 @@ describe("v4 → v5 market-state migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(6);
+    expect(getSchemaVersion(migrated)).toBe(7);
     expect(getTableNames(migrated)).toContain("watchlist_items");
     expect(getTableNames(migrated)).toContain("portfolio_lots");
     expect(getTableNames(migrated)).toContain("prediction_records");
@@ -558,7 +562,7 @@ describe("v5 → v6 import provenance migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(6);
+    expect(getSchemaVersion(migrated)).toBe(7);
     expect(rowCount(migrated, "instruments")).toBe(1);
     expect(rowCount(migrated, "watchlist_items")).toBe(1);
     expect(rowCount(migrated, "portfolio_lots")).toBe(1);
@@ -621,7 +625,7 @@ describe("v5 → v6 import provenance migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(6);
+    expect(getSchemaVersion(migrated)).toBe(7);
 
     const cols = (migrated.pragma("table_info(import_rows)") as Array<{ name: string }>).map((c) => c.name);
     expect(cols).toEqual(expect.arrayContaining([
@@ -638,6 +642,176 @@ describe("v5 → v6 import provenance migration", () => {
       source_symbol: "NASDAQ:AAPL",
       raw_json: '{"Symbol":"NASDAQ:AAPL"}',
     });
+
+    migrated.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+});
+
+describe("v6 → v7 local automation migration", () => {
+  it("preserves alert/report rows while adding automation runtime state", () => {
+    const base = mkdtempSync(join(tmpdir(), "vantage-v6-automation-runtime-"));
+    const dbPath = join(base, "state.db");
+
+    const v6 = new Database(dbPath);
+    v6.pragma("journal_mode = WAL");
+    v6.pragma("foreign_keys = ON");
+    v6.exec(`
+      CREATE TABLE schema_version (version INTEGER NOT NULL);
+      INSERT INTO schema_version (version) VALUES (6);
+
+      CREATE TABLE instruments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT NOT NULL,
+        asset_type TEXT NOT NULL,
+        name TEXT,
+        exchange TEXT,
+        currency TEXT,
+        provider TEXT NOT NULL,
+        provider_metadata_json TEXT,
+        last_resolved_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE alert_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope_type TEXT NOT NULL,
+        scope_id INTEGER,
+        instrument_id INTEGER,
+        condition_type TEXT NOT NULL,
+        condition_version INTEGER NOT NULL,
+        condition_json TEXT NOT NULL,
+        timeframe TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        check_interval_seconds INTEGER,
+        next_check_at TEXT,
+        last_checked_at TEXT,
+        last_observed_json TEXT,
+        cooldown_seconds INTEGER,
+        last_triggered_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE alert_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_rule_id INTEGER NOT NULL,
+        instrument_id INTEGER,
+        observed_value_json TEXT,
+        triggered_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        message TEXT,
+        FOREIGN KEY (alert_rule_id) REFERENCES alert_rules(id) ON DELETE CASCADE,
+        FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE report_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        report_type TEXT NOT NULL,
+        cadence TEXT NOT NULL,
+        timezone TEXT NOT NULL,
+        local_time TEXT NOT NULL,
+        config_json TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        last_run_at TEXT,
+        next_run_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE report_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_id INTEGER,
+        started_at TEXT NOT NULL,
+        completed_at TEXT,
+        status TEXT NOT NULL,
+        artifact_path TEXT,
+        summary_json TEXT,
+        errors_json TEXT,
+        FOREIGN KEY (template_id) REFERENCES report_templates(id) ON DELETE SET NULL
+      );
+
+      INSERT INTO instruments (
+        symbol, asset_type, name, exchange, currency, provider,
+        last_resolved_at, created_at, updated_at
+      )
+      VALUES ('AAPL', 'equity', 'Apple Inc.', 'NMS', 'USD', 'yahoo',
+        '2026-06-01T12:00:00.000Z', '2026-06-01T12:00:00.000Z', '2026-06-01T12:00:00.000Z');
+
+      INSERT INTO alert_rules (
+        scope_type, instrument_id, condition_type, condition_version, condition_json,
+        timeframe, enabled, cooldown_seconds, created_at, updated_at
+      )
+      VALUES ('instrument', 1, 'price_crosses_above', 1, '{"threshold":250,"field":"last_price"}',
+        'quote', 1, 3600, '2026-06-01T12:00:00.000Z', '2026-06-01T12:00:00.000Z');
+
+      INSERT INTO alert_events (
+        alert_rule_id, instrument_id, observed_value_json, triggered_at, status, message
+      )
+      VALUES (1, 1, '{"value":260}', '2026-06-01T12:01:00.000Z', 'triggered', 'AAPL triggered');
+
+      INSERT INTO report_templates (
+        name, report_type, cadence, timezone, local_time, config_json, enabled,
+        created_at, updated_at
+      )
+      VALUES ('Morning watchlist', 'watchlist_daily', 'daily', 'America/Toronto', '08:00',
+        '{"targets":{"default_watchlist":true}}', 1, '2026-06-01T12:00:00.000Z', '2026-06-01T12:00:00.000Z');
+
+      INSERT INTO report_runs (
+        template_id, started_at, completed_at, status, summary_json
+      )
+      VALUES (1, '2026-06-01T12:02:00.000Z', '2026-06-01T12:03:00.000Z', 'completed', '{"ok":true}');
+    `);
+    v6.close();
+
+    const migrated = initDatabase(dbPath);
+
+    expect(getSchemaVersion(migrated)).toBe(7);
+    expect(getTableNames(migrated)).toContain("automation_runner_leases");
+    expect(getTableNames(migrated)).toContain("alert_check_runs");
+    expect(getTableNames(migrated)).toContain("notification_events");
+    expect(getTableNames(migrated)).toContain("notification_delivery_attempts");
+
+    const rule = migrated.prepare("SELECT status, retrigger_mode, last_condition_state, rule_revision, arm_cycle_id FROM alert_rules").get() as {
+      status: string;
+      retrigger_mode: string;
+      last_condition_state: string;
+      rule_revision: number;
+      arm_cycle_id: number;
+    };
+    expect(rule).toEqual({
+      status: "active",
+      retrigger_mode: "recurring",
+      last_condition_state: "unknown",
+      rule_revision: 1,
+      arm_cycle_id: 1,
+    });
+
+    const event = migrated.prepare("SELECT observed_at, trigger_source, source_provider, cache_status FROM alert_events").get() as {
+      observed_at: string;
+      trigger_source: string;
+      source_provider: string | null;
+      cache_status: string;
+    };
+    expect(event).toEqual({
+      observed_at: "2026-06-01T12:01:00.000Z",
+      trigger_source: "manual",
+      source_provider: null,
+      cache_status: "live",
+    });
+
+    const run = migrated.prepare("SELECT trigger_type, scheduled_for, owner_id FROM report_runs").get() as {
+      trigger_type: string;
+      scheduled_for: string | null;
+      owner_id: string | null;
+    };
+    expect(run).toEqual({ trigger_type: "manual", scheduled_for: null, owner_id: null });
+    expect(rowCount(migrated, "alert_rules")).toBe(1);
+    expect(rowCount(migrated, "alert_events")).toBe(1);
+    expect(rowCount(migrated, "report_runs")).toBe(1);
 
     migrated.close();
     rmSync(base, { recursive: true, force: true });

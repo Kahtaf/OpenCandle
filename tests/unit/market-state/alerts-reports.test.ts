@@ -137,4 +137,95 @@ describe("market-state alerts and reports", () => {
     expect(template.localTime).toBe("08:00");
     expect(template.configJson).toEqual({ targets: { default_watchlist: true } });
   });
+
+  it("claims runner ownership, records alert runs, notifications, and delivery attempts", () => {
+    const firstLease = service.acquireAutomationRunnerLease({
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-06-01T12:00:00.000Z",
+      ttlSeconds: 60,
+    });
+    const blockedLease = service.acquireAutomationRunnerLease({
+      ownerId: "monitor-1",
+      ownerKind: "monitor",
+      now: "2026-06-01T12:00:30.000Z",
+      ttlSeconds: 60,
+    });
+    const takeoverLease = service.acquireAutomationRunnerLease({
+      ownerId: "monitor-1",
+      ownerKind: "monitor",
+      now: "2026-06-01T12:02:00.000Z",
+      ttlSeconds: 60,
+    });
+
+    expect(firstLease.acquired).toBe(true);
+    expect(blockedLease).toMatchObject({ acquired: false, ownerId: "gui-1" });
+    expect(takeoverLease).toMatchObject({ acquired: true, ownerId: "monitor-1" });
+
+    const run = service.startAlertCheckRun({
+      ownerId: "monitor-1",
+      startedAt: "2026-06-01T12:02:01.000Z",
+      triggerType: "heartbeat",
+    });
+    const completed = service.completeAlertCheckRun(run.id, {
+      completedAt: "2026-06-01T12:02:03.000Z",
+      status: "completed",
+      checkedCount: 2,
+      triggeredCount: 1,
+      unavailableCount: 1,
+      providerStatus: {
+        tradingview: { status: "ok", requests: 1 },
+        yahoo: { status: "fallback", requests: 1 },
+      },
+    });
+
+    expect(completed).toMatchObject({
+      status: "completed",
+      checkedCount: 2,
+      triggeredCount: 1,
+      unavailableCount: 1,
+      ownerId: "monitor-1",
+      triggerType: "heartbeat",
+      providerStatusJson: {
+        tradingview: { status: "ok", requests: 1 },
+        yahoo: { status: "fallback", requests: 1 },
+      },
+    });
+
+    const notification = service.recordNotificationEvent({
+      sourceType: "alert_event",
+      sourceId: 42,
+      severity: "warning",
+      title: "AAPL alert triggered",
+      body: "AAPL crossed above $250.",
+      payload: { symbol: "AAPL", price: 260 },
+    });
+    const attempt = service.recordNotificationDeliveryAttempt({
+      notificationEventId: notification.id,
+      channel: "webhook",
+      status: "failed",
+      attemptedAt: "2026-06-01T12:02:04.000Z",
+      completedAt: "2026-06-01T12:02:05.000Z",
+      error: "connection refused",
+    });
+
+    expect(service.listNotificationEvents()).toEqual([
+      expect.objectContaining({
+        id: notification.id,
+        sourceType: "alert_event",
+        sourceId: 42,
+        acknowledgedAt: null,
+        payloadJson: { symbol: "AAPL", price: 260 },
+      }),
+    ]);
+    expect(service.listNotificationDeliveryAttempts(notification.id)).toEqual([
+      expect.objectContaining({
+        id: attempt.id,
+        notificationEventId: notification.id,
+        channel: "webhook",
+        status: "failed",
+        error: "connection refused",
+      }),
+    ]);
+  });
 });
