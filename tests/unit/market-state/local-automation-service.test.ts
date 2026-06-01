@@ -195,6 +195,54 @@ describe("local automation service", () => {
     ]);
   });
 
+  it("claims a scheduled daily report once when heartbeats overlap", async () => {
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    service.createReportTemplate({
+      name: "Morning watchlist",
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+      config: { targets: { default_watchlist: true } },
+      enabled: true,
+      nextRunAt: "2026-03-08T12:00:00.000Z",
+    });
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return quote(symbol, 180);
+    });
+
+    const [first, second] = await Promise.all([
+      runLocalAutomationHeartbeat(db, {
+        ownerId: "gui-1",
+        ownerKind: "writer",
+        now: "2026-03-08T12:00:30.000Z",
+        ttlSeconds: 60,
+        checkAlerts: false,
+      }),
+      runLocalAutomationHeartbeat(db, {
+        ownerId: "gui-1",
+        ownerKind: "writer",
+        now: "2026-03-08T12:00:30.000Z",
+        ttlSeconds: 60,
+        checkAlerts: false,
+      }),
+    ]);
+
+    expect(first.reportRuns.length + second.reportRuns.length).toBe(1);
+    expect(service.listReportRuns()).toHaveLength(1);
+    expect(service.listNotificationEvents()).toHaveLength(1);
+  });
+
   it("advances overdue daily reports past the current heartbeat instead of replaying one stale day at a time", async () => {
     service.addWatchlistItem({
       instrument: {

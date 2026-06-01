@@ -161,7 +161,7 @@ export async function runAlertChecks(
         outsideCooldown(item.rule, now);
       const observed = {
         value: observation.value,
-        field: "last_price",
+        field: observationField(item.rule),
         at: now,
         observedAt: now,
         providerDataAt: observation.providerDataAt ?? null,
@@ -180,7 +180,7 @@ export async function runAlertChecks(
           ? {
             instrumentId: item.instrument.id,
             title: `${item.instrument.symbol} alert triggered`,
-            message: `${item.instrument.symbol} ${item.rule.conditionType} at $${observation.value.toFixed(2)}`,
+            message: alertTriggerMessage(item.instrument.symbol, item.rule, observation.value),
             triggeredAt: now,
             observedAt: now,
             providerDataAt: observation.providerDataAt ?? null,
@@ -333,6 +333,32 @@ function historicalObservation(
     providerDataAt,
     cacheStatus: "live",
   };
+}
+
+function observationField(rule: AlertRuleRecord): string {
+  if (rule.conditionType === "rsi_threshold") return "rsi";
+  if (rule.conditionType === "volume_spike") return "volume_ratio";
+  if (rule.conditionType === "price_crosses_sma") return "price_sma_spread";
+  return "last_price";
+}
+
+function alertTriggerMessage(symbol: string, rule: AlertRuleRecord, value: number): string {
+  if (rule.conditionType === "rsi_threshold") {
+    const direction = (rule.conditionJson as { direction?: unknown }).direction;
+    const directionText = direction === "above" ? "above" : "below";
+    return `${symbol} RSI ${directionText} threshold at ${value.toFixed(2)}`;
+  }
+  if (rule.conditionType === "volume_spike") {
+    return `${symbol} volume spike at ${value.toFixed(2)}x average volume`;
+  }
+  if (rule.conditionType === "price_crosses_sma") {
+    return `${symbol} price/SMA spread at ${formatSignedCurrency(value)}`;
+  }
+  return `${symbol} ${rule.conditionType} at $${value.toFixed(2)}`;
+}
+
+function formatSignedCurrency(value: number): string {
+  return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toFixed(2)}`;
 }
 
 function normalizeObservation(observation: AlertQuoteObservation, now: string): AlertQuoteObservation {

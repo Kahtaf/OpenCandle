@@ -1596,6 +1596,26 @@ export class MarketStateService {
     return this.getReportTemplate(id);
   }
 
+  claimDueReportTemplateRun(id: number, params: {
+    scheduledFor: string;
+    nextRunAt: string;
+    claimedAt?: string;
+  }): ReportTemplateRecord | null {
+    const result = this.db
+      .prepare(
+        `UPDATE report_templates
+         SET next_run_at = ?, updated_at = ?
+         WHERE id = ? AND enabled = 1 AND next_run_at = ?`,
+      )
+      .run(
+        params.nextRunAt,
+        params.claimedAt ?? new Date().toISOString(),
+        id,
+        params.scheduledFor,
+      );
+    return result.changes === 0 ? null : this.getReportTemplate(id);
+  }
+
   listReportTemplates(): ReportTemplateRecord[] {
     const rows = this.db
       .prepare("SELECT * FROM report_templates ORDER BY created_at, id")

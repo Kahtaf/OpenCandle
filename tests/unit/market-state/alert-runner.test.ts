@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { ALERT_CONDITION_VERSION, priceCrossesAbove } from "../../../src/market-state/alert-conditions.js";
+import { ALERT_CONDITION_VERSION, priceCrossesAbove, rsiThreshold } from "../../../src/market-state/alert-conditions.js";
 import { runAlertChecks, type AlertRunnerProviders } from "../../../src/market-state/alert-runner.js";
 
 describe("alert runner", () => {
@@ -316,6 +316,63 @@ describe("alert runner", () => {
 
     expect(service.getAlertRule(available.id).nextCheckAt).toBe("2026-06-01T12:05:00.000Z");
     expect(service.getAlertRule(unavailable.id).nextCheckAt).toBe("2026-06-01T12:10:00.000Z");
+  });
+
+  it("formats indicator alert notifications with indicator units instead of dollars", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "rsi_threshold",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: rsiThreshold(2, 30, "below"),
+      timeframe: "1d",
+      cooldownSeconds: 0,
+    });
+
+    let closes = [100, 102, 101];
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(async () => closes.map((close, index) => ({
+        date: `2026-06-0${index + 1}`,
+        open: close,
+        high: close,
+        low: close,
+        close,
+        volume: 1_000,
+      }))),
+    };
+
+    await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+    });
+    closes = [100, 99, 98];
+    const triggered = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-02T12:00:00.000Z",
+      providers,
+    });
+
+    expect(triggered.triggered).toBe(1);
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        message: "AAPL RSI below threshold at 0.00",
+        observedValueJson: expect.objectContaining({ field: "rsi", value: 0 }),
+      }),
+    ]);
+    expect(service.listAlertEvents()[0].message).not.toContain("$");
   });
 
   it("marks false-to-true resume triggers as late alerts", async () => {

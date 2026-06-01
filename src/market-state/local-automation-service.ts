@@ -85,6 +85,17 @@ async function runDueReports(
   for (const template of dueTemplates) {
     const scheduledFor = template.nextRunAt;
     if (scheduledFor == null) continue;
+    const nextRunAt = nextDailyReportRunAt(
+      template.timezone,
+      template.localTime,
+      new Date(params.now),
+    );
+    const claimed = service.claimDueReportTemplateRun(template.id, {
+      scheduledFor,
+      nextRunAt,
+      claimedAt: params.now,
+    });
+    if (claimed == null) continue;
     const { run } = await recordDailyWatchlistReportRun(service, {
       templateId: template.id,
       triggerType: "scheduled",
@@ -92,13 +103,6 @@ async function runDueReports(
       ownerId: params.ownerId,
     });
     runs.push(run);
-    service.updateReportTemplate(template.id, {
-      nextRunAt: nextDailyReportRunAt(
-        template.timezone,
-        template.localTime,
-        new Date(params.now),
-      ),
-    });
   }
   return runs;
 }
