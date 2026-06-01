@@ -705,6 +705,39 @@ describe("route()", () => {
     }));
   });
 
+  it("corrects portfolio lot mutations away from compare workflow dispatch", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.",
+      },
+      fixedClient(JSON.stringify({
+        routeKind: "workflow_dispatch",
+        workflow: "compare_assets",
+        entities: { symbols: ["ASTS", "USD"], budget: 28 },
+        slots: {
+          symbols: { value: ["ASTS", "USD"], source: "user", confidence: "high" },
+          budget: { value: 28, source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        tool_bundles: ["core_market"],
+        diagnostics: [],
+        reasoning: "misread a portfolio mutation as comparison",
+      })),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("watchlist_or_tracking");
+    expect(result.entities.symbols).toEqual(["ASTS"]);
+    expect(result.missing_required).toEqual([]);
+    expect(result.slots.symbols?.value).toEqual(["ASTS"]);
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({
+      code: "stateful_tracking_corrected_to_agent_task",
+    }));
+  });
+
   it("removes live tool bundles for no-symbol conceptual education", async () => {
     const result = await route(
       {

@@ -145,6 +145,14 @@ const RULES: Rule[] = [
       return hasOptionKeywords && entities.symbols.length >= 1;
     },
   },
+  // Stateful portfolio/watchlist/alert/prediction mutations must not be
+  // mistaken for compare or portfolio-construction workflows just because a
+  // cost basis, target, or currency token is present.
+  {
+    workflow: "watchlist_or_tracking",
+    confidence: 0.95,
+    test: (input) => isStatefulTrackingRequest(input),
+  },
   // Compare: keyword + 2+ symbols (uppercase)
   {
     workflow: "compare_assets",
@@ -282,4 +290,17 @@ function isPortfolioEvaluationRequest(input: string): boolean {
     /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
     (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
   return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
+}
+
+function isStatefulTrackingRequest(input: string): boolean {
+  const lower = input.toLowerCase();
+  const hasStateVerb =
+    /\b(?:add|remove|update|record|track|create|configure|check|show|list|view|cancel)\b/.test(lower);
+  const hasStateObject =
+    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(lower);
+  const hasPortfolioLotShape =
+    /\b(?:add|record|track)\b/.test(lower) &&
+    /\b\d+(?:\.\d+)?\s+shares?\b/.test(lower) &&
+    /\b(?:portfolio|holding|holdings|position|positions)\b/.test(lower);
+  return (hasStateVerb && hasStateObject) || hasPortfolioLotShape;
 }

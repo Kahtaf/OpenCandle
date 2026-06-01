@@ -82,6 +82,11 @@ describe("extractEntities", () => {
       expect(result.symbols).toEqual(["AAPL", "MSFT", "GOOGL"]);
     });
 
+    it("does not treat currency codes as tickers in cost-basis portfolio mutations", () => {
+      const result = extractEntities("Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.");
+      expect(result.symbols).toEqual(["ASTS"]);
+    });
+
     it("extracts ticker with $ prefix and strips $", () => {
       const result = extractEntities("analyze $NVDA");
       expect(result.symbols).toEqual(["NVDA"]);

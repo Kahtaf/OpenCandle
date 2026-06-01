@@ -24,6 +24,7 @@ const COMMON_WORDS = new Set([
 ]);
 
 const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI", "MA"]);
+const CURRENCY_CODES = new Set(["USD", "CAD", "EUR", "GBP", "AUD", "JPY", "CHF"]);
 const EXPLICIT_FINANCE_ACRONYM_TICKERS = new Set([
   "IV", "HV", "ITM", "OTM", "ATM", "IPO", "SEC", "FED", "FOMC", "IRS",
   "ECB", "BOE", "BOJ", "GDP", "CPI", "PPI", "FX", "NDA",
@@ -84,6 +85,9 @@ export function extractBudget(input: string): number | undefined {
   // Match "10000 dollars" or "10,000 dollars"
   const dollarWord = input.match(/\b([\d,]+(?:\.\d+)?)\s+dollars?\b/i);
   if (dollarWord) {
+    if (isNonBudgetDollarAmount(input, dollarWord.index ?? 0, dollarWord[0].length)) {
+      return undefined;
+    }
     return parseFloat(dollarWord[1].replace(/,/g, ""));
   }
 
@@ -97,8 +101,8 @@ function hasBudgetContext(input: string): boolean {
 function isNonBudgetDollarAmount(input: string, start: number, length: number): boolean {
   const before = input.slice(Math.max(0, start - 32), start);
   const after = input.slice(start + length, start + length + 24);
-  return /\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*$/i.test(before) ||
-    /^\s*(?:premium|max\s+premium|cost\s*basis|basis|entry(?:\s*price)?)\b/i.test(after);
+  return /\b(?:average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*$/i.test(before) ||
+    /^\s*(?:premium|max\s+premium|average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?)\b/i.test(after);
 }
 
 function extractSymbols(input: string): string[] {
@@ -109,6 +113,14 @@ function extractSymbols(input: string): string[] {
   ) => {
     const symbol = raw?.toUpperCase();
     if (options.lowercaseContext && LOWERCASE_FINANCE_TERMS.has(String(raw || "").toLowerCase())) {
+      return;
+    }
+    if (
+      symbol &&
+      !options.explicitTicker &&
+      CURRENCY_CODES.has(symbol) &&
+      isCurrencyCodeUsage(input, symbol)
+    ) {
       return;
     }
     if (
@@ -159,6 +171,14 @@ function extractSymbols(input: string): string[] {
   }
 
   return symbols;
+}
+
+export function isCurrencyCodeUsage(input: string, symbol: string): boolean {
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `\\b(?:average\\s+cost|avg\\s+cost|cost\\s+basis|entry\\s+price|currency|denominated|dollars?|per\\s+share|base\\s+currency|cash)\\b[^.?!]{0,80}\\b${escaped}\\b|\\b${escaped}\\b[^.?!]{0,40}\\b(?:currency|dollars?|cash|base\\s+currency)\\b`,
+    "i",
+  ).test(input);
 }
 
 export function isAmbiguousConceptUsage(input: string, symbol: string): boolean {

@@ -212,6 +212,13 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("watchlist_or_tracking");
     });
 
+    it("routes portfolio lot mutations before compare or builder workflows", () => {
+      const result = classifyIntent("Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.");
+      expect(result.workflow).toBe("watchlist_or_tracking");
+      expect(result.entities.symbols).toEqual(["ASTS"]);
+      expect(result.entities.budget).toBeUndefined();
+    });
+
     it("matches owned-holdings portfolio risk prompts before compare routing", () => {
       const result = classifyIntent("I own 40% NVDA, 25% MSFT, 20% AAPL, 15% cash. What is my biggest portfolio risk?");
       expect(result.workflow).toBe("watchlist_or_tracking");

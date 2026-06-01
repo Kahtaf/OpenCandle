@@ -1,4 +1,4 @@
-import { extractEntities, isAmbiguousConceptUsage } from "./entity-extractor.js";
+import { extractEntities, isAmbiguousConceptUsage, isCurrencyCodeUsage } from "./entity-extractor.js";
 import { classifyWithLegacyRules } from "./legacy-rule-router.js";
 import { buildRouterPrompt } from "./router-prompt.js";
 import { disambiguateSymbols } from "./symbol-disambiguator.js";
@@ -315,6 +315,29 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    (next.workflow === "compare_assets" || next.workflow === "portfolio_builder") &&
+    isStatefulTrackingRequest(text)
+  ) {
+    diagnostics.push({
+      code: "stateful_tracking_corrected_to_agent_task",
+      message: "portfolio/watchlist tracking mutation should use stateful tracking tools, not compare or construction workflow dispatch",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "watchlist_or_tracking",
+      missing_required: [],
+      entities: {
+        ...next.entities,
+        symbols: filterCurrencyUnitSymbols(text, next.entities.symbols),
+      },
+      slots: removeCurrencyUnitSymbolSlots(text, next.slots),
+      diagnostics,
+    };
+  }
+
   if (next.routeKind === "agent_task" && isDispatchableWorkflow(next.workflow)) {
     diagnostics.push({
       code: "dispatchable_workflow_corrected_to_workflow_dispatch",
@@ -548,6 +571,46 @@ function isPortfolioEvaluationRequest(text: string): boolean {
     /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
     (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
   return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
+}
+
+function isStatefulTrackingRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasStateVerb =
+    /\b(?:add|remove|update|record|track|create|configure|check|show|list|view|cancel)\b/.test(lower);
+  const hasStateObject =
+    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(lower);
+  const hasPortfolioLotShape =
+    /\b(?:add|record|track)\b/.test(lower) &&
+    /\b\d+(?:\.\d+)?\s+shares?\b/.test(lower) &&
+    /\b(?:portfolio|holding|holdings|position|positions)\b/.test(lower);
+  return (hasStateVerb && hasStateObject) || hasPortfolioLotShape;
+}
+
+function filterCurrencyUnitSymbols(text: string, symbols: string[]): string[] {
+  return symbols.filter((symbol) => !isCurrencyCodeUsage(text, symbol));
+}
+
+function removeCurrencyUnitSymbolSlots(
+  text: string,
+  slots: Record<string, RouterSlot>,
+): Record<string, RouterSlot> {
+  const next = { ...slots };
+  for (const key of ["symbol", "symbols"]) {
+    const slot = next[key];
+    if (!slot) continue;
+    if (Array.isArray(slot.value)) {
+      const value = slot.value.filter((item) =>
+        typeof item !== "string" || !isCurrencyCodeUsage(text, item.toUpperCase())
+      );
+      if (value.length === 0) delete next[key];
+      else next[key] = { ...slot, value };
+      continue;
+    }
+    if (typeof slot.value === "string" && isCurrencyCodeUsage(text, slot.value.toUpperCase())) {
+      delete next[key];
+    }
+  }
+  return next;
 }
 
 function isPortfolioTradeoffComparisonRequest(text: string): boolean {
