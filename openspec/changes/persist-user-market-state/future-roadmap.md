@@ -57,6 +57,7 @@ This document preserves deferred feature context so V1 can stay focused without 
 - **Delivery channels**
   - Desktop notifications.
   - Email or webhook delivery.
+  - Chat/mobile delivery adapters such as Telegram or WhatsApp.
   - Per-alert/report delivery preferences.
 
 ## Explicitly Deferred From V1
