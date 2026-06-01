@@ -10,6 +10,7 @@ import { cache } from "../../../src/infra/cache.js";
 import type { OHLCV, StockQuote } from "../../../src/types/market.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { defaultAlertProviderBudget } from "../../../src/market-state/alert-runner.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -32,6 +33,7 @@ describe("alertsTool", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    defaultAlertProviderBudget.reset();
     cache.clear();
     cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-alerts-test-"));
@@ -64,8 +66,44 @@ describe("alertsTool", () => {
     expect(actionDescription).toContain("create_price_below_sma");
     expect(actionDescription).toContain("create_rsi_below");
     expect(actionDescription).toContain("set_enabled");
+    expect(actionDescription).toContain("status");
     expect(actionDescription).toContain("check_after_create");
     expect(alertsTool.parameters.properties.check_after_create.description).toContain("immediately");
+  });
+
+  it("reports local runner status and recent check history for TUI parity", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.acquireAutomationRunnerLease({
+      ownerId: "monitor-1",
+      ownerKind: "monitor",
+      now: new Date().toISOString(),
+      ttlSeconds: 60,
+    });
+    service.startAlertCheckRun({
+      ownerId: "monitor-1",
+      triggerType: "heartbeat",
+      startedAt: "2026-06-01T12:00:05.000Z",
+    });
+    service.completeAlertCheckRun(1, {
+      completedAt: "2026-06-01T12:00:06.000Z",
+      status: "completed",
+      checkedCount: 2,
+      triggeredCount: 1,
+      unavailableCount: 0,
+      providerStatus: { providerBudget: { yahoo: { state: "available", failureCount: 0 } } },
+    });
+    db.close();
+
+    const status = await alertsTool.execute("test", { action: "status" });
+
+    expect(status.content[0].text).toContain("Running locally");
+    expect(status.content[0].text).toContain("monitor-1");
+    expect(status.content[0].text).toContain("checked=2");
+    expect(status.details).toMatchObject({
+      runnerLease: expect.objectContaining({ ownerId: "monitor-1" }),
+      recentCheckRuns: [expect.objectContaining({ checkedCount: 2, triggeredCount: 1 })],
+    });
   });
 
   it("creates and lists manual price alerts", async () => {

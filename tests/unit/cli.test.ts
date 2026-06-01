@@ -5,9 +5,21 @@ const piMocks = vi.hoisted(() => ({
   install: vi.fn(),
   remove: vi.fn(),
   removeSourceFromSettings: vi.fn(),
+  spawn: vi.fn(),
   setProgressCallback: vi.fn(),
   update: vi.fn(),
 }));
+
+vi.mock("node:child_process", async () => {
+  const { EventEmitter } = await import("node:events");
+  return {
+    spawn: piMocks.spawn.mockImplementation(() => {
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit("close", 0));
+      return child;
+    }),
+  };
+});
 
 vi.mock("@earendil-works/pi-coding-agent", () => ({
   AuthStorage: { create: vi.fn() },
@@ -85,5 +97,22 @@ describe("opencandle package commands", () => {
     expect(piMocks.addSourceToSettings).toHaveBeenCalledWith("./fixture-package", {
       local: true,
     });
+  });
+
+  it("spawns the foreground local automation monitor", async () => {
+    await runCli(["monitor", "--once"]);
+
+    expect(piMocks.spawn).toHaveBeenCalledWith(
+      process.execPath,
+      expect.arrayContaining([
+        expect.stringContaining("tsx"),
+        expect.stringContaining("src/monitor.ts"),
+        "--once",
+      ]),
+      expect.objectContaining({
+        stdio: "inherit",
+      }),
+    );
+    expect(process.exitCode).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import {
   recordDailyWatchlistReportRun,
   targetsDefaultWatchlist,
 } from "../../market-state/daily-report.js";
+import { deliverPendingNotifications } from "../../market-state/notification-delivery.js";
 
 const ACTION_DESCRIPTION = [
   "One of: run, configure, history.",
@@ -84,6 +85,7 @@ export const dailyReportTool: AgentTool<typeof params> = {
         templateId: template.id,
         triggerType: "manual",
       });
+      await deliverPendingNotifications(service);
       return {
         content: [{ type: "text", text: report.text }],
         details: run,

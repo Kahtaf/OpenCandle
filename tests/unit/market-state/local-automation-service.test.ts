@@ -6,7 +6,7 @@ import {
   runLocalAutomationHeartbeat,
 } from "../../../src/market-state/local-automation-service.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import type { AlertRunnerProviders } from "../../../src/market-state/alert-runner.js";
+import { defaultAlertProviderBudget, type AlertRunnerProviders } from "../../../src/market-state/alert-runner.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
@@ -19,6 +19,7 @@ describe("local automation service", () => {
   let service: MarketStateService;
 
   beforeEach(() => {
+    defaultAlertProviderBudget.reset();
     vi.clearAllMocks();
     db = initDatabase(":memory:");
     service = new MarketStateService(db);
@@ -86,6 +87,32 @@ describe("local automation service", () => {
     expect(service.listAlertCheckRuns()).toEqual([]);
   });
 
+  it("can release runner ownership after a single monitor heartbeat completes", async () => {
+    await runLocalAutomationHeartbeat(db, {
+      ownerId: "monitor-1",
+      ownerKind: "monitor",
+      now: "2026-06-01T12:00:00.000Z",
+      ttlSeconds: 90,
+      checkAlerts: false,
+      checkReports: false,
+      releaseLeaseOnComplete: true,
+      providers: unusedProviders(),
+    });
+
+    expect(service.getAutomationRunnerLease("2026-06-01T12:00:01.000Z")).toBeNull();
+    const next = await runLocalAutomationHeartbeat(db, {
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-06-01T12:00:01.000Z",
+      ttlSeconds: 90,
+      checkAlerts: false,
+      checkReports: false,
+      providers: unusedProviders(),
+    });
+
+    expect(next.lease).toMatchObject({ acquired: true, ownerId: "gui-1" });
+  });
+
   it("runs due alerts through the shared alert runner when the lease holder owns the heartbeat", async () => {
     const instrument = service.upsertInstrumentRecord({
       symbol: "AAPL",
@@ -142,6 +169,65 @@ describe("local automation service", () => {
     expect(service.listAlertCheckRuns()).toHaveLength(2);
     expect(service.listNotificationEvents()).toEqual([
       expect.objectContaining({ sourceType: "alert_event", title: "AAPL alert triggered" }),
+    ]);
+  });
+
+  it("labels checks as resume work when a local runner starts after no active lease", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    let price = 240;
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
+        symbol,
+        value: price,
+        sourceProvider: "tradingview",
+        observedAt: "2026-06-01T12:00:00.000Z",
+        providerDataAt: "2026-06-01T11:45:00.000Z",
+        cacheStatus: "live",
+      }))),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(),
+    };
+
+    await runLocalAutomationHeartbeat(db, {
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-06-01T12:00:00.000Z",
+      ttlSeconds: 60,
+      checkAlerts: true,
+      providers,
+    });
+    price = 260;
+    await runLocalAutomationHeartbeat(db, {
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-06-01T12:10:00.000Z",
+      ttlSeconds: 60,
+      checkAlerts: true,
+      providers,
+    });
+
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        status: "triggered_late",
+        triggerSource: "resume",
+      }),
     ]);
   });
 

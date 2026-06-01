@@ -2,14 +2,20 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { ALERT_CONDITION_VERSION, priceCrossesAbove, rsiThreshold } from "../../../src/market-state/alert-conditions.js";
-import { runAlertChecks, type AlertRunnerProviders } from "../../../src/market-state/alert-runner.js";
+import { ALERT_CONDITION_VERSION, priceCrossesAbove, rsiThreshold, volumeSpike } from "../../../src/market-state/alert-conditions.js";
+import {
+  AlertProviderBudget,
+  defaultAlertProviderBudget,
+  runAlertChecks,
+  type AlertRunnerProviders,
+} from "../../../src/market-state/alert-runner.js";
 
 describe("alert runner", () => {
   let db: Database.Database;
   let service: MarketStateService;
 
   beforeEach(() => {
+    defaultAlertProviderBudget.reset();
     db = initDatabase(":memory:");
     service = new MarketStateService(db);
   });
@@ -98,6 +104,252 @@ describe("alert runner", () => {
       value: 69_000,
       sourceProvider: "yahoo",
     });
+  });
+
+  it("skips Yahoo network calls while the alert provider circuit is open after repeated rate limits", async () => {
+    const btc = service.upsertInstrumentRecord({
+      symbol: "BTC-USD",
+      assetType: "crypto",
+      name: "Bitcoin",
+      exchange: null,
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: btc.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(70_000),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(async () => {
+        throw new Error("Yahoo HTTP 429");
+      }),
+      getHistory: vi.fn(),
+    };
+    const providerBudget = new AlertProviderBudget({ failureThreshold: 2, backoffMs: 300_000 });
+
+    await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+      providerBudget,
+    });
+    await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:01:00.000Z",
+      providers,
+      providerBudget,
+    });
+    const skipped = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:02:00.000Z",
+      providers,
+      providerBudget,
+    });
+
+    expect(providers.getYahooQuote).toHaveBeenCalledTimes(2);
+    expect(skipped).toMatchObject({ checked: 1, triggered: 0, unavailable: 1 });
+    expect(service.listAlertEvents().at(-1)).toMatchObject({
+      status: "unavailable",
+      message: expect.stringContaining("provider_budget_exhausted"),
+    });
+    expect(service.listAlertCheckRuns()[0].providerStatusJson).toMatchObject({
+      providerBudget: {
+        yahoo: expect.objectContaining({ state: "open" }),
+      },
+    });
+  });
+
+  it("does not open the Yahoo provider circuit for symbol-specific no-data failures", async () => {
+    const bad = service.upsertInstrumentRecord({
+      symbol: "BAD-USD",
+      assetType: "crypto",
+      name: "Bad Symbol",
+      exchange: null,
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const btc = service.upsertInstrumentRecord({
+      symbol: "BTC-USD",
+      assetType: "crypto",
+      name: "Bitcoin",
+      exchange: null,
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: bad.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(1),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: btc.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(70_000),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(async (symbol) => {
+        if (symbol === "BAD-USD") throw new Error("No data found, symbol may be delisted");
+        return {
+          symbol,
+          value: 69_000,
+          sourceProvider: "yahoo",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T12:00:00.000Z",
+          cacheStatus: "live",
+        };
+      }),
+      getHistory: vi.fn(),
+    };
+
+    const result = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+      providerBudget: new AlertProviderBudget({ failureThreshold: 1, backoffMs: 300_000 }),
+    });
+
+    expect(result).toMatchObject({ checked: 2, triggered: 0, unavailable: 1 });
+    expect(providers.getYahooQuote).toHaveBeenCalledTimes(2);
+    expect(service.getAlertRule(2).lastObservedJson).toMatchObject({
+      sourceProvider: "yahoo",
+      value: 69_000,
+    });
+    expect(service.listAlertCheckRuns()[0].providerStatusJson).toMatchObject({
+      providerBudget: {},
+    });
+  });
+
+  it("routes latency-sensitive price rules away from delayed TradingView observations", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: { ...priceCrossesAbove(250), allow_delayed: false },
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(async (symbol) => ({
+        symbol,
+        value: 240,
+        sourceProvider: "yahoo",
+        observedAt: "2026-06-01T12:00:00.000Z",
+        providerDataAt: "2026-06-01T12:00:00.000Z",
+        cacheStatus: "live",
+      })),
+      getHistory: vi.fn(),
+    };
+
+    await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+      providerBudget: new AlertProviderBudget(),
+    });
+
+    expect(providers.getTradingViewQuotes).not.toHaveBeenCalled();
+    expect(providers.getYahooQuote).toHaveBeenCalledWith("AAPL");
+    expect(service.getAlertRule(1).lastObservedJson).toMatchObject({
+      sourceProvider: "yahoo",
+    });
+  });
+
+  it("does not reuse delayed TradingView observations for same-symbol latency-sensitive rules when Yahoo fails", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: { ...priceCrossesAbove(250), allow_delayed: false },
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
+        symbol,
+        value: 260,
+        sourceProvider: "tradingview",
+        observedAt: "2026-06-01T12:00:00.000Z",
+        providerDataAt: "2026-06-01T11:45:00.000Z",
+        cacheStatus: "live",
+        dataDelayMs: 15 * 60_000,
+      }))),
+      getYahooQuote: vi.fn(async () => {
+        throw new Error("Yahoo unavailable");
+      }),
+      getHistory: vi.fn(),
+    };
+
+    const result = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+      providerBudget: new AlertProviderBudget(),
+    });
+
+    expect(result).toMatchObject({ checked: 2, triggered: 0, unavailable: 1 });
+    const [delayedRule, freshOnlyRule] = service.listAlertRules();
+    expect(delayedRule.lastObservedJson).toMatchObject({ sourceProvider: "tradingview" });
+    expect(freshOnlyRule.lastObservedJson).toBeNull();
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        alertRuleId: freshOnlyRule.id,
+        status: "unavailable",
+        message: expect.stringContaining("Yahoo unavailable"),
+      }),
+    ]);
   });
 
   it("records TradingView stale cache as unavailable instead of firing alerts from expired quotes", async () => {
@@ -373,6 +625,55 @@ describe("alert runner", () => {
       }),
     ]);
     expect(service.listAlertEvents()[0].message).not.toContain("$");
+  });
+
+  it("shares daily history observations across indicator alerts for the same symbol", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "rsi_threshold",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: rsiThreshold(2, 30, "below"),
+      timeframe: "1d",
+      cooldownSeconds: 0,
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "volume_spike",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: volumeSpike(2, 1.5),
+      timeframe: "1d",
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(async () => [
+        { date: "2026-06-01", open: 100, high: 100, low: 100, close: 100, volume: 100 },
+        { date: "2026-06-02", open: 99, high: 99, low: 99, close: 99, volume: 100 },
+        { date: "2026-06-03", open: 98, high: 98, low: 98, close: 98, volume: 300 },
+      ]),
+    };
+
+    await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-03T12:00:00.000Z",
+      providers,
+      providerBudget: new AlertProviderBudget(),
+    });
+
+    expect(providers.getHistory).toHaveBeenCalledTimes(1);
   });
 
   it("marks false-to-true resume triggers as late alerts", async () => {

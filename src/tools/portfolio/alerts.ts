@@ -4,6 +4,7 @@ import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService, type AlertRuleRecord } from "../../market-state/service.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 import { defaultAlertRunnerProviders, runAlertChecks } from "../../market-state/alert-runner.js";
+import { deliverPendingNotifications } from "../../market-state/notification-delivery.js";
 import {
   ALERT_CONDITION_VERSION,
   priceCrossesAbove,
@@ -16,11 +17,12 @@ import {
 const ACTION_DESCRIPTION = [
   "One of: create_price_above, create_price_below, create_price_above_sma,",
   "create_price_below_sma, create_rsi_above, create_rsi_below,",
-  "create_volume_spike, set_enabled, list, check.",
+  "create_volume_spike, set_enabled, list, status, check.",
   "Use create_price_above/create_price_below for price alerts,",
   "create_price_above_sma/create_price_below_sma for SMA crossing alerts,",
   "create_rsi_above/create_rsi_below for RSI alerts,",
-  "create_volume_spike for volume alerts, and set_enabled to enable or disable an alert.",
+  "create_volume_spike for volume alerts, set_enabled to enable or disable an alert,",
+  "and status to inspect local runner/check history.",
   "When the user asks to create an alert and check it now in the same request,",
   "set check_after_create to true on the create action.",
 ].join(" ");
@@ -37,6 +39,7 @@ const params = Type.Object({
       Type.Literal("create_volume_spike"),
       Type.Literal("set_enabled"),
       Type.Literal("list"),
+      Type.Literal("status"),
       Type.Literal("check"),
     ],
     { description: ACTION_DESCRIPTION },
@@ -61,7 +64,7 @@ export const alertsTool: AgentTool<typeof params> = {
   name: "manage_alerts",
   label: "Alerts",
   description:
-    "Create, pause/resume, list, and check durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
+    "Create, pause/resume, list, check, and inspect status for durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, status, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
@@ -188,6 +191,29 @@ export const alertsTool: AgentTool<typeof params> = {
         return { content: [{ type: "text", text: lines.join("\n") }], details: rules };
       }
 
+      if (args.action === "status") {
+        const runnerLease = service.getAutomationRunnerLease();
+        const recentCheckRuns = service.listAlertCheckRuns().slice(0, 10);
+        const stateLine = runnerLease
+          ? `Running locally — ${runnerLease.ownerKind} ${runnerLease.ownerId}; heartbeat ${runnerLease.heartbeatAt}; expires ${runnerLease.expiresAt}.`
+          : "Manual only — no active local runner lease. Keep the GUI/TUI writer or `opencandle monitor` open for background checks.";
+        const lines = ["**Alert Automation Status**", "", stateLine];
+        if (recentCheckRuns.length === 0) {
+          lines.push("", "No alert check runs yet.");
+        } else {
+          lines.push("", "Recent checks:");
+          for (const run of recentCheckRuns) {
+            lines.push(
+              `  #${run.id} ${run.triggerType} ${run.status} checked=${run.checkedCount} triggered=${run.triggeredCount} unavailable=${run.unavailableCount}`,
+            );
+          }
+        }
+        return {
+          content: [{ type: "text", text: lines.join("\n") }],
+          details: { runnerLease, recentCheckRuns },
+        };
+      }
+
       if (args.action === "set_enabled") {
         if (args.id == null || args.enabled == null) {
           throw new Error("id and enabled are required for set_enabled.");
@@ -226,6 +252,7 @@ async function checkAlerts(service: MarketStateService): Promise<{
     triggerType: "manual",
     providers: defaultAlertRunnerProviders,
   });
+  await deliverPendingNotifications(service);
   return {
     checked: result.checked,
     triggered: result.triggered,

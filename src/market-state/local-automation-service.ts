@@ -7,8 +7,10 @@ import {
 } from "./alert-runner.js";
 import { nextDailyReportRunAt, recordDailyWatchlistReportRun } from "./daily-report.js";
 import { MarketStateService, type AutomationRunnerLeaseResult, type ReportRunRecord } from "./service.js";
+import { deliverPendingNotifications } from "./notification-delivery.js";
 
 type DailyReportRunRecorder = typeof recordDailyWatchlistReportRun;
+type NotificationDeliverer = typeof deliverPendingNotifications;
 
 export interface LocalAutomationHeartbeatResult {
   lease: AutomationRunnerLeaseResult;
@@ -21,48 +23,63 @@ export async function runLocalAutomationHeartbeat(
   params: {
     ownerId: string;
     ownerKind: "writer" | "monitor";
-        now?: string;
-        ttlSeconds?: number;
-        checkAlerts?: boolean;
-        checkReports?: boolean;
-        providers?: AlertRunnerProviders;
-        recordDailyReportRun?: DailyReportRunRecorder;
-      },
+    now?: string;
+    ttlSeconds?: number;
+    checkAlerts?: boolean;
+    checkReports?: boolean;
+    providers?: AlertRunnerProviders;
+    recordDailyReportRun?: DailyReportRunRecorder;
+    deliverNotifications?: NotificationDeliverer;
+    releaseLeaseOnComplete?: boolean;
+  },
 ): Promise<LocalAutomationHeartbeatResult> {
   const service = new MarketStateService(db);
   const now = params.now ?? new Date().toISOString();
-  const lease = service.acquireAutomationRunnerLease({
-    ownerId: params.ownerId,
-    ownerKind: params.ownerKind,
-    now,
-    ttlSeconds: params.ttlSeconds ?? 90,
-  });
-
-  if (!lease.acquired) {
-    return { lease, alertCheck: null, reportRuns: [] };
-  }
-
-  const reportRuns = params.checkReports === false
-    ? []
-    : await runDueReports(service, {
-        ownerId: params.ownerId,
-        now,
-        recordDailyReportRun: params.recordDailyReportRun ?? recordDailyWatchlistReportRun,
-      });
-  if (params.checkAlerts === false || !hasDueAlertRules(service, now)) {
-    return { lease, alertCheck: null, reportRuns };
-  }
-
-  return {
-    lease,
-    alertCheck: await runAlertChecks(service, {
+  let acquiredLease = false;
+  try {
+    service.markStaleAutomationRunsLost({ now, graceSeconds: 300 });
+    const hadActiveLease = service.getAutomationRunnerLease(now) != null;
+    const lease = service.acquireAutomationRunnerLease({
       ownerId: params.ownerId,
-      triggerType: "heartbeat",
+      ownerKind: params.ownerKind,
+      now,
+      ttlSeconds: params.ttlSeconds ?? 90,
+    });
+    acquiredLease = lease.acquired;
+
+    if (!lease.acquired) {
+      return { lease, alertCheck: null, reportRuns: [] };
+    }
+
+    const reportRuns = params.checkReports === false
+      ? []
+      : await runDueReports(service, {
+          ownerId: params.ownerId,
+          now,
+          recordDailyReportRun: params.recordDailyReportRun ?? recordDailyWatchlistReportRun,
+        });
+    if (params.checkAlerts === false || !hasDueAlertRules(service, now)) {
+      await (params.deliverNotifications ?? deliverPendingNotifications)(service, { now });
+      return { lease, alertCheck: null, reportRuns };
+    }
+
+    const alertCheck = await runAlertChecks(service, {
+      ownerId: params.ownerId,
+      triggerType: hadActiveLease ? "heartbeat" : "resume",
       now,
       providers: params.providers ?? defaultAlertRunnerProviders,
-    }),
-    reportRuns,
-  };
+    });
+    await (params.deliverNotifications ?? deliverPendingNotifications)(service, { now });
+    return {
+      lease,
+      alertCheck,
+      reportRuns,
+    };
+  } finally {
+    if (params.releaseLeaseOnComplete && acquiredLease) {
+      service.releaseAutomationRunnerLease(params.ownerId);
+    }
+  }
 }
 
 function hasDueAlertRules(service: MarketStateService, now: string): boolean {

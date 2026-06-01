@@ -242,4 +242,38 @@ describe("market-state alerts and reports", () => {
     });
     expect(service.getAutomationRunnerLease("2026-06-01T12:01:01.000Z")).toBeNull();
   });
+
+  it("marks stale running alert and report work as lost", () => {
+    const run = service.startAlertCheckRun({
+      ownerId: "monitor-1",
+      startedAt: "2026-06-01T12:00:00.000Z",
+      triggerType: "heartbeat",
+    });
+    const template = service.createReportTemplate({
+      name: "Morning watchlist",
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+      config: { targets: { default_watchlist: true } },
+    });
+    const report = service.recordReportRun({
+      templateId: template.id,
+      startedAt: "2026-06-01T12:00:00.000Z",
+      status: "running",
+      triggerType: "scheduled",
+      ownerId: "monitor-1",
+    });
+
+    const marked = service.markStaleAutomationRunsLost({
+      now: "2026-06-01T12:10:00.000Z",
+      graceSeconds: 300,
+    });
+
+    expect(marked).toEqual({ alertCheckRuns: 1, reportRuns: 1 });
+    expect(service.getAlertCheckRun(run.id)).toMatchObject({ status: "lost" });
+    expect(service.listReportRuns()).toEqual([
+      expect.objectContaining({ id: report.id, status: "lost" }),
+    ]);
+  });
 });

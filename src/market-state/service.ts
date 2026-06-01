@@ -1056,6 +1056,13 @@ export class MarketStateService {
     return mapAutomationRunnerLease(row);
   }
 
+  releaseAutomationRunnerLease(ownerId: string): boolean {
+    const result = this.db
+      .prepare("DELETE FROM automation_runner_leases WHERE id = 1 AND owner_id = ?")
+      .run(ownerId);
+    return result.changes > 0;
+  }
+
   startAlertCheckRun(params: {
     ownerId?: string | null;
     startedAt?: string;
@@ -1121,6 +1128,39 @@ export class MarketStateService {
       .prepare("SELECT * FROM alert_check_runs ORDER BY started_at DESC, id DESC")
       .all() as AlertCheckRunRow[];
     return rows.map(mapAlertCheckRun);
+  }
+
+  markStaleAutomationRunsLost(params: {
+    now?: string;
+    graceSeconds: number;
+  }): { alertCheckRuns: number; reportRuns: number } {
+    const now = params.now ?? new Date().toISOString();
+    const cutoff = new Date(new Date(now).getTime() - params.graceSeconds * 1000).toISOString();
+    const tx = this.db.transaction(() => {
+      const alertResult = this.db
+        .prepare(
+          `UPDATE alert_check_runs
+           SET status = 'lost',
+               completed_at = COALESCE(completed_at, ?),
+               error_json = COALESCE(error_json, ?)
+           WHERE status = 'running' AND started_at < ?`,
+        )
+        .run(now, JSON.stringify({ message: "runner lease expired before completion" }), cutoff);
+      const reportResult = this.db
+        .prepare(
+          `UPDATE report_runs
+           SET status = 'lost',
+               completed_at = COALESCE(completed_at, ?),
+               errors_json = COALESCE(errors_json, ?)
+           WHERE status = 'running' AND started_at < ?`,
+        )
+        .run(now, JSON.stringify(["runner lease expired before completion"]), cutoff);
+      return {
+        alertCheckRuns: alertResult.changes,
+        reportRuns: reportResult.changes,
+      };
+    });
+    return tx();
   }
 
   recordNotificationEvent(params: {

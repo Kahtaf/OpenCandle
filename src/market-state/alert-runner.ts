@@ -30,6 +30,7 @@ export interface AlertRunnerOptions {
   triggerType: "heartbeat" | "manual" | "scheduled" | "resume";
   now?: string;
   providers: AlertRunnerProviders;
+  providerBudget?: AlertProviderBudget;
 }
 
 export interface AlertRunnerResult {
@@ -39,6 +40,74 @@ export interface AlertRunnerResult {
   runId: number;
   lines: string[];
 }
+
+export interface AlertProviderBudgetOptions {
+  failureThreshold?: number;
+  backoffMs?: number;
+}
+
+export interface AlertProviderBudgetSnapshotEntry {
+  state: "available" | "open";
+  failureCount: number;
+  openUntil?: string;
+  reason?: string;
+}
+
+interface ProviderBudgetState {
+  failureCount: number;
+  openUntilMs: number;
+  reason?: string;
+}
+
+export class AlertProviderBudget {
+  private readonly state = new Map<string, ProviderBudgetState>();
+  private readonly failureThreshold: number;
+  private readonly backoffMs: number;
+
+  constructor(options: AlertProviderBudgetOptions = {}) {
+    this.failureThreshold = options.failureThreshold ?? 2;
+    this.backoffMs = options.backoffMs ?? 5 * 60_000;
+  }
+
+  unavailableReason(provider: string, now: string): string | null {
+    const current = this.state.get(provider);
+    if (current == null || current.openUntilMs <= new Date(now).getTime()) return null;
+    return `${provider} provider_budget_exhausted until ${new Date(current.openUntilMs).toISOString()}${current.reason ? ` (${current.reason})` : ""}`;
+  }
+
+  recordSuccess(provider: string): void {
+    this.state.delete(provider);
+  }
+
+  recordFailure(provider: string, reason: string, now: string): void {
+    const current = this.state.get(provider) ?? { failureCount: 0, openUntilMs: 0 };
+    const nextFailureCount = current.failureCount + 1;
+    this.state.set(provider, {
+      failureCount: nextFailureCount,
+      openUntilMs: nextFailureCount >= this.failureThreshold ? new Date(now).getTime() + this.backoffMs : 0,
+      reason,
+    });
+  }
+
+  reset(): void {
+    this.state.clear();
+  }
+
+  snapshot(now: string): Record<string, AlertProviderBudgetSnapshotEntry> {
+    const nowMs = new Date(now).getTime();
+    return Object.fromEntries([...this.state.entries()].map(([provider, state]) => [
+      provider,
+      {
+        state: state.openUntilMs > nowMs ? "open" : "available",
+        failureCount: state.failureCount,
+        ...(state.openUntilMs > nowMs ? { openUntil: new Date(state.openUntilMs).toISOString() } : {}),
+        ...(state.reason ? { reason: state.reason } : {}),
+      },
+    ]));
+  }
+}
+
+export const defaultAlertProviderBudget = new AlertProviderBudget();
 
 export const defaultAlertRunnerProviders: AlertRunnerProviders = {
   async getTradingViewQuotes(symbols) {
@@ -93,6 +162,8 @@ export async function runAlertChecks(
   options: AlertRunnerOptions,
 ): Promise<AlertRunnerResult> {
   const now = options.now ?? new Date().toISOString();
+  const providerBudget = options.providerBudget ?? defaultAlertProviderBudget;
+  const historyCache = new Map<string, Promise<OHLCV[]>>();
   const run = service.startAlertCheckRun({
     ownerId: options.ownerId,
     triggerType: options.triggerType,
@@ -132,14 +203,18 @@ export async function runAlertChecks(
     const priceRules = runnable.filter(({ rule }) =>
       rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below"
     );
-    const quoteObservations = await loadPriceObservations(priceRules, options.providers, now);
+    const quoteObservations = await loadPriceObservations(priceRules, options.providers, providerBudget, now);
 
     for (const item of runnable) {
+      const observationKey = isPriceRule(item.rule)
+        ? quoteObservationKey(item.instrument.symbol, allowsDelayedObservation(item.rule))
+        : item.instrument.symbol;
       const observation = isPriceRule(item.rule)
-        ? quoteObservations.observations.get(item.instrument.symbol)
-        : await loadHistoricalObservation(item, options.providers, now);
+        ? quoteObservations.observations.get(observationKey)
+        : await loadHistoricalObservation(item, options.providers, providerBudget, historyCache, now);
       if (!observation) {
-        const reason = quoteObservations.unavailableReasons.get(item.instrument.symbol) ??
+        const reason = quoteObservations.unavailableReasons.get(observationKey) ??
+          quoteObservations.unavailableReasons.get(item.instrument.symbol) ??
           `no provider observation for ${item.instrument.symbol}`;
         unavailable++;
         service.recordAlertUnavailable({
@@ -210,6 +285,8 @@ export async function runAlertChecks(
       unavailableCount: unavailable,
       providerStatus: {
         checkedSymbols: runnable.map((item) => item.instrument.symbol),
+        unavailableReasons: Object.fromEntries(quoteObservations.unavailableReasons),
+        providerBudget: providerBudget.snapshot(now),
       },
     });
 
@@ -230,44 +307,89 @@ export async function runAlertChecks(
 async function loadPriceObservations(
   rules: RunnableRule[],
   providers: AlertRunnerProviders,
+  providerBudget: AlertProviderBudget,
   now: string,
 ): Promise<ObservationSet> {
   const symbols = [...new Set(rules.map(({ instrument }) => instrument.symbol))].sort();
-  const tradingViewSymbols = symbols.filter(canUseTradingViewQuote);
-  const yahooSymbols = new Set(symbols.filter((symbol) => !canUseTradingViewQuote(symbol)));
+  const tradingViewSymbols = symbols.filter((symbol) =>
+    canUseTradingViewQuote(symbol) &&
+    rules.some(({ rule, instrument }) => instrument.symbol === symbol && allowsDelayedObservation(rule))
+  );
+  const yahooSymbols = new Set(symbols.filter((symbol) =>
+    !canUseTradingViewQuote(symbol) ||
+    rules.some(({ rule, instrument }) => instrument.symbol === symbol && !allowsDelayedObservation(rule))
+  ));
   const observations = new Map<string, AlertQuoteObservation>();
   const unavailableReasons = new Map<string, string>();
 
   if (tradingViewSymbols.length > 0) {
-    try {
-      for (const quote of await providers.getTradingViewQuotes(tradingViewSymbols)) {
-        if (quote.cacheStatus === "stale") {
-          unavailableReasons.set(quote.symbol.toUpperCase(), "TradingView returned stale market data");
-          continue;
-        }
-        observations.set(quote.symbol.toUpperCase(), normalizeObservation(quote, now));
-      }
-    } catch (error) {
+    const budgetReason = providerBudget.unavailableReason("tradingview", now);
+    if (budgetReason) {
       for (const symbol of tradingViewSymbols) {
         yahooSymbols.add(symbol);
-        unavailableReasons.set(symbol, error instanceof Error ? error.message : "TradingView unavailable");
+        unavailableReasons.set(symbol, budgetReason);
+        unavailableReasons.set(quoteObservationKey(symbol, true), budgetReason);
+      }
+    } else {
+      try {
+        for (const quote of await providers.getTradingViewQuotes(tradingViewSymbols)) {
+          if (quote.cacheStatus === "stale") {
+            unavailableReasons.set(quoteObservationKey(quote.symbol, true), "TradingView returned stale market data");
+            continue;
+          }
+          observations.set(quoteObservationKey(quote.symbol, true), normalizeObservation(quote, now));
+        }
+        providerBudget.recordSuccess("tradingview");
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "TradingView unavailable";
+        providerBudget.recordFailure("tradingview", reason, now);
+        for (const symbol of tradingViewSymbols) {
+          yahooSymbols.add(symbol);
+          unavailableReasons.set(symbol, reason);
+          unavailableReasons.set(quoteObservationKey(symbol, true), reason);
+        }
       }
     }
   }
 
   for (const symbol of tradingViewSymbols) {
-    if (!observations.has(symbol.toUpperCase())) yahooSymbols.add(symbol);
+    if (!observations.has(quoteObservationKey(symbol, true))) yahooSymbols.add(symbol);
   }
 
   for (const symbol of yahooSymbols) {
+    const budgetReason = providerBudget.unavailableReason("yahoo", now);
+    if (budgetReason) {
+      const prior = unavailableReasons.get(symbol);
+      unavailableReasons.set(symbol, prior ? `${prior}; ${budgetReason}` : budgetReason);
+      unavailableReasons.set(quoteObservationKey(symbol, false), budgetReason);
+      continue;
+    }
     try {
       const quote = await providers.getYahooQuote(symbol);
-      observations.set(symbol.toUpperCase(), normalizeObservation(quote, now));
+      const normalized = normalizeObservation(quote, now);
+      observations.set(quoteObservationKey(symbol, false), normalized);
+      if (!observations.has(quoteObservationKey(symbol, true))) {
+        observations.set(quoteObservationKey(symbol, true), normalized);
+      }
       unavailableReasons.delete(symbol);
+      unavailableReasons.delete(quoteObservationKey(symbol, false));
+      unavailableReasons.delete(quoteObservationKey(symbol, true));
+      providerBudget.recordSuccess("yahoo");
     } catch (error) {
       const prior = unavailableReasons.get(symbol);
       const reason = error instanceof Error ? error.message : "Yahoo unavailable";
-      unavailableReasons.set(symbol, prior ? `${prior}; Yahoo fallback unavailable: ${reason}` : reason);
+      if (isProviderWideFailure(reason)) providerBudget.recordFailure("yahoo", reason, now);
+      const mergedReason = prior ? `${prior}; Yahoo fallback unavailable: ${reason}` : reason;
+      unavailableReasons.set(symbol, mergedReason);
+      unavailableReasons.set(quoteObservationKey(symbol, false), reason);
+      if (!observations.has(quoteObservationKey(symbol, true))) {
+        const delayedKey = quoteObservationKey(symbol, true);
+        const delayedPrior = unavailableReasons.get(delayedKey);
+        unavailableReasons.set(
+          delayedKey,
+          delayedPrior ? `${delayedPrior}; Yahoo fallback unavailable: ${reason}` : mergedReason,
+        );
+      }
     }
   }
 
@@ -277,13 +399,15 @@ async function loadPriceObservations(
 async function loadHistoricalObservation(
   item: RunnableRule,
   providers: AlertRunnerProviders,
+  providerBudget: AlertProviderBudget,
+  historyCache: Map<string, Promise<OHLCV[]>>,
   now: string,
 ): Promise<AlertQuoteObservation | null> {
   try {
     if (item.rule.conditionType === "price_crosses_sma") {
       const condition = item.rule.conditionJson as { period?: unknown };
       const period = typeof condition.period === "number" ? condition.period : 50;
-      const bars = await providers.getHistory(item.instrument.symbol, "1y", "1d");
+      const bars = await loadHistory(item.instrument.symbol, "1y", "1d", providers, providerBudget, historyCache, now);
       const closes = bars.map((bar) => bar.close);
       const sma = computeSMA(closes, period);
       const latestClose = closes.at(-1);
@@ -295,7 +419,7 @@ async function loadHistoricalObservation(
     if (item.rule.conditionType === "rsi_threshold") {
       const condition = item.rule.conditionJson as { period?: unknown };
       const period = typeof condition.period === "number" ? condition.period : 14;
-      const bars = await providers.getHistory(item.instrument.symbol, "6mo", "1d");
+      const bars = await loadHistory(item.instrument.symbol, "6mo", "1d", providers, providerBudget, historyCache, now);
       const rsi = computeRSI(bars.map((bar) => bar.close), period);
       const latestRsi = rsi.at(-1);
       if (latestRsi == null) return null;
@@ -305,7 +429,7 @@ async function loadHistoricalObservation(
     if (item.rule.conditionType === "volume_spike") {
       const condition = item.rule.conditionJson as { lookback_period?: unknown };
       const period = typeof condition.lookback_period === "number" ? condition.lookback_period : 20;
-      const bars = await providers.getHistory(item.instrument.symbol, "6mo", "1d");
+      const bars = await loadHistory(item.instrument.symbol, "6mo", "1d", providers, providerBudget, historyCache, now);
       const latest = bars.at(-1);
       const prior = bars.slice(Math.max(0, bars.length - 1 - period), bars.length - 1);
       if (latest == null || prior.length < period) return null;
@@ -317,6 +441,48 @@ async function loadHistoricalObservation(
     return null;
   }
   return null;
+}
+
+function loadHistory(
+  symbol: string,
+  range: string,
+  interval: string,
+  providers: AlertRunnerProviders,
+  providerBudget: AlertProviderBudget,
+  historyCache: Map<string, Promise<OHLCV[]>>,
+  now: string,
+): Promise<OHLCV[]> {
+  const budgetReason = providerBudget.unavailableReason("yahoo", now);
+  if (budgetReason) return Promise.reject(new Error(budgetReason));
+  const key = `${symbol}:${range}:${interval}`;
+  const cached = historyCache.get(key);
+  if (cached) return cached;
+  const promise = providers.getHistory(symbol, range, interval)
+    .then((bars) => {
+      providerBudget.recordSuccess("yahoo");
+      return bars;
+    })
+    .catch((error) => {
+      const reason = error instanceof Error ? error.message : "Yahoo history unavailable";
+      if (isProviderWideFailure(reason)) providerBudget.recordFailure("yahoo", reason, now);
+      throw error;
+    });
+  historyCache.set(key, promise);
+  return promise;
+}
+
+function isProviderWideFailure(reason: string): boolean {
+  const normalized = reason.toLowerCase();
+  return normalized.includes("429") ||
+    normalized.includes("rate limit") ||
+    normalized.includes("too many requests") ||
+    normalized.includes("provider_budget_exhausted") ||
+    normalized.includes("timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("network") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("econn") ||
+    normalized.includes("enotfound");
 }
 
 function historicalObservation(
@@ -376,6 +542,15 @@ function isDue(rule: AlertRuleRecord, now: string): boolean {
 
 function isPriceRule(rule: AlertRuleRecord): boolean {
   return rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below";
+}
+
+function allowsDelayedObservation(rule: AlertRuleRecord): boolean {
+  const condition = rule.conditionJson as { allow_delayed?: unknown; allowDelayed?: unknown };
+  return condition.allow_delayed !== false && condition.allowDelayed !== false;
+}
+
+function quoteObservationKey(symbol: string, delayedAllowed: boolean): string {
+  return `${symbol.toUpperCase()}:${delayedAllowed ? "delayed-ok" : "fresh-only"}`;
 }
 
 function lastObservedValue(rule: AlertRuleRecord): number | null {

@@ -665,7 +665,7 @@ function subscribeToSessionEvents(): () => void {
 
 function startLocalAutomationHeartbeat(): void {
   if (lockResult.role !== "writer") return;
-  void runGuiAutomationHeartbeat(false);
+  void runGuiAutomationHeartbeat(true);
   automationHeartbeat = setInterval(() => void runGuiAutomationHeartbeat(true), automationHeartbeatMs);
 }
 
