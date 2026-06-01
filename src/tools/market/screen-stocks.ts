@@ -4,39 +4,66 @@ import { screenStocks } from "../../providers/tradingview.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { ScreenFilterOp, ScreenerRow } from "../../providers/tradingview.js";
 
-const filterOp = Type.Union([
-  Type.Literal("greater"),
-  Type.Literal("gt"),
-  Type.Literal(">"),
-  Type.Literal("egreater"),
-  Type.Literal("gte"),
-  Type.Literal(">="),
-  Type.Literal("less"),
-  Type.Literal("lt"),
-  Type.Literal("<"),
-  Type.Literal("eless"),
-  Type.Literal("lte"),
-  Type.Literal("<="),
-  Type.Literal("equal"),
-  Type.Literal("eq"),
-  Type.Literal("=="),
-  Type.Literal("nequal"),
-  Type.Literal("neq"),
-  Type.Literal("!="),
-  Type.Literal("in_range"),
-  Type.Literal("not_in_range"),
-  Type.Literal("crosses"),
-  Type.Literal("crosses_above"),
-  Type.Literal("crosses_below"),
-  Type.Literal("above%"),
-  Type.Literal("below%"),
-  Type.Literal("match"),
-  Type.Literal("nmatch"),
-  Type.Literal("has"),
-  Type.Literal("has_none_of"),
-  Type.Literal("empty"),
-  Type.Literal("nempty"),
-]);
+const filterOps = [
+  "greater",
+  "GREATER",
+  "gt",
+  "GT",
+  ">",
+  "egreater",
+  "EGREATER",
+  "gte",
+  "GTE",
+  ">=",
+  "less",
+  "LESS",
+  "lt",
+  "LT",
+  "<",
+  "eless",
+  "ELESS",
+  "lte",
+  "LTE",
+  "<=",
+  "equal",
+  "EQUAL",
+  "eq",
+  "EQ",
+  "==",
+  "nequal",
+  "NEQUAL",
+  "neq",
+  "NEQ",
+  "!=",
+  "in_range",
+  "IN_RANGE",
+  "not_in_range",
+  "NOT_IN_RANGE",
+  "crosses",
+  "CROSSES",
+  "crosses_above",
+  "CROSSES_ABOVE",
+  "crosses_below",
+  "CROSSES_BELOW",
+  "above%",
+  "ABOVE%",
+  "below%",
+  "BELOW%",
+  "match",
+  "MATCH",
+  "nmatch",
+  "NMATCH",
+  "has",
+  "HAS",
+  "has_none_of",
+  "HAS_NONE_OF",
+  "empty",
+  "EMPTY",
+  "nempty",
+  "NEMPTY",
+] as const;
+
+const filterOp = Type.String({ enum: [...filterOps] });
 
 const params = Type.Object({
   market: Type.Optional(Type.String({ description: "TradingView market path segment. Default: america" })),
@@ -48,7 +75,7 @@ const params = Type.Object({
   }), { description: "Flat AND filter clauses; nested OR trees are not supported" })),
   sort: Type.Optional(Type.Object({
     field: Type.String({ description: "TradingView scanner field to sort by" }),
-    direction: Type.Optional(Type.Union([Type.Literal("asc"), Type.Literal("desc")])),
+    direction: Type.Optional(Type.String({ enum: ["asc", "ASC", "desc", "DESC"] })),
   })),
   limit: Type.Optional(Type.Number({ description: "Maximum rows to return. Default 50; maximum 500" })),
 });
@@ -119,6 +146,7 @@ function normalizeArgs(args: Static<typeof params>) {
     sort: args.sort && {
       ...args.sort,
       field: normalizeField(args.sort.field),
+      direction: normalizeSortDirection(args.sort.direction),
     },
   };
 }
@@ -131,7 +159,13 @@ function normalizeFilterOp(op: string): ScreenFilterOp {
   if (normalized === "lte" || normalized === "<=") return "eless";
   if (normalized === "eq" || normalized === "==") return "equal";
   if (normalized === "neq" || normalized === "!=") return "nequal";
-  return op as ScreenFilterOp;
+  return normalized as ScreenFilterOp;
+}
+
+function normalizeSortDirection(direction?: string): "asc" | "desc" | undefined {
+  const normalized = direction?.toLowerCase();
+  if (normalized === "asc" || normalized === "desc") return normalized;
+  return undefined;
 }
 
 function normalizeField(field: string): string {

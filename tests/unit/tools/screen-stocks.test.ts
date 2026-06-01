@@ -98,6 +98,39 @@ describe("screen_stocks tool", () => {
     });
   });
 
+  it("accepts uppercase sort directions and filter aliases before execution", async () => {
+    vi.mocked(wrapProvider).mockImplementation(async (_provider, fn) => ({
+      status: "ok",
+      data: await fn(),
+      timestamp: "2026-06-01T00:00:00.000Z",
+    }));
+    vi.mocked(screenStocks).mockResolvedValue([]);
+    const args = {
+      market: "america",
+      columns: ["name", "RSI|14D", "volume"],
+      filter: [
+        { field: "market_cap_basic", op: "GTE", value: 10_000_000_000 },
+        { field: "RSI|14D", op: "LT", value: 30 },
+      ],
+      sort: { field: "volume", direction: "DESC" },
+      limit: 10,
+    };
+
+    expect(Value.Check(screenStocksTool.parameters, args)).toBe(true);
+    await screenStocksTool.execute("call-uppercase", args as any);
+
+    expect(screenStocks).toHaveBeenCalledWith({
+      market: "america",
+      columns: ["name", "RSI", "volume"],
+      filter: [
+        { field: "market_cap_basic", op: "egreater", value: 10_000_000_000 },
+        { field: "RSI", op: "less", value: 30 },
+      ],
+      sort: { field: "volume", direction: "desc" },
+      limit: 10,
+    });
+  });
+
   it("normalizes percent-change aliases for mover screens", async () => {
     vi.mocked(wrapProvider).mockImplementation(async (_provider, fn) => ({
       status: "ok",
