@@ -133,6 +133,16 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Web Search");
   });
 
+  it("guides tool choice between stock screening and single-symbol Yahoo tools", () => {
+    const builder = new PromptContextBuilder();
+    builder.populateFromOptions({});
+
+    const result = builder.build();
+    expect(result).toContain("screen_stocks");
+    expect(result).toContain("breadth");
+    expect(result).toContain("single-security quote");
+  });
+
   it("includes new sentiment tools in catalog", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({});
