@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
 import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
+import { getQuotes } from "../../../src/providers/tradingview.js";
 import { httpGet } from "../../../src/infra/http-client.js";
 import { cache } from "../../../src/infra/cache.js";
 import type { OHLCV, StockQuote } from "../../../src/types/market.js";
@@ -14,6 +15,13 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
   getHistory: vi.fn(),
 }));
+vi.mock("../../../src/providers/tradingview.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/providers/tradingview.js")>();
+  return {
+    ...actual,
+    getQuotes: vi.fn(),
+  };
+});
 vi.mock("../../../src/infra/http-client.js", () => ({
   httpGet: vi.fn(),
 }));
@@ -29,6 +37,7 @@ describe("alertsTool", () => {
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-alerts-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
+    vi.mocked(getQuotes).mockRejectedValue(new Error("TradingView unavailable in unit test"));
     vi.mocked(getHistory).mockResolvedValue(history([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114]));
     vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });

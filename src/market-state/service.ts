@@ -941,6 +941,7 @@ export class MarketStateService {
     checkIntervalSeconds?: number;
     nextCheckAt?: string;
     cooldownSeconds?: number;
+    retriggerMode?: string;
   }): AlertRuleRecord {
     const now = new Date().toISOString();
     const result = this.db
@@ -948,9 +949,9 @@ export class MarketStateService {
         `INSERT INTO alert_rules (
            scope_type, scope_id, instrument_id, condition_type, condition_version,
            condition_json, timeframe, enabled, check_interval_seconds, next_check_at,
-           cooldown_seconds, created_at, updated_at
+           retrigger_mode, cooldown_seconds, created_at, updated_at
          )
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         params.scopeType,
@@ -963,6 +964,7 @@ export class MarketStateService {
         params.enabled === false ? 0 : 1,
         params.checkIntervalSeconds ?? null,
         params.nextCheckAt ?? null,
+        params.retriggerMode ?? "recurring",
         params.cooldownSeconds ?? null,
         now,
         now,
@@ -1317,6 +1319,124 @@ export class MarketStateService {
     });
     const triggered = tx();
     return { triggered, rule: this.getAlertRule(params.ruleId) };
+  }
+
+  recordAlertEvaluationResult(params: {
+    ruleId: number;
+    observed: unknown;
+    checkedAt: string;
+    conditionState: "true" | "false" | "unknown";
+    trigger?: {
+      instrumentId: number | null;
+      message: string;
+      triggeredAt: string;
+      observedAt: string;
+      providerDataAt?: string | null;
+      sourceProvider?: string | null;
+      cacheStatus?: string;
+      dataDelayMs?: number | null;
+      triggerSource: string;
+      dedupeKey: string;
+    };
+  }): { triggered: boolean; event: AlertEventRecord | null; rule: AlertRuleRecord } {
+    const tx = this.db.transaction(() => {
+      const row = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(params.ruleId) as
+        | AlertRuleRow
+        | undefined;
+      if (row == null) {
+        throw new Error(`alert rule ${params.ruleId} not found`);
+      }
+
+      const rearmed = params.conditionState === "false" && row.last_condition_state === "true";
+      const nextArmCycleId = rearmed ? row.arm_cycle_id + 1 : row.arm_cycle_id;
+      let eventId: number | null = null;
+
+      if (params.trigger != null) {
+        const result = this.db
+          .prepare(
+            `INSERT OR IGNORE INTO alert_events (
+               alert_rule_id, instrument_id, observed_value_json, triggered_at,
+               observed_at, provider_data_at, source_provider, cache_status,
+               data_delay_ms, trigger_source, dedupe_key, status, message
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triggered', ?)`,
+          )
+          .run(
+            params.ruleId,
+            params.trigger.instrumentId,
+            JSON.stringify(params.observed),
+            params.trigger.triggeredAt,
+            params.trigger.observedAt,
+            params.trigger.providerDataAt ?? null,
+            params.trigger.sourceProvider ?? null,
+            params.trigger.cacheStatus ?? "live",
+            params.trigger.dataDelayMs ?? null,
+            params.trigger.triggerSource,
+            params.trigger.dedupeKey,
+            params.trigger.message,
+          );
+
+        if (result.changes > 0) {
+          eventId = Number(result.lastInsertRowid);
+          this.db
+            .prepare(
+              `INSERT INTO notification_events (
+                 source_type, source_id, severity, title, body, payload_json, status, created_at
+               )
+               VALUES ('alert_event', ?, 'warning', ?, ?, ?, 'unread', ?)`,
+            )
+            .run(
+              eventId,
+              "Alert triggered",
+              params.trigger.message,
+              JSON.stringify({
+                ruleId: params.ruleId,
+                observed: params.observed,
+                sourceProvider: params.trigger.sourceProvider ?? null,
+                providerDataAt: params.trigger.providerDataAt ?? null,
+                cacheStatus: params.trigger.cacheStatus ?? "live",
+                dataDelayMs: params.trigger.dataDelayMs ?? null,
+              }),
+              params.trigger.observedAt,
+            );
+        }
+      }
+
+      const triggered = eventId != null;
+      const completeOneShot = triggered && row.retrigger_mode === "once";
+      this.db
+        .prepare(
+          `UPDATE alert_rules
+           SET last_checked_at = ?,
+               last_observed_json = ?,
+               last_condition_state = ?,
+               arm_cycle_id = ?,
+               last_triggered_at = COALESCE(?, last_triggered_at),
+               enabled = CASE WHEN ? THEN 0 ELSE enabled END,
+               status = CASE WHEN ? THEN 'completed' ELSE status END,
+               updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(
+          params.checkedAt,
+          JSON.stringify(params.observed),
+          params.conditionState,
+          nextArmCycleId,
+          triggered && params.trigger ? params.trigger.triggeredAt : null,
+          completeOneShot ? 1 : 0,
+          completeOneShot ? 1 : 0,
+          params.checkedAt,
+          params.ruleId,
+        );
+
+      return { triggered, eventId };
+    });
+    const result = tx();
+    return {
+      triggered: result.triggered,
+      event: result.eventId == null ? null : this.getAlertEvent(result.eventId),
+      rule: this.getAlertRule(params.ruleId),
+    };
   }
 
   recordAlertUnavailable(params: {
@@ -1738,12 +1858,12 @@ export class MarketStateService {
     return mapPrediction(row);
   }
 
-  private getAlertRule(id: number): AlertRuleRecord {
+  getAlertRule(id: number): AlertRuleRecord {
     const row = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(id) as AlertRuleRow;
     return mapAlertRule(row);
   }
 
-  private getAlertEvent(id: number): AlertEventRecord {
+  getAlertEvent(id: number): AlertEventRecord {
     const row = this.db.prepare("SELECT * FROM alert_events WHERE id = ?").get(id) as AlertEventRow;
     return mapAlertEvent(row);
   }

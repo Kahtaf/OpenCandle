@@ -343,12 +343,17 @@ function normalizeRequestedSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
 
-function isTradingViewQualified(symbol: string): boolean {
+export function isTradingViewQualified(symbol: string): boolean {
   return /^[A-Z0-9_]+:[A-Z0-9._-]+$/.test(symbol);
 }
 
-function shouldSkipTradingView(symbol: string): boolean {
+export function shouldSkipTradingView(symbol: string): boolean {
   return /(?:-USD|\.(?:TO|DE|T|L|HK))$/i.test(symbol);
+}
+
+export function canUseTradingViewQuote(symbol: string): boolean {
+  const normalized = normalizeRequestedSymbol(symbol);
+  return normalized.length > 0 && (isTradingViewQualified(normalized) || !shouldSkipTradingView(normalized));
 }
 
 function symbolFromTvSymbol(tvSymbol: string): string {
