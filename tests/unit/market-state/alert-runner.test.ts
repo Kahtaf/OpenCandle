@@ -266,4 +266,58 @@ describe("alert runner", () => {
     expect(service.getAlertRule(available.id).nextCheckAt).toBe("2026-06-01T12:05:00.000Z");
     expect(service.getAlertRule(unavailable.id).nextCheckAt).toBe("2026-06-01T12:10:00.000Z");
   });
+
+  it("marks false-to-true resume triggers as late alerts", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    let price = 240;
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
+        symbol,
+        value: price,
+        sourceProvider: "tradingview",
+        observedAt: "2026-06-01T12:00:00.000Z",
+        providerDataAt: "2026-06-01T11:45:00.000Z",
+        cacheStatus: "live",
+      }))),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(),
+    };
+
+    await runAlertChecks(service, {
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+    });
+    price = 260;
+    const resumed = await runAlertChecks(service, {
+      triggerType: "resume",
+      now: "2026-06-01T13:00:00.000Z",
+      providers,
+    });
+
+    expect(resumed.triggered).toBe(1);
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        status: "triggered_late",
+        triggerSource: "resume",
+      }),
+    ]);
+  });
 });

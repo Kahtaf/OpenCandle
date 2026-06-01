@@ -1364,6 +1364,7 @@ export class MarketStateService {
       dataDelayMs?: number | null;
       triggerSource: string;
       dedupeKey: string;
+      status?: string;
     };
   }): { triggered: boolean; event: AlertEventRecord | null; rule: AlertRuleRecord } {
     const tx = this.db.transaction(() => {
@@ -1386,7 +1387,7 @@ export class MarketStateService {
                observed_at, provider_data_at, source_provider, cache_status,
                data_delay_ms, trigger_source, dedupe_key, status, message
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'triggered', ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             params.ruleId,
@@ -1400,6 +1401,7 @@ export class MarketStateService {
             params.trigger.dataDelayMs ?? null,
             params.trigger.triggerSource,
             params.trigger.dedupeKey,
+            params.trigger.status ?? "triggered",
             params.trigger.message,
           );
 

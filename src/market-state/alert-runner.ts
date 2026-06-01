@@ -188,6 +188,7 @@ export async function runAlertChecks(
             dataDelayMs: observation.dataDelayMs ?? null,
             triggerSource: options.triggerType,
             dedupeKey: alertDedupeKey(item.rule, observation, options.triggerType),
+            status: options.triggerType === "resume" ? "triggered_late" : "triggered",
           }
           : undefined,
       });
