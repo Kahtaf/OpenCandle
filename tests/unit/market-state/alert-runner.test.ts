@@ -202,4 +202,68 @@ describe("alert runner", () => {
       triggerSource: "heartbeat",
     });
   });
+
+  it("advances next check time from the rule interval after available and unavailable checks", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const btc = service.upsertInstrumentRecord({
+      symbol: "BTC-USD",
+      assetType: "crypto",
+      name: "Bitcoin",
+      exchange: null,
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const available = service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      checkIntervalSeconds: 300,
+      cooldownSeconds: 0,
+    });
+    const unavailable = service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: btc.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(300),
+      timeframe: "quote",
+      checkIntervalSeconds: 600,
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
+        symbol,
+        value: 240,
+        sourceProvider: "tradingview",
+        observedAt: "2026-06-01T12:00:00.000Z",
+        providerDataAt: "2026-06-01T11:45:00.000Z",
+        cacheStatus: "live",
+      }))),
+      getYahooQuote: vi.fn(async () => {
+        throw new Error("rate limited");
+      }),
+      getHistory: vi.fn(),
+    };
+
+    await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+    });
+
+    expect(service.getAlertRule(available.id).nextCheckAt).toBe("2026-06-01T12:05:00.000Z");
+    expect(service.getAlertRule(unavailable.id).nextCheckAt).toBe("2026-06-01T12:10:00.000Z");
+  });
 });

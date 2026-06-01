@@ -1426,6 +1426,7 @@ export class MarketStateService {
                last_observed_json = ?,
                last_condition_state = ?,
                arm_cycle_id = ?,
+               next_check_at = ?,
                last_triggered_at = COALESCE(?, last_triggered_at),
                enabled = CASE WHEN ? THEN 0 ELSE enabled END,
                status = CASE WHEN ? THEN 'completed' ELSE status END,
@@ -1437,6 +1438,7 @@ export class MarketStateService {
           JSON.stringify(params.observed),
           params.conditionState,
           nextArmCycleId,
+          nextAlertCheckAt(row, params.checkedAt),
           triggered && params.trigger ? params.trigger.triggeredAt : null,
           completeOneShot ? 1 : 0,
           completeOneShot ? 1 : 0,
@@ -1461,8 +1463,8 @@ export class MarketStateService {
     checkedAt: string;
   }): { event: AlertEventRecord; rule: AlertRuleRecord } {
     const tx = this.db.transaction(() => {
-      const row = this.db.prepare("SELECT id FROM alert_rules WHERE id = ?").get(params.ruleId) as
-        | { id: number }
+      const row = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(params.ruleId) as
+        | AlertRuleRow
         | undefined;
       if (row == null) {
         throw new Error(`alert rule ${params.ruleId} not found`);
@@ -1487,10 +1489,11 @@ export class MarketStateService {
         .prepare(
           `UPDATE alert_rules
            SET last_checked_at = ?,
+               next_check_at = ?,
                updated_at = ?
            WHERE id = ?`,
         )
-        .run(params.checkedAt, params.checkedAt, params.ruleId);
+        .run(params.checkedAt, nextAlertCheckAt(row, params.checkedAt), params.checkedAt, params.ruleId);
 
       return Number(result.lastInsertRowid);
     });
@@ -2096,6 +2099,13 @@ function mapNotificationDeliveryAttempt(row: NotificationDeliveryAttemptRow): No
     responseJson: row.response_json == null ? null : JSON.parse(row.response_json),
     error: row.error,
   };
+}
+
+function nextAlertCheckAt(row: AlertRuleRow, checkedAt: string): string | null {
+  if (row.check_interval_seconds == null) return null;
+  const checkedAtMs = new Date(checkedAt).getTime();
+  if (!Number.isFinite(checkedAtMs)) return null;
+  return new Date(checkedAtMs + row.check_interval_seconds * 1000).toISOString();
 }
 
 function mapReportTemplate(row: ReportTemplateRow): ReportTemplateRecord {
