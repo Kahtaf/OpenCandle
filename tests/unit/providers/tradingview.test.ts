@@ -4,6 +4,7 @@ import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { buildTvSymbol, getQuotes, screenStocks } from "../../../src/providers/tradingview.js";
 import bareQuotesFixture from "../../fixtures/tradingview/bare-quotes.json";
 import qualifiedQuotesFixture from "../../fixtures/tradingview/qualified-quotes.json";
+import shuffledFieldsFixture from "../../fixtures/tradingview/screen-fields-shuffled.json";
 import screenResultsFixture from "../../fixtures/tradingview/screen-results.json";
 
 describe("TradingView provider", () => {
@@ -134,5 +135,44 @@ describe("TradingView provider", () => {
     });
 
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("decodes rows by response fields and backfills missing requested columns as null", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(shuffledFieldsFixture),
+    });
+
+    const rows = await screenStocks({
+      market: "america",
+      columns: ["name", "close", "volume", "RSI|60"],
+      limit: 1,
+    });
+
+    expect(rows[0]?.values).toEqual({
+      name: "AAPL",
+      close: 190.5,
+      volume: null,
+      "RSI|60": 29.4,
+    });
+  });
+
+  it("serves stale scanner data when a repeated request fails within the stale window", async () => {
+    let now = new Date("2026-06-01T00:00:00.000Z").getTime();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    rateLimiter.configure("tradingview", 1000, 1000);
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(screenResultsFixture),
+      })
+      .mockRejectedValueOnce(new Error("network down"));
+
+    const first = await screenStocks({ market: "america", columns: ["name", "close"], limit: 2 });
+    now = new Date("2026-06-01T00:02:00.000Z").getTime();
+    const second = await screenStocks({ market: "america", columns: ["name", "close"], limit: 2 });
+
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(second).toEqual(first);
   });
 });

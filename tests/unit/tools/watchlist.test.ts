@@ -136,6 +136,38 @@ describe("watchlistTool", () => {
     ]);
   });
 
+  it("checks 100+ equity symbols with one TradingView batch call", async () => {
+    const items = Array.from({ length: 101 }, (_, index) => ({
+      symbol: `SYM${index}`,
+      addedAt: "2024-01-01",
+    }));
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(items));
+    vi.mocked(getQuotes).mockResolvedValue(
+      items.map((item, index) => ({
+        requestedSymbol: item.symbol,
+        tvSymbol: `NASDAQ:${item.symbol}`,
+        symbol: item.symbol,
+        price: 100 + index,
+        change: 0,
+        changePercent: 0,
+        volume: 1000,
+        sourceProvider: "tradingview",
+        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+      })),
+    );
+
+    const result = await watchlistTool.execute("test", { action: "check" });
+
+    expect(getQuotes).toHaveBeenCalledTimes(1);
+    expect(getQuotes).toHaveBeenCalledWith(items.map((item) => item.symbol));
+    expect(getQuote).not.toHaveBeenCalled();
+    expect((result.details as any).items).toHaveLength(101);
+    expect((result.details as any).items[100]).toEqual(
+      expect.objectContaining({ symbol: "SYM100", currentPrice: 200, sourceProvider: "tradingview" }),
+    );
+  });
+
   it("fills missing TradingView rows through Yahoo without discarding successful rows", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readFileSync).mockReturnValue(

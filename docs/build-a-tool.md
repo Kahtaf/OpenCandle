@@ -122,6 +122,8 @@ const posted = await httpPost<MyApiResponse>("https://api.example.com/search", {
 });
 ```
 
+`httpPost` is internal first-party infrastructure at the moment; add-on packages should continue using the currently exported `opencandle/tool-kit` APIs unless that package subpath explicitly exports new HTTP helpers.
+
 ### Caching
 
 ```ts

@@ -56,6 +56,8 @@ Expected behavior:
 
 TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens. Single-security quotes, history, options, and company analysis should still use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
 
+The TradingView scanner implementation reimplements request grammar and decoding discipline in TypeScript rather than copying source. Reference projects used for protocol cross-checking include `himself65/finance-skills`, `shner-elmo/TradingView-Screener`, `deepentropy/tvscreener`, `Fynnius/TradingView.Screener`, and `ryar001/tradingview-screener-wrapper`; confirm upstream licenses before adapting non-trivial source.
+
 ## Local State
 
 OpenCandle user state defaults to `~/.opencandle/`. Pi configuration is separate and stays in `.pi/` or `~/.pi/agent/`.

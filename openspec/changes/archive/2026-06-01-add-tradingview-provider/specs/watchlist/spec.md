@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Watchlist price check uses batch quote with fallback
 The `manage_watchlist` tool's `check` action SHALL price equity-like watchlist symbols using TradingView batch quotes (`getQuotes(symbols)`) as the primary path. It SHALL invoke TradingView through `wrapProvider("tradingview", ...)` so provider failure is represented as `unavailable`. If TradingView is unavailable, returns no usable rows, or the response shape changes enough to be unsafe, the action SHALL revert to the existing per-symbol Yahoo `getQuote` loop for the whole list. If TradingView returns a partial usable result, the action SHALL preserve the successful TradingView rows and fill missing/unresolved symbols through the existing Yahoo path. The action SHALL NOT fan out one request per symbol on the primary path.
