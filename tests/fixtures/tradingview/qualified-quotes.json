@@ -1,0 +1,15 @@
+{
+  "totalCount": 2,
+  "fields": ["name", "close", "change", "change_abs", "volume", "exchange", "market", "description", "type", "typespecs"],
+  "symbols": [
+    {
+      "s": "NASDAQ:AAPL",
+      "f": ["AAPL", 190.5, 1.25, 2.35, 123456789, "NASDAQ", "america", "Apple Inc.", "stock", ["common"]]
+    },
+    {
+      "s": "NASDAQ:MSFT",
+      "f": ["MSFT", 415.75, -0.5, -2.08, 34567890, "NASDAQ", "america", "Microsoft Corporation", "stock", ["common"]]
+    }
+  ],
+  "time": 1717000000
+}
