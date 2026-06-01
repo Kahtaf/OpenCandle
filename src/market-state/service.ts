@@ -1378,8 +1378,12 @@ export class MarketStateService {
       const rearmed = params.conditionState === "false" && row.last_condition_state === "true";
       const nextArmCycleId = rearmed ? row.arm_cycle_id + 1 : row.arm_cycle_id;
       let eventId: number | null = null;
+      const canInsertTrigger = params.trigger != null &&
+        row.enabled === 1 &&
+        row.status === "active" &&
+        row.last_condition_state !== "true";
 
-      if (params.trigger != null) {
+      if (params.trigger != null && canInsertTrigger) {
         const result = this.db
           .prepare(
             `INSERT OR IGNORE INTO alert_events (

@@ -44,6 +44,7 @@ export const defaultAlertRunnerProviders: AlertRunnerProviders = {
   async getTradingViewQuotes(symbols) {
     const result = await wrapProvider("tradingview", () => getQuotes(symbols));
     if (result.status === "unavailable") throw new Error(result.reason);
+    if (result.stale) throw new Error("provider returned stale market data");
     return result.data.map((quote) => ({
       symbol: quote.requestedSymbol,
       value: quote.price,
@@ -240,6 +241,10 @@ async function loadPriceObservations(
   if (tradingViewSymbols.length > 0) {
     try {
       for (const quote of await providers.getTradingViewQuotes(tradingViewSymbols)) {
+        if (quote.cacheStatus === "stale") {
+          unavailableReasons.set(quote.symbol.toUpperCase(), "TradingView returned stale market data");
+          continue;
+        }
         observations.set(quote.symbol.toUpperCase(), normalizeObservation(quote, now));
       }
     } catch (error) {
@@ -260,7 +265,9 @@ async function loadPriceObservations(
       observations.set(symbol.toUpperCase(), normalizeObservation(quote, now));
       unavailableReasons.delete(symbol);
     } catch (error) {
-      unavailableReasons.set(symbol, error instanceof Error ? error.message : "Yahoo unavailable");
+      const prior = unavailableReasons.get(symbol);
+      const reason = error instanceof Error ? error.message : "Yahoo unavailable";
+      unavailableReasons.set(symbol, prior ? `${prior}; Yahoo fallback unavailable: ${reason}` : reason);
     }
   }
 

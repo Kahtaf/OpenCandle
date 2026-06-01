@@ -5,7 +5,7 @@ import {
   type AlertRunnerProviders,
   type AlertRunnerResult,
 } from "./alert-runner.js";
-import { recordDailyWatchlistReportRun } from "./daily-report.js";
+import { nextDailyReportRunAt, recordDailyWatchlistReportRun } from "./daily-report.js";
 import { MarketStateService, type AutomationRunnerLeaseResult, type ReportRunRecord } from "./service.js";
 
 export interface LocalAutomationHeartbeatResult {
@@ -93,14 +93,12 @@ async function runDueReports(
     });
     runs.push(run);
     service.updateReportTemplate(template.id, {
-      nextRunAt: nextDailyRunAt(scheduledFor),
+      nextRunAt: nextDailyReportRunAt(
+        template.timezone,
+        template.localTime,
+        new Date(new Date(scheduledFor).getTime() + 1000),
+      ),
     });
   }
   return runs;
-}
-
-function nextDailyRunAt(currentRunAt: string): string {
-  const next = new Date(currentRunAt);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString();
 }

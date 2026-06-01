@@ -164,13 +164,13 @@ describe("local automation service", () => {
       localTime: "08:00",
       config: { targets: { default_watchlist: true } },
       enabled: true,
-      nextRunAt: "2026-06-01T12:00:00.000Z",
+      nextRunAt: "2026-03-08T12:00:00.000Z",
     });
 
     const result = await runLocalAutomationHeartbeat(db, {
       ownerId: "gui-1",
       ownerKind: "writer",
-      now: "2026-06-01T12:00:30.000Z",
+      now: "2026-03-08T12:00:30.000Z",
       ttlSeconds: 60,
       checkAlerts: true,
       providers: unusedProviders(),
@@ -180,12 +180,12 @@ describe("local automation service", () => {
       expect.objectContaining({
         templateId: template.id,
         triggerType: "scheduled",
-        scheduledFor: "2026-06-01T12:00:00.000Z",
+        scheduledFor: "2026-03-08T12:00:00.000Z",
         ownerId: "gui-1",
         status: "completed",
       }),
     ]);
-    expect(service.getReportTemplate(template.id).nextRunAt).toBe("2026-06-02T12:00:00.000Z");
+    expect(service.getReportTemplate(template.id).nextRunAt).toBe("2026-03-09T12:00:00.000Z");
     expect(service.listNotificationEvents()).toEqual([
       expect.objectContaining({
         sourceType: "report_run",

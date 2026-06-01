@@ -100,6 +100,57 @@ describe("alert runner", () => {
     });
   });
 
+  it("records TradingView stale cache as unavailable instead of firing alerts from expired quotes", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
+        symbol,
+        value: 260,
+        sourceProvider: "tradingview",
+        observedAt: "2026-06-01T12:00:00.000Z",
+        providerDataAt: "2026-06-01T11:00:00.000Z",
+        cacheStatus: "stale",
+      }))),
+      getYahooQuote: vi.fn(async () => {
+        throw new Error("Yahoo fallback unavailable");
+      }),
+      getHistory: vi.fn(),
+    };
+
+    const result = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+    });
+
+    expect(result).toMatchObject({ checked: 1, triggered: 0, unavailable: 1 });
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        status: "unavailable",
+        message: expect.stringMatching(/stale/i),
+      }),
+    ]);
+    expect(service.getAlertRule(1).lastObservedJson).toBeNull();
+  });
+
   it("records notification lifecycle, suppresses still-true checks, rearms on false, and completes one-shot rules", async () => {
     const instrument = service.upsertInstrumentRecord({
       symbol: "AAPL",
@@ -319,5 +370,64 @@ describe("alert runner", () => {
         triggerSource: "resume",
       }),
     ]);
+  });
+
+  it("suppresses duplicate trigger inserts when a stale caller races with an already-triggered rule", () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const rule = service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_above",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesAbove(250),
+      timeframe: "quote",
+      cooldownSeconds: 0,
+    });
+    service.recordAlertEvaluationResult({
+      ruleId: rule.id,
+      observed: { value: 240, field: "last_price" },
+      checkedAt: "2026-06-01T12:00:00.000Z",
+      conditionState: "false",
+    });
+    const trigger = {
+      instrumentId: instrument.id,
+      title: "AAPL alert triggered",
+      message: "AAPL price_crosses_above at $260.00",
+      triggeredAt: "2026-06-01T12:01:00.000Z",
+      observedAt: "2026-06-01T12:01:00.000Z",
+      providerDataAt: "2026-06-01T12:01:00.000Z",
+      sourceProvider: "tradingview",
+      cacheStatus: "live",
+      dataDelayMs: null,
+      triggerSource: "heartbeat",
+      dedupeKey: "first",
+    };
+
+    const first = service.recordAlertEvaluationResult({
+      ruleId: rule.id,
+      observed: { value: 260, field: "last_price" },
+      checkedAt: "2026-06-01T12:01:00.000Z",
+      conditionState: "true",
+      trigger,
+    });
+    const duplicate = service.recordAlertEvaluationResult({
+      ruleId: rule.id,
+      observed: { value: 260, field: "last_price" },
+      checkedAt: "2026-06-01T12:01:01.000Z",
+      conditionState: "true",
+      trigger: { ...trigger, triggerSource: "manual", dedupeKey: "second" },
+    });
+
+    expect(first.triggered).toBe(true);
+    expect(duplicate.triggered).toBe(false);
+    expect(service.listAlertEvents()).toHaveLength(1);
+    expect(service.listNotificationEvents()).toHaveLength(1);
   });
 });
