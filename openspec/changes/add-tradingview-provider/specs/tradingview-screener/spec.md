@@ -16,15 +16,15 @@ The system SHALL provide a `src/providers/tradingview.ts` module exposing `scree
 - **THEN** requests succeed without any credential; the provider never throws `ProviderCredentialError` and is not gated by `getConfig()`
 
 ### Requirement: Resilient response decoding
-The provider SHALL decode TradingView's column-compressed response `{ fields: string[], symbols: [{ s, f: any[] }] }` by reading each value's position from the response `fields[]` array at decode time. Field indices SHALL NOT be hard-coded. A requested column absent from the response `fields[]` SHALL decode to `null` rather than throwing.
+The decoder SHALL have the signature `decodeScannerRows(payload, requestedColumns)` and decode TradingView's column-compressed response `{ fields: string[], symbols: [{ s, f: any[] }] }` by reading each value's position from the response `fields[]` array at decode time. Field indices SHALL NOT be hard-coded. Because TradingView omits a requested column from the response `fields[]` when it has no value, the decoder SHALL use `requestedColumns` to backfill any requested column missing from `fields[]` as `null` on every row, so downstream formatting never sees `undefined` keys. Decoding SHALL NOT throw on a missing column.
 
 #### Scenario: Position read from response, not hard-coded
 - **WHEN** the response `fields` array is in a different order than requested
 - **THEN** each value is still mapped to the correct field name (decoded by matching `fields[i]` to `f[i]`)
 
-#### Scenario: Missing column tolerated
+#### Scenario: Missing column backfilled as null
 - **WHEN** a requested column does not appear in the response `fields`
-- **THEN** that field on each decoded row is `null` and no error is thrown
+- **THEN** the decoder uses `requestedColumns` to set that field to `null` (not `undefined`) on every decoded row, and no error is thrown
 
 #### Scenario: Empty result
 - **WHEN** the response `symbols` array is empty

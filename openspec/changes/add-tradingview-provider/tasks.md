@@ -9,11 +9,11 @@
 
 - [ ] 2.1 Add fixtures: `tests/fixtures/tradingview/screen-america.json` (multi-symbol screener response with realistic `fields`/`symbols`), `tests/fixtures/tradingview/quotes-batch.json` (explicit-ticker quote response), and `tests/fixtures/tradingview/screen-fields-shuffled.json` (same data, **reordered `fields[]`** and one requested column omitted)
 - [ ] 2.2 **RED**: Write tests in `tests/unit/providers/tradingview-decode.test.ts`:
-  - `decodeScannerRows` zips `fields[i] → f[i]` into `{ symbol: s, ...fields }`
+  - `decodeScannerRows(payload, requestedColumns)` zips `fields[i] → f[i]` into `{ symbol: s, ...fields }`
   - shuffled-`fields` fixture decodes to identical values (position read from response, not hard-coded)
-  - a requested column absent from `fields` decodes to `null` (no throw) — the shape-guard
+  - a requested column absent from the response `fields` is backfilled as `null` (explicitly `null`, not `undefined`; no throw) — the shape-guard
   - empty `symbols` array → empty result
-- [ ] 2.3 **GREEN**: Implement `decodeScannerRows(payload)` reading positions from `payload.fields` with null-tolerance for missing columns
+- [ ] 2.3 **GREEN**: Implement `decodeScannerRows(payload, requestedColumns)` reading positions from `payload.fields` and backfilling any requested column missing from `fields[]` as `null`
 
 ## 3. Scanner provider (screen + batch quotes)
 

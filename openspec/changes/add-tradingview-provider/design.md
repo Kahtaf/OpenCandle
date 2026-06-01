@@ -31,11 +31,11 @@ TradingView's scanner backend is a single generic POST grammar (`scan2`) that po
 
 ### 2. Position-based decoding from response `fields[]`, never hard-coded indices
 
-**Decision**: `decodeScannerRows(payload)` builds row objects by zipping `payload.fields[i] → row.f[i]`. Requested columns missing from the response decode to `null` rather than throwing. (Pattern borrowed from `finance-skills`'s `scanner.js`.)
+**Decision**: `decodeScannerRows(payload, requestedColumns)` builds row objects by zipping `payload.fields[i] → row.f[i]`. Because TradingView drops a requested column from the response `fields[]` when it has no value, the decoder takes the requested column list and backfills any column missing from `fields[]` as `null` on every row — so a pure zip can't leave `undefined` keys. (Pattern borrowed from `finance-skills`'s `scanner.js`, extended with the requested-column backfill.)
 
-**Why**: Research showed the dominant TradingView break mode is field reordering / renaming, not endpoint death. Reading by name-from-response survives reordering, and null-tolerance survives a column being dropped or renamed — turning a hard crash into a degraded-but-functional result. This is the single most important resilience decision.
+**Why**: Research showed the dominant TradingView break mode is field reordering / renaming, not endpoint death. Reading by name-from-response survives reordering, and backfilling missing requested columns survives a column being dropped or renamed — turning a hard crash (or silent `undefined`) into a degraded-but-functional `null`. This is the single most important resilience decision. The decoder must receive `requestedColumns` precisely because a value-less column is absent from the response, so the response alone cannot reveal that the caller asked for it.
 
-**Guard**: A unit test feeds a fixture with shuffled `fields` order and a missing column, asserting correct mapping and `null` for the absent field.
+**Guard**: A unit test feeds a fixture with shuffled `fields` order and a requested column omitted from the response, asserting correct mapping and an explicit `null` (not `undefined`) for the absent field.
 
 ### 3. `screenStocks` and `getQuotes` share one body builder and one fetch
 
