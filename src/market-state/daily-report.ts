@@ -123,7 +123,7 @@ export async function generateDailyWatchlistReport(service: MarketStateService):
     `  ${service.listAlertEvents().length} recorded alert event(s).`,
     ``,
     `Technical snapshot`,
-    `  Deferred in V1 report generation unless quote/history data is available through a later section builder.`,
+    `  Deferred unless quote/history data is available through a later section builder.`,
     ``,
     `Data gaps`,
     ...dataGapLines,

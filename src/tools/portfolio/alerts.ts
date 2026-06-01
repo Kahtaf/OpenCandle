@@ -61,7 +61,7 @@ export const alertsTool: AgentTool<typeof params> = {
   name: "manage_alerts",
   label: "Alerts",
   description:
-    "Create and manually check durable alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, and check. V1 alerts are manually checked and do not imply continuous background monitoring. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
+    "Create, pause/resume, list, and check durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
@@ -90,7 +90,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return await createResultMaybeChecked(
           service,
           rule,
-          `Created manual alert ${rule.conditionType} for ${instrument.symbol} at $${args.threshold}.`,
+          `Created local alert ${rule.conditionType} for ${instrument.symbol} at $${args.threshold}.`,
           args.check_after_create,
         );
       }
@@ -116,7 +116,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return await createResultMaybeChecked(
           service,
           rule,
-          `Created manual alert price_crosses_sma for ${instrument.symbol} using SMA(${period}).`,
+          `Created local alert price_crosses_sma for ${instrument.symbol} using SMA(${period}).`,
           args.check_after_create,
         );
       }
@@ -142,7 +142,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return await createResultMaybeChecked(
           service,
           rule,
-          `Created manual alert rsi_threshold for ${instrument.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
+          `Created local alert rsi_threshold for ${instrument.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
           args.check_after_create,
         );
       }
@@ -168,7 +168,7 @@ export const alertsTool: AgentTool<typeof params> = {
         return await createResultMaybeChecked(
           service,
           rule,
-          `Created manual alert volume_spike for ${instrument.symbol}: volume > ${multiplier}x ${period}-bar average.`,
+          `Created local alert volume_spike for ${instrument.symbol}: volume > ${multiplier}x ${period}-bar average.`,
           args.check_after_create,
         );
       }
@@ -178,7 +178,7 @@ export const alertsTool: AgentTool<typeof params> = {
         if (rules.length === 0) {
           return { content: [{ type: "text", text: "No alert rules created yet." }], details: [] };
         }
-        const lines = ["**Alerts** — manually checked in V1", ""];
+        const lines = ["**Alerts** — local runner eligible; manual checks available", ""];
         for (const rule of rules) {
           const instrument = rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
           lines.push(

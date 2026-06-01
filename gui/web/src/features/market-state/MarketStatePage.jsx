@@ -297,7 +297,7 @@ function Alerts({ state, readOnly, invokeTool }) {
           ]]}
         />
       </Panel>
-      <Panel title="Create Price Alert" meta="Manual checks in V1">
+      <Panel title="Create Price Alert" meta="Local runner eligible; manual checks available">
         <AlertCreateForm disabled={readOnly} invokeTool={invokeTool} />
       </Panel>
       <Panel

@@ -75,7 +75,7 @@ describe("alertsTool", () => {
       threshold: 250,
     });
 
-    expect(created.content[0].text).toContain("manual alert");
+    expect(created.content[0].text).toContain("local alert");
     expect(created.details).toMatchObject({
       conditionType: "price_crosses_above",
       conditionVersion: 1,
@@ -85,7 +85,7 @@ describe("alertsTool", () => {
 
     const listed = await alertsTool.execute("test", { action: "list" });
     expect(listed.content[0].text).toContain("AAPL");
-    expect(listed.content[0].text).toContain("manually checked");
+    expect(listed.content[0].text).toContain("manual checks available");
   });
 
   it("does not wipe existing watchlist metadata when creating an alert", async () => {
@@ -206,7 +206,7 @@ describe("alertsTool", () => {
       check_after_create: true,
     });
 
-    expect(result.content[0].text).toContain("Created manual alert");
+    expect(result.content[0].text).toContain("Created local alert");
     expect(result.content[0].text).toContain("Manual Alert Check");
     expect(result.content[0].text).toContain("seeded");
     expect(result.details).toMatchObject({

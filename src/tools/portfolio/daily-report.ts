@@ -33,7 +33,7 @@ export const dailyReportTool: AgentTool<typeof params> = {
   name: "daily_watchlist_report",
   label: "Daily Report",
   description:
-    "Generate, configure, or show history for the V1 daily watchlist report. Actions are run, configure, and history. Reports run manually in V1 and preserve schedule metadata for future heartbeat execution.",
+    "Generate, configure, or show history for the local daily watchlist report. Actions are run, configure, and history. Reports can run manually and configured schedules run while an OpenCandle writer/monitor process is active.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
