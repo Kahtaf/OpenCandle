@@ -1047,11 +1047,13 @@ export class MarketStateService {
     return tx();
   }
 
-  getAutomationRunnerLease(): AutomationRunnerLeaseRecord | null {
+  getAutomationRunnerLease(now = new Date().toISOString()): AutomationRunnerLeaseRecord | null {
     const row = this.db
       .prepare("SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1")
       .get() as AutomationRunnerLeaseRow | undefined;
-    return row == null ? null : mapAutomationRunnerLease(row);
+    if (row == null) return null;
+    if (new Date(row.expires_at).getTime() <= new Date(now).getTime()) return null;
+    return mapAutomationRunnerLease(row);
   }
 
   startAlertCheckRun(params: {

@@ -228,4 +228,18 @@ describe("market-state alerts and reports", () => {
       }),
     ]);
   });
+
+  it("does not report an expired automation runner lease as active", () => {
+    service.acquireAutomationRunnerLease({
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-06-01T12:00:00.000Z",
+      ttlSeconds: 60,
+    });
+
+    expect(service.getAutomationRunnerLease("2026-06-01T12:00:30.000Z")).toMatchObject({
+      ownerId: "gui-1",
+    });
+    expect(service.getAutomationRunnerLease("2026-06-01T12:01:01.000Z")).toBeNull();
+  });
 });

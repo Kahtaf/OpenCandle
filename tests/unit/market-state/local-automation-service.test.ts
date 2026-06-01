@@ -194,6 +194,45 @@ describe("local automation service", () => {
       }),
     ]);
   });
+
+  it("advances overdue daily reports past the current heartbeat instead of replaying one stale day at a time", async () => {
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    const template = service.createReportTemplate({
+      name: "Morning watchlist",
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+      config: { targets: { default_watchlist: true } },
+      enabled: true,
+      nextRunAt: "2026-03-08T12:00:00.000Z",
+    });
+
+    const result = await runLocalAutomationHeartbeat(db, {
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-03-10T15:00:00.000Z",
+      ttlSeconds: 60,
+      checkAlerts: false,
+    });
+
+    expect(result.reportRuns).toEqual([
+      expect.objectContaining({
+        scheduledFor: "2026-03-08T12:00:00.000Z",
+        triggerType: "scheduled",
+      }),
+    ]);
+    expect(service.getReportTemplate(template.id).nextRunAt).toBe("2026-03-11T12:00:00.000Z");
+  });
 });
 
 function unusedProviders(): AlertRunnerProviders {

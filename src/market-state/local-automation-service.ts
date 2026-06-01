@@ -96,7 +96,7 @@ async function runDueReports(
       nextRunAt: nextDailyReportRunAt(
         template.timezone,
         template.localTime,
-        new Date(new Date(scheduledFor).getTime() + 1000),
+        new Date(params.now),
       ),
     });
   }
