@@ -1,5 +1,6 @@
 import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -43,7 +44,7 @@ import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { createAutomationHeartbeatRunner, normalizeAutomationHeartbeatMs } from "./automation-heartbeat.js";
-import { isTrustedPrivateApiRequest } from "./private-api-access.js";
+import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
 import type { ChatEvent } from "../shared/chat-events.js";
@@ -52,6 +53,7 @@ const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
 const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
 const automationHeartbeatMs = normalizeAutomationHeartbeatMs(process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS);
+const privateApiSessionToken = randomBytes(32).toString("base64url");
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
@@ -174,7 +176,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   if (!path.startsWith(webDist) || !existsSync(path)) {
     const fallback = resolve(join(webDist, "index.html"));
     if (!extname(requested) && fallback.startsWith(webDist) && existsSync(fallback)) {
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.writeHead(200, privateGuiHeaders("text/html; charset=utf-8"));
       createReadStream(fallback).pipe(res);
       return;
     }
@@ -182,7 +184,8 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
     return;
   }
 
-  res.writeHead(200, { "content-type": contentType(path) });
+  const type = contentType(path);
+  res.writeHead(200, privateGuiHeaders(type));
   createReadStream(path).pipe(res);
 }
 
@@ -731,10 +734,18 @@ function writeJson(res: ServerResponse, value: unknown): void {
 }
 
 function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
-  if (isTrustedPrivateApiRequest(req.socket.remoteAddress, req.headers)) return true;
+  if (isTrustedPrivateApiRequest(req.socket.remoteAddress, req.headers, privateApiSessionToken)) return true;
   res.writeHead(403, { "content-type": "application/json" });
   res.end(JSON.stringify({ error: "Market-state API is only available to trusted GUI browser sessions." }));
   return false;
+}
+
+function privateGuiHeaders(contentTypeValue: string): Record<string, string> {
+  const headers: Record<string, string> = { "content-type": contentTypeValue };
+  if (contentTypeValue.startsWith("text/html")) {
+    headers["set-cookie"] = privateApiCookieHeader(privateApiSessionToken);
+  }
+  return headers;
 }
 
 function writeSse(res: ServerResponse, event: ChatEvent): void {

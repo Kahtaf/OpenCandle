@@ -1,5 +1,7 @@
 import type { IncomingHttpHeaders } from "node:http";
 
+const PRIVATE_API_COOKIE = "opencandle_gui_session";
+
 export function isLoopbackAddress(remoteAddress: string | undefined): boolean {
   if (remoteAddress == null || remoteAddress === "") return false;
   return (
@@ -13,20 +15,22 @@ export function isLoopbackAddress(remoteAddress: string | undefined): boolean {
 export function isTrustedPrivateApiRequest(
   remoteAddress: string | undefined,
   headers: IncomingHttpHeaders,
+  sessionToken: string,
 ): boolean {
   if (isLoopbackAddress(remoteAddress)) return true;
-  if (headerValue(headers["sec-fetch-site"]) === "same-origin") return true;
-
-  const origin = headerValue(headers.origin);
-  const host = headerValue(headers.host);
-  if (origin == null || host == null) return false;
-  try {
-    return new URL(origin).host === host;
-  } catch {
-    return false;
-  }
+  return cookieValue(headers.cookie, PRIVATE_API_COOKIE) === sessionToken;
 }
 
-function headerValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+export function privateApiCookieHeader(sessionToken: string): string {
+  return `${PRIVATE_API_COOKIE}=${encodeURIComponent(sessionToken)}; Path=/; HttpOnly; SameSite=Strict`;
+}
+
+function cookieValue(header: string | string[] | undefined, name: string): string | undefined {
+  const value = Array.isArray(header) ? header.join("; ") : header;
+  if (value == null) return undefined;
+  for (const part of value.split(";")) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    if (rawKey === name) return decodeURIComponent(rawValue.join("="));
+  }
+  return undefined;
 }

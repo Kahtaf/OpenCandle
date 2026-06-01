@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isLoopbackAddress, isTrustedPrivateApiRequest } from "../../../gui/server/private-api-access.js";
+import {
+  privateApiCookieHeader,
+  isLoopbackAddress,
+  isTrustedPrivateApiRequest,
+} from "../../../gui/server/private-api-access.js";
 
 describe("private GUI API access", () => {
   it("allows loopback callers", () => {
@@ -16,28 +20,25 @@ describe("private GUI API access", () => {
     expect(isLoopbackAddress(undefined)).toBe(false);
   });
 
-  it("allows remote same-origin browser API fetches", () => {
+  it("allows remote requests carrying the server-issued GUI cookie", () => {
+    const cookie = privateApiCookieHeader("secret-token");
+    expect(isTrustedPrivateApiRequest("100.64.0.8", {
+      cookie,
+      host: "oc-tailnet:14567",
+    }, "secret-token")).toBe(true);
+  });
+
+  it("rejects remote spoofed headers and raw private API reads without the GUI cookie", () => {
     expect(isTrustedPrivateApiRequest("100.64.0.8", {
       "sec-fetch-site": "same-origin",
       host: "oc-tailnet:14567",
-    })).toBe(true);
+    }, "secret-token")).toBe(false);
     expect(isTrustedPrivateApiRequest("100.64.0.8", {
       origin: "http://oc-tailnet:14567",
       host: "oc-tailnet:14567",
-    })).toBe(true);
-  });
-
-  it("rejects remote cross-site or raw private API reads", () => {
-    expect(isTrustedPrivateApiRequest("100.64.0.8", {
-      "sec-fetch-site": "cross-site",
-      host: "oc-tailnet:14567",
-    })).toBe(false);
-    expect(isTrustedPrivateApiRequest("100.64.0.8", {
-      origin: "http://evil.example",
-      host: "oc-tailnet:14567",
-    })).toBe(false);
+    }, "secret-token")).toBe(false);
     expect(isTrustedPrivateApiRequest("100.64.0.8", {
       host: "oc-tailnet:14567",
-    })).toBe(false);
+    }, "secret-token")).toBe(false);
   });
 });

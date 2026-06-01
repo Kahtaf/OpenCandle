@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
+import { InvalidSymbolError } from "../../../src/providers/errors.js";
 import {
   setRunContext,
   clearRunContext,
@@ -65,6 +66,21 @@ describe("wrapProvider", () => {
     });
 
     expect(tracker.isCircuitOpen("yahoo")).toBe(true); // 2 failures, circuit open
+  });
+
+  it("does not record invalid symbols as provider failures", async () => {
+    const tracker = new ProviderTracker(1);
+    setRunContext({ providerTracker: tracker });
+
+    const result = await wrapProvider("yahoo", async () => {
+      throw new InvalidSymbolError("XXFAKEXX", "yahoo");
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider: "yahoo",
+    });
+    expect(tracker.isCircuitOpen("yahoo")).toBe(false);
   });
 
   it("works without run context (no tracker present)", async () => {

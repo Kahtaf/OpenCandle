@@ -1,6 +1,7 @@
 import type { ProviderResult } from "../runtime/evidence.js";
 import { getProviderTracker } from "../runtime/run-context.js";
 import { cache } from "../infra/cache.js";
+import { InvalidSymbolError } from "./errors.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
 /**
@@ -51,6 +52,13 @@ export async function wrapProvider<T>(
     // provider reliability problem.
     if (error instanceof ProviderCredentialError) {
       throw error;
+    }
+    if (error instanceof InvalidSymbolError) {
+      return {
+        status: "unavailable",
+        reason: error.message,
+        provider: providerId,
+      };
     }
     tracker?.recordFailure(providerId);
     const reason =
