@@ -6,8 +6,12 @@ const EMPTY_MARKET_STATE = {
   predictions: [],
   alerts: [],
   alertEvents: [],
+  alertCheckRuns: [],
   reportTemplates: [],
   reportRuns: [],
+  runnerLease: null,
+  notifications: [],
+  notificationDeliveryAttempts: [],
   quoteSnapshot: null,
 };
 

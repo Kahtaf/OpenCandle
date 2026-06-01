@@ -11,8 +11,12 @@ export interface MarketStateSnapshot {
   predictions: ReturnType<MarketStateService["listPredictions"]>;
   alerts: ReturnType<MarketStateService["listAlertRules"]>;
   alertEvents: ReturnType<MarketStateService["listAlertEvents"]>;
+  alertCheckRuns: ReturnType<MarketStateService["listAlertCheckRuns"]>;
   reportTemplates: ReturnType<MarketStateService["listReportTemplates"]>;
   reportRuns: ReturnType<MarketStateService["listReportRuns"]>;
+  runnerLease: ReturnType<MarketStateService["getAutomationRunnerLease"]>;
+  notifications: ReturnType<MarketStateService["listNotificationEvents"]>;
+  notificationDeliveryAttempts: ReturnType<MarketStateService["listNotificationDeliveryAttempts"]>;
 }
 
 export interface MarketStateQuoteSnapshot {
@@ -65,8 +69,12 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
       predictions: service.listPredictions(),
       alerts: service.listAlertRules(),
       alertEvents: service.listAlertEvents(),
+      alertCheckRuns: service.listAlertCheckRuns(),
       reportTemplates: service.listReportTemplates(),
       reportRuns: service.listReportRuns(),
+      runnerLease: service.getAutomationRunnerLease(),
+      notifications: service.listNotificationEvents(),
+      notificationDeliveryAttempts: service.listNotificationDeliveryAttempts(),
     };
   } finally {
     if (!db) ownedDb.close();

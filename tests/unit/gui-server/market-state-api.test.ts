@@ -61,6 +61,39 @@ describe("market-state API helpers", () => {
       avgCost: 250,
       currency: "USD",
     });
+    service.acquireAutomationRunnerLease({
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-06-01T12:00:00.000Z",
+      ttlSeconds: 60,
+    });
+    const checkRun = service.startAlertCheckRun({
+      ownerId: "gui-1",
+      triggerType: "manual",
+      startedAt: "2026-06-01T12:00:01.000Z",
+    });
+    service.completeAlertCheckRun(checkRun.id, {
+      status: "completed",
+      completedAt: "2026-06-01T12:00:02.000Z",
+      checkedCount: 1,
+      triggeredCount: 0,
+      unavailableCount: 0,
+    });
+    const notification = service.recordNotificationEvent({
+      sourceType: "alert_event",
+      sourceId: 1,
+      severity: "info",
+      title: "Alert checked",
+      body: "No trigger.",
+      createdAt: "2026-06-01T12:00:03.000Z",
+    });
+    service.recordNotificationDeliveryAttempt({
+      notificationEventId: notification.id,
+      channel: "webhook",
+      status: "failed",
+      attemptedAt: "2026-06-01T12:00:04.000Z",
+      error: "connection refused",
+    });
 
     const snapshot = buildMarketStateSnapshot(db);
 
@@ -68,6 +101,16 @@ describe("market-state API helpers", () => {
     expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
     expect(snapshot.alerts).toEqual([]);
     expect(snapshot.reportRuns).toEqual([]);
+    expect(snapshot.runnerLease).toMatchObject({ ownerId: "gui-1", ownerKind: "writer" });
+    expect(snapshot.alertCheckRuns).toEqual([
+      expect.objectContaining({ id: checkRun.id, status: "completed", checkedCount: 1 }),
+    ]);
+    expect(snapshot.notifications).toEqual([
+      expect.objectContaining({ id: notification.id, title: "Alert checked" }),
+    ]);
+    expect(snapshot.notificationDeliveryAttempts).toEqual([
+      expect.objectContaining({ notificationEventId: notification.id, channel: "webhook", status: "failed" }),
+    ]);
     db.close();
   });
 

@@ -178,6 +178,7 @@ export async function runAlertChecks(
         trigger: shouldTrigger
           ? {
             instrumentId: item.instrument.id,
+            title: `${item.instrument.symbol} alert triggered`,
             message: `${item.instrument.symbol} ${item.rule.conditionType} at $${observation.value.toFixed(2)}`,
             triggeredAt: now,
             observedAt: now,

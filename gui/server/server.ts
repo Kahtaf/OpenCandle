@@ -42,11 +42,14 @@ import { createAskUserBridge } from "./ask-user-bridge.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
+import { initDefaultDatabase } from "../../src/memory/sqlite.js";
+import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
 const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
+const automationHeartbeatMs = Number(process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS ?? 60_000);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
@@ -89,6 +92,7 @@ const clients = new Set<WsClient>();
 const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 let poller: NodeJS.Timeout | null = null;
+let automationHeartbeat: NodeJS.Timeout | null = null;
 let quotePollInFlight = false;
 
 let unsubscribeSession = subscribeToSessionEvents();
@@ -201,6 +205,7 @@ server.listen(port, host, () => {
     console.log(`OpenCandle GUI is accepting LAN/Tailscale connections on port ${port}`);
   }
   console.log(`Writer role: ${lockResult.role}`);
+  startLocalAutomationHeartbeat();
 });
 
 const shutdown = createGracefulShutdown({
@@ -210,6 +215,10 @@ const shutdown = createGracefulShutdown({
     if (poller) {
       clearInterval(poller);
       poller = null;
+    }
+    if (automationHeartbeat) {
+      clearInterval(automationHeartbeat);
+      automationHeartbeat = null;
     }
     for (const client of clients) client.close();
     clients.clear();
@@ -644,6 +653,28 @@ function subscribeToSessionEvents(): () => void {
     broadcast({ type: "session.event", event });
     broadcastState();
   });
+}
+
+function startLocalAutomationHeartbeat(): void {
+  if (lockResult.role !== "writer") return;
+  void runGuiAutomationHeartbeat(false);
+  automationHeartbeat = setInterval(() => void runGuiAutomationHeartbeat(true), automationHeartbeatMs);
+}
+
+async function runGuiAutomationHeartbeat(checkAlerts: boolean): Promise<void> {
+  const db = initDefaultDatabase();
+  try {
+    await runLocalAutomationHeartbeat(db, {
+      ownerId: `gui:${sessionManager.getSessionId()}`,
+      ownerKind: "writer",
+      ttlSeconds: Math.max(90, Math.ceil((automationHeartbeatMs * 2) / 1000)),
+      checkAlerts,
+    });
+  } catch (error) {
+    console.warn(`Local automation heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    db.close();
+  }
 }
 
 function updatePoller(): void {

@@ -1047,6 +1047,13 @@ export class MarketStateService {
     return tx();
   }
 
+  getAutomationRunnerLease(): AutomationRunnerLeaseRecord | null {
+    const row = this.db
+      .prepare("SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1")
+      .get() as AutomationRunnerLeaseRow | undefined;
+    return row == null ? null : mapAutomationRunnerLease(row);
+  }
+
   startAlertCheckRun(params: {
     ownerId?: string | null;
     startedAt?: string;
@@ -1105,6 +1112,13 @@ export class MarketStateService {
       | undefined;
     if (row == null) throw new Error(`alert check run ${id} not found`);
     return mapAlertCheckRun(row);
+  }
+
+  listAlertCheckRuns(): AlertCheckRunRecord[] {
+    const rows = this.db
+      .prepare("SELECT * FROM alert_check_runs ORDER BY started_at DESC, id DESC")
+      .all() as AlertCheckRunRow[];
+    return rows.map(mapAlertCheckRun);
   }
 
   recordNotificationEvent(params: {
@@ -1328,6 +1342,7 @@ export class MarketStateService {
     conditionState: "true" | "false" | "unknown";
     trigger?: {
       instrumentId: number | null;
+      title?: string;
       message: string;
       triggeredAt: string;
       observedAt: string;
@@ -1387,7 +1402,7 @@ export class MarketStateService {
             )
             .run(
               eventId,
-              "Alert triggered",
+              params.trigger.title ?? "Alert triggered",
               params.trigger.message,
               JSON.stringify({
                 ruleId: params.ruleId,

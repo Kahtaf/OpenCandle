@@ -283,8 +283,20 @@ function PortfolioUpdatePanel({ disabled, invokeTool }) {
 
 function Alerts({ state, readOnly, invokeTool }) {
   const alertRows = useMemo(() => buildAlertRows(state.alerts, state.alertEvents), [state.alerts, state.alertEvents]);
+  const runner = state.runnerLease;
   return (
     <>
+      <Panel title="Automation Status" meta={runner ? `Runner: ${runner.ownerKind}` : "Manual only"}>
+        <DataTable
+          columns={["State", "Owner", "Heartbeat", "Expires"]}
+          rows={[[
+            runner ? "Running locally" : "Manual only",
+            runner?.ownerId || "N/A",
+            runner ? shortDate(runner.heartbeatAt) : "N/A",
+            runner ? shortDate(runner.expiresAt) : "N/A",
+          ]]}
+        />
+      </Panel>
       <Panel title="Create Price Alert" meta="Manual checks in V1">
         <AlertCreateForm disabled={readOnly} invokeTool={invokeTool} />
       </Panel>
@@ -321,13 +333,46 @@ function Alerts({ state, readOnly, invokeTool }) {
           <EmptyState icon={Bell} title="No alert events" action="Run a manual check after creating alerts to record events." />
         ) : (
           <DataTable
-            columns={["Triggered", "Rule", "Instrument", "Status", "Message"]}
+            columns={["Observed", "Rule", "Source", "Status", "Message"]}
             rows={state.alertEvents.map((event) => [
-              shortDate(event.triggeredAt),
+              shortDate(event.observedAt || event.triggeredAt),
               `#${event.alertRuleId}`,
-              event.instrumentId ? `#${event.instrumentId}` : "N/A",
+              event.sourceProvider || (event.instrumentId ? `#${event.instrumentId}` : "N/A"),
               event.status,
               event.message || "N/A",
+            ])}
+          />
+        )}
+      </Panel>
+      <Panel title="Check Runs" count={state.alertCheckRuns.length}>
+        {state.alertCheckRuns.length === 0 ? (
+          <EmptyState icon={Activity} title="No check runs" action="Run a check to record automation history." />
+        ) : (
+          <DataTable
+            columns={["Started", "Trigger", "Status", "Checked", "Triggered", "Unavailable"]}
+            rows={state.alertCheckRuns.slice(0, 10).map((run) => [
+              shortDate(run.startedAt),
+              run.triggerType,
+              run.status,
+              run.checkedCount,
+              run.triggeredCount,
+              run.unavailableCount,
+            ])}
+          />
+        )}
+      </Panel>
+      <Panel title="Notifications" count={state.notifications.length}>
+        {state.notifications.length === 0 ? (
+          <EmptyState icon={Bell} title="No notifications" action="Triggered alerts and report outcomes appear here." />
+        ) : (
+          <DataTable
+            columns={["Created", "Severity", "Title", "Status", "Delivery"]}
+            rows={state.notifications.slice(0, 10).map((notification) => [
+              shortDate(notification.createdAt),
+              notification.severity,
+              notification.title,
+              notification.status,
+              deliveryStatus(state.notificationDeliveryAttempts, notification.id),
             ])}
           />
         )}
@@ -826,6 +871,12 @@ function formatNumber(value) {
 function shortDate(value) {
   if (!value) return "N/A";
   return String(value).replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+}
+
+function deliveryStatus(attempts = [], notificationId) {
+  const matching = attempts.filter((attempt) => attempt.notificationEventId === notificationId);
+  if (matching.length === 0) return "In-app only";
+  return matching[0].status;
 }
 
 function numberOrUndefined(value) {
