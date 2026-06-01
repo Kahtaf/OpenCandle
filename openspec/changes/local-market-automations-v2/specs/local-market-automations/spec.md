@@ -145,6 +145,19 @@ OpenCandle SHALL schedule alert checks through provider-specific budgets so loca
 - **AND** it respects quote cache freshness, provider throttling, and jitter
 - **AND** it does not present the cadence as guaranteed real-time monitoring
 
+#### Scenario: Equity watchlist uses TradingView batch quotes
+
+- **WHEN** a due alert check includes many equity-like symbols supported by the TradingView scanner
+- **THEN** OpenCandle groups those symbols into a TradingView batch quote request where possible
+- **AND** evaluates applicable price alerts from the shared batch observation
+- **AND** records TradingView source and delayed/unofficial data caveats in check/event metadata
+
+#### Scenario: TradingView unsupported symbols fall back to Yahoo
+
+- **WHEN** TradingView cannot resolve a symbol such as a crypto suffix, foreign Yahoo-style suffix, or unsupported listing
+- **THEN** OpenCandle may evaluate that symbol through the Yahoo quote path
+- **AND** the check history records that the symbol used Yahoo fallback rather than the TradingView batch source
+
 #### Scenario: Provider rate limit is hit
 
 - **WHEN** Yahoo or another provider returns a rate-limit response such as HTTP 429 or equivalent provider anomaly
@@ -185,6 +198,13 @@ OpenCandle SHALL schedule alert checks through provider-specific budgets so loca
 - **WHEN** a configured provider supports batch quote snapshots
 - **THEN** OpenCandle groups due symbols into batch requests where possible
 - **AND** prefers that provider for alert monitoring over a one-request-per-symbol provider with undocumented limits
+
+#### Scenario: TradingView rate limit is handled as provider degradation
+
+- **WHEN** TradingView scanner requests are rate-limited or unavailable
+- **THEN** OpenCandle may fall back to Yahoo for unresolved due symbols within the provider budget
+- **AND** uses fresh or acceptable stale TradingView cache only when the rule permits cached observations
+- **AND** records TradingView degradation separately from Yahoo fallback results
 
 #### Scenario: Multiple alerts share one symbol
 

@@ -1136,14 +1136,22 @@ describe("route capability manifest", () => {
   it("resolves active tools from selected bundles", () => {
     const tools = activeToolsForBundles(["core_market", "clarification"], [
       "get_stock_quote",
+      "screen_stocks",
       "ask_user",
       "get_option_chain",
       "manage_alerts",
       "daily_watchlist_report",
     ]);
 
-    expect(tools).toEqual(["get_stock_quote", "manage_alerts", "daily_watchlist_report", "ask_user"]);
+    expect(tools).toEqual(["get_stock_quote", "screen_stocks", "manage_alerts", "daily_watchlist_report", "ask_user"]);
     expect(TOOL_BUNDLE_TOOLS.options).toContain("get_option_chain");
+  });
+
+  it("exposes stock screening only through the core market bundle", () => {
+    expect(TOOL_BUNDLE_TOOLS.core_market).toContain("screen_stocks");
+    expect(activeToolsForBundles(["macro"])).not.toContain("screen_stocks");
+    expect(activeToolsForBundles(["sentiment"])).not.toContain("screen_stocks");
+    expect(activeToolsForBundles(["sec"])).not.toContain("screen_stocks");
   });
 
   it("keeps macro tools for interest-rate comparisons", async () => {

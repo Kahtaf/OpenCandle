@@ -284,7 +284,7 @@ Keep questions concise and offer specific options when possible. Prefer select-t
 CRITICAL: After ask_user answers come back, your NEXT action MUST be tool calls — not a text response. You are a data agent, not a chatbot. Never respond with generic investment categories or tell the user to come back with tickers. YOU pick the relevant assets and indicators based on what you learned, then fetch the data.`;
 
 const TOOL_CATALOG = `## Available Tools
-- **Market Data**: get_stock_quote, get_stock_history, get_crypto_price, get_crypto_history — real-time and historical price data
+- **Market Data**: screen_stocks, get_stock_quote, get_stock_history, get_crypto_price, get_crypto_history — use screen_stocks for breadth and screening prompts such as large-cap lists, oversold stocks, market movers, and filtered market scans; use get_stock_quote/get_stock_history for a single-security quote or historical OHLCV
 - **Fundamentals**: get_company_overview, get_financials, get_earnings, compute_dcf, compare_companies, get_sec_filings — company financials, valuation metrics, DCF intrinsic value, peer comparison, and SEC EDGAR filings (10-K, 10-Q, 8-K)
 - **Technical Analysis**: get_technical_indicators, backtest_strategy — SMA, EMA, RSI, MACD, Bollinger Bands, OBV, VWAP computed from price data, plus simple strategy backtesting
 - **Macro**: get_economic_data, get_fear_greed — FRED economic indicators and market sentiment

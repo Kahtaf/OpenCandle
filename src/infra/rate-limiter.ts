@@ -71,3 +71,5 @@ rateLimiter.configure("ddg", 3, 0.1);             // 3 req, ~6 req/min
 rateLimiter.configure("brave_search", 5, 0.083);  // 5 req, ~5 req/min
 rateLimiter.configure("exa", 5, 0.1);              // 5 req, ~6 req/min
 rateLimiter.configure("finnhub", 60, 1);            // 60 req/min (free tier)
+// TradingView scanner is undocumented; keep usage batch-first and paced.
+rateLimiter.configure("tradingview", 5, 1);         // 5 burst, 1 req/s sustained

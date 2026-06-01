@@ -27,6 +27,34 @@ export async function httpGet<T>(
   url: string,
   options: HttpClientOptions = {},
 ): Promise<T> {
+  return httpRequest<T>(url, { ...options, method: "GET" });
+}
+
+export async function httpPost<T>(
+  url: string,
+  body: unknown,
+  options: HttpClientOptions = {},
+): Promise<T> {
+  return httpRequest<T>(url, {
+    ...options,
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+}
+
+interface HttpRequestOptions extends HttpClientOptions {
+  method: "GET" | "POST";
+  body?: string;
+}
+
+async function httpRequest<T>(
+  url: string,
+  options: HttpRequestOptions,
+): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   let lastError: Error | undefined;
 
@@ -40,8 +68,10 @@ export async function httpGet<T>(
 
     try {
       const response = await fetch(url, {
+        method: opts.method,
         signal: controller.signal,
         headers: opts.headers,
+        ...(opts.body !== undefined && { body: opts.body }),
       });
 
       if (!response.ok) {

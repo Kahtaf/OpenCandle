@@ -1,6 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { stockQuoteTool } from "./market/stock-quote.js";
 import { stockHistoryTool } from "./market/stock-history.js";
+import { screenStocksTool } from "./market/screen-stocks.js";
 import { cryptoPriceTool } from "./market/crypto-price.js";
 import { cryptoHistoryTool } from "./market/crypto-history.js";
 import { searchTickerTool } from "./market/search-ticker.js";
@@ -32,6 +33,7 @@ import { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 
 export { stockQuoteTool } from "./market/stock-quote.js";
 export { stockHistoryTool } from "./market/stock-history.js";
+export { screenStocksTool } from "./market/screen-stocks.js";
 export { cryptoPriceTool } from "./market/crypto-price.js";
 export { cryptoHistoryTool } from "./market/crypto-history.js";
 export { searchTickerTool } from "./market/search-ticker.js";
@@ -66,6 +68,7 @@ export function getAllTools(): AgentTool<any>[] {
     searchTickerTool,
     stockQuoteTool,
     stockHistoryTool,
+    screenStocksTool,
     cryptoPriceTool,
     cryptoHistoryTool,
     companyOverviewTool,

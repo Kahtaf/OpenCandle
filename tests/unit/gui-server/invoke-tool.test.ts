@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
@@ -6,6 +9,23 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 
 describe("invokeToolFromUi", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string;
+
+  beforeEach(() => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-gui-invoke-tool-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+  });
+
+  afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    rmSync(openCandleHome, { recursive: true, force: true });
+  });
+
   it("appends normalized market-state mutation metadata for UI tool results", async () => {
     const messages: Message[] = [];
     const sessionManager = {

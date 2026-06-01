@@ -22,6 +22,7 @@ export const TOOL_BUNDLE_TOOLS: Record<ToolBundleName, readonly string[]> = {
     "search_ticker",
     "get_stock_quote",
     "get_stock_history",
+    "screen_stocks",
     "get_crypto_price",
     "get_crypto_history",
     "get_company_overview",

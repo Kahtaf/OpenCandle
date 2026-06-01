@@ -85,6 +85,7 @@ export const TTL = {
   MACRO: 3_600_000,      // 1 hour
   SENTIMENT: 300_000,    // 5 minutes
   OPTIONS_CHAIN: 120_000, // 2 minutes
+  SCREENER: 60_000,      // 1 minute
   CRUMB: 900_000,        // 15 minutes
   WEB_SEARCH: 300_000,   // 5 minutes
   FINNHUB_NEWS: 300_000, // 5 minutes
@@ -98,6 +99,7 @@ export const STALE_LIMIT = {
   MACRO: 24 * 3_600_000,          // 24 hours
   SENTIMENT: 3_600_000,           // 1 hour
   OPTIONS_CHAIN: 30 * 60_000,     // 30 minutes
+  SCREENER: 15 * 60_000,           // 15 minutes
   WEB_SEARCH: 3_600_000,          // 1 hour
   FINNHUB_NEWS: 3_600_000,        // 1 hour
 } as const;

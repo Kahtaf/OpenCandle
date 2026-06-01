@@ -32,6 +32,8 @@
 - [ ] 3.10 Add provider-level circuit breaker semantics for repeated 429/rate-limit responses.
 - [ ] 3.11 Add provider-chain observation metadata so alert events/check runs record primary provider, fallback provider, cache use, and all-provider failure reasons.
 - [ ] 3.12 Prefer batch quote/snapshot providers for monitoring and treat Yahoo one-symbol quote polling as best-effort fallback.
+- [ ] 3.13 Use TradingView `getQuotes(symbols)` as the preferred batch quote path for equity-like alert/watchlist checks, with Yahoo fallback for unsupported or unresolved symbols.
+- [ ] 3.14 Persist TradingView delayed/unofficial-data caveats and cache/stale status in alert check metadata when TradingView observations are used.
 
 ## 4. Notifications and delivery
 
@@ -60,3 +62,4 @@
 - [ ] 6.7 Unit test alert resume scenarios: prior false/current true, prior true/current true, prior unknown/current true, and reconstructed historical crossing.
 - [ ] 6.8 Unit test provider budget behavior: shared quote observation, 429 backoff, deferred checks beyond budget, and no duplicate polling from follower surfaces.
 - [ ] 6.9 Unit test provider-chain monitoring: primary rate-limited, fallback succeeds; Yahoo-only rate-limited, check becomes degraded/unavailable; fresh cache used while circuit breaker is open; stale cache rejected.
+- [ ] 6.10 Unit test TradingView-backed alert checks: 100+ equity symbols share one batch observation, unsupported symbols fall back to Yahoo, TradingView 429 degrades/falls back without duplicate Yahoo fanout, and source/caveat metadata is recorded.

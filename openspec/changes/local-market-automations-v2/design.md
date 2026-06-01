@@ -191,6 +191,8 @@ V2 should describe freshness honestly. Yahoo-backed polling can make OpenCandle 
 
 Provider capacity must be treated as a runtime budget, not a fixed promise. Yahoo Finance is an unofficial source with undocumented and changeable limits. The existing OC code has an internal Yahoo bucket of `5 req/s` and a 60-second quote cache, but that is only OC's self-throttle. It is not evidence that Yahoo will allow sustained local polling at that rate.
 
+OpenCandle now also has a keyless TradingView scanner provider. Its `getQuotes(symbols)` path is materially better for local alert monitoring over many equity-like watchlist symbols because it resolves bare US symbols through TradingView's scanner and fetches many quotes in a batch request. It remains unofficial and delayed, so it is not a real-time feed, but it is a better V2 default than fanning out one Yahoo quote request per alert.
+
 For V2, the runner should assume a conservative market-data budget:
 
 - group due checks by provider, timeframe, and required data shape;
@@ -201,9 +203,9 @@ For V2, the runner should assume a conservative market-data budget:
 - degrade cadence before disabling alerts;
 - surface `rate_limited` or `provider_budget_exhausted` in run/check history.
 
-The default Yahoo-backed cadence should be "best effort around one minute" for small watchlists, not "guaranteed every minute." With the current one-request-per-symbol quote path, 10 symbols checked once per minute is only 10 requests/minute and is reasonable for a personal local app if caching/backoff are respected. It is still not a service guarantee. Larger watchlists, indicator alerts, or multiple OC surfaces must be scheduled through a shared provider budget so they do not multiply requests.
+The default quote cadence should be "best effort around one minute" for small watchlists, not "guaranteed every minute." For equity-like symbols supported by TradingView, V2 should prefer TradingView batch quotes before Yahoo fallback. Ten or even 100 equity symbols can be one scanner request when they fit TradingView's bare-symbol path, which is far more realistic than 10-100 Yahoo requests per minute. It is still not a service guarantee because TradingView is unofficial and can be delayed/rate-limited. Larger watchlists, indicator alerts, or multiple OC surfaces must be scheduled through a shared provider budget so they do not multiply requests.
 
-Indicator alerts should avoid minute-level historical calls. SMA, RSI, and volume-spike alerts can usually share cached daily OHLCV bars; they should run on a daily-bar cadence unless a future intraday provider explicitly supports faster history. Price alerts are the only V2 alert class that should default toward minute-ish polling on Yahoo.
+Indicator alerts should avoid minute-level historical calls. SMA, RSI, and volume-spike alerts can usually share cached daily OHLCV bars; they should run on a daily-bar cadence unless a future intraday provider explicitly supports faster history. Price alerts are the only V2 alert class that should default toward minute-ish polling, and for equities they should prefer TradingView batch snapshots with Yahoo as unresolved-symbol fallback. Yahoo remains useful for crypto-style suffixes, unsupported symbols, and fallback when TradingView is unavailable.
 
 LangAlpha's practical answer to provider limits is not "retry Yahoo harder." Its price-monitor path prefers a dedicated `ginlix-data` WebSocket stream, uses batched REST snapshots as fallback, and routes market data through an ordered provider chain (`ginlix-data` -> FMP -> yfinance when configured). It also treats yfinance as a free/self-hosted fallback, not the foundation for reliable price-trigger automation.
 
@@ -215,14 +217,15 @@ alert evaluator
       ▼
 market data budget manager
       │
-      ├─ provider with batch quotes / explicit limits     preferred
+      ├─ TradingView batch scanner quotes                 preferred for equity-like watchlists
+      ├─ provider with batch quotes / explicit limits     preferred when configured
       ├─ Yahoo direct quote path                          best-effort fallback
       └─ stale cache / unavailable event                  when provider is budget-exhausted
 ```
 
 For Yahoo specifically, repeated `429` should trip a provider circuit breaker. While the breaker is open, OC should stop trying minute checks against Yahoo, evaluate with still-fresh cache when allowed, and record checks as `rate_limited` or `provider_budget_exhausted` once data is no longer fresh. A user with Yahoo-only data can still use alerts, but the UI should say "best effort; currently rate-limited" rather than silently falling behind.
 
-The strategic V2 implementation choice should be: build the alert runner against a provider-neutral snapshot interface first. Yahoo can back that interface for small local use, but serious minute-ish monitoring should prefer a provider with batch quotes and documented/contractual limits.
+The strategic V2 implementation choice should be: build the alert runner against a provider-neutral snapshot interface first. TradingView can back equity watchlists in batch for local best-effort monitoring, Yahoo can fill unsupported/unresolved symbols, and serious minute-ish monitoring should still prefer a provider with explicit limits or a contractual data feed when available.
 
 ## 6. Notifications And Delivery
 

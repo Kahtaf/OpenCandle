@@ -5,6 +5,7 @@
 ### Added
 
 - Saved watchlist, portfolio, alert, daily-report, and prediction state is now summarized into agent prompt context, so broad sector or theme prompts can connect back to relevant saved positions such as ASTS.
+- Keyless TradingView scanner provider with the `screen_stocks` tool for breadth/screening prompts and TradingView batch quote support for watchlist checks, including delayed/unofficial-data caveats and Yahoo fallback for unresolved rows.
 - Repo-local autoreview skill and `npm run review:pr` helper for OpenCandle-specific PR review, including first-parent diff handling for already-merged PRs.
 
 ### Fixed
@@ -44,6 +45,9 @@
 - TUI alert requests now expose exact `manage_alerts` action literals and natural-language mappings, so the agent can create and enable price, SMA, RSI, and volume alerts instead of trying generic `create` or `add` actions.
 - Prediction checks now keep durable resolved-history scorecards visible after all predictions have been resolved.
 - Watchlist row alert creation no longer clears existing target, stop, thesis, notes, or tags on the saved watchlist item.
+- `screen_stocks` now accepts natural screener prompt aliases such as `gte`, `<`, `market_cap`, `change_percent`, `total_volume`, `10B`, and signed numeric strings, and returns explicit freshness/interpretation guidance for screened candidates.
+- `screen_stocks` now accepts uppercase `ASC`/`DESC` sort directions and uppercase comparison aliases before tool validation, matching common LLM-generated screener calls.
+- `search_ticker` now falls back to the keyless TradingView stock scanner when Yahoo search is rate-limited or empty, while preserving Yahoo-shaped quote results for existing consumers.
 - Yahoo fund holdings parsing now accepts live quoteSummary `{ raw, fmt }` numeric weights and retries quoteSummary with Yahoo crumb auth after 401/429 responses, so ETF overlap analysis is less likely to drop valid holdings.
 - Generic macro or portfolio hedge prompts no longer receive options-strategy policy guidance unless the prompt explicitly asks for options or put hedges.
 - Long-horizon ETF/fund comparison prompts now preserve the user's budget, probe holdings overlap when applicable, and call out tax, role/style, and fund-fact verification gaps without inventing unavailable holdings or expense data.

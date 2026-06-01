@@ -1,0 +1,15 @@
+{
+  "totalCount": 2,
+  "fields": ["name", "close", "change", "volume", "market_cap_basic", "RSI|60"],
+  "symbols": [
+    {
+      "s": "NASDAQ:AAPL",
+      "f": ["AAPL", 190.5, 1.25, 123456789, 2900000000000, 29.4]
+    },
+    {
+      "s": "NASDAQ:MSFT",
+      "f": ["MSFT", 415.75, -0.5, 34567890, 3100000000000, 28.1]
+    }
+  ],
+  "time": 1717000002
+}

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { httpGet, HttpError } from "../../../src/infra/http-client.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { HttpError, httpGet, httpPost } from "../../../src/infra/http-client.js";
 
 describe("httpGet", () => {
   const originalFetch = globalThis.fetch;
@@ -104,6 +104,7 @@ describe("httpGet", () => {
     expect(fetch).toHaveBeenCalledWith(
       "https://api.example.com/auth",
       expect.objectContaining({
+        method: "GET",
         headers: { Authorization: "Bearer token123" },
       }),
     );
@@ -127,5 +128,56 @@ describe("httpGet", () => {
       expect(err.statusText).toBe("Too Many Requests");
       expect(err.body).toBe("Rate limited");
     }
+  });
+});
+
+describe("httpPost", () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("sends a JSON POST body and returns typed JSON", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ ok: true }),
+    });
+
+    const result = await httpPost<{ ok: boolean }>(
+      "https://scanner.tradingview.com/america/scan2",
+      { columns: ["name", "close"] },
+      { headers: { Origin: "https://www.tradingview.com" }, maxRetries: 0 },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://scanner.tradingview.com/america/scan2",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ columns: ["name", "close"] }),
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Origin: "https://www.tradingview.com",
+        }),
+      }),
+    );
+  });
+
+  it("throws HttpError with response body and does not retry 4xx responses", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      statusText: "Bad Request",
+      text: () => Promise.resolve("invalid field"),
+    });
+
+    await expect(httpPost("https://example.test", { bad: true })).rejects.toMatchObject({
+      status: 400,
+      statusText: "Bad Request",
+      body: "invalid field",
+    } satisfies Partial<HttpError>);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
