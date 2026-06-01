@@ -294,6 +294,10 @@ function isPortfolioEvaluationRequest(input: string): boolean {
 
 function isStatefulTrackingRequest(input: string): boolean {
   const lower = input.toLowerCase();
+  const hasPortfolioConstructionIntent =
+    /\b(?:build|create|construct|put\s+together)\b/.test(lower) &&
+    /\bportfolio\b/.test(lower) &&
+    (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
   const hasStateVerb =
     /\b(?:add|remove|update|record|track|create|configure|check|show|list|view|cancel)\b/.test(lower);
   const hasStateObject =
@@ -302,5 +306,6 @@ function isStatefulTrackingRequest(input: string): boolean {
     /\b(?:add|record|track)\b/.test(lower) &&
     /\b\d+(?:\.\d+)?\s+shares?\b/.test(lower) &&
     /\b(?:portfolio|holding|holdings|position|positions)\b/.test(lower);
+  if (hasPortfolioConstructionIntent) return false;
   return (hasStateVerb && hasStateObject) || hasPortfolioLotShape;
 }

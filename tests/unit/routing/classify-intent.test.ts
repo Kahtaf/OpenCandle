@@ -95,6 +95,12 @@ describe("classifyIntent", () => {
       expect(result.workflow).toBe("portfolio_builder");
     });
 
+    it("does not mistake budget-backed portfolio creation for saved-state tracking", () => {
+      const result = classifyIntent("create a $10k portfolio");
+      expect(result.workflow).toBe("portfolio_builder");
+      expect(result.entities.budget).toBe(10_000);
+    });
+
     it("extracts risk profile when present", () => {
       const result = classifyIntent(
         "I'm conservative and prefer ETFs. What should I buy with $10k?",

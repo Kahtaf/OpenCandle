@@ -1141,9 +1141,17 @@ describe("route capability manifest", () => {
       "get_option_chain",
       "manage_alerts",
       "daily_watchlist_report",
+      "manage_notifications",
     ]);
 
-    expect(tools).toEqual(["get_stock_quote", "screen_stocks", "manage_alerts", "daily_watchlist_report", "ask_user"]);
+    expect(tools).toEqual([
+      "get_stock_quote",
+      "screen_stocks",
+      "manage_alerts",
+      "daily_watchlist_report",
+      "manage_notifications",
+      "ask_user",
+    ]);
     expect(TOOL_BUNDLE_TOOLS.options).toContain("get_option_chain");
   });
 

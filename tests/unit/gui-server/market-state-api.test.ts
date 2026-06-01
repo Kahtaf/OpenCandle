@@ -297,6 +297,62 @@ describe("market-state API helpers", () => {
     db.close();
   });
 
+  it("does not let one stale quote mark a concurrently faster quote as stale", async () => {
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    const lot = service.addPortfolioLot({
+      instrument: {
+        symbol: "MSFT",
+        assetType: "equity",
+        name: "Microsoft Corporation",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 1,
+      avgCost: 350,
+      currency: "USD",
+    });
+    cache.set("test-stale-market-state-api-quote", quote("AAPL", 200), -1);
+    cache.getStale("test-stale-market-state-api-quote", 60_000);
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) => {
+      if (symbol === "AAPL") {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return quote(symbol, symbol === "AAPL" ? 200 : 400);
+    });
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.watchlistQuotes).toEqual([
+      expect.objectContaining({
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+      }),
+    ]);
+    expect(snapshot.portfolioQuotes).toEqual([
+      expect.objectContaining({
+        lotId: lot.id,
+        symbol: "MSFT",
+        status: "ok",
+        currentPrice: 400,
+        marketValue: 400,
+      }),
+    ]);
+    db.close();
+  });
+
   it("does not compute row P&L when quote and lot currencies differ", async () => {
     const db = initDatabase(":memory:");
     const service = new MarketStateService(db);

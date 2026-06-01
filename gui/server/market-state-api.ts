@@ -89,9 +89,9 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
     const portfolio = service.listPortfolioLots();
     const symbols = [...new Set([...watchlist.map((item) => item.symbol), ...portfolio.map((lot) => lot.symbol)])];
     const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>();
-    await Promise.all(symbols.map(async (symbol) => {
+    for (const symbol of symbols) {
       quoteMap.set(symbol, await fetchQuoteSnapshot(symbol));
-    }));
+    }
 
     const generatedAt = new Date().toISOString();
     const watchlistQuotes = watchlist.map((item) => {
