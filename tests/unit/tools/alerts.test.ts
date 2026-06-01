@@ -55,6 +55,8 @@ describe("alertsTool", () => {
     expect(actionDescription).toContain("create_price_below_sma");
     expect(actionDescription).toContain("create_rsi_below");
     expect(actionDescription).toContain("set_enabled");
+    expect(actionDescription).toContain("check_after_create");
+    expect(alertsTool.parameters.properties.check_after_create.description).toContain("immediately");
   });
 
   it("creates and lists manual price alerts", async () => {
@@ -185,6 +187,31 @@ describe("alertsTool", () => {
 
     expect(triggered.content[0].text).toContain("TRIGGERED");
     expect(triggered.details).toMatchObject({ checked: 1, triggered: 1 });
+  });
+
+  it("can check immediately after creating an alert when requested", async () => {
+    const result = await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 1,
+      check_after_create: true,
+    });
+
+    expect(result.content[0].text).toContain("Created manual alert");
+    expect(result.content[0].text).toContain("Manual Alert Check");
+    expect(result.content[0].text).toContain("seeded");
+    expect(result.details).toMatchObject({
+      created: expect.objectContaining({
+        conditionType: "price_crosses_above",
+      }),
+      check: { checked: 1, triggered: 0 },
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()[0].lastObservedJson).toMatchObject({ value: 180 });
+    expect(service.listAlertEvents()).toHaveLength(0);
+    db.close();
   });
 
   it("does not duplicate events when a manual check sees the same triggered value again", async () => {

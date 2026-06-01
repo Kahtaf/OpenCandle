@@ -24,6 +24,8 @@ const ACTION_DESCRIPTION = [
   "create_price_above_sma/create_price_below_sma for SMA crossing alerts,",
   "create_rsi_above/create_rsi_below for RSI alerts,",
   "create_volume_spike for volume alerts, and set_enabled to enable or disable an alert.",
+  "When the user asks to create an alert and check it now in the same request,",
+  "set check_after_create to true on the create action.",
 ].join(" ");
 
 const params = Type.Object({
@@ -50,13 +52,19 @@ const params = Type.Object({
   ),
   id: Type.Optional(Type.Number({ description: "Alert rule id for update actions" })),
   enabled: Type.Optional(Type.Boolean({ description: "Whether an alert rule is enabled" })),
+  check_after_create: Type.Optional(
+    Type.Boolean({
+      description:
+        "Set true only when the user asks to check/run alerts immediately after creating this alert in the same request.",
+    }),
+  ),
 });
 
 export const alertsTool: AgentTool<typeof params> = {
   name: "manage_alerts",
   label: "Alerts",
   description:
-    "Create and manually check durable alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, and check. V1 alerts are manually checked and do not imply continuous background monitoring.",
+    "Create and manually check durable alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, and check. V1 alerts are manually checked and do not imply continuous background monitoring. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
@@ -82,13 +90,12 @@ export const alertsTool: AgentTool<typeof params> = {
           timeframe: "quote",
           cooldownSeconds: args.cooldown_seconds ?? 3600,
         });
-        return {
-          content: [{
-            type: "text",
-            text: `Created manual alert ${rule.conditionType} for ${instrument.symbol} at $${args.threshold}.`,
-          }],
-          details: rule,
-        };
+        return await createResultMaybeChecked(
+          service,
+          rule,
+          `Created manual alert ${rule.conditionType} for ${instrument.symbol} at $${args.threshold}.`,
+          args.check_after_create,
+        );
       }
 
       if (args.action === "create_price_above_sma" || args.action === "create_price_below_sma") {
@@ -109,13 +116,12 @@ export const alertsTool: AgentTool<typeof params> = {
           timeframe: "1d",
           cooldownSeconds: args.cooldown_seconds ?? 3600,
         });
-        return {
-          content: [{
-            type: "text",
-            text: `Created manual alert price_crosses_sma for ${instrument.symbol} using SMA(${period}).`,
-          }],
-          details: rule,
-        };
+        return await createResultMaybeChecked(
+          service,
+          rule,
+          `Created manual alert price_crosses_sma for ${instrument.symbol} using SMA(${period}).`,
+          args.check_after_create,
+        );
       }
 
       if (args.action === "create_rsi_above" || args.action === "create_rsi_below") {
@@ -136,13 +142,12 @@ export const alertsTool: AgentTool<typeof params> = {
           timeframe: "1d",
           cooldownSeconds: args.cooldown_seconds ?? 3600,
         });
-        return {
-          content: [{
-            type: "text",
-            text: `Created manual alert rsi_threshold for ${instrument.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
-          }],
-          details: rule,
-        };
+        return await createResultMaybeChecked(
+          service,
+          rule,
+          `Created manual alert rsi_threshold for ${instrument.symbol}: RSI(${period}) ${direction} ${args.threshold}.`,
+          args.check_after_create,
+        );
       }
 
       if (args.action === "create_volume_spike") {
@@ -163,13 +168,12 @@ export const alertsTool: AgentTool<typeof params> = {
           timeframe: "1d",
           cooldownSeconds: args.cooldown_seconds ?? 3600,
         });
-        return {
-          content: [{
-            type: "text",
-            text: `Created manual alert volume_spike for ${instrument.symbol}: volume > ${multiplier}x ${period}-bar average.`,
-          }],
-          details: rule,
-        };
+        return await createResultMaybeChecked(
+          service,
+          rule,
+          `Created manual alert volume_spike for ${instrument.symbol}: volume > ${multiplier}x ${period}-bar average.`,
+          args.check_after_create,
+        );
       }
 
       if (args.action === "list") {
@@ -288,6 +292,29 @@ function candidateResult(resolution: Extract<Awaited<ReturnType<typeof resolveIn
       text: `Could not verify ${resolution.query}. Choose one of the returned candidates before creating the ${target}.`,
     }],
     details: resolution,
+  };
+}
+
+async function createResultMaybeChecked(
+  service: MarketStateService,
+  rule: AlertRuleRecord,
+  createdText: string,
+  checkAfterCreate?: boolean,
+) {
+  if (!checkAfterCreate) {
+    return {
+      content: [{ type: "text" as const, text: createdText }],
+      details: rule,
+    };
+  }
+
+  const check = await checkAlerts(service);
+  return {
+    content: [{ type: "text" as const, text: `${createdText}\n\n${check.lines.join("\n")}` }],
+    details: {
+      created: rule,
+      check,
+    },
   };
 }
 

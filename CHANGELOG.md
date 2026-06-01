@@ -10,6 +10,7 @@
 ### Fixed
 
 - Portfolio lot add prompts with cost basis and currency now route to stateful tracking instead of being misread as asset comparisons or portfolio construction.
+- Combined alert prompts such as “create this alert, then check it now” now run the immediate manual check instead of stopping after alert creation.
 - Router symbol extraction now drops bare finance acronyms such as IV, SEC, FED, and CPI unless the user provides a direct ticker signal such as `$IV` or `IV ticker`.
 - Rules-mode compare prompts now clarify instead of passing the raw prompt through when acronym disambiguation leaves fewer than two valid symbols.
 - Portfolio row removal now targets the selected SQLite lot id instead of removing every lot for that symbol.
