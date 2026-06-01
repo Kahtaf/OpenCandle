@@ -42,6 +42,7 @@ import { createAskUserBridge } from "./ask-user-bridge.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
+import { createAutomationHeartbeatRunner, normalizeAutomationHeartbeatMs } from "./automation-heartbeat.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
 import type { ChatEvent } from "../shared/chat-events.js";
@@ -49,7 +50,7 @@ import type { ChatEvent } from "../shared/chat-events.js";
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
 const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
-const automationHeartbeatMs = Number(process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS ?? 60_000);
+const automationHeartbeatMs = normalizeAutomationHeartbeatMs(process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS);
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
@@ -661,7 +662,9 @@ function startLocalAutomationHeartbeat(): void {
   automationHeartbeat = setInterval(() => void runGuiAutomationHeartbeat(true), automationHeartbeatMs);
 }
 
-async function runGuiAutomationHeartbeat(checkAlerts: boolean): Promise<void> {
+const runGuiAutomationHeartbeat = createAutomationHeartbeatRunner(executeGuiAutomationHeartbeat);
+
+async function executeGuiAutomationHeartbeat(checkAlerts: boolean): Promise<void> {
   const db = initDefaultDatabase();
   try {
     await runLocalAutomationHeartbeat(db, {
