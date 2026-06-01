@@ -243,6 +243,48 @@ describe("local automation service", () => {
     expect(service.listNotificationEvents()).toHaveLength(1);
   });
 
+  it("records failed scheduled reports and restores the due time for retry", async () => {
+    const template = service.createReportTemplate({
+      name: "Morning watchlist",
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+      config: { targets: { default_watchlist: true } },
+      enabled: true,
+      nextRunAt: "2026-03-08T12:00:00.000Z",
+    });
+
+    const result = await runLocalAutomationHeartbeat(db, {
+      ownerId: "gui-1",
+      ownerKind: "writer",
+      now: "2026-03-08T12:00:30.000Z",
+      ttlSeconds: 60,
+      checkAlerts: false,
+      recordDailyReportRun: async () => {
+        throw new Error("report generator crashed");
+      },
+    });
+
+    expect(result.reportRuns).toEqual([
+      expect.objectContaining({
+        templateId: template.id,
+        triggerType: "scheduled",
+        scheduledFor: "2026-03-08T12:00:00.000Z",
+        status: "failed",
+      }),
+    ]);
+    expect(service.getReportTemplate(template.id).nextRunAt).toBe("2026-03-08T12:00:00.000Z");
+    expect(service.listNotificationEvents()).toEqual([
+      expect.objectContaining({
+        sourceType: "report_run",
+        sourceId: result.reportRuns[0].id,
+        severity: "error",
+        title: "Daily watchlist report failed",
+      }),
+    ]);
+  });
+
   it("advances overdue daily reports past the current heartbeat instead of replaying one stale day at a time", async () => {
     service.addWatchlistItem({
       instrument: {

@@ -8,6 +8,8 @@ import {
 import { nextDailyReportRunAt, recordDailyWatchlistReportRun } from "./daily-report.js";
 import { MarketStateService, type AutomationRunnerLeaseResult, type ReportRunRecord } from "./service.js";
 
+type DailyReportRunRecorder = typeof recordDailyWatchlistReportRun;
+
 export interface LocalAutomationHeartbeatResult {
   lease: AutomationRunnerLeaseResult;
   alertCheck: AlertRunnerResult | null;
@@ -24,6 +26,7 @@ export async function runLocalAutomationHeartbeat(
         checkAlerts?: boolean;
         checkReports?: boolean;
         providers?: AlertRunnerProviders;
+        recordDailyReportRun?: DailyReportRunRecorder;
       },
 ): Promise<LocalAutomationHeartbeatResult> {
   const service = new MarketStateService(db);
@@ -44,6 +47,7 @@ export async function runLocalAutomationHeartbeat(
     : await runDueReports(service, {
         ownerId: params.ownerId,
         now,
+        recordDailyReportRun: params.recordDailyReportRun ?? recordDailyWatchlistReportRun,
       });
   if (params.checkAlerts === false || !hasDueAlertRules(service, now)) {
     return { lease, alertCheck: null, reportRuns };
@@ -72,7 +76,7 @@ function hasDueAlertRules(service: MarketStateService, now: string): boolean {
 
 async function runDueReports(
   service: MarketStateService,
-  params: { ownerId: string; now: string },
+  params: { ownerId: string; now: string; recordDailyReportRun: DailyReportRunRecorder },
 ): Promise<ReportRunRecord[]> {
   const nowMs = new Date(params.now).getTime();
   const dueTemplates = service.listReportTemplates().filter((template) =>
@@ -96,13 +100,38 @@ async function runDueReports(
       claimedAt: params.now,
     });
     if (claimed == null) continue;
-    const { run } = await recordDailyWatchlistReportRun(service, {
-      templateId: template.id,
-      triggerType: "scheduled",
-      scheduledFor,
-      ownerId: params.ownerId,
-    });
-    runs.push(run);
+    try {
+      const { run } = await params.recordDailyReportRun(service, {
+        templateId: template.id,
+        triggerType: "scheduled",
+        scheduledFor,
+        ownerId: params.ownerId,
+      });
+      runs.push(run);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failedRun = service.recordReportRun({
+        templateId: template.id,
+        startedAt: params.now,
+        completedAt: new Date().toISOString(),
+        status: "failed",
+        triggerType: "scheduled",
+        scheduledFor,
+        ownerId: params.ownerId,
+        errors: [message],
+      });
+      service.recordNotificationEvent({
+        sourceType: "report_run",
+        sourceId: failedRun.id,
+        severity: "error",
+        title: "Daily watchlist report failed",
+        body: message,
+        payload: { template_id: template.id, scheduled_for: scheduledFor },
+        createdAt: failedRun.completedAt ?? params.now,
+      });
+      service.updateReportTemplate(template.id, { nextRunAt: scheduledFor });
+      runs.push(failedRun);
+    }
   }
   return runs;
 }
