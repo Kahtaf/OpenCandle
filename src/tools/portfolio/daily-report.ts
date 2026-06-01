@@ -1,10 +1,13 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getQuote } from "../../providers/yahoo-finance.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { MarketStateService } from "../../market-state/service.js";
-import { isZeroFilledQuote } from "../../market-state/resolve.js";
+import {
+  getOrCreateDefaultWatchlistReportTemplate,
+  nextDailyReportRunAt,
+  recordDailyWatchlistReportRun,
+  targetsDefaultWatchlist,
+} from "../../market-state/daily-report.js";
 
 const ACTION_DESCRIPTION = [
   "One of: run, configure, history.",
@@ -47,13 +50,14 @@ export const dailyReportTool: AgentTool<typeof params> = {
           config: { targets: { default_watchlist: true } },
           enabled: true,
         };
+        const nextRunAt = nextDailyReportRunAt(templateParams.timezone, templateParams.localTime);
         const existing = service.listReportTemplates().find((template) =>
           template.reportType === "watchlist_daily" &&
           targetsDefaultWatchlist(template.configJson)
         );
         const template = existing
-          ? service.updateReportTemplate(existing.id, templateParams)
-          : service.createReportTemplate(templateParams);
+          ? service.updateReportTemplate(existing.id, { ...templateParams, nextRunAt })
+          : service.createReportTemplate({ ...templateParams, nextRunAt });
         return {
           content: [{
             type: "text",
@@ -76,14 +80,9 @@ export const dailyReportTool: AgentTool<typeof params> = {
       }
 
       const template = getOrCreateDefaultWatchlistReportTemplate(service);
-      const report = await generateDailyReport(service);
-      const run = service.recordReportRun({
+      const { report, run } = await recordDailyWatchlistReportRun(service, {
         templateId: template.id,
-        startedAt: report.generatedAt,
-        completedAt: new Date().toISOString(),
-        status: "completed",
-        summary: report.summary,
-        errors: report.dataGaps,
+        triggerType: "manual",
       });
       return {
         content: [{ type: "text", text: report.text }],
@@ -94,119 +93,3 @@ export const dailyReportTool: AgentTool<typeof params> = {
     }
   },
 };
-
-function getOrCreateDefaultWatchlistReportTemplate(service: MarketStateService) {
-  const existing = service.listReportTemplates().find((template) =>
-    template.reportType === "watchlist_daily" &&
-    targetsDefaultWatchlist(template.configJson)
-  );
-  if (existing) return existing;
-  return service.createReportTemplate({
-    name: "Morning watchlist",
-    reportType: "watchlist_daily",
-    cadence: "daily",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    localTime: "08:00",
-    config: { targets: { default_watchlist: true } },
-    enabled: true,
-  });
-}
-
-function targetsDefaultWatchlist(config: unknown): boolean {
-  if (typeof config !== "object" || config === null) return false;
-  const targets = (config as { targets?: unknown }).targets;
-  if (typeof targets !== "object" || targets === null) return false;
-  return (targets as { default_watchlist?: unknown }).default_watchlist === true;
-}
-
-async function generateDailyReport(service: MarketStateService): Promise<{
-  generatedAt: string;
-  text: string;
-  summary: unknown;
-  dataGaps: string[];
-}> {
-  const generatedAt = new Date().toISOString();
-  const watchlist = service.getDefaultWatchlist();
-  const items = service.listWatchlistItems(watchlist.id);
-  const dataGaps: string[] = [];
-
-  const quotes = await Promise.all(
-    items.map(async (item) => {
-      const result = await wrapProvider("yahoo", () => getQuote(item.symbol));
-      if (result.status === "unavailable") {
-        dataGaps.push(`${item.symbol}: ${result.reason}`);
-        return null;
-      }
-      if (result.stale) {
-        dataGaps.push(`${item.symbol}: provider returned stale market data`);
-        return null;
-      }
-      if (isZeroFilledQuote(result.data)) {
-        dataGaps.push(`${item.symbol}: Yahoo returned no valid market data.`);
-        return null;
-      }
-      return { item, quote: result.data };
-    }),
-  );
-
-  const validQuotes = quotes.filter((q) => q != null);
-  const movers = [...validQuotes].sort(
-    (a, b) => Math.abs(b.quote.changePercent) - Math.abs(a.quote.changePercent),
-  );
-  const freshnessLines = validQuotes.length === 0
-    ? [`  No quote data available.`]
-    : quoteFreshnessLines(validQuotes);
-  const moverLines = movers.length === 0
-    ? [`  No movers available.`]
-    : movers.slice(0, 5).map(({ item, quote }) =>
-        `  ${item.symbol}: ${formatSigned(quote.changePercent)}% to $${quote.price.toFixed(2)}`,
-      );
-  const dataGapLines = dataGaps.length === 0
-    ? [`  None.`]
-    : dataGaps.map((gap) => `  ${gap}`);
-
-  const lines = [
-    `**Daily Watchlist Report**`,
-    `Generated: ${generatedAt}`,
-    `Target watchlist: ${watchlist.name}`,
-    ``,
-    `Quote freshness`,
-    ...freshnessLines,
-    ``,
-    `Major movers`,
-    ...moverLines,
-    ``,
-    `Recent alerts`,
-    `  ${service.listAlertEvents().length} recorded alert event(s).`,
-    ``,
-    `Technical snapshot`,
-    `  Deferred in V1 report generation unless quote/history data is available through a later section builder.`,
-    ``,
-    `Data gaps`,
-    ...dataGapLines,
-  ];
-
-  return {
-    generatedAt,
-    text: lines.join("\n"),
-    summary: {
-      watchlistId: watchlist.id,
-      symbols: items.map((item) => item.symbol),
-      quoteCount: validQuotes.length,
-      dataGapCount: dataGaps.length,
-    },
-    dataGaps,
-  };
-}
-
-function quoteFreshnessLines(
-  quotes: Array<{ item: { symbol: string }; quote: { timestamp: number; price: number } }>,
-): string[] {
-  return quotes.map(({ item, quote }) =>
-    `  ${item.symbol}: $${quote.price.toFixed(2)} as of ${new Date(quote.timestamp).toISOString()}`,
-  );
-}
-
-function formatSigned(value: number): string {
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
-}

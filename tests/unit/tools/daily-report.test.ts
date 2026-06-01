@@ -31,6 +31,7 @@ describe("dailyReportTool", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (originalEnv == null) {
       delete process.env.OPENCANDLE_HOME;
     } else {
@@ -77,11 +78,20 @@ describe("dailyReportTool", () => {
     const service = new MarketStateService(db);
     const [template] = service.listReportTemplates();
     const [run] = service.listReportRuns();
+    const [notification] = service.listNotificationEvents();
     db.close();
 
     expect(template.reportType).toBe("watchlist_daily");
     expect(template.lastRunAt).toBe(run.startedAt);
     expect(run.templateId).toBe(template.id);
+    expect(run.triggerType).toBe("manual");
+    expect(notification).toMatchObject({
+      sourceType: "report_run",
+      sourceId: run.id,
+      severity: "info",
+      title: "Daily watchlist report generated",
+      status: "unread",
+    });
   });
 
   it("reports zero-filled quote rows as data gaps instead of valid report data", async () => {
@@ -142,6 +152,9 @@ describe("dailyReportTool", () => {
   });
 
   it("configures the morning report with timezone and local time", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T11:00:00.000Z"));
+
     const result = await dailyReportTool.execute("test", {
       action: "configure",
       timezone: "America/Toronto",
@@ -153,6 +166,7 @@ describe("dailyReportTool", () => {
       cadence: "daily",
       timezone: "America/Toronto",
       localTime: "08:00",
+      nextRunAt: "2026-06-01T12:00:00.000Z",
     });
   });
 

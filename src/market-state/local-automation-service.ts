@@ -5,11 +5,13 @@ import {
   type AlertRunnerProviders,
   type AlertRunnerResult,
 } from "./alert-runner.js";
-import { MarketStateService, type AutomationRunnerLeaseResult } from "./service.js";
+import { recordDailyWatchlistReportRun } from "./daily-report.js";
+import { MarketStateService, type AutomationRunnerLeaseResult, type ReportRunRecord } from "./service.js";
 
 export interface LocalAutomationHeartbeatResult {
   lease: AutomationRunnerLeaseResult;
   alertCheck: AlertRunnerResult | null;
+  reportRuns: ReportRunRecord[];
 }
 
 export async function runLocalAutomationHeartbeat(
@@ -20,6 +22,7 @@ export async function runLocalAutomationHeartbeat(
         now?: string;
         ttlSeconds?: number;
         checkAlerts?: boolean;
+        checkReports?: boolean;
         providers?: AlertRunnerProviders;
       },
 ): Promise<LocalAutomationHeartbeatResult> {
@@ -32,8 +35,18 @@ export async function runLocalAutomationHeartbeat(
     ttlSeconds: params.ttlSeconds ?? 90,
   });
 
-  if (!lease.acquired || params.checkAlerts === false || !hasDueAlertRules(service, now)) {
-    return { lease, alertCheck: null };
+  if (!lease.acquired) {
+    return { lease, alertCheck: null, reportRuns: [] };
+  }
+
+  const reportRuns = params.checkReports === false
+    ? []
+    : await runDueReports(service, {
+        ownerId: params.ownerId,
+        now,
+      });
+  if (params.checkAlerts === false || !hasDueAlertRules(service, now)) {
+    return { lease, alertCheck: null, reportRuns };
   }
 
   return {
@@ -44,6 +57,7 @@ export async function runLocalAutomationHeartbeat(
       now,
       providers: params.providers ?? defaultAlertRunnerProviders,
     }),
+    reportRuns,
   };
 }
 
@@ -54,4 +68,39 @@ function hasDueAlertRules(service: MarketStateService, now: string): boolean {
     if (rule.nextCheckAt == null) return true;
     return new Date(rule.nextCheckAt).getTime() <= nowMs;
   });
+}
+
+async function runDueReports(
+  service: MarketStateService,
+  params: { ownerId: string; now: string },
+): Promise<ReportRunRecord[]> {
+  const nowMs = new Date(params.now).getTime();
+  const dueTemplates = service.listReportTemplates().filter((template) =>
+    template.enabled &&
+    template.reportType === "watchlist_daily" &&
+    template.nextRunAt != null &&
+    new Date(template.nextRunAt).getTime() <= nowMs
+  );
+  const runs: ReportRunRecord[] = [];
+  for (const template of dueTemplates) {
+    const scheduledFor = template.nextRunAt;
+    if (scheduledFor == null) continue;
+    const { run } = await recordDailyWatchlistReportRun(service, {
+      templateId: template.id,
+      triggerType: "scheduled",
+      scheduledFor,
+      ownerId: params.ownerId,
+    });
+    runs.push(run);
+    service.updateReportTemplate(template.id, {
+      nextRunAt: nextDailyRunAt(scheduledFor),
+    });
+  }
+  return runs;
+}
+
+function nextDailyRunAt(currentRunAt: string): string {
+  const next = new Date(currentRunAt);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString();
 }
