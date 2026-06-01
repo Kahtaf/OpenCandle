@@ -11,7 +11,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 
 | Domain | Tools | Providers |
 | --- | --- | --- |
-| Market | `search_ticker`, `get_stock_quote`, `get_stock_history` | Yahoo Finance; Alpha Vantage fallback for quote/history when configured |
+| Market | `search_ticker`, `screen_stocks`, `get_stock_quote`, `get_stock_history` | Yahoo Finance; TradingView scanner for breadth screening and watchlist batch quotes; Alpha Vantage fallback for quote/history when configured |
 | Crypto | `get_crypto_price`, `get_crypto_history` | CoinGecko |
 | Options | `get_option_chain` with Greeks computed inside the result | Yahoo Finance plus local calculations |
 | Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage |
@@ -26,6 +26,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 Keyless by default:
 
 - Yahoo Finance
+- TradingView scanner (unofficial, delayed scanner endpoint; used read-only and batch-first)
 - CoinGecko
 - Reddit JSON API
 - SEC EDGAR
@@ -52,6 +53,8 @@ Expected behavior:
 - Missing credentials are reported as setup gaps.
 - Circuit breakers avoid repeatedly calling failing providers.
 - Unit tests mock provider responses with fixtures.
+
+TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens. Single-security quotes, history, options, and company analysis should still use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
 
 ## Local State
 
