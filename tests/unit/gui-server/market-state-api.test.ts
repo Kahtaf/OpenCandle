@@ -30,6 +30,7 @@ describe("market-state API helpers", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     cache.clear();
     cache.consumeStaleFlag();
     vi.clearAllMocks();
@@ -95,6 +96,8 @@ describe("market-state API helpers", () => {
       error: "connection refused",
     });
 
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T12:00:30.000Z"));
     const snapshot = buildMarketStateSnapshot(db);
 
     expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
