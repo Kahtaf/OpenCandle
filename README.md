@@ -125,6 +125,7 @@ Model access comes from Pi. Market data provider keys can be set in the environm
 | `OPENCANDLE_HOME` | Override OpenCandle state directory |
 | `OPENCANDLE_GUI_HOST` | GUI bind host, default `127.0.0.1` |
 | `OPENCANDLE_GUI_PORT` | GUI port, default `14567` |
+| `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | Optional local webhook target for alert/report notification delivery attempts |
 
 Environment variables override `~/.opencandle/config.json`. See [docs/configuration.md](./docs/configuration.md) for the full reference, including advanced routing and diagnostic switches.
 

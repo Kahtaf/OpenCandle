@@ -44,6 +44,9 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `OPENCANDLE_DEBATE` | `true` | Enables adversarial bull/bear debate for comprehensive analysis. Set `false` or `0` to disable. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
 | `OPENCANDLE_GUI_PORT` | `14567` | GUI HTTP/WebSocket port. |
+| `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | unset | Optional local webhook target for alert/report notification delivery attempts. In-app notifications are still recorded first. |
+
+Run `opencandle monitor` to keep local alert/report automations active from a foreground terminal process without opening the GUI. Use `opencandle monitor --once` for a single local automation heartbeat.
 
 ### Advanced Developer Diagnostics
 

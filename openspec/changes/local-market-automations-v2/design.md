@@ -78,6 +78,8 @@ The local runner is OC's equivalent of OpenClaw's Gateway. It is not a hosted sc
 
 Runner ownership should be single-owner and explicit. The current GUI/TUI writer lock determines which interactive surface is allowed to mutate session state, but the automation runner lease determines which local process may evaluate scheduled market jobs and spend provider budget. In the initial V2 path, the active writer should normally acquire the runner lease. A future `opencandle monitor` may acquire the runner lease when no writer owns it. If a writer and monitor are both present, only the lease holder evaluates due work; the loser renders state and may request manual work through SQLite rather than issuing its own provider calls.
 
+Short-lived monitor invocations such as `opencandle monitor --once` should release their runner lease on clean completion so a follow-up GUI/TUI writer or restarted monitor does not wait for the full lease TTL. Long-running monitor processes should also release on clean shutdown when possible; stale/lost maintenance remains the fallback for crashes.
+
 This also defines "shared provider budget" for V2: scheduled alert/report market-data requests are shared by routing them through the single runner lease holder. The in-memory cache and token buckets remain process-local implementation details. Follower GUI/TUI processes must read persisted runner/check/notification state and must not start independent polling loops.
 
 The UI must label runner state plainly:
@@ -234,6 +236,8 @@ market data budget manager
 
 For Yahoo specifically, repeated `429` should trip a provider circuit breaker. While the breaker is open, OC should stop trying minute checks against Yahoo, evaluate with still-fresh cache when allowed, and record checks as `rate_limited` or `provider_budget_exhausted` once data is no longer fresh. A user with Yahoo-only data can still use alerts, but the UI should say "best effort; currently rate-limited" rather than silently falling behind.
 
+Symbol-specific Yahoo failures such as invalid, delisted, or no-data symbols must not open the shared Yahoo provider circuit. Those should mark only the affected rule/check unavailable. Provider budget backoff should be reserved for provider-wide failures such as `429`, transport failures, and timeouts so one bad ticker does not suppress unrelated valid alerts.
+
 The strategic V2 implementation choice should be: build the alert runner against a provider-neutral snapshot interface first. TradingView can back supported equity watchlists in batch for local best-effort monitoring, Yahoo can fill unsupported/unresolved or latency-sensitive symbols, and serious minute-ish monitoring should still prefer a provider with explicit limits or a contractual data feed when available.
 
 Interactive TradingView tools such as stock screening share the same process-local limiter as monitoring. The monitoring lane should treat user-initiated screens as budget pressure and defer or mark due checks as delayed rather than starving interactive requests or silently exceeding the provider budget.
@@ -264,6 +268,8 @@ Delivery adapters should be local plugins/config, not hosted infrastructure:
 - Telegram/WhatsApp remain adapter-shaped but deferred until credential/config UX exists.
 
 Delivery failures should not rewrite execution truth. A report can succeed even if webhook delivery fails; the delivery attempt records that failure and the in-app notification remains available.
+
+Delivery adapters must be bounded and fair. A webhook endpoint that accepts a connection but never responds should time out, record a failed delivery attempt, and let the local automation heartbeat continue. A backlog of failed webhook notifications should also be capped per heartbeat pass, leaving remaining events pending for later delivery attempts rather than monopolizing the local runner. Retry selection should prefer never-attempted and least-recently-attempted notifications so persistent failures do not permanently starve older or newer events.
 
 ## 6.1 Heartbeat Versus Scheduled Work
 
@@ -297,22 +303,22 @@ The GUI can use pages/tabs; the TUI can use commands, menus, and lists. They sho
 
 V2 should make OpenCandle much better for a local user without pretending to be a cloud service.
 
-Keep in V2:
+Implemented in V2:
 
 - active-writer heartbeat;
 - manual trigger;
 - run history;
 - provider-aware polling;
 - in-app notifications;
-- desktop/webhook delivery if the config path is small;
-- foreground local monitor command if it is thin and shares the same service.
+- webhook delivery through `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` with persisted attempts/results;
+- foreground local `opencandle monitor` command as a thin wrapper over the same local automation service.
 - local scheduled report/check templates that run only under an active local runner.
 
 Push to V3:
 
 - OS scheduler installation helpers;
 - always-on daemon/service management;
-- Telegram/WhatsApp production adapters;
+- desktop notifications and Telegram/WhatsApp production adapters;
 - broker sync and credentials;
 - hosted WebSocket fanout;
 - arbitrary prompt automations.
