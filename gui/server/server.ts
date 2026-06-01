@@ -162,6 +162,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/instruments/search" && req.method === "GET") {
+    if (!allowPrivateMarketStateApi(req, res)) return;
     writeJson(res, await searchInstrumentCandidates(url.searchParams.get("q") ?? ""));
     return;
   }
