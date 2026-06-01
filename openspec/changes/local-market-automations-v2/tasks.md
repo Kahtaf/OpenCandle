@@ -1,12 +1,14 @@
 ## 1. Runtime model and schema
 
-- [ ] 1.1 Decide whether V2 stores generic `automation_runs` plus type-specific `alert_check_runs`, or a smaller set of alert/report run tables only.
+- [ ] 1.1 Use type-specific run ledgers for V2: `alert_check_runs` for batched alert checks and the existing `report_runs` ledger for scheduled/manual reports.
 - [ ] 1.2 Add SQLite schema for runner leases, automation/check runs, notification events, and delivery attempts.
 - [ ] 1.3 Add transactional claim helpers for due alert checks and due report templates.
 - [ ] 1.4 Add idempotency/dedupe keys for alert events and notification events.
 - [ ] 1.5 Keep scheduling source-of-truth in alert rules/report templates; use run/check tables as the activity ledger.
 - [ ] 1.6 Define retention and maintenance behavior for stale/lost/old run and notification rows.
 - [ ] 1.7 Add alert lifecycle/retrigger fields or equivalent state for status, retrigger mode, latest condition state, latest trigger source, and latest re-arm observation.
+- [ ] 1.8 Add `rule_revision` and `arm_cycle_id` or equivalent dedupe inputs so recurring alerts can trigger again after re-arm without being collapsed by an old dedupe key.
+- [ ] 1.9 Add alert/check observation metadata for `observed_at`, provider data timestamp when available, source provider, cache/stale status, and provider delay/caveat details.
 
 ## 2. Local runner service
 
@@ -17,6 +19,8 @@
 - [ ] 2.5 Add local scheduled report/check execution for due templates while a local runner is active.
 - [ ] 2.6 Add busy-lane deferral so heartbeat checks do not compete with an already-running report/check.
 - [ ] 2.7 Add late/missed/check-on-resume policy for work due while OC was closed.
+- [ ] 2.8 Define writer-lock versus runner-lease precedence, including foreground monitor ownership and what happens when writer and monitor processes coexist.
+- [ ] 2.9 Add follower manual-request behavior: enqueue durable request for the runner owner or disable controls with explanatory status.
 
 ## 3. Alert evaluation hardening
 
@@ -32,8 +36,12 @@
 - [ ] 3.10 Add provider-level circuit breaker semantics for repeated 429/rate-limit responses.
 - [ ] 3.11 Add provider-chain observation metadata so alert events/check runs record primary provider, fallback provider, cache use, and all-provider failure reasons.
 - [ ] 3.12 Prefer batch quote/snapshot providers for monitoring and treat Yahoo one-symbol quote polling as best-effort fallback.
-- [ ] 3.13 Use TradingView `getQuotes(symbols)` as the preferred batch quote path for equity-like alert/watchlist checks, with Yahoo fallback for unsupported or unresolved symbols.
+- [ ] 3.13 Use TradingView `getQuotes(symbols)` as the preferred batch quote path for supported delayed-data alert/watchlist checks, with Yahoo fallback for unsupported, unresolved, or latency-sensitive symbols.
 - [ ] 3.14 Persist TradingView delayed/unofficial-data caveats and cache/stale status in alert check metadata when TradingView observations are used.
+- [ ] 3.15 Centralize TradingView eligibility and skip/partition logic in the provider layer so watchlist checks and alert evaluation do not duplicate suffix/type heuristics.
+- [ ] 3.16 Add rule/provider freshness policy so delayed TradingView data is used only for alerts that permit delayed scanner observations; latency-sensitive rules choose Yahoo or another suitable provider when available.
+- [ ] 3.17 Account for interactive TradingView screens in the monitoring budget so user-initiated screens can delay heartbeat checks without causing duplicate fanout or budget overruns.
+- [ ] 3.18 Ensure mixed price and indicator alerts on the same symbol share quote/history observations without minute-level historical refetches.
 
 ## 4. Notifications and delivery
 
@@ -63,3 +71,5 @@
 - [ ] 6.8 Unit test provider budget behavior: shared quote observation, 429 backoff, deferred checks beyond budget, and no duplicate polling from follower surfaces.
 - [ ] 6.9 Unit test provider-chain monitoring: primary rate-limited, fallback succeeds; Yahoo-only rate-limited, check becomes degraded/unavailable; fresh cache used while circuit breaker is open; stale cache rejected.
 - [ ] 6.10 Unit test TradingView-backed alert checks: 100+ equity symbols share one batch observation, unsupported symbols fall back to Yahoo, TradingView 429 degrades/falls back without duplicate Yahoo fanout, and source/caveat metadata is recorded.
+- [ ] 6.11 Unit test runner ownership edge cases: writer owns runner, monitor owns runner while no writer exists, follower manual request does not execute directly, and writer/monitor coexist without duplicate provider calls.
+- [ ] 6.12 Unit test delayed-data semantics: TradingView observations record provider delay metadata, delayed data is rejected for latency-sensitive rules, and resume checks ignore wall-clock drift without provider/condition evidence.

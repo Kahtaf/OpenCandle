@@ -10,6 +10,18 @@ OpenCandle SHALL evaluate scheduled market automations only from a process that 
 - **THEN** it may acquire the local runner lease
 - **AND** it evaluates due alert checks and report templates while the process remains alive
 
+#### Scenario: Monitor runs only when it owns the runner lease
+
+- **WHEN** a foreground monitor process is running without an active GUI/TUI writer
+- **THEN** it may acquire the local runner lease
+- **AND** it evaluates due alert checks and report templates while the lease remains current
+
+#### Scenario: Multiple runner candidates do not duplicate checks
+
+- **WHEN** an active writer and a foreground monitor both exist
+- **THEN** only the process with the current runner lease evaluates scheduled market jobs
+- **AND** the other process renders state or records manual requests without issuing scheduled provider calls
+
 #### Scenario: Follower process does not evaluate automations
 
 - **WHEN** a GUI or TUI process is in follower/read-only mode
@@ -76,6 +88,13 @@ OpenCandle SHALL distinguish approximate heartbeat monitoring from exact local s
 - **THEN** OpenCandle uses the same evaluator and run-history path as scheduled/heartbeat execution
 - **AND** marks the trigger source as manual
 
+#### Scenario: Follower requests manual work
+
+- **WHEN** a follower GUI/TUI surface receives a user request to check alerts now or run a report now
+- **THEN** OpenCandle either records a durable manual request for the runner owner to claim
+- **OR** disables the control with runner-status copy explaining that only the runner owner can execute manual automation work
+- **AND** it does not let the follower bypass runner ownership and directly evaluate due work
+
 ### Requirement: Notifications Are Durable And Delivery-Aware
 
 OpenCandle SHALL create durable notification events for triggered alerts and report outcomes before attempting optional external delivery.
@@ -121,6 +140,12 @@ OpenCandle SHALL verify that enabled alert conditions have provider inputs neede
 - **WHEN** a user enables a price crossing alert
 - **THEN** OpenCandle verifies that the instrument can be resolved and current quote data can be requested from an available provider
 
+#### Scenario: Latency-sensitive price alert requires suitable source
+
+- **WHEN** a user enables a price alert that requires low-latency or non-delayed data
+- **THEN** OpenCandle chooses a provider that satisfies the rule freshness policy when one is available
+- **AND** it does not silently satisfy that rule with delayed TradingView scanner data unless the rule permits delayed observations
+
 #### Scenario: Indicator alert requires historical bars
 
 - **WHEN** a user enables an SMA, RSI, or volume-spike alert
@@ -147,16 +172,29 @@ OpenCandle SHALL schedule alert checks through provider-specific budgets so loca
 
 #### Scenario: Equity watchlist uses TradingView batch quotes
 
-- **WHEN** a due alert check includes many equity-like symbols supported by the TradingView scanner
+- **WHEN** a due alert check includes many TradingView-supported symbols whose rules permit delayed scanner observations
 - **THEN** OpenCandle groups those symbols into a TradingView batch quote request where possible
 - **AND** evaluates applicable price alerts from the shared batch observation
 - **AND** records TradingView source and delayed/unofficial data caveats in check/event metadata
+
+#### Scenario: TradingView eligibility is explicit
+
+- **WHEN** OpenCandle routes symbols to the TradingView batch quote path
+- **THEN** bare symbols are eligible only when they resolve as US primary stock, fund, or DR listings supported by the scanner
+- **AND** qualified `EXCHANGE:TICKER` symbols may use the TradingView qualified-symbol path
+- **AND** unsupported instrument types, unresolved symbols, crypto suffixes, foreign Yahoo-style suffixes, and other non-eligible symbols use another capable provider when available
 
 #### Scenario: TradingView unsupported symbols fall back to Yahoo
 
 - **WHEN** TradingView cannot resolve a symbol such as a crypto suffix, foreign Yahoo-style suffix, or unsupported listing
 - **THEN** OpenCandle may evaluate that symbol through the Yahoo quote path
 - **AND** the check history records that the symbol used Yahoo fallback rather than the TradingView batch source
+
+#### Scenario: Delayed provider observation records timestamps
+
+- **WHEN** OpenCandle evaluates an alert from a delayed or cached provider observation
+- **THEN** the alert check/event metadata records when OC observed the condition
+- **AND** records provider data timestamp, cache/stale status, source provider, and delay/caveat metadata when the provider exposes it
 
 #### Scenario: Provider rate limit is hit
 
@@ -215,7 +253,8 @@ OpenCandle SHALL schedule alert checks through provider-specific budgets so loca
 #### Scenario: Multiple surfaces are open
 
 - **WHEN** GUI and TUI are both open or multiple views request market state
-- **THEN** provider requests flow through the shared local provider budget/cache
+- **THEN** scheduled automation provider requests are issued only by the runner lease holder
+- **AND** follower surfaces read persisted observations, runs, and notifications from SQLite
 - **AND** follower surfaces do not trigger independent duplicate polling
 
 #### Scenario: Indicator alerts require historical data
@@ -223,6 +262,13 @@ OpenCandle SHALL schedule alert checks through provider-specific budgets so loca
 - **WHEN** SMA, RSI, or volume-spike alerts are evaluated from daily OHLCV bars
 - **THEN** OpenCandle reuses cached history within the configured freshness window
 - **AND** it does not perform minute-level historical-data refetches unless a provider capability explicitly supports that cadence
+
+#### Scenario: Mixed price and indicator alerts share scheduling safely
+
+- **WHEN** the same symbol has both a price alert and a daily-bar indicator alert
+- **THEN** OpenCandle may evaluate the price alert on the quote heartbeat cadence
+- **AND** evaluates the indicator alert from cached daily history or a daily history refresh cadence
+- **AND** it does not refetch historical bars every minute just because a price alert is also due
 
 #### Scenario: Watchlist grows beyond budget
 
@@ -315,6 +361,12 @@ OpenCandle SHALL distinguish missed local monitoring from observed alert trigger
 - **WHEN** provider history is unavailable or too coarse to prove what happened while OC was closed
 - **THEN** OpenCandle evaluates only the current observation against the last persisted condition state
 - **AND** it does not invent one or more missed triggers from unavailable data
+
+#### Scenario: Resume does not synthesize triggers from clock skew
+
+- **WHEN** the system clock, timezone, sleep/wake timing, or daylight-saving offset changes between runs
+- **THEN** OpenCandle uses persisted condition state and provider observations to decide whether a trigger occurred
+- **AND** it does not synthesize a trigger from wall-clock drift alone
 
 ### Requirement: GUI And TUI Automation Controls Stay In Parity
 

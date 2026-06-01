@@ -76,6 +76,10 @@ V2 should begin with the active writer heartbeat because it fits the current GUI
 
 The local runner is OC's equivalent of OpenClaw's Gateway. It is not a hosted scheduler. If no local process is running, no alert/report work is actively monitored.
 
+Runner ownership should be single-owner and explicit. The current GUI/TUI writer lock determines which interactive surface is allowed to mutate session state, but the automation runner lease determines which local process may evaluate scheduled market jobs and spend provider budget. In the initial V2 path, the active writer should normally acquire the runner lease. A future `opencandle monitor` may acquire the runner lease when no writer owns it. If a writer and monitor are both present, only the lease holder evaluates due work; the loser renders state and may request manual work through SQLite rather than issuing its own provider calls.
+
+This also defines "shared provider budget" for V2: scheduled alert/report market-data requests are shared by routing them through the single runner lease holder. The in-memory cache and token buckets remain process-local implementation details. Follower GUI/TUI processes must read persisted runner/check/notification state and must not start independent polling loops.
+
 The UI must label runner state plainly:
 
 - **Running locally** — an active writer or monitor process is checking due work.
@@ -91,16 +95,15 @@ The existing V1 state model already has `alert_rules`, `alert_events`, `report_t
 automation_runner_leases
   id, owner_id, owner_kind, acquired_at, heartbeat_at, expires_at
 
-automation_runs
-  id, automation_type, source_id,
-  trigger_type, scheduled_for, started_at, completed_at,
-  status, result_summary_json, error_json,
-  owner_id, created_at
-
 alert_check_runs
   id, started_at, completed_at, status,
   checked_count, triggered_count, unavailable_count,
   owner_id, error_json
+
+report_runs                         # existing V1 table, extended as needed
+  id, template_id, trigger_type, scheduled_for,
+  started_at, completed_at, status,
+  result_summary_json, error_json, owner_id
 
 notification_events
   id, source_type, source_id, severity,
@@ -113,7 +116,7 @@ notification_delivery_attempts
   response_json, error
 ```
 
-`automation_type` should be small and explicit in V2: `alert_check` and `daily_report`. Do not create a generic prompt-running automation engine until there is a clear OC use case. LangAlpha's "agent executes arbitrary instruction" is powerful, but for OpenCandle V2 the highest-value jobs are market-state jobs with known inputs and predictable output.
+V2 should prefer type-specific ledgers: `alert_check_runs` for batched/high-frequency alert checks and the existing `report_runs` ledger for scheduled or manual report generation. Do not add a generic prompt-running automation engine until there is a clear OC use case. LangAlpha's "agent executes arbitrary instruction" is powerful, but for OpenCandle V2 the highest-value jobs are market-state jobs with known inputs and predictable output.
 
 OpenClaw's "task records are not schedulers" distinction should carry over. In OC, templates and alert rules decide what is due; run/check rows record what happened. A heartbeat tick that finds nothing due may update runner heartbeat metadata without creating a noisy run row.
 
@@ -128,8 +131,10 @@ For alert triggers:
 - cooldown still depends on `last_triggered_at`;
 - lifecycle should be explicit: `active`, `paused`, `completed`, and `needs_review` are enough for V2;
 - retrigger behavior should be explicit: `once` completes after the first trigger, while `recurring` can notify again only after the condition re-arms and cooldown permits it;
-- event creation should use a deterministic dedupe key such as rule id + condition version + observed timestamp/value bucket;
+- event creation should use a deterministic dedupe key based on `rule_id`, `rule_revision`, `arm_cycle_id`, trigger source, and observed timestamp/value bucket;
 - notification creation should be linked to the alert event so a retry does not create a second user-visible notification.
+
+`rule_revision` should increment when the user edits the condition. `arm_cycle_id` should increment when a recurring crossing rule re-arms after a valid false observation. Dedupe must not collapse a legitimate second trigger after re-arm just because the threshold and time bucket are similar.
 
 When an alert fires, the transaction should update all observable state together:
 
@@ -144,7 +149,11 @@ alert_rules
 alert_events
   status = triggered | triggered_late
   trigger_source = heartbeat | scheduled | manual | resume
-  observed_at
+  observed_at             # when OC evaluated/observed the condition
+  provider_data_at        # provider-supplied quote/bar timestamp, if available
+  source_provider
+  cache_status
+  data_delay_ms
   observed_value_json
   message
 
@@ -191,7 +200,7 @@ V2 should describe freshness honestly. Yahoo-backed polling can make OpenCandle 
 
 Provider capacity must be treated as a runtime budget, not a fixed promise. Yahoo Finance is an unofficial source with undocumented and changeable limits. The existing OC code has an internal Yahoo bucket of `5 req/s` and a 60-second quote cache, but that is only OC's self-throttle. It is not evidence that Yahoo will allow sustained local polling at that rate.
 
-OpenCandle now also has a keyless TradingView scanner provider. Its `getQuotes(symbols)` path is materially better for local alert monitoring over many equity-like watchlist symbols because it resolves bare US symbols through TradingView's scanner and fetches many quotes in a batch request. It remains unofficial and delayed, so it is not a real-time feed, but it is a better V2 default than fanning out one Yahoo quote request per alert.
+OpenCandle now also has a keyless TradingView scanner provider. Its `getQuotes(symbols)` path is materially better for local alert monitoring over many supported watchlist symbols because it resolves bare US primary stock/fund/DR symbols through TradingView's scanner and fetches many quotes in a batch request. Qualified `EXCHANGE:TICKER` symbols can also use the scanner path. Crypto suffixes, foreign Yahoo-style suffixes, OTC/unsupported instrument types, and unresolved symbols should fall back to Yahoo or another capable provider. TradingView remains unofficial and delayed, so it is not a real-time feed, but it is a better V2 default than fanning out one Yahoo quote request per alert for batch-friendly, delayed-data-acceptable equity monitoring.
 
 For V2, the runner should assume a conservative market-data budget:
 
@@ -203,9 +212,9 @@ For V2, the runner should assume a conservative market-data budget:
 - degrade cadence before disabling alerts;
 - surface `rate_limited` or `provider_budget_exhausted` in run/check history.
 
-The default quote cadence should be "best effort around one minute" for small watchlists, not "guaranteed every minute." For equity-like symbols supported by TradingView, V2 should prefer TradingView batch quotes before Yahoo fallback. Ten or even 100 equity symbols can be one scanner request when they fit TradingView's bare-symbol path, which is far more realistic than 10-100 Yahoo requests per minute. It is still not a service guarantee because TradingView is unofficial and can be delayed/rate-limited. Larger watchlists, indicator alerts, or multiple OC surfaces must be scheduled through a shared provider budget so they do not multiply requests.
+The default quote cadence should be "best effort around one minute" for small watchlists, not "guaranteed every minute." The default heartbeat wake can be about 60 seconds for due price alerts, with jitter and provider-budget deferral; users may configure slower cadences, but faster cadences require a provider that explicitly supports them. For supported TradingView symbols whose rules accept delayed scanner data, V2 should prefer TradingView batch quotes before Yahoo fallback. Ten or even 100 supported symbols can be one scanner request when they fit TradingView's batch path, which is far more realistic than 10-100 Yahoo requests per minute. It is still not a service guarantee because TradingView is unofficial and can be delayed/rate-limited. Larger watchlists, indicator alerts, or multiple OC surfaces must be scheduled through the single runner owner so they do not multiply requests.
 
-Indicator alerts should avoid minute-level historical calls. SMA, RSI, and volume-spike alerts can usually share cached daily OHLCV bars; they should run on a daily-bar cadence unless a future intraday provider explicitly supports faster history. Price alerts are the only V2 alert class that should default toward minute-ish polling, and for equities they should prefer TradingView batch snapshots with Yahoo as unresolved-symbol fallback. Yahoo remains useful for crypto-style suffixes, unsupported symbols, and fallback when TradingView is unavailable.
+Indicator alerts should avoid minute-level historical calls. SMA, RSI, and volume-spike alerts can usually share cached daily OHLCV bars; they should run on a daily-bar cadence unless a future intraday provider explicitly supports faster history. If the same symbol has both a price alert and a daily indicator alert, the price alert can be evaluated on the quote heartbeat while the indicator alert reuses daily history cache and is not refetched every minute. Price alerts are the only V2 alert class that should default toward minute-ish polling, and for supported equities they should prefer TradingView batch snapshots when delayed-data semantics are acceptable. Yahoo remains useful for crypto-style suffixes, unsupported symbols, latency-sensitive price rules, and fallback when TradingView is unavailable.
 
 LangAlpha's practical answer to provider limits is not "retry Yahoo harder." Its price-monitor path prefers a dedicated `ginlix-data` WebSocket stream, uses batched REST snapshots as fallback, and routes market data through an ordered provider chain (`ginlix-data` -> FMP -> yfinance when configured). It also treats yfinance as a free/self-hosted fallback, not the foundation for reliable price-trigger automation.
 
@@ -217,7 +226,7 @@ alert evaluator
       ▼
 market data budget manager
       │
-      ├─ TradingView batch scanner quotes                 preferred for equity-like watchlists
+      ├─ TradingView batch scanner quotes                 preferred for supported delayed-data rules
       ├─ provider with batch quotes / explicit limits     preferred when configured
       ├─ Yahoo direct quote path                          best-effort fallback
       └─ stale cache / unavailable event                  when provider is budget-exhausted
@@ -225,7 +234,9 @@ market data budget manager
 
 For Yahoo specifically, repeated `429` should trip a provider circuit breaker. While the breaker is open, OC should stop trying minute checks against Yahoo, evaluate with still-fresh cache when allowed, and record checks as `rate_limited` or `provider_budget_exhausted` once data is no longer fresh. A user with Yahoo-only data can still use alerts, but the UI should say "best effort; currently rate-limited" rather than silently falling behind.
 
-The strategic V2 implementation choice should be: build the alert runner against a provider-neutral snapshot interface first. TradingView can back equity watchlists in batch for local best-effort monitoring, Yahoo can fill unsupported/unresolved symbols, and serious minute-ish monitoring should still prefer a provider with explicit limits or a contractual data feed when available.
+The strategic V2 implementation choice should be: build the alert runner against a provider-neutral snapshot interface first. TradingView can back supported equity watchlists in batch for local best-effort monitoring, Yahoo can fill unsupported/unresolved or latency-sensitive symbols, and serious minute-ish monitoring should still prefer a provider with explicit limits or a contractual data feed when available.
+
+Interactive TradingView tools such as stock screening share the same process-local limiter as monitoring. The monitoring lane should treat user-initiated screens as budget pressure and defer or mark due checks as delayed rather than starving interactive requests or silently exceeding the provider budget.
 
 ## 6. Notifications And Delivery
 
