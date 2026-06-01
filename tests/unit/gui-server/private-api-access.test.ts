@@ -41,4 +41,11 @@ describe("private GUI API access", () => {
       host: "oc-tailnet:14567",
     }, "secret-token")).toBe(false);
   });
+
+  it("treats malformed private API cookies as absent", () => {
+    expect(isTrustedPrivateApiRequest("100.64.0.8", {
+      cookie: "opencandle_gui_session=%",
+      host: "oc-tailnet:14567",
+    }, "secret-token")).toBe(false);
+  });
 });

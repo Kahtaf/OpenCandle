@@ -30,7 +30,13 @@ function cookieValue(header: string | string[] | undefined, name: string): strin
   if (value == null) return undefined;
   for (const part of value.split(";")) {
     const [rawKey, ...rawValue] = part.trim().split("=");
-    if (rawKey === name) return decodeURIComponent(rawValue.join("="));
+    if (rawKey === name) {
+      try {
+        return decodeURIComponent(rawValue.join("="));
+      } catch {
+        return undefined;
+      }
+    }
   }
   return undefined;
 }
