@@ -1167,6 +1167,18 @@ export class MarketStateService {
     return mapNotificationEvent(row);
   }
 
+  acknowledgeNotificationEvent(id: number, acknowledgedAt = new Date().toISOString()): NotificationEventRecord {
+    this.db
+      .prepare(
+        `UPDATE notification_events
+         SET status = 'acknowledged',
+             acknowledged_at = ?
+         WHERE id = ?`,
+      )
+      .run(acknowledgedAt, id);
+    return this.getNotificationEvent(id);
+  }
+
   recordNotificationDeliveryAttempt(params: {
     notificationEventId: number;
     channel: string;

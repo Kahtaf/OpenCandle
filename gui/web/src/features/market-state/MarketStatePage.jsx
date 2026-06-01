@@ -366,13 +366,18 @@ function Alerts({ state, readOnly, invokeTool }) {
           <EmptyState icon={Bell} title="No notifications" action="Triggered alerts and report outcomes appear here." />
         ) : (
           <DataTable
-            columns={["Created", "Severity", "Title", "Status", "Delivery"]}
+            columns={["Created", "Severity", "Title", "Status", "Delivery", "Actions"]}
             rows={state.notifications.slice(0, 10).map((notification) => [
               shortDate(notification.createdAt),
               notification.severity,
               notification.title,
               notification.status,
               deliveryStatus(state.notificationDeliveryAttempts, notification.id),
+              <RowActions
+                key="actions"
+                disabled={readOnly || notification.status === "acknowledged"}
+                actions={[["Acknowledge", () => invokeTool("manage_notifications", { action: "acknowledge", id: notification.id })]]}
+              />,
             ])}
           />
         )}
@@ -384,7 +389,7 @@ function Alerts({ state, readOnly, invokeTool }) {
 function Reports({ state, readOnly, invokeTool }) {
   return (
     <>
-      <Panel title="Morning Report" meta="Manual run now, schedule metadata preserved">
+      <Panel title="Morning Report" meta="Local runner executes due schedules while OpenCandle is open">
         <div className="flex flex-wrap gap-2">
           <Button variant="brand" size="sm" prefixIcon={FileText} disabled={readOnly} onClick={() => invokeTool("daily_watchlist_report", { action: "run" })}>
             Generate today
@@ -399,13 +404,14 @@ function Reports({ state, readOnly, invokeTool }) {
           <EmptyState icon={FileText} title="No report template configured" action="Configure the morning report to preserve schedule metadata." />
         ) : (
           <DataTable
-            columns={["Name", "Type", "Cadence", "Local time", "Timezone", "Status"]}
+            columns={["Name", "Type", "Cadence", "Local time", "Timezone", "Next run", "Status"]}
             rows={state.reportTemplates.map((template) => [
               template.name,
               template.reportType,
               template.cadence,
               template.localTime,
               template.timezone,
+              shortDate(template.nextRunAt),
               template.enabled ? "Enabled" : "Disabled",
             ])}
           />
@@ -416,12 +422,35 @@ function Reports({ state, readOnly, invokeTool }) {
           <EmptyState icon={FileText} title="No reports generated" action="Generate today's watchlist report to create history." />
         ) : (
           <DataTable
-            columns={["Started", "Completed", "Status", "Summary"]}
+            columns={["Started", "Trigger", "Scheduled for", "Completed", "Status", "Summary"]}
             rows={state.reportRuns.map((run) => [
               shortDate(run.startedAt),
+              run.triggerType,
+              shortDate(run.scheduledFor),
               shortDate(run.completedAt),
               run.status,
               summarize(run.summaryJson),
+            ])}
+          />
+        )}
+      </Panel>
+      <Panel title="Notifications" count={state.notifications.filter((notification) => notification.sourceType === "report_run").length}>
+        {state.notifications.filter((notification) => notification.sourceType === "report_run").length === 0 ? (
+          <EmptyState icon={Bell} title="No report notifications" action="Report outcomes will appear here after a run completes." />
+        ) : (
+          <DataTable
+            columns={["Created", "Severity", "Title", "Status", "Delivery", "Actions"]}
+            rows={state.notifications.filter((notification) => notification.sourceType === "report_run").slice(0, 10).map((notification) => [
+              shortDate(notification.createdAt),
+              notification.severity,
+              notification.title,
+              notification.status,
+              deliveryStatus(state.notificationDeliveryAttempts, notification.id),
+              <RowActions
+                key="actions"
+                disabled={readOnly || notification.status === "acknowledged"}
+                actions={[["Acknowledge", () => invokeTool("manage_notifications", { action: "acknowledge", id: notification.id })]]}
+              />,
             ])}
           />
         )}

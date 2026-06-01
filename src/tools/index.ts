@@ -26,6 +26,7 @@ import { backtestTool } from "./technical/backtest.js";
 import { predictionsTool } from "./portfolio/predictions.js";
 import { alertsTool } from "./portfolio/alerts.js";
 import { dailyReportTool } from "./portfolio/daily-report.js";
+import { notificationsTool } from "./portfolio/notifications.js";
 import { webSearchTool } from "./sentiment/web-search.js";
 import { webSentimentTool } from "./sentiment/web-sentiment.js";
 import { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
@@ -61,6 +62,7 @@ export { holdingsOverlapTool } from "./portfolio/holdings-overlap.js";
 export { predictionsTool } from "./portfolio/predictions.js";
 export { alertsTool } from "./portfolio/alerts.js";
 export { dailyReportTool } from "./portfolio/daily-report.js";
+export { notificationsTool } from "./portfolio/notifications.js";
 export { optionChainTool } from "./options/option-chain.js";
 
 export function getAllTools(): AgentTool<any>[] {
@@ -91,6 +93,7 @@ export function getAllTools(): AgentTool<any>[] {
     predictionsTool,
     alertsTool,
     dailyReportTool,
+    notificationsTool,
     optionChainTool,
     webSearchTool,
     webSentimentTool,
