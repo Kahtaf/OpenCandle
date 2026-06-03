@@ -12,6 +12,7 @@ Focus on concrete regressions, missing validation, and OpenCandle-specific risks
 - Prompt/routing changes: avoid overfitting to specific tickers, sectors, rates, dollar amounts, share counts, or benchmark phrases.
 - Eval regressions: classify issues at the narrowest durable layer before changing prompts: routing/planning, slot/entity extraction, tool capability, evidence normalization, policy card, workflow prompt, answer contract, structured check, eval assertion, or harness.
 - GUI changes: check server/shared/web contracts together. UI changes need browser verification and the relevant GUI tests/builds.
+- GUI React quality: for changes under `gui/web/src`, require React Doctor evidence. Treat React Doctor errors as blockers by default, and treat new warnings as actionable unless the change documents why they are pre-existing or consciously deferred. Maintain a high React Doctor score for UI work rather than accepting regressions in state/effects, performance, architecture, security, or accessibility.
 - Package/release changes: require package dry-run proof that shipped files match the intended install behavior.
 - Changelog: atomic features and bug fixes should update `CHANGELOG.md` under `[Unreleased]`.
 
@@ -20,7 +21,7 @@ Focus on concrete regressions, missing validation, and OpenCandle-specific risks
 - General code: `npx tsc --noEmit`, `npm test`, and `git diff --check`.
 - Provider/tool changes: focused provider/tool tests with fixtures; live provider tests only when explicitly part of validation.
 - Routing/workflow/prompt changes: focused unit tests and, when behavior quality matters, a manual harness or eval report.
-- GUI changes: `npm run gui:web:build`; for browser behavior, `npm run test:gui:browser` or documented live browser smoke proof.
+- GUI changes: `npm run gui:web:build`; for browser behavior, `npm run test:gui:browser` or documented live browser smoke proof; for React code changes, React Doctor output from autoreview or `npx react-doctor@latest gui/web --changed-files-from <file>`.
 - Docs/site changes: docs build or local render proof when applicable.
 - Package/release changes: `npm pack --dry-run --json --ignore-scripts`.
 
