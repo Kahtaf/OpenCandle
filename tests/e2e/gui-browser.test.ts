@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { chromium, type Browser, type Locator, type Page } from "playwright-core";
+import { existsSync } from "node:fs";
 
 const runGuiBrowser = process.env.OPENCANDLE_GUI_BROWSER === "1";
 const guiUrl = process.env.OPENCANDLE_GUI_URL ?? "http://127.0.0.1:14567";
@@ -10,7 +11,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
   beforeAll(async () => {
     browser = await chromium.launch({
-      executablePath: chromium.executablePath(),
+      executablePath: resolveChromiumExecutable(),
       headless: true,
     });
     page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
@@ -143,6 +144,83 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("button", { name: "Expand sidebar" }));
     await mocked.getByRole("button", { name: "Expand sidebar" }).click();
     await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await mocked.close();
+  });
+
+  it("uses the sidebar app shell as market-state navigation", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+    await installMockMarketState(mocked);
+
+    await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await expectVisible(mocked.getByRole("heading", { name: "Watchlists" }));
+    await expectVisible(mocked.getByRole("button", { name: "Refresh prices" }));
+    await expect(mocked.getByRole("button", { name: "Quotes" }).count()).resolves.toBe(0);
+    await expectVisible(mocked.getByRole("link", { name: "Portfolios" }));
+    await expect(mocked.getByLabel("Market state sections").count()).resolves.toBe(0);
+    await expect(mocked.getByRole("heading", { name: "Watchlists" }).evaluate(hasScrollableAncestor)).resolves.toBe(true);
+    await expect(mocked.getByText("Market State", { exact: true }).evaluate(hasScrollableAncestor)).resolves.toBe(true);
+
+    const addTickerAction = mocked.locator("header").filter({ hasText: "Watchlists" }).getByRole("button", { name: "Add ticker" });
+    await addTickerAction.click();
+    await expectVisible(mocked.getByRole("heading", { name: "Add Ticker", exact: true }).first());
+    await expectVisible(mocked.getByText("Search provider-backed candidates and select a resolved ticker before saving."));
+    await mocked.getByRole("button", { name: "Close panel" }).click();
+    await mocked.waitForFunction(() => document.activeElement?.textContent?.includes("Add ticker"));
+    await expect(addTickerAction.evaluate((node) => node === document.activeElement)).resolves.toBe(true);
+
+    await mocked.getByRole("link", { name: "Portfolios" }).click();
+    await mocked.waitForURL("**/portfolios", { timeout: 5_000 });
+    await expectVisible(mocked.getByRole("heading", { name: "Portfolios" }));
+
+    await mocked.getByRole("button", { name: "Collapse sidebar" }).click();
+    await mocked.getByRole("button", { name: "New chat" }).waitFor({ state: "detached" });
+    await expectVisible(mocked.getByRole("button", { name: "Expand sidebar" }));
+    await mocked.getByRole("button", { name: "Expand sidebar" }).click();
+    await expectVisible(mocked.getByRole("link", { name: "Alerts" }));
+
+    await mocked.setViewportSize({ width: 390, height: 844 });
+    await mocked.goto(`${guiUrl}/alerts`, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("button", { name: "Open sidebar" }));
+    await mocked.getByRole("button", { name: "Open sidebar" }).click();
+    await expectVisible(mocked.getByRole("dialog", { name: "Sessions" }));
+    await expectVisible(mocked.getByRole("link", { name: "Reports" }));
+    await mocked.close();
+  });
+
+  it("keeps market-state follower mode readable and disables mutations", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, { role: "follower" });
+    await installMockMarketState(mocked, {
+      watchlist: [{
+        id: 1,
+        instrumentId: 1,
+        symbol: "AAPL",
+        name: "Apple Inc.",
+        assetType: "equity",
+        exchange: "NMS",
+        targetPrice: 250,
+        stopPrice: null,
+        thesis: "AI device cycle",
+        notes: "Read-only detail should open.",
+        tags: ["mega-cap"],
+      }],
+    });
+
+    await mocked.goto(`${guiUrl}/alerts`, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("heading", { name: "Alerts" }));
+    await expectVisible(mocked.getByText("Follower mode: read-only"));
+    await expectVisible(mocked.getByRole("heading", { name: "Alert Rules" }));
+    await expect(mocked.locator("header").filter({ hasText: "Alerts" }).getByRole("button", { name: "Create alert" }).isDisabled()).resolves.toBe(true);
+    await expect(mocked.getByRole("button", { name: "Run check" }).isDisabled()).resolves.toBe(true);
+
+    await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("heading", { name: "Default Watchlist" }));
+    await expect(mocked.getByRole("button", { name: "Remove" }).isDisabled()).resolves.toBe(true);
+    await mocked.getByRole("button", { name: "Details" }).click();
+    await expectVisible(mocked.getByRole("heading", { name: "Ticker Details" }));
+    await expectVisible(mocked.locator("aside").getByText("AI device cycle", { exact: true }));
     await mocked.close();
   });
 
@@ -456,6 +534,16 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   }, 30_000);
 });
 
+function resolveChromiumExecutable(): string {
+  const configured = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+  if (configured) return configured;
+  const bundled = chromium.executablePath();
+  if (existsSync(bundled)) return bundled;
+  const macChrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  if (existsSync(macChrome)) return macChrome;
+  return bundled;
+}
+
 async function submitPrompt(page: Page, prompt: string): Promise<void> {
   await waitForRunIdle(page);
   await page.getByLabel("Message OpenCandle").fill(prompt);
@@ -480,6 +568,16 @@ async function waitForRunIdle(page: Page): Promise<void> {
   }, null, { timeout: 45_000 });
 }
 
+function hasScrollableAncestor(element: Element): boolean {
+  let current = element.parentElement;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    if (style.overflowY === "auto" || style.overflowY === "scroll") return true;
+    current = current.parentElement;
+  }
+  return false;
+}
+
 async function installMockSocket(page: Page, overrides: Record<string, unknown> = {}): Promise<void> {
   await page.addInitScript((mockOverrides) => {
     class MockWebSocket extends EventTarget {
@@ -501,7 +599,7 @@ async function installMockSocket(page: Page, overrides: Record<string, unknown> 
           this.onopen?.(new Event("open"));
           this.emit({
             type: "boot",
-            role: "writer",
+            role: mockOverrides.role ?? "writer",
             sessionId: "mock-session",
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? { requirement: "ready", providers: [], availableModels: [] },
@@ -546,5 +644,41 @@ async function installMockSocket(page: Page, overrides: Record<string, unknown> 
     }
 
     window.WebSocket = MockWebSocket;
+  }, overrides);
+}
+
+async function installMockMarketState(page: Page, overrides: Record<string, unknown> = {}): Promise<void> {
+  await page.addInitScript((marketStateOverrides) => {
+    const emptyMarketState = {
+      watchlist: [],
+      portfolio: [],
+      predictions: [],
+      alerts: [],
+      alertEvents: [],
+      alertCheckRuns: [],
+      reportTemplates: [],
+      reportRuns: [],
+      runnerLease: null,
+      notifications: [],
+      notificationDeliveryAttempts: [],
+      quoteSnapshot: null,
+    };
+    const marketState = { ...emptyMarketState, ...marketStateOverrides };
+    window.fetch = (input) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url === "/api/market-state") {
+        return Promise.resolve(new Response(JSON.stringify(marketState), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      if (url === "/api/market-state/quotes") {
+        return Promise.resolve(new Response(JSON.stringify({ watchlistQuotes: [], portfolioQuotes: [], portfolioSummary: null }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }));
+      }
+      return Promise.resolve(new Response("Not found", { status: 404, statusText: "Not found" }));
+    };
   }, overrides);
 }

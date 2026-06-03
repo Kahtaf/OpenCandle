@@ -20,6 +20,20 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Skip For Now");
   });
 
+  it("uses the shared app shell chrome without duplicate section tabs", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "watchlists",
+      role: "writer",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+      onOpenSidebar: () => undefined,
+    }));
+
+    expect(html).toContain('aria-label="Open sidebar"');
+    expect(html).not.toContain('aria-label="Market state sections"');
+  });
+
   it("renders report templates as durable report state", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "reports",
@@ -32,6 +46,21 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Report Templates");
   });
 
+  it("uses explicit refresh-prices copy and keeps creation flows contextual", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "watchlists",
+      role: "writer",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+    }));
+
+    expect(html).toContain("Refresh prices");
+    expect(html).not.toContain(">Quotes<");
+    expect(html).toContain("Default Watchlist");
+    expect(html).not.toContain("Search Yahoo candidates before saving");
+  });
+
   it("renders alert event history as durable alert state", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "alerts",
@@ -42,6 +71,33 @@ describe("MarketStatePage rendering", () => {
     }));
 
     expect(html).toContain("Alert Events");
+  });
+
+  it("frames predictions as thesis tracking in the GUI", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "predictions",
+      role: "writer",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+    }));
+
+    expect(html).toContain("Thesis Tracker");
+    expect(html).toContain("Record thesis");
+  });
+
+  it("keeps follower mode readable while disabling mutation actions", () => {
+    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+      domain: "alerts",
+      role: "follower",
+      send: () => false,
+      navigate: () => undefined,
+      setToast: () => undefined,
+    }));
+
+    expect(html).toContain("Follower mode: read-only");
+    expect(html).toContain("Create alert");
+    expect(html).toContain("disabled");
   });
 
   it("does not create a watchlist alert without an explicit target", () => {
@@ -75,7 +131,7 @@ describe("MarketStatePage rendering", () => {
     }]);
   });
 
-  it("allows decimal financial number inputs", () => {
+  it("keeps holding forms out of the first viewport", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "portfolios",
       role: "writer",
@@ -84,7 +140,8 @@ describe("MarketStatePage rendering", () => {
       setToast: () => undefined,
     }));
 
-    expect(html).toContain('type="number"');
-    expect(html).toContain('step="any"');
+    expect(html).toContain("Add holding");
+    expect(html).toContain("Default Portfolio");
+    expect(html).not.toContain("Use the lot id shown in the portfolio table");
   });
 });

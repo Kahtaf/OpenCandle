@@ -1,6 +1,5 @@
-import { CircleHelp, Menu, PanelLeftOpen, Send, X } from "lucide-react";
+import { CircleHelp, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import { AssistantMessage, CustomMessage, UserMessage } from "../../components/chat/thread-message.jsx";
@@ -12,6 +11,7 @@ import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { cn } from "../../lib/utils.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
+import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { compactDuplicateUserMessages, eventsToLiveEntries } from "./live-entries.js";
 import { groupToolRuns } from "./tool-run-grouper.js";
 import { StepsCard } from "./steps-card.jsx";
@@ -217,30 +217,6 @@ function AgentActivity({ activity }) {
         </div>
       ) : null}
     </div>
-  );
-}
-
-function DesktopSidebarRestore({ onExpandSidebar }) {
-  return (
-    <div className="hidden h-12 shrink-0 items-center border-b border-border bg-background px-3 md:flex">
-      <Button variant="ghost" size="icon-sm" aria-label="Expand sidebar" onClick={onExpandSidebar}>
-        <PanelLeftOpen />
-      </Button>
-    </div>
-  );
-}
-
-function MobileHeader({ onOpenSidebar }) {
-  return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-2 md:hidden">
-      <Button variant="ghost" size="icon-sm" aria-label="Open sidebar" onClick={onOpenSidebar}>
-        <Menu />
-      </Button>
-      <div className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
-        <OpenCandleLogo />
-        OpenCandle
-      </div>
-    </header>
   );
 }
 

@@ -57,11 +57,10 @@ function SidebarBody({ sessions, currentSessionId, currentPath = "", onOpenSessi
         <Plus /> New chat
       </Button>
 
-      <MarketStateNav currentPath={currentPath} />
-
       <SearchField value={query} onChange={setQuery} />
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
+        <MarketStateNav currentPath={currentPath} />
         <ThreadGroup label="Today" sessions={groups.today} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <ThreadGroup label="Yesterday" sessions={groups.yesterday} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
         <ThreadGroup label="Earlier" sessions={groups.earlier} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />

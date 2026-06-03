@@ -198,6 +198,9 @@ export function AppShell() {
             send={gui.send}
             navigate={navigate}
             setToast={gui.setToast}
+            onOpenSidebar={() => openDrawer("history")}
+            sidebarCollapsed={sidebarCollapsed}
+            onExpandSidebar={() => setSidebarCollapsed(false)}
           />
         ) : (
           <ChatPanel
