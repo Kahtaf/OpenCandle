@@ -52,11 +52,17 @@ export function renderRichText(markdown) {
       continue;
     }
     flushTable();
-    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (/^([-*_])(?:\s*\1){2,}$/.test(line)) {
+      flushList();
+      flushParagraph();
+      html.push("<hr>");
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       flushList();
       flushParagraph();
-      const level = Math.min(3, heading[1].length + 2);
+      const level = Math.min(5, Math.max(3, heading[1].length));
       html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
       continue;
     }

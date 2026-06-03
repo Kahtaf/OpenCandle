@@ -58,6 +58,7 @@
 - GUI market-state pages now share the main app shell sidebar and mobile drawer navigation without pinning the page actions or duplicate top tab strip.
 - Mobile GUI tool timelines no longer lock or cover the page after refreshing restored provider/tool-run state.
 - Mobile GUI home refreshes no longer leave the empty chat composer disabled while starting a fresh session.
+- GUI rich-text rendering now treats level-four markdown headings and horizontal rules as semantic `<h4>` and `<hr>` elements.
 - Published docs site now exposes AI-readable metadata, structured data, `llms.txt`, markdown mirrors, sitemap dates, and comparison/FAQ content for AI crawlers.
 
 ## [0.5.0] - 2026-05-26
