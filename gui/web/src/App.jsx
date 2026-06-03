@@ -7,7 +7,7 @@ import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-us
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
-import { routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
+import { hasSessionContent, routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
 
@@ -61,11 +61,7 @@ export function AppShell() {
   const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
     !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
   );
-  const pendingHomeResetForCurrentSession =
-    sessionView.pendingFreshHomeSession &&
-    (homeResetSessionRef.current === "" || homeResetSessionRef.current === gui.currentSessionId);
   const inputDisabled = gui.role !== "writer"
-    || pendingHomeResetForCurrentSession
     || sessionView.pendingSessionSwitch;
 
   const openDrawer = useCallback((drawer) => {
@@ -106,13 +102,13 @@ export function AppShell() {
       pathname,
       role: gui.role,
       currentSessionId: gui.currentSessionId,
-      entryCount: gui.entries.length,
+      entryCount: hasSessionContent(gui.entries) ? gui.entries.length : 0,
       lastResetSessionId: homeResetSessionRef.current,
       canStartFreshHomeSession: gui.supportsSessionActions,
     })) return;
     homeResetSessionRef.current = gui.currentSessionId;
-    gui.send("session.new");
-  }, [pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.send, gui.supportsSessionActions]);
+    void gui.newSession();
+  }, [pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.newSession, gui.supportsSessionActions]);
 
   useEffect(() => {
     if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;
@@ -142,7 +138,7 @@ export function AppShell() {
   }, [chatRun.startChatRun]);
 
   const newSession = useCallback(() => {
-    gui.send("session.new");
+    void gui.newSession();
     void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
   }, [gui, navigate]);
 

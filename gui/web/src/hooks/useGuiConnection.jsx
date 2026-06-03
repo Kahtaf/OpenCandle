@@ -21,6 +21,21 @@ export function useGuiConnection() {
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
   const [toast, setToast] = useState("");
 
+  const applyBootstrap = useCallback((data) => {
+    const snapshot = data.snapshot || {};
+    setRole(data.role || "writer");
+    setCurrentSessionId(data.sessionId || snapshot.sessionId || "");
+    setAskUserPrompts(data.askUserPrompts || []);
+    setEntries(snapshot.entries || []);
+    startTransition(() => {
+      setSessions(data.sessions || []);
+      setDashboard(snapshot.state || EMPTY_DASHBOARD);
+      setEvents(snapshot.events || []);
+      setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
+      setModelSetup(data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
+    });
+  }, []);
+
   useEffect(() => {
     let disposed = false;
     let reconnect = 0;
@@ -31,20 +46,9 @@ export function useGuiConnection() {
         const response = await fetch("/api/bootstrap");
         if (!response.ok) throw new Error(response.statusText);
         const data = await response.json();
-        const snapshot = data.snapshot || {};
         if (disposed) return;
         setSupportsSessionActions(false);
-        setRole(data.role || "writer");
-        setCurrentSessionId(data.sessionId || snapshot.sessionId || "");
-        setAskUserPrompts(data.askUserPrompts || []);
-        setEntries(snapshot.entries || []);
-        startTransition(() => {
-          setSessions(data.sessions || []);
-          setDashboard(snapshot.state || EMPTY_DASHBOARD);
-          setEvents(snapshot.events || []);
-          setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
-          setModelSetup(data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
-        });
+        applyBootstrap(data);
       } catch {
         if (!disposed) setRole("disconnected");
       }
@@ -119,7 +123,7 @@ export function useGuiConnection() {
       window.clearTimeout(reconnect);
       wsRef.current?.close();
     };
-  }, []);
+  }, [applyBootstrap]);
 
   const send = useCallback((type, payload = {}) => {
     const socket = wsRef.current;
@@ -130,6 +134,20 @@ export function useGuiConnection() {
     socket.send(JSON.stringify({ type, ...payload }));
     return true;
   }, []);
+
+  const newSession = useCallback(async () => {
+    try {
+      const response = await fetch("/api/session/new", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || response.statusText);
+      setSupportsSessionActions(true);
+      applyBootstrap(data);
+      return true;
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : String(error));
+      return false;
+    }
+  }, [applyBootstrap]);
 
   return useMemo(() => ({
     role,
@@ -145,7 +163,8 @@ export function useGuiConnection() {
     toast,
     setToast,
     send,
-  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, toast, send]);
+    newSession,
+  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, toast, send, newSession]);
 }
 
 function upsertPrompt(current, prompt) {

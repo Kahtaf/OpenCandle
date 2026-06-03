@@ -40,6 +40,23 @@ describe("route session state", () => {
     expect(view.entries).toEqual([]);
   });
 
+  it("does not treat model metadata entries as stale home transcript content", () => {
+    const entries = [
+      { type: "model_change", id: "model" },
+      { type: "thinking_level_change", id: "thinking" },
+    ];
+    const view = routeSessionView({
+      pathname: "/",
+      currentSessionId: "fresh-session",
+      entries,
+      runState: "ready",
+      liveBaseEntryCount: 0,
+    });
+
+    expect(view.pendingFreshHomeSession).toBe(false);
+    expect(view.entries).toBe(entries);
+  });
+
   it("keeps the existing home transcript when session actions are unavailable", () => {
     const entries = [{ type: "message", id: "existing-home-entry" }];
     const view = routeSessionView({

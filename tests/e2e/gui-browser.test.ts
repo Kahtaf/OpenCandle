@@ -224,6 +224,67 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
+  it("keeps restored mobile tool timelines collapsed and manually openable", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 815, height: 938 } });
+    await mocked.addInitScript(() => {
+      window.WebSocket = function BrokenWebSocket() {
+        throw new TypeError("WebSocket is not a constructor");
+      };
+      const entries = [{
+        type: "message",
+        id: "assistant-tools-1",
+        timestamp: new Date().toISOString(),
+        message: {
+          role: "assistant",
+          content: [{
+            type: "toolCall",
+            id: "tool-call-sofi",
+            name: "get_stock_quote",
+            arguments: { symbol: "SOFI" },
+          }],
+        },
+      }];
+      window.fetch = (input) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith("/api/bootstrap")) {
+          return Promise.resolve(new Response(JSON.stringify({
+            role: "writer",
+            sessionId: "mock-session",
+            sessions: [],
+            catalog: { tools: [], workflows: [], providers: [] },
+            modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+            askUserPrompts: [],
+            snapshot: {
+              sessionId: "mock-session",
+              entries,
+              events: [],
+              state: { watchlist: [], activeAnalyses: [], recentResearch: [], dataQuality: { softGaps: [], hardSkips: [] } },
+            },
+          }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }));
+        }
+        return Promise.resolve(new Response("Not found", { status: 404, statusText: "Not found" }));
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const dialog = mocked.getByRole("dialog", { name: "Tool run timeline" });
+    await expect(dialog.count()).resolves.toBe(0);
+    const card = mocked.locator("button").filter({ hasText: "Market lookup" });
+    await expect(card.count()).resolves.toBe(1);
+    await card.click();
+    await expectVisible(dialog);
+    const box = await dialog.boundingBox();
+    expect(box?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(938);
+    await expect(mocked.evaluate(() => document.body.style.pointerEvents)).resolves.not.toBe("none");
+
+    await mocked.getByRole("button", { name: "Close drawer" }).click();
+    await dialog.waitFor({ state: "detached" });
+    await mocked.close();
+  });
+
   it("prefills provider config keys masked and can reveal them", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {

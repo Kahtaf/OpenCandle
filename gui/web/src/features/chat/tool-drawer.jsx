@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Drawer as VaulDrawer } from "vaul";
 import { X } from "lucide-react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
@@ -38,16 +37,24 @@ export function ToolDrawerOverlay() {
   const isMobile = useIsMobile();
   if (!isMobile || !run) return null;
   return (
-    <VaulDrawer.Root open onClose={close} shouldScaleBackground={false}>
-      <VaulDrawer.Portal>
-        <VaulDrawer.Overlay className="fixed inset-0 z-40 bg-foreground/40" />
-        <VaulDrawer.Content className="fixed inset-x-0 bottom-0 z-50 mt-24 flex h-[90vh] flex-col rounded-t-2xl bg-background outline-none">
-          <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-border" aria-hidden="true" />
-          <DrawerHeader run={run} onClose={close} />
-          <DrawerBody run={run} />
-        </VaulDrawer.Content>
-      </VaulDrawer.Portal>
-    </VaulDrawer.Root>
+    <>
+      <button
+        type="button"
+        aria-label="Close tool timeline"
+        className="fixed inset-0 z-40 bg-foreground/40"
+        onClick={close}
+      />
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tool run timeline"
+        className="fixed inset-x-0 bottom-0 z-50 flex h-[min(90dvh,calc(100dvh-40px))] flex-col rounded-t-2xl bg-background outline-none shadow-subtle-md animate-in slide-in-from-bottom-4 duration-200"
+      >
+        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden="true" />
+        <DrawerHeader run={run} onClose={close} />
+        <DrawerBody run={run} />
+      </section>
+    </>
   );
 }
 

@@ -119,15 +119,19 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
-    writeJson(res, {
-      role: lockResult.role,
-      sessionId: sessionManager.getSessionId(),
-      catalog: buildCatalog(),
-      modelSetup: buildCurrentModelSetupState(),
-      askUserPrompts: askUserBridge.getPrompts(),
-      sessions: await SessionManager.list(cwd, sessionDir),
-      snapshot: buildStateSnapshot(),
-    });
+    writeJson(res, await buildBootstrapPayload());
+    return;
+  }
+
+  if (url.pathname === "/api/session/new" && req.method === "POST") {
+    if (lockResult.role !== "writer") {
+      writeJson(res, { error: "Read-only follower mode" }, 409);
+      return;
+    }
+    await handleNewSession();
+    broadcastState();
+    broadcastSessions();
+    writeJson(res, await buildBootstrapPayload());
     return;
   }
 
@@ -356,6 +360,18 @@ async function handleAskUserCancel(id: string): Promise<void> {
 async function handleNewSession(): Promise<void> {
   const result = await runtime.newSession();
   if (result.cancelled) throw new Error("Session switch cancelled");
+}
+
+async function buildBootstrapPayload(): Promise<Record<string, unknown>> {
+  return {
+    role: lockResult.role,
+    sessionId: sessionManager.getSessionId(),
+    catalog: buildCatalog(),
+    modelSetup: buildCurrentModelSetupState(),
+    askUserPrompts: askUserBridge.getPrompts(),
+    sessions: await SessionManager.list(cwd, sessionDir),
+    snapshot: buildStateSnapshot(),
+  };
 }
 
 async function handleOpenSession(path: string): Promise<void> {

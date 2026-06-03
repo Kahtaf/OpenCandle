@@ -13,7 +13,7 @@ export function routeSessionView({
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
-  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && entries.length > 0;
+  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && hasSessionContent(entries);
   const streaming = runState === "connecting" || runState === "streaming";
 
   return {
@@ -27,6 +27,10 @@ export function routeSessionView({
         ? entries.slice(0, liveBaseEntryCount)
         : entries,
   };
+}
+
+export function hasSessionContent(entries) {
+  return entries.some((entry) => entry.type === "message" || entry.type === "custom_message");
 }
 
 export function shouldStartFreshHomeSession({

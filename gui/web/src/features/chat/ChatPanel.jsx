@@ -21,6 +21,7 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
+  const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
   const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
@@ -28,6 +29,11 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
   const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
   const groupedEntries = useMemo(() => groupToolRuns(visibleEntries), [visibleEntries]);
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
+  const autoOpenRunId = useMemo(() => {
+    if (!allowToolAutoOpen) return null;
+    const pendingRuns = groupedEntries.filter((entry) => entry.type === "tool_run" && entry.status === "pending");
+    return pendingRuns[pendingRuns.length - 1]?.id ?? null;
+  }, [allowToolAutoOpen, groupedEntries]);
   const drawer = useToolDrawer();
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
@@ -35,12 +41,18 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
     const latest = groupedEntries.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
     if (latest && latest !== drawer.run) drawer.open(latest);
   }, [groupedEntries, drawer]);
+  useEffect(() => {
+    if (!allowToolAutoOpen) return;
+    if (autoOpenRunId || runState === "connecting" || runState === "streaming") return;
+    setAllowToolAutoOpen(false);
+  }, [allowToolAutoOpen, autoOpenRunId, runState]);
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
   const chatDisabled = role === "follower" || inputDisabled;
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
     if (!prompt || chatDisabled) return;
+    setAllowToolAutoOpen(true);
     setDraft("");
     void startChatRun(prompt);
   };
@@ -60,7 +72,14 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
           <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} disabled={chatDisabled} />
         ) : (
           <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
-            {groupedEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
+            {groupedEntries.map((entry) => (
+              <MessageRow
+                key={entry.id}
+                entry={entry}
+                catalog={catalog}
+                autoOpenToolRun={entry.id === autoOpenRunId}
+              />
+            ))}
             {askUserPrompts.map((prompt) => (
               <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
             ))}
@@ -220,9 +239,9 @@ function AgentActivity({ activity }) {
   );
 }
 
-function MessageRow({ entry, catalog }) {
+function MessageRow({ entry, catalog, autoOpenToolRun = false }) {
   if (entry.type === "tool_run") {
-    return <StepsCard run={entry} />;
+    return <StepsCard run={entry} autoOpen={autoOpenToolRun} />;
   }
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;

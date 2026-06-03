@@ -13,7 +13,7 @@ import { cn } from "../../lib/utils.js";
 // full timeline. Layout follows llmchat's pattern: small eyebrow ("Working"
 // or "Answer"), then a row of icon + title + step badge + caret. While the
 // run is still pending the title shimmers and the icon spins.
-export function StepsCard({ run }) {
+export function StepsCard({ run, autoOpen = false }) {
   const { open, requestAutoOpen, run: openRun } = useToolDrawer();
   const isOpen = openRun?.id === run.id;
   const stepCount = run.steps.length;
@@ -24,8 +24,9 @@ export function StepsCard({ run }) {
   const sources = extractRunSources(run);
 
   useEffect(() => {
+    if (!autoOpen) return;
     requestAutoOpen(run);
-  }, [run, requestAutoOpen]);
+  }, [autoOpen, run, requestAutoOpen]);
 
   // What's the active step? While pending, show its label as shimmering text
   // beneath the title (e.g. "Fetching get_stock_quote AAPL").
