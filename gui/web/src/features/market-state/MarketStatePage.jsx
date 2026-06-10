@@ -20,6 +20,7 @@ import { cn } from "../../lib/utils.js";
 import { searchInstruments, useMarketState } from "../../hooks/useMarketState.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { buildAlertRows } from "./alert-view-model.js";
+import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 
 const PAGE_META = {
   watchlists: {
@@ -65,6 +66,41 @@ const PAGE_META = {
 
 const DOMAINS = Object.keys(PAGE_META).map((id) => ({ id, label: PAGE_META[id].label }));
 const EMPTY_ACTIONS = [];
+const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE = "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
+
+export async function invokeMarketStateMutation({
+  readOnly,
+  toolName,
+  args,
+  invokeToolRequest,
+  setToast,
+  refresh,
+  setPendingMutation,
+}) {
+  if (readOnly) {
+    setToast?.("This GUI session is read-only until it reconnects as the writer.", { destructive: true });
+    return false;
+  }
+  setPendingMutation?.({ toolName });
+  try {
+    if (typeof invokeToolRequest !== "function") {
+      throw new Error(UNSUPPORTED_MUTATION_FALLBACK_MESSAGE);
+    }
+    await invokeToolRequest(toolName, args);
+    await refresh();
+    return true;
+  } catch (mutationError) {
+    const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
+    const stillRunning = message === TOOL_INVOKE_TIMEOUT_MESSAGE;
+    setToast?.(message, {
+      destructive: !stillRunning,
+      title: stillRunning ? "Operation still running" : "Tool failed",
+    });
+    return false;
+  } finally {
+    setPendingMutation?.(null);
+  }
+}
 
 export function MarketStatePage({ domain, role, send, invokeTool: invokeToolRequest, navigate, setToast, onOpenSidebar, sidebarCollapsed = false, onExpandSidebar }) {
   const { state, loading, error, refresh, refreshQuotes } = useMarketState();
@@ -78,26 +114,15 @@ export function MarketStatePage({ domain, role, send, invokeTool: invokeToolRequ
   const mutationPending = Boolean(pendingMutation);
 
   const invokeTool = async (toolName, args) => {
-    if (readOnly) {
-      setToast?.("This GUI session is read-only until it reconnects as the writer.", { destructive: true });
-      return false;
-    }
-    setPendingMutation({ toolName });
-    try {
-      if (typeof invokeToolRequest === "function") {
-        await invokeToolRequest(toolName, args);
-      } else if (!send?.("tool.invoke", { toolName, args })) {
-        throw new Error("GUI connection is not open.");
-      }
-      await refresh();
-      return true;
-    } catch (mutationError) {
-      const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
-      setToast?.(message, { destructive: true, title: "Tool failed" });
-      return false;
-    } finally {
-      setPendingMutation(null);
-    }
+    return invokeMarketStateMutation({
+      readOnly,
+      toolName,
+      args,
+      invokeToolRequest,
+      setToast,
+      refresh,
+      setPendingMutation,
+    });
   };
 
   const openPanel = (type, data) => {
@@ -876,7 +901,7 @@ function ContextPanel({ title, onClose, children }) {
   );
 }
 
-function SymbolActionPanel({ title, fields, disabled, initialSymbol = "", onSubmit }) {
+export function SymbolActionPanel({ title, fields, disabled, initialSymbol = "", onSubmit }) {
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])));
   const [query, setQuery] = useState(initialSymbol);
   const [selected, setSelected] = useState(initialSymbol);
@@ -912,6 +937,7 @@ function SymbolActionPanel({ title, fields, disabled, initialSymbol = "", onSubm
           field.multiline ? (
             <Textarea
               key={field.name}
+              aria-label={field.label}
               placeholder={field.label}
               value={values[field.name] || ""}
               disabled={disabled}
@@ -921,6 +947,7 @@ function SymbolActionPanel({ title, fields, disabled, initialSymbol = "", onSubm
           ) : (
             <Input
               key={field.name}
+              aria-label={field.label}
               type={field.type || "text"}
               step={field.type === "number" ? "any" : undefined}
               placeholder={field.placeholder || field.label}
@@ -937,7 +964,7 @@ function SymbolActionPanel({ title, fields, disabled, initialSymbol = "", onSubm
   );
 }
 
-function HoldingForm({ disabled, lot, onSubmit }) {
+export function HoldingForm({ disabled, lot, onSubmit }) {
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
@@ -965,9 +992,9 @@ function HoldingForm({ disabled, lot, onSubmit }) {
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
-      <Input type="number" step="any" placeholder="Quantity" value={values.shares} disabled={disabled} required onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))} />
-      <Input type="number" step="any" placeholder="Avg cost" value={values.avg_cost} disabled={disabled} required onChange={(event) => setValues((current) => ({ ...current, avg_cost: event.target.value }))} />
-      <Input placeholder="Currency" value={values.currency} disabled={disabled} onChange={(event) => setValues((current) => ({ ...current, currency: event.target.value }))} />
+      <Input aria-label="Quantity" type="number" step="any" placeholder="Quantity" value={values.shares} disabled={disabled} required onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))} />
+      <Input aria-label="Average cost" type="number" step="any" placeholder="Avg cost" value={values.avg_cost} disabled={disabled} required onChange={(event) => setValues((current) => ({ ...current, avg_cost: event.target.value }))} />
+      <Input aria-label="Currency" placeholder="Currency" value={values.currency} disabled={disabled} onChange={(event) => setValues((current) => ({ ...current, currency: event.target.value }))} />
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol || !values.shares || !values.avg_cost}>Save</Button>
     </form>
   );
@@ -1093,7 +1120,7 @@ export function nextComboboxActiveIndex(activeIndex, candidateCount, direction) 
   return current <= 0 ? candidateCount - 1 : current - 1;
 }
 
-function AlertCreateForm({ disabled, invokeTool, onSaved }) {
+export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
   const [draft, setDraft] = useState({
     query: "",
     selected: "",
@@ -1140,6 +1167,7 @@ function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         onSelectedChange={(value) => setDraftField("selected", value)}
       />
       <select
+        aria-label="Alert condition"
         className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
         value={condition}
         disabled={disabled}
@@ -1154,6 +1182,7 @@ function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         <option value="create_volume_spike">Volume spike</option>
       </select>
       <Input
+        aria-label="Alert threshold"
         type="number"
         step="any"
         placeholder={condition === "create_volume_spike" ? "Multiplier (optional)" : needsThreshold ? "Threshold" : "No threshold required"}
@@ -1161,8 +1190,8 @@ function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         disabled={disabled || !supportsThreshold}
         onChange={(event) => setDraftField("threshold", event.target.value)}
       />
-      <Input type="number" step="any" placeholder="Period" value={period} disabled={disabled || !needsPeriod} onChange={(event) => setDraftField("period", event.target.value)} />
-      <Input type="number" step="any" placeholder="Cooldown sec" value={cooldown} disabled={disabled} onChange={(event) => setDraftField("cooldown", event.target.value)} />
+      <Input aria-label="Alert period" type="number" step="any" placeholder="Period" value={period} disabled={disabled || !needsPeriod} onChange={(event) => setDraftField("period", event.target.value)} />
+      <Input aria-label="Alert cooldown seconds" type="number" step="any" placeholder="Cooldown sec" value={cooldown} disabled={disabled} onChange={(event) => setDraftField("cooldown", event.target.value)} />
       <div className="rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">{summary}</div>
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol || (needsThreshold && !threshold)}>Create alert</Button>
     </form>

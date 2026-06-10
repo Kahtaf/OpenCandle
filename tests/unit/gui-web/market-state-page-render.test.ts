@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  AlertCreateForm,
   buildWatchlistRowActions,
   clampComboboxActiveIndex,
+  HoldingForm,
+  invokeMarketStateMutation,
   MarketStatePage,
   nextComboboxActiveIndex,
+  SymbolActionPanel,
   SymbolSearchInput,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
@@ -187,5 +191,57 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Add holding");
     expect(html).toContain("Default Portfolio");
     expect(html).not.toContain("Use the lot id shown in the portfolio table");
+  });
+
+  it("rejects market-state mutations without acknowledged invoke support", async () => {
+    const setPendingMutationCalls = [];
+    const toastCalls = [];
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "AAPL" },
+      setPendingMutation: (value) => setPendingMutationCalls.push(value),
+      setToast: (message, options) => toastCalls.push({ message, options }),
+      refresh: () => {
+        throw new Error("unexpected refresh");
+      },
+    });
+
+    expect(saved).toBe(false);
+    expect(setPendingMutationCalls).toEqual([{ toolName: "manage_watchlist" }, null]);
+    expect(toastCalls).toEqual([expect.objectContaining({
+      message: "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.",
+    })]);
+  });
+
+  it("names market-state form controls for assistive technology", () => {
+    const alertHtml = renderToStaticMarkup(React.createElement(AlertCreateForm, {
+      disabled: false,
+      invokeTool: () => true,
+      onSaved: () => undefined,
+    }));
+    const symbolHtml = renderToStaticMarkup(React.createElement(SymbolActionPanel, {
+      title: "Add ticker",
+      disabled: false,
+      fields: [
+        { name: "target_price", label: "Target", type: "number" },
+        { name: "thesis", label: "Thesis", multiline: true },
+      ],
+      onSubmit: () => true,
+    }));
+    const holdingHtml = renderToStaticMarkup(React.createElement(HoldingForm, {
+      disabled: false,
+      onSubmit: () => true,
+    }));
+
+    expect(alertHtml).toContain('aria-label="Alert condition"');
+    expect(alertHtml).toContain('aria-label="Alert threshold"');
+    expect(alertHtml).toContain('aria-label="Alert period"');
+    expect(alertHtml).toContain('aria-label="Alert cooldown seconds"');
+    expect(symbolHtml).toContain('aria-label="Target"');
+    expect(symbolHtml).toContain('aria-label="Thesis"');
+    expect(holdingHtml).toContain('aria-label="Quantity"');
+    expect(holdingHtml).toContain('aria-label="Average cost"');
+    expect(holdingHtml).toContain('aria-label="Currency"');
   });
 });

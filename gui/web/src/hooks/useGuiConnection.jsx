@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { dismissToast, toast } from "../components/ui/use-toast.jsx";
+import { toast } from "../components/ui/use-toast.jsx";
 
 const EMPTY_DASHBOARD = {
   watchlist: [],
@@ -7,6 +7,34 @@ const EMPTY_DASHBOARD = {
   recentResearch: [],
   dataQuality: { softGaps: [], hardSkips: [] },
 };
+
+export const TOOL_INVOKE_TIMEOUT_MESSAGE = "The operation is still running. OpenCandle will refresh state when the server finishes.";
+
+export function buildGuiToastPayload(message, options = {}) {
+  if (!message) return null;
+  return {
+    title: options.title,
+    description: String(message),
+    variant: options.variant || (options.destructive ? "destructive" : "default"),
+  };
+}
+
+export function settlePendingToolInvoke(pendingToolInvokes, requestId, settle, payload) {
+  const pending = pendingToolInvokes.get(requestId);
+  if (!pending) return false;
+  globalThis.clearTimeout(pending.timeout);
+  pendingToolInvokes.delete(requestId);
+  pending[settle](payload);
+  return true;
+}
+
+export function rejectTimedOutToolInvoke(pendingToolInvokes, requestId) {
+  const pending = pendingToolInvokes.get(requestId);
+  if (!pending) return false;
+  pending.timedOut = true;
+  pending.reject(new Error(TOOL_INVOKE_TIMEOUT_MESSAGE));
+  return true;
+}
 
 export function useGuiConnection() {
   const wsRef = useRef(null);
@@ -24,23 +52,13 @@ export function useGuiConnection() {
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
 
   const setToast = useCallback((message, options = {}) => {
-    if (!message) {
-      dismissToast();
-      return;
-    }
-    toast({
-      title: options.title,
-      description: String(message),
-      variant: options.variant || (options.destructive ? "destructive" : "default"),
-    });
+    const payload = buildGuiToastPayload(message, options);
+    if (!payload) return;
+    toast(payload);
   }, []);
 
   const settleToolInvoke = useCallback((requestId, settle, payload) => {
-    const pending = pendingToolInvokesRef.current.get(requestId);
-    if (!pending) return;
-    window.clearTimeout(pending.timeout);
-    pendingToolInvokesRef.current.delete(requestId);
-    pending[settle](payload);
+    settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
   }, []);
 
   const applyBootstrap = useCallback((data) => {
@@ -185,7 +203,7 @@ export function useGuiConnection() {
 
     const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
     const timeout = window.setTimeout(() => {
-      settleToolInvoke(requestId, "reject", new Error("Timed out waiting for the tool response."));
+      rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
     }, 30_000);
 
     const promise = new Promise((resolve, reject) => {
