@@ -2,6 +2,7 @@ export interface HttpClientOptions {
   timeoutMs?: number;
   maxRetries?: number;
   retryDelayMs?: number;
+  maxRetryAfterMs?: number;
   headers?: Record<string, string>;
 }
 
@@ -9,6 +10,7 @@ const DEFAULT_OPTIONS: Required<HttpClientOptions> = {
   timeoutMs: 10_000,
   maxRetries: 2,
   retryDelayMs: 1_000,
+  maxRetryAfterMs: 30_000,
   headers: {},
 };
 
@@ -91,7 +93,7 @@ async function httpRequest<T>(
       }
       if (attempt < opts.maxRetries) {
         retryDelayMs = error instanceof HttpError && error.status === 429 && error.retryAfterMs !== undefined
-          ? error.retryAfterMs
+          ? Math.min(error.retryAfterMs, Math.max(0, opts.maxRetryAfterMs))
           : opts.retryDelayMs * (attempt + 1);
       }
     } finally {

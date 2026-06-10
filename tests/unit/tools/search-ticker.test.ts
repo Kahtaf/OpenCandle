@@ -96,6 +96,57 @@ describe("search_ticker tool", () => {
     }]);
   });
 
+  it("caps Yahoo Retry-After delays before using the TradingView fallback", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        text: () => Promise.resolve("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        text: () => Promise.resolve("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        text: () => Promise.resolve("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          fields: ["name", "description", "exchange", "type", "typespecs"],
+          symbols: [{
+            s: "NASDAQ:AAPL",
+            f: ["AAPL", "Apple Inc.", "NASDAQ", "stock", ["common"]],
+          }],
+        }),
+      });
+
+    const resultPromise = searchTickerTool.execute("call-capped-fallback", { query: "AAPL" });
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(String(vi.mocked(fetch).mock.calls[3][0])).toContain("scanner.tradingview.com/america/scan2");
+    expect((result.content[0] as any).text).toContain("TradingView fallback");
+  });
+
   it("falls back to TradingView when Yahoo returns no matches", async () => {
     globalThis.fetch = vi.fn()
       .mockResolvedValueOnce({
