@@ -8,11 +8,13 @@ describe("search_ticker tool", () => {
 
   beforeEach(() => {
     cache.clear();
+    rateLimiter.configure("yahoo", 1000, 1000);
     rateLimiter.configure("tradingview", 1000, 1000);
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -46,7 +48,20 @@ describe("search_ticker tool", () => {
   });
 
   it("falls back to TradingView on Yahoo 429 while preserving the Yahoo quote shape", async () => {
+    vi.useFakeTimers();
     globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      })
       .mockResolvedValueOnce({
         ok: false,
         status: 429,
@@ -64,10 +79,12 @@ describe("search_ticker tool", () => {
         }),
       });
 
-    const result = await searchTickerTool.execute("call-fallback", { query: "AAPL" });
+    const resultPromise = searchTickerTool.execute("call-fallback", { query: "AAPL" });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(String(vi.mocked(fetch).mock.calls[1][0])).toContain("scanner.tradingview.com/america/scan2");
+    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(String(vi.mocked(fetch).mock.calls[3][0])).toContain("scanner.tradingview.com/america/scan2");
     expect((result.content[0] as any).text).toContain("TradingView fallback");
     expect(result.details).toEqual([{
       symbol: "AAPL",
@@ -109,7 +126,20 @@ describe("search_ticker tool", () => {
   });
 
   it("tries TradingView company-name matching when an exact ticker fallback is empty", async () => {
+    vi.useFakeTimers();
     globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      })
       .mockResolvedValueOnce({
         ok: false,
         status: 429,
@@ -131,15 +161,17 @@ describe("search_ticker tool", () => {
         }),
       });
 
-    const result = await searchTickerTool.execute("call-company-fallback", { query: "apple" });
+    const resultPromise = searchTickerTool.execute("call-company-fallback", { query: "apple" });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[1][1]?.body)).filter[0]).toEqual({
+    expect(fetch).toHaveBeenCalledTimes(5);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[3][1]?.body)).filter[0]).toEqual({
       left: "name",
       operation: "equal",
       right: "APPLE",
     });
-    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[2][1]?.body)).filter[0]).toEqual({
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[4][1]?.body)).filter[0]).toEqual({
       left: "description",
       operation: "match",
       right: "apple",
@@ -153,7 +185,20 @@ describe("search_ticker tool", () => {
   });
 
   it("returns a structured no-result message if Yahoo and TradingView are both unavailable", async () => {
+    vi.useFakeTimers();
     globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      })
       .mockResolvedValueOnce({
         ok: false,
         status: 429,
@@ -165,9 +210,23 @@ describe("search_ticker tool", () => {
         status: 500,
         statusText: "Server Error",
         text: () => Promise.resolve("tradingview down"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Server Error",
+        text: () => Promise.resolve("tradingview down"),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Server Error",
+        text: () => Promise.resolve("tradingview down"),
       });
 
-    const result = await searchTickerTool.execute("call-double-failure", { query: "AAPL" });
+    const resultPromise = searchTickerTool.execute("call-double-failure", { query: "AAPL" });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
 
     expect((result.content[0] as any).text).toContain("Yahoo search was unavailable");
     expect((result.content[0] as any).text).toContain("TradingView fallback was unavailable");
