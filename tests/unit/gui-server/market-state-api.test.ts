@@ -25,14 +25,12 @@ vi.mock("../../../src/providers/yahoo-finance.js", () => ({
 describe("market-state API helpers", () => {
   beforeEach(() => {
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     vi.useRealTimers();
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -265,8 +263,10 @@ describe("market-state API helpers", () => {
       currency: "USD",
     });
     cache.set("test-stale-market-state-api-quote", quote("AAPL", 200), -1);
-    cache.getStale("test-stale-market-state-api-quote", 60_000);
-    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 200));
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-market-state-api-quote", 60_000);
+      return quote("AAPL", 200);
+    });
 
     const snapshot = await buildMarketStateQuoteSnapshot(db);
 
@@ -324,9 +324,9 @@ describe("market-state API helpers", () => {
       currency: "USD",
     });
     cache.set("test-stale-market-state-api-quote", quote("AAPL", 200), -1);
-    cache.getStale("test-stale-market-state-api-quote", 60_000);
     vi.mocked(getQuote).mockImplementation(async (symbol: string) => {
       if (symbol === "AAPL") {
+        cache.getStale("test-stale-market-state-api-quote", 60_000);
         await new Promise((resolve) => setTimeout(resolve, 10));
       }
       return quote(symbol, symbol === "AAPL" ? 200 : 400);

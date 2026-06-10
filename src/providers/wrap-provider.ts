@@ -1,6 +1,6 @@
 import type { ProviderResult } from "../runtime/evidence.js";
 import { getProviderTracker } from "../runtime/run-context.js";
-import { cache } from "../infra/cache.js";
+import { runWithStaleMetadata } from "../infra/cache.js";
 import { InvalidSymbolError } from "./errors.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
@@ -18,9 +18,8 @@ import { ProviderCredentialError } from "./provider-credential-error.js";
  * When a run context is active, checks circuit breaker state before
  * calling and records failures after.
  *
- * After a successful provider call, checks if the cache's stale flag
- * was set (meaning the provider fell back to stale cached data internally)
- * and propagates that metadata on the result.
+ * After a successful provider call, propagates stale cache metadata recorded
+ * in the current provider call's async scope.
  */
 export async function wrapProvider<T>(
   providerId: string,
@@ -37,13 +36,12 @@ export async function wrapProvider<T>(
   }
 
   try {
-    const data = await fn();
-    const { stale, cachedAt } = cache.consumeStaleFlag();
+    const { value: data, stale } = await runWithStaleMetadata(fn);
     return {
       status: "ok",
       data,
-      timestamp: stale ? new Date(cachedAt).toISOString() : new Date().toISOString(),
-      stale: stale || undefined,
+      timestamp: stale ? new Date(stale.cachedAt).toISOString() : new Date().toISOString(),
+      stale: stale ? true : undefined,
     };
   } catch (error) {
     // Credential errors are re-thrown so the tool-layer `withCredentialCheck`

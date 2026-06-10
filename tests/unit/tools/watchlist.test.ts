@@ -26,7 +26,6 @@ describe("watchlistTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cache.clear();
-    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-watchlist-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol, symbol === "BTC-USD" ? 68_000 : 180));
@@ -42,7 +41,6 @@ describe("watchlistTool", () => {
     }
     rmSync(openCandleHome, { recursive: true, force: true });
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -240,7 +238,22 @@ describe("watchlistTool", () => {
       },
     ]);
     cache.set("test:stale-flag", { ok: true }, -1);
-    cache.getStale("test:stale-flag", 60_000);
+    vi.mocked(getQuotes).mockImplementation(async () => {
+      cache.getStale("test:stale-flag", 60_000);
+      return [
+        {
+          requestedSymbol: "AAPL",
+          tvSymbol: "NASDAQ:AAPL",
+          symbol: "AAPL",
+          price: 190.5,
+          change: 2.35,
+          changePercent: 1.25,
+          volume: 123,
+          sourceProvider: "tradingview",
+          dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        },
+      ];
+    });
 
     const result = await watchlistTool.execute("test", { action: "check" });
 
@@ -329,8 +342,10 @@ describe("watchlistTool", () => {
     });
     vi.mocked(getQuotes).mockResolvedValue([]);
     cache.set("test-stale-watchlist-quote", quote("SHOP.TO", 210), -1);
-    cache.getStale("test-stale-watchlist-quote", 60_000);
-    vi.mocked(getQuote).mockResolvedValue(quote("SHOP.TO", 210));
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-watchlist-quote", 60_000);
+      return quote("SHOP.TO", 210);
+    });
 
     const result = await watchlistTool.execute("test", { action: "check" });
 
