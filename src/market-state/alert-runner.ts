@@ -416,6 +416,27 @@ async function loadHistoricalObservation(
       return historicalObservation(item.instrument.symbol, latestClose - latestSma, bars.at(-1)?.date ?? null, now);
     }
 
+    if (item.rule.conditionType === "percent_move") {
+      const bars = await loadHistory(item.instrument.symbol, "5d", "1d", providers, providerBudget, historyCache, now);
+      const latest = bars.at(-1);
+      const prior = bars.at(-2);
+      if (latest == null || prior == null || prior.close === 0) return null;
+      const move = ((latest.close / prior.close) - 1) * 100;
+      return historicalObservation(item.instrument.symbol, roundObservation(move), latest.date, now);
+    }
+
+    if (item.rule.conditionType === "sma_cross") {
+      const condition = item.rule.conditionJson as { fast_period?: unknown; slow_period?: unknown };
+      const fastPeriod = typeof condition.fast_period === "number" ? condition.fast_period : 50;
+      const slowPeriod = typeof condition.slow_period === "number" ? condition.slow_period : 200;
+      const bars = await loadHistory(item.instrument.symbol, "2y", "1d", providers, providerBudget, historyCache, now);
+      const closes = bars.map((bar) => bar.close);
+      const fast = computeSMA(closes, fastPeriod).at(-1);
+      const slow = computeSMA(closes, slowPeriod).at(-1);
+      if (fast == null || slow == null) return null;
+      return historicalObservation(item.instrument.symbol, roundObservation(fast - slow), bars.at(-1)?.date ?? null, now);
+    }
+
     if (item.rule.conditionType === "rsi_threshold") {
       const condition = item.rule.conditionJson as { period?: unknown };
       const period = typeof condition.period === "number" ? condition.period : 14;
@@ -505,6 +526,8 @@ function observationField(rule: AlertRuleRecord): string {
   if (rule.conditionType === "rsi_threshold") return "rsi";
   if (rule.conditionType === "volume_spike") return "volume_ratio";
   if (rule.conditionType === "price_crosses_sma") return "price_sma_spread";
+  if (rule.conditionType === "percent_move") return "percent_move";
+  if (rule.conditionType === "sma_cross") return "sma_spread";
   return "last_price";
 }
 
@@ -520,11 +543,23 @@ function alertTriggerMessage(symbol: string, rule: AlertRuleRecord, value: numbe
   if (rule.conditionType === "price_crosses_sma") {
     return `${symbol} price/SMA spread at ${formatSignedCurrency(value)}`;
   }
+  if (rule.conditionType === "percent_move") {
+    const direction = (rule.conditionJson as { direction?: unknown }).direction === "down" ? "down" : "up";
+    return `${symbol} percent move ${direction} ${Math.abs(value).toFixed(2)}%`;
+  }
+  if (rule.conditionType === "sma_cross") {
+    const direction = (rule.conditionJson as { direction?: unknown }).direction === "below" ? "below" : "above";
+    return `${symbol} fast SMA crossed ${direction} slow SMA at ${formatSignedCurrency(value)}`;
+  }
   return `${symbol} ${rule.conditionType} at $${value.toFixed(2)}`;
 }
 
 function formatSignedCurrency(value: number): string {
   return `${value >= 0 ? "+" : "-"}$${Math.abs(value).toFixed(2)}`;
+}
+
+function roundObservation(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
 }
 
 function normalizeObservation(observation: AlertQuoteObservation, now: string): AlertQuoteObservation {
@@ -571,6 +606,18 @@ function conditionIsTrue(rule: AlertRuleRecord, current: number): boolean {
     if (direction === "above") return current > 0;
     if (direction === "below") return current < 0;
   }
+  if (rule.conditionType === "percent_move") {
+    const percent = (rule.conditionJson as { percent?: unknown }).percent;
+    if (typeof percent !== "number") return false;
+    const direction = (rule.conditionJson as { direction?: unknown }).direction;
+    if (direction === "up") return current > percent;
+    if (direction === "down") return current < -percent;
+  }
+  if (rule.conditionType === "sma_cross") {
+    const direction = (rule.conditionJson as { direction?: unknown }).direction;
+    if (direction === "above") return current > 0;
+    if (direction === "below") return current < 0;
+  }
   if (rule.conditionType === "rsi_threshold") {
     if (typeof condition.threshold !== "number") return false;
     const direction = (rule.conditionJson as { direction?: unknown }).direction;
@@ -593,6 +640,18 @@ function crosses(rule: AlertRuleRecord, previous: number, current: number): bool
     return typeof condition.threshold === "number" && previous >= condition.threshold && current < condition.threshold;
   }
   if (rule.conditionType === "price_crosses_sma") {
+    const direction = (rule.conditionJson as { direction?: unknown }).direction;
+    if (direction === "above") return previous <= 0 && current > 0;
+    if (direction === "below") return previous >= 0 && current < 0;
+  }
+  if (rule.conditionType === "percent_move") {
+    const percent = (rule.conditionJson as { percent?: unknown }).percent;
+    if (typeof percent !== "number") return false;
+    const direction = (rule.conditionJson as { direction?: unknown }).direction;
+    if (direction === "up") return previous <= percent && current > percent;
+    if (direction === "down") return previous >= -percent && current < -percent;
+  }
+  if (rule.conditionType === "sma_cross") {
     const direction = (rule.conditionJson as { direction?: unknown }).direction;
     if (direction === "above") return previous <= 0 && current > 0;
     if (direction === "below") return previous >= 0 && current < 0;

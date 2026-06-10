@@ -314,6 +314,18 @@ describe("alertsTool", () => {
     expect(enabled.details).toMatchObject({ enabled: true });
   });
 
+  it("returns a clear not-found result when enabling an unknown alert id", async () => {
+    const result = await alertsTool.execute("test", {
+      action: "set_enabled",
+      id: 999,
+      enabled: false,
+    });
+
+    expect(result.content[0].text).toContain("Alert #999 not found");
+    expect(result.content[0].text).toContain("list");
+    expect(result.details).toBeNull();
+  });
+
   it("suppresses a fresh crossing while the alert is inside cooldown", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",
@@ -379,6 +391,35 @@ describe("alertsTool", () => {
     expect(created.details).toMatchObject({
       conditionType: "price_crosses_sma",
       conditionJson: { period: 50, direction: "above", price_field: "close" },
+      timeframe: "1d",
+    });
+  });
+
+  it("creates percent-move alerts with canonical condition JSON", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_percent_move_up",
+      symbol: "AAPL",
+      threshold: 5,
+    });
+
+    expect(created.details).toMatchObject({
+      conditionType: "percent_move",
+      conditionJson: { direction: "up", percent: 5, window: "1d" },
+      timeframe: "1d",
+    });
+  });
+
+  it("creates SMA-cross alerts with canonical condition JSON", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 3,
+      slow_period: 5,
+    });
+
+    expect(created.details).toMatchObject({
+      conditionType: "sma_cross",
+      conditionJson: { fast_period: 3, slow_period: 5, direction: "above" },
       timeframe: "1d",
     });
   });
