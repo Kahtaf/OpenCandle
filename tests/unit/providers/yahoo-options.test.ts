@@ -98,6 +98,27 @@ describe("yahoo-finance options provider", () => {
       expect(fetch).toHaveBeenCalledTimes(2);
     });
 
+    it("accepts Yahoo's 404 cookie bootstrap response when it sets a usable cookie", async () => {
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+          headers: new Headers({ "set-cookie": "A3=d=livecookie; Path=/; Domain=.yahoo.com" }),
+          text: () => Promise.resolve(""),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve("liveCrumb"),
+        });
+
+      const result = await getYahooCrumb();
+
+      expect(result).toEqual({ crumb: "liveCrumb", cookie: "A3=d=livecookie" });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect((fetch as any).mock.calls[1][1]?.headers.Cookie).toBe("A3=d=livecookie");
+    });
+
     it("uses timeouts and validates the cookie response before requesting a crumb", async () => {
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,

@@ -304,12 +304,12 @@ export async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }
     headers: { "User-Agent": BROWSER_UA },
     signal: yahooRawFetchSignal(),
   });
-  if (!cookieRes.ok) {
-    throw new Error(`Yahoo crumb cookie request failed: HTTP ${cookieRes.status} ${cookieRes.statusText}`.trim());
-  }
   const setCookie = cookieRes.headers.get("set-cookie") ?? "";
   const cookie = setCookie.split(";")[0]; // Extract just the cookie value
   if (!cookie) {
+    if (!cookieRes.ok) {
+      throw new Error(`Yahoo crumb cookie request failed: HTTP ${cookieRes.status} ${cookieRes.statusText}`.trim());
+    }
     throw new Error("Yahoo crumb cookie request did not return a session cookie");
   }
 
