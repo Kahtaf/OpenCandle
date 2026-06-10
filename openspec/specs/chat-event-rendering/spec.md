@@ -1,7 +1,7 @@
 # chat-event-rendering Specification
 
 ## Purpose
-TBD - created by archiving change revamp-local-gui. Update Purpose after archive.
+Defines how the local GUI renders streamed chat, tool calls, tool results, workflow progress, and provider-gap annotations.
 ## Requirements
 ### Requirement: Canonical Chat Event Stream
 The system SHALL expose a canonical chat event stream for GUI rendering and replay, covering run lifecycle, message lifecycle, tool lifecycle, errors, and session updates.
@@ -123,4 +123,3 @@ The GUI implementation SHALL document that llmchat's `packages/ui` is a visual/p
 #### Scenario: Developer reads GUI docs
 - **WHEN** a developer reads the GUI implementation notes
 - **THEN** the docs point to `https://github.com/trendy-design/llmchat/tree/main/packages/ui` as inspiration and state that OpenCandle does not depend on llmchat
-

@@ -1,7 +1,7 @@
 # market-alerts-and-reports Specification
 
 ## Purpose
-TBD - created by archiving change persist-user-market-state. Update Purpose after archive.
+Defines alert rules, alert events, daily report templates, report history, and notification hooks for local market-state automations.
 ## Requirements
 ### Requirement: Alert Rules Are Durable
 
@@ -174,4 +174,3 @@ OpenCandle SHALL treat watchlist target and stop prices as display/manual-check 
 - **WHEN** a watchlist item has a target price or stop price
 - **THEN** OpenCandle may display those fields and use them in explicit watchlist checks
 - **AND** it does not create background alert events for those fields unless a corresponding enabled alert rule exists
-

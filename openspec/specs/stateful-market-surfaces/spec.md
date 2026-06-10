@@ -1,7 +1,7 @@
 # stateful-market-surfaces Specification
 
 ## Purpose
-TBD - created by archiving change persist-user-market-state. Update Purpose after archive.
+Defines chat and GUI surfaces for saved watchlists, portfolios, predictions, alerts, reports, and prompt context derived from market state.
 ## Requirements
 ### Requirement: TUI and GUI Share Market State Services
 
@@ -195,4 +195,3 @@ OpenCandle SHALL preserve the stateful tracking planner behavior while changing 
 - **WHEN** a user asks OpenCandle to record a prediction
 - **THEN** the final answer confirms the persisted symbol, direction, and relevant parameters
 - **AND** it does not turn the mutation confirmation into an unsupported market recommendation
-

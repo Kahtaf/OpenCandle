@@ -1,7 +1,7 @@
 # structured-provenance Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines provenance metadata for slot values, fetched data, computed metrics, and unavailable evidence.
 ## Requirements
 ### Requirement: Provenance type covers all data sources
 The runtime SHALL define a `Provenance` type that covers all value sources: `user`, `preference`, `default`, `fetched`, `computed`, and `unavailable`. Each provenance record SHALL include the source type and MAY include `timestamp`, `provider`, and `confidence`.
@@ -42,4 +42,3 @@ The synthesis step SHALL receive evidence records with provenance and SHALL use 
 #### Scenario: Unavailable data is disclosed in synthesis output
 - **WHEN** synthesis receives an evidence record with `source: "unavailable"`
 - **THEN** the output explicitly states the metric is unavailable rather than omitting it silently
-

@@ -1,7 +1,7 @@
 # workflow-events Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines workflow lifecycle and step event logging for workflow observability and trace/debug surfaces.
 ## Requirements
 ### Requirement: Workflow events are persisted to SQLite
 The runtime SHALL persist workflow events to a `workflow_events` table in the existing SQLite database. Each event row SHALL contain `run_id`, `step_index`, `event_type`, `payload_json`, and `timestamp`.
@@ -49,4 +49,3 @@ Event logging SHALL be local to the SQLite database with no external telemetry, 
 #### Scenario: Tool call event has compact payload
 - **WHEN** a `tool_called` event is logged for `get_stock_quote`
 - **THEN** the payload contains `{ tool: "get_stock_quote", args: { symbol: "AAPL" }, status: "ok" }` — not the full quote response data
-

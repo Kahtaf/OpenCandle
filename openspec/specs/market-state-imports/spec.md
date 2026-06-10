@@ -1,7 +1,7 @@
 # market-state-imports Specification
 
 ## Purpose
-TBD - created by archiving change persist-user-market-state. Update Purpose after archive.
+Defines import/export behavior and provenance tracking for user market state.
 ## Requirements
 ### Requirement: Imports Preserve Source Provenance
 
@@ -68,4 +68,3 @@ OpenCandle SHALL preserve enough source identity to support future safe re-impor
 - **WHEN** this data model is implemented
 - **THEN** OpenCandle is not required to implement TradingView, Interactive Brokers, or CSV import adapters immediately
 - **AND** the schema is still capable of representing those future imports
-

@@ -1,7 +1,7 @@
 # graceful-degradation Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines how workflows and tools continue when optional providers fail, credentials are missing, or stale or fallback data must be surfaced.
 ## Requirements
 ### Requirement: Provider results use a structured result union
 All provider functions SHALL return a `ProviderResult<T>` union type: either `{ status: "ok"; data: T; timestamp: string }` or `{ status: "unavailable"; reason: string; provider: string }`. Raw exceptions from providers SHALL be caught and converted to the unavailable variant.
@@ -49,4 +49,3 @@ When the synthesis step produces the final response, any evidence records with `
 #### Scenario: Missing fundamentals are disclosed
 - **WHEN** synthesis receives evidence records where free cash flow and debt-to-equity are unavailable
 - **THEN** the final output includes a "Data Gaps" section listing those metrics and their unavailability reasons
-

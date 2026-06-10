@@ -1,7 +1,7 @@
 # structured-analysts Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines structured analyst roles, outputs, debate, synthesis, and validation steps for comprehensive analysis workflows.
 ## Requirements
 ### Requirement: Each analyst role has a typed input/output contract
 Each analyst role (valuation, momentum, options, contrarian, risk) SHALL define a typed input contract (what evidence it receives) and a typed output contract (what evidence it produces). The output contract SHALL include a signal (`BUY | HOLD | SELL`), conviction score (1-10), thesis string, and an array of evidence records.
@@ -46,4 +46,3 @@ The prompt text for each analyst role SHALL be generated using the step's input 
 #### Scenario: Prompt includes available evidence context
 - **WHEN** the contrarian analyst prompt is generated and prior steps have produced evidence for P/E and sentiment
 - **THEN** the prompt references the available evidence fields so the analyst knows what data is already collected
-

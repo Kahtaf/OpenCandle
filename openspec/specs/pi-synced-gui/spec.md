@@ -1,7 +1,7 @@
 # pi-synced-gui Specification
 
 ## Purpose
-TBD - created by archiving change revamp-local-gui. Update Purpose after archive.
+Defines how the browser GUI stays synchronized with Pi sessions, model and provider settings, session history, and writer/follower process roles.
 ## Requirements
 ### Requirement: Peer GUI Surface
 The system SHALL provide a local GUI as a peer surface to the TUI, using Pi/OpenCandle session primitives as the canonical source of chat history, tool events, and resume state.
@@ -112,4 +112,3 @@ The GUI SHALL make primary shell interactions keyboard accessible and screen-rea
 #### Scenario: Mobile drawer
 - **WHEN** a mobile session or context drawer is opened
 - **THEN** focus is contained within the drawer until it is closed
-

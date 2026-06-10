@@ -10,6 +10,10 @@
 - Repo-local autoreview skill and `npm run review:pr` helper for OpenCandle-specific PR review, including first-parent diff handling for already-merged PRs.
 - Repo-local autoreview now runs React Doctor for changed GUI React files, includes the structured diagnostics in review evidence, and fails UI reviews on React Doctor errors by default.
 
+### Changed
+
+- Removed deprecated `WorkflowPlan` workflow wrappers (`buildPortfolioWorkflow`, `buildCompareAssetsWorkflow`, and `buildOptionsScreenerWorkflow`) from `opencandle/workflows`; use the `*WorkflowDefinition` builders instead.
+
 ### Fixed
 
 - Portfolio lot add prompts with cost basis and currency now route to stateful tracking instead of being misread as asset comparisons or portfolio construction.

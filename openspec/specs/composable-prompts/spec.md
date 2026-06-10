@@ -1,7 +1,7 @@
 # composable-prompts Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines sectioned prompt assembly for role, safety, tool, workflow, memory, provider-status, and output-contract guidance within runtime prompt budgets.
 ## Requirements
 ### Requirement: System prompt is assembled from named sections
 The `PromptContextBuilder` SHALL assemble the system prompt from discrete named sections: `base-role`, `safety-rules`, `tool-catalog`, `workflow-instructions`, `memory-context`, `provider-status`, and `output-format`. Each section is a typed object with a name, content string, and character budget.
@@ -50,4 +50,3 @@ The current `buildSystemPrompt()` function in `system-prompt.ts` SHALL be replac
 - **WHEN** the `before_agent_start` event fires
 - **THEN** the extension calls `PromptContextBuilder.build()` and returns the assembled prompt
 - **THEN** no string concatenation happens in the extension
-

@@ -1,7 +1,7 @@
 # runtime-validation Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines runtime validation checks for workflow evidence, required outputs, and synthesis consistency.
 ## Requirements
 ### Requirement: Deterministic validation runs before LLM validation
 The runtime SHALL execute deterministic validation checks on structured evidence records before any LLM-based validation prompt. Deterministic validation SHALL produce a `ValidationResult` listing passes, failures, and warnings.
@@ -64,4 +64,3 @@ The existing LLM validation prompt SHALL continue to run after deterministic val
 #### Scenario: LLM validation receives deterministic results
 - **WHEN** deterministic validation completes with 2 warnings and 0 failures
 - **THEN** the LLM validation prompt includes the deterministic results so it knows what has already been verified
-

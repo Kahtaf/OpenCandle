@@ -1,7 +1,7 @@
 # user-market-state Specification
 
 ## Purpose
-TBD - created by archiving change persist-user-market-state. Update Purpose after archive.
+Defines durable SQLite-backed user market state for instruments, watchlists, portfolios, predictions, alerts, reports, aliases, and provenance.
 ## Requirements
 ### Requirement: User Market State Uses SQLite
 
@@ -284,4 +284,3 @@ OpenCandle SHALL represent prediction status and check behavior consistently acr
 - **WHEN** a user cancels a prediction before resolution
 - **THEN** OpenCandle marks it `cancelled`
 - **AND** it excludes the record from hit-rate calculations unless the user explicitly asks for cancelled history
-

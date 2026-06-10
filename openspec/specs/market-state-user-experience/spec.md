@@ -1,7 +1,7 @@
 # market-state-user-experience Specification
 
 ## Purpose
-TBD - created by archiving change persist-user-market-state. Update Purpose after archive.
+Defines the GUI and TUI experience for watchlists, portfolios, alerts, reports, predictions, and market-state mutations.
 ## Requirements
 ### Requirement: Market-State Pages Provide Actionable Empty States
 
@@ -191,4 +191,3 @@ OpenCandle SHALL keep the V1 user experience focused on the default watchlist an
 - **WHEN** import provenance, report templates, or alerts contain collection ids created by future multi-collection support
 - **THEN** the UI can display the referenced collection label when available
 - **AND** it does not collapse all future collection-specific state into the current default collection
-

@@ -1,7 +1,7 @@
 # selective-memory Specification
 
 ## Purpose
-TBD - created by archiving change agent-runtime-v2. Update Purpose after archive.
+Defines route-aware memory retrieval and freshness handling for prompt and workflow context.
 ## Requirements
 ### Requirement: Memory is organized into typed categories
 The memory system SHALL organize stored data into four categories: `investor_profile` (risk tolerance, goals, account types), `interaction_feedback` (corrections, confirmed approaches), `workflow_history` (past workflow runs and outcomes), and `references` (external links, data source notes).
@@ -55,4 +55,3 @@ When current-turn user input overrides a slot value, the corresponding memory en
 #### Scenario: User-specified risk profile suppresses stored preference
 - **WHEN** the user says "build me an aggressive portfolio" (specifying risk profile)
 - **THEN** any stored `investor_profile` entry for risk tolerance is excluded from the memory context for this turn
-

@@ -1,7 +1,7 @@
 # local-market-automations Specification
 
 ## Purpose
-TBD - created by archiving change local-market-automations-v2. Update Purpose after archive.
+Defines local alert and report automation behavior for monitor heartbeats, provider budgets, durable run records, and notification delivery.
 ## Requirements
 ### Requirement: Local Runner Ownership Is Explicit
 
@@ -428,4 +428,3 @@ OpenCandle SHALL communicate the limits of local monitoring.
 - **WHEN** a rule has a minute-level interval
 - **THEN** OpenCandle treats that interval as a best-effort local polling cadence
 - **AND** it does not guarantee exact trigger timing or exchange-grade real-time delivery
-
