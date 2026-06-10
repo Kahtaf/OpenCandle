@@ -176,10 +176,6 @@ export interface ComprehensiveAnalysisOptions {
   debate?: boolean;
 }
 
-export function getComprehensiveAnalysisPrompts(symbol: string, options?: ComprehensiveAnalysisOptions): string[] {
-  return buildComprehensiveAnalysisDefinition(symbol, options).steps.map((step) => step.prompt);
-}
-
 export function buildComprehensiveAnalysisDefinition(symbol: string, options?: ComprehensiveAnalysisOptions): WorkflowDefinition {
   const debate = options?.debate ?? true;
   const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
@@ -244,16 +240,6 @@ export function buildComprehensiveAnalysisDefinition(symbol: string, options?: C
       }),
     ],
   };
-}
-
-export function runComprehensiveAnalysis(
-  enqueueFollowUp: (prompt: string) => void,
-  symbol: string,
-  options?: ComprehensiveAnalysisOptions,
-): void {
-  for (const prompt of getComprehensiveAnalysisPrompts(symbol, options).slice(1)) {
-    enqueueFollowUp(prompt);
-  }
 }
 
 export function isAnalysisRequest(input: string): { match: boolean; symbol?: string } {

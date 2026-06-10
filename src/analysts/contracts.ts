@@ -9,15 +9,6 @@ export type AnalystRole =
   | "contrarian"
   | "risk";
 
-/** Evidence fields expected per analyst role. */
-export const ROLE_EXPECTED_EVIDENCE: Record<AnalystRole, string[]> = {
-  valuation: ["P/E Ratio", "Forward P/E", "EPS", "Intrinsic Value", "Revenue Growth"],
-  momentum: ["RSI", "MACD", "SMA 50", "SMA 200", "Volume Trend"],
-  options: ["Put/Call Ratio", "IV Level", "Unusual Volume", "Max Pain"],
-  contrarian: ["Fear & Greed Index", "Reddit Sentiment", "Sentiment Score"],
-  risk: ["Annualized Volatility", "Sharpe Ratio", "Max Drawdown", "VaR 95%", "Position Size"],
-};
-
 /**
  * Parse an LLM response into a structured AnalystOutput.
  * Falls back to raw text if parsing fails.
