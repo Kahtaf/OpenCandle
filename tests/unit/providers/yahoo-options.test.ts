@@ -97,6 +97,31 @@ describe("yahoo-finance options provider", () => {
       // Only 2 fetch calls for the first crumb acquisition, 0 for the second (cached)
       expect(fetch).toHaveBeenCalledTimes(2);
     });
+
+    it("uses timeouts and validates the cookie response before requesting a crumb", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      await expect(getYahooCrumb()).rejects.toThrow("Yahoo crumb cookie request failed: HTTP 503");
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect((fetch as any).mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("fails fast when Yahoo does not return a crumb cookie", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      await expect(getYahooCrumb()).rejects.toThrow("Yahoo crumb cookie request did not return a session cookie");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("getOptionsChain", () => {
@@ -132,6 +157,17 @@ describe("yahoo-finance options provider", () => {
       expect(chain.calls.length).toBeGreaterThan(0);
       expect(chain.puts.length).toBeGreaterThan(0);
       expect(chain.expirationDates.length).toBeGreaterThan(0);
+    });
+
+    it("uses timeouts for direct raw Yahoo options fetches", async () => {
+      mockCrumbAndOptions();
+      await getOptionsChain("AAPL");
+
+      const fetchCalls = (fetch as any).mock.calls;
+      expect(fetchCalls).toHaveLength(3);
+      for (const call of fetchCalls) {
+        expect(call[1]?.signal).toBeInstanceOf(AbortSignal);
+      }
     });
 
     it("computes Greeks for each contract", async () => {
