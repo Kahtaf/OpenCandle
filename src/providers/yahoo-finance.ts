@@ -358,13 +358,13 @@ export async function getOptionsChain(
 
   await rateLimiter.acquire("yahoo");
 
-  const { crumb, cookie } = await getYahooCrumb();
   const dateParam = expiration ? `&date=${expiration}` : "";
-  const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
 
   let res: Response | null = null;
   let fetchError: unknown;
   try {
+    const { crumb, cookie } = await getYahooCrumb();
+    const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
     res = await fetch(url, {
       headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
       signal: yahooRawFetchSignal(),

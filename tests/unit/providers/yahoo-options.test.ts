@@ -276,6 +276,58 @@ describe("yahoo-finance options provider", () => {
       expect(chain.calls.length).toBeGreaterThan(0);
     });
 
+    it("falls back to the stealth browser when initial crumb acquisition fails", async () => {
+      vi.spyOn(StealthBrowser, "run").mockResolvedValue(optionsFixture as any);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(chain.symbol).toBe("AAPL");
+      expect(chain.calls.length).toBeGreaterThan(0);
+    });
+
+    it("returns stale cached options when crumb acquisition and browser fallback fail", async () => {
+      const staleChain = {
+        symbol: "AAPL",
+        underlyingPrice: 100,
+        expirationDate: "2026-06-19",
+        expirationDates: ["2026-06-19"],
+        calls: [],
+        puts: [],
+        totalCallVolume: 0,
+        totalPutVolume: 0,
+        putCallRatio: 0,
+        quoteStatus: {
+          marketSession: "closed",
+          bidAskState: "mixed_or_unknown",
+          zeroBidAskContracts: 0,
+          totalContracts: 0,
+        },
+        fetchedAt: "2026-06-01T00:00:00.000Z",
+      } as const;
+      cache.set("yahoo:options:AAPL:nearest", staleChain, -1);
+      vi.spyOn(StealthBrowser, "run").mockRejectedValue(new Error("browser unavailable"));
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(chain).toEqual(staleChain);
+    });
+
     it("includes the stealth browser failure when every options fetch path fails", async () => {
       vi.spyOn(StealthBrowser, "run").mockRejectedValue(new Error("browser launch failed"));
 
