@@ -10,7 +10,7 @@ const DEFAULT_OPTIONS: Required<HttpClientOptions> = {
   timeoutMs: 10_000,
   maxRetries: 2,
   retryDelayMs: 1_000,
-  maxRetryAfterMs: 30_000,
+  maxRetryAfterMs: 1_000,
   headers: {},
 };
 

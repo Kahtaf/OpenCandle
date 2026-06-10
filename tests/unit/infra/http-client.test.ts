@@ -150,6 +150,7 @@ describe("httpGet", () => {
     const resultPromise = httpGet("https://api.example.com/limited", {
       maxRetries: 1,
       retryDelayMs: 1,
+      maxRetryAfterMs: 5_000,
     });
 
     await vi.advanceTimersByTimeAsync(1_999);

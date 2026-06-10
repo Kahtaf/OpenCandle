@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { getQuote, getHistory } from "../../../src/providers/yahoo-finance.js";
 import { InvalidSymbolError } from "../../../src/providers/errors.js";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
+import type { StockQuote } from "../../../src/types/market.js";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
@@ -11,11 +13,13 @@ describe("yahoo-finance provider", () => {
 
   beforeEach(() => {
     cache.clear();
+    rateLimiter.configure("yahoo", 1000, 1000);
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("getQuote", () => {
@@ -122,6 +126,47 @@ describe("yahoo-finance provider", () => {
       expect(quote.price).toBe(0.04);
       expect(quote.volume).toBe(12000);
       expect(quote.marketCap).toBe(50000);
+    });
+
+    it("returns stale cached quote promptly when Yahoo 429 sends a long Retry-After", async () => {
+      vi.useFakeTimers();
+      const staleQuote: StockQuote = {
+        symbol: "AAPL",
+        price: 171.25,
+        change: 1.5,
+        changePercent: 0.88,
+        open: 170,
+        high: 172,
+        low: 169,
+        previousClose: 169.75,
+        volume: 123_456,
+        marketCap: 2_700_000_000_000,
+        pe: null,
+        week52High: 199,
+        week52Low: 140,
+        timestamp: Date.now(),
+        currency: "USD",
+      };
+      cache.set("yahoo:quote:AAPL", staleQuote, -1);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        text: () => Promise.resolve("rate limited"),
+      });
+
+      const quotePromise = getQuote("AAPL");
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(quotePromise).resolves.toEqual(staleQuote);
+      expect(fetch).toHaveBeenCalledTimes(3);
     });
   });
 
