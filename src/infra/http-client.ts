@@ -6,11 +6,10 @@ export interface HttpClientOptions {
   headers?: Record<string, string>;
 }
 
-const DEFAULT_OPTIONS: Required<HttpClientOptions> = {
+const DEFAULT_OPTIONS: Required<Omit<HttpClientOptions, "maxRetryAfterMs">> = {
   timeoutMs: 10_000,
   maxRetries: 2,
   retryDelayMs: 1_000,
-  maxRetryAfterMs: 1_000,
   headers: {},
 };
 
@@ -93,7 +92,7 @@ async function httpRequest<T>(
       }
       if (attempt < opts.maxRetries) {
         retryDelayMs = error instanceof HttpError && error.status === 429 && error.retryAfterMs !== undefined
-          ? Math.min(error.retryAfterMs, Math.max(0, opts.maxRetryAfterMs))
+          ? capRetryAfterMs(error.retryAfterMs, opts.maxRetryAfterMs)
           : opts.retryDelayMs * (attempt + 1);
       }
     } finally {
@@ -127,6 +126,11 @@ function parseRetryAfterMs(value: string | null): number | undefined {
   const dateMs = Date.parse(trimmed);
   if (Number.isNaN(dateMs)) return undefined;
   return Math.max(0, dateMs - Date.now());
+}
+
+function capRetryAfterMs(retryAfterMs: number, maxRetryAfterMs: number | undefined): number {
+  if (maxRetryAfterMs === undefined) return retryAfterMs;
+  return Math.min(retryAfterMs, Math.max(0, maxRetryAfterMs));
 }
 
 function sleep(ms: number): Promise<void> {

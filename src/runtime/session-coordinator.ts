@@ -467,8 +467,6 @@ export class SessionCoordinator {
       activeRef.active = false;
       clearRunContext(activeRef.contextToken);
       this.activeWorkflowRunRef = null;
-    } else {
-      clearRunContext();
     }
     this.runner?.cancel();
   }

@@ -4,11 +4,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
-import { getProviderTracker, clearRunContext } from "../../../src/runtime/run-context.js";
+import { getProviderTracker, setRunContext, clearRunContext } from "../../../src/runtime/run-context.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 import type { WorkflowDefinition } from "../../../src/runtime/prompt-step.js";
+import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
@@ -251,6 +252,17 @@ afterEach(() => {
 });
 
 describe("SessionCoordinator workflow runtime ownership", () => {
+  it("does not clear an unowned run context when no workflow is active", () => {
+    const coord = new SessionCoordinator();
+    const tracker = new ProviderTracker();
+
+    setRunContext({ providerTracker: tracker });
+
+    coord.cancelActiveWorkflow();
+
+    expect(getProviderTracker()).toBe(tracker);
+  });
+
   it("does not let a superseded workflow clear the newer workflow context", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();
