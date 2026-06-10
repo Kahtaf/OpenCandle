@@ -114,6 +114,24 @@ describe("recordPrediction", () => {
     });
   });
 
+  it("rejects zero conviction and entry price as invalid instead of treating them as missing", async () => {
+    await expect(predictionsTool.execute("test", {
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 0,
+      entry_price: 180,
+    })).rejects.toThrow("conviction must be between 1 and 10");
+
+    await expect(predictionsTool.execute("test", {
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 5,
+      entry_price: 0,
+    })).rejects.toThrow("entry_price must be greater than 0");
+  });
+
   it("returns candidate matches for an unverified prediction symbol without recording", async () => {
     vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
     vi.mocked(httpGet).mockResolvedValue({

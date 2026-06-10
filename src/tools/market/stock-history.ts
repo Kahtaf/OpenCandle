@@ -9,16 +9,18 @@ import type { OHLCV } from "../../types/market.js";
 import type { ProviderResult } from "../../runtime/evidence.js";
 
 const DAILY_INTERVALS = new Set(["1d", "1wk", "1mo"]);
+const HISTORY_RANGES = ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"] as const;
+const HISTORY_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"] as const;
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   range: Type.Optional(
-    Type.String({
+    Type.Union(HISTORY_RANGES.map((range) => Type.Literal(range)), {
       description: "Time range: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max. Default: 6mo",
     }),
   ),
   interval: Type.Optional(
-    Type.String({
+    Type.Union(HISTORY_INTERVALS.map((interval) => Type.Literal(interval)), {
       description: "Data interval: 1m, 5m, 15m, 1h, 1d, 1wk, 1mo. Default: 1d",
     }),
   ),
