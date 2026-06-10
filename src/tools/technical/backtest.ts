@@ -195,7 +195,9 @@ const params = Type.Object({
     { description: "Strategy: sma_crossover (buy when SMA20 > SMA50, sell on reverse), sma_50_200_crossover (buy when SMA50 > SMA200, sell on reverse), or rsi_mean_reversion (buy when RSI < 30, sell when RSI > 70)" },
   ),
   period: Type.Optional(
-    Type.String({ description: "Historical period to backtest: 1y, 2y, 5y. Default: 2y" }),
+    Type.Union([Type.Literal("1y"), Type.Literal("2y"), Type.Literal("5y")], {
+      description: "Historical period to backtest: 1y, 2y, 5y. Default: 2y",
+    }),
   ),
 });
 

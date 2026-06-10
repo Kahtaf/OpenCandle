@@ -438,6 +438,47 @@ describe("alertsTool", () => {
     db.close();
   });
 
+  it("rejects invalid indicator alert lookback periods before storing a rule", async () => {
+    await expect(alertsTool.execute("test", {
+      action: "create_price_above_sma",
+      symbol: "AAPL",
+      period: 2.5,
+    })).rejects.toThrow("period must be a whole-number lookback period");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_volume_spike",
+      symbol: "AAPL",
+      period: -5,
+    })).rejects.toThrow("period must be a whole-number lookback period");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
+  });
+
+  it("allows zero cooldowns and rejects negative cooldowns before storing a rule", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+      cooldown_seconds: 0,
+    });
+    expect(created.details).toMatchObject({ cooldownSeconds: 0 });
+
+    await expect(alertsTool.execute("test", {
+      action: "create_price_below",
+      symbol: "AAPL",
+      threshold: 100,
+      cooldown_seconds: -1,
+    })).rejects.toThrow("cooldown_seconds must be a whole number greater than or equal to 0");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(1);
+    db.close();
+  });
+
   it("creates and manually checks volume-spike alerts", async () => {
     const created = await alertsTool.execute("test", {
       action: "create_volume_spike",

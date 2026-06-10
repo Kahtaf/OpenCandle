@@ -55,11 +55,11 @@ const params = Type.Object({
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol for create actions" })),
   threshold: Type.Optional(Type.Number({ description: "Price or indicator threshold for create actions" })),
-  period: Type.Optional(Type.Number({ description: "Indicator lookback period for SMA/RSI alerts" })),
+  period: Type.Optional(Type.Integer({ minimum: 1, description: "Indicator lookback period for SMA/RSI alerts" })),
   fast_period: Type.Optional(Type.Integer({ minimum: 1, description: "Fast SMA lookback period for SMA-cross alerts. Default: 50" })),
   slow_period: Type.Optional(Type.Integer({ minimum: 1, description: "Slow SMA lookback period for SMA-cross alerts. Default: 200" })),
   cooldown_seconds: Type.Optional(
-    Type.Number({ description: "Cooldown between repeated trigger events. Default: 3600" }),
+    Type.Integer({ minimum: 0, description: "Cooldown between repeated trigger events. Default: 3600" }),
   ),
   id: Type.Optional(Type.Number({ description: "Alert rule id for update actions" })),
   enabled: Type.Optional(Type.Boolean({ description: "Whether an alert rule is enabled" })),
@@ -82,6 +82,8 @@ export const alertsTool: AgentTool<typeof params> = {
     const service = new MarketStateService(db);
 
     try {
+      const cooldownSeconds = validateCooldownSeconds(args.cooldown_seconds);
+
       if (args.action === "create_price_above" || args.action === "create_price_below") {
         if (!args.symbol || args.threshold == null) {
           throw new Error("symbol and threshold are required for create alert actions.");
@@ -99,7 +101,7 @@ export const alertsTool: AgentTool<typeof params> = {
             ? priceCrossesAbove(args.threshold)
             : priceCrossesBelow(args.threshold),
           timeframe: "quote",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -113,7 +115,7 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for SMA alert actions.");
         }
-        const period = args.period ?? 50;
+        const period = validateLookbackPeriod(args.period ?? 50);
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
         const instrument = service.upsertInstrumentRecord(resolution.instrument);
@@ -125,7 +127,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: priceCrossesSma(period, direction),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -139,7 +141,7 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol || args.threshold == null) {
           throw new Error("symbol and threshold are required for RSI alert actions.");
         }
-        const period = args.period ?? 14;
+        const period = validateLookbackPeriod(args.period ?? 14);
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
         const instrument = service.upsertInstrumentRecord(resolution.instrument);
@@ -151,7 +153,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: rsiThreshold(period, args.threshold, direction),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -165,7 +167,7 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for volume-spike alert actions.");
         }
-        const period = args.period ?? 20;
+        const period = validateLookbackPeriod(args.period ?? 20);
         const multiplier = args.threshold ?? 2;
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
@@ -177,7 +179,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: volumeSpike(period, multiplier),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -205,7 +207,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: percentMove(direction, args.threshold),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -241,7 +243,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: smaCross(fastPeriod, slowPeriod, direction),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -322,6 +324,21 @@ export const alertsTool: AgentTool<typeof params> = {
     }
   },
 };
+
+function validateLookbackPeriod(period: number): number {
+  if (!Number.isInteger(period) || period <= 0) {
+    throw new Error("period must be a whole-number lookback period greater than 0 for indicator alert actions.");
+  }
+  return period;
+}
+
+function validateCooldownSeconds(cooldownSeconds: number | undefined): number {
+  const resolved = cooldownSeconds ?? 3600;
+  if (!Number.isInteger(resolved) || resolved < 0) {
+    throw new Error("cooldown_seconds must be a whole number greater than or equal to 0.");
+  }
+  return resolved;
+}
 
 async function checkAlerts(service: MarketStateService): Promise<{
   checked: number;
