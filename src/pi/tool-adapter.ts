@@ -24,7 +24,10 @@ export function getOpenCandleToolDefinitions(): ToolDefinition[] {
   return getAllTools()
     .map((tool) => ({ tool, defaults: safeGetDefaults(tool.name) }))
     .filter(({ defaults }) => defaults.__enabled !== false)
-    .map(({ tool, defaults }) => agentToolToPiTool(wrapWithDefaults(tool, defaults)));
+    .map(({ tool, defaults }) => {
+      const { __enabled: _enabled, ...paramDefaults } = defaults;
+      return agentToolToPiTool(wrapWithDefaults(tool, paramDefaults));
+    });
 }
 
 function safeGetDefaults(toolName: string): Record<string, unknown> {

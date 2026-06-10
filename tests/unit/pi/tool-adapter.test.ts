@@ -37,4 +37,39 @@ describe("tool adapter", () => {
 
     expect(adaptedNames).toEqual(sourceNames);
   });
+
+  it("strips tool metadata defaults before wrapping tool params", async () => {
+    vi.resetModules();
+    const defaultsPassedToWrapper: Array<Record<string, unknown>> = [];
+    const fakeTool = {
+      name: "fake_tool",
+      label: "Fake Tool",
+      description: "Fake tool",
+      parameters: Type.Object({ symbol: Type.String() }),
+      execute: vi.fn(),
+    };
+
+    vi.doMock("../../../src/tools/index.js", () => ({
+      getAllTools: () => [fakeTool],
+    }));
+    vi.doMock("../../../src/memory/tool-defaults.js", () => ({
+      getDefaults: () => ({ __enabled: true, symbol: "NVDA" }),
+    }));
+    vi.doMock("../../../src/runtime/tool-defaults-wrapper.js", () => ({
+      wrapWithDefaults: (tool: typeof fakeTool, defaults: Record<string, unknown>) => {
+        defaultsPassedToWrapper.push(defaults);
+        return tool;
+      },
+    }));
+
+    const { getOpenCandleToolDefinitions: getDefinitions } = await import("../../../src/pi/tool-adapter.js");
+
+    expect(getDefinitions().map((tool) => tool.name)).toEqual(["fake_tool"]);
+    expect(defaultsPassedToWrapper).toEqual([{ symbol: "NVDA" }]);
+
+    vi.doUnmock("../../../src/tools/index.js");
+    vi.doUnmock("../../../src/memory/tool-defaults.js");
+    vi.doUnmock("../../../src/runtime/tool-defaults-wrapper.js");
+    vi.resetModules();
+  });
 });
