@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildWatchlistRowActions,
   MarketStatePage,
+  SymbolSearchInput,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
 describe("MarketStatePage rendering", () => {
@@ -98,6 +99,36 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Follower mode: read-only");
     expect(html).toContain("Create alert");
     expect(html).toContain("disabled");
+  });
+
+  it("keeps connecting and disconnected market-state pages read-only", () => {
+    for (const role of ["connecting", "disconnected"]) {
+      const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
+        domain: "watchlists",
+        role,
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }));
+
+      expect(html).toContain("read-only");
+      expect(html).toContain("disabled");
+    }
+  });
+
+  it("renders symbol search with combobox semantics", () => {
+    const html = renderToStaticMarkup(React.createElement(SymbolSearchInput, {
+      query: "AA",
+      selected: "",
+      disabled: false,
+      onQueryChange: () => undefined,
+      onSelectedChange: () => undefined,
+    }));
+
+    expect(html).toContain('role="combobox"');
+    expect(html).toContain('aria-autocomplete="list"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('aria-controls=');
   });
 
   it("does not create a watchlist alert without an explicit target", () => {

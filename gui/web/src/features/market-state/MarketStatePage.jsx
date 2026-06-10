@@ -12,7 +12,7 @@ import {
   TrendingUp,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Textarea } from "../../components/ui/textarea.jsx";
@@ -66,22 +66,37 @@ const PAGE_META = {
 const DOMAINS = Object.keys(PAGE_META).map((id) => ({ id, label: PAGE_META[id].label }));
 const EMPTY_ACTIONS = [];
 
-export function MarketStatePage({ domain, role, send, navigate, setToast, onOpenSidebar, sidebarCollapsed = false, onExpandSidebar }) {
+export function MarketStatePage({ domain, role, send, invokeTool: invokeToolRequest, navigate, setToast, onOpenSidebar, sidebarCollapsed = false, onExpandSidebar }) {
   const { state, loading, error, refresh, refreshQuotes } = useMarketState();
-  const readOnly = role === "follower";
+  const readOnly = role !== "writer";
   const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
   const [filter, setFilter] = useState("");
   const [panel, setPanel] = useState(null);
+  const [pendingMutation, setPendingMutation] = useState(null);
   const panelOpenerRef = useRef(null);
+  const mutationPending = Boolean(pendingMutation);
 
-  const invokeTool = (toolName, args) => {
+  const invokeTool = async (toolName, args) => {
     if (readOnly) {
-      setToast?.("Follower mode: market-state mutations are disabled.");
-      return;
+      setToast?.("This GUI session is read-only until it reconnects as the writer.", { destructive: true });
+      return false;
     }
-    if (send?.("tool.invoke", { toolName, args })) {
-      window.setTimeout(() => void refresh(), 700);
+    setPendingMutation({ toolName });
+    try {
+      if (typeof invokeToolRequest === "function") {
+        await invokeToolRequest(toolName, args);
+      } else if (!send?.("tool.invoke", { toolName, args })) {
+        throw new Error("GUI connection is not open.");
+      }
+      await refresh();
+      return true;
+    } catch (mutationError) {
+      const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
+      setToast?.(message, { destructive: true, title: "Tool failed" });
+      return false;
+    } finally {
+      setPendingMutation(null);
     }
   };
 
@@ -118,7 +133,7 @@ export function MarketStatePage({ domain, role, send, navigate, setToast, onOpen
           <PageHeader
             meta={active}
             loading={loading}
-            readOnly={readOnly}
+            readOnly={readOnly || mutationPending}
             onPrimary={primaryAction}
           />
           <PageToolbar
@@ -127,6 +142,7 @@ export function MarketStatePage({ domain, role, send, navigate, setToast, onOpen
             setFilter={setFilter}
             loading={loading}
             readOnly={readOnly}
+            mutationPending={mutationPending}
             canRefreshPrices={canRefreshPrices}
             onRefresh={refresh}
             onRefreshPrices={refreshQuotes}
@@ -136,24 +152,25 @@ export function MarketStatePage({ domain, role, send, navigate, setToast, onOpen
             activeId={activeId}
           />
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
-          {readOnly ? <StatusBand>Follower mode: read-only. Take over the session to mutate saved state; tables, summaries, and details remain available here.</StatusBand> : null}
+          {mutationPending ? <StatusBand>Saving market-state change. Controls will unlock after the server acknowledges the operation.</StatusBand> : null}
+          {readOnly ? <StatusBand>{readOnlyMessage(role)}</StatusBand> : null}
           <div className={cn(
             "grid min-h-0 gap-3",
             panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : "grid-cols-1",
           )}>
             <div className="flex min-w-0 flex-col gap-3">
-              {activeId === "watchlists" ? <Watchlists state={state} filter={filter} readOnly={readOnly} openPanel={openPanel} invokeTool={invokeTool} /> : null}
-              {activeId === "portfolios" ? <Portfolios state={state} filter={filter} setFilter={setFilter} readOnly={readOnly} openPanel={openPanel} invokeTool={invokeTool} navigate={navigate} /> : null}
-              {activeId === "alerts" ? <Alerts state={state} filter={filter} readOnly={readOnly} openPanel={openPanel} invokeTool={invokeTool} /> : null}
-              {activeId === "reports" ? <Reports state={state} filter={filter} readOnly={readOnly} invokeTool={invokeTool} /> : null}
-              {activeId === "predictions" ? <Predictions state={state} filter={filter} readOnly={readOnly} openPanel={openPanel} invokeTool={invokeTool} /> : null}
+              {activeId === "watchlists" ? <Watchlists state={state} filter={filter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
+              {activeId === "portfolios" ? <Portfolios state={state} filter={filter} setFilter={setFilter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} navigate={navigate} /> : null}
+              {activeId === "alerts" ? <Alerts state={state} filter={filter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
+              {activeId === "reports" ? <Reports state={state} filter={filter} readOnly={readOnly || mutationPending} invokeTool={invokeTool} /> : null}
+              {activeId === "predictions" ? <Predictions state={state} filter={filter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
             </div>
             {panel ? (
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
                 <PanelContent
                   panel={panel}
                   state={state}
-                  readOnly={readOnly}
+                  readOnly={readOnly || mutationPending}
                   invokeTool={invokeTool}
                   closePanel={closePanel}
                 />
@@ -196,6 +213,7 @@ function PageToolbar({
   setFilter,
   loading,
   readOnly,
+  mutationPending,
   canRefreshPrices,
   onRefresh,
   onRefreshPrices,
@@ -221,22 +239,22 @@ function PageToolbar({
           Refresh
         </Button>
         {canRefreshPrices ? (
-          <Button variant="bordered" size="sm" prefixIcon={Activity} onClick={onRefreshPrices} disabled={loading || readOnly}>
+          <Button variant="bordered" size="sm" prefixIcon={Activity} onClick={onRefreshPrices} disabled={loading || readOnly || mutationPending}>
             Refresh prices
           </Button>
         ) : null}
         {activeId === "reports" ? (
-          <Button variant="bordered" size="sm" prefixIcon={SlidersHorizontal} disabled={readOnly} onClick={onConfigureReport}>
+          <Button variant="bordered" size="sm" prefixIcon={SlidersHorizontal} disabled={readOnly || mutationPending} onClick={onConfigureReport}>
             Configure schedule
           </Button>
         ) : null}
         {activeId === "alerts" ? (
-          <Button variant="bordered" size="sm" prefixIcon={Activity} disabled={readOnly} onClick={onRunAlertCheck}>
+          <Button variant="bordered" size="sm" prefixIcon={Activity} disabled={readOnly || mutationPending} onClick={onRunAlertCheck}>
             Run check
           </Button>
         ) : null}
         {activeId === "predictions" ? (
-          <Button variant="bordered" size="sm" prefixIcon={Activity} disabled={readOnly} onClick={onCheckTheses}>
+          <Button variant="bordered" size="sm" prefixIcon={Activity} disabled={readOnly || mutationPending} onClick={onCheckTheses}>
             Check theses
           </Button>
         ) : null}
@@ -637,8 +655,8 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
           { name: "notes", label: "Notes", multiline: true, defaultValue: item?.notes },
           { name: "tags", label: "Tags", defaultValue: item?.tags?.join(", ") },
         ]}
-        onSubmit={(values) => {
-          invokeTool("manage_watchlist", {
+        onSubmit={async (values) => {
+          const saved = await invokeTool("manage_watchlist", {
             action: panel.type === "watchlist-add" ? "add" : "update",
             symbol: values.symbol,
             target_price: numberOrUndefined(values.target_price),
@@ -647,7 +665,8 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
             notes: values.notes || undefined,
             tags: parseTags(values.tags),
           });
-          closePanel();
+          if (saved) closePanel();
+          return saved;
         }}
       />
     );
@@ -682,8 +701,8 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
         key={`${panel.type}:${lot?.id ?? "new"}`}
         disabled={readOnly}
         lot={lot}
-        onSubmit={(values) => {
-          invokeTool("track_portfolio", {
+        onSubmit={async (values) => {
+          const saved = await invokeTool("track_portfolio", {
             action: lot ? "update" : "add",
             lot_id: lot?.id,
             symbol: values.symbol,
@@ -691,7 +710,8 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
             avg_cost: Number(values.avg_cost),
             currency: values.currency || undefined,
           });
-          closePanel();
+          if (saved) closePanel();
+          return saved;
         }}
       />
     );
@@ -757,13 +777,13 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
           variant="brand"
           size="sm"
           disabled={readOnly}
-          onClick={() => {
-            invokeTool("daily_watchlist_report", {
+          onClick={async () => {
+            const saved = await invokeTool("daily_watchlist_report", {
               action: "configure",
               timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               local_time: "08:00",
             });
-            closePanel();
+            if (saved) closePanel();
           }}
         >
           Configure 08:00
@@ -785,8 +805,8 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
           { name: "target_price", label: "Target", type: "number" },
           { name: "timeframe_days", label: "Days", type: "number" },
         ]}
-        onSubmit={(values) => {
-          invokeTool("track_prediction", {
+        onSubmit={async (values) => {
+          const saved = await invokeTool("track_prediction", {
             action: "record",
             symbol: values.symbol,
             direction: values.direction || "bullish",
@@ -795,7 +815,8 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
             target_price: numberOrUndefined(values.target_price),
             timeframe_days: numberOrUndefined(values.timeframe_days),
           });
-          closePanel();
+          if (saved) closePanel();
+          return saved;
         }}
       />
     );
@@ -861,10 +882,11 @@ function SymbolActionPanel({ title, fields, disabled, initialSymbol = "", onSubm
   const [selected, setSelected] = useState(initialSymbol);
   const resolvedSymbol = selected || initialSymbol;
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol) return;
-    onSubmit({ ...values, symbol: resolvedSymbol });
+    const saved = await onSubmit({ ...values, symbol: resolvedSymbol });
+    if (saved === false) return;
     setValues(Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])));
     setQuery(initialSymbol);
     setSelected(initialSymbol);
@@ -925,10 +947,10 @@ function HoldingForm({ disabled, lot, onSubmit }) {
   const [selected, setSelected] = useState(lot?.symbol ?? "");
   const resolvedSymbol = selected || lot?.symbol;
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol || !values.shares || !values.avg_cost) return;
-    onSubmit({ ...values, symbol: resolvedSymbol });
+    await onSubmit({ ...values, symbol: resolvedSymbol });
   };
 
   return (
@@ -951,9 +973,23 @@ function HoldingForm({ disabled, lot, onSubmit }) {
   );
 }
 
-function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
+export function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
+  const inputId = useId();
+  const listboxId = useId();
   const [candidates, setCandidates] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const visibleCandidates = query.trim().length >= 2 && !selected ? candidates : [];
+  const activeCandidate = activeIndex >= 0 ? visibleCandidates[activeIndex] : null;
+  const activeOptionId = activeCandidate
+    ? `${listboxId}-option-${activeIndex}`
+    : undefined;
+
+  const selectCandidate = (candidate) => {
+    onSelectedChange(candidate.symbol);
+    onQueryChange(`${candidate.symbol} - ${candidate.name || candidate.quoteType}`);
+    setCandidates([]);
+    setActiveIndex(-1);
+  };
 
   useEffect(() => {
     if (query.trim().length < 2 || selected) return undefined;
@@ -971,32 +1007,75 @@ function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelecte
     };
   }, [query, selected]);
 
+  useEffect(() => {
+    if (visibleCandidates.length === 0) {
+      setActiveIndex(-1);
+    } else if (activeIndex >= visibleCandidates.length) {
+      setActiveIndex(visibleCandidates.length - 1);
+    }
+  }, [activeIndex, visibleCandidates.length]);
+
   return (
     <div className="relative">
+      <label className="sr-only" htmlFor={inputId}>Search ticker or company</label>
       <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" />
       <Input
+        id={inputId}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={visibleCandidates.length > 0}
+        aria-controls={listboxId}
+        aria-activedescendant={activeOptionId}
         className="pl-9"
         placeholder="Search ticker or company"
         value={query}
         disabled={disabled}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            if (visibleCandidates.length === 0) return;
+            setActiveIndex((index) => (index + 1) % visibleCandidates.length);
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            if (visibleCandidates.length === 0) return;
+            setActiveIndex((index) => (index <= 0 ? visibleCandidates.length - 1 : index - 1));
+          } else if (event.key === "Enter" && activeCandidate) {
+            event.preventDefault();
+            selectCandidate(activeCandidate);
+          } else if (event.key === "Escape" && visibleCandidates.length > 0) {
+            event.preventDefault();
+            setCandidates([]);
+            setActiveIndex(-1);
+          }
+        }}
         onChange={(event) => {
           setCandidates([]);
+          setActiveIndex(-1);
           onQueryChange(event.target.value);
           onSelectedChange("");
         }}
       />
       {visibleCandidates.length ? (
-        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-subtle-md">
-          {visibleCandidates.map((candidate) => (
+        <div
+          id={listboxId}
+          role="listbox"
+          aria-label="Ticker suggestions"
+          className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-subtle-md"
+        >
+          {visibleCandidates.map((candidate, index) => (
             <button
               key={`${candidate.provider}:${candidate.symbol}:${candidate.exchange}`}
+              id={`${listboxId}-option-${index}`}
               type="button"
-              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-secondary"
-              onClick={() => {
-                onSelectedChange(candidate.symbol);
-                onQueryChange(`${candidate.symbol} - ${candidate.name || candidate.quoteType}`);
-                setCandidates([]);
-              }}
+              role="option"
+              aria-selected={index === activeIndex}
+              className={cn(
+                "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-secondary",
+                index === activeIndex && "bg-secondary",
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => selectCandidate(candidate)}
             >
               <span className="font-medium text-foreground">{candidate.symbol}</span>
               <span className="truncate text-muted-foreground">{candidate.name || candidate.quoteType}</span>
@@ -1030,18 +1109,20 @@ function AlertCreateForm({ disabled, invokeTool, onSaved }) {
   return (
     <form
       className="space-y-3"
-      onSubmit={(event) => {
+      onSubmit={async (event) => {
         event.preventDefault();
         if (!resolvedSymbol || (needsThreshold && !threshold)) return;
-        invokeTool("manage_alerts", {
+        const saved = await invokeTool("manage_alerts", {
           action: condition,
           symbol: resolvedSymbol,
-        threshold: supportsThreshold && threshold ? Number(threshold) : undefined,
+          threshold: supportsThreshold && threshold ? Number(threshold) : undefined,
           period: needsPeriod ? Number(period) : undefined,
           cooldown_seconds: numberOrUndefined(cooldown),
         });
-        setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
-        onSaved?.();
+        if (saved) {
+          setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
+          onSaved?.();
+        }
       }}
     >
       <p className="text-xs text-muted-foreground">Rule builder uses existing manage_alerts inputs and existing alert lifecycle semantics.</p>
@@ -1222,6 +1303,12 @@ function StatusBand({ tone = "default", children }) {
       {children}
     </div>
   );
+}
+
+function readOnlyMessage(role) {
+  if (role === "connecting") return "Connecting to the GUI session: read-only until the writer connection is ready.";
+  if (role === "disconnected") return "Disconnected from the GUI session: read-only until the writer reconnects.";
+  return "Follower mode: read-only. Take over the session to mutate saved state; tables, summaries, and details remain available here.";
 }
 
 export function buildWatchlistRowActions(item, invokeTool) {

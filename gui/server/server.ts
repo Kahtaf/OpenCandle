@@ -258,7 +258,7 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         await handleAskUserCancel(String(data.id ?? ""));
         break;
       case "tool.invoke":
-        await handleToolInvoke(String(data.toolName ?? ""), asRecord(data.args));
+        await handleToolInvokeMessage(client, data);
         break;
       case "tool.enabled":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
@@ -486,6 +486,35 @@ async function handleToolInvoke(toolName: string, args: Record<string, unknown>)
   if (!tool) throw new Error(`Unknown tool: ${toolName}`);
   await invokeToolFromUi(sessionManager, tool, args, "ui");
   broadcastState();
+}
+
+async function handleToolInvokeMessage(client: WsClient, data: Record<string, unknown>): Promise<void> {
+  const requestId = typeof data.requestId === "string" ? data.requestId : "";
+  const toolName = String(data.toolName ?? "");
+  try {
+    await handleToolInvoke(toolName, asRecord(data.args));
+    if (requestId) {
+      client.send({
+        type: "tool.invoke.result",
+        requestId,
+        ok: true,
+        toolName,
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (requestId) {
+      client.send({
+        type: "tool.invoke.result",
+        requestId,
+        ok: false,
+        toolName,
+        error: { message },
+      });
+      return;
+    }
+    throw error;
+  }
 }
 
 function sendBoot(client: WsClient): void {
