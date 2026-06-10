@@ -1,3 +1,6 @@
+import type { WorkflowDefinition } from "../runtime/prompt-step.js";
+import { promptStep } from "../runtime/prompt-step.js";
+
 export type AnalystRole =
   | "valuation"
   | "momentum"
@@ -174,30 +177,8 @@ export interface ComprehensiveAnalysisOptions {
 }
 
 export function getComprehensiveAnalysisPrompts(symbol: string, options?: ComprehensiveAnalysisOptions): string[] {
-  const debate = options?.debate ?? true;
-  const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
-  const prompts = [getInitialAnalysisPrompt(symbol)];
-
-  for (const role of roles) {
-    prompts.push(ANALYST_PROMPTS[role](symbol));
-  }
-
-  if (debate) {
-    prompts.push(buildBullPrompt(symbol));
-    prompts.push(buildBearPrompt(symbol));
-    prompts.push(buildRebuttalPrompt(symbol));
-    prompts.push(buildSynthesisPrompt(symbol));
-    prompts.push(VALIDATION_PROMPT_DEBATE(symbol));
-  } else {
-    prompts.push(SYNTHESIS_PROMPT_NO_DEBATE(symbol));
-    prompts.push(VALIDATION_PROMPT_NO_DEBATE(symbol));
-  }
-
-  return prompts;
+  return buildComprehensiveAnalysisDefinition(symbol, options).steps.map((step) => step.prompt);
 }
-
-import type { WorkflowDefinition } from "../runtime/prompt-step.js";
-import { promptStep } from "../runtime/prompt-step.js";
 
 export function buildComprehensiveAnalysisDefinition(symbol: string, options?: ComprehensiveAnalysisOptions): WorkflowDefinition {
   const debate = options?.debate ?? true;

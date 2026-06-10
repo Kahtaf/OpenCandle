@@ -1,6 +1,5 @@
 import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
-import type { WorkflowPlan } from "./types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
 
@@ -115,13 +114,4 @@ function describeDteTarget(dteTarget: string): string {
   const plus = dteTarget.match(/^(\d+)_plus_days$/);
   if (plus) return `${plus[1]}+ day horizon`;
   return `${dteTarget} horizon`;
-}
-
-/** @deprecated Use buildOptionsScreenerWorkflowDefinition instead */
-export function buildOptionsScreenerWorkflow(resolution: SlotResolution<OptionsScreenerSlots>): WorkflowPlan {
-  const def = buildOptionsScreenerWorkflowDefinition(resolution);
-  return {
-    initialPrompt: def.steps[0].prompt,
-    followUps: def.steps.slice(1).map((s) => s.prompt),
-  };
 }

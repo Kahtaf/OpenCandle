@@ -1,6 +1,5 @@
 import type { PortfolioSlots, SlotResolution } from "../routing/types.js";
 import { buildPortfolioPrompt } from "../prompts/workflow-prompts.js";
-import type { WorkflowPlan } from "./types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
 
@@ -43,14 +42,5 @@ Length constraints:
         expectedOutputs: ["portfolio_summary"],
       }),
     ],
-  };
-}
-
-/** @deprecated Use buildPortfolioWorkflowDefinition instead */
-export function buildPortfolioWorkflow(resolution: SlotResolution<PortfolioSlots>): WorkflowPlan {
-  const def = buildPortfolioWorkflowDefinition(resolution);
-  return {
-    initialPrompt: def.steps[0].prompt,
-    followUps: def.steps.slice(1).map((s) => s.prompt),
   };
 }

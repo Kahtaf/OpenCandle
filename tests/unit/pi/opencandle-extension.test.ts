@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestrator.js";
-import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
+import {
+  buildOptionsScreenerWorkflowDefinition,
+  buildPortfolioWorkflowDefinition,
+  buildCompareAssetsWorkflowDefinition,
+} from "../../../src/workflows/index.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { resetConfigCache } from "../../../src/config.js";
@@ -85,6 +89,10 @@ function exactSymbolSearch(validSymbols: string[]) {
           score: 1,
         }]
       : [];
+}
+
+function firstWorkflowPrompt(definition: { steps: { prompt: string }[] }): string {
+  return definition.steps[0]?.prompt ?? "";
 }
 
 describe("opencandle extension", () => {
@@ -217,15 +225,15 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const workflow = buildPortfolioWorkflow(resolvePortfolioSlots({
+    const prompt = firstWorkflowPrompt(buildPortfolioWorkflowDefinition(resolvePortfolioSlots({
       symbols: [],
       budget: 10_000,
       riskProfile: "balanced",
       assetScope: "etf_focused",
-    }));
+    })));
 
-    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: prompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("routes options-screening prompts through the deterministic workflow", async () => {
@@ -243,14 +251,14 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const workflow = buildOptionsScreenerWorkflow(resolveOptionsScreenerSlots({
+    const prompt = firstWorkflowPrompt(buildOptionsScreenerWorkflowDefinition(resolveOptionsScreenerSlots({
       symbols: ["AAPL"],
       direction: "bullish",
       dteHint: "30 to 45 DTE",
-    }));
+    })));
 
-    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: prompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("routes compare prompts through the deterministic workflow", async () => {
@@ -268,15 +276,15 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const workflow = buildCompareAssetsWorkflow({
+    const prompt = firstWorkflowPrompt(buildCompareAssetsWorkflowDefinition({
       resolved: { symbols: ["AAPL", "MSFT"] },
       sources: { symbols: "user" },
       defaultsUsed: [],
       missingRequired: [],
-    });
+    }));
 
-    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: prompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("records a per-turn disclaimer entry (non-LLM-context) on final assistant turns", async () => {
