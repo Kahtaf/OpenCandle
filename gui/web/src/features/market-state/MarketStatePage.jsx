@@ -979,9 +979,10 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
   const [candidates, setCandidates] = useState([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const visibleCandidates = query.trim().length >= 2 && !selected ? candidates : [];
-  const activeCandidate = activeIndex >= 0 ? visibleCandidates[activeIndex] : null;
+  const clampedActiveIndex = clampComboboxActiveIndex(activeIndex, visibleCandidates.length);
+  const activeCandidate = clampedActiveIndex >= 0 ? visibleCandidates[clampedActiveIndex] : null;
   const activeOptionId = activeCandidate
-    ? `${listboxId}-option-${activeIndex}`
+    ? `${listboxId}-option-${clampedActiveIndex}`
     : undefined;
 
   const selectCandidate = (candidate) => {
@@ -1007,14 +1008,6 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
     };
   }, [query, selected]);
 
-  useEffect(() => {
-    if (visibleCandidates.length === 0) {
-      setActiveIndex(-1);
-    } else if (activeIndex >= visibleCandidates.length) {
-      setActiveIndex(visibleCandidates.length - 1);
-    }
-  }, [activeIndex, visibleCandidates.length]);
-
   return (
     <div className="relative">
       <label className="sr-only" htmlFor={inputId}>Search ticker or company</label>
@@ -1034,11 +1027,11 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
           if (event.key === "ArrowDown") {
             event.preventDefault();
             if (visibleCandidates.length === 0) return;
-            setActiveIndex((index) => (index + 1) % visibleCandidates.length);
+            setActiveIndex((index) => nextComboboxActiveIndex(index, visibleCandidates.length, "next"));
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
             if (visibleCandidates.length === 0) return;
-            setActiveIndex((index) => (index <= 0 ? visibleCandidates.length - 1 : index - 1));
+            setActiveIndex((index) => nextComboboxActiveIndex(index, visibleCandidates.length, "previous"));
           } else if (event.key === "Enter" && activeCandidate) {
             event.preventDefault();
             selectCandidate(activeCandidate);
@@ -1068,10 +1061,10 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
               id={`${listboxId}-option-${index}`}
               type="button"
               role="option"
-              aria-selected={index === activeIndex}
+              aria-selected={index === clampedActiveIndex}
               className={cn(
                 "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-secondary",
-                index === activeIndex && "bg-secondary",
+                index === clampedActiveIndex && "bg-secondary",
               )}
               onMouseDown={(event) => event.preventDefault()}
               onMouseEnter={() => setActiveIndex(index)}
@@ -1085,6 +1078,19 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
       ) : null}
     </div>
   );
+}
+
+export function clampComboboxActiveIndex(activeIndex, candidateCount) {
+  if (candidateCount <= 0) return -1;
+  if (activeIndex < 0) return -1;
+  return Math.min(activeIndex, candidateCount - 1);
+}
+
+export function nextComboboxActiveIndex(activeIndex, candidateCount, direction) {
+  if (candidateCount <= 0) return -1;
+  const current = clampComboboxActiveIndex(activeIndex, candidateCount);
+  if (direction === "next") return (current + 1) % candidateCount;
+  return current <= 0 ? candidateCount - 1 : current - 1;
 }
 
 function AlertCreateForm({ disabled, invokeTool, onSaved }) {

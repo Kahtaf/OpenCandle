@@ -3,7 +3,9 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildWatchlistRowActions,
+  clampComboboxActiveIndex,
   MarketStatePage,
+  nextComboboxActiveIndex,
   SymbolSearchInput,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
@@ -129,6 +131,17 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('aria-autocomplete="list"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-controls=');
+  });
+
+  it("derives combobox active index without prop-change state syncing", () => {
+    expect(clampComboboxActiveIndex(3, 2)).toBe(1);
+    expect(clampComboboxActiveIndex(-1, 2)).toBe(-1);
+    expect(clampComboboxActiveIndex(0, 0)).toBe(-1);
+
+    expect(nextComboboxActiveIndex(-1, 3, "next")).toBe(0);
+    expect(nextComboboxActiveIndex(2, 3, "next")).toBe(0);
+    expect(nextComboboxActiveIndex(-1, 3, "previous")).toBe(2);
+    expect(nextComboboxActiveIndex(0, 3, "previous")).toBe(2);
   });
 
   it("does not create a watchlist alert without an explicit target", () => {
