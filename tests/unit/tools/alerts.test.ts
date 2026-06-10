@@ -424,6 +424,20 @@ describe("alertsTool", () => {
     });
   });
 
+  it("rejects fractional SMA-cross lookback periods before storing a rule", async () => {
+    await expect(alertsTool.execute("test", {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 2.5,
+      slow_period: 5,
+    })).rejects.toThrow("fast_period and slow_period must be whole-number lookback periods");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
+  });
+
   it("creates and manually checks volume-spike alerts", async () => {
     const created = await alertsTool.execute("test", {
       action: "create_volume_spike",

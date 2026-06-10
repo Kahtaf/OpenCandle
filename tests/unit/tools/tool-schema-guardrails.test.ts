@@ -3,6 +3,7 @@ import { Value } from "@sinclair/typebox/value";
 import { stockHistoryTool } from "../../../src/tools/market/stock-history.js";
 import { fredDataTool } from "../../../src/tools/macro/fred-data.js";
 import { optionChainTool } from "../../../src/tools/options/option-chain.js";
+import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { predictionsTool } from "../../../src/tools/portfolio/predictions.js";
 
@@ -66,6 +67,21 @@ describe("tool schema guardrails", () => {
       conviction: 5,
       entry_price: 100,
       timeframe_days: 30,
+    })).toBe(true);
+  });
+
+  it("requires integer SMA-cross alert lookback periods", () => {
+    expect(Value.Check(alertsTool.parameters, {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 2.5,
+      slow_period: 5,
+    })).toBe(false);
+    expect(Value.Check(alertsTool.parameters, {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 2,
+      slow_period: 5,
     })).toBe(true);
   });
 });

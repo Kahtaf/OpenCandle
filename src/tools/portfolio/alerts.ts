@@ -56,8 +56,8 @@ const params = Type.Object({
   symbol: Type.Optional(Type.String({ description: "Ticker symbol for create actions" })),
   threshold: Type.Optional(Type.Number({ description: "Price or indicator threshold for create actions" })),
   period: Type.Optional(Type.Number({ description: "Indicator lookback period for SMA/RSI alerts" })),
-  fast_period: Type.Optional(Type.Number({ description: "Fast SMA lookback period for SMA-cross alerts. Default: 50" })),
-  slow_period: Type.Optional(Type.Number({ description: "Slow SMA lookback period for SMA-cross alerts. Default: 200" })),
+  fast_period: Type.Optional(Type.Integer({ minimum: 1, description: "Fast SMA lookback period for SMA-cross alerts. Default: 50" })),
+  slow_period: Type.Optional(Type.Integer({ minimum: 1, description: "Slow SMA lookback period for SMA-cross alerts. Default: 200" })),
   cooldown_seconds: Type.Optional(
     Type.Number({ description: "Cooldown between repeated trigger events. Default: 3600" }),
   ),
@@ -221,6 +221,9 @@ export const alertsTool: AgentTool<typeof params> = {
         }
         const fastPeriod = args.fast_period ?? 50;
         const slowPeriod = args.slow_period ?? 200;
+        if (!Number.isInteger(fastPeriod) || !Number.isInteger(slowPeriod)) {
+          throw new Error("fast_period and slow_period must be whole-number lookback periods for SMA-cross alert actions.");
+        }
         if (fastPeriod <= 0 || slowPeriod <= 0) {
           throw new Error("fast_period and slow_period must be greater than 0 for SMA-cross alert actions.");
         }
