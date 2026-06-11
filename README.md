@@ -166,11 +166,17 @@ src/
 |-- tools/        Tool implementations by domain
 |-- infra/        Cache, rate limiter, HTTP, browser, paths
 |-- routing/      Request understanding, entity extraction, slot resolution
-|-- workflows/    Multi-step workflow builders
+|-- workflows/    WorkflowDefinition builders
+|-- runtime/      Session coordinator, workflow runner, runtime context
+|-- market-state/ Durable watchlists, portfolios, predictions, alerts, reports
 |-- memory/       SQLite-backed state and retrieval
+|-- sentiment/    Cross-source sentiment pipeline, scoring, adapters, trends
 |-- analysts/     Multi-analyst orchestration
 |-- pi/           Pi integration and session wiring
-`-- index.ts      Public exports
+|-- cli.ts        CLI entry point
+|-- monitor.ts    Local automation heartbeat command
+|-- tool-kit.ts   Public add-on tool helpers
+`-- index.ts      Public package exports
 ```
 
 Package exports:

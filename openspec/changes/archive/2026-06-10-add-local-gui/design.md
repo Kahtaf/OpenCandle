@@ -8,7 +8,7 @@ This document captures the architectural decisions where multiple paths existed 
 
 The original design assumed older Pi APIs and package names. The implemented v1 now uses the current installed Pi packages:
 
-- A local browser app served by `gui/server`; the current implementation is the React/Tailwind revamp captured in `openspec/changes/revamp-local-gui/`.
+- A local browser app served by `gui/server`; the current implementation is the React/Tailwind revamp captured in `openspec/changes/archive/2026-06-10-revamp-local-gui/`.
 - `SessionManager.list(cwd)` for session listing.
 - Synthetic assistant `toolCall` messages followed by `toolResult` messages for UI-driven tool execution.
 - File/session re-read as the follower fallback. No session append event API is required for v1.

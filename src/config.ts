@@ -22,9 +22,9 @@ export interface Config {
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
   /**
-   * Intent-router mode. `"llm"` (default) runs the LLM router ahead of prompt
-   * assembly. `"rules"` is the explicit legacy rule-router rollback path
-   * (`classifyIntent` + `extractPreferences`). Controlled by
+   * Intent-router mode. `"rules"` (default) uses the deterministic rule
+   * router (`classifyIntent` + `extractPreferences`). `"llm"` opts into the
+   * LLM router ahead of prompt assembly. Controlled by
    * `OPENCANDLE_ROUTER_MODE`.
    */
   routerMode: RouterMode;

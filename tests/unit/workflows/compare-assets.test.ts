@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCompareAssetsWorkflow } from "../../../src/workflows/compare-assets.js";
+import { buildCompareAssetsWorkflowDefinition } from "../../../src/workflows/compare-assets.js";
 import type { CompareAssetsSlots, SlotResolution } from "../../../src/routing/types.js";
 
 function makeResolution(
@@ -22,134 +22,141 @@ function makeResolution(
   };
 }
 
-describe("buildCompareAssetsWorkflow", () => {
+function initialPrompt(resolution = makeResolution()): string {
+  return buildCompareAssetsWorkflowDefinition(resolution).steps[0].prompt;
+}
+
+function followUpPrompt(resolution = makeResolution()): string {
+  return buildCompareAssetsWorkflowDefinition(resolution).steps[1].prompt;
+}
+
+describe("buildCompareAssetsWorkflowDefinition", () => {
   it("includes compare tool instructions in the initial prompt", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution());
-    expect(workflow.initialPrompt).toContain("compare_companies");
-    expect(workflow.initialPrompt).toContain("AAPL");
-    expect(workflow.initialPrompt).toContain("MSFT");
+    const prompt = initialPrompt();
+    expect(prompt).toContain("compare_companies");
+    expect(prompt).toContain("AAPL");
+    expect(prompt).toContain("MSFT");
   });
 
   it("includes fallback guidance for unavailable fundamentals", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution());
-    expect(workflow.followUps[0]).toContain("unavailable fundamentals");
-    expect(workflow.followUps[0]).toContain("price, technical, and risk data");
+    expect(followUpPrompt()).toContain("unavailable fundamentals");
+    expect(followUpPrompt()).toContain("price, technical, and risk data");
   });
 
   it("adds sentiment tool instructions when the comparison asks for sentiment", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({ metrics: ["sentiment"] }));
-    expect(workflow.initialPrompt).toContain("get_sentiment_summary");
-    expect(workflow.initialPrompt).toContain("sentiment");
-    expect(workflow.followUps[0]).toContain("sentiment");
+    const resolution = makeResolution({ metrics: ["sentiment"] });
+    expect(initialPrompt(resolution)).toContain("get_sentiment_summary");
+    expect(initialPrompt(resolution)).toContain("sentiment");
+    expect(followUpPrompt(resolution)).toContain("sentiment");
   });
 
   it("adds macro hedge synthesis guidance when the comparison asks for hedging", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["BTC", "GLD"],
       timeHorizon: "6mo",
       metrics: ["macro_hedge"],
-    }));
+    });
 
-    expect(workflow.initialPrompt).toContain("macro hedge");
-    expect(workflow.initialPrompt).toContain("real yields");
-    expect(workflow.followUps[0]).toContain("hedge role");
-    expect(workflow.followUps[0]).toContain("conditions under which");
+    expect(initialPrompt(resolution)).toContain("macro hedge");
+    expect(initialPrompt(resolution)).toContain("real yields");
+    expect(followUpPrompt(resolution)).toContain("hedge role");
+    expect(followUpPrompt(resolution)).toContain("conditions under which");
   });
 
   it("keeps macro hedge follow-up guidance generic across symbols", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const followUp = followUpPrompt(makeResolution({
       symbols: ["TLT", "IEF"],
       timeHorizon: "6mo",
       metrics: ["macro_hedge"],
     }));
 
-    expect(workflow.followUps[0]).toContain("each asset");
-    expect(workflow.followUps[0]).not.toContain("BTC");
-    expect(workflow.followUps[0]).not.toContain("GLD");
+    expect(followUp).toContain("each asset");
+    expect(followUp).not.toContain("BTC");
+    expect(followUp).not.toContain("GLD");
   });
 
   it("adds rate-scenario synthesis guidance for interest-rate comparisons", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["SPY", "QQQ"],
       timeHorizon: "12mo",
       metrics: ["interest_rates"],
-    }));
+    });
 
-    expect(workflow.initialPrompt).toContain("interest-rate comparison guidance");
-    expect(workflow.initialPrompt).toContain("Fed funds backdrop");
-    expect(workflow.followUps[0]).toContain("benign falling rates");
-    expect(workflow.followUps[0]).toContain("recessionary cuts");
-    expect(workflow.followUps[0]).toContain("sector-exposure risk");
-    expect(workflow.followUps[0]).toContain("historical/current data");
+    expect(initialPrompt(resolution)).toContain("interest-rate comparison guidance");
+    expect(initialPrompt(resolution)).toContain("Fed funds backdrop");
+    expect(followUpPrompt(resolution)).toContain("benign falling rates");
+    expect(followUpPrompt(resolution)).toContain("recessionary cuts");
+    expect(followUpPrompt(resolution)).toContain("sector-exposure risk");
+    expect(followUpPrompt(resolution)).toContain("historical/current data");
   });
 
   it("keeps ETF overlap synthesis focused on holdings evidence instead of generic risk ranking", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["VOO", "QQQ", "SCHD"],
       metrics: ["overlap"],
-    }));
+    });
 
-    expect(workflow.initialPrompt).toContain("analyze_holdings_overlap");
-    expect(workflow.followUps[0]).toContain("holdings-overlap");
-    expect(workflow.followUps[0]).toContain("diversification implication");
-    expect(workflow.followUps[0]).not.toContain("price, technical, and risk data");
-    expect(workflow.followUps[0]).not.toContain("which asset looks strongest right now");
+    expect(initialPrompt(resolution)).toContain("analyze_holdings_overlap");
+    expect(followUpPrompt(resolution)).toContain("holdings-overlap");
+    expect(followUpPrompt(resolution)).toContain("diversification implication");
+    expect(followUpPrompt(resolution)).not.toContain("price, technical, and risk data");
+    expect(followUpPrompt(resolution)).not.toContain("which asset looks strongest right now");
   });
 
   it("prompts long-horizon fund allocation comparisons to check holdings overlap", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["VYM", "SCHD", "VOO", "QQQ"],
       timeHorizon: "long",
       budget: 5000,
-    }));
+    });
 
-    expect(workflow.initialPrompt).toContain("Budget: $5,000");
-    expect(workflow.initialPrompt).toContain("analyze_holdings_overlap");
-    expect(workflow.initialPrompt).toContain("ETFs, funds, or index products");
-    expect(workflow.initialPrompt).toContain("expense ratios");
-    expect(workflow.initialPrompt).toContain("dividend yields");
-    expect(workflow.initialPrompt).toContain("taxable account");
-    expect(workflow.initialPrompt).toContain("fund role");
-    expect(workflow.initialPrompt).toContain("long-horizon fund comparison table");
-    expect(workflow.initialPrompt).toContain("do not let RSI or short-term momentum dominate");
-    expect(workflow.followUps[0]).toContain("holdings-overlap");
-    expect(workflow.followUps[0]).toContain("long horizon");
-    expect(workflow.followUps[0]).not.toContain("right now");
+    expect(initialPrompt(resolution)).toContain("Budget: $5,000");
+    expect(initialPrompt(resolution)).toContain("analyze_holdings_overlap");
+    expect(initialPrompt(resolution)).toContain("ETFs, funds, or index products");
+    expect(initialPrompt(resolution)).toContain("expense ratios");
+    expect(initialPrompt(resolution)).toContain("dividend yields");
+    expect(initialPrompt(resolution)).toContain("taxable account");
+    expect(initialPrompt(resolution)).toContain("fund role");
+    expect(initialPrompt(resolution)).toContain("long-horizon fund comparison table");
+    expect(initialPrompt(resolution)).toContain("do not let RSI or short-term momentum dominate");
+    expect(followUpPrompt(resolution)).toContain("holdings-overlap");
+    expect(followUpPrompt(resolution)).toContain("long horizon");
+    expect(followUpPrompt(resolution)).not.toContain("right now");
   });
 
   it("does not apply fund-overlap guidance to long-horizon stock baskets", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["AAPL", "MSFT", "NVDA"],
       timeHorizon: "long",
-    }));
+    });
 
-    expect(workflow.initialPrompt).not.toContain("analyze_holdings_overlap");
-    expect(workflow.initialPrompt).not.toContain("ETF/fund overlap check");
-    expect(workflow.followUps[0]).not.toContain("holdings-overlap");
-    expect(workflow.followUps[0]).toContain("long horizon");
+    expect(initialPrompt(resolution)).not.toContain("analyze_holdings_overlap");
+    expect(initialPrompt(resolution)).not.toContain("ETF/fund overlap check");
+    expect(followUpPrompt(resolution)).not.toContain("holdings-overlap");
+    expect(followUpPrompt(resolution)).toContain("long horizon");
   });
 
   it("does not apply long-horizon fund guidance to short-horizon ETF comparisons", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["SPY", "QQQ"],
       timeHorizon: "6mo",
-    }));
+    });
 
-    expect(workflow.initialPrompt).not.toContain("long-horizon fund comparison table");
-    expect(workflow.initialPrompt).not.toContain("analyze_holdings_overlap");
-    expect(workflow.followUps[0]).not.toContain("holdings-overlap");
-    expect(workflow.followUps[0]).toContain("6mo horizon");
+    expect(initialPrompt(resolution)).not.toContain("long-horizon fund comparison table");
+    expect(initialPrompt(resolution)).not.toContain("analyze_holdings_overlap");
+    expect(followUpPrompt(resolution)).not.toContain("holdings-overlap");
+    expect(followUpPrompt(resolution)).toContain("6mo horizon");
   });
 
   it("uses explicit ETF scope for long-horizon funds outside the common-symbol classifier", () => {
-    const workflow = buildCompareAssetsWorkflow(makeResolution({
+    const resolution = makeResolution({
       symbols: ["VGT", "VOO"],
       timeHorizon: "5_years",
       assetScope: "etf_focused",
-    }));
+    });
 
-    expect(workflow.initialPrompt).toContain("analyze_holdings_overlap");
-    expect(workflow.initialPrompt).toContain("asset scope (etf_focused)");
-    expect(workflow.followUps[0]).toContain("holdings-overlap");
+    expect(initialPrompt(resolution)).toContain("analyze_holdings_overlap");
+    expect(initialPrompt(resolution)).toContain("asset scope (etf_focused)");
+    expect(followUpPrompt(resolution)).toContain("holdings-overlap");
   });
 });
