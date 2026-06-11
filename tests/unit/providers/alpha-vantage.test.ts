@@ -200,6 +200,27 @@ describe("alpha-vantage provider", () => {
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
 
+    it("returns only current-year bars for ytd ranges", async () => {
+      const bar = (close: string) => ({
+        "1. open": close, "2. high": close, "3. low": close, "4. close": close, "5. volume": "1000",
+      });
+      const currentYear = new Date().getFullYear();
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          "Time Series (Daily)": {
+            [`${currentYear - 1}-12-30`]: bar("100"),
+            [`${currentYear - 1}-12-31`]: bar("101"),
+            [`${currentYear}-01-02`]: bar("102"),
+            [`${currentYear}-01-05`]: bar("103"),
+          },
+        }),
+      });
+
+      const bars = await getDailyHistory("YTDTEST", "test-key", "ytd");
+      expect(bars.map((b) => b.date)).toEqual([`${currentYear}-01-02`, `${currentYear}-01-05`]);
+    });
+
     it("requests full daily history for 10y fallback ranges", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,

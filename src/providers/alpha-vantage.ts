@@ -274,7 +274,7 @@ export async function getDailyHistory(
       throw new Error(`Alpha Vantage: No daily history for ${symbol}`);
     }
 
-    const ohlcv: OHLCV[] = Object.entries(timeSeries)
+    const sorted = Object.entries(timeSeries)
       .map(([date, bar]) => ({
         date,
         open: parseFloat(bar["1. open"]) || 0,
@@ -283,8 +283,13 @@ export async function getDailyHistory(
         close: parseFloat(bar["4. close"]) || 0,
         volume: parseInt(bar["5. volume"], 10) || 0,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-daysNeeded);
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Count-based slicing for ytd is only an estimate (ignores holidays and
+    // the starting weekday) and can leak prior-year bars; filter by date.
+    const ohlcv: OHLCV[] = range === "ytd"
+      ? sorted.filter((bar) => bar.date >= `${new Date().getFullYear()}-01-01`)
+      : sorted.slice(-daysNeeded);
 
     cache.set(cacheKey, ohlcv, TTL.HISTORY);
     return ohlcv;
