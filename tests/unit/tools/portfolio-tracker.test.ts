@@ -24,7 +24,6 @@ describe("portfolioTrackerTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cache.clear();
-    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-portfolio-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol.toUpperCase(), 300));
@@ -39,7 +38,6 @@ describe("portfolioTrackerTool", () => {
     }
     rmSync(openCandleHome, { recursive: true, force: true });
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -138,8 +136,10 @@ describe("portfolioTrackerTool", () => {
       avg_cost: 250,
     });
     cache.set("test-stale-portfolio-quote", quote("VTI", 300), -1);
-    cache.getStale("test-stale-portfolio-quote", 60_000);
-    vi.mocked(getQuote).mockResolvedValue(quote("VTI", 300));
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-portfolio-quote", 60_000);
+      return quote("VTI", 300);
+    });
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 

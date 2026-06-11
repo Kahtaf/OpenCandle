@@ -14,7 +14,7 @@ import { runOpenCandleSetup } from "../pi/setup.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { WorkflowRunner } from "./workflow-runner.js";
-import { setRunContext, clearRunContext } from "./run-context.js";
+import { setRunContext, clearRunContext, type RunContextToken } from "./run-context.js";
 import { PromptContextBuilder, type FallbackContext } from "../prompts/context-builder.js";
 import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
@@ -29,6 +29,11 @@ import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
+
+interface ActiveWorkflowRunRef {
+  active: boolean;
+  contextToken: RunContextToken;
+}
 
 function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
   if (typeof raw !== "string" || raw.length === 0) return undefined;
@@ -104,6 +109,7 @@ export class SessionCoordinator {
   private eventLogger: WorkflowEventLogger | null = null;
   private runner: WorkflowRunner;
   private providerTracker: ProviderTracker;
+  private activeWorkflowRunRef: ActiveWorkflowRunRef | null = null;
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
@@ -402,7 +408,10 @@ export class SessionCoordinator {
     if (definition.steps.length === 0) return;
 
     const runner = this.runner;
-    const runRef = { active: true };
+    if (this.activeWorkflowRunRef) {
+      this.activeWorkflowRunRef.active = false;
+    }
+    runner.cancel();
 
     const [firstStep] = definition.steps;
 
@@ -417,7 +426,9 @@ export class SessionCoordinator {
     }
 
     // Make the run's ProviderTracker accessible to tools during execution
-    setRunContext({ providerTracker: this.providerTracker });
+    const contextToken = setRunContext({ providerTracker: this.providerTracker });
+    const runRef: ActiveWorkflowRunRef = { active: true, contextToken };
+    this.activeWorkflowRunRef = runRef;
 
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
@@ -442,13 +453,21 @@ export class SessionCoordinator {
       }
       return promptStepOutput(stepIndex, step.stepType);
     }).finally(() => {
-      clearRunContext();
+      clearRunContext(runRef.contextToken);
+      if (this.activeWorkflowRunRef === runRef) {
+        this.activeWorkflowRunRef = null;
+      }
     });
   }
 
   /** Cancel any active workflow. */
   cancelActiveWorkflow(): void {
-    clearRunContext();
+    const activeRef = this.activeWorkflowRunRef;
+    if (activeRef) {
+      activeRef.active = false;
+      clearRunContext(activeRef.contextToken);
+      this.activeWorkflowRunRef = null;
+    }
     this.runner?.cancel();
   }
 }

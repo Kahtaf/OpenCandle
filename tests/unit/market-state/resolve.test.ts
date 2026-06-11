@@ -18,14 +18,12 @@ let acquireSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.clearAllMocks();
   cache.clear();
-  cache.consumeStaleFlag();
   acquireSpy = vi.spyOn(rateLimiter, "acquire").mockResolvedValue();
 });
 
 afterEach(() => {
   acquireSpy.mockRestore();
   cache.clear();
-  cache.consumeStaleFlag();
 });
 
 describe("searchYahooInstruments", () => {

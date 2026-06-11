@@ -7,6 +7,7 @@ describe("httpGet", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("returns parsed JSON on success", async () => {
@@ -128,6 +129,95 @@ describe("httpGet", () => {
       expect(err.statusText).toBe("Too Many Requests");
       expect(err.body).toBe("Rate limited");
     }
+  });
+
+  it("retries HTTP 429 after the Retry-After delay", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "2" : null },
+        text: () => Promise.resolve("Rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ recovered: true }),
+      });
+
+    const resultPromise = httpGet("https://api.example.com/limited", {
+      maxRetries: 1,
+      retryDelayMs: 1,
+      maxRetryAfterMs: 5_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(resultPromise).resolves.toEqual({ recovered: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps oversized Retry-After delays to the safe default", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        text: () => Promise.resolve("Rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ recovered: true }),
+      });
+
+    const resultPromise = httpGet("https://api.example.com/limited", {
+      maxRetries: 1,
+      retryDelayMs: 1,
+    });
+
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(resultPromise).resolves.toEqual({ recovered: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps oversized Retry-After delays to the configured maximum", async () => {
+    vi.useFakeTimers();
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        text: () => Promise.resolve("Rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ recovered: true }),
+      });
+
+    const resultPromise = httpGet("https://api.example.com/limited", {
+      maxRetries: 1,
+      retryDelayMs: 1,
+      maxRetryAfterMs: 250,
+    });
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(resultPromise).resolves.toEqual({ recovered: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 

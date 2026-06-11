@@ -82,4 +82,34 @@ describe("RateLimiter", () => {
       vi.useRealTimers();
     }
   });
+
+  it("does not let concurrent waiters spend the same refilled token", async () => {
+    vi.useFakeTimers();
+    try {
+      const limiter = new RateLimiter();
+      limiter.configure("test", 1, 10); // 1 token, 10/sec refill
+
+      await limiter.acquire("test");
+
+      let firstAcquired = false;
+      let secondAcquired = false;
+      const first = limiter.acquire("test").then(() => {
+        firstAcquired = true;
+      });
+      const second = limiter.acquire("test").then(() => {
+        secondAcquired = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(100);
+      await first;
+      expect(firstAcquired).toBe(true);
+      expect(secondAcquired).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(100);
+      await second;
+      expect(secondAcquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
