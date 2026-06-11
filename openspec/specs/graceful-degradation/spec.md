@@ -3,16 +3,16 @@
 ## Purpose
 Defines how workflows and tools continue when optional providers fail, credentials are missing, or stale or fallback data must be surfaced.
 ## Requirements
-### Requirement: Provider results use a structured result union
-All provider functions SHALL return a `ProviderResult<T>` union type: either `{ status: "ok"; data: T; timestamp: string }` or `{ status: "unavailable"; reason: string; provider: string }`. Raw exceptions from providers SHALL be caught and converted to the unavailable variant.
+### Requirement: Wrapped provider calls use a structured result union
+Provider modules SHALL export raw typed APIs that throw on failure (e.g. `getQuote(): Promise<StockQuote>`). Consumers SHALL call providers through `wrapProvider()` or `withFallback()`, which return a `ProviderResult<T>` union type: either `{ status: "ok"; data: T; timestamp: string; stale?: boolean }` or `{ status: "unavailable"; reason: string; provider: string }`. Raw exceptions thrown by provider functions SHALL be caught by the wrapper and converted to the unavailable variant, with the exception of `ProviderCredentialError`, which is re-thrown so the tool layer can surface the credential-setup flow.
 
-#### Scenario: Successful provider call returns ok result
-- **WHEN** `getQuote("AAPL")` succeeds
+#### Scenario: Successful wrapped provider call returns ok result
+- **WHEN** `wrapProvider("yahoo-finance", () => getQuote("AAPL"))` succeeds
 - **THEN** it returns `{ status: "ok", data: { price: 185.5, ... }, timestamp: "2026-04-02T14:30:00Z" }`
 
 #### Scenario: Failed provider call returns unavailable result
-- **WHEN** `getCompanyOverview("AAPL")` fails due to API rate limiting
-- **THEN** it returns `{ status: "unavailable", reason: "rate_limited", provider: "alpha-vantage" }`
+- **WHEN** a wrapped `getCompanyOverview("AAPL")` call fails due to API rate limiting
+- **THEN** the wrapper returns `{ status: "unavailable", reason: "rate_limited", provider: "alpha-vantage" }`
 
 #### Scenario: Network error is caught and wrapped
 - **WHEN** a provider call throws a network error
