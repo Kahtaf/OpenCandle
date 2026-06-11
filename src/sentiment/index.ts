@@ -47,12 +47,3 @@ export function getSentimentPipeline(): SentimentPipeline {
   }
   return _pipeline;
 }
-
-/** For testing: reset singletons */
-export function _resetSentimentSingletons(): void {
-  if (_store) {
-    try { _store.close(); } catch { /* ignore */ }
-  }
-  _pipeline = null;
-  _store = null;
-}

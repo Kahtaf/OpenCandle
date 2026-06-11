@@ -56,6 +56,8 @@ These settings are for debugging request understanding and tool availability. Ke
 | --- | --- | --- |
 | `OPENCANDLE_ROUTER_MODE` | `rules` | Advanced request-understanding mode. Set `llm` to opt into the LLM router during development or eval runs. Invalid values fail startup config loading. |
 | `OPENCANDLE_TOOL_SCOPE_MODE` | `observe` | Tool-scope diagnostic mode. `observe` records selected bundles and active-tool candidates; `enforce` applies Pi active tools for each turn. Invalid values fail startup config loading. |
+| `OPENCANDLE_PLANNING_MIGRATION_STATUSES` | unset | Comma-separated planning rollout overrides in `task_family=status` form, for example `single_asset_decision=dual_run,asset_compare=observe_only`. Invalid entries fail startup config loading. |
+| `OPENCANDLE_AUTOMATION_HEARTBEAT_MS` | `60000` | GUI automation heartbeat interval in milliseconds. Values below `5000` or invalid values fall back to the default. |
 
 ## File Config
 

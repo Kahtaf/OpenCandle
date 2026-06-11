@@ -4,7 +4,7 @@
 
 A browser-served, single-user GUI for OpenCandle that mounts on the existing `createOpenCandleSession()` entry point and runs locally via `npm run gui`. Provides a three-pane shell (sessions sidebar | chat | dashboard) with a full-screen tools overlay and a slash palette.
 
-Implementation note: v1 uses installed Pi APIs and OpenCandle-owned local WebSocket projection, session history, onboarding, dashboard, and finance-specific tool renderers. The current browser app is the React/Tailwind revamp captured in `openspec/changes/revamp-local-gui/`.
+Implementation note: v1 uses installed Pi APIs and OpenCandle-owned local WebSocket projection, session history, onboarding, dashboard, and finance-specific tool renderers. The current browser app is the React/Tailwind revamp captured in `openspec/changes/archive/2026-06-10-revamp-local-gui/`.
 
 ## Scope
 

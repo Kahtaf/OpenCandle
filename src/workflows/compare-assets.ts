@@ -1,6 +1,5 @@
 import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsPrompt } from "../prompts/workflow-prompts.js";
-import type { WorkflowPlan } from "./types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
 import { areLikelyFundOrIndexSymbols, isFundOrIndexAssetScope } from "../routing/fund-symbols.js";
@@ -78,16 +77,5 @@ export function buildCompareAssetsWorkflowDefinition(
         expectedOutputs: ["comparison_summary"],
       }),
     ],
-  };
-}
-
-/** @deprecated Use buildCompareAssetsWorkflowDefinition instead */
-export function buildCompareAssetsWorkflow(
-  resolution: SlotResolution<CompareAssetsSlots>,
-): WorkflowPlan {
-  const def = buildCompareAssetsWorkflowDefinition(resolution);
-  return {
-    initialPrompt: def.steps[0].prompt,
-    followUps: def.steps.slice(1).map((s) => s.prompt),
   };
 }
