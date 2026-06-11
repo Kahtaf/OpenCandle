@@ -10,6 +10,7 @@ import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistor
 import { hasSessionContent, routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
+import { Toaster } from "./components/ui/toaster.jsx";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
 const CatalogOverlay = lazy(() => loadCatalogOverlay().then((module) => ({ default: module.CatalogOverlay })));
@@ -187,11 +188,13 @@ export function AppShell() {
     <ToolDrawerProvider>
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
+        <ConnectionStatusBanner role={gui.role} />
         {marketDomain ? (
           <MarketStatePage
             domain={marketDomain}
             role={gui.role}
             send={gui.send}
+            invokeTool={gui.invokeTool}
             navigate={navigate}
             setToast={gui.setToast}
             onOpenSidebar={() => openDrawer("history")}
@@ -255,7 +258,24 @@ export function AppShell() {
           />
         ) : null}
       </Suspense>
+      <Toaster />
     </ToolDrawerProvider>
+  );
+}
+
+function ConnectionStatusBanner({ role }) {
+  if (role !== "connecting" && role !== "disconnected") return null;
+  const message = role === "connecting"
+    ? "Connecting to the GUI session..."
+    : "Reconnecting to the GUI session. Editing is disabled until the writer reconnects.";
+  return (
+    <div
+      className="fixed left-1/2 top-3 z-[90] max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-subtle-md"
+      role="status"
+      aria-live="polite"
+    >
+      {message}
+    </div>
   );
 }
 

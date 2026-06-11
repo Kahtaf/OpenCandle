@@ -1,4 +1,5 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "../components/ui/use-toast.jsx";
 
 const EMPTY_DASHBOARD = {
   watchlist: [],
@@ -7,8 +8,38 @@ const EMPTY_DASHBOARD = {
   dataQuality: { softGaps: [], hardSkips: [] },
 };
 
+export const TOOL_INVOKE_TIMEOUT_MESSAGE = "The operation is still running. OpenCandle will refresh state when the server finishes.";
+
+export function buildGuiToastPayload(message, options = {}) {
+  if (!message) return null;
+  return {
+    title: options.title,
+    description: String(message),
+    variant: options.variant || (options.destructive ? "destructive" : "default"),
+  };
+}
+
+export function settlePendingToolInvoke(pendingToolInvokes, requestId, settle, payload) {
+  const pending = pendingToolInvokes.get(requestId);
+  if (!pending) return false;
+  globalThis.clearTimeout(pending.timeout);
+  pendingToolInvokes.delete(requestId);
+  pending[settle](payload);
+  return true;
+}
+
+export function rejectTimedOutToolInvoke(pendingToolInvokes, requestId) {
+  const pending = pendingToolInvokes.get(requestId);
+  if (!pending) return false;
+  pending.timedOut = true;
+  pending.reject(new Error(TOOL_INVOKE_TIMEOUT_MESSAGE));
+  return true;
+}
+
 export function useGuiConnection() {
   const wsRef = useRef(null);
+  const requestSeqRef = useRef(0);
+  const pendingToolInvokesRef = useRef(new Map());
   const [role, setRole] = useState("connecting");
   const [catalog, setCatalog] = useState({ tools: [], workflows: [], providers: [] });
   const [sessions, setSessions] = useState([]);
@@ -19,7 +50,16 @@ export function useGuiConnection() {
   const [currentSessionId, setCurrentSessionId] = useState("");
   const [modelSetup, setModelSetup] = useState({ requirement: "unknown", providers: [], availableModels: [] });
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
-  const [toast, setToast] = useState("");
+
+  const setToast = useCallback((message, options = {}) => {
+    const payload = buildGuiToastPayload(message, options);
+    if (!payload) return;
+    toast(payload);
+  }, []);
+
+  const settleToolInvoke = useCallback((requestId, settle, payload) => {
+    settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
+  }, []);
 
   const applyBootstrap = useCallback((data) => {
     const snapshot = data.snapshot || {};
@@ -77,7 +117,13 @@ export function useGuiConnection() {
       }, 1_500);
       wsRef.current = ws;
       ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch {
+          setToast("Received malformed GUI server message.", { destructive: true });
+          return;
+        }
         if (message.type === "boot") {
           receivedBoot = true;
           window.clearTimeout(bootTimeout);
@@ -104,12 +150,24 @@ export function useGuiConnection() {
           });
         } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
           setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
+        } else if (message.type === "tool.invoke.result") {
+          const requestId = typeof message.requestId === "string" ? message.requestId : "";
+          if (message.ok) {
+            settleToolInvoke(requestId, "resolve", message);
+          } else {
+            settleToolInvoke(requestId, "reject", new Error(message.error?.message || "Tool invocation failed"));
+          }
         } else if (message.type === "error") {
-          setToast(message.message);
+          setToast(message.message, { destructive: true });
         }
       };
       ws.onclose = () => {
         window.clearTimeout(bootTimeout);
+        for (const [requestId, pending] of pendingToolInvokesRef.current) {
+          window.clearTimeout(pending.timeout);
+          pending.reject(new Error("GUI connection closed before the tool finished."));
+          pendingToolInvokesRef.current.delete(requestId);
+        }
         if (usingHttpFallback) return;
         setSupportsSessionActions(false);
         setRole("disconnected");
@@ -128,12 +186,33 @@ export function useGuiConnection() {
   const send = useCallback((type, payload = {}) => {
     const socket = wsRef.current;
     if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
-      setToast("GUI connection is not open.");
+      setToast("GUI connection is not open.", { destructive: true });
       return false;
     }
     socket.send(JSON.stringify({ type, ...payload }));
     return true;
-  }, []);
+  }, [setToast]);
+
+  const invokeTool = useCallback((toolName, args = {}) => {
+    const socket = wsRef.current;
+    if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
+      const error = new Error("GUI connection is not open.");
+      setToast(error.message, { destructive: true });
+      return Promise.reject(error);
+    }
+
+    const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
+    const timeout = window.setTimeout(() => {
+      rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
+    }, 30_000);
+
+    const promise = new Promise((resolve, reject) => {
+      pendingToolInvokesRef.current.set(requestId, { resolve, reject, timeout });
+    });
+
+    socket.send(JSON.stringify({ type: "tool.invoke", requestId, toolName, args }));
+    return promise;
+  }, [setToast, settleToolInvoke]);
 
   const newSession = useCallback(async () => {
     try {
@@ -144,10 +223,10 @@ export function useGuiConnection() {
       applyBootstrap(data);
       return true;
     } catch (error) {
-      setToast(error instanceof Error ? error.message : String(error));
+      setToast(error instanceof Error ? error.message : String(error), { destructive: true });
       return false;
     }
-  }, [applyBootstrap]);
+  }, [applyBootstrap, setToast]);
 
   return useMemo(() => ({
     role,
@@ -160,11 +239,11 @@ export function useGuiConnection() {
     currentSessionId,
     modelSetup,
     supportsSessionActions,
-    toast,
     setToast,
     send,
+    invokeTool,
     newSession,
-  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, toast, send, newSession]);
+  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, setToast, send, invokeTool, newSession]);
 }
 
 function upsertPrompt(current, prompt) {

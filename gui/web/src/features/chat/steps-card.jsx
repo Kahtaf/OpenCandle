@@ -65,8 +65,8 @@ export function StepsCard({ run, autoOpen = false }) {
           )}
         </div>
         {sources.length > 0 && !isPending ? (
-          <span className="hidden sm:inline-flex" onClick={(event) => event.stopPropagation()}>
-            <SourceStack sources={sources} onClick={() => open(run)} />
+          <span className="hidden sm:inline-flex">
+            <SourceStack sources={sources} />
           </span>
         ) : null}
         <Badge variant="outline" size="sm" className="shrink-0 font-mono">
