@@ -82,4 +82,38 @@ describe("RateLimiter", () => {
       vi.useRealTimers();
     }
   });
+
+  it("serializes concurrent waiters one token per refill", async () => {
+    vi.useFakeTimers();
+    try {
+      const limiter = new RateLimiter();
+      limiter.configure("test", 1, 1);
+
+      await limiter.acquire("test");
+
+      let firstAcquired = false;
+      let secondAcquired = false;
+      const first = limiter.acquire("test").then(() => {
+        firstAcquired = true;
+      });
+      const second = limiter.acquire("test").then(() => {
+        secondAcquired = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(999);
+      expect(firstAcquired).toBe(false);
+      expect(secondAcquired).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await first;
+      expect(firstAcquired).toBe(true);
+      expect(secondAcquired).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await second;
+      expect(secondAcquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

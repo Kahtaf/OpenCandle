@@ -299,9 +299,16 @@ export async function getDailyHistory(
 function rangeToDays(range: string): number {
   const map: Record<string, number> = {
     "1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 130,
-    "1y": 252, "2y": 504, "5y": 1260, "max": 5000,
+    "1y": 252, "2y": 504, "5y": 1260, "10y": 2520, "max": 5000,
   };
+  if (range === "ytd") return tradingDaysSinceStartOfYear();
   return map[range] ?? 130;
+}
+
+function tradingDaysSinceStartOfYear(date = new Date()): number {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const calendarDays = Math.max(1, Math.ceil((date.getTime() - start.getTime()) / 86_400_000) + 1);
+  return Math.max(1, Math.ceil((calendarDays / 7) * 5));
 }
 
 function parseNum(s: string | undefined): number {

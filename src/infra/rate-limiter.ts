@@ -29,18 +29,19 @@ export class RateLimiter {
     const bucket = this.buckets.get(provider);
     if (!bucket) return; // No limit configured
 
-    this.refill(bucket);
+    while (true) {
+      this.refill(bucket);
 
-    if (bucket.tokens >= 1) {
-      bucket.tokens -= 1;
-      return;
+      if (bucket.tokens >= 1) {
+        bucket.tokens -= 1;
+        return;
+      }
+
+      // Wait until a token should be available, then re-check. Re-checking
+      // prevents concurrent waiters from spending the same refilled token.
+      const waitMs = ((1 - bucket.tokens) / bucket.config.refillRate) * 1000;
+      await new Promise((resolve) => setTimeout(resolve, Math.ceil(waitMs)));
     }
-
-    // Wait until a token is available
-    const waitMs = ((1 - bucket.tokens) / bucket.config.refillRate) * 1000;
-    await new Promise((resolve) => setTimeout(resolve, Math.ceil(waitMs)));
-    this.refill(bucket);
-    bucket.tokens -= 1;
   }
 
   private refill(bucket: Bucket): void {

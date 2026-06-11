@@ -199,6 +199,19 @@ describe("alpha-vantage provider", () => {
       await getDailyHistory("AAPL", "test-key", "1mo");
       expect(globalThis.fetch).toHaveBeenCalledTimes(1);
     });
+
+    it("requests full daily history for 10y fallback ranges", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(dailyHistoryFixture),
+      });
+
+      await getDailyHistory("AAPL", "test-key", "10y");
+
+      const url = (globalThis.fetch as any).mock.calls[0][0] as string;
+      expect(url).toContain("function=TIME_SERIES_DAILY");
+      expect(url).toContain("outputsize=full");
+    });
   });
 
   describe("getOverview", () => {
