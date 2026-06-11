@@ -160,7 +160,7 @@ const params = Type.Object({
         "record: save a new prediction. check: evaluate all predictions against current prices. cancel: close an open prediction without scoring it.",
     },
   ),
-  id: Type.Optional(Type.Number({ description: "Prediction id (required for cancel)" })),
+  id: Type.Optional(Type.Integer({ minimum: 1, description: "Prediction id (required for cancel)" })),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for record)" })),
   direction: Type.Optional(
     Type.Union(
@@ -169,16 +169,16 @@ const params = Type.Object({
     ),
   ),
   conviction: Type.Optional(
-    Type.Number({ description: "Conviction 1-10 (required for record)" }),
+    Type.Integer({ minimum: 1, maximum: 10, description: "Conviction 1-10 (required for record)" }),
   ),
   entry_price: Type.Optional(
-    Type.Number({ description: "Entry price at time of prediction (required for record)" }),
+    Type.Number({ exclusiveMinimum: 0, description: "Entry price at time of prediction (required for record)" }),
   ),
   target_price: Type.Optional(
-    Type.Number({ description: "Optional target price" }),
+    Type.Number({ exclusiveMinimum: 0, description: "Optional target price" }),
   ),
   timeframe_days: Type.Optional(
-    Type.Number({ description: "Timeframe in days for the prediction (default: 30)" }),
+    Type.Integer({ minimum: 1, maximum: 3650, description: "Timeframe in days for the prediction (default: 30)" }),
   ),
 });
 
@@ -226,8 +226,23 @@ export const predictionsTool: AgentTool<typeof params> = {
     }
 
     if (args.action === "record") {
-      if (!args.symbol || !args.direction || !args.conviction || !args.entry_price) {
+      if (!args.symbol || !args.direction || args.conviction == null || args.entry_price == null) {
         throw new Error("symbol, direction, conviction, and entry_price are required for record action.");
+      }
+      if (!Number.isInteger(args.conviction) || args.conviction < 1 || args.conviction > 10) {
+        throw new Error("conviction must be between 1 and 10.");
+      }
+      if (args.entry_price <= 0) {
+        throw new Error("entry_price must be greater than 0.");
+      }
+      if (args.target_price != null && args.target_price <= 0) {
+        throw new Error("target_price must be greater than 0.");
+      }
+      if (
+        args.timeframe_days != null &&
+        (!Number.isInteger(args.timeframe_days) || args.timeframe_days < 1 || args.timeframe_days > 3650)
+      ) {
+        throw new Error("timeframe_days must be an integer between 1 and 3650.");
       }
 
       const resolution = await resolveInstrumentForMutation(args.symbol);

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { searchFilings, type SECFiling } from "../../../src/providers/sec-edgar.js";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 
 const mockSearchResponse = {
   hits: {
@@ -128,6 +129,47 @@ describe("sec-edgar provider", () => {
     expect(filings[0].evidenceSnippets?.[0]).not.toContain("Table of Contents");
     expect(filings[1].evidenceSnippets?.[0]).toContain("Management's Discussion");
     expect(filings[0].primaryDocumentUrl).toContain("aapl-20240928.htm");
+  });
+
+  it("rate limits document fetches and records visible evidence warnings", async () => {
+    const acquire = vi.spyOn(rateLimiter, "acquire").mockResolvedValue(undefined);
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          "0": { cik_str: 320193, ticker: "AAPL", title: "APPLE INC" },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          name: "APPLE INC",
+          filings: {
+            recent: {
+              accessionNumber: ["0000320193-24-000123"],
+              filingDate: ["2024-10-31"],
+              reportDate: ["2024-09-28"],
+              form: ["10-K"],
+              primaryDocument: ["aapl-20240928.htm"],
+              items: [""],
+            },
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      });
+
+    const filings = await searchFilings("AAPL", ["10-K"], 1, { includeSnippets: true });
+
+    expect(acquire).toHaveBeenCalledWith("sec_edgar");
+    expect((fetch as any).mock.calls[2][1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(filings[0].evidenceSnippets).toEqual([]);
+    expect(filings[0].evidenceWarning).toContain("Evidence fetch failed");
+    expect(filings[0].evidenceWarning).toContain("HTTP 429");
   });
 
   it("caches results", async () => {

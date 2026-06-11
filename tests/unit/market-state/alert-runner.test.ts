@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { ALERT_CONDITION_VERSION, priceCrossesAbove, rsiThreshold, volumeSpike } from "../../../src/market-state/alert-conditions.js";
+import { ALERT_CONDITION_VERSION, percentMove, priceCrossesAbove, rsiThreshold, smaCross, volumeSpike } from "../../../src/market-state/alert-conditions.js";
 import {
   AlertProviderBudget,
   defaultAlertProviderBudget,
@@ -625,6 +625,114 @@ describe("alert runner", () => {
       }),
     ]);
     expect(service.listAlertEvents()[0].message).not.toContain("$");
+  });
+
+  it("triggers percent-move alerts after a threshold crossing", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "percent_move",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: percentMove("up", 5),
+      timeframe: "1d",
+      cooldownSeconds: 0,
+    });
+
+    let closes = [100, 104];
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(async () => closes.map((close, index) => ({
+        date: `2026-06-0${index + 1}`,
+        open: close,
+        high: close,
+        low: close,
+        close,
+        volume: 1_000,
+      }))),
+    };
+
+    await runAlertChecks(service, {
+      triggerType: "manual",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+    });
+    closes = [100, 106];
+    const triggered = await runAlertChecks(service, {
+      triggerType: "manual",
+      now: "2026-06-02T12:00:00.000Z",
+      providers,
+    });
+
+    expect(triggered.triggered).toBe(1);
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        message: "AAPL percent move up 6.00%",
+        observedValueJson: expect.objectContaining({ field: "percent_move", value: 6 }),
+      }),
+    ]);
+  });
+
+  it("triggers SMA-cross alerts after fast SMA crosses the slow SMA", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "sma_cross",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: smaCross(2, 3, "above"),
+      timeframe: "1d",
+      cooldownSeconds: 0,
+    });
+
+    let closes = [103, 101, 99];
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(async () => closes.map((close, index) => ({
+        date: `2026-06-0${index + 1}`,
+        open: close,
+        high: close,
+        low: close,
+        close,
+        volume: 1_000,
+      }))),
+    };
+
+    await runAlertChecks(service, {
+      triggerType: "manual",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+    });
+    closes = [99, 101, 103];
+    const triggered = await runAlertChecks(service, {
+      triggerType: "manual",
+      now: "2026-06-02T12:00:00.000Z",
+      providers,
+    });
+
+    expect(triggered.triggered).toBe(1);
+    expect(service.listAlertEvents()).toEqual([
+      expect.objectContaining({
+        message: "AAPL fast SMA crossed above slow SMA at +$1.00",
+        observedValueJson: expect.objectContaining({ field: "sma_spread", value: 1 }),
+      }),
+    ]);
   });
 
   it("shares daily history observations across indicator alerts for the same symbol", async () => {

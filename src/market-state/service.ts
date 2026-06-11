@@ -979,15 +979,16 @@ export class MarketStateService {
     return rows.map(mapAlertRule);
   }
 
-  setAlertRuleEnabled(id: number, enabled: boolean): AlertRuleRecord {
+  setAlertRuleEnabled(id: number, enabled: boolean): AlertRuleRecord | null {
     const now = new Date().toISOString();
-    this.db
+    const result = this.db
       .prepare(
         `UPDATE alert_rules
          SET enabled = ?, updated_at = ?
          WHERE id = ?`,
       )
       .run(enabled ? 1 : 0, now, id);
+    if (result.changes === 0) return null;
     return this.getAlertRule(id);
   }
 

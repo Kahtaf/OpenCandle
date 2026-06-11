@@ -68,9 +68,11 @@ export const secFilingsTool: AgentTool<typeof params> = {
           ``,
           `Evidence snippets (short excerpts; review source filing for full context):`,
           ...filings.flatMap((f) =>
-            (f.evidenceSnippets?.length
-              ? f.evidenceSnippets.map((snippet) => `  ${f.formType} ${f.filedDate}: ${snippet}`)
-              : [`  ${f.formType} ${f.filedDate}: No keyword snippet found in fetched primary document.`])
+            f.evidenceWarning
+              ? [`  ${f.formType} ${f.filedDate}: ${f.evidenceWarning}`]
+              : (f.evidenceSnippets?.length
+                ? f.evidenceSnippets.map((snippet) => `  ${f.formType} ${f.filedDate}: ${snippet}`)
+                : [`  ${f.formType} ${f.filedDate}: No keyword snippet found in fetched primary document.`])
           ),
         ]
         : []),

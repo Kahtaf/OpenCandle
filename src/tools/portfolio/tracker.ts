@@ -29,16 +29,16 @@ const params = Type.Object({
     Type.Literal("view"),
   ], { description: "Action: add a position, update a lot, remove a position, or view portfolio" }),
   lot_id: Type.Optional(
-    Type.Number({ description: "Portfolio lot id for precise update or single-lot removal" }),
+    Type.Integer({ minimum: 1, description: "Portfolio lot id for precise update or single-lot removal" }),
   ),
   symbol: Type.Optional(
     Type.String({ description: "Ticker symbol — stocks (AAPL, MSFT) or crypto with -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker to find the right ticker." }),
   ),
   shares: Type.Optional(
-    Type.Number({ description: "Number of shares/units (required for add)" }),
+    Type.Number({ exclusiveMinimum: 0, description: "Number of shares/units (required for add)" }),
   ),
   avg_cost: Type.Optional(
-    Type.Number({ description: "Average cost per share/unit in the lot currency (required for add)" }),
+    Type.Number({ exclusiveMinimum: 0, description: "Average cost per share/unit in the lot currency (required for add)" }),
   ),
   currency: Type.Optional(
     Type.String({ description: "Lot currency, such as USD or CAD (defaults to the resolved instrument currency)" }),
@@ -57,9 +57,11 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
 
     try {
       if (args.action === "add") {
-        if (!args.symbol || !args.shares || !args.avg_cost) {
+        if (!args.symbol || args.shares == null || args.avg_cost == null) {
           throw new Error("symbol, shares, and avg_cost are required for add action.");
         }
+        if (args.shares <= 0) throw new Error("shares must be greater than 0.");
+        if (args.avg_cost <= 0) throw new Error("avg_cost must be greater than 0.");
         const instrument = await resolveInstrumentForMutation(args.symbol);
         if (instrument.status === "needs_selection") {
           return {
@@ -97,7 +99,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       }
 
       if (args.action === "remove") {
-        if (args.lot_id) {
+        if (args.lot_id != null) {
           const removed = service.removePortfolioLot(args.lot_id);
           if (removed == null) {
             return {
@@ -133,7 +135,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       }
 
       if (args.action === "update") {
-        if (!args.lot_id) {
+        if (args.lot_id == null) {
           return {
             content: [{ type: "text", text: "lot_id is required for update action. Use view to find the lot id before updating a holding." }],
             details: {
@@ -147,6 +149,12 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           avgCost: args.avg_cost,
           currency: args.currency?.trim() || undefined,
         };
+        if (updateParams.quantity != null && updateParams.quantity <= 0) {
+          throw new Error("shares must be greater than 0.");
+        }
+        if (updateParams.avgCost != null && updateParams.avgCost <= 0) {
+          throw new Error("avg_cost must be greater than 0.");
+        }
         const updated = service.updatePortfolioLot(args.lot_id, updateParams);
         if (updated == null) {
           const target = args.lot_id ? `lot ${args.lot_id}` : args.symbol?.toUpperCase();

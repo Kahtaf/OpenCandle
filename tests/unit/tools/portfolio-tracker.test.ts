@@ -60,6 +60,22 @@ describe("portfolioTrackerTool", () => {
     expect(existsSync(join(openCandleHome, "portfolio.json"))).toBe(false);
   });
 
+  it("rejects zero shares and cost as invalid instead of treating them as missing", async () => {
+    await expect(portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 0,
+      avg_cost: 250,
+    })).rejects.toThrow("shares must be greater than 0");
+
+    await expect(portfolioTrackerTool.execute("test", {
+      action: "add",
+      symbol: "VTI",
+      shares: 1,
+      avg_cost: 0,
+    })).rejects.toThrow("avg_cost must be greater than 0");
+  });
+
   it("ignores pre-existing portfolio.json as a state source", async () => {
     writeFileSync(join(openCandleHome, "portfolio.json"), JSON.stringify([{ symbol: "VTI", shares: 2 }]));
 

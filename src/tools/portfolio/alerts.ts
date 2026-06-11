@@ -7,19 +7,24 @@ import { defaultAlertRunnerProviders, runAlertChecks } from "../../market-state/
 import { deliverPendingNotifications } from "../../market-state/notification-delivery.js";
 import {
   ALERT_CONDITION_VERSION,
+  percentMove,
   priceCrossesAbove,
   priceCrossesBelow,
   priceCrossesSma,
   rsiThreshold,
+  smaCross,
   volumeSpike,
 } from "../../market-state/alert-conditions.js";
 
 const ACTION_DESCRIPTION = [
   "One of: create_price_above, create_price_below, create_price_above_sma,",
   "create_price_below_sma, create_rsi_above, create_rsi_below,",
-  "create_volume_spike, set_enabled, list, status, check.",
+  "create_volume_spike, create_percent_move_up, create_percent_move_down,",
+  "create_sma_cross_above, create_sma_cross_below, set_enabled, list, status, check.",
   "Use create_price_above/create_price_below for price alerts,",
   "create_price_above_sma/create_price_below_sma for SMA crossing alerts,",
+  "create_percent_move_up/create_percent_move_down for one-day percent move alerts,",
+  "create_sma_cross_above/create_sma_cross_below for fast/slow SMA crossing alerts,",
   "create_rsi_above/create_rsi_below for RSI alerts,",
   "create_volume_spike for volume alerts, set_enabled to enable or disable an alert,",
   "and status to inspect local runner/check history.",
@@ -37,6 +42,10 @@ const params = Type.Object({
       Type.Literal("create_rsi_above"),
       Type.Literal("create_rsi_below"),
       Type.Literal("create_volume_spike"),
+      Type.Literal("create_percent_move_up"),
+      Type.Literal("create_percent_move_down"),
+      Type.Literal("create_sma_cross_above"),
+      Type.Literal("create_sma_cross_below"),
       Type.Literal("set_enabled"),
       Type.Literal("list"),
       Type.Literal("status"),
@@ -46,9 +55,11 @@ const params = Type.Object({
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol for create actions" })),
   threshold: Type.Optional(Type.Number({ description: "Price or indicator threshold for create actions" })),
-  period: Type.Optional(Type.Number({ description: "Indicator lookback period for SMA/RSI alerts" })),
+  period: Type.Optional(Type.Integer({ minimum: 1, description: "Indicator lookback period for SMA/RSI alerts. Max: 200 for price-SMA, 100 for RSI/volume alerts" })),
+  fast_period: Type.Optional(Type.Integer({ minimum: 1, description: "Fast SMA lookback period for SMA-cross alerts. Default: 50" })),
+  slow_period: Type.Optional(Type.Integer({ minimum: 1, maximum: 400, description: "Slow SMA lookback period for SMA-cross alerts. Default: 200, max: 400" })),
   cooldown_seconds: Type.Optional(
-    Type.Number({ description: "Cooldown between repeated trigger events. Default: 3600" }),
+    Type.Integer({ minimum: 0, description: "Cooldown between repeated trigger events. Default: 3600" }),
   ),
   id: Type.Optional(Type.Number({ description: "Alert rule id for update actions" })),
   enabled: Type.Optional(Type.Boolean({ description: "Whether an alert rule is enabled" })),
@@ -64,13 +75,15 @@ export const alertsTool: AgentTool<typeof params> = {
   name: "manage_alerts",
   label: "Alerts",
   description:
-    "Create, pause/resume, list, check, and inspect status for durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, set_enabled, list, status, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
+    "Create, pause/resume, list, check, and inspect status for durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, create_percent_move_up, create_percent_move_down, create_sma_cross_above, create_sma_cross_below, set_enabled, list, status, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
 
     try {
+      const cooldownSeconds = validateCooldownSeconds(args.cooldown_seconds);
+
       if (args.action === "create_price_above" || args.action === "create_price_below") {
         if (!args.symbol || args.threshold == null) {
           throw new Error("symbol and threshold are required for create alert actions.");
@@ -88,7 +101,7 @@ export const alertsTool: AgentTool<typeof params> = {
             ? priceCrossesAbove(args.threshold)
             : priceCrossesBelow(args.threshold),
           timeframe: "quote",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -102,7 +115,8 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for SMA alert actions.");
         }
-        const period = args.period ?? 50;
+        // Runner evaluates price_crosses_sma against 1y of daily bars (~252).
+        const period = validateLookbackPeriod(args.period ?? 50, 200);
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
         const instrument = service.upsertInstrumentRecord(resolution.instrument);
@@ -114,7 +128,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: priceCrossesSma(period, direction),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -128,7 +142,8 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol || args.threshold == null) {
           throw new Error("symbol and threshold are required for RSI alert actions.");
         }
-        const period = args.period ?? 14;
+        // Runner evaluates rsi_threshold against 6mo of daily bars (~126).
+        const period = validateLookbackPeriod(args.period ?? 14, 100);
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
         const instrument = service.upsertInstrumentRecord(resolution.instrument);
@@ -140,7 +155,7 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: rsiThreshold(period, args.threshold, direction),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
@@ -154,7 +169,8 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for volume-spike alert actions.");
         }
-        const period = args.period ?? 20;
+        // Runner evaluates volume_spike against 6mo of daily bars (~126).
+        const period = validateLookbackPeriod(args.period ?? 20, 100);
         const multiplier = args.threshold ?? 2;
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
@@ -166,12 +182,80 @@ export const alertsTool: AgentTool<typeof params> = {
           conditionVersion: ALERT_CONDITION_VERSION,
           condition: volumeSpike(period, multiplier),
           timeframe: "1d",
-          cooldownSeconds: args.cooldown_seconds ?? 3600,
+          cooldownSeconds,
         });
         return await createResultMaybeChecked(
           service,
           rule,
           `Created local alert volume_spike for ${instrument.symbol}: volume > ${multiplier}x ${period}-bar average.`,
+          args.check_after_create,
+        );
+      }
+
+      if (args.action === "create_percent_move_up" || args.action === "create_percent_move_down") {
+        if (!args.symbol || args.threshold == null) {
+          throw new Error("symbol and threshold are required for percent-move alert actions.");
+        }
+        if (args.threshold <= 0) {
+          throw new Error("threshold must be greater than 0 for percent-move alert actions.");
+        }
+        const resolution = await resolveInstrumentForMutation(args.symbol);
+        if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
+        const instrument = service.upsertInstrumentRecord(resolution.instrument);
+        const direction = args.action === "create_percent_move_up" ? "up" : "down";
+        const rule = service.createAlertRule({
+          scopeType: "instrument",
+          instrumentId: instrument.id,
+          conditionType: "percent_move",
+          conditionVersion: ALERT_CONDITION_VERSION,
+          condition: percentMove(direction, args.threshold),
+          timeframe: "1d",
+          cooldownSeconds,
+        });
+        return await createResultMaybeChecked(
+          service,
+          rule,
+          `Created local alert percent_move for ${instrument.symbol}: ${direction} ${args.threshold}%.`,
+          args.check_after_create,
+        );
+      }
+
+      if (args.action === "create_sma_cross_above" || args.action === "create_sma_cross_below") {
+        if (!args.symbol) {
+          throw new Error("symbol is required for SMA-cross alert actions.");
+        }
+        const fastPeriod = args.fast_period ?? 50;
+        const slowPeriod = args.slow_period ?? 200;
+        if (!Number.isInteger(fastPeriod) || !Number.isInteger(slowPeriod)) {
+          throw new Error("fast_period and slow_period must be whole-number lookback periods for SMA-cross alert actions.");
+        }
+        if (fastPeriod <= 0 || slowPeriod <= 0) {
+          throw new Error("fast_period and slow_period must be greater than 0 for SMA-cross alert actions.");
+        }
+        if (fastPeriod >= slowPeriod) {
+          throw new Error("fast_period must be less than slow_period for SMA-cross alert actions.");
+        }
+        // Runner evaluates sma_cross against 2y of daily bars (~504).
+        if (slowPeriod > 400) {
+          throw new Error("slow_period must be at most 400 so alert checks can evaluate it against the runner's 2y daily history window.");
+        }
+        const resolution = await resolveInstrumentForMutation(args.symbol);
+        if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
+        const instrument = service.upsertInstrumentRecord(resolution.instrument);
+        const direction = args.action === "create_sma_cross_above" ? "above" : "below";
+        const rule = service.createAlertRule({
+          scopeType: "instrument",
+          instrumentId: instrument.id,
+          conditionType: "sma_cross",
+          conditionVersion: ALERT_CONDITION_VERSION,
+          condition: smaCross(fastPeriod, slowPeriod, direction),
+          timeframe: "1d",
+          cooldownSeconds,
+        });
+        return await createResultMaybeChecked(
+          service,
+          rule,
+          `Created local alert sma_cross for ${instrument.symbol}: SMA(${fastPeriod}) crosses ${direction} SMA(${slowPeriod}).`,
           args.check_after_create,
         );
       }
@@ -219,6 +303,15 @@ export const alertsTool: AgentTool<typeof params> = {
           throw new Error("id and enabled are required for set_enabled.");
         }
         const rule = service.setAlertRuleEnabled(args.id, args.enabled);
+        if (rule == null) {
+          return {
+            content: [{
+              type: "text",
+              text: `Alert #${args.id} not found. Use the list action to see alert ids.`,
+            }],
+            details: null,
+          };
+        }
         return {
           content: [{
             type: "text",
@@ -238,6 +331,24 @@ export const alertsTool: AgentTool<typeof params> = {
     }
   },
 };
+
+function validateLookbackPeriod(period: number, maxPeriod: number): number {
+  if (!Number.isInteger(period) || period <= 0) {
+    throw new Error("period must be a whole-number lookback period greater than 0 for indicator alert actions.");
+  }
+  if (period > maxPeriod) {
+    throw new Error(`period must be at most ${maxPeriod} so alert checks can evaluate it against the runner's daily history window.`);
+  }
+  return period;
+}
+
+function validateCooldownSeconds(cooldownSeconds: number | undefined): number {
+  const resolved = cooldownSeconds ?? 3600;
+  if (!Number.isInteger(resolved) || resolved < 0) {
+    throw new Error("cooldown_seconds must be a whole number greater than or equal to 0.");
+  }
+  return resolved;
+}
 
 async function checkAlerts(service: MarketStateService): Promise<{
   checked: number;

@@ -288,6 +288,7 @@ function roundWeight(value: number): number {
 
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const YAHOO_RAW_FETCH_TIMEOUT_MS = 10_000;
 
 let cachedCrumb: { crumb: string; cookie: string; expiresAt: number } | null = null;
 
@@ -303,15 +304,26 @@ export async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }
   // Step 1: Hit fc.yahoo.com to get a session cookie
   const cookieRes = await fetch("https://fc.yahoo.com/t", {
     headers: { "User-Agent": BROWSER_UA },
+    signal: yahooRawFetchSignal(),
   });
   const setCookie = cookieRes.headers.get("set-cookie") ?? "";
   const cookie = setCookie.split(";")[0]; // Extract just the cookie value
+  if (!cookie) {
+    if (!cookieRes.ok) {
+      throw new Error(`Yahoo crumb cookie request failed: HTTP ${cookieRes.status} ${cookieRes.statusText}`.trim());
+    }
+    throw new Error("Yahoo crumb cookie request did not return a session cookie");
+  }
 
   // Step 2: Use the cookie to get a crumb
   const crumbRes = await fetch("https://query2.finance.yahoo.com/v1/test/getcrumb", {
     headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
+    signal: yahooRawFetchSignal(),
   });
-  const crumb = await crumbRes.text();
+  if (!crumbRes.ok) {
+    throw new Error(`Yahoo crumb request failed: HTTP ${crumbRes.status} ${crumbRes.statusText}`.trim());
+  }
+  const crumb = (await crumbRes.text()).trim();
 
   if (!crumb || crumb.includes("Unauthorized")) {
     throw new Error("Failed to acquire Yahoo Finance crumb");
@@ -348,15 +360,16 @@ export async function getOptionsChain(
 
   await rateLimiter.acquire("yahoo");
 
-  const { crumb, cookie } = await getYahooCrumb();
   const dateParam = expiration ? `&date=${expiration}` : "";
-  const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
 
   let res: Response | null = null;
   let fetchError: unknown;
   try {
+    const { crumb, cookie } = await getYahooCrumb();
+    const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
     res = await fetch(url, {
       headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
+      signal: yahooRawFetchSignal(),
     });
   } catch (error) {
     fetchError = error;
@@ -370,6 +383,7 @@ export async function getOptionsChain(
       const retryUrl = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(fresh.crumb)}${dateParam}`;
       res = await fetch(retryUrl, {
         headers: { "User-Agent": BROWSER_UA, Cookie: fresh.cookie },
+        signal: yahooRawFetchSignal(),
       });
     } catch (error) {
       fetchError = error;
@@ -411,6 +425,10 @@ export async function getOptionsChain(
   const chain = parseOptionsResponse(data);
   cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
   return chain;
+}
+
+function yahooRawFetchSignal(): AbortSignal {
+  return AbortSignal.timeout(YAHOO_RAW_FETCH_TIMEOUT_MS);
 }
 
 /**

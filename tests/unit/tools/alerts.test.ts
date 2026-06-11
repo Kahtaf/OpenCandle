@@ -312,6 +312,18 @@ describe("alertsTool", () => {
     expect(enabled.details).toMatchObject({ enabled: true });
   });
 
+  it("returns a clear not-found result when enabling an unknown alert id", async () => {
+    const result = await alertsTool.execute("test", {
+      action: "set_enabled",
+      id: 999,
+      enabled: false,
+    });
+
+    expect(result.content[0].text).toContain("Alert #999 not found");
+    expect(result.content[0].text).toContain("list");
+    expect(result.details).toBeNull();
+  });
+
   it("suppresses a fresh crossing while the alert is inside cooldown", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",
@@ -379,6 +391,123 @@ describe("alertsTool", () => {
       conditionJson: { period: 50, direction: "above", price_field: "close" },
       timeframe: "1d",
     });
+  });
+
+  it("creates percent-move alerts with canonical condition JSON", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_percent_move_up",
+      symbol: "AAPL",
+      threshold: 5,
+    });
+
+    expect(created.details).toMatchObject({
+      conditionType: "percent_move",
+      conditionJson: { direction: "up", percent: 5, window: "1d" },
+      timeframe: "1d",
+    });
+  });
+
+  it("creates SMA-cross alerts with canonical condition JSON", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 3,
+      slow_period: 5,
+    });
+
+    expect(created.details).toMatchObject({
+      conditionType: "sma_cross",
+      conditionJson: { fast_period: 3, slow_period: 5, direction: "above" },
+      timeframe: "1d",
+    });
+  });
+
+  it("rejects fractional SMA-cross lookback periods before storing a rule", async () => {
+    await expect(alertsTool.execute("test", {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 2.5,
+      slow_period: 5,
+    })).rejects.toThrow("fast_period and slow_period must be whole-number lookback periods");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
+  });
+
+  it("rejects invalid indicator alert lookback periods before storing a rule", async () => {
+    await expect(alertsTool.execute("test", {
+      action: "create_price_above_sma",
+      symbol: "AAPL",
+      period: 2.5,
+    })).rejects.toThrow("period must be a whole-number lookback period");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_volume_spike",
+      symbol: "AAPL",
+      period: -5,
+    })).rejects.toThrow("period must be a whole-number lookback period");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
+  });
+
+  it("rejects lookback periods longer than the alert runner's history window", async () => {
+    await expect(alertsTool.execute("test", {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 50,
+      slow_period: 1000,
+    })).rejects.toThrow("slow_period must be at most 400");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_price_above_sma",
+      symbol: "AAPL",
+      period: 500,
+    })).rejects.toThrow("period must be at most 200");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_rsi_above",
+      symbol: "AAPL",
+      threshold: 70,
+      period: 500,
+    })).rejects.toThrow("period must be at most 100");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_volume_spike",
+      symbol: "AAPL",
+      period: 500,
+    })).rejects.toThrow("period must be at most 100");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
+  });
+
+  it("allows zero cooldowns and rejects negative cooldowns before storing a rule", async () => {
+    const created = await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+      cooldown_seconds: 0,
+    });
+    expect(created.details).toMatchObject({ cooldownSeconds: 0 });
+
+    await expect(alertsTool.execute("test", {
+      action: "create_price_below",
+      symbol: "AAPL",
+      threshold: 100,
+      cooldown_seconds: -1,
+    })).rejects.toThrow("cooldown_seconds must be a whole number greater than or equal to 0");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(1);
+    db.close();
   });
 
   it("creates and manually checks volume-spike alerts", async () => {

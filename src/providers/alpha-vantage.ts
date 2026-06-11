@@ -274,7 +274,7 @@ export async function getDailyHistory(
       throw new Error(`Alpha Vantage: No daily history for ${symbol}`);
     }
 
-    const ohlcv: OHLCV[] = Object.entries(timeSeries)
+    const sorted = Object.entries(timeSeries)
       .map(([date, bar]) => ({
         date,
         open: parseFloat(bar["1. open"]) || 0,
@@ -283,8 +283,13 @@ export async function getDailyHistory(
         close: parseFloat(bar["4. close"]) || 0,
         volume: parseInt(bar["5. volume"], 10) || 0,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-daysNeeded);
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Count-based slicing for ytd is only an estimate (ignores holidays and
+    // the starting weekday) and can leak prior-year bars; filter by date.
+    const ohlcv: OHLCV[] = range === "ytd"
+      ? sorted.filter((bar) => bar.date >= `${new Date().getFullYear()}-01-01`)
+      : sorted.slice(-daysNeeded);
 
     cache.set(cacheKey, ohlcv, TTL.HISTORY);
     return ohlcv;
@@ -299,9 +304,16 @@ export async function getDailyHistory(
 function rangeToDays(range: string): number {
   const map: Record<string, number> = {
     "1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 130,
-    "1y": 252, "2y": 504, "5y": 1260, "max": 5000,
+    "1y": 252, "2y": 504, "5y": 1260, "10y": 2520, "max": 5000,
   };
+  if (range === "ytd") return tradingDaysSinceStartOfYear();
   return map[range] ?? 130;
+}
+
+function tradingDaysSinceStartOfYear(date = new Date()): number {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const calendarDays = Math.max(1, Math.ceil((date.getTime() - start.getTime()) / 86_400_000) + 1);
+  return Math.max(1, Math.ceil((calendarDays / 7) * 5));
 }
 
 function parseNum(s: string | undefined): number {

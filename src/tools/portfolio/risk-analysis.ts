@@ -4,10 +4,14 @@ import { getHistory } from "../../providers/yahoo-finance.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { RiskMetrics } from "../../types/portfolio.js";
 
+const RISK_PERIODS = ["6mo", "1y", "2y"] as const;
+
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, SPY)" }),
   period: Type.Optional(
-    Type.String({ description: "Historical period for analysis: 6mo, 1y, 2y. Default: 1y" }),
+    Type.Union(RISK_PERIODS.map((period) => Type.Literal(period)), {
+      description: "Historical period for analysis: 6mo, 1y, 2y. Default: 1y",
+    }),
   ),
 });
 

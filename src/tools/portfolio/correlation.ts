@@ -31,6 +31,7 @@ export function computeCorrelation(returnsA: number[], returnsB: number[]): numb
 }
 
 const DEFAULT_MIN_OVERLAP = 20;
+const CORRELATION_PERIODS = ["6mo", "1y", "2y"] as const;
 
 export function alignReturnsByDate(
   historiesBySymbol: Map<string, OHLCV[]>,
@@ -76,7 +77,9 @@ const params = Type.Object({
     minItems: 2,
   }),
   period: Type.Optional(
-    Type.String({ description: "Historical period: 6mo, 1y, 2y. Default: 1y" }),
+    Type.Union(CORRELATION_PERIODS.map((period) => Type.Literal(period)), {
+      description: "Historical period: 6mo, 1y, 2y. Default: 1y",
+    }),
   ),
 });
 

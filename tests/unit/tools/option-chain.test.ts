@@ -96,6 +96,17 @@ describe("get_option_chain tool", () => {
     expect(text).not.toContain("**PUTS**");
   });
 
+  it("rejects semantically invalid expiration dates before fetching Yahoo", async () => {
+    globalThis.fetch = vi.fn();
+
+    await expect(optionChainTool.execute("call-invalid-expiration", {
+      symbol: "AAPL",
+      expiration: "2026-99-99",
+    })).rejects.toThrow("expiration must be a valid YYYY-MM-DD date");
+
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
   it("shows long-dated available expirations instead of hiding them behind a count", async () => {
     const fixture = structuredClone(optionsFixture);
     fixture.optionChain.result[0].expirationDates = [

@@ -12,7 +12,7 @@ const params = Type.Object({
     description: `FRED series ID. Common ones: ${Object.entries(FRED_SERIES).map(([k, v]) => `${v} (${k})`).join(", ")}`,
   }),
   limit: Type.Optional(
-    Type.Number({ description: "Number of observations to return. Default: 30" }),
+    Type.Integer({ minimum: 1, maximum: 1000, description: "Number of observations to return. Default: 30" }),
   ),
 });
 
@@ -59,6 +59,9 @@ export const fredDataTool: AgentTool<typeof params, FredSeries | { credentialReq
 
 function normalizeLimit(seriesId: string, requested: number | undefined): number {
   const limit = requested ?? 30;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+    throw new Error("limit must be an integer between 1 and 1000.");
+  }
   if (seriesId === FRED_SERIES.CPI && limit < 13) return 13;
   return limit;
 }

@@ -97,6 +97,52 @@ describe("yahoo-finance options provider", () => {
       // Only 2 fetch calls for the first crumb acquisition, 0 for the second (cached)
       expect(fetch).toHaveBeenCalledTimes(2);
     });
+
+    it("accepts Yahoo's 404 cookie bootstrap response when it sets a usable cookie", async () => {
+      globalThis.fetch = vi.fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 404,
+          statusText: "Not Found",
+          headers: new Headers({ "set-cookie": "A3=d=livecookie; Path=/; Domain=.yahoo.com" }),
+          text: () => Promise.resolve(""),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve("liveCrumb"),
+        });
+
+      const result = await getYahooCrumb();
+
+      expect(result).toEqual({ crumb: "liveCrumb", cookie: "A3=d=livecookie" });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect((fetch as any).mock.calls[1][1]?.headers.Cookie).toBe("A3=d=livecookie");
+    });
+
+    it("uses timeouts and validates the cookie response before requesting a crumb", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      await expect(getYahooCrumb()).rejects.toThrow("Yahoo crumb cookie request failed: HTTP 503");
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect((fetch as any).mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("fails fast when Yahoo does not return a crumb cookie", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      await expect(getYahooCrumb()).rejects.toThrow("Yahoo crumb cookie request did not return a session cookie");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("getOptionsChain", () => {
@@ -132,6 +178,17 @@ describe("yahoo-finance options provider", () => {
       expect(chain.calls.length).toBeGreaterThan(0);
       expect(chain.puts.length).toBeGreaterThan(0);
       expect(chain.expirationDates.length).toBeGreaterThan(0);
+    });
+
+    it("uses timeouts for direct raw Yahoo options fetches", async () => {
+      mockCrumbAndOptions();
+      await getOptionsChain("AAPL");
+
+      const fetchCalls = (fetch as any).mock.calls;
+      expect(fetchCalls).toHaveLength(3);
+      for (const call of fetchCalls) {
+        expect(call[1]?.signal).toBeInstanceOf(AbortSignal);
+      }
     });
 
     it("computes Greeks for each contract", async () => {
@@ -238,6 +295,58 @@ describe("yahoo-finance options provider", () => {
       expect(StealthBrowser.run).toHaveBeenCalled();
       expect(chain.symbol).toBe("AAPL");
       expect(chain.calls.length).toBeGreaterThan(0);
+    });
+
+    it("falls back to the stealth browser when initial crumb acquisition fails", async () => {
+      vi.spyOn(StealthBrowser, "run").mockResolvedValue(optionsFixture as any);
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(chain.symbol).toBe("AAPL");
+      expect(chain.calls.length).toBeGreaterThan(0);
+    });
+
+    it("returns stale cached options when crumb acquisition and browser fallback fail", async () => {
+      const staleChain = {
+        symbol: "AAPL",
+        underlyingPrice: 100,
+        expirationDate: "2026-06-19",
+        expirationDates: ["2026-06-19"],
+        calls: [],
+        puts: [],
+        totalCallVolume: 0,
+        totalPutVolume: 0,
+        putCallRatio: 0,
+        quoteStatus: {
+          marketSession: "closed",
+          bidAskState: "mixed_or_unknown",
+          zeroBidAskContracts: 0,
+          totalContracts: 0,
+        },
+        fetchedAt: "2026-06-01T00:00:00.000Z",
+      } as const;
+      cache.set("yahoo:options:AAPL:nearest", staleChain, -1);
+      vi.spyOn(StealthBrowser, "run").mockRejectedValue(new Error("browser unavailable"));
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+        headers: new Headers(),
+        text: () => Promise.resolve(""),
+      });
+
+      const chain = await getOptionsChain("AAPL");
+
+      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(chain).toEqual(staleChain);
     });
 
     it("includes the stealth browser failure when every options fetch path fails", async () => {

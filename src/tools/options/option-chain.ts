@@ -8,6 +8,7 @@ const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, TSLA, SPY, MSFT)" }),
   expiration: Type.Optional(
     Type.String({
+      pattern: "^\\d{4}-\\d{2}-\\d{2}$",
       description:
         "Expiration date as YYYY-MM-DD. If omitted, uses the nearest expiration.",
     }),
@@ -28,9 +29,7 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
   async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
     const normalizedType = args.type?.toLowerCase();
-    const expirationTs = args.expiration
-      ? Math.floor(new Date(args.expiration).getTime() / 1000)
-      : undefined;
+    const expirationTs = args.expiration ? parseExpiration(args.expiration) : undefined;
 
     const result = await wrapProvider("yahoo", () => getOptionsChain(symbol, expirationTs));
     if (result.status === "unavailable") {
@@ -81,6 +80,17 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     return { content: [{ type: "text", text: lines.join("\n") }], details: chain };
   },
 };
+
+function parseExpiration(expiration: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiration)) {
+    throw new Error("expiration must be a valid YYYY-MM-DD date.");
+  }
+  const parsed = new Date(`${expiration}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== expiration) {
+    throw new Error("expiration must be a valid YYYY-MM-DD date.");
+  }
+  return Math.floor(parsed.getTime() / 1000);
+}
 
 function sortByVolume(contracts: OptionContract[]): OptionContract[] {
   return [...contracts].sort((a, b) => b.volume - a.volume);
