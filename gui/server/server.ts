@@ -25,7 +25,8 @@ import { validateCredential } from "../../src/onboarding/validation.js";
 import { buildModelSetupState, findPreferredModel, modelSetupProviders } from "./model-setup.js";
 import { projectDashboard } from "./projector.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
-import { invokeToolFromUi } from "./invoke-tool.js";
+import { invokeToolFromUi, type InvokeToolResult } from "./invoke-tool.js";
+import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
@@ -258,7 +259,7 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         await handleAskUserCancel(String(data.id ?? ""));
         break;
       case "tool.invoke":
-        await handleToolInvoke(String(data.toolName ?? ""), asRecord(data.args));
+        await handleToolInvokeMessage(client, data);
         break;
       case "tool.enabled":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
@@ -480,12 +481,37 @@ async function handleSelectModel(provider: string, modelId: string): Promise<voi
   await session.settingsManager.flush();
 }
 
-async function handleToolInvoke(toolName: string, args: Record<string, unknown>): Promise<void> {
+async function handleToolInvoke(toolName: string, args: Record<string, unknown>): Promise<InvokeToolResult> {
   if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
   const tool = getAllTools().find((candidate) => candidate.name === toolName);
   if (!tool) throw new Error(`Unknown tool: ${toolName}`);
-  await invokeToolFromUi(sessionManager, tool, args, "ui");
+  const result = await invokeToolFromUi(sessionManager, tool, args, "ui");
   broadcastState();
+  return result;
+}
+
+async function handleToolInvokeMessage(client: WsClient, data: Record<string, unknown>): Promise<void> {
+  const requestId = typeof data.requestId === "string" ? data.requestId : "";
+  const toolName = String(data.toolName ?? "");
+  try {
+    const result = await handleToolInvoke(toolName, asRecord(data.args));
+    if (requestId) {
+      client.send(buildToolInvokeAckMessage(requestId, toolName, result));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (requestId) {
+      client.send({
+        type: "tool.invoke.result",
+        requestId,
+        ok: false,
+        toolName,
+        error: { message },
+      });
+      return;
+    }
+    throw error;
+  }
 }
 
 function sendBoot(client: WsClient): void {
