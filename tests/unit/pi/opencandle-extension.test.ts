@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { getComprehensiveAnalysisPrompts } from "../../../src/analysts/orchestrator.js";
-import { buildOptionsScreenerWorkflow, buildPortfolioWorkflow, buildCompareAssetsWorkflow } from "../../../src/workflows/index.js";
+import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
+import {
+  buildOptionsScreenerWorkflowDefinition,
+  buildPortfolioWorkflowDefinition,
+  buildCompareAssetsWorkflowDefinition,
+} from "../../../src/workflows/index.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { resetConfigCache } from "../../../src/config.js";
@@ -87,6 +91,14 @@ function exactSymbolSearch(validSymbols: string[]) {
       : [];
 }
 
+function firstWorkflowPrompt(definition: { steps: { prompt: string }[] }): string {
+  return definition.steps[0]?.prompt ?? "";
+}
+
+function comprehensiveAnalysisPrompts(symbol: string): string[] {
+  return buildComprehensiveAnalysisDefinition(symbol).steps.map((step) => step.prompt);
+}
+
 describe("opencandle extension", () => {
   beforeEach(() => {
     vi.stubEnv("OPENCANDLE_ROUTER_MODE", "rules");
@@ -128,12 +140,12 @@ describe("opencandle extension", () => {
     expect(fake.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(fake.sendUserMessage).toHaveBeenNthCalledWith(
       1,
-      getComprehensiveAnalysisPrompts("NVDA")[0],
+      comprehensiveAnalysisPrompts("NVDA")[0],
     );
 
     await vi.runAllTimersAsync();
 
-    const prompts = getComprehensiveAnalysisPrompts("NVDA");
+    const prompts = comprehensiveAnalysisPrompts("NVDA");
     expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length);
     for (const [index, prompt] of prompts.entries()) {
       if (index === 0) continue;
@@ -167,7 +179,7 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const prompts = getComprehensiveAnalysisPrompts("NVDA");
+    const prompts = comprehensiveAnalysisPrompts("NVDA");
     expect(result).toEqual({ action: "transform", text: prompts[0] });
 
     await vi.runAllTimersAsync();
@@ -217,15 +229,15 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const workflow = buildPortfolioWorkflow(resolvePortfolioSlots({
+    const prompt = firstWorkflowPrompt(buildPortfolioWorkflowDefinition(resolvePortfolioSlots({
       symbols: [],
       budget: 10_000,
       riskProfile: "balanced",
       assetScope: "etf_focused",
-    }));
+    })));
 
-    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: prompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("routes options-screening prompts through the deterministic workflow", async () => {
@@ -243,14 +255,14 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const workflow = buildOptionsScreenerWorkflow(resolveOptionsScreenerSlots({
+    const prompt = firstWorkflowPrompt(buildOptionsScreenerWorkflowDefinition(resolveOptionsScreenerSlots({
       symbols: ["AAPL"],
       direction: "bullish",
       dteHint: "30 to 45 DTE",
-    }));
+    })));
 
-    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: prompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("routes compare prompts through the deterministic workflow", async () => {
@@ -268,15 +280,15 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const workflow = buildCompareAssetsWorkflow({
+    const prompt = firstWorkflowPrompt(buildCompareAssetsWorkflowDefinition({
       resolved: { symbols: ["AAPL", "MSFT"] },
       sources: { symbols: "user" },
       defaultsUsed: [],
       missingRequired: [],
-    });
+    }));
 
-    expect(result).toEqual({ action: "transform", text: workflow.initialPrompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(workflow.initialPrompt);
+    expect(result).toEqual({ action: "transform", text: prompt });
+    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("records a per-turn disclaimer entry (non-LLM-context) on final assistant turns", async () => {
@@ -465,12 +477,12 @@ describe("opencandle extension", () => {
     await vi.runAllTimersAsync();
 
     const calls = fake.sendUserMessage.mock.calls.map((call) => call[0]);
-    expect(firstResult).toEqual({ action: "transform", text: getComprehensiveAnalysisPrompts("NVDA")[0] });
-    expect(secondResult).toEqual({ action: "transform", text: getComprehensiveAnalysisPrompts("AAPL")[0] });
+    expect(firstResult).toEqual({ action: "transform", text: comprehensiveAnalysisPrompts("NVDA")[0] });
+    expect(secondResult).toEqual({ action: "transform", text: comprehensiveAnalysisPrompts("AAPL")[0] });
     // The NVDA follow-ups should have been cancelled
-    expect(calls).not.toContain(getComprehensiveAnalysisPrompts("NVDA")[1]);
+    expect(calls).not.toContain(comprehensiveAnalysisPrompts("NVDA")[1]);
     // The AAPL follow-ups should proceed
-    expect(calls).toContain(getComprehensiveAnalysisPrompts("AAPL")[1]);
+    expect(calls).toContain(comprehensiveAnalysisPrompts("AAPL")[1]);
   });
 
   it("clarifies rules-mode compare prompts when acronym drops leave too few symbols", async () => {

@@ -22,7 +22,7 @@ When `OPENCANDLE_ROUTER_MODE=rules` (the default during rollout), the system SHA
 - **WHEN** the router returns a response
 - **THEN** the response is parsed and validated against the defined JSON schema; on validation failure, one retry is attempted with error feedback; on persistent failure, the router emits a minimal fallback output (`route: "fallback"`, extracted symbols only, empty slots, empty preference_updates, empty missing_required)
 
-### Requirement: Two-Value Route Categorization
+### Requirement: Route Kind Categorization
 
 Every canonical router output SHALL carry a `routeKind` field with exactly one of: `"workflow_dispatch"`, `"agent_task"`, `"clarification"`, or `"pass_through"`. The legacy `route` field MAY be derived for compatibility while migration is in progress, but implementation code SHALL treat `routeKind` as the canonical route decision.
 
@@ -55,7 +55,7 @@ Every canonical router output SHALL carry a `routeKind` field with exactly one o
 
 ### Requirement: Per-Slot Source Provenance
 
-Every slot in the router output SHALL include a `source` field with one of: `"user"` (extracted from current turn), `"preference"` (retrieved from investor_profile), or `"default"` (applied as a fallback). These values match the existing `SlotSource` type in `src/routing/types.ts`.
+Every slot in the router output SHALL include a `source` field with one of: `"user"` (extracted from current turn), `"preference"` (retrieved from investor_profile), `"default"` (applied as a fallback), `"prior_context"` (carried from earlier conversation turns), or `"memory"` (retrieved from persisted memory outside the investor_profile preference path). These values match the existing `SlotSource` type in `src/routing/types.ts` and render as User-specified, From saved preferences, Defaults, From prior context, or From memory in Assumptions blocks.
 
 #### Scenario: Slot sourced from current turn
 
@@ -71,6 +71,16 @@ Every slot in the router output SHALL include a `source` field with one of: `"us
 
 - **WHEN** neither the current turn nor memory provides a value and the workflow applies a default
 - **THEN** `slots.<name>.source` is `"default"`
+
+#### Scenario: Slot sourced from prior context
+
+- **WHEN** the user says "what about at $500?" and the prior turn establishes the symbol as NVDA
+- **THEN** `slots.symbol.source` is `"prior_context"`
+
+#### Scenario: Slot sourced from memory
+
+- **WHEN** persisted memory outside investor_profile provides a reliable slot value
+- **THEN** `slots.<name>.source` is `"memory"`
 
 ### Requirement: High-Confidence-Only Preference Writes
 
@@ -105,7 +115,7 @@ When the router identifies required slots that are not filled from the current t
 
 - **WHEN** the user asks "what about at $500?" and the prior turn establishes the symbol as NVDA
 - **THEN** router does not emit `routeKind: "clarification"` for the symbol slot
-- **AND** the symbol slot records the prior-turn source
+- **AND** the symbol slot records `source: "prior_context"`
 
 ### Requirement: Fallback Playbook Injection
 
@@ -306,4 +316,3 @@ When the LLM router is enabled, deterministic routing code SHALL NOT make the pr
 
 - **WHEN** the LLM router emits an invalid route kind
 - **THEN** post-processing applies the documented fallback correction and records a diagnostic explaining the correction
-

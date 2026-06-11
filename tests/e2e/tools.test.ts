@@ -489,11 +489,9 @@ async function run() {
   // ============================
   console.log("\n12. Orchestrator:");
   await test("orchestrator roles are named personas with debate", async () => {
-    const { runComprehensiveAnalysis } = await import("../../src/analysts/orchestrator.js");
-    const calls: string[] = [];
-    runComprehensiveAnalysis((prompt) => calls.push(prompt), "AAPL");
-    assert(calls.length === 10, `expected 10 followUps, got ${calls.length}`);
-    const texts = calls;
+    const { buildComprehensiveAnalysisDefinition } = await import("../../src/analysts/orchestrator.js");
+    const texts = buildComprehensiveAnalysisDefinition("AAPL").steps.slice(1).map((step) => step.prompt);
+    assert(texts.length === 10, `expected 10 followUps, got ${texts.length}`);
     assert(texts[0].includes("[Valuation Analyst]"), "missing Valuation Analyst");
     assert(texts[1].includes("[Momentum Analyst]"), "missing Momentum Analyst");
     assert(texts[2].includes("[Options Analyst]"), "missing Options Analyst");
