@@ -7,13 +7,13 @@ description: Run OpenCandle's repo-local autoreview helper for local branch, PR,
 
 Run the bundled structured review helper as an advisory closeout check for OpenCandle PRs and local branches.
 
-Default PR branch review:
+Default PR branch review (base auto-detects from the open PR via `gh`, falling back to `origin/main`; pass `--base` only to override — stacked PRs often target a feature branch, and a wrong base reviews the whole stack):
 
 ```bash
-.agents/skills/autoreview/scripts/autoreview --mode branch --base origin/main --prompt-file .agents/skills/autoreview/references/opencandle-review.md
+.agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md
 ```
 
-The npm alias is equivalent:
+The npm alias is equivalent and additionally gates on typecheck + unit tests run in parallel with the review:
 
 ```bash
 npm run review:pr
@@ -39,7 +39,7 @@ Dirty local work:
 Open PR or feature branch:
 
 ```bash
-.agents/skills/autoreview/scripts/autoreview --mode branch --base origin/main --prompt-file .agents/skills/autoreview/references/opencandle-review.md
+.agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md
 ```
 
 Branch review requires a clean worktree so it cannot silently skip local edits. Commit or stash local changes first, or use `--mode local` to review dirty work.
@@ -55,7 +55,7 @@ For a merged GitHub PR, pass the merge commit SHA. The helper reviews merge comm
 Add extra evidence when available:
 
 ```bash
-.agents/skills/autoreview/scripts/autoreview --mode branch --base origin/main \
+.agents/skills/autoreview/scripts/autoreview --mode branch \
   --prompt-file .agents/skills/autoreview/references/opencandle-review.md \
   --dataset validation-output/<evidence>.json
 ```
