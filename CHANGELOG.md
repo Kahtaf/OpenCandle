@@ -9,6 +9,7 @@
 - Local market automation runtime pieces for V2: `opencandle monitor`, alert provider-budget backoff, resume/late alert labeling, lost-run maintenance, webhook notification delivery attempts, and TUI-visible alert runner status.
 - Repo-local autoreview skill and `npm run review:pr` helper for OpenCandle-specific PR review, including first-parent diff handling for already-merged PRs.
 - Repo-local autoreview now runs React Doctor for changed GUI React files, includes the structured diagnostics in review evidence, and fails UI reviews on React Doctor errors by default.
+- Repo-local autoreview gate hardening: `npm run review:pr` now auto-detects the PR base branch via `gh` instead of assuming `origin/main`, gates on typecheck and unit tests run in parallel with the review, pins React Doctor to a fixed version, and warns when an oversized diff is truncated from the review bundle.
 
 ### Changed
 
