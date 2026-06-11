@@ -161,7 +161,7 @@ describe("httpGet", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("honors uncapped Retry-After delays by default", async () => {
+  it("caps oversized Retry-After delays to the safe default", async () => {
     vi.useFakeTimers();
     globalThis.fetch = vi
       .fn()
@@ -169,7 +169,7 @@ describe("httpGet", () => {
         ok: false,
         status: 429,
         statusText: "Too Many Requests",
-        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "2" : null },
+        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
         text: () => Promise.resolve("Rate limited"),
       })
       .mockResolvedValueOnce({
@@ -182,7 +182,7 @@ describe("httpGet", () => {
       retryDelayMs: 1,
     });
 
-    await vi.advanceTimersByTimeAsync(1_999);
+    await vi.advanceTimersByTimeAsync(4_999);
     expect(fetch).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1);

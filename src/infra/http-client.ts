@@ -6,10 +6,11 @@ export interface HttpClientOptions {
   headers?: Record<string, string>;
 }
 
-const DEFAULT_OPTIONS: Required<Omit<HttpClientOptions, "maxRetryAfterMs">> = {
+const DEFAULT_OPTIONS: Required<HttpClientOptions> = {
   timeoutMs: 10_000,
   maxRetries: 2,
   retryDelayMs: 1_000,
+  maxRetryAfterMs: 5_000,
   headers: {},
 };
 
