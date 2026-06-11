@@ -178,7 +178,6 @@ describe("predictionsTool check", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cache.clear();
-    cache.consumeStaleFlag();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-predictions-check-test-"));
@@ -195,7 +194,6 @@ describe("predictionsTool check", () => {
     }
     rmSync(openCandleHome, { recursive: true, force: true });
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -288,8 +286,10 @@ describe("predictionsTool check", () => {
 
   it("keeps expired predictions open when quote data is stale", async () => {
     cache.set("test-stale-prediction-quote", quote("AAPL", 200), -1);
-    cache.getStale("test-stale-prediction-quote", 60_000);
-    vi.mocked(getQuote).mockResolvedValueOnce(quote("AAPL", 200));
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-prediction-quote", 60_000);
+      return quote("AAPL", 200);
+    });
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
     service.recordPrediction({

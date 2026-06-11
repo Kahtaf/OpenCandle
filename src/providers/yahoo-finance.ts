@@ -10,6 +10,7 @@ import { InvalidSymbolError } from "./errors.js";
 
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
+const STALE_QUOTE_MAX_RETRY_AFTER_MS = 1_000;
 
 type YahooNumber = number | { raw?: number; fmt?: string };
 
@@ -67,6 +68,7 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     const url = `${BASE_URL}/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
     const data = await httpGet<YahooChartResponse>(url, {
       headers: { "User-Agent": "OpenCandle/1.0" },
+      maxRetryAfterMs: STALE_QUOTE_MAX_RETRY_AFTER_MS,
     });
 
     if (data.chart.error) {

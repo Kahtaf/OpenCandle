@@ -30,6 +30,8 @@ interface TradingViewSearchResponse {
   }>;
 }
 
+const FALLBACK_SEARCH_MAX_RETRY_AFTER_MS = 1_000;
+
 export const searchTickerTool: AgentTool<typeof params> = {
   name: "search_ticker",
   label: "Search Ticker",
@@ -86,6 +88,7 @@ async function searchYahoo(query: string): Promise<{ quotes: YahooSearchQuote[];
     await rateLimiter.acquire("yahoo");
     const data = await httpGet<YahooSearchResponse>(url, {
       headers: { "User-Agent": "OpenCandle/1.0" },
+      maxRetryAfterMs: FALLBACK_SEARCH_MAX_RETRY_AFTER_MS,
     });
     return { quotes: data.quotes ?? [] };
   } catch (error) {

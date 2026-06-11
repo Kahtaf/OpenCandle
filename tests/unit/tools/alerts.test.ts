@@ -35,7 +35,6 @@ describe("alertsTool", () => {
     vi.clearAllMocks();
     defaultAlertProviderBudget.reset();
     cache.clear();
-    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-alerts-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
@@ -52,7 +51,6 @@ describe("alertsTool", () => {
     }
     rmSync(openCandleHome, { recursive: true, force: true });
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -544,8 +542,10 @@ describe("alertsTool", () => {
       threshold: 250,
     });
     cache.set("test-stale-alert-quote", quote("AAPL", 260), -1);
-    cache.getStale("test-stale-alert-quote", 60_000);
-    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 260));
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-alert-quote", 60_000);
+      return quote("AAPL", 260);
+    });
 
     const checked = await alertsTool.execute("test", { action: "check" });
 

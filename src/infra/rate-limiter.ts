@@ -37,8 +37,6 @@ export class RateLimiter {
         return;
       }
 
-      // Wait until a token should be available, then re-check. Re-checking
-      // prevents concurrent waiters from spending the same refilled token.
       const waitMs = ((1 - bucket.tokens) / bucket.config.refillRate) * 1000;
       await new Promise((resolve) => setTimeout(resolve, Math.ceil(waitMs)));
     }
@@ -72,6 +70,5 @@ rateLimiter.configure("ddg", 3, 0.1);             // 3 req, ~6 req/min
 rateLimiter.configure("brave_search", 5, 0.083);  // 5 req, ~5 req/min
 rateLimiter.configure("exa", 5, 0.1);              // 5 req, ~6 req/min
 rateLimiter.configure("finnhub", 60, 1);            // 60 req/min (free tier)
-rateLimiter.configure("sec_edgar", 5, 5);           // SEC fair-access pacing for document fetches
 // TradingView scanner is undocumented; keep usage batch-first and paced.
 rateLimiter.configure("tradingview", 5, 1);         // 5 burst, 1 req/s sustained

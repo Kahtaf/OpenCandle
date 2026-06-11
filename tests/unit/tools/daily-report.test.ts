@@ -22,7 +22,6 @@ describe("dailyReportTool", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cache.clear();
-    cache.consumeStaleFlag();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-report-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
@@ -39,7 +38,6 @@ describe("dailyReportTool", () => {
     }
     rmSync(openCandleHome, { recursive: true, force: true });
     cache.clear();
-    cache.consumeStaleFlag();
     vi.clearAllMocks();
   });
 
@@ -134,8 +132,10 @@ describe("dailyReportTool", () => {
   it("reports stale quote rows as data gaps instead of valid report data", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
     cache.set("test-stale-report-quote", quote("AAPL", 260), -1);
-    cache.getStale("test-stale-report-quote", 60_000);
-    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 260));
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-report-quote", 60_000);
+      return quote("AAPL", 260);
+    });
 
     const result = await dailyReportTool.execute("test", { action: "run" });
 

@@ -11,7 +11,7 @@ A local single-user GUI on top of the existing `createOpenCandleSession()` entry
 ## What Changes
 
 - **New `gui/server/` package** — a Node process that constructs `createOpenCandleSession()`, exposes a dependency-free WS + HTTP server to the browser, hosts the dashboard projector, and serves the static `gui/web/dist/` bundle. Boot via `npm run gui`. TUI (`npm start`) is unchanged.
-- **New `gui/web/` package** — a local browser bundle served by `gui/server`. The original v1 shell has since been replaced by the React/Tailwind revamp in `openspec/changes/revamp-local-gui/`.
+- **New `gui/web/` package** — a local browser bundle served by `gui/server`. The original v1 shell has since been replaced by the React/Tailwind revamp in `openspec/changes/archive/2026-06-10-revamp-local-gui/`.
 - **TUI ↔ GUI session sharing** via a writer/follower model. At most one writer per session at a time; all other processes are read-only followers that re-read session entries. Sidebar lists sessions via Pi's current `SessionManager.list(cwd)` API.
 - **Dashboard projector** — pure read-side derivation of dashboard state from session entries (`tool_result`, `appendEntry`, custom messages). The agent does not know the dashboard exists; no new tools, no new system-prompt content. Panels: Watchlist (auto-grows from quote calls + manual pin), Active Analyses (workflow + analyst progress), Recent Research, Data Quality (`opencandle-turn-gap` projection).
 - **Tool catalog** — renders `getOpenCandleToolDefinitions()` and `PROVIDERS` directly. Per-tool: enable/disable toggle, defaults form built from the Typebox schema, "Run" (direct invocation), "Try in chat" (auto-prompt). Per-provider: status, unlocks list, sign-up CTA, test/disconnect.

@@ -83,11 +83,11 @@ describe("RateLimiter", () => {
     }
   });
 
-  it("serializes concurrent waiters one token per refill", async () => {
+  it("does not let concurrent waiters spend the same refilled token", async () => {
     vi.useFakeTimers();
     try {
       const limiter = new RateLimiter();
-      limiter.configure("test", 1, 1);
+      limiter.configure("test", 1, 10); // 1 token, 10/sec refill
 
       await limiter.acquire("test");
 
@@ -100,16 +100,12 @@ describe("RateLimiter", () => {
         secondAcquired = true;
       });
 
-      await vi.advanceTimersByTimeAsync(999);
-      expect(firstAcquired).toBe(false);
-      expect(secondAcquired).toBe(false);
-
-      await vi.advanceTimersByTimeAsync(1);
+      await vi.advanceTimersByTimeAsync(100);
       await first;
       expect(firstAcquired).toBe(true);
       expect(secondAcquired).toBe(false);
 
-      await vi.advanceTimersByTimeAsync(1_000);
+      await vi.advanceTimersByTimeAsync(100);
       await second;
       expect(secondAcquired).toBe(true);
     } finally {

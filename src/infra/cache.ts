@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
@@ -10,10 +12,26 @@ export interface StaleResult<T> {
   cachedAt: number;
 }
 
+interface StaleMetadata {
+  stale: boolean;
+  cachedAt: number;
+}
+
+const staleMetadataStorage = new AsyncLocalStorage<StaleMetadata>();
+
+export async function runWithStaleMetadata<T>(
+  fn: () => Promise<T>,
+): Promise<{ value: T; stale?: { cachedAt: number } }> {
+  const metadata: StaleMetadata = { stale: false, cachedAt: 0 };
+  const value = await staleMetadataStorage.run(metadata, fn);
+  return {
+    value,
+    stale: metadata.stale ? { cachedAt: metadata.cachedAt } : undefined,
+  };
+}
+
 export class Cache {
   private store = new Map<string, CacheEntry<unknown>>();
-  private lastStaleHit = false;
-  private lastStaleCachedAt = 0;
 
   get<T>(key: string): T | undefined {
     const entry = this.store.get(key);
@@ -36,21 +54,12 @@ export class Cache {
       return undefined;
     }
 
-    this.lastStaleHit = true;
-    this.lastStaleCachedAt = entry.cachedAt;
+    const metadata = staleMetadataStorage.getStore();
+    if (metadata) {
+      metadata.stale = true;
+      metadata.cachedAt = entry.cachedAt;
+    }
     return { value: entry.value as T, stale: true, cachedAt: entry.cachedAt };
-  }
-
-  /**
-   * Consume the stale flag set by the last getStale() hit.
-   * Returns { stale: true, cachedAt } if the last getStale() found data,
-   * then resets the flag. Used by wrapProvider to propagate stale metadata.
-   */
-  consumeStaleFlag(): { stale: boolean; cachedAt: number } {
-    const result = { stale: this.lastStaleHit, cachedAt: this.lastStaleCachedAt };
-    this.lastStaleHit = false;
-    this.lastStaleCachedAt = 0;
-    return result;
   }
 
   set<T>(key: string, value: T, ttlMs: number): void {
