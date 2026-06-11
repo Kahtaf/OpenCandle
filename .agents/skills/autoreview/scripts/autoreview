@@ -271,6 +271,11 @@ def shutil_which(name: str) -> str | None:
 def bounded(text: str, limit: int = 180_000) -> str:
     if len(text) <= limit:
         return text
+    print(
+        f"autoreview warning: review bundle section truncated at {limit} of {len(text)} characters; review coverage is partial",
+        file=sys.stderr,
+        flush=True,
+    )
     return text[:limit] + f"\n\n[truncated at {limit} characters]\n"
 
 
@@ -424,7 +429,7 @@ def react_doctor_evidence(repo: Path, changed_paths: set[str], args: argparse.Na
     cmd = [
         "npx",
         "--yes",
-        "react-doctor@latest",
+        "react-doctor@0.5.1",
         "gui/web",
         "--json",
         "--no-telemetry",
