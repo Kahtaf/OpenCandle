@@ -455,6 +455,39 @@ describe("alertsTool", () => {
     db.close();
   });
 
+  it("rejects lookback periods longer than the alert runner's history window", async () => {
+    await expect(alertsTool.execute("test", {
+      action: "create_sma_cross_above",
+      symbol: "AAPL",
+      fast_period: 50,
+      slow_period: 1000,
+    })).rejects.toThrow("slow_period must be at most 400");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_price_above_sma",
+      symbol: "AAPL",
+      period: 500,
+    })).rejects.toThrow("period must be at most 200");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_rsi_above",
+      symbol: "AAPL",
+      threshold: 70,
+      period: 500,
+    })).rejects.toThrow("period must be at most 100");
+
+    await expect(alertsTool.execute("test", {
+      action: "create_volume_spike",
+      symbol: "AAPL",
+      period: 500,
+    })).rejects.toThrow("period must be at most 100");
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listAlertRules()).toHaveLength(0);
+    db.close();
+  });
+
   it("allows zero cooldowns and rejects negative cooldowns before storing a rule", async () => {
     const created = await alertsTool.execute("test", {
       action: "create_price_above",

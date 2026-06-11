@@ -55,9 +55,9 @@ const params = Type.Object({
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol for create actions" })),
   threshold: Type.Optional(Type.Number({ description: "Price or indicator threshold for create actions" })),
-  period: Type.Optional(Type.Integer({ minimum: 1, description: "Indicator lookback period for SMA/RSI alerts" })),
+  period: Type.Optional(Type.Integer({ minimum: 1, description: "Indicator lookback period for SMA/RSI alerts. Max: 200 for price-SMA, 100 for RSI/volume alerts" })),
   fast_period: Type.Optional(Type.Integer({ minimum: 1, description: "Fast SMA lookback period for SMA-cross alerts. Default: 50" })),
-  slow_period: Type.Optional(Type.Integer({ minimum: 1, description: "Slow SMA lookback period for SMA-cross alerts. Default: 200" })),
+  slow_period: Type.Optional(Type.Integer({ minimum: 1, maximum: 400, description: "Slow SMA lookback period for SMA-cross alerts. Default: 200, max: 400" })),
   cooldown_seconds: Type.Optional(
     Type.Integer({ minimum: 0, description: "Cooldown between repeated trigger events. Default: 3600" }),
   ),
@@ -115,7 +115,8 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for SMA alert actions.");
         }
-        const period = validateLookbackPeriod(args.period ?? 50);
+        // Runner evaluates price_crosses_sma against 1y of daily bars (~252).
+        const period = validateLookbackPeriod(args.period ?? 50, 200);
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
         const instrument = service.upsertInstrumentRecord(resolution.instrument);
@@ -141,7 +142,8 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol || args.threshold == null) {
           throw new Error("symbol and threshold are required for RSI alert actions.");
         }
-        const period = validateLookbackPeriod(args.period ?? 14);
+        // Runner evaluates rsi_threshold against 6mo of daily bars (~126).
+        const period = validateLookbackPeriod(args.period ?? 14, 100);
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
         const instrument = service.upsertInstrumentRecord(resolution.instrument);
@@ -167,7 +169,8 @@ export const alertsTool: AgentTool<typeof params> = {
         if (!args.symbol) {
           throw new Error("symbol is required for volume-spike alert actions.");
         }
-        const period = validateLookbackPeriod(args.period ?? 20);
+        // Runner evaluates volume_spike against 6mo of daily bars (~126).
+        const period = validateLookbackPeriod(args.period ?? 20, 100);
         const multiplier = args.threshold ?? 2;
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
@@ -231,6 +234,10 @@ export const alertsTool: AgentTool<typeof params> = {
         }
         if (fastPeriod >= slowPeriod) {
           throw new Error("fast_period must be less than slow_period for SMA-cross alert actions.");
+        }
+        // Runner evaluates sma_cross against 2y of daily bars (~504).
+        if (slowPeriod > 400) {
+          throw new Error("slow_period must be at most 400 so alert checks can evaluate it against the runner's 2y daily history window.");
         }
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
@@ -325,9 +332,12 @@ export const alertsTool: AgentTool<typeof params> = {
   },
 };
 
-function validateLookbackPeriod(period: number): number {
+function validateLookbackPeriod(period: number, maxPeriod: number): number {
   if (!Number.isInteger(period) || period <= 0) {
     throw new Error("period must be a whole-number lookback period greater than 0 for indicator alert actions.");
+  }
+  if (period > maxPeriod) {
+    throw new Error(`period must be at most ${maxPeriod} so alert checks can evaluate it against the runner's daily history window.`);
   }
   return period;
 }
