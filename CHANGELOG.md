@@ -17,7 +17,7 @@
 
 ### Fixed
 
-- Tool/provider guardrails now return clear alert not-found results, validate finite and bounded tool parameters earlier, expose planned percent-move/SMA-cross alert checks, and surface Yahoo/SEC evidence-fetch failures with timeout/rate-limit hygiene.
+- Tool/provider guardrails now return clear alert not-found results, validate finite and bounded tool parameters earlier, expose planned percent-move/SMA-cross alert checks, and surface Yahoo/SEC evidence-fetch failures with timeout/rate-limit hygiene, including a configured `sec_edgar` rate-limit bucket so SEC document fetches are actually paced.
 - Portfolio lot add prompts with cost basis and currency now route to stateful tracking instead of being misread as asset comparisons or portfolio construction.
 - Combined alert prompts such as “create this alert, then check it now” now run the immediate manual check instead of stopping after alert creation.
 - Router symbol extraction now drops bare finance acronyms such as IV, SEC, FED, and CPI unless the user provides a direct ticker signal such as `$IV` or `IV ticker`.

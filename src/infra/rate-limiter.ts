@@ -72,3 +72,5 @@ rateLimiter.configure("exa", 5, 0.1);              // 5 req, ~6 req/min
 rateLimiter.configure("finnhub", 60, 1);            // 60 req/min (free tier)
 // TradingView scanner is undocumented; keep usage batch-first and paced.
 rateLimiter.configure("tradingview", 5, 1);         // 5 burst, 1 req/s sustained
+// SEC EDGAR fair-access guideline is 10 req/s; stay below it.
+rateLimiter.configure("sec_edgar", 5, 5);           // 5 burst, 5 req/s sustained
