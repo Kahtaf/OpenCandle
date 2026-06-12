@@ -1,298 +1,257 @@
 ---
-name: OpenCandle Research Surface
-description: Light evidence-first financial research UI for the homepage, docs, and GUI.
+name: OpenCandle
+description: Minimal shadcn-style research workbench UI shared by the GUI, docs site, and homepage.
 colors:
   ink: "#18181B"
-  body: "#303633"
-  muted: "#71717A"
+  graphite: "#71717A"
   paper: "#FFFFFF"
-  paper-soft: "#F4F4F5"
-  paper-sunk: "#EBEBEC"
-  line: "#E4E4E7"
-  line-strong: "#D4D4D8"
-  brand: "#34474E"
-  accent: "#87A188"
-  success: "#15803D"
-  warning: "#B45309"
-  danger: "#DC2626"
-  info: "#2563EB"
-  code-dark: "#202523"
-  code-dark-border: "#111412"
-  code-light: "#F5F1E5"
-  chrome-dot: "#9FA7A2"
+  zinc-mist: "#F4F4F5"
+  zinc-sunk: "#EAEAEC"
+  hairline: "#E4E4E7"
+  hairline-strong: "#D4D4D8"
+  brand: "#18181B"
+  success: "#1A9948"
+  warning: "#DC8409"
+  danger: "#EF4343"
+  info: "#3C83F6"
 typography:
   display:
-    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "5.25rem"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
+    fontSize: "4.5rem"
     fontWeight: 600
     lineHeight: 1.05
-    letterSpacing: "0"
+    letterSpacing: "-0.02em"
   headline:
-    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "3.5rem"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
+    fontSize: "2.75rem"
     fontWeight: 600
-    lineHeight: 1.05
-    letterSpacing: "0"
+    lineHeight: 1.1
+    letterSpacing: "-0.01em"
   title:
-    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "1.625rem"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
+    fontSize: "1.25rem"
     fontWeight: 600
-    lineHeight: 1.15
+    lineHeight: 1.2
     letterSpacing: "0"
   body:
-    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "1rem"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
+    fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.5
-    letterSpacing: "0"
-  lede:
-    fontFamily: "DM Sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "1.25rem"
-    fontWeight: 400
-    lineHeight: 1.45
     letterSpacing: "0"
   label:
-    fontFamily: "SFMono-Regular, Menlo, Consolas, monospace"
+    fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
     fontSize: "0.75rem"
-    fontWeight: 700
+    fontWeight: 500
     lineHeight: 1.4
-    letterSpacing: "0"
+    letterSpacing: "0.02em"
   code:
-    fontFamily: "SFMono-Regular, Menlo, Consolas, monospace"
-    fontSize: "0.8125rem"
+    fontFamily: "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: 1.5
-    letterSpacing: "0"
     fontFeature: "tnum"
 rounded:
-  xs: "5px"
-  sm: "7px"
+  sm: "6px"
   md: "8px"
-  lg: "10px"
-  xl: "12px"
-  frame: "14px"
-  tile: "24px"
+  lg: "12px"
   full: "9999px"
 spacing:
-  xxs: "6px"
   xs: "8px"
   sm: "12px"
-  md: "18px"
+  md: "16px"
   lg: "24px"
   xl: "36px"
-  xxl: "52px"
-  section-y: "92px"
-  hero-top: "150px"
-  docs-top: "98px"
-  content-max: "780px"
-  page-max: "1320px"
+  page-max: "1240px"
+  prose-max: "720px"
 components:
-  button-primary:
+  button-brand:
     backgroundColor: "{colors.brand}"
     textColor: "{colors.paper}"
     typography: "{typography.body}"
-    rounded: "{rounded.lg}"
-    height: "54px"
-    padding: "0 24px"
-  button-secondary:
+    rounded: "{rounded.full}"
+    height: "36px"
+    padding: "0 16px"
+  button-bordered:
     backgroundColor: "{colors.paper}"
-    textColor: "{colors.brand}"
-    typography: "{typography.body}"
-    rounded: "{rounded.lg}"
-    height: "54px"
-    padding: "0 24px"
-  nav-button:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.brand}"
+    textColor: "{colors.ink}"
     typography: "{typography.body}"
     rounded: "{rounded.md}"
-    height: "40px"
-    padding: "0 16px"
-  nav-button-active:
-    backgroundColor: "{colors.brand}"
-    textColor: "{colors.paper}"
+    height: "32px"
+    padding: "0 12px"
+  button-ghost:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.graphite}"
     typography: "{typography.body}"
     rounded: "{rounded.md}"
-    height: "40px"
-    padding: "0 16px"
+    height: "32px"
+    padding: "0 8px"
+  badge:
+    backgroundColor: "{colors.zinc-mist}"
+    textColor: "{colors.graphite}"
+    typography: "{typography.label}"
+    rounded: "{rounded.sm}"
+    height: "22px"
+    padding: "0 8px"
   panel:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
-    padding: "18px"
-  docs-content:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
-    padding: "34px"
-  floating-tile:
-    backgroundColor: "{colors.paper-soft}"
-    textColor: "{colors.brand}"
-    typography: "{typography.label}"
-    rounded: "{rounded.tile}"
-    height: "96px"
-    width: "96px"
-  code-block:
-    backgroundColor: "{colors.code-dark}"
-    textColor: "{colors.code-light}"
-    typography: "{typography.code}"
-    rounded: "{rounded.md}"
+    rounded: "{rounded.lg}"
     padding: "16px"
-  screenshot-frame:
+  input:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
-    rounded: "{rounded.frame}"
-    padding: "0"
+    typography: "{typography.body}"
+    rounded: "{rounded.md}"
+    height: "36px"
+    padding: "0 12px"
 ---
 
-# Design System: OpenCandle Research Surface
+# Design System: OpenCandle
 
 ## 1. Overview
 
 **Creative North Star: "The Research Desk."**
 
-OpenCandle should feel like a precise research desk: bright surface, visible instruments, quiet chrome, and strong evidence hierarchy. The current homepage is the source of truth for the static site and the direction for the GUI. It uses a light workspace, DM Sans, dark ink text, green-gray primary actions, and restrained panels that make the real product screenshot feel central.
+OpenCandle is a quiet, exacting workbench for financial research. The design language is the GUI's: minimal, professional, shadcn-component construction in the spirit of llmchat — white paper, zinc neutrals, one near-black action color, Inter for everything, JetBrains Mono only where data demands alignment. The docs site and homepage follow the GUI, not the other way around; `gui/web/src/styles.css` and `gui/web/src/components/ui/` are the source of truth for tokens and component anatomy.
 
-This system is calm, exacting, and useful. It rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, and hidden capabilities. The interface can be visually memorable through scale, grid, and product evidence, but it should never feel like a trading game or a generic AI landing page.
+The system rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, gamified trading-app energy, and terminal cosplay. Color exists to carry meaning — market direction, provider state, data freshness — never decoration. Evidence (real screenshots, real tool output, real numbers) carries the visual story.
 
 **Key Characteristics:**
 
-- Light research surface with subtle gray page wash.
-- Dark ink text and one green-gray primary action.
-- Large, confident homepage typography; quieter Markdown typography in docs and GUI.
-- Thin borders, small radii, and only a few purposeful shadows.
-- Real product evidence, especially screenshots and tool output, carries the visual story.
+- White surfaces layered with zinc tints before any shadow.
+- One action color: near-black ink. Semantic green/amber/red/blue communicate state only.
+- Inter at every scale; hierarchy from size and weight, never a second display face.
+- Hairline borders, 6–12px radii, pill-shaped primary CTAs.
+- Tabular numerals on all financial figures; signed values accompany every direction color.
 
 ## 2. Colors
 
-The palette is a restrained light system: white paper, zinc-like grays, deep ink, and a muted green-gray brand action.
+A zinc-neutral system: white paper, cool grays with a barely-there blue cast (hue 240), one near-black action color, and four semantic signals.
 
 ### Primary
 
-- **Research Ink** (`#18181B`): Main text, high-emphasis headings, hover state for primary actions, and the darkest UI state.
-- **Candle Slate** (`#34474E`): Primary action color. Use it for Install, Run, selected docs nav, active GUI actions, and focus rings.
-- **Sage Evidence** (`#87A188`): Soft brand accent. Use sparingly for background tints, generated image accents, and subtle visual association with the logo.
+- **Research Ink** (`#18181B`): Foreground text, headings, and the only action color. Primary buttons, active navigation, focus rings, and toggles are this near-black — commitment is shown by darkness, not hue.
 
 ### Neutral
 
-- **White Paper** (`#FFFFFF`): Main page surface, panels, nav, content cards, and screenshot frames.
-- **Soft Paper** (`#F4F4F5`): Page wash, code inline backgrounds, nav hover fills, browser chrome strips, and secondary tonal layers.
-- **Sunk Paper** (`#EBEBEC`): Selected rows, deeper GUI surfaces, and low emphasis state fills.
-- **Hairline** (`#E4E4E7`): Default border, dividers, table rules, and panel outlines.
-- **Strong Hairline** (`#D4D4D8`): Hover border and stronger separation when a surface needs a clearer edge.
-- **Muted Graphite** (`#71717A`): Secondary copy, metadata, nav labels, captions, and inactive states.
-- **Body Graphite** (`#303633`): Long-form Markdown body text, GUI prose, and dense readable copy.
+- **Paper** (`#FFFFFF`): Default surface for pages, panels, cards, and inputs.
+- **Zinc Mist** (`#F4F4F5`): Secondary fills — hover states, badges, inline-code backgrounds, selected rows, lot-ledger rows.
+- **Zinc Sunk** (`#EAEAEC`): Tertiary fill for pressed/active states and deeper tonal layers.
+- **Hairline** (`#E4E4E7`): Default border for panels, tables, dividers, and inputs.
+- **Strong Hairline** (`#D4D4D8`): Hover borders, disabled toggle tracks, neutral chart strokes.
+- **Graphite** (`#71717A`): Secondary text — descriptions, metadata, column headers, timestamps, inactive nav.
 
 ### Semantic
 
-- **Success Green** (`#15803D`): Positive status, configured providers, successful checks, and positive market values with text labels.
-- **Warning Ochre** (`#B45309`): Missing keys, stale data, partial results, and caveats.
-- **Danger Red** (`#DC2626`): Failed providers, destructive actions, and negative states.
-- **Info Blue** (`#2563EB`): Informational statuses, links where the brand action color would imply commitment, and neutral success logs.
+- **Signal Green** (`#1A9948`, `hsl(142 71% 35%)`): Positive market direction, configured providers, success badges. Always paired with a `+` sign or text label.
+- **Amber Caveat** (`#DC8409`, `hsl(35 92% 45%)`): Stale quotes, provider limits, partial data, late runs.
+- **Signal Red** (`#EF4343`, `hsl(0 84% 60%)`): Negative market direction, failures, destructive actions. Always paired with a `−` sign or text label.
+- **Info Blue** (`#3C83F6`, `hsl(217 91% 60%)`): Neutral informational status.
+
+Semantic tints follow the shadcn badge recipe: `color/10` background, `color/30` border, full-strength text.
 
 ### Named Rules
 
-**The One Action Color Rule.** Candle Slate is the only primary action color. Semantic colors communicate state; they do not decorate layout.
+**The One Ink Rule.** Research Ink is the only action color. If a control is interactive and committed, it is near-black; if a color is not Research Ink, it is communicating market or system state.
 
-**The Paper First Rule.** White Paper is the default surface. Soft Paper and Sunk Paper create depth before shadows do.
+**The Signed Color Rule.** Direction colors never appear without a sign, label, or icon. `+2.41%` in green; never a green number alone.
 
 ## 3. Typography
 
-**Display Font:** DM Sans with system sans fallbacks.
-**Body Font:** DM Sans with system sans fallbacks.
-**Label/Mono Font:** SFMono-Regular, Menlo, Consolas, monospace.
+**Display Font:** Inter (system-ui fallback)
+**Body Font:** Inter (system-ui fallback)
+**Label/Mono Font:** JetBrains Mono (ui-monospace fallback)
 
-**Character:** DM Sans gives the homepage a direct, modern, product-native voice without becoming ornamental. The mono stack is only for structural labels, provider names, code, tickers, and data snippets.
+**Character:** A single neutral grotesque doing all the work — modern, legible, unsentimental. JetBrains Mono appears only where alignment is functional: code, tickers in dense tables, and tabular financial figures.
 
 ### Hierarchy
 
-- **Display** (600, `5.25rem`, 1.05): Homepage hero headline. Use only for the first viewport brand message.
-- **Headline** (600, `3.5rem`, 1.05): Homepage sections and major static-site section headings.
-- **Docs Title** (600, `3.25rem`, 1.05): Markdown `h1` inside docs content.
-- **Title** (600, `1.625rem`, 1.15): Markdown `h2`, GUI panel titles, and dense product page section heads.
-- **Body** (400, `1rem`, 1.5): Markdown prose, GUI descriptions, and normal UI copy. Keep long-form text between 65 and 75 characters per line.
-- **Lede** (400, `1.25rem`, 1.45): Homepage supporting copy and major static-site intros.
-- **Label** (700, `0.75rem`, 1.4): Section kickers, terminal labels, provider labels, and compact metadata. Keep letter spacing at 0.
-- **Code** (400, `0.8125rem`, 1.5): Code blocks, terminal snippets, tickers, provider IDs, and structured tool output. Use tabular numbers.
+- **Display** (600, 4.5rem, 1.05, −0.02em): Homepage hero only.
+- **Headline** (600, 2.75rem, 1.1): Homepage and docs section headings.
+- **Title** (600, 1.25rem, 1.2): Page titles (17px in the GUI shell), panel headings at 14px/600.
+- **Body** (400, 0.875rem, 1.5): GUI default. Docs prose runs 1rem with a 65–75ch measure.
+- **Label** (500, 0.75rem, 0.02em): Column headers, badges, kickers, uppercase section labels in inspectors.
+- **Code** (400, 0.75rem, tabular numerals): Code blocks, lot ledgers, provider IDs.
 
 ### Named Rules
 
-**The No Decorative Type Rule.** Do not introduce another display family. The difference between homepage, docs, and GUI comes from scale, density, and layout, not font switching.
+**The One Face Rule.** No second display family, ever. Hierarchy comes from Inter's weight and size, and from spacing.
 
-**The Flat Tracking Rule.** Letter spacing is 0 across the system. Uppercase labels can use weight and mono structure, not tracking, for authority.
+**The Tabular Rule.** Every financial figure — price, P&L, percentage, quantity — renders with `font-variant-numeric: tabular-nums`.
 
 ## 4. Elevation
 
-OpenCandle uses tonal layering first and shadows second. Most surfaces sit flat with a 1px Hairline border. Shadows appear only on the homepage screenshot frame, the CTA panel, and rare overlays where the surface needs to read as physically above the page.
+Tonal layering first, shadows second. Surfaces sit flat with a 1px Hairline border; depth comes from Paper → Zinc Mist → Zinc Sunk. Shadows are neutral-gray, near-invisible, and reserved for genuine lift.
 
 ### Shadow Vocabulary
 
-- **Product Frame Shadow** (`0 24px 90px rgba(52, 71, 78, 0.12)`): Use for the real GUI screenshot frame and large proof surfaces.
-- **CTA Shadow** (`0 18px 70px rgba(52, 71, 78, 0.10)`): Use for the final homepage call-to-action or a similarly rare elevated static-site surface.
-- **Tile Shadow** (`inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 22px 70px rgba(48, 57, 52, 0.14)`): Use only for homepage floating provider tiles, not for GUI panels.
+- **Subtle XS** (`0 1px 2px rgba(15, 15, 15, 0.04)`): Cards and panels at rest.
+- **Subtle SM** (`0 4px 12px rgba(15, 15, 15, 0.06)`): Popovers, dropdowns, toasts.
+- **Subtle MD** (`0 16px 32px rgba(15, 15, 15, 0.08)`): Dialogs, sheets, and the homepage product-screenshot frame.
 
 ### Named Rules
 
-**The Flat Product Rule.** GUI surfaces, docs panels, tool cards, tables, and sidebars are flat by default. Use borders and tonal layers before adding shadow.
-
-**The Evidence Frame Rule.** Large shadow belongs to evidence: the product screenshot, an important workflow panel, or a focused overlay. Never use it for decorative card grids.
+**The Neutral Shadow Rule.** Shadow color is neutral near-black at single-digit opacity. Tinted, colored, or glowing shadows are prohibited.
 
 ## 5. Components
 
+Components are shadcn/ui constructions (cva variants, Radix primitives where interaction demands it). New GUI components should be composed from `gui/web/src/components/ui/` before anything is hand-rolled; efferd.com shadcn blocks are an approved structural reference.
+
 ### Buttons
 
-- **Shape:** 8px for nav buttons, 10px for large homepage actions, 6px to 8px for compact GUI actions.
-- **Primary:** Candle Slate background, White Paper text, 54px height for homepage actions, 40px height for nav actions.
-- **Hover / Focus:** Hover shifts primary to Research Ink. Focus uses a 2px Candle Slate outline with a 3px offset.
-- **Secondary:** White Paper background, Hairline border, Candle Slate text. Hover uses Soft Paper and Strong Hairline.
-- **GUI adaptation:** Keep one primary action per region. Use compact heights when density matters.
+- **Shape:** 8px radius default; primary CTAs are pills (9999px).
+- **Brand:** Research Ink background, Paper text, pill shape, 36px height (`hover: opacity 0.9`).
+- **Bordered:** Paper background, Hairline border, Ink text, 32px height (`hover: Zinc Mist`).
+- **Ghost:** No border, Graphite text (`hover: Zinc Mist fill, Ink text`).
+- **Focus:** 2px Ink ring with offset; never a colored glow.
 
-### Navigation
+### Badges
 
-- **Homepage and docs navbar:** Fixed top bar, 66px minimum height, White Paper at high opacity, Hairline bottom rule, 14px blur, 52px desktop horizontal padding, 18px mobile padding.
-- **Brand lockup:** Logo at 26px, 8px radius, Hairline border, 10px gap to wordmark, 700 weight.
-- **Docs navigation:** Left sidebar and right table of contents use the same panel treatment as static site cards. Active nav is Candle Slate with White Paper text.
-- **GUI adaptation:** Sidebars should keep the same paper, border, and active-row vocabulary. Do not make the GUI darker than the static site unless the whole product explicitly supports a dark mode.
+- **Style:** 22px tall, 6px radius, 11–12px medium text. Neutral: Zinc Mist fill + Graphite text. Semantic: `color/10` fill, `color/30` border, full-strength colored text.
+- **Status dots:** 7px circles (green armed, amber degraded, gray paused) always adjacent to a text label.
 
 ### Cards / Containers
 
-- **Panels:** White Paper or 86 percent white over the page wash, 1px Hairline border, 12px radius, 18px to 34px internal padding.
-- **Docs content:** White Paper panel, 12px radius, 34px desktop padding, Markdown rendered directly without a separate hero.
-- **Homepage evidence cards:** Use panels for proof, provider grids, terminal panels, code windows, and open-source tiles. Avoid nested cards.
-- **Floating tiles:** 96px square, 24px radius, Soft Paper gradient, one provider abbreviation or logo. They are homepage-specific decoration, not a GUI primitive.
+- **Corner Style:** 12px radius.
+- **Background:** Paper with 1px Hairline border and Subtle XS shadow.
+- **Internal Padding:** 12–16px header band with bottom Hairline rule; content edge-to-edge for tables, 16px otherwise.
+- **Nested cards are prohibited** — use a Hairline divider or a Zinc Mist band inside a card.
 
-### Code, Tables, and Data
+### Inputs / Fields
 
-- **Inline code:** Soft Paper fill, Hairline border, 5px radius, mono stack, tabular numbers.
-- **Code blocks:** Code Dark background, Code Light text, 8px radius, 16px padding.
-- **Tables:** White Paper background, Hairline border, 8px radius, horizontal overflow inside the table, Soft Paper header row.
-- **Financial data:** Always use tabular numbers. Do not rely on color alone for positive, negative, warning, stale, or partial states.
+- **Style:** Paper background, Hairline border, 8px radius, 36px height.
+- **Focus:** Border shifts to Ink with a 2px ring; no glow.
+- **Placeholder:** Graphite. Placeholders never substitute for labels.
 
-### Product Screenshot / GUI Frame
+### Navigation
 
-- **Frame:** White Paper, Hairline border, 14px radius, Product Frame Shadow.
-- **Chrome strip:** 42px desktop, 36px mobile, Soft Paper fill, Hairline bottom rule.
-- **Window dots:** Neutral gray only. No red/yellow/green traffic-light dots because the brand is quieter than a browser mockup.
-- **Image:** Use real product screenshots with explicit width and height. Do not fabricate GUI captures.
+- **Sidebar:** Paper, right Hairline rule, 13.5px items at 6px/10px padding, 8px radius. Inactive: Graphite. Hover and active: Zinc Mist fill with Ink text; active adds 500 weight. Count pills right-aligned in Zinc Mist.
+- **Docs/homepage navbar:** Same vocabulary — Paper bar, Hairline bottom rule, Ink wordmark, Graphite links that resolve to Ink on hover, pill brand CTA.
 
-### Markdown Surfaces
+### Data Tables (signature component)
 
-- **Docs layout:** Sidebar, content, and table-of-contents panels in a three-column grid. Content max width is 780px.
-- **Docs rhythm:** Markdown starts directly with its `h1`. No docs hero. `h2` sections get a top border, 22px top padding, and 42px top margin.
-- **Mobile docs:** Stack sidebar above content, hide table of contents, reduce content padding to 18px, and keep nav accessible without horizontal overflow.
+- **Headers:** 12px/500 Graphite, sentence case, no uppercase, bottom Hairline rule.
+- **Rows:** 13.5px, 11px vertical padding, Hairline rules, Zinc Mist hover and selection.
+- **Symbol cell grammar:** bold ticker over Graphite company name, two lines.
+- **Numbers:** right-aligned, tabular. Direction values use Signed Color Rule.
+- **Drill-down:** chevron-expand to Zinc Mist detail rows (lot ledgers), not modals.
 
 ## 6. Do's and Don'ts
 
-- **Do** use the homepage as the source of truth for the static site and the visual direction for the GUI.
-- **Do** keep the system light, precise, and evidence-led.
-- **Do** use DM Sans for static-site and GUI typography unless a platform constraint prevents it.
-- **Do** reserve Candle Slate for committed actions and active navigation.
-- **Do** rely on White Paper, Soft Paper, Hairline borders, and radius before adding shadow.
-- **Do** render Markdown plainly in docs pages; nav can be designed, docs content should remain readable documentation.
-- **Do** make provider state, data freshness, and warnings explicit in text.
-- **Don't** return to dark T3-style styling for OpenCandle.
-- **Don't** introduce purple AI gradients, navy-and-gold finance cliches, glass panels, or stock-photo gloss.
-- **Don't** use decorative shadows on ordinary GUI cards.
-- **Don't** fabricate product screenshots or UI states.
-- **Don't** communicate market status through color alone.
-- **Don't** add a second display font, negative tracking, or ornamental letter spacing.
+### Do:
+
+- **Do** treat `gui/web/src/styles.css` and `gui/web/src/components/ui/` as the normative token and component source.
+- **Do** keep one primary (pill, Research Ink) action per region; everything else bordered or ghost.
+- **Do** show data freshness in plain language ("Updated 2m ago", "Quote 26m old") with Amber Caveat when stale.
+- **Do** use relative, human timestamps in UI surfaces; raw ISO strings belong in tool output only.
+- **Do** layer Paper → Zinc Mist → Zinc Sunk before reaching for shadow.
+
+### Don't:
+
+- **Don't** reintroduce the retired docs-site theme: DM Sans, Candle Slate `#34474E`, sage `#87A188`, cream code blocks, or green-tinted shadows.
+- **Don't** use purple AI gradients, navy-and-gold finance cliches, glassmorphism, stock-photo gloss, or gamified trading-app styling — PRODUCT.md's anti-references, verbatim.
+- **Don't** communicate market direction through color alone; every red/green value carries its sign.
+- **Don't** add a second display font, gradient text, side-stripe borders, or decorative card shadows.
+- **Don't** leak internal vocabulary (`price_crosses_above`, "Instrument #1", "SQLite-backed") into user-facing copy.
+- **Don't** ship manual refresh buttons; data updates in the background and announces its own age.

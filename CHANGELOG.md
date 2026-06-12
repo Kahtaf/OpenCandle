@@ -13,10 +13,23 @@
 
 ### Changed
 
+- GUI market-state pages were redesigned around symbol-centric layouts: the watchlist is a master-detail view with a symbol inspector (quote, stop→target range, thesis, position, alerts, predictions), the portfolio gets a total-value header with today/all-time deltas, an allocation bar, and chevron-expandable per-symbol lot ledgers, alerts render as plain-English sentence rules with a status log, predictions get a scorecard with progress-to-target bars, and reports render the latest report as a document with a history rail.
+- GUI market-state pages are now mobile-first: no document-level horizontal overflow, tables fold secondary columns behind sm/md breakpoints (lot details and actions inline on phones), and create/edit panels present as a bottom sheet with scrim on small screens.
+- GUI market-state forms gained visible labels, bordered text areas, a direction select for predictions, condition-aware alert fields with plain-English copy, a report schedule time picker, and two-step inline confirmation on destructive remove/cancel actions.
+- GUI quote refreshes now happen automatically in the background: the server keeps a stale-while-revalidate quote snapshot that survives page reloads, the client polls it, and the manual Refresh/Refresh prices buttons were removed in favor of an "Updated Xm ago" freshness line.
+- The predictions surface is now consistently named "Predictions" in the GUI (previously "Thesis Tracker" on the page itself).
+- Daily report runs now persist the full report text in the stored run summary so the GUI can render past reports without regenerating them.
+- Docs site and DESIGN.md now follow the GUI's minimal shadcn design language (Inter, zinc neutrals, near-black actions, neutral shadows), replacing the DM Sans/slate docs-only theme; DESIGN.md documents the GUI tokens as the normative source with a DESIGN.json sidecar.
 - Removed deprecated `WorkflowPlan` workflow wrappers (`buildPortfolioWorkflow`, `buildCompareAssetsWorkflow`, and `buildOptionsScreenerWorkflow`) from `opencandle/workflows`; use the `*WorkflowDefinition` builders instead.
 
 ### Fixed
 
+- Prediction checks now flag open calls whose target price was reached before expiry ("target hit … resolve or let it ride") while keeping them open, matching the GUI's target-hit badge.
+- Manual alert check output now states the observed value versus the rule threshold, the condition result, the source provider, and any data-delay caveat instead of a bare "checked"/"seeded" label.
+- The GUI prediction form and displays now use the tool's canonical 1–10 conviction scale (previously labeled 0–1, which skewed conviction-weighted accuracy).
+- The agent test harness (`tests/harness/cli.ts`) now respects a caller-provided `OPENCANDLE_HOME` instead of always redirecting to a disposable temp home and deleting it on exit, so documented manual runs can exercise real local state.
+- Saved portfolio/watchlist context now reaches rules-mode chat turns: finance-shaped prompts that match no workflow (for example sector or IPO theme questions about companies without tickers) record a fallback turn, carry the saved market-state context, and instruct a "Your positions" impact section connecting the answer back to saved holdings; non-finance prompts remain excluded.
+- SQLite schema migrations from v3/v4 no longer crash on startup when `alert_events` exists without the v7 `dedupe_key` column; the column is added before the unique dedupe index is created.
 - Tool/provider guardrails now return clear alert not-found results, validate finite and bounded tool parameters earlier, expose planned percent-move/SMA-cross alert checks, and surface Yahoo/SEC evidence-fetch failures with timeout/rate-limit hygiene, including a configured `sec_edgar` rate-limit bucket so SEC document fetches are actually paced.
 - Indicator alert lookback periods (SMA-cross slow leg, price-SMA, RSI, volume spike) are now bounded to what the alert runner's daily history window can evaluate, so stored alerts cannot remain permanently unavailable.
 - Alpha Vantage `ytd` history fallback now filters bars by calendar date instead of an estimated trading-day count, so year-to-date requests no longer include prior-year bars.
