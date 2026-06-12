@@ -44,6 +44,7 @@ import { createAskUserBridge } from "./ask-user-bridge.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
+import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createAutomationHeartbeatRunner, normalizeAutomationHeartbeatMs } from "./automation-heartbeat.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
@@ -96,6 +97,7 @@ let session = runtime.session;
 const clients = new Set<WsClient>();
 const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
+const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 let poller: NodeJS.Timeout | null = null;
 let automationHeartbeat: NodeJS.Timeout | null = null;
 let quotePollInFlight = false;
@@ -162,7 +164,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
 
   if (url.pathname === "/api/market-state/quotes" && req.method === "GET") {
     if (!allowPrivateMarketStateApi(req, res)) return;
-    writeJson(res, await buildMarketStateQuoteSnapshot());
+    writeJson(res, await quoteSnapshotStore.get());
     return;
   }
 

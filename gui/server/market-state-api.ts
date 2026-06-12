@@ -6,6 +6,7 @@ import { getQuote } from "../../src/providers/yahoo-finance.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
 
 export interface MarketStateSnapshot {
+  instruments: Array<NonNullable<ReturnType<MarketStateService["getInstrument"]>>>;
   watchlist: ReturnType<MarketStateService["listWatchlistItems"]>;
   portfolio: ReturnType<MarketStateService["listPortfolioLots"]>;
   predictions: ReturnType<MarketStateService["listPredictions"]>;
@@ -38,6 +39,7 @@ export interface MarketStateQuoteSnapshot {
     symbol: string;
     status: "ok" | "unavailable";
     currentPrice?: number;
+    changePercent?: number;
     marketValue?: number;
     totalCost: number;
     pnl?: number;
@@ -63,11 +65,16 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
   const ownedDb = db ?? initDefaultDatabase();
   const service = new MarketStateService(ownedDb);
   try {
+    const alerts = service.listAlertRules();
+    const instrumentIds = [...new Set(alerts.map((rule) => rule.instrumentId).filter((id) => id != null))];
     return {
+      instruments: instrumentIds
+        .map((id) => service.getInstrument(id))
+        .filter((instrument) => instrument != null),
       watchlist: service.listWatchlistItems(),
       portfolio: service.listPortfolioLots(),
       predictions: service.listPredictions(),
-      alerts: service.listAlertRules(),
+      alerts,
       alertEvents: service.listAlertEvents(),
       alertCheckRuns: service.listAlertCheckRuns(),
       reportTemplates: service.listReportTemplates(),
@@ -162,6 +169,7 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
         symbol: lot.symbol,
         status: "ok" as const,
         currentPrice: quote.price,
+        changePercent: quote.changePercent,
         marketValue,
         totalCost,
         pnl: marketValue - totalCost,
