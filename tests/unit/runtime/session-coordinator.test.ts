@@ -579,6 +579,39 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     expect(coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("pass_through")))
       .not.toContain("Saved Market State");
   });
+
+  it("injects saved market state for rules-mode finance fallback turns carrying a fallback context", () => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "RKLB",
+        assetType: "equity",
+        name: "Rocket Lab USA, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 150,
+      avgCost: 18.4,
+      currency: "USD",
+    });
+    db.close();
+
+    const coord = new SessionCoordinator();
+    coord.initSession("test-session");
+    const prompt = coord.buildSystemPrompt("base", undefined, {
+      assumptionsBlock: "",
+      missingRequired: [],
+      extraContext: "General finance question without a dispatched workflow.",
+    });
+
+    expect(prompt).toContain("Saved Market State");
+    expect(prompt).toContain("RKLB");
+  });
 });
 
 function resolvedTurnContext(routeKind: "agent_task" | "pass_through") {

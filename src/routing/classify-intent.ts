@@ -309,3 +309,26 @@ function isStatefulTrackingRequest(input: string): boolean {
   if (hasPortfolioConstructionIntent) return false;
   return (hasStateVerb && hasStateObject) || hasPortfolioLotShape;
 }
+
+const FINANCE_SIGNAL_TERMS = [
+  "stock", "stocks", "shares", "ticker", "tickers", "etf", "etfs",
+  "ipo", "earnings", "dividend", "dividends", "valuation", "stock market",
+  "invest", "investing", "investment", "portfolio", "watchlist",
+  "bond", "bonds", "bond yield", "treasury", "the fed", "inflation", "interest rates",
+  "crypto", "bitcoin", "ethereum", "options chain", "covered call", "puts",
+  "bullish", "bearish", "hedge", "price target", "cost basis", "nasdaq", "s&p",
+];
+
+const FINANCE_SIGNAL_PATTERN = new RegExp(
+  `\\b(?:${FINANCE_SIGNAL_TERMS.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
+  "i",
+);
+
+/**
+ * Deterministic finance-vocabulary check for rules-mode fallback turns whose
+ * intent did not match a workflow and whose entities carry no symbols (for
+ * example theme prompts about private companies or sectors).
+ */
+export function hasFinanceSignals(input: string): boolean {
+  return FINANCE_SIGNAL_PATTERN.test(input);
+}

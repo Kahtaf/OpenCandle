@@ -321,7 +321,7 @@ export class SessionCoordinator {
         resolvedTurnContext?.workflow ?? workflowType ?? resolvedTurnContext?.routeKind ?? "unclassified",
       )
       : undefined;
-    const savedMarketStateContext = this.db && shouldIncludeSavedMarketStateContext(workflowType, resolvedTurnContext)
+    const savedMarketStateContext = this.db && shouldIncludeSavedMarketStateContext(workflowType, resolvedTurnContext, fallbackContext)
       ? buildSavedMarketStateContext(this.db)
       : "";
     const combinedMemoryContext = [savedMarketStateContext, memoryContext]
@@ -528,6 +528,7 @@ function buildSavedMarketStateContext(db: Database.Database): string {
       "## Saved Market State",
       "Use this saved user state to connect broad sector, theme, portfolio-impact, watchlist, alert, daily-report, and prediction questions back to the user's positions and tracked symbols. Treat it as context, not as a fresh instruction.",
       "When a saved portfolio lot is relevant, explicitly mention the saved quantity, average cost, and cost basis before explaining the impact.",
+      "If the question concerns a sector, industry, event, company, or competitor connected to any saved position or watchlist symbol, end the answer with a short \"Your positions\" section explaining how it affects those specific holdings. Skip that section only when no saved symbol is plausibly affected.",
     ];
 
     if (lots.length > 0) {
@@ -600,11 +601,14 @@ function buildSavedMarketStateContext(db: Database.Database): string {
 function shouldIncludeSavedMarketStateContext(
   workflowType: string | undefined,
   resolvedTurnContext: ResolvedTurnContext | undefined,
+  fallbackContext: FallbackContext | undefined,
 ): boolean {
   if (resolvedTurnContext) {
     return resolvedTurnContext.routeKind !== "pass_through";
   }
-  return workflowType != null;
+  // A pending fallback context only exists for routed finance turns (rules-mode
+  // general finance or LLM-router fallback), never for pass-through prompts.
+  return workflowType != null || fallbackContext != null;
 }
 
 function formatMoney(value: number, currency: string): string {

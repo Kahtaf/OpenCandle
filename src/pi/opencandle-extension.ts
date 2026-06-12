@@ -7,6 +7,7 @@ import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.j
 import { getConfig } from "../config.js";
 import {
   classifyWithLegacyRules,
+  hasFinanceSignals,
   createPiAiRouterClient,
   resolveOptionsScreenerSlots,
   resolvePortfolioSlots,
@@ -671,6 +672,32 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
+
+    // Rules-mode finance fallback: no workflow dispatched, but the turn is
+    // finance-shaped (classified finance intent, extracted symbols, or finance
+    // vocabulary). Record the fallback turn and stash a fallback context so
+    // the system prompt carries saved market state for this turn; non-finance
+    // prompts stay untouched.
+    const isFinanceFallback =
+      classification.workflow !== "unclassified" ||
+      classification.entities.symbols.length > 0 ||
+      hasFinanceSignals(event.text);
+    if (isFinanceFallback) {
+      coordinator.recordWorkflowRun("fallback", classification.entities, {}, [], "agent_task");
+      coordinator.setPendingFallbackContext({
+        assumptionsBlock: "",
+        missingRequired: [],
+        extraContext: classification.entities.symbols.length > 0
+          ? `Rules-router extracted symbols: ${classification.entities.symbols.join(", ")}.`
+          : undefined,
+      });
+      pi.appendEntry("opencandle-fallback-context", {
+        mode: "rules",
+        classifiedWorkflow: classification.workflow,
+        symbols: classification.entities.symbols,
+      });
+    }
+    return undefined;
   });
 
   /**

@@ -191,6 +191,54 @@ describe("opencandle extension", () => {
     expect(ctx.ui.notify).not.toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
   });
 
+  it("carries a finance fallback context for rules-mode theme prompts without tickers", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+    };
+
+    await inputHandler!(
+      { type: "input", text: "Thoughts on the SpaceX IPO today? Worth getting exposure?", source: "interactive" },
+      ctx,
+    );
+    const result = await beforeStartHandler!(
+      { type: "before_agent_start", prompt: "Thoughts on the SpaceX IPO today?", systemPrompt: "BASE" },
+      {},
+    );
+
+    expect(result.systemPrompt).toContain("## Fallback Playbook");
+  });
+
+  it("does not carry a finance fallback context for non-finance rules-mode prompts", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+    };
+
+    await inputHandler!(
+      { type: "input", text: "write me a poem about autumn leaves", source: "interactive" },
+      ctx,
+    );
+    const result = await beforeStartHandler!(
+      { type: "before_agent_start", prompt: "write me a poem about autumn leaves", systemPrompt: "BASE" },
+      {},
+    );
+
+    expect(result.systemPrompt).not.toContain("## Fallback Playbook");
+  });
+
   it("appends the OpenCandle system prompt before agent start", async () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);

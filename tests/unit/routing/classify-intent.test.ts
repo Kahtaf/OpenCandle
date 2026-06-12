@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
-import { classifyIntent } from "../../../src/routing/classify-intent.js";
+import { classifyIntent, hasFinanceSignals } from "../../../src/routing/classify-intent.js";
 
 describe("classifyIntent", () => {
   it("is marked deprecated because LLM routing is the default classifier", () => {
@@ -368,5 +368,20 @@ describe("classifyIntent", () => {
       const result = classifyIntent("Compare aapl and msft");
       expect(result.workflow).toBe("compare_assets");
     });
+  });
+});
+
+describe("hasFinanceSignals", () => {
+  it("detects finance vocabulary in prompts without resolvable tickers", () => {
+    expect(hasFinanceSignals("Thoughts on the SpaceX IPO today? Worth getting exposure?")).toBe(true);
+    expect(hasFinanceSignals("Should I buy more semiconductor stocks before earnings?")).toBe(true);
+    expect(hasFinanceSignals("How is the bond market reacting to the Fed?")).toBe(true);
+    expect(hasFinanceSignals("Is now a good time to invest in clean energy ETFs?")).toBe(true);
+  });
+
+  it("stays quiet for non-finance prompts", () => {
+    expect(hasFinanceSignals("write me a poem about autumn leaves")).toBe(false);
+    expect(hasFinanceSignals("what's the weather in Toronto tomorrow")).toBe(false);
+    expect(hasFinanceSignals("translate hello to french")).toBe(false);
   });
 });
