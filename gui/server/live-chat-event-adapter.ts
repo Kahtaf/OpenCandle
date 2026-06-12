@@ -7,6 +7,11 @@ export interface LiveChatEventAdapterOptions {
   sessionId: string;
   startSeq: number;
   emit: (event: ChatEvent) => void;
+  /**
+   * The user's words as typed. Workflow transforms can replace the first user
+   * message with an expanded prompt; the live view renders this instead.
+   */
+  originalPrompt?: string;
 }
 
 export interface LiveChatEventAdapter {
@@ -55,11 +60,14 @@ export function createLiveChatEventAdapter(options: LiveChatEventAdapterOptions)
           const message = event.message as Message;
           if (message.role === "user") {
             const messageId = `${options.runId}-user-${++userCount}`;
+            const text = userCount === 1 && options.originalPrompt
+              ? options.originalPrompt
+              : messageText(message.content);
             emit({ type: "message.created", messageId, role: "user" });
             emit({
               type: "message.completed",
               messageId,
-              content: [{ type: "text", text: messageText(message.content) }],
+              content: [{ type: "text", text }],
             });
             return;
           }

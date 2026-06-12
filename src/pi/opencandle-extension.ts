@@ -75,6 +75,12 @@ export interface OpenCandleExtensionOptions {
 export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
   const coordinator = new SessionCoordinator();
 
+  // Workflow transforms replace the user's turn with the expanded prompt; this
+  // marker lets the GUI render the user's original words instead.
+  const markOriginalInput = (original: string): void => {
+    pi.appendEntry("opencandle-user-input", { original });
+  };
+
   // Credential-interception state. Lifetime:
   //   `sessionPromptedSet` — cleared on session_start, persists across turns
   //      within a session so users don't get re-prompted after picking
@@ -505,6 +511,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     if (analysis.match && analysis.symbol) {
       const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
@@ -613,6 +620,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
       const definition = buildPortfolioWorkflowDefinition(resolution);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
@@ -623,7 +631,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-        return prompt ? { action: "transform", text: prompt } : { action: "handled" };
+        if (prompt) markOriginalInput(event.text);
+      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
       }
     }
 
@@ -670,6 +679,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
       applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
@@ -793,7 +803,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
 
     // Workflow dispatch for recognised workflows.
     if (output.routeKind === "workflow_dispatch" && output.workflow) {
-      return dispatchRouterWorkflow(output, ctx);
+      return dispatchRouterWorkflow(output, ctx, text);
     }
 
     if (output.routeKind === "pass_through") {
@@ -825,6 +835,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   async function dispatchRouterWorkflow(
     output: RouterOutput,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+    originalText: string,
   ): Promise<{ action: "transform"; text: string } | false> {
     const workflow = output.workflow!;
     const storage = coordinator.getStorage();
@@ -850,6 +861,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       });
       const definition = buildPortfolioWorkflowDefinition(resolution);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(originalText);
       return prompt ? { action: "transform", text: prompt } : false;
     }
     if (workflow === "options_screener") {
@@ -874,7 +886,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-        return prompt ? { action: "transform", text: prompt } : false;
+        if (prompt) markOriginalInput(originalText);
+      return prompt ? { action: "transform", text: prompt } : false;
       }
       // Missing required symbol — treat as fallback with ask_user directive.
     }
@@ -928,6 +941,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
       applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(originalText);
       return prompt ? { action: "transform", text: prompt } : false;
     }
 

@@ -191,6 +191,29 @@ describe("opencandle extension", () => {
     expect(ctx.ui.notify).not.toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
   });
 
+  it("records the original user text when a workflow transform replaces the turn", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "analyze NVDA", source: "interactive" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ action: "transform" });
+    const markerCall = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+      ([type]) => type === "opencandle-user-input",
+    );
+    expect(markerCall?.[1]).toEqual({ original: "analyze NVDA" });
+  });
+
   it("carries a finance fallback context for rules-mode theme prompts without tickers", async () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);

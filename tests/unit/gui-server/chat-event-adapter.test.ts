@@ -44,6 +44,31 @@ describe("sessionEntriesToChatEvents", () => {
     });
   });
 
+  it("renders the original user text for workflow-transformed turns", () => {
+    const events = sessionEntriesToChatEvents([
+      {
+        type: "custom",
+        id: "c1",
+        parentId: null,
+        timestamp: new Date().toISOString(),
+        customType: "opencandle-user-input",
+        data: { original: "I own 200 ASTS shares. Worth selling covered calls?" },
+      } as unknown as SessionEntry,
+      messageEntry("u1", {
+        role: "user",
+        content: "Current date: 2026-06-12 Screen and rank options contracts for ASTS: ...",
+        timestamp: Date.now(),
+      } as Message),
+    ], { sessionId: "s1", startSeq: 1 });
+
+    const completed = events.find((event) => event.type === "message.completed");
+    expect(completed).toMatchObject({
+      content: [{ type: "text", text: "I own 200 ASTS shares. Worth selling covered calls?" }],
+    });
+    // The marker entry itself must not render as a separate message.
+    expect(events.filter((event) => event.type === "message.created")).toHaveLength(1);
+  });
+
   it("preserves final assistant prose after a normal Pi tool turn", () => {
     const events = sessionEntriesToChatEvents([
       messageEntry("u1", { role: "user", content: "Show options chain for AAPL", timestamp: Date.now() } as Message),

@@ -569,6 +569,11 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
   const runSession = session;
   const runSessionManager = sessionManager;
   const sessionId = runSessionManager.getSessionId();
+  // Name new sessions by the user's words before any workflow transform
+  // replaces the turn text, so the sidebar shows what the user actually asked.
+  if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
+    runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
+  }
   const beforeEntries = runSessionManager.getEntries();
   const beforeCount = beforeEntries.length;
   const beforeIds = new Set(beforeEntries.map((entry) => entry.id));
@@ -580,6 +585,7 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     sessionId,
     startSeq: seq,
     emit: (event) => writeSse(res, event),
+    originalPrompt: prompt,
   });
   const observation = createPromptObservation();
   const unsubscribeLive = runSession.subscribe((event) => {

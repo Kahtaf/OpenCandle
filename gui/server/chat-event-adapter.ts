@@ -16,6 +16,9 @@ export function sessionEntriesToChatEvents(
   let seq = options.startSeq ?? 1;
   const events: ChatEvent[] = [];
   const seenToolCalls = new Set<string>();
+  // Set by an opencandle-user-input marker: the user's words before a workflow
+  // transform expanded the turn. The next user message renders this instead.
+  let pendingOriginalInput: string | null = null;
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
   events.push({
@@ -27,6 +30,11 @@ export function sessionEntriesToChatEvents(
   });
 
   for (const entry of entries) {
+    if (isOriginalInputEntry(entry)) {
+      pendingOriginalInput = originalInputText(entry);
+      continue;
+    }
+
     if (entry.type === "custom_message") {
       const messageId = entry.id;
       events.push({ type: "message.created", messageId, role: "assistant", seq: seq++ });
@@ -48,9 +56,10 @@ export function sessionEntriesToChatEvents(
       events.push({
         type: "message.completed",
         messageId,
-        content: [{ type: "text", text: messageText(message.content) }],
+        content: [{ type: "text", text: pendingOriginalInput ?? messageText(message.content) }],
         seq: seq++,
       });
+      pendingOriginalInput = null;
       continue;
     }
 
@@ -107,6 +116,16 @@ export function sessionEntriesToChatEvents(
   }
 
   return events;
+}
+
+export function isOriginalInputEntry(entry: SessionEntry): boolean {
+  return entry.type === "custom" &&
+    (entry as { customType?: unknown }).customType === "opencandle-user-input";
+}
+
+export function originalInputText(entry: SessionEntry): string | null {
+  const data = (entry as { data?: { original?: unknown } }).data;
+  return typeof data?.original === "string" && data.original.trim().length > 0 ? data.original : null;
 }
 
 function customMessageText(content: unknown): string {

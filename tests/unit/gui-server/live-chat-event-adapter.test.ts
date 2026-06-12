@@ -97,6 +97,31 @@ describe("live chat event adapter", () => {
     });
   });
 
+  it("renders the original prompt for the first user message of a transformed run", () => {
+    const events: ChatEvent[] = [];
+    const adapter = createLiveChatEventAdapter({
+      runId: "run-1",
+      sessionId: "session-1",
+      startSeq: 1,
+      emit: (event) => events.push(event),
+      originalPrompt: "I own 200 ASTS shares. Worth selling covered calls?",
+    });
+
+    adapter.handle(agentEvent({
+      type: "message_start",
+      message: {
+        role: "user",
+        content: "Current date: 2026-06-12 Screen and rank options contracts for ASTS ...",
+        timestamp: Date.now(),
+      },
+    }));
+
+    const completed = events.find((event) => event.type === "message.completed");
+    expect(completed).toMatchObject({
+      content: [{ type: "text", text: "I own 200 ASTS shares. Worth selling covered calls?" }],
+    });
+  });
+
   it("emits compact thinking events from Pi reasoning deltas", () => {
     const events: ChatEvent[] = [];
     const adapter = createLiveChatEventAdapter({
