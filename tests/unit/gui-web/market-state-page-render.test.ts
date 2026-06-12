@@ -41,7 +41,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain('aria-label="Market state sections"');
   });
 
-  it("renders report templates as durable report state", () => {
+  it("renders the report schedule and generate action as durable report state", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "reports",
       role: "writer",
@@ -50,10 +50,11 @@ describe("MarketStatePage rendering", () => {
       setToast: () => undefined,
     }));
 
-    expect(html).toContain("Report Templates");
+    expect(html).toContain("Generate today");
+    expect(html).toContain("History");
   });
 
-  it("uses explicit refresh-prices copy and keeps creation flows contextual", () => {
+  it("refreshes quotes in the background instead of offering manual refresh buttons", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "watchlists",
       role: "writer",
@@ -62,13 +63,14 @@ describe("MarketStatePage rendering", () => {
       setToast: () => undefined,
     }));
 
-    expect(html).toContain("Refresh prices");
-    expect(html).not.toContain(">Quotes<");
-    expect(html).toContain("Default Watchlist");
+    expect(html).not.toContain("Refresh prices");
+    expect(html).not.toContain(">Refresh<");
+    expect(html).toContain("Awaiting quotes");
+    expect(html).not.toContain("SQLite-backed");
     expect(html).not.toContain("Search Yahoo candidates before saving");
   });
 
-  it("renders alert event history as durable alert state", () => {
+  it("renders the alert log as durable alert state", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "alerts",
       role: "writer",
@@ -77,10 +79,12 @@ describe("MarketStatePage rendering", () => {
       setToast: () => undefined,
     }));
 
-    expect(html).toContain("Alert Events");
+    expect(html).toContain("Active rules");
+    expect(html).toContain("Alert log");
+    expect(html).not.toContain("Instrument #");
   });
 
-  it("frames predictions as thesis tracking in the GUI", () => {
+  it("frames predictions as scoreable calls with one consistent name", () => {
     const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
       domain: "predictions",
       role: "writer",
@@ -89,8 +93,9 @@ describe("MarketStatePage rendering", () => {
       setToast: () => undefined,
     }));
 
-    expect(html).toContain("Thesis Tracker");
-    expect(html).toContain("Record thesis");
+    expect(html).toContain("Predictions");
+    expect(html).toContain("Record prediction");
+    expect(html).not.toContain("Thesis Tracker");
   });
 
   it("keeps follower mode readable while disabling mutation actions", () => {
@@ -189,7 +194,7 @@ describe("MarketStatePage rendering", () => {
     }));
 
     expect(html).toContain("Add holding");
-    expect(html).toContain("Default Portfolio");
+    expect(html).toContain("Holdings");
     expect(html).not.toContain("Use the lot id shown in the portfolio table");
   });
 
@@ -236,7 +241,9 @@ describe("MarketStatePage rendering", () => {
 
     expect(alertHtml).toContain('aria-label="Alert condition"');
     expect(alertHtml).toContain('aria-label="Alert threshold"');
-    expect(alertHtml).toContain('aria-label="Alert period"');
+    // Period only renders for SMA/RSI/volume conditions; the default price-above
+    // condition hides it instead of showing a disabled field.
+    expect(alertHtml).not.toContain('aria-label="Alert period"');
     expect(alertHtml).toContain('aria-label="Alert cooldown seconds"');
     expect(symbolHtml).toContain('aria-label="Target"');
     expect(symbolHtml).toContain('aria-label="Thesis"');

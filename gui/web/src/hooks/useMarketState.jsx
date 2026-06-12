@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const EMPTY_MARKET_STATE = {
+  instruments: [],
   watchlist: [],
   portfolio: [],
   predictions: [],
@@ -54,7 +55,7 @@ function portfolioSignature(portfolio) {
     .join("|");
 }
 
-export function useMarketState({ pollMs = 4000 } = {}) {
+export function useMarketState({ pollMs = 4000, quotePollMs = 20000 } = {}) {
   const [state, setState] = useState(EMPTY_MARKET_STATE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -97,6 +98,21 @@ export function useMarketState({ pollMs = 4000 } = {}) {
       window.clearInterval(timer);
     };
   }, [pollMs, refresh]);
+
+  // Quotes refresh in the background; the server store revalidates at most
+  // once per TTL, so this poll is a cheap in-memory read between refreshes.
+  useEffect(() => {
+    let disposed = false;
+    const run = async () => {
+      if (!disposed) await refreshQuotes();
+    };
+    void run();
+    const timer = window.setInterval(run, quotePollMs);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [quotePollMs, refreshQuotes]);
 
   return useMemo(
     () => ({ state, loading, error, refresh, refreshQuotes }),
