@@ -52,7 +52,7 @@ export async function recordDailyWatchlistReportRun(
     triggerType: params.triggerType,
     scheduledFor: params.scheduledFor,
     ownerId: params.ownerId,
-    summary: report.summary,
+    summary: { ...report.summary, text: report.text },
     errors: report.dataGaps,
   });
   service.recordNotificationEvent({

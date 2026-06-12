@@ -83,6 +83,9 @@ describe("dailyReportTool", () => {
     expect(template.lastRunAt).toBe(run.startedAt);
     expect(run.templateId).toBe(template.id);
     expect(run.triggerType).toBe("manual");
+    expect(run.summaryJson).toMatchObject({
+      text: expect.stringContaining("Daily Watchlist Report"),
+    });
     expect(notification).toMatchObject({
       sourceType: "report_run",
       sourceId: run.id,
