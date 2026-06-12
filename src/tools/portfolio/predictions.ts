@@ -32,10 +32,12 @@ export interface PredictionCheckResult {
     direction: string;
     conviction: number;
     entryPrice: number;
+    targetPrice?: number;
     currentPrice: number | null;
     pnlPercent: number | null;
     correct: boolean;
     status: "open" | "resolved";
+    targetHit?: boolean;
     dataGap?: string;
   }>;
 }
@@ -105,15 +107,21 @@ export function checkPredictions(
 
     if (!isExpired) {
       openCount++;
+      const targetHit =
+        p.targetPrice != null &&
+        ((p.direction === "bullish" && currentPrice >= p.targetPrice) ||
+          (p.direction === "bearish" && currentPrice <= p.targetPrice));
       details.push({
         symbol: p.symbol,
         direction: p.direction,
         conviction: p.conviction,
         entryPrice: p.entryPrice,
+        targetPrice: p.targetPrice,
         currentPrice,
         pnlPercent,
         correct: false,
         status: "open",
+        targetHit,
       });
       continue;
     }
@@ -430,7 +438,11 @@ function formatPredictionScorecard(result: PredictionCheckResult): string {
         return `${icon} ${d.symbol} ${d.direction}: quote unavailable (open)`;
       }
       const sign = d.pnlPercent >= 0 ? "+" : "";
-      const label = d.status === "open" ? " (open)" : "";
+      const label = d.status === "open"
+        ? d.targetHit && d.targetPrice != null
+          ? ` (open — target hit: $${d.targetPrice.toFixed(2)} reached before expiry; resolve or let it ride)`
+          : " (open)"
+        : "";
       return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
     }),
   ];

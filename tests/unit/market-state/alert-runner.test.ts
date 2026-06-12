@@ -93,6 +93,19 @@ describe("alert runner", () => {
     expect(providers.getTradingViewQuotes).toHaveBeenCalledWith(["AAPL"]);
     expect(providers.getYahooQuote).toHaveBeenCalledWith("BTC-USD");
 
+    const aaplLine = result.lines.find((line) => line.startsWith("AAPL"));
+    expect(aaplLine).toContain("AAPL: seeded");
+    expect(aaplLine).toContain("240.00");
+    expect(aaplLine).toContain("above 250.00");
+    expect(aaplLine).toContain("condition false");
+    expect(aaplLine).toContain("tradingview");
+    expect(aaplLine).toContain("15m delayed");
+    const btcLine = result.lines.find((line) => line.startsWith("BTC-USD"));
+    expect(btcLine).toContain("69000.00");
+    expect(btcLine).toContain("above 70000.00");
+    expect(btcLine).toContain("yahoo");
+    expect(btcLine).not.toContain("delayed");
+
     const [aaplRule, btcRule] = service.listAlertRules();
     expect(aaplRule.lastObservedJson).toMatchObject({
       value: 240,

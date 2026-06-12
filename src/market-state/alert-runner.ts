@@ -271,9 +271,11 @@ export async function runAlertChecks(
 
       if (result.triggered) {
         triggered++;
-        lines.push(`TRIGGERED: ${item.instrument.symbol}`);
+        lines.push(`TRIGGERED: ${item.instrument.symbol} — ${alertTriggerMessage(item.instrument.symbol, item.rule, observation.value)}${observationSourceSuffix(observation)}`);
       } else {
-        lines.push(`${item.instrument.symbol}: ${previous == null ? "seeded" : "checked"}`);
+        lines.push(
+          `${item.instrument.symbol}: ${previous == null ? "seeded" : "checked"} — observed ${observation.value.toFixed(2)} vs ${conditionTargetLabel(item.rule)} (condition ${conditionState})${observationSourceSuffix(observation)}`,
+        );
       }
     }
 
@@ -529,6 +531,38 @@ function observationField(rule: AlertRuleRecord): string {
   if (rule.conditionType === "percent_move") return "percent_move";
   if (rule.conditionType === "sma_cross") return "sma_spread";
   return "last_price";
+}
+
+function conditionTargetLabel(rule: AlertRuleRecord): string {
+  const c = (rule.conditionJson ?? {}) as Record<string, unknown>;
+  switch (rule.conditionType) {
+    case "price_crosses_above":
+      return `above ${Number(c.threshold).toFixed(2)}`;
+    case "price_crosses_below":
+      return `below ${Number(c.threshold).toFixed(2)}`;
+    case "rsi_threshold":
+      return `RSI ${c.direction === "below" ? "below" : "above"} ${c.threshold} (${c.period}-day)`;
+    case "percent_move":
+      return `${c.direction === "down" ? "down" : "up"} ${c.percent}% in ${c.window ?? "1d"}`;
+    case "price_crosses_sma":
+      return `price ${c.direction === "below" ? "below" : "above"} ${c.period}-day SMA`;
+    case "sma_cross":
+      return `${c.fast_period}-day SMA ${c.direction === "below" ? "below" : "above"} ${c.slow_period}-day SMA`;
+    case "volume_spike":
+      return `${c.multiplier}x the ${c.lookback_period}-day average volume`;
+    default:
+      return rule.conditionType;
+  }
+}
+
+function observationSourceSuffix(observation: {
+  sourceProvider: string;
+  dataDelayMs?: number | null;
+}): string {
+  const delay = observation.dataDelayMs != null && observation.dataDelayMs > 0
+    ? `, ~${Math.round(observation.dataDelayMs / 60_000)}m delayed`
+    : "";
+  return ` [${observation.sourceProvider}${delay}]`;
 }
 
 function alertTriggerMessage(symbol: string, rule: AlertRuleRecord, value: number): string {

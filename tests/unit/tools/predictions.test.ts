@@ -197,6 +197,39 @@ describe("predictionsTool check", () => {
     vi.clearAllMocks();
   });
 
+  it("reports target hit on open predictions while keeping them open", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      targetPrice: 195,
+      timeframeDays: 365,
+      now: new Date("2026-02-20T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text.toLowerCase()).toContain("target hit");
+    expect(result.content[0].text).toContain("$195.00");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+    expect(prediction.status).toBe("open");
+  });
+
   it("persists resolved outcomes when checking expired predictions", async () => {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
