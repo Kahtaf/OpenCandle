@@ -13,6 +13,54 @@ export interface PromptGenerationOptions {
   count: number;
   seed?: string;
   asOfDate: string;
+  savedStateSummary?: string;
+}
+
+export interface SeededMarketStateFixture {
+  lots: Array<{ symbol: string; name: string; assetType: "equity" | "etf"; quantity: number; avgCost: number }>;
+  watchlist: Array<{ symbol: string; name: string; targetPrice?: number; thesis?: string }>;
+  predictions: Array<{ symbol: string; direction: "bullish" | "bearish"; conviction: number; entryPrice: number; targetPrice: number; timeframeDays: number }>;
+}
+
+/**
+ * Deterministic user state for saved-state competitive prompts. Sector-diverse
+ * and generic on purpose; benchmark literals stay here, never in production
+ * prompts (see prompt-debt-guard).
+ */
+export const COMPETITIVE_STATE_FIXTURE: SeededMarketStateFixture = {
+  lots: [
+    { symbol: "SPY", name: "SPDR S&P 500 ETF Trust", assetType: "etf", quantity: 60, avgCost: 480 },
+    { symbol: "AAPL", name: "Apple Inc.", assetType: "equity", quantity: 40, avgCost: 175 },
+    { symbol: "XLE", name: "Energy Select Sector SPDR Fund", assetType: "etf", quantity: 100, avgCost: 85 },
+  ],
+  watchlist: [
+    { symbol: "MSFT", name: "Microsoft Corporation", targetPrice: 420, thesis: "cloud margin expansion" },
+    { symbol: "JPM", name: "JPMorgan Chase & Co.", thesis: "rate-cycle beneficiary" },
+  ],
+  predictions: [
+    { symbol: "AAPL", direction: "bullish", conviction: 7, entryPrice: 180, targetPrice: 210, timeframeDays: 120 },
+  ],
+};
+
+export function buildSavedStateSummary(fixture: SeededMarketStateFixture): string {
+  const lines = ["The user's saved OpenCandle state:"];
+  lines.push("Portfolio lots:");
+  for (const lot of fixture.lots) {
+    lines.push(`- ${lot.symbol} (${lot.name}): ${lot.quantity} shares @ $${lot.avgCost.toFixed(2)}`);
+  }
+  lines.push("Watchlist:");
+  for (const item of fixture.watchlist) {
+    const parts = [
+      item.targetPrice != null ? `target $${item.targetPrice.toFixed(2)}` : null,
+      item.thesis ? `thesis: ${item.thesis}` : null,
+    ].filter(Boolean).join("; ");
+    lines.push(`- ${item.symbol} (${item.name})${parts ? ` — ${parts}` : ""}`);
+  }
+  lines.push("Open predictions:");
+  for (const prediction of fixture.predictions) {
+    lines.push(`- ${prediction.symbol} ${prediction.direction} to $${prediction.targetPrice.toFixed(2)} (conviction ${prediction.conviction}/10, entry $${prediction.entryPrice.toFixed(2)}, ${prediction.timeframeDays}d)`);
+  }
+  return lines.join("\n");
 }
 
 export interface CompetitorAnswer {
@@ -30,6 +78,7 @@ export interface ComparisonJudgeInput {
   asOfDate: string;
   openCandleTrace: EvalTrace;
   competitorAnswers: CompetitorAnswer[];
+  savedStateSummary?: string;
 }
 
 export interface ComparisonJudgment {
@@ -114,7 +163,11 @@ Prompt wording rules:
 - Do not ask the user to compare tool coverage, source availability, or evidence categories unless a normal user would ask that explicitly.
 - Prefer realistic constraints users actually give, such as budget, holdings, cost basis, time horizon, worry, target, stop, or "today/right now".
 
-Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
+${options.savedStateSummary ? `${options.savedStateSummary}
+
+The user has saved this state in their assistant. Make about two of the prompts naturally reference it the way a returning user would ("my portfolio", "my watchlist", "the stocks I'm watching") without enumerating the saved rows verbatim. The remaining prompts should not depend on saved state.
+
+` : ""}Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
 - OpenCandle may be better because it can gather evidence or run tools.
 - A generic agent may be better because the prompt mainly needs synthesis, explanation, or judgment.
 - The winner is ambiguous and the comparison should reveal what OpenCandle needs to improve.
@@ -135,14 +188,17 @@ Return JSON only:
 
 export function buildGenericAgentPrompt(
   prompt: string,
-  options: { agentName: string; asOfDate: string },
+  options: { agentName: string; asOfDate: string; savedStateSummary?: string },
 ): string {
   return `You are ${options.agentName}, acting as a general finance assistant without live tools, browsing, private data, or market-data APIs.
 
 Current date: ${options.asOfDate}
 
 Answer the user's prompt as well as you can. Be explicit when current data would be needed and you cannot verify it. Do not pretend to have live prices, filings, options chains, sentiment, or macro probabilities.
-
+${options.savedStateSummary ? `
+Context the user previously shared with you:
+${options.savedStateSummary}
+` : ""}
 User prompt:
 ${prompt}`;
 }
@@ -201,9 +257,14 @@ ${input.openCandleTrace.text}
 Generic no-tool agent answers:
 ${competitorAnswers}
 
-Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
+Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. Score each answer on a 0-10 scale anchored as: 10 = excellent on all five criteria with no material flaws; 7 = good with minor gaps; 5 = mixed, useful but with a significant gap (missing evidence, vagueness, or an unsupported claim); 3 = weak, mostly unhelpful or partly wrong; 0 = harmful or fabricated. Use the full scale; do not cluster at 7-8 by default. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
 
-Do not reward fabricated current facts. A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized for correctness and honesty even if the answer sounds specific. For prompts about current filings or live market data, prefer a sourced OpenCandle answer or an honest generic limitation over an unsourced no-tool answer that invents details.
+${input.savedStateSummary ? `Saved state for this user (both agents had access to these facts):
+${input.savedStateSummary}
+
+When the prompt concerns the user's own portfolio, watchlist, or predictions, verify each answer against this saved state: penalize answers that ignore it, misquote quantities or cost basis, or invent holdings. Reward answers that connect the question to the specific saved positions.
+
+` : ""}Do not reward fabricated current facts. A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized for correctness and honesty even if the answer sounds specific. For prompts about current filings or live market data, prefer a sourced OpenCandle answer or an honest generic limitation over an unsourced no-tool answer that invents details.
 
 When suggesting OpenCandle improvements, make them layer-specific where possible: routing, planning, evidence-plan, tool-capability, evidence-normalization, answer-contract, structured-check, retry-eligibility, synthesis, or judge/harness.
 
@@ -280,12 +341,24 @@ export function findCachedCompetitorAnswer(
   return null;
 }
 
-export function parseComparisonJudgment(raw: string): ComparisonJudgment {
+export function parseComparisonJudgment(
+  raw: string,
+  options?: { allowedWinners?: string[] },
+): ComparisonJudgment {
   const value = parseJsonPayload(raw);
   if (!isRecord(value)) throw new Error("Comparison judgment must be a JSON object");
 
-  const winner = stringValue(value.winner);
+  let winner = stringValue(value.winner).trim().toLowerCase();
   if (!winner) throw new Error("Comparison judgment winner is required");
+  if (options?.allowedWinners) {
+    const allowed = options.allowedWinners.map((candidate) => candidate.toLowerCase());
+    if (!allowed.includes(winner)) {
+      throw new Error(
+        `Comparison judgment winner "${winner}" is not one of: ${options.allowedWinners.join(", ")}`,
+      );
+    }
+    winner = options.allowedWinners[allowed.indexOf(winner)];
+  }
 
   return {
     winner,

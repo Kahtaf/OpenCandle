@@ -24,6 +24,8 @@ import {
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
+  COMPETITIVE_STATE_FIXTURE,
+  buildSavedStateSummary,
   buildComparisonJudgePrompt,
   buildComparisonJudgeRetryPrompt,
   buildGenericAgentPrompt,
@@ -100,6 +102,9 @@ const settleGraceMs = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS ?? "9000
 const competitorCwd = process.env.OPENCANDLE_COMPETITIVE_AGENT_CWD ?? DEFAULT_COMPETITOR_CWD;
 const sourceOpenCandleHome = getOpenCandleHomeDir();
 const openCandleHome = createSeededEvalHome(sourceOpenCandleHome);
+const seedState = process.env.OPENCANDLE_COMPETITIVE_SEED_STATE === "1";
+const savedStateSummary = seedState ? buildSavedStateSummary(COMPETITIVE_STATE_FIXTURE) : undefined;
+if (seedState) await seedEvalMarketState(openCandleHome);
 process.on("exit", () => {
   rmSync(openCandleHome, { recursive: true, force: true });
 });
@@ -117,7 +122,7 @@ const judgeModel = await resolveModelWithAuth(
 const fixedPrompt = fixedPromptFromEnv(process.env);
 const rawPrompts = fixedPrompt ? [fixedPrompt] : parseGeneratedPrompts(await completeText(
   judgeModel,
-  buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate }),
+  buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
   { temperature: 0.8, maxTokens: 3000 },
 ));
 const prompts = rawPrompts.map((prompt) => {
@@ -163,7 +168,7 @@ for (const prompt of prompts.slice(0, promptCount)) {
     console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
     try {
       const result = competitor.run(
-        buildGenericAgentPrompt(prompt.prompt, { agentName: competitor.label, asOfDate }),
+        buildGenericAgentPrompt(prompt.prompt, { agentName: competitor.label, asOfDate, savedStateSummary }),
       );
       competitorAnswers.push({
         id: competitor.id,
@@ -193,7 +198,8 @@ for (const prompt of prompts.slice(0, promptCount)) {
     throw new Error(`No cached or live competitive baseline answers are available for prompt ${prompt.id}`);
   }
   const judgment = await completeComparisonJudgment(
-    buildComparisonJudgePrompt({ prompt, asOfDate, openCandleTrace, competitorAnswers }),
+    buildComparisonJudgePrompt({ prompt, asOfDate, openCandleTrace, competitorAnswers, savedStateSummary }),
+    ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
   );
   results.push({ prompt, openCandleTrace, competitorAnswers, judgment });
   const competitorScoreText = Object.entries(judgment.competitorScores)
@@ -226,6 +232,7 @@ const report = {
   skippedCompetitors: preflight.skipped,
   promptCount: results.length,
   promptMode: fixedPrompt ? "fixed" : "generated",
+  seededState: seedState,
   summary,
   results,
 };
@@ -280,7 +287,7 @@ async function completeText(
   throw new Error("model call failed after retries");
 }
 
-async function completeComparisonJudgment(prompt: string): Promise<ComparisonJudgment> {
+async function completeComparisonJudgment(prompt: string, allowedWinners: string[]): Promise<ComparisonJudgment> {
   const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_JUDGE_PARSE_ATTEMPTS", 3);
   let lastText = "";
   let lastError = "";
@@ -298,7 +305,7 @@ async function completeComparisonJudgment(prompt: string): Promise<ComparisonJud
       { temperature: 0, maxTokens: 3000 },
     );
     try {
-      return parseComparisonJudgment(lastText);
+      return parseComparisonJudgment(lastText, { allowedWinners });
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       if (attempt >= maxAttempts) throw error;
@@ -518,6 +525,48 @@ function writeReportAnalysis(report: unknown, reportPath: string): string {
   const path = competitiveReportAnalysisPath(reportPath);
   writeFileSync(path, formatCompetitiveReportAnalysisMarkdown(analysis), "utf-8");
   return path;
+}
+
+async function seedEvalMarketState(home: string): Promise<void> {
+  const { initDatabase } = await import("../../src/memory/sqlite.js");
+  const { MarketStateService } = await import("../../src/market-state/service.js");
+  const db = initDatabase(join(home, "state.db"));
+  const service = new MarketStateService(db);
+  const instrument = (symbol: string, name: string, assetType: string) => ({
+    symbol,
+    name,
+    assetType,
+    exchange: "NMS",
+    currency: "USD",
+    provider: "yahoo",
+  });
+  for (const lot of COMPETITIVE_STATE_FIXTURE.lots) {
+    service.addPortfolioLot({
+      instrument: instrument(lot.symbol, lot.name, lot.assetType),
+      quantity: lot.quantity,
+      avgCost: lot.avgCost,
+      currency: "USD",
+    });
+  }
+  for (const item of COMPETITIVE_STATE_FIXTURE.watchlist) {
+    service.addWatchlistItem({
+      instrument: instrument(item.symbol, item.name, "equity"),
+      targetPrice: item.targetPrice,
+      thesis: item.thesis,
+    });
+  }
+  for (const prediction of COMPETITIVE_STATE_FIXTURE.predictions) {
+    service.recordPrediction({
+      instrument: instrument(prediction.symbol, prediction.symbol, "equity"),
+      direction: prediction.direction,
+      conviction: prediction.conviction,
+      entryPrice: prediction.entryPrice,
+      targetPrice: prediction.targetPrice,
+      timeframeDays: prediction.timeframeDays,
+    });
+  }
+  db.close();
+  console.log(`Seeded eval market state into ${home} (${COMPETITIVE_STATE_FIXTURE.lots.length} lots, ${COMPETITIVE_STATE_FIXTURE.watchlist.length} watchlist, ${COMPETITIVE_STATE_FIXTURE.predictions.length} predictions)`);
 }
 
 function createSeededEvalHome(sourceHome: string): string {

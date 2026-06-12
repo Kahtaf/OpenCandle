@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPETITIVE_STATE_FIXTURE,
+  buildSavedStateSummary,
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
   buildComparisonJudgeRetryPrompt,
@@ -38,6 +40,23 @@ describe("competitive finance benchmarking", () => {
     expect(prompt).toContain("what OpenCandle needs to improve");
   });
 
+  it("asks the prompt generator for saved-state prompts when a state summary is provided", () => {
+    const summary = buildSavedStateSummary(COMPETITIVE_STATE_FIXTURE);
+    const prompt = buildPromptGenerationPrompt({
+      count: 5,
+      seed: "2026-06-12",
+      asOfDate: "2026-06-12",
+      savedStateSummary: summary,
+    });
+
+    expect(prompt).toContain(summary);
+    expect(prompt.toLowerCase()).toContain("saved");
+    expect(prompt).toMatch(/my portfolio|my watchlist|my holdings/i);
+
+    const withoutState = buildPromptGenerationPrompt({ count: 5, seed: "s", asOfDate: "2026-06-12" });
+    expect(withoutState).not.toContain(summary);
+  });
+
   it("parses generated prompt JSON from model output", () => {
     const prompts = parseGeneratedPrompts(`Here is JSON:
 {
@@ -61,6 +80,22 @@ describe("competitive finance benchmarking", () => {
         evaluationFocus: "clarity and correctness",
       },
     ]);
+  });
+
+  it("gives generic agents the same saved-state facts for fairness", () => {
+    const summary = buildSavedStateSummary(COMPETITIVE_STATE_FIXTURE);
+    const withState = buildGenericAgentPrompt("How is my portfolio doing?", {
+      agentName: "Claude",
+      asOfDate: "2026-06-12",
+      savedStateSummary: summary,
+    });
+    expect(withState).toContain(summary);
+
+    const withoutState = buildGenericAgentPrompt("How is my portfolio doing?", {
+      agentName: "Claude",
+      asOfDate: "2026-06-12",
+    });
+    expect(withoutState).not.toContain("saved OpenCandle state");
   });
 
   it("compares OpenCandle with generic no-tool answers", () => {
@@ -124,6 +159,34 @@ describe("competitive finance benchmarking", () => {
     expect(judgePrompt).not.toContain("OpenCandle router telemetry");
   });
 
+  it("tells the judge to verify saved-state usage when state is seeded", () => {
+    const summary = buildSavedStateSummary(COMPETITIVE_STATE_FIXTURE);
+    const prompt = buildComparisonJudgePrompt({
+      prompt: { id: "p1", prompt: "How risky is my portfolio?", topic: "portfolio", complexity: "moderate", evaluationFocus: "personalization" },
+      asOfDate: "2026-06-12",
+      openCandleTrace: { text: "answer", toolCalls: [], classification: {}, planning: null } as never,
+      competitorAnswers: [{ id: "claude", label: "Claude", provider: "anthropic", model: "m", answer: "a" }],
+      savedStateSummary: summary,
+    });
+
+    expect(prompt).toContain(summary);
+    expect(prompt.toLowerCase()).toContain("saved state");
+    expect(prompt.toLowerCase()).toMatch(/penal/);
+  });
+
+  it("anchors the judge score scale so scores are comparable across runs", () => {
+    const prompt = buildComparisonJudgePrompt({
+      prompt: { id: "p1", prompt: "Should I buy index funds?", topic: "investing", complexity: "simple", evaluationFocus: "clarity" },
+      asOfDate: "2026-06-12",
+      openCandleTrace: { text: "answer", toolCalls: [], classification: {}, planning: null } as never,
+      competitorAnswers: [{ id: "claude", label: "Claude", provider: "anthropic", model: "m", answer: "a" }],
+    });
+
+    expect(prompt).toContain("0-10");
+    expect(prompt.toLowerCase()).toContain("10 = ");
+    expect(prompt.toLowerCase()).toContain("5 = ");
+  });
+
   it("builds a retry prompt when comparison judgment JSON is invalid", () => {
     const retryPrompt = buildComparisonJudgeRetryPrompt({
       originalPrompt: "Compare OpenCandle against baselines and return JSON.",
@@ -156,6 +219,23 @@ describe("competitive finance benchmarking", () => {
       codex: ["better structure"],
     });
     expect(judgment.openCandleImprovementIdeas).toEqual(["summarize before listing tool output"]);
+  });
+
+  it("normalizes winner case and rejects winners outside the allowed set", () => {
+    const raw = (winner: string) => `{
+      "winner": "${winner}",
+      "openCandleScore": 6,
+      "competitorScores": { "claude": 7 },
+      "reason": "r",
+      "openCandleDidBetter": [],
+      "competitorsDidBetter": { "claude": [] },
+      "openCandleImprovementIdeas": []
+    }`;
+    const allowedWinners = ["opencandle", "claude", "tie"];
+
+    expect(parseComparisonJudgment(raw("OpenCandle "), { allowedWinners }).winner).toBe("opencandle");
+    expect(parseComparisonJudgment(raw("TIE"), { allowedWinners }).winner).toBe("tie");
+    expect(() => parseComparisonJudgment(raw("gemini"), { allowedWinners })).toThrow(/winner/i);
   });
 
   it("repairs common missing-comma JSON from comparison judgments", () => {
