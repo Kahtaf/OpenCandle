@@ -4,6 +4,8 @@
 
 ### Added
 
+- Competitive benchmark saved-state mode: `OPENCANDLE_COMPETITIVE_SEED_STATE=1` seeds a deterministic portfolio/watchlist/prediction fixture into the eval home, steers generated prompts toward "my portfolio" phrasing, shares the same facts with generic baseline agents for fairness, and instructs the judge to verify personalization against the saved state.
+
 - Saved watchlist, portfolio, alert, daily-report, and prediction state is now summarized into agent prompt context, so broad sector or theme prompts can connect back to relevant saved positions such as ASTS.
 - Keyless TradingView scanner provider with the `screen_stocks` tool for breadth/screening prompts and TradingView batch quote support for watchlist checks, including delayed/unofficial-data caveats and Yahoo fallback for unresolved rows.
 - Local market automation runtime pieces for V2: `opencandle monitor`, alert provider-budget backoff, resume/late alert labeling, lost-run maintenance, webhook notification delivery attempts, and TUI-visible alert runner status.
@@ -24,6 +26,8 @@
 
 ### Fixed
 
+- Workflow chat turns (options screeners, comparisons, portfolio builds) now carry the saved market-state context, so prompts like a covered-call question about an owned position use the stored lot's cost basis instead of ignoring it.
+- Competitive benchmark judging now validates the winner against the allowed set (case-normalized) so summaries cannot misattribute wins, and anchors judge scores on a defined 0-10 rubric.
 - Prediction checks now flag open calls whose target price was reached before expiry ("target hit … resolve or let it ride") while keeping them open, matching the GUI's target-hit badge.
 - Manual alert check output now states the observed value versus the rule threshold, the condition result, the source provider, and any data-delay caveat instead of a bare "checked"/"seeded" label.
 - The GUI prediction form and displays now use the tool's canonical 1–10 conviction scale (previously labeled 0–1, which skewed conviction-weighted accuracy).

@@ -252,6 +252,21 @@ afterEach(() => {
 });
 
 describe("SessionCoordinator workflow runtime ownership", () => {
+  it("exposes the active workflow type so workflow turns can carry saved market state", () => {
+    const coord = new SessionCoordinator();
+    const pi = { sendUserMessage: vi.fn(), appendEntry: vi.fn() };
+
+    expect(coord.getActiveWorkflowType()).toBeUndefined();
+
+    coord.transformWorkflowInput(
+      pi as never,
+      workflowDefinition("options_screener"),
+      fakeQueueContext(() => true),
+    );
+
+    expect(coord.getActiveWorkflowType()).toBe("options_screener");
+  });
+
   it("does not clear an unowned run context when no workflow is active", () => {
     const coord = new SessionCoordinator();
     const tracker = new ProviderTracker();

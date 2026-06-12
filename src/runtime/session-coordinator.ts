@@ -110,6 +110,7 @@ export class SessionCoordinator {
   private runner: WorkflowRunner;
   private providerTracker: ProviderTracker;
   private activeWorkflowRunRef: ActiveWorkflowRunRef | null = null;
+  private activeWorkflowType: string | undefined;
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
@@ -389,6 +390,11 @@ export class SessionCoordinator {
    * transform result. The current prompt becomes the first workflow prompt;
    * only later steps are sent through Pi.
    */
+  /** Workflow type of the in-flight run, for prompt context on workflow turns. */
+  getActiveWorkflowType(): string | undefined {
+    return this.activeWorkflowRunRef?.active ? this.activeWorkflowType : undefined;
+  }
+
   transformWorkflowInput(
     pi: ExtensionAPI,
     definition: WorkflowDefinition,
@@ -412,6 +418,7 @@ export class SessionCoordinator {
       this.activeWorkflowRunRef.active = false;
     }
     runner.cancel();
+    this.activeWorkflowType = definition.workflowType;
 
     const [firstStep] = definition.steps;
 

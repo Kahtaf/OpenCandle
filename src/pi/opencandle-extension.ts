@@ -1217,7 +1217,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     return {
       systemPrompt: coordinator.buildSystemPrompt(
         event.systemPrompt,
-        undefined,
+        coordinator.getActiveWorkflowType(),
         fallbackContext,
         resolvedTurnContext,
       ),
