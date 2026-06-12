@@ -65,8 +65,15 @@ async function cmdRun() {
   ipc.writePid();
   ipc.setStatus("running");
 
-  const openCandleHome = mkdtempSync(join(tmpdir(), "oc-harness-home-"));
+  // Respect a caller-provided OPENCANDLE_HOME (for example dogfooding against
+  // real local state); otherwise isolate the run in a disposable temp home.
+  // Only a temp home we created ourselves is ever deleted.
+  const presetHome = process.env.OPENCANDLE_HOME;
+  const openCandleHome = presetHome ?? mkdtempSync(join(tmpdir(), "oc-harness-home-"));
   process.env.OPENCANDLE_HOME = openCandleHome;
+  const cleanupHome = () => {
+    if (!presetHome) rmSync(openCandleHome, { recursive: true, force: true });
+  };
 
   let collector: ReturnType<typeof createTraceCollector> | null = null;
 
@@ -109,7 +116,7 @@ async function cmdRun() {
         });
       }
       session.dispose();
-      rmSync(openCandleHome, { recursive: true, force: true });
+      cleanupHome();
       process.exit(0);
     };
     process.on("SIGINT", onShutdown);
@@ -136,14 +143,14 @@ async function cmdRun() {
 
     collector.dispose();
     session.dispose();
-    rmSync(openCandleHome, { recursive: true, force: true });
+    cleanupHome();
     process.exit(0);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     ipc.writeError(message);
     console.error("Harness error:", message);
     if (collector) collector.dispose();
-    rmSync(openCandleHome, { recursive: true, force: true });
+    cleanupHome();
     process.exit(1);
   }
 }
