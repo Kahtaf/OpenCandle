@@ -438,6 +438,8 @@ function migrateV2ToV3(db: Database.Database): void {
 }
 
 function migrateV3ToV4(db: Database.Database): void {
+  // CURRENT_SCHEMA indexes alert_events(dedupe_key); pre-v7 tables lack the column.
+  addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();
@@ -445,6 +447,7 @@ function migrateV3ToV4(db: Database.Database): void {
 }
 
 function migrateV4ToV5(db: Database.Database): void {
+  addColumnIfMissing(db, "alert_events", "dedupe_key", "TEXT");
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();

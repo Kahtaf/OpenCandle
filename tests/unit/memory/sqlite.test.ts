@@ -21,6 +21,29 @@ describe("initDatabase", () => {
     db.close();
   });
 
+  it("migrates a v4 database whose alert_events lacks dedupe_key without crashing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-migration-v4-"));
+    const path = join(dir, "state.db");
+
+    // Shape a v4-era database: current tables, but alert_events without the
+    // v7 dedupe_key column (whose unique index used to crash the migration).
+    const v4 = initDatabase(path);
+    v4.exec(`
+      DROP INDEX IF EXISTS idx_alert_events_dedupe;
+      ALTER TABLE alert_events DROP COLUMN dedupe_key;
+      DELETE FROM schema_version;
+      INSERT INTO schema_version (version) VALUES (4);
+    `);
+    v4.close();
+
+    const migrated = initDatabase(path);
+    const columns = (migrated.pragma("table_info(alert_events)") as Array<{ name: string }>).map((c) => c.name);
+    expect(columns).toContain("dedupe_key");
+    expect(getSchemaVersion(migrated)).toBeGreaterThanOrEqual(7);
+    migrated.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("creates domain tables plus schema_version", () => {
     const tables = getTableNames(db);
     expect(tables).toContain("user_preferences");
