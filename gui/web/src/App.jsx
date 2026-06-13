@@ -7,7 +7,7 @@ import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-us
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
-import { hasSessionContent, routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
+import { chatRunSessionTarget, hasSessionContent, routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
 import { Toaster } from "./components/ui/toaster.jsx";
@@ -26,8 +26,8 @@ export function AppShell() {
   const [liveBaseEntryCount, setLiveBaseEntryCount] = useState(0);
   const chatRun = useChatRun({
     setToast: gui.setToast,
-    onRunStart: useCallback((prompt) => {
-      setLiveBaseEntryCount(gui.entries.length);
+    onRunStart: useCallback((prompt, baseEntryCount) => {
+      setLiveBaseEntryCount(baseEntryCount ?? gui.entries.length);
       setLiveEvents(createOptimisticUserMessageEvents(prompt));
     }, [gui.entries.length]),
     onEvent: useCallback((event) => {
@@ -51,6 +51,7 @@ export function AppShell() {
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const homeResetSessionRef = useRef("");
+  const freshRunPendingRef = useRef(false);
   const sessionView = routeSessionView({
     pathname,
     currentSessionId: gui.currentSessionId,
@@ -134,9 +135,39 @@ export function AppShell() {
     }, 220);
   }, []);
 
-  const startRoutedChatRun = useCallback((prompt) => {
-    void chatRun.startChatRun(prompt);
-  }, [chatRun.startChatRun]);
+  // Home sends always run in a fresh session so a stale client can never
+  // append to the previous writer session; the server rejects mismatches
+  // with a session_changed 409, retried once against another fresh session.
+  const startRoutedChatRun = useCallback(async (prompt) => {
+    const target = chatRunSessionTarget({ pathname, supportsSessionActions: gui.supportsSessionActions });
+    if (target.mode === "current") {
+      void chatRun.startChatRun(prompt);
+      return;
+    }
+    if (target.mode === "route") {
+      const result = await chatRun.startChatRun(prompt, { sessionId: target.sessionId });
+      if (result?.sessionChanged) {
+        setLiveEvents([]);
+        gui.setToast("The active session changed before your message was sent. Please resend.", { destructive: true });
+      }
+      return;
+    }
+    if (freshRunPendingRef.current) return;
+    freshRunPendingRef.current = true;
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const freshSessionId = await gui.newSession();
+        if (!freshSessionId) return;
+        homeResetSessionRef.current = freshSessionId;
+        const result = await chatRun.startChatRun(prompt, { sessionId: freshSessionId, baseEntryCount: 0 });
+        if (!result?.sessionChanged) return;
+      }
+      setLiveEvents([]);
+      gui.setToast("The active session changed before your message was sent. Please resend.", { destructive: true });
+    } finally {
+      freshRunPendingRef.current = false;
+    }
+  }, [pathname, gui.supportsSessionActions, gui.newSession, gui.setToast, chatRun.startChatRun]);
 
   const newSession = useCallback(() => {
     void gui.newSession();

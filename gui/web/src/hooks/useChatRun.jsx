@@ -1,17 +1,26 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
+export function buildChatRunRequestBody(prompt, sessionId) {
+  const expectedSessionId = String(sessionId ?? "").trim();
+  return expectedSessionId ? { prompt, sessionId: expectedSessionId } : { prompt };
+}
+
+export function isSessionChangedChatRunError(status, errorBody) {
+  return status === 409 && errorBody?.code === "session_changed";
+}
+
 export function useChatRun({ setToast, onEvent, onRunStart }) {
   const abortRef = useRef(null);
   const [runState, setRunState] = useState("ready");
-  const [lastPrompt, setLastPrompt] = useState("");
+  const [lastRun, setLastRun] = useState(null);
 
-  const startChatRun = useCallback(async (prompt) => {
+  const startChatRun = useCallback(async (prompt, options = {}) => {
     const trimmed = String(prompt || "").trim();
     if (!trimmed || runState === "connecting" || runState === "streaming") return;
-    setLastPrompt(trimmed);
+    setLastRun({ prompt: trimmed, sessionId: options.sessionId });
     setRunState("connecting");
     setToast("");
-    onRunStart?.(trimmed);
+    onRunStart?.(trimmed, options.baseEntryCount);
     const abort = new AbortController();
     abortRef.current = abort;
 
@@ -19,11 +28,15 @@ export function useChatRun({ setToast, onEvent, onRunStart }) {
       const response = await fetch("/api/chat/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: trimmed }),
+        body: JSON.stringify(buildChatRunRequestBody(trimmed, options.sessionId)),
         signal: abort.signal,
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: response.statusText }));
+        if (isSessionChangedChatRunError(response.status, error)) {
+          setRunState("ready");
+          return { sessionChanged: true };
+        }
         throw new Error(error.error || response.statusText);
       }
       setRunState("streaming");
@@ -54,8 +67,10 @@ export function useChatRun({ setToast, onEvent, onRunStart }) {
   }, []);
 
   const retryRun = useCallback(() => {
-    if (lastPrompt) void startChatRun(lastPrompt);
-  }, [lastPrompt, startChatRun]);
+    if (lastRun) void startChatRun(lastRun.prompt, { sessionId: lastRun.sessionId });
+  }, [lastRun, startChatRun]);
+
+  const lastPrompt = lastRun?.prompt ?? "";
 
   return useMemo(() => ({
     runState,

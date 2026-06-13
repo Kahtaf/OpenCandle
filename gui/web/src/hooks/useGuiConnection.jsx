@@ -221,10 +221,10 @@ export function useGuiConnection() {
       if (!response.ok) throw new Error(data?.error || response.statusText);
       setSupportsSessionActions(true);
       applyBootstrap(data);
-      return true;
+      return String(data?.sessionId ?? "");
     } catch (error) {
       setToast(error instanceof Error ? error.message : String(error), { destructive: true });
-      return false;
+      return "";
     }
   }, [applyBootstrap, setToast]);
 

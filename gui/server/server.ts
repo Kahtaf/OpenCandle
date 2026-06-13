@@ -30,6 +30,7 @@ import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
+import { chatRunSessionConflict } from "./chat-run-session.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
@@ -558,6 +559,12 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     return;
   }
 
+  const sessionConflict = chatRunSessionConflict(asRecord(body).sessionId, sessionManager.getSessionId());
+  if (sessionConflict) {
+    writeJson(res, sessionConflict, 409);
+    return;
+  }
+
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache, no-transform",
@@ -779,8 +786,8 @@ async function pollVisibleQuotes(): Promise<void> {
   }
 }
 
-function writeJson(res: ServerResponse, value: unknown): void {
-  res.writeHead(200, { "content-type": "application/json" });
+function writeJson(res: ServerResponse, value: unknown, status = 200): void {
+  res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(value));
 }
 

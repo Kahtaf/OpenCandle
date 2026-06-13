@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  chatRunSessionTarget,
   routeSessionView,
   sessionIdFromPath,
   shouldStartFreshHomeSession,
@@ -82,6 +83,27 @@ describe("route session state", () => {
     });
 
     expect(view.entries).toEqual([{ id: "base-1" }]);
+  });
+
+  it("targets the route session for sends on session routes", () => {
+    expect(chatRunSessionTarget({
+      pathname: "/sessions/session-1",
+      supportsSessionActions: true,
+    })).toEqual({ mode: "route", sessionId: "session-1" });
+  });
+
+  it("targets a fresh session for home sends so they never append to a previous session", () => {
+    expect(chatRunSessionTarget({
+      pathname: "/",
+      supportsSessionActions: true,
+    })).toEqual({ mode: "fresh" });
+  });
+
+  it("falls back to the unguarded current session when session actions are unavailable", () => {
+    expect(chatRunSessionTarget({
+      pathname: "/",
+      supportsSessionActions: false,
+    })).toEqual({ mode: "current" });
   });
 
   it("starts a fresh writer session when home is showing an existing transcript", () => {

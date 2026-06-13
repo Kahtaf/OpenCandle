@@ -29,6 +29,13 @@ export function routeSessionView({
   };
 }
 
+export function chatRunSessionTarget({ pathname, supportsSessionActions }) {
+  const routeSessionId = sessionIdFromPath(pathname);
+  if (routeSessionId) return { mode: "route", sessionId: routeSessionId };
+  if (supportsSessionActions) return { mode: "fresh" };
+  return { mode: "current" };
+}
+
 export function hasSessionContent(entries) {
   return entries.some((entry) => entry.type === "message" || entry.type === "custom_message");
 }
