@@ -26,7 +26,7 @@ import {
   createAutomationHeartbeatRunner,
   normalizeAutomationHeartbeatMs,
 } from "./automation-heartbeat.js";
-import { BackgroundQuoteRefreshes } from "./background-quotes.js";
+import { BackgroundQuoteRefreshes, createBackgroundQuotePoller } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
@@ -105,9 +105,13 @@ const clients = new Set<WsClient>();
 const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
-let poller: NodeJS.Timeout | null = null;
 let automationHeartbeat: NodeJS.Timeout | null = null;
-let quotePollInFlight = false;
+const quotePoller = createBackgroundQuotePoller({
+  getClientCount: () => clients.size,
+  getSessionManager: () => sessionManager,
+  refreshes: backgroundQuoteRefreshes,
+  broadcastState,
+});
 
 let unsubscribeSession = subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
@@ -214,11 +218,11 @@ server.on("upgrade", (req, socket) => {
   clients.add(client);
   client.onClose(() => {
     clients.delete(client);
-    updatePoller();
+    quotePoller.updatePoller();
   });
   client.onMessage((message) => void handleClientMessage(client, message));
   sendBoot(client);
-  updatePoller();
+  quotePoller.updatePoller();
 });
 
 server.listen(port, host, () => {
@@ -239,10 +243,7 @@ const shutdown = createGracefulShutdown({
   server,
   cleanup: async () => {
     clearInterval(heartbeat);
-    if (poller) {
-      clearInterval(poller);
-      poller = null;
-    }
+    quotePoller.stop();
     if (automationHeartbeat) {
       clearInterval(automationHeartbeat);
       automationHeartbeat = null;
@@ -772,50 +773,6 @@ async function executeGuiAutomationHeartbeat(checkAlerts: boolean): Promise<void
     );
   } finally {
     db.close();
-  }
-}
-
-function updatePoller(): void {
-  if (clients.size > 0 && !poller) {
-    poller = setInterval(() => void pollVisibleQuotes(), 30000);
-  }
-  if (clients.size === 0 && poller) {
-    clearInterval(poller);
-    poller = null;
-  }
-}
-
-async function pollVisibleQuotes(): Promise<void> {
-  if (quotePollInFlight) return;
-  quotePollInFlight = true;
-  try {
-    const state = projectDashboard(sessionManager.getEntries(), sessionManager.getSessionId());
-    const tool = getAllTools().find((candidate) => candidate.name === "get_stock_quote");
-    if (!tool) return;
-    for (const row of state.watchlist.filter((item) => item.pinned || item.quote)) {
-      const result = await invokeToolFromUi(
-        sessionManager,
-        tool,
-        { symbol: row.symbol },
-        "background",
-        { recordTranscript: false },
-      );
-      backgroundQuoteRefreshes.upsert({
-        symbol: row.symbol,
-        toolName: tool.name,
-        args: { symbol: row.symbol },
-        value: result.result.details,
-        content: result.result.content,
-        isError: result.isError,
-      });
-    }
-    broadcastState();
-  } catch (error) {
-    console.warn(
-      `Background quote refresh failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  } finally {
-    quotePollInFlight = false;
   }
 }
 
