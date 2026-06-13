@@ -5,11 +5,83 @@ import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { getDefaults } from "../../src/memory/tool-defaults.js";
 import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
+import { getAllTools } from "../../src/tools/index.js";
+import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 
 export interface InvokeToolResult {
   toolCallId: string;
   result: AgentToolResult<unknown>;
   isError: boolean;
+}
+
+interface ToolInvokeClient {
+  send(message: unknown): void;
+}
+
+export interface ToolInvokeController {
+  handleToolInvoke(toolName: string, args: Record<string, unknown>): Promise<InvokeToolResult>;
+  handleToolInvokeMessage(client: ToolInvokeClient, data: Record<string, unknown>): Promise<void>;
+}
+
+export interface ToolInvokeControllerOptions {
+  role: string;
+  getSessionManager: () => SessionManager;
+  broadcastState: () => void;
+  getTools?: typeof getAllTools;
+  invokeTool?: typeof invokeToolFromUi;
+}
+
+export function createToolInvokeController({
+  role,
+  getSessionManager,
+  broadcastState,
+  getTools = getAllTools,
+  invokeTool = invokeToolFromUi,
+}: ToolInvokeControllerOptions): ToolInvokeController {
+  async function handleToolInvoke(
+    toolName: string,
+    args: Record<string, unknown>,
+  ): Promise<InvokeToolResult> {
+    if (role !== "writer") throw new Error("Read-only follower mode");
+    const tool = getTools().find((candidate) => candidate.name === toolName);
+    if (!tool) throw new Error(`Unknown tool: ${toolName}`);
+    const result = await invokeTool(getSessionManager(), tool, args, "ui");
+    broadcastState();
+    return result;
+  }
+
+  async function handleToolInvokeMessage(
+    client: ToolInvokeClient,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const requestId = typeof data.requestId === "string" ? data.requestId : "";
+    const toolName = String(data.toolName ?? "");
+    try {
+      const result = await handleToolInvoke(toolName, requestArgs(data.args));
+      if (requestId) {
+        client.send(buildToolInvokeAckMessage(requestId, toolName, result));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (requestId) {
+        client.send({
+          type: "tool.invoke.result",
+          requestId,
+          ok: false,
+          toolName,
+          error: { message },
+        });
+        return;
+      }
+      throw error;
+    }
+  }
+
+  return { handleToolInvoke, handleToolInvokeMessage };
+}
+
+function requestArgs(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 export async function invokeToolFromUi(

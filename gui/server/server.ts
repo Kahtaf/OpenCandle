@@ -14,7 +14,6 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
-import { getAllTools } from "../../src/tools/index.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import {
@@ -25,7 +24,7 @@ import { BackgroundQuoteRefreshes, createBackgroundQuotePoller } from "./backgro
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
-import { type InvokeToolResult, invokeToolFromUi } from "./invoke-tool.js";
+import { createToolInvokeController } from "./invoke-tool.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import {
   buildMarketStateQuoteSnapshot,
@@ -45,7 +44,6 @@ import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
 import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
 import { createGracefulShutdown } from "./shutdown.js";
-import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
@@ -114,6 +112,11 @@ const localAutomationHeartbeat = createLocalAutomationHeartbeat({
 const modelSetupController = createModelSetupController({
   role: lockResult.role,
   getSession: () => session,
+  getSessionManager: () => sessionManager,
+  broadcastState,
+});
+const toolInvokeController = createToolInvokeController({
+  role: lockResult.role,
   getSessionManager: () => sessionManager,
   broadcastState,
 });
@@ -276,7 +279,7 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         await handleAskUserCancel(String(data.id ?? ""));
         break;
       case "tool.invoke":
-        await handleToolInvokeMessage(client, data);
+        await toolInvokeController.handleToolInvokeMessage(client, data);
         break;
       case "tool.enabled":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
@@ -426,45 +429,6 @@ async function handleDeleteSession(client: WsClient, path: string): Promise<void
     broadcastState();
   }
   broadcastSessions();
-}
-
-async function handleToolInvoke(
-  toolName: string,
-  args: Record<string, unknown>,
-): Promise<InvokeToolResult> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-  const tool = getAllTools().find((candidate) => candidate.name === toolName);
-  if (!tool) throw new Error(`Unknown tool: ${toolName}`);
-  const result = await invokeToolFromUi(sessionManager, tool, args, "ui");
-  broadcastState();
-  return result;
-}
-
-async function handleToolInvokeMessage(
-  client: WsClient,
-  data: Record<string, unknown>,
-): Promise<void> {
-  const requestId = typeof data.requestId === "string" ? data.requestId : "";
-  const toolName = String(data.toolName ?? "");
-  try {
-    const result = await handleToolInvoke(toolName, asRecord(data.args));
-    if (requestId) {
-      client.send(buildToolInvokeAckMessage(requestId, toolName, result));
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (requestId) {
-      client.send({
-        type: "tool.invoke.result",
-        requestId,
-        ok: false,
-        toolName,
-        error: { message },
-      });
-      return;
-    }
-    throw error;
-  }
 }
 
 function sendBoot(client: WsClient): void {

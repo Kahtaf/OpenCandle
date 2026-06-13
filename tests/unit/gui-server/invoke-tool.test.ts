@@ -5,8 +5,8 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createToolInvokeController, invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 
 describe("invokeToolFromUi", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
@@ -123,5 +123,81 @@ describe("invokeToolFromUi", () => {
         },
       },
     });
+  });
+
+  it("sends a tool invocation ack and broadcasts state after UI invocation", async () => {
+    const messages: Message[] = [];
+    const sentMessages: unknown[] = [];
+    const broadcastState = vi.fn();
+    const sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "get_stock_quote",
+      label: "Quote",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "AAPL quote" }],
+          details: { symbol: "AAPL", price: 190 },
+        };
+      },
+    };
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => sessionManager,
+      broadcastState,
+      getTools: () => [tool],
+    });
+
+    await controller.handleToolInvokeMessage(
+      { send: (message: unknown) => sentMessages.push(message) },
+      { requestId: "req-1", toolName: "get_stock_quote", args: { symbol: "AAPL" } },
+    );
+
+    expect(messages).toHaveLength(2);
+    expect(broadcastState).toHaveBeenCalledOnce();
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]).toMatchObject({
+      type: "tool.invoke.result",
+      requestId: "req-1",
+      ok: true,
+      toolName: "get_stock_quote",
+      result: {
+        details: { symbol: "AAPL", price: 190 },
+        isError: false,
+      },
+    });
+  });
+
+  it("sends request-scoped tool invocation errors without throwing", async () => {
+    const sentMessages: unknown[] = [];
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => ({}) as SessionManager,
+      broadcastState: vi.fn(),
+      getTools: () => [],
+    });
+
+    await controller.handleToolInvokeMessage(
+      { send: (message: unknown) => sentMessages.push(message) },
+      { requestId: "req-2", toolName: "missing_tool", args: {} },
+    );
+
+    expect(sentMessages).toEqual([
+      {
+        type: "tool.invoke.result",
+        requestId: "req-2",
+        ok: false,
+        toolName: "missing_tool",
+        error: { message: "Unknown tool: missing_tool" },
+      },
+    ]);
   });
 });
