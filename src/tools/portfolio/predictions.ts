@@ -102,6 +102,23 @@ export function checkPredictions(
       continue;
     }
 
+    if (!Number.isFinite(p.entryPrice) || p.entryPrice <= 0) {
+      openCount++;
+      details.push({
+        symbol: p.symbol,
+        direction: p.direction,
+        conviction: p.conviction,
+        entryPrice: p.entryPrice,
+        targetPrice: p.targetPrice,
+        currentPrice,
+        pnlPercent: null,
+        correct: false,
+        status: "open",
+        dataGap: "invalid entry price",
+      });
+      continue;
+    }
+
     const isExpired = p.expiresAt <= nowStr;
     const pnlPercent = (currentPrice - p.entryPrice) / p.entryPrice;
 

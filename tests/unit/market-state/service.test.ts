@@ -166,6 +166,47 @@ describe("MarketStateService", () => {
     expect(lots[0].symbol).toBe("VTI");
   });
 
+  it("rejects non-positive or non-finite portfolio lot quantities and costs", () => {
+    const instrument = {
+      symbol: "VTI",
+      assetType: "etf" as const,
+      name: "Vanguard Total Stock Market ETF",
+      exchange: "PCX",
+      currency: "USD",
+      provider: "yahoo",
+    };
+
+    expect(() => service.addPortfolioLot({
+      instrument,
+      quantity: 0,
+      avgCost: 250,
+      currency: "USD",
+    })).toThrow("Portfolio lot quantity must be a positive finite number.");
+    expect(() => service.addPortfolioLot({
+      instrument,
+      quantity: 1,
+      avgCost: -1,
+      currency: "USD",
+    })).toThrow("Portfolio lot average cost must be a positive finite number.");
+    expect(() => service.addPortfolioLot({
+      instrument,
+      quantity: Number.NaN,
+      avgCost: 250,
+      currency: "USD",
+    })).toThrow("Portfolio lot quantity must be a positive finite number.");
+
+    const lot = service.addPortfolioLot({
+      instrument,
+      quantity: 1,
+      avgCost: 250,
+      currency: "USD",
+    });
+    expect(() => service.updatePortfolioLot(lot.id, { avgCost: 0 })).toThrow(
+      "Portfolio lot average cost must be a positive finite number.",
+    );
+    expect(service.updatePortfolioLot(lot.id, { notes: "kept" })?.notes).toBe("kept");
+  });
+
   it("represents import provenance on import rows and saved market-state rows", () => {
     const batch = service.recordImportBatch({
       source: "tradingview",

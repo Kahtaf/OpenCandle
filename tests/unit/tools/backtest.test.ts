@@ -30,6 +30,16 @@ function makeOscillating(days: number): OHLCV[] {
   });
 }
 
+function expectFiniteBacktestResult(result: BacktestResult): void {
+  expect(Number.isFinite(result.totalReturn)).toBe(true);
+  expect(Number.isFinite(result.buyAndHoldReturn)).toBe(true);
+  expect(Number.isFinite(result.maxDrawdown)).toBe(true);
+  for (const trade of result.tradeLog) {
+    expect(Number.isFinite(trade.price)).toBe(true);
+    if (trade.pnl != null) expect(Number.isFinite(trade.pnl)).toBe(true);
+  }
+}
+
 describe("runBacktest", () => {
   it("returns a BacktestResult with required fields", () => {
     const bars = makeUptrend(100);
@@ -128,5 +138,15 @@ describe("runBacktest", () => {
     // Position should still be open at end (force-closed)
     // Max drawdown should reflect the ~15% unrealized loss
     expect(result.maxDrawdown).toBeGreaterThan(0.05);
+  });
+
+  it("does not emit NaN or Infinity for zero-close history", () => {
+    const bars = makeUptrend(260);
+    bars[0] = { ...bars[0], close: 0 };
+    bars[210] = { ...bars[210], close: 0 };
+
+    expectFiniteBacktestResult(runBacktest(bars, "sma_crossover"));
+    expectFiniteBacktestResult(runBacktest(bars, "sma_50_200_crossover"));
+    expectFiniteBacktestResult(runBacktest(bars, "rsi_mean_reversion"));
   });
 });

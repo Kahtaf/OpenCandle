@@ -281,6 +281,30 @@ describe("predictionsTool check", () => {
     expect(getQuote).not.toHaveBeenCalled();
   });
 
+  it("keeps predictions with invalid entry prices open without NaN scoring", () => {
+    const result = checkPredictions(
+      [{
+        id: 1,
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 8,
+        entryPrice: 0,
+        date: "2026-01-01",
+        expiresAt: "2026-01-31",
+        status: "open",
+      }],
+      new Map([["AAPL", 200]]),
+      new Date("2026-02-01T12:00:00.000Z"),
+    );
+
+    expect(result.details[0]).toMatchObject({
+      symbol: "AAPL",
+      pnlPercent: null,
+      status: "open",
+      dataGap: "invalid entry price",
+    });
+  });
+
   it("keeps expired predictions open when quotes are temporarily unavailable", async () => {
     vi.mocked(getQuote).mockRejectedValueOnce(new Error("temporary outage"));
     const db = initDefaultDatabase();

@@ -61,7 +61,7 @@ function backtestSMACrossover(
     const sLong = longSma[i];
     const price = closes[barIdx];
 
-    if (!position && sShort > sLong) {
+    if (!position && sShort > sLong && price > 0) {
       // Buy signal
       position = true;
       entryPrice = price;
@@ -115,7 +115,7 @@ function backtestRSIMeanReversion(bars: OHLCV[], closes: number[]): BacktestResu
     const r = rsi[i];
     const price = closes[barIdx];
 
-    if (!position && r < 30) {
+    if (!position && r < 30 && price > 0) {
       // RSI oversold → buy
       position = true;
       entryPrice = price;
@@ -157,7 +157,7 @@ function buildResult(
 ): BacktestResult {
   const sellTrades = tradeLog.filter((t) => t.type === "sell" && t.pnl != null);
   const wins = sellTrades.filter((t) => t.pnl! > 0).length;
-  const buyAndHoldReturn = closes.length > 1
+  const buyAndHoldReturn = closes.length > 1 && closes[0] > 0
     ? (closes[closes.length - 1] - closes[0]) / closes[0]
     : 0;
 
@@ -177,7 +177,7 @@ function emptyResult(strategy: string, closes: number[]): BacktestResult {
   return {
     strategy,
     totalReturn: 0,
-    buyAndHoldReturn: closes.length > 1
+    buyAndHoldReturn: closes.length > 1 && closes[0] > 0
       ? (closes[closes.length - 1] - closes[0]) / closes[0]
       : 0,
     trades: 0,

@@ -41,7 +41,18 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
       };
     }
 
-    const metrics = computeRiskMetrics(symbol, closes);
+    let metrics: RiskMetrics;
+    try {
+      metrics = computeRiskMetrics(symbol, closes);
+    } catch (error) {
+      if (error instanceof Error && error.message === "insufficient usable price history") {
+        return {
+          content: [{ type: "text", text: `Insufficient data for risk analysis (no usable price returns after filtering invalid closes)` }],
+          details: null as any,
+        };
+      }
+      throw error;
+    }
 
     const text = [
       `**${symbol} Risk Analysis** (${bars[0].date} to ${bars[bars.length - 1].date}, ${closes.length} days)`,
@@ -61,6 +72,9 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
 
 export function computeRiskMetrics(symbol: string, closes: number[]): RiskMetrics {
   const dailyReturns = computeDailyReturns(closes);
+  if (dailyReturns.length === 0) {
+    throw new Error("insufficient usable price history");
+  }
   const avgDailyReturn = mean(dailyReturns);
   const dailyVol = stddev(dailyReturns);
 
@@ -88,16 +102,19 @@ export function computeRiskMetrics(symbol: string, closes: number[]): RiskMetric
 export function computeDailyReturns(prices: number[]): number[] {
   const returns: number[] = [];
   for (let i = 1; i < prices.length; i++) {
+    if (prices[i - 1] <= 0) continue;
     returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
   }
   return returns;
 }
 
 export function computeMaxDrawdown(prices: number[]): number {
-  let peak = prices[0];
+  let peak = 0;
   let maxDd = 0;
   for (const price of prices) {
+    if (price <= 0 && peak <= 0) continue;
     if (price > peak) peak = price;
+    if (peak <= 0) continue;
     const dd = (peak - price) / peak;
     if (dd > maxDd) maxDd = dd;
   }
@@ -105,6 +122,9 @@ export function computeMaxDrawdown(prices: number[]): number {
 }
 
 export function computeVaR(returns: number[], confidence: number): number {
+  if (returns.length === 0) {
+    throw new Error("insufficient usable price history");
+  }
   const sorted = [...returns].sort((a, b) => a - b);
   const idx = Math.floor(sorted.length * confidence);
   return Math.abs(sorted[idx]);

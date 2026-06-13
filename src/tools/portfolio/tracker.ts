@@ -190,6 +190,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           const canValueRow = quote.status === "ok" && quoteCurrency === lotCurrency;
           const currentPrice = canValueRow ? quote.price : null;
           const marketValue = currentPrice == null ? null : currentPrice * p.quantity;
+          const canComputePnlPercent = totalCost > 0;
           const includedInTotals = canValueRow && lotCurrency === baseCurrency;
           const exclusionReason = quote.status === "unavailable"
             ? `Quote unavailable: ${quote.reason}`
@@ -211,7 +212,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
             marketValue,
             totalCost,
             pnl: marketValue == null ? null : marketValue - totalCost,
-            pnlPercent: marketValue == null ? null : ((marketValue - totalCost) / totalCost) * 100,
+            pnlPercent: marketValue == null || !canComputePnlPercent ? null : ((marketValue - totalCost) / totalCost) * 100,
             includedInTotals,
             quoteStatus: quote.status,
             exclusionReason,

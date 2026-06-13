@@ -733,6 +733,8 @@ export class MarketStateService {
     sourceRowId?: string;
     sourceMetadata?: unknown;
   }): PortfolioLotRecord {
+    assertPositiveFinitePortfolioLotNumber(params.quantity, "quantity");
+    assertPositiveFinitePortfolioLotNumber(params.avgCost, "average cost");
     const tx = this.db.transaction(() => {
       const portfolioId = params.portfolioId ?? this.getDefaultPortfolio().id;
       const instrument = this.upsertInstrument(params.instrument);
@@ -809,6 +811,12 @@ export class MarketStateService {
       notes?: string;
     },
   ): PortfolioLotRecord | null {
+    if (params.quantity != null) {
+      assertPositiveFinitePortfolioLotNumber(params.quantity, "quantity");
+    }
+    if (params.avgCost != null) {
+      assertPositiveFinitePortfolioLotNumber(params.avgCost, "average cost");
+    }
     const existing = this.db.prepare("SELECT * FROM portfolio_lots WHERE id = ?").get(id) as
       | PortfolioLotRow
       | undefined;
@@ -2252,6 +2260,12 @@ function mapImportRow(row: ImportRowRow): ImportRowRecord {
 function normalizeNullable(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function assertPositiveFinitePortfolioLotNumber(value: number, label: "quantity" | "average cost"): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Portfolio lot ${label} must be a positive finite number.`);
+  }
 }
 
 function lastObservedValueFromJson(value: string | null): number | null {

@@ -29,6 +29,7 @@
 
 - OpenCandle now creates and repairs `~/.opencandle` with owner-only permissions and writes `config.json` as `0600`, reducing local exposure of saved provider credentials.
 - Alert checks now fetch Yahoo fallback quotes concurrently after TradingView misses, while preserving per-symbol unavailable reasons and provider-budget backoff for later runs.
+- Portfolio lot storage now rejects non-positive or non-finite quantity/cost values, and portfolio, prediction, risk, and backtest math now avoid non-finite results from zero price/cost history.
 - Budget extraction no longer treats position values, dividends, gains/losses, or trading prices as investment budgets.
 - The GUI private market-state API now requires loopback callers by default, exposes an explicit remote opt-in for intentional LAN/Tailscale use, and rejects unsafe notification webhook URL schemes and link-local metadata hosts.
 - GUI chat transcript rendering now uses one event-driven path for both live and reloaded sessions: persisted `SessionEntry[]` is adapted to `ChatEvent[]` on the server, live SSE events are merged at the browser boundary, and `ChatPanel` renders event-derived rows so workflow-dispatched user bubbles keep the user's original typed words after reload instead of exposing internal prompt expansions.

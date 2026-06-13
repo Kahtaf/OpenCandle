@@ -17,6 +17,12 @@ describe("computeDailyReturns", () => {
   it("returns empty for single price", () => {
     expect(computeDailyReturns([100])).toHaveLength(0);
   });
+
+  it("skips returns whose previous close is zero", () => {
+    const returns = computeDailyReturns([100, 0, 110]);
+    expect(returns.every(Number.isFinite)).toBe(true);
+    expect(returns).toEqual([-1]);
+  });
 });
 
 describe("computeMaxDrawdown", () => {
@@ -35,6 +41,10 @@ describe("computeMaxDrawdown", () => {
   it("handles single price", () => {
     expect(computeMaxDrawdown([100])).toBe(0);
   });
+
+  it("does not produce NaN when the first close is zero", () => {
+    expect(Number.isFinite(computeMaxDrawdown([0, 100, 90]))).toBe(true);
+  });
 });
 
 describe("computeVaR", () => {
@@ -44,6 +54,10 @@ describe("computeVaR", () => {
     // sorted: -0.10, -0.09, ..., 0.09
     const var95 = computeVaR(returns, 0.05);
     expect(var95).toBeCloseTo(0.09, 2); // abs of returns[1] = -0.09
+  });
+
+  it("throws on empty return sets instead of returning NaN", () => {
+    expect(() => computeVaR([], 0.05)).toThrow("insufficient usable price history");
   });
 });
 
@@ -77,5 +91,11 @@ describe("computeRiskMetrics", () => {
     const prices = Array.from({ length: 252 }, (_, i) => 200 - i * 0.5);
     const metrics = computeRiskMetrics("DOWN", prices);
     expect(metrics.annualizedReturn).toBeLessThan(0);
+  });
+
+  it("throws when no usable returns remain after zero-close filtering", () => {
+    expect(() => computeRiskMetrics("ZERO", [0, 0, 0])).toThrow(
+      "insufficient usable price history",
+    );
   });
 });

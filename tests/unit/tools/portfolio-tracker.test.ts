@@ -107,6 +107,41 @@ describe("portfolioTrackerTool", () => {
     });
   });
 
+  it("does not emit NaN for a legacy zero-cost portfolio lot", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const portfolio = service.getDefaultPortfolio();
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "VTI",
+      assetType: "etf",
+      name: "Vanguard Total Stock Market ETF",
+      exchange: "PCX",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO portfolio_lots (
+         portfolio_id, instrument_id, quantity, avg_cost, currency,
+         opened_at, notes, source, source_account_ref, source_lot_id,
+         source_row_id, source_metadata_json, created_at, updated_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(portfolio.id, instrument.id, 2, 0, "USD", now, null, null, null, null, null, null, now, now);
+    db.close();
+    vi.mocked(getQuote).mockResolvedValue(quote("VTI", 300));
+
+    const result = await portfolioTrackerTool.execute("test", { action: "view" });
+
+    expect(result.content[0].text).not.toMatch(/NaN/);
+    expect(result.content[0].text).toContain("P&L: unavailable");
+    expect(result.details?.positions[0]).toMatchObject({
+      symbol: "VTI",
+      totalCost: 0,
+      pnlPercent: null,
+    });
+  });
+
   it("discloses zero-filled quote data and excludes the row from current-value totals", async () => {
     await portfolioTrackerTool.execute("test", {
       action: "add",
