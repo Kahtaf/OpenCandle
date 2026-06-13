@@ -4,7 +4,7 @@ Focus on concrete regressions, missing validation, and OpenCandle-specific risks
 
 ## Required Review Focus
 
-- Full branch diff: review `origin/main...HEAD` behavior unless the caller selected `--mode local` or `--mode commit`.
+- Review scope: review only the diff bundle supplied by the helper. For branch mode that is the branch diff, for local mode that is uncommitted local changes, for commit mode that is the selected commit, and for range mode that is the selected base-to-head diff.
 - TDD: behavior changes should have tests; unit tests should mirror `src/` and use public interfaces.
 - Finance safety: never allow guessed prices, ratios, metrics, filings, or option values. Flag missing source/freshness context and weak downside-risk framing.
 - Tools/providers: tools should fetch and format; analysts/LLM synthesize. External calls should use existing cache/rate-limiter infra and fixture-backed tests.

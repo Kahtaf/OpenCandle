@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const helperPath = resolve(".agents/skills/autoreview/scripts/autoreview");
+const opencandlePromptPath = resolve(".agents/skills/autoreview/references/opencandle-review.md");
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -111,6 +112,9 @@ if (!stdin.includes("export const value = 2;")) {
 if (stdin.includes("ignored.js")) {
   throw new Error("range bundle included commits after the requested head");
 }
+if (stdin.includes("origin/main...HEAD")) {
+  throw new Error("OpenCandle prompt file contains branch-only review scope");
+}
 const report = {
   findings: [{
     title: "Changed app behavior needs review",
@@ -138,6 +142,8 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
         base,
         "--head",
         middle,
+        "--prompt-file",
+        opencandlePromptPath,
         "--commit",
         head,
         "--codex-bin",
