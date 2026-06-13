@@ -4,7 +4,6 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type AgentSession,
   AuthStorage,
   createAgentSessionRuntime,
   createAgentSessionServices,
@@ -34,15 +33,10 @@ import {
 import { buildModelSetupState, createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { projectDashboard } from "./projector.js";
-import {
-  createPromptObservation,
-  observePromptEvent,
-  type PromptObservation,
-  selectReplayPrompt,
-} from "./prompt-observation.js";
+import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
-import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
-import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
+import { createSessionActionsController, promptAndSettle } from "./session-actions.js";
+import { waitForNewEntryId } from "./session-entry-wait.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
@@ -120,6 +114,19 @@ const toolInvokeController = createToolInvokeController({
   getSessionManager: () => sessionManager,
   broadcastState,
 });
+const sessionActionsController = createSessionActionsController({
+  role: lockResult.role,
+  cwd,
+  sessionDir,
+  getSession: () => session,
+  getSessionManager: () => sessionManager,
+  getModelSetupState: () => buildCurrentModelSetupState(),
+  askUserBridge,
+  runtime,
+  sendBoot,
+  broadcastState,
+  broadcastSessions,
+});
 
 let unsubscribeSession = subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
@@ -150,7 +157,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
       writeJson(res, { error: "Read-only follower mode" }, 409);
       return;
     }
-    await handleNewSession();
+    await sessionActionsController.handleNewSession();
     broadcastState();
     broadcastSessions();
     writeJson(res, await buildBootstrapPayload());
@@ -270,13 +277,13 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
   try {
     switch (data.type) {
       case "chat.prompt":
-        await handlePrompt(String(data.prompt ?? ""));
+        await sessionActionsController.handlePrompt(String(data.prompt ?? ""));
         break;
       case "ask_user.answer":
-        await handleAskUserAnswer(String(data.id ?? ""), data.answer);
+        await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer);
         break;
       case "ask_user.cancel":
-        await handleAskUserCancel(String(data.id ?? ""));
+        await sessionActionsController.handleAskUserCancel(String(data.id ?? ""));
         break;
       case "tool.invoke":
         await toolInvokeController.handleToolInvokeMessage(client, data);
@@ -316,27 +323,30 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         break;
       case "session.new":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await handleNewSession();
+        await sessionActionsController.handleNewSession();
         sendBoot(client);
         broadcastState();
         broadcastSessions();
         break;
       case "session.open":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await handleOpenSession(String(data.path ?? ""));
+        await sessionActionsController.handleOpenSession(String(data.path ?? ""));
         sendBoot(client);
         broadcastState();
         broadcastSessions();
         break;
       case "session.rename":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await handleRenameSession(String(data.path ?? ""), String(data.name ?? ""));
+        await sessionActionsController.handleRenameSession(
+          String(data.path ?? ""),
+          String(data.name ?? ""),
+        );
         broadcastState();
         broadcastSessions();
         break;
       case "session.delete":
         if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await handleDeleteSession(client, String(data.path ?? ""));
+        await sessionActionsController.handleDeleteSession(client, String(data.path ?? ""));
         break;
     }
   } catch (error) {
@@ -346,48 +356,6 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
       message,
     });
   }
-}
-
-async function handlePrompt(prompt: string): Promise<void> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-
-  const modelSetup = buildCurrentModelSetupState();
-  const trimmedPrompt = prompt.trim();
-  if (!trimmedPrompt.startsWith("/") && modelSetup.requirement !== "ready") {
-    sessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
-    broadcastState();
-    const message =
-      modelSetup.requirement === "select_model"
-        ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
-        : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
-    sessionManager.appendCustomMessageEntry("opencandle-model-setup", message, true, {
-      source: "gui",
-      requirement: modelSetup.requirement,
-    });
-    broadcastState();
-    return;
-  }
-
-  const beforeIds = new Set(sessionManager.getEntries().map((entry) => entry.id));
-  await promptAndSettle(session, prompt, beforeIds);
-  broadcastState();
-}
-
-async function handleAskUserAnswer(id: string, value: unknown): Promise<void> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-  const answer = String(value ?? "").trim();
-  if (!answer) throw new Error("Answer cannot be empty");
-  if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
-}
-
-async function handleAskUserCancel(id: string): Promise<void> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-  if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
-}
-
-async function handleNewSession(): Promise<void> {
-  const result = await runtime.newSession();
-  if (result.cancelled) throw new Error("Session switch cancelled");
 }
 
 async function buildBootstrapPayload(): Promise<Record<string, unknown>> {
@@ -400,35 +368,6 @@ async function buildBootstrapPayload(): Promise<Record<string, unknown>> {
     sessions: await SessionManager.list(cwd, sessionDir),
     snapshot: buildStateSnapshot(),
   };
-}
-
-async function handleOpenSession(path: string): Promise<void> {
-  const sessions = await SessionManager.list(cwd, sessionDir);
-  const match = sessions.find((candidate) => candidate.path === path);
-  if (!match) throw new Error("Unknown saved session");
-  const result = await runtime.switchSession(match.path);
-  if (result.cancelled) throw new Error("Session switch cancelled");
-}
-
-async function handleRenameSession(path: string, name: string): Promise<void> {
-  const nextName = name.trim();
-  if (!nextName) throw new Error("Session name cannot be empty");
-  if (sessionManager.getSessionFile() === path) {
-    sessionManager.appendSessionInfo(nextName);
-    return;
-  }
-  await renameSessionFile(cwd, sessionDir, path, nextName);
-}
-
-async function handleDeleteSession(client: WsClient, path: string): Promise<void> {
-  const deletingCurrent = sessionManager.getSessionFile() === path;
-  await deleteSessionFile(cwd, sessionDir, path);
-  if (deletingCurrent) {
-    await handleNewSession();
-    sendBoot(client);
-    broadcastState();
-  }
-  broadcastSessions();
 }
 
 function sendBoot(client: WsClient): void {
@@ -565,43 +504,6 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     unsubscribeLive();
     res.end();
   }
-}
-
-async function promptAndSettle(
-  runSession: AgentSession,
-  prompt: string,
-  beforeIds: Set<string>,
-  observation?: PromptObservation,
-): Promise<void> {
-  await runSession.prompt(prompt);
-  await waitForSessionTurnSettlement(() => ({
-    isStreaming: runSession.isStreaming,
-    pendingMessageCount: runSession.pendingMessageCount,
-  }));
-  await waitForNewEntryId(
-    () => runSession.sessionManager.getEntries().map((entry) => entry.id),
-    beforeIds,
-  );
-  await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
-}
-
-async function replayObservedWorkflowPromptIfNeeded(
-  runSession: AgentSession,
-  originalPrompt: string,
-  observation?: PromptObservation,
-): Promise<void> {
-  if (!observation) return;
-  const replayPrompt = selectReplayPrompt(observation, originalPrompt);
-  if (!replayPrompt) return;
-
-  await runSession.prompt(replayPrompt, {
-    expandPromptTemplates: false,
-    source: "extension",
-  });
-  await waitForSessionTurnSettlement(() => ({
-    isStreaming: runSession.isStreaming,
-    pendingMessageCount: runSession.pendingMessageCount,
-  }));
 }
 
 function buildStateSnapshot() {
