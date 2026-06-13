@@ -90,6 +90,8 @@
     "docs:site:serve": "node website/serve.mjs",
     "gui": "tsx gui/server/server.ts",
     "gui:dev": "tsx gui/server/server.ts",
+    "lint": "biome check .",
+    "format": "biome check --write .",
     "pretest": "npm run check:node",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -137,6 +139,7 @@
   },
   "devDependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.37.0",
+    "@biomejs/biome": "2.5.0",
     "@sinclair/typebox": "^0.34.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.19",
