@@ -170,11 +170,13 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
+    if (!allowTrustedGuiRequest(req, res, "Bootstrap API")) return;
     writeJson(res, await wsHub.buildBootstrapPayload());
     return;
   }
 
   if (url.pathname === "/api/session/new" && req.method === "POST") {
+    if (!allowTrustedGuiRequest(req, res, "Session API")) return;
     if (lockResult.role !== "writer") {
       writeJson(res, { error: "Read-only follower mode" }, 409);
       return;
@@ -187,6 +189,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/sessions" && req.method === "GET") {
+    if (!allowTrustedGuiRequest(req, res, "Session API")) return;
     writeJson(res, {
       currentSessionId: sessionManager.getSessionId(),
       role: lockResult.role,
@@ -196,6 +199,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/session/events" && req.method === "GET") {
+    if (!allowTrustedGuiRequest(req, res, "Session API")) return;
     writeJson(res, {
       sessionId: sessionManager.getSessionId(),
       role: lockResult.role,
