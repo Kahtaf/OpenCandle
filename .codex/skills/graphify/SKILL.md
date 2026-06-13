@@ -335,7 +335,8 @@ import sys, json
 from pathlib import Path
 
 ast = json.loads(Path('graphify-out/.graphify_ast.json').read_text(encoding=\"utf-8\"))
-sem = json.loads(Path('graphify-out/.graphify_semantic.json').read_text(encoding=\"utf-8\"))
+sem_path = Path('graphify-out/.graphify_semantic.json')
+sem = json.loads(sem_path.read_text(encoding=\"utf-8\")) if sem_path.exists() else {'nodes':[],'edges':[],'hyperedges':[],'input_tokens':0,'output_tokens':0}
 
 # Merge: AST nodes first, semantic nodes deduplicated by id
 seen = {n['id'] for n in ast['nodes']}
@@ -378,8 +379,9 @@ from pathlib import Path
 
 extraction = json.loads(Path('graphify-out/.graphify_extract.json').read_text(encoding=\"utf-8\"))
 detection  = json.loads(Path('graphify-out/.graphify_detect.json').read_text(encoding=\"utf-8\"))
+DIRECTED = False  # replace with True when --directed was given
 
-G = build_from_json(extraction)
+G = build_from_json(extraction, directed=DIRECTED)
 communities = cluster(G)
 cohesion = score_all(G, communities)
 tokens = {'input': extraction.get('input_tokens', 0), 'output': extraction.get('output_tokens', 0)}
@@ -431,8 +433,9 @@ from pathlib import Path
 extraction = json.loads(Path('graphify-out/.graphify_extract.json').read_text(encoding=\"utf-8\"))
 detection  = json.loads(Path('graphify-out/.graphify_detect.json').read_text(encoding=\"utf-8\"))
 analysis   = json.loads(Path('graphify-out/.graphify_analysis.json').read_text(encoding=\"utf-8\"))
+DIRECTED = False  # replace with True when --directed was given
 
-G = build_from_json(extraction)
+G = build_from_json(extraction, directed=DIRECTED)
 communities = {int(k): v for k, v in analysis['communities'].items()}
 cohesion = {int(k): v for k, v in analysis['cohesion'].items()}
 tokens = {'input': extraction.get('input_tokens', 0), 'output': extraction.get('output_tokens', 0)}
