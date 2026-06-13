@@ -2,6 +2,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { searchFilings } from "../../providers/sec-edgar.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import { renderUntrustedText, untrustedContentHeader } from "../sentiment/untrusted-text.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, TSLA)" }),
@@ -79,12 +80,14 @@ export const secFilingsTool: AgentTool<typeof params> = {
         ? [
             ``,
             `Evidence snippets (short excerpts; review source filing for full context):`,
+            untrustedContentHeader("SEC filing snippets"),
             ...filings.flatMap((f) =>
               f.evidenceWarning
                 ? [`  ${f.formType} ${f.filedDate}: ${f.evidenceWarning}`]
                 : f.evidenceSnippets?.length
                   ? f.evidenceSnippets.map(
-                      (snippet) => `  ${f.formType} ${f.filedDate}: ${snippet}`,
+                      (snippet) =>
+                        `  ${f.formType} ${f.filedDate}: ${renderUntrustedText(snippet, 500)}`,
                     )
                   : [
                       `  ${f.formType} ${f.filedDate}: No keyword snippet found in fetched primary document.`,
