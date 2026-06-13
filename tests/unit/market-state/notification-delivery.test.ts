@@ -123,7 +123,14 @@ describe("notification delivery", () => {
 
     expect(result).toMatchObject({ attempted: 1, succeeded: 0, failed: 1 });
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(service.listNotificationDeliveryAttempts(notification.id)).toHaveLength(0);
+    expect(service.listNotificationDeliveryAttempts(notification.id)).toEqual([
+      expect.objectContaining({
+        notificationEventId: notification.id,
+        channel: "webhook",
+        status: "failed",
+        error: "Rejected notification webhook URL host: example.com",
+      }),
+    ]);
     expect(warn).toHaveBeenCalledWith("Rejected notification webhook URL host: example.com");
   });
 
@@ -144,8 +151,54 @@ describe("notification delivery", () => {
 
     expect(result).toMatchObject({ attempted: 1, succeeded: 0, failed: 1 });
     expect(fetchImpl).not.toHaveBeenCalled();
-    expect(service.listNotificationDeliveryAttempts(notification.id)).toHaveLength(0);
+    expect(service.listNotificationDeliveryAttempts(notification.id)).toEqual([
+      expect.objectContaining({
+        notificationEventId: notification.id,
+        channel: "webhook",
+        status: "failed",
+        error: "Rejected notification webhook URL host: 169.254.169.254",
+      }),
+    ]);
     expect(warn).toHaveBeenCalledWith("Rejected notification webhook URL host: 169.254.169.254");
+  });
+
+  it("records rejected webhook URL failures with bounded retry rotation", async () => {
+    const notifications = [];
+    for (let index = 0; index < 6; index++) {
+      notifications.push(
+        service.recordNotificationEvent({
+          sourceType: "alert_event",
+          severity: "warning",
+          title: `Alert ${index + 1}`,
+          body: "A price alert triggered.",
+          createdAt: `2026-06-01T12:0${index}:00.000Z`,
+        }),
+      );
+    }
+    const fetchImpl = vi.fn(async () => new Response("ok", { status: 200 }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const first = await deliverPendingNotifications(service, {
+      webhookUrl: "ftp://example.com/hook",
+      fetchImpl,
+      now: "2026-06-01T12:10:00.000Z",
+      maxAttempts: 3,
+    });
+    const second = await deliverPendingNotifications(service, {
+      webhookUrl: "ftp://example.com/hook",
+      fetchImpl,
+      now: "2026-06-01T12:11:00.000Z",
+      maxAttempts: 3,
+    });
+
+    expect(first).toMatchObject({ attempted: 3, succeeded: 0, failed: 3 });
+    expect(second).toMatchObject({ attempted: 3, succeeded: 0, failed: 3 });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith("Rejected notification webhook URL host: example.com");
+    const attemptsByNotification = notifications.map(
+      (notification) => service.listNotificationDeliveryAttempts(notification.id).length,
+    );
+    expect(attemptsByNotification).toEqual([1, 1, 1, 1, 1, 1]);
   });
 
   it("allows localhost webhook receivers", async () => {

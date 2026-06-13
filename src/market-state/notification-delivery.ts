@@ -62,7 +62,19 @@ export async function deliverPendingNotifications(
   if (!isAllowedWebhookUrl(webhookUrl)) {
     const rejectedHost = webhookUrlHost(webhookUrl);
     console.warn(`Rejected notification webhook URL host: ${rejectedHost}`);
-    const rejected = Math.min(pendingNotifications.length, maxAttempts);
+    const rejectedNotifications = pendingNotifications.slice(0, maxAttempts);
+    const error = `Rejected notification webhook URL host: ${rejectedHost}`;
+    for (const notification of rejectedNotifications) {
+      service.recordNotificationDeliveryAttempt({
+        notificationEventId: notification.id,
+        channel: "webhook",
+        status: "failed",
+        attemptedAt: now,
+        completedAt: now,
+        error,
+      });
+    }
+    const rejected = rejectedNotifications.length;
     return { attempted: rejected, succeeded: 0, failed: rejected };
   }
 
