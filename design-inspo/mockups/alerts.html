@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Alerts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="logo"><span></span>OpenCandle</div>
+    <div class="kicker">MARKET STATE</div>
+    <a href="watchlist.html">Watchlist <span class="pill">5</span></a>
+    <a href="portfolio.html">Portfolio</a>
+    <a class="active" href="alerts.html">Alerts <span class="pill">3</span></a>
+    <a href="predictions.html">Predictions <span class="pill">3</span></a>
+    <a href="reports.html">Reports</a>
+  </nav>
+  <main class="main">
+    <div class="page-head">
+      <h1>Alerts</h1>
+      <div class="meta">
+        <span class="session-dot">Monitoring locally · last check 4m ago</span>
+        <button class="btn primary">New alert</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Active rules</h2>
+        <span style="color:var(--muted);font-size:12px">Checked every 15 min while OpenCandle is open</span>
+      </div>
+      <div class="alert-row">
+        <span class="dot g"></span>
+        <div class="sym" style="width:64px"><b>NVDA</b></div>
+        <div class="sentence">Price crosses above <b class="num">$220.00</b>
+          <small>Armed · last checked 4m ago at $204.25 · 7.7% away</small>
+        </div>
+        <span class="badge off">recurring</span>
+        <div class="toggle"></div>
+      </div>
+      <div class="alert-row">
+        <span class="dot g"></span>
+        <div class="sym" style="width:64px"><b>ASTS</b></div>
+        <div class="sentence">Price drops below <b class="num">$40.00</b>
+          <small>Armed · last checked 4m ago at $86.56 · acts as stop-loss watch</small>
+        </div>
+        <span class="badge off">recurring</span>
+        <div class="toggle"></div>
+      </div>
+      <div class="alert-row">
+        <span class="dot o"></span>
+        <div class="sym" style="width:64px"><b>TSLA</b></div>
+        <div class="sentence">RSI (14-day) rises above <b class="num">70</b>
+          <small>Data unavailable on last check · will retry in 11 min</small>
+        </div>
+        <span class="badge warn">provider limit</span>
+        <div class="toggle"></div>
+      </div>
+      <div class="alert-row">
+        <span class="dot gray"></span>
+        <div class="sym" style="width:64px"><b>NVDA</b></div>
+        <div class="sentence">Falls more than <b class="num">5%</b> in a day
+          <small>Paused by you on Jun 8</small>
+        </div>
+        <span class="badge off">recurring</span>
+        <div class="toggle off"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Alert log</h2><button class="btn quiet">Mark all read</button></div>
+      <div class="log-row">
+        <time>Today 9:42 AM</time>
+        <div><b>ASTS</b> rose <span class="chg up">+5.12%</span> — crossed your $80 prediction checkpoint. <span style="color:var(--muted)">Quote $86.56, Yahoo</span></div>
+      </div>
+      <div class="log-row">
+        <time>Yesterday 3:58 PM</time>
+        <div><b>NVDA</b> price-above-$220 check ran at $199.50 — not triggered.</div>
+      </div>
+      <div class="log-row">
+        <time>Jun 9, 8:01 AM</time>
+        <div>Morning report generated for Default Watchlist. <a href="reports.html" style="color:var(--brand)">View report →</a></div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,54 @@
+=== tmux capture-pane (OpenCandle TUI, Fri 12 Jun 2026 20:22:48 EDT) ===
+ - What happens: The call option expires worthless. You keep your 100 shares and the $198 premium.
+ - Your return:
+     - Unrealized stock loss: -$0.75/share (-$75)
+     - Realized premium gain: +$1.98/share (+$198)
+     - Net Position: Up +$123 overall.
+ - The Benefit: This is the ideal scenario. You can now sell another call option for the next period, compounding your yield and lowering your net "cost basis" on the stock to $739.77 ($741.75 -
+   $1.98).
+
+ #### 3. SPY drops sharply (e.g., to $700.00)
+
+ - What happens: The option expires worthless. You keep the $198 premium but still own the declining shares.
+ - Your return:
+     - Unrealized stock loss: -$41.75/share (-$4,175)
+     - Realized premium gain: +$1.98/share (+$198)
+     - Net Position: Down -$3,977 overall.
+ - The Reality Check: The premium provides a tiny cushion, but it does not protect you from significant downside risk. You are still exposed to nearly the full loss of holding the stock.
+
+ ────────────────────────────────────────────────────────────────────────────────
+
+ ### Summary of Differences
+
+ ┌──────────────────┬────────────────────────────────────────┬──────────────────────────────────────────────────────┐
+ │ Feature          │ Regular Stock Ownership                │ Covered Call Position                                │
+ ├──────────────────┼────────────────────────────────────────┼──────────────────────────────────────────────────────┤
+ │ Upfront Income   │ $0                                     │ Pocket the Premium (e.g., $198)                      │
+ ├──────────────────┼────────────────────────────────────────┼──────────────────────────────────────────────────────┤
+ │ Maximum Upside   │ Unlimited                              │ Capped at Strike + Premium (e.g., $746.98)           │
+ ├──────────────────┼────────────────────────────────────────┼──────────────────────────────────────────────────────┤
+ │ Downside Risk    │ Stock can go to $0                     │ Stock can go to $0 (buffered by premium)             │
+ ├──────────────────┼────────────────────────────────────────┼──────────────────────────────────────────────────────┤
+ │ Break-Even Price │ Initial Purchase Price (e.g., $741.75) │ Initial Purchase Price minus Premium (e.g., $739.77) │
+ ├──────────────────┼────────────────────────────────────────┼──────────────────────────────────────────────────────┤
+ │ Optimal Outlook  │ Strongly Bullish                       │ Neutral to Moderately Bullish                        │
+ └──────────────────┴────────────────────────────────────────┴──────────────────────────────────────────────────────┘
+
+ ### What Live Broker Quotes Would Change
+
+ If you check this during live trading hours, the actual premium you collect will fluctuate rapidly based on:
+ - Implied Volatility (IV): Higher market fear increases option pricing, allowing you to collect larger premiums.
+ - Time Decay (Theta): Options lose value as expiration approaches.
+ - Underlying Price Moves: As the stock rises closer to the strike, the call option premium increases.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/Documents/workspace_kahtaf/opencandle (feat/persist-user-market-state) • Understanding the Mechanics of Covered Calls
+↑67k ↓4.3k $0.138 2.1%/1.0M (auto)                                                                                                                                      (google) gemini-3.5-flash • high
+OpenCandle is a research and analysis tool, not financial advice or a fiduciary financial advisor. Views, targets, and allocations are informational analyst output — not personalized recommendation...
+
+
+
+=== session_info entries in 2026-06-13T00-21-49-073Z_019ebe5b-3591-75ae-a645-d2e32e2ba952.jsonl ===
+{"type":"session_info","id":"19867a5a","parentId":"e9afa840","timestamp":"2026-06-13T00:22:37.222Z","name":"Understanding the Mechanics of Covered Calls"}

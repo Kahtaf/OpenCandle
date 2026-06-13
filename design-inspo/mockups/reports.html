@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mockup — Reports</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <div class="logo"><span></span>OpenCandle</div>
+    <div class="kicker">MARKET STATE</div>
+    <a href="watchlist.html">Watchlist <span class="pill">5</span></a>
+    <a href="portfolio.html">Portfolio</a>
+    <a href="alerts.html">Alerts <span class="pill">3</span></a>
+    <a href="predictions.html">Predictions <span class="pill">3</span></a>
+    <a class="active" href="reports.html">Reports</a>
+  </nav>
+  <main class="main">
+    <div class="page-head">
+      <h1>Reports</h1>
+      <div class="meta">
+        <span>Daily at 8:00 AM · next run tomorrow</span>
+        <button class="btn">Edit schedule</button>
+        <button class="btn primary">Generate now</button>
+      </div>
+    </div>
+
+    <div class="split" style="grid-template-columns:minmax(0,1fr) 280px">
+      <div class="panel doc">
+        <h2>Morning report</h2>
+        <div class="byline">Default Watchlist · Thursday, June 12, 2026 · generated 8:01 AM</div>
+        <h4>What moved</h4>
+        <ul>
+          <li><b>ASTS</b> <span class="chg up">+5.12%</span> — strongest mover; now 9.8% from your $95 target and above your $80 prediction checkpoint.</li>
+          <li><b>NVDA</b> <span class="chg up">+2.41%</span> — 7.7% from the $220 alert level you set.</li>
+          <li><b>AAPL</b> <span class="chg down">−0.83%</span> — pulled back; still 54% above your blended cost basis.</li>
+        </ul>
+        <h4>Approaching your levels</h4>
+        <ul>
+          <li>NVDA is within 8% of your price-above alert at $220. Two more sessions at today's pace would trigger it.</li>
+        </ul>
+        <h4>Data gaps</h4>
+        <ul>
+          <li>SPY quote is 26 minutes old (Yahoo rate limit); day change may lag.</li>
+        </ul>
+      </div>
+
+      <aside class="panel inspector">
+        <div class="panel-head"><h2>History</h2></div>
+        <div class="log-row" style="grid-template-columns:1fr auto">
+          <div><b>Jun 12</b> · 8:01 AM<br><small style="color:var(--muted)">scheduled · delivered</small></div>
+          <span class="badge ok">read</span>
+        </div>
+        <div class="log-row" style="grid-template-columns:1fr auto">
+          <div><b>Jun 11</b> · 8:00 AM<br><small style="color:var(--muted)">scheduled · delivered</small></div>
+          <span class="badge ok">read</span>
+        </div>
+        <div class="log-row" style="grid-template-columns:1fr auto">
+          <div><b>Jun 10</b> · 9:14 AM<br><small style="color:var(--muted)">late · machine was asleep</small></div>
+          <span class="badge warn">late</span>
+        </div>
+        <div class="log-row" style="grid-template-columns:1fr auto">
+          <div><b>Jun 9</b> · 8:00 AM<br><small style="color:var(--muted)">scheduled · delivered</small></div>
+          <span class="badge off">unread</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>
