@@ -243,6 +243,10 @@ def choose_target(repo: Path, mode: str, base_ref: str | None) -> tuple[str, str
         return "local", None
     if mode == "commit":
         return "commit", None
+    if mode == "range":
+        if not base_ref:
+            raise SystemExit("--mode range requires --base <commit>")
+        return "range", base_ref
     if mode == "branch" and is_dirty(repo):
         raise SystemExit(
             "branch review requires a clean worktree; commit/stash changes first or run --mode local"
@@ -329,6 +333,18 @@ def branch_bundle(repo: Path, base_ref: str) -> str:
     )
 
 
+def range_bundle(repo: Path, base_ref: str, head_ref: str) -> str:
+    return "\n\n".join(
+        [
+            "# Range Diff",
+            f"base: {base_ref}",
+            f"head: {head_ref}",
+            git(repo, "diff", "--stat", base_ref, head_ref),
+            bounded(git(repo, "diff", "--patch", "--find-renames", base_ref, head_ref)),
+        ]
+    )
+
+
 def commit_parents(repo: Path, commit_ref: str) -> list[str]:
     line = git(repo, "rev-list", "--parents", "-n", "1", commit_ref)
     parts = line.split()
@@ -359,7 +375,13 @@ def commit_bundle(repo: Path, commit_ref: str) -> str:
     )
 
 
-def review_paths(repo: Path, target: str, target_ref: str | None, commit_ref: str) -> set[str]:
+def review_paths(
+    repo: Path,
+    target: str,
+    target_ref: str | None,
+    commit_ref: str,
+    head_ref: str,
+) -> set[str]:
     names: set[str] = set()
     if target == "local":
         sources = [
@@ -370,6 +392,9 @@ def review_paths(repo: Path, target: str, target_ref: str | None, commit_ref: st
     elif target == "branch":
         assert target_ref
         sources = [git(repo, "diff", "--name-only", f"{target_ref}...HEAD")]
+    elif target == "range":
+        assert target_ref
+        sources = [git(repo, "diff", "--name-only", target_ref, head_ref)]
     else:
         parents = commit_parents(repo, commit_ref)
         if len(parents) > 1:
@@ -1054,8 +1079,9 @@ def finish_parallel_tests(proc: subprocess.Popen, started: float) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Bundle-driven AI code review.")
-    parser.add_argument("--mode", choices=["auto", "local", "branch", "commit"], default="auto")
+    parser.add_argument("--mode", choices=["auto", "local", "branch", "commit", "range"], default="auto")
     parser.add_argument("--base")
+    parser.add_argument("--head", default="HEAD")
     parser.add_argument("--commit", default="HEAD")
     parser.add_argument("--engine", choices=ENGINES, default=os.environ.get("AUTOREVIEW_ENGINE", "codex"))
     parser.add_argument("--reviewers", help="Comma-separated review panel, e.g. codex,claude or codex:gpt-5:high.")
@@ -1285,7 +1311,12 @@ def main() -> int:
         print(f"reviewers: {', '.join(reviewer_label(reviewer) for reviewer in reviewers)}")
     print(f"tools: {'on' if args.tools else 'off'}")
     print(f"web_search: {'on' if args.web_search else 'off'}")
-    display_ref = args.commit if target == "commit" else target_ref
+    if target == "commit":
+        display_ref = args.commit
+    elif target == "range":
+        display_ref = f"{target_ref}..{args.head}"
+    else:
+        display_ref = target_ref
     if display_ref:
         print(f"ref: {display_ref}")
     if args.dry_run:
@@ -1296,10 +1327,13 @@ def main() -> int:
     elif target == "branch":
         assert target_ref
         bundle = branch_bundle(repo, target_ref)
+    elif target == "range":
+        assert target_ref
+        bundle = range_bundle(repo, target_ref, args.head)
     else:
         bundle = commit_bundle(repo, args.commit)
         target_ref = args.commit
-    changed_paths = review_paths(repo, target, target_ref, args.commit)
+    changed_paths = review_paths(repo, target, target_ref, args.commit, args.head)
     react_doctor, react_doctor_status = react_doctor_evidence(repo, changed_paths, args)
     datasets = "\n\n".join(chunk for chunk in [load_datasets(args), react_doctor] if chunk)
     prompt = build_prompt(repo, target, target_ref, bundle, load_extra_prompt(args), datasets)

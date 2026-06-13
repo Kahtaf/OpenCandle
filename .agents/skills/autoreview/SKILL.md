@@ -52,6 +52,14 @@ Already-landed or single committed change:
 
 For a merged GitHub PR, pass the merge commit SHA. The helper reviews merge commits against their first parent so the PR diff is in scope.
 
+Explicit commit-to-commit range:
+
+```bash
+.agents/skills/autoreview/scripts/autoreview --mode range --base <base-commit> --head <head-commit> --prompt-file .agents/skills/autoreview/references/opencandle-review.md
+```
+
+Range mode reviews exactly `git diff <base-commit> <head-commit>` and validates findings against files changed in that diff.
+
 Add extra evidence when available:
 
 ```bash
