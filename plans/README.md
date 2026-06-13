@@ -21,7 +21,7 @@ Verification gates for every plan: `npx tsc --noEmit` and `npx vitest run`
 | 007  | Tighten non-budget dollar-amount detection | P2 | S | — | DONE |
 | 008  | Lint/format baseline (Biome) gated in CI | P3 | M | 001–007 (ordering, not hard) | DONE |
 | 009  | Decompose gui/server/server.ts into services | P3 | M | — | TODO |
-| 010  | Snapshot prompts layer + map duplication (Phase B consolidation gated on operator approval) | P3 | M | — | TODO |
+| 010  | Snapshot prompts layer + map duplication (Phase B consolidation gated on operator approval) | P3 | M | — | DONE (Phase A) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
