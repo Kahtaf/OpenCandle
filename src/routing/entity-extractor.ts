@@ -246,6 +246,9 @@ export function extractBudget(input: string): number | undefined {
   // Match "10k" or "10K" standalone
   const kNotation = input.match(/\b(\d+(?:\.\d+)?)\s*[kK]\b/);
   if (kNotation) {
+    if (isNonBudgetDollarAmount(input, kNotation.index ?? 0, kNotation[0].length)) {
+      return undefined;
+    }
     return parseFloat(kNotation[1]) * 1000;
   }
 

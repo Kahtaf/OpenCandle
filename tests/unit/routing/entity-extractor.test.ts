@@ -57,6 +57,10 @@ describe("extractEntities", () => {
       expect(extractBudget("my position is valued at $12,500")).toBeUndefined();
       expect(extractBudget("it pays $2 per share in dividends")).toBeUndefined();
       expect(extractBudget("the stock is trading around $150")).toBeUndefined();
+      expect(extractBudget("I am up $10k on NVDA")).toBeUndefined();
+      expect(extractBudget("my position is worth $25k")).toBeUndefined();
+      expect(extractBudget("I am up 10k on NVDA")).toBeUndefined();
+      expect(extractBudget("my position is worth 25k")).toBeUndefined();
     });
 
     it("preserves explicit budget dollar amount extraction", () => {
