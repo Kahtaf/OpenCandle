@@ -44,7 +44,7 @@ export function buildMemoryContext(storage: MemoryStorage, overriddenSlots?: str
         const value = tryParseJson(p.value_json as string);
         return `- ${p.key}: ${value}`;
       });
-      sections.push("User Preferences:\n" + lines.join("\n"));
+      sections.push(`User Preferences:\n${lines.join("\n")}`);
     }
   }
 
@@ -55,7 +55,7 @@ export function buildMemoryContext(storage: MemoryStorage, overriddenSlots?: str
       const summary = r.output_summary ? ` — ${r.output_summary}` : "";
       return `- ${r.workflow_type} (${r.created_at})${summary}`;
     });
-    sections.push("Recent Workflows:\n" + lines.join("\n"));
+    sections.push(`Recent Workflows:\n${lines.join("\n")}`);
   }
 
   return sections.join("\n\n");

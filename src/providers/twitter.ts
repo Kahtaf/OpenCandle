@@ -68,7 +68,7 @@ export function scoreTwitterSentiment(
 // ── Query normalization ──────────────────────────────────
 
 export function normalizeQuery(query: string): string {
-  if (/^[A-Z]{1,5}$/.test(query)) return "$" + query;
+  if (/^[A-Z]{1,5}$/.test(query)) return `$${query}`;
   return query;
 }
 

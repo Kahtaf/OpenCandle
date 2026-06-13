@@ -41,11 +41,11 @@ export const companyOverviewTool: AgentTool<
         `**${ov.name}** (${ov.symbol}) — ${ov.exchange}`,
         `Sector: ${ov.sector} | Industry: ${ov.industry}`,
         `Market Cap: $${formatLargeNumber(ov.marketCap)} | P/E: ${ov.pe ?? "N/A"} | Fwd P/E: ${ov.forwardPe ?? "N/A"}`,
-        `EPS: $${ov.eps ?? "N/A"} | Div Yield: ${ov.dividendYield ? (ov.dividendYield * 100).toFixed(2) + "%" : "N/A"}`,
-        `Beta: ${ov.beta ?? "N/A"} | Profit Margin: ${ov.profitMargin ? (ov.profitMargin * 100).toFixed(1) + "%" : "N/A"}`,
+        `EPS: $${ov.eps ?? "N/A"} | Div Yield: ${ov.dividendYield ? `${(ov.dividendYield * 100).toFixed(2)}%` : "N/A"}`,
+        `Beta: ${ov.beta ?? "N/A"} | Profit Margin: ${ov.profitMargin ? `${(ov.profitMargin * 100).toFixed(1)}%` : "N/A"}`,
         `52W: $${ov.week52Low.toFixed(2)} - $${ov.week52High.toFixed(2)}`,
         ``,
-        ov.description.slice(0, 300) + (ov.description.length > 300 ? "..." : ""),
+        `${ov.description.slice(0, 300)}${ov.description.length > 300 ? "..." : ""}`,
       ].join("\n");
 
       const prefix = result.stale

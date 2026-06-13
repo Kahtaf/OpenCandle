@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const skillPaths = [
-  ".codex/skills/graphify/SKILL.md",
-  ".claude/skills/graphify/SKILL.md",
-] as const;
+const skillPaths = [".codex/skills/graphify/SKILL.md", ".claude/skills/graphify/SKILL.md"] as const;
 
 describe("graphify skill snippets", () => {
   it.each(skillPaths)("supports code-only runs in %s", (path) => {

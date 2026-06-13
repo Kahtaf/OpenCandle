@@ -543,11 +543,13 @@ export function buildWatchlistMutationArgs(panelType, values) {
   return {
     action: isEdit ? "update" : "add",
     symbol: values.symbol,
-    target_price: isEdit ? numberOrNull(values.target_price) : numberOrUndefined(values.target_price),
+    target_price: isEdit
+      ? numberOrNull(values.target_price)
+      : numberOrUndefined(values.target_price),
     stop_price: isEdit ? numberOrNull(values.stop_price) : numberOrUndefined(values.stop_price),
     thesis: isEdit ? blankToNull(values.thesis) : values.thesis || undefined,
     notes: isEdit ? blankToNull(values.notes) : values.notes || undefined,
-    tags: isEdit ? parseTags(values.tags) ?? [] : parseTags(values.tags),
+    tags: isEdit ? (parseTags(values.tags) ?? []) : parseTags(values.tags),
   };
 }
 

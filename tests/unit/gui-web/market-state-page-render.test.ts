@@ -136,7 +136,9 @@ describe("MarketStatePage rendering", () => {
           quoteSnapshot: {
             watchlistQuotes: [],
             portfolioQuotes: [],
-            predictionQuotes: [{ predictionId: 1, symbol: "NVDA", status: "ok", currentPrice: 950 }],
+            predictionQuotes: [
+              { predictionId: 1, symbol: "NVDA", status: "ok", currentPrice: 950 },
+            ],
           },
         },
       }),

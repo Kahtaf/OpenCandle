@@ -105,27 +105,30 @@ describe("initDatabase", () => {
     rmSync(base, { recursive: true, force: true });
   });
 
-  it.skipIf(process.platform === "win32")("creates the default state DB under owner-only home", () => {
-    const originalHome = process.env.OPENCANDLE_HOME;
-    const base = mkdtempSync(join(tmpdir(), "opencandle-default-db-perms-"));
-    const home = join(base, "home");
-    process.env.OPENCANDLE_HOME = home;
+  it.skipIf(process.platform === "win32")(
+    "creates the default state DB under owner-only home",
+    () => {
+      const originalHome = process.env.OPENCANDLE_HOME;
+      const base = mkdtempSync(join(tmpdir(), "opencandle-default-db-perms-"));
+      const home = join(base, "home");
+      process.env.OPENCANDLE_HOME = home;
 
-    try {
-      const defaultDb = initDefaultDatabase();
-      defaultDb.close();
+      try {
+        const defaultDb = initDefaultDatabase();
+        defaultDb.close();
 
-      expect(existsSync(join(home, "state.db"))).toBe(true);
-      expect(statSync(home).mode & 0o777).toBe(0o700);
-    } finally {
-      if (originalHome == null) {
-        delete process.env.OPENCANDLE_HOME;
-      } else {
-        process.env.OPENCANDLE_HOME = originalHome;
+        expect(existsSync(join(home, "state.db"))).toBe(true);
+        expect(statSync(home).mode & 0o777).toBe(0o700);
+      } finally {
+        if (originalHome == null) {
+          delete process.env.OPENCANDLE_HOME;
+        } else {
+          process.env.OPENCANDLE_HOME = originalHome;
+        }
+        rmSync(base, { recursive: true, force: true });
       }
-      rmSync(base, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "repairs the default state DB home directory permissions",

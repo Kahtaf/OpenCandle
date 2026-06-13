@@ -393,11 +393,7 @@ function writeJson(res: ServerResponse, value: unknown, status = 200): void {
   res.end(JSON.stringify(value));
 }
 
-function allowTrustedGuiRequest(
-  req: IncomingMessage,
-  res: ServerResponse,
-  label: string,
-): boolean {
+function allowTrustedGuiRequest(req: IncomingMessage, res: ServerResponse, label: string): boolean {
   if (
     isTrustedPrivateApiRequest(req.headers, privateApiSessionToken, req.socket.remoteAddress, {
       allowRemote: allowRemotePrivateApi,

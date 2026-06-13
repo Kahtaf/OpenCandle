@@ -28,6 +28,7 @@
 
 ### Fixed
 
+- CI lint/format drift from the market-state, catalog, memory, onboarding, provider, prompt, and test changes is now resolved so Biome passes in GitHub Actions.
 - OpenCandle now creates and repairs `~/.opencandle` with owner-only permissions and writes `config.json` as `0600`, reducing local exposure of saved provider credentials.
 - Alert checks now fetch Yahoo fallback quotes concurrently after TradingView misses, while preserving per-symbol unavailable reasons and provider-budget backoff for later runs.
 - Portfolio lot storage now rejects non-positive or non-finite quantity/cost values, and portfolio, prediction, risk, and backtest math now avoid non-finite results from zero price/cost history.

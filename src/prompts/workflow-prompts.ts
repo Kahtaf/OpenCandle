@@ -16,7 +16,6 @@ function tag(source: string | undefined): string {
       return " [DEFAULT]";
     case "preference":
       return " [SAVED PREFERENCE]";
-    case "user":
     default:
       return "";
   }

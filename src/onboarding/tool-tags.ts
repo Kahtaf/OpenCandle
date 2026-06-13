@@ -81,14 +81,12 @@ export function buildCredentialRequiredTag(fields: CredentialRequiredTagFields):
 }
 
 export function buildSoftDegradedTag(fields: SoftDegradedTagFields): string {
-  return (
-    [
-      "[OPENCANDLE_SOFT_DEGRADED",
-      formatField("provider", fields.provider),
-      formatField("fallback", fields.fallback),
-      `remediation=${quote(fields.remediation)}`,
-    ].join(" ") + "]"
-  );
+  return `${[
+    "[OPENCANDLE_SOFT_DEGRADED",
+    formatField("provider", fields.provider),
+    formatField("fallback", fields.fallback),
+    `remediation=${quote(fields.remediation)}`,
+  ].join(" ")}]`;
 }
 
 export function buildSkippedTag(fields: SkippedTagFields): string {

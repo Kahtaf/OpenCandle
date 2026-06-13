@@ -820,7 +820,7 @@ function deriveGenericSchema(tool) {
       kind: schema.type === "number" ? "text" : schema.type === "boolean" ? "select" : "text",
       label: friendlyLabel(name),
       placeholder: schema.examples?.[0],
-      helper: description.length > 80 ? description.slice(0, 80) + "…" : description,
+      helper: description.length > 80 ? `${description.slice(0, 80)}…` : description,
       required: tool.parameters?.required?.includes?.(name) ?? false,
     };
   });

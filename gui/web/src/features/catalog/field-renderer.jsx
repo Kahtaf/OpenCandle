@@ -180,7 +180,6 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
         </Field>
       );
 
-    case "text":
     default:
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>

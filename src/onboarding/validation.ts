@@ -89,7 +89,7 @@ function classifyAlphaVantageBody(body: string): ValidationResult | undefined {
     if (typeof errorMessage === "string" && errorMessage.length > 0) {
       return { status: "invalid", message: errorMessage };
     }
-    const information = parsed["Information"];
+    const information = parsed.Information;
     if (typeof information === "string" && /invalid api/i.test(information)) {
       return { status: "invalid", message: information };
     }

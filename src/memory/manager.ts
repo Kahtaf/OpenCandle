@@ -55,7 +55,7 @@ export class MemoryManager {
     now: Date = new Date(),
   ): MemoryRetrievalResult {
     const relevantCategories =
-      WORKFLOW_RELEVANT_CATEGORIES[workflowType] ?? WORKFLOW_RELEVANT_CATEGORIES["unclassified"];
+      WORKFLOW_RELEVANT_CATEGORIES[workflowType] ?? WORKFLOW_RELEVANT_CATEGORIES.unclassified;
 
     // Build set of preference keys to suppress
     const suppressedKeys = new Set<string>();
@@ -161,19 +161,19 @@ export class MemoryManager {
     const profileEntries = byCategory.get("investor_profile");
     if (profileEntries && profileEntries.length > 0) {
       const lines = profileEntries.map((e) => `- ${e.key}: ${e.value}`);
-      sections.push("User Preferences:\n" + lines.join("\n"));
+      sections.push(`User Preferences:\n${lines.join("\n")}`);
     }
 
     const historyEntries = byCategory.get("workflow_history");
     if (historyEntries && historyEntries.length > 0) {
       const lines = historyEntries.map((e) => `- ${e.value} (${e.recordedAt})`);
-      sections.push("Recent Workflows:\n" + lines.join("\n"));
+      sections.push(`Recent Workflows:\n${lines.join("\n")}`);
     }
 
     const feedbackEntries = byCategory.get("interaction_feedback");
     if (feedbackEntries && feedbackEntries.length > 0) {
       const lines = feedbackEntries.map((e) => `- ${e.key}: ${e.value}`);
-      sections.push("Feedback:\n" + lines.join("\n"));
+      sections.push(`Feedback:\n${lines.join("\n")}`);
     }
 
     return sections.join("\n\n");
