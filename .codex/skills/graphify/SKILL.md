@@ -252,24 +252,23 @@ See `references/extraction-spec.md` for the compact subagent prompt (rules, node
 **Step B3 - Collect, cache, and merge**
 
 Wait for all subagents. For each result:
-- Check that `graphify-out/.graphify_chunk_NN.json` exists on disk — this is the success signal
-- If the file exists and contains valid JSON with `nodes` and `edges`, include it and save to cache
-- If the file is missing, the subagent was likely dispatched as read-only (Explore type) — print a warning: "chunk N missing from disk — subagent may have been read-only. Re-run with general-purpose agent." Do not silently skip.
+- Parse the inline JSON returned by `wait_agent`; valid JSON with `nodes` and `edges` is the success signal
+- Read token counts from the subagent result metadata when available and add them to that parsed chunk before merging
 - If a subagent failed or returned invalid JSON, print a warning and skip that chunk - do not abort
 
-If more than half the chunks failed or are missing, stop and tell the user to re-run and ensure `subagent_type="general-purpose"` is used.
+If more than half the chunks failed, stop and tell the user to re-run and ensure worker subagents returned only the structured JSON response.
 
-Merge all chunk files into `.graphify_semantic_new.json`. **After each Agent call completes, read the real token counts from the Agent tool result's `usage` field and write them back into the chunk JSON before merging** — the chunk JSON itself always has placeholder zeros. Then run:
+Merge the parsed inline results into `graphify-out/.graphify_semantic_new.json`:
 ```bash
 $(cat graphify-out/.graphify_python) -c "
-import json, glob
+import json
 from pathlib import Path
 
-chunks = sorted(glob.glob('graphify-out/.graphify_chunk_*.json'))
+# Replace INLINE_CHUNK_JSON_ARRAY with the JSON array collected from wait_agent results.
+chunks = INLINE_CHUNK_JSON_ARRAY
 all_nodes, all_edges, all_hyperedges = [], [], []
 total_in, total_out = 0, 0
-for c in chunks:
-    d = json.loads(Path(c).read_text(encoding=\"utf-8\"))
+for d in chunks:
     all_nodes += d.get('nodes', [])
     all_edges += d.get('edges', [])
     all_hyperedges += d.get('hyperedges', [])
@@ -279,7 +278,7 @@ Path('graphify-out/.graphify_semantic_new.json').write_text(json.dumps({
     'nodes': all_nodes, 'edges': all_edges, 'hyperedges': all_hyperedges,
     'input_tokens': total_in, 'output_tokens': total_out,
 }, indent=2, ensure_ascii=False), encoding=\"utf-8\")
-print(f'Merged {len(chunks)} chunks: {total_in:,} in / {total_out:,} out tokens')
+print(f'Merged {len(chunks)} inline chunks: {total_in:,} in / {total_out:,} out tokens')
 "
 ```
 
