@@ -19,7 +19,11 @@ import {
   createLocalAutomationHeartbeat,
   normalizeAutomationHeartbeatMs,
 } from "./automation-heartbeat.js";
-import { BackgroundQuoteRefreshes, createBackgroundQuotePoller } from "./background-quotes.js";
+import {
+  type BackgroundQuotePoller,
+  BackgroundQuoteRefreshes,
+  createBackgroundQuotePoller,
+} from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
@@ -32,15 +36,13 @@ import {
 } from "./market-state-api.js";
 import { buildModelSetupState, createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
-import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createSessionActionsController, promptAndSettle } from "./session-actions.js";
 import { waitForNewEntryId } from "./session-entry-wait.js";
 import { createGracefulShutdown } from "./shutdown.js";
-import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
-import { acceptWebSocket, type WsClient } from "./websocket.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
+import { createWsHub, type WsHub } from "./ws-hub.js";
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
@@ -61,8 +63,10 @@ const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const lockResult = await acquireWriterLock(sessionDir, "gui");
+let wsHub: WsHub;
+let quotePoller: BackgroundQuotePoller;
 const askUserBridge = createAskUserBridge({
-  broadcast,
+  broadcast: (message) => wsHub.broadcast(message),
   getSessionId: () => sessionManager.getSessionId(),
 });
 const runtime = await createAgentSessionRuntime(
@@ -88,15 +92,14 @@ const runtime = await createAgentSessionRuntime(
   { cwd, agentDir, sessionManager },
 );
 let session = runtime.session;
-const clients = new Set<WsClient>();
 const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
-const quotePoller = createBackgroundQuotePoller({
-  getClientCount: () => clients.size,
+quotePoller = createBackgroundQuotePoller({
+  getClientCount: () => wsHub.getClientCount(),
   getSessionManager: () => sessionManager,
   refreshes: backgroundQuoteRefreshes,
-  broadcastState,
+  broadcastState: () => wsHub.broadcastState(),
 });
 const localAutomationHeartbeat = createLocalAutomationHeartbeat({
   role: lockResult.role,
@@ -107,12 +110,12 @@ const modelSetupController = createModelSetupController({
   role: lockResult.role,
   getSession: () => session,
   getSessionManager: () => sessionManager,
-  broadcastState,
+  broadcastState: () => wsHub.broadcastState(),
 });
 const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
   getSessionManager: () => sessionManager,
-  broadcastState,
+  broadcastState: () => wsHub.broadcastState(),
 });
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,
@@ -120,20 +123,34 @@ const sessionActionsController = createSessionActionsController({
   sessionDir,
   getSession: () => session,
   getSessionManager: () => sessionManager,
-  getModelSetupState: () => buildCurrentModelSetupState(),
+  getModelSetupState: () => modelSetupController.buildCurrentModelSetupState(),
   askUserBridge,
   runtime,
-  sendBoot,
-  broadcastState,
-  broadcastSessions,
+  sendBoot: (client) => wsHub.sendBoot(client),
+  broadcastState: () => wsHub.broadcastState(),
+  broadcastSessions: () => wsHub.broadcastSessions(),
+});
+wsHub = createWsHub({
+  role: lockResult.role,
+  lock: lockResult.lock,
+  cwd,
+  sessionDir,
+  getSession: () => session,
+  getSessionManager: () => sessionManager,
+  backgroundQuoteRefreshes,
+  askUserBridge,
+  modelSetupController,
+  toolInvokeController,
+  sessionActionsController,
+  onClientCountChanged: () => quotePoller.updatePoller(),
 });
 
-let unsubscribeSession = subscribeToSessionEvents();
+let unsubscribeSession = wsHub.subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
   unsubscribeSession();
   session = nextSession;
   sessionManager = nextSession.sessionManager;
-  unsubscribeSession = subscribeToSessionEvents();
+  unsubscribeSession = wsHub.subscribeToSessionEvents();
 });
 
 const server = createServer((req, res) => {
@@ -148,7 +165,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/bootstrap" && req.method === "GET") {
-    writeJson(res, await buildBootstrapPayload());
+    writeJson(res, await wsHub.buildBootstrapPayload());
     return;
   }
 
@@ -158,9 +175,9 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
       return;
     }
     await sessionActionsController.handleNewSession();
-    broadcastState();
-    broadcastSessions();
-    writeJson(res, await buildBootstrapPayload());
+    wsHub.broadcastState();
+    wsHub.broadcastSessions();
+    writeJson(res, await wsHub.buildBootstrapPayload());
     return;
   }
 
@@ -177,7 +194,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
     writeJson(res, {
       sessionId: sessionManager.getSessionId(),
       role: lockResult.role,
-      events: currentChatEvents(),
+      events: wsHub.currentChatEvents(),
     });
     return;
   }
@@ -223,22 +240,7 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   createReadStream(path).pipe(res);
 }
 
-server.on("upgrade", (req, socket) => {
-  if (req.url !== "/ws") {
-    socket.destroy();
-    return;
-  }
-
-  const client = acceptWebSocket(req, socket);
-  clients.add(client);
-  client.onClose(() => {
-    clients.delete(client);
-    quotePoller.updatePoller();
-  });
-  client.onMessage((message) => void handleClientMessage(client, message));
-  sendBoot(client);
-  quotePoller.updatePoller();
-});
+server.on("upgrade", (req, socket) => wsHub.handleUpgrade(req, socket));
 
 server.listen(port, host, () => {
   console.log(`OpenCandle GUI listening on http://${host}:${port}`);
@@ -260,8 +262,7 @@ const shutdown = createGracefulShutdown({
     clearInterval(heartbeat);
     quotePoller.stop();
     localAutomationHeartbeat.stop();
-    for (const client of clients) client.close();
-    clients.clear();
+    wsHub.closeClients();
     unsubscribeSession();
     releaseWriterLock(sessionDir);
     await runtime.dispose();
@@ -271,135 +272,6 @@ const shutdown = createGracefulShutdown({
 
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
-
-async function handleClientMessage(client: WsClient, message: unknown): Promise<void> {
-  const data = asRecord(message);
-  try {
-    switch (data.type) {
-      case "chat.prompt":
-        await sessionActionsController.handlePrompt(String(data.prompt ?? ""));
-        break;
-      case "ask_user.answer":
-        await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer);
-        break;
-      case "ask_user.cancel":
-        await sessionActionsController.handleAskUserCancel(String(data.id ?? ""));
-        break;
-      case "tool.invoke":
-        await toolInvokeController.handleToolInvokeMessage(client, data);
-        break;
-      case "tool.enabled":
-        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        setToolEnabled(String(data.toolName), Boolean(data.enabled));
-        broadcast({ type: "catalog", catalog: buildCatalog(), restartRequired: true });
-        break;
-      case "catalog.refresh":
-        client.send({ type: "catalog", catalog: buildCatalog() });
-        break;
-      case "model.setup.refresh":
-        session.modelRegistry.refresh();
-        broadcastModelSetup();
-        break;
-      case "model.setup.save_api_key":
-        await modelSetupController.handleSaveModelApiKey(
-          String(data.provider ?? ""),
-          String(data.apiKey ?? ""),
-        );
-        broadcastModelSetup();
-        break;
-      case "model.setup.select_model":
-        await modelSetupController.handleSelectModel(
-          String(data.provider ?? ""),
-          String(data.modelId ?? ""),
-        );
-        broadcastModelSetup();
-        break;
-      case "provider.save_api_key":
-        await modelSetupController.handleSaveProviderApiKey(
-          String(data.providerId ?? ""),
-          String(data.apiKey ?? ""),
-        );
-        broadcast({ type: "catalog", catalog: buildCatalog() });
-        break;
-      case "session.new":
-        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await sessionActionsController.handleNewSession();
-        sendBoot(client);
-        broadcastState();
-        broadcastSessions();
-        break;
-      case "session.open":
-        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await sessionActionsController.handleOpenSession(String(data.path ?? ""));
-        sendBoot(client);
-        broadcastState();
-        broadcastSessions();
-        break;
-      case "session.rename":
-        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await sessionActionsController.handleRenameSession(
-          String(data.path ?? ""),
-          String(data.name ?? ""),
-        );
-        broadcastState();
-        broadcastSessions();
-        break;
-      case "session.delete":
-        if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-        await sessionActionsController.handleDeleteSession(client, String(data.path ?? ""));
-        break;
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    client.send({
-      type: "error",
-      message,
-    });
-  }
-}
-
-async function buildBootstrapPayload(): Promise<Record<string, unknown>> {
-  return {
-    role: lockResult.role,
-    sessionId: sessionManager.getSessionId(),
-    catalog: buildCatalog(),
-    modelSetup: buildCurrentModelSetupState(),
-    askUserPrompts: askUserBridge.getPrompts(),
-    sessions: await SessionManager.list(cwd, sessionDir),
-    snapshot: buildStateSnapshot(),
-  };
-}
-
-function sendBoot(client: WsClient): void {
-  const snapshot = buildStateSnapshot();
-  client.send({
-    type: "boot",
-    role: lockResult.role,
-    lock: lockResult.lock,
-    sessionId: sessionManager.getSessionId(),
-    catalog: buildCatalog(),
-    modelSetup: buildCurrentModelSetupState(),
-    askUserPrompts: askUserBridge.getPrompts(),
-  });
-  client.send({
-    type: "state.snapshot",
-    ...snapshot,
-  });
-  void SessionManager.list(cwd, sessionDir).then((sessions) =>
-    client.send({ type: "sessions", sessions }),
-  );
-}
-
-function broadcastModelSetup(): void {
-  broadcast({ type: "model.setup", modelSetup: buildCurrentModelSetupState() });
-}
-
-function broadcastState(): void {
-  broadcast({
-    type: "state.snapshot",
-    ...buildStateSnapshot(),
-  });
-}
 
 async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (lockResult.role !== "writer") {
@@ -470,10 +342,10 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
         source: "gui",
         requirement: modelSetup.requirement,
       });
-      broadcastState();
+      wsHub.broadcastState();
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
-      broadcastState();
+      wsHub.broadcastState();
     }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
@@ -504,45 +376,6 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     unsubscribeLive();
     res.end();
   }
-}
-
-function buildStateSnapshot() {
-  const sessionId = sessionManager.getSessionId();
-  const entries = sessionManager.getEntries();
-  return {
-    sessionId,
-    state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
-    entries,
-    events: currentChatEvents(entries),
-  };
-}
-
-function currentChatEvents(entries = sessionManager.getEntries()): ChatEvent[] {
-  return sessionEntriesToChatEvents(entries, {
-    sessionId: sessionManager.getSessionId(),
-    title: sessionManager.getSessionName(),
-  });
-}
-
-function broadcastSessions(): void {
-  void SessionManager.list(cwd, sessionDir).then((sessions) =>
-    broadcast({ type: "sessions", sessions }),
-  );
-}
-
-function buildCurrentModelSetupState() {
-  return modelSetupController.buildCurrentModelSetupState();
-}
-
-function broadcast(message: unknown): void {
-  for (const client of clients) client.send(message);
-}
-
-function subscribeToSessionEvents(): () => void {
-  return session.subscribe((event) => {
-    broadcast({ type: "session.event", event });
-    broadcastState();
-  });
 }
 
 function writeJson(res: ServerResponse, value: unknown, status = 200): void {
