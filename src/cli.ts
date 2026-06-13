@@ -6,18 +6,18 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
-  DefaultPackageManager,
-  InteractiveMode,
-  ModelRegistry,
-  SettingsManager,
   createAgentSessionRuntime,
   createAgentSessionServices,
+  DefaultPackageManager,
   getAgentDir,
+  InteractiveMode,
   initTheme,
+  ModelRegistry,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { loadEnv } from "./config.js";
 import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
-import { loadEnv } from "./config.js";
 
 const require = createRequire(import.meta.url);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,10 +28,7 @@ async function handlePackageCommand(
   agentDir: string,
 ): Promise<boolean> {
   const [command, ...rest] = args;
-  if (
-    !command ||
-    !["install", "remove", "uninstall", "list", "update"].includes(command)
-  ) {
+  if (!command || !["install", "remove", "uninstall", "list", "update"].includes(command)) {
     return false;
   }
 

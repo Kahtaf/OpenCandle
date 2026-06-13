@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { WorkflowEventLogger } from "../../../src/runtime/workflow-events.js";
-import type Database from "better-sqlite3";
 
 describe("WorkflowEventLogger", () => {
   let db: Database.Database;

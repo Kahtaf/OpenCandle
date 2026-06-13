@@ -1,28 +1,46 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getHistory } from "../../providers/yahoo-finance.js";
-import { getDailyHistory } from "../../providers/alpha-vantage.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
-import { withFallback } from "../../providers/with-fallback.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
-import type { OHLCV } from "../../types/market.js";
+import { getDailyHistory } from "../../providers/alpha-vantage.js";
+import { withFallback } from "../../providers/with-fallback.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getHistory } from "../../providers/yahoo-finance.js";
 import type { ProviderResult } from "../../runtime/evidence.js";
+import type { OHLCV } from "../../types/market.js";
 
 const DAILY_INTERVALS = new Set(["1d", "1wk", "1mo"]);
-const HISTORY_RANGES = ["1d", "5d", "1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "10y", "max"] as const;
+const HISTORY_RANGES = [
+  "1d",
+  "5d",
+  "1mo",
+  "3mo",
+  "6mo",
+  "ytd",
+  "1y",
+  "2y",
+  "5y",
+  "10y",
+  "max",
+] as const;
 const HISTORY_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"] as const;
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   range: Type.Optional(
-    Type.Union(HISTORY_RANGES.map((range) => Type.Literal(range)), {
-      description: "Time range: 1d, 5d, 1mo, 3mo, 6mo, ytd, 1y, 2y, 5y, 10y, max. Default: 6mo",
-    }),
+    Type.Union(
+      HISTORY_RANGES.map((range) => Type.Literal(range)),
+      {
+        description: "Time range: 1d, 5d, 1mo, 3mo, 6mo, ytd, 1y, 2y, 5y, 10y, max. Default: 6mo",
+      },
+    ),
   ),
   interval: Type.Optional(
-    Type.Union(HISTORY_INTERVALS.map((interval) => Type.Literal(interval)), {
-      description: "Data interval: 1m, 5m, 15m, 1h, 1d, 1wk, 1mo. Default: 1d",
-    }),
+    Type.Union(
+      HISTORY_INTERVALS.map((interval) => Type.Literal(interval)),
+      {
+        description: "Data interval: 1m, 5m, 15m, 1h, 1d, 1wk, 1mo. Default: 1d",
+      },
+    ),
   ),
 });
 
@@ -55,7 +73,12 @@ export const stockHistoryTool: AgentTool<typeof params, OHLCV[]> = {
         ? ` No alternate source for ${interval} data.`
         : "";
       return {
-        content: [{ type: "text", text: `⚠ Stock history unavailable for ${symbol} (${result.reason}).${intradayNote}` }],
+        content: [
+          {
+            type: "text",
+            text: `⚠ Stock history unavailable for ${symbol} (${result.reason}).${intradayNote}`,
+          },
+        ],
         details: [],
       };
     }

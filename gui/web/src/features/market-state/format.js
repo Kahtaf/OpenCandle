@@ -17,7 +17,9 @@ export function shortDateLabel(iso, nowMs = Date.now()) {
   if (!Number.isFinite(ts)) return "";
   const date = new Date(ts);
   const label = `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
-  return date.getUTCFullYear() === new Date(nowMs).getUTCFullYear() ? label : `${label}, ${date.getUTCFullYear()}`;
+  return date.getUTCFullYear() === new Date(nowMs).getUTCFullYear()
+    ? label
+    : `${label}, ${date.getUTCFullYear()}`;
 }
 
 export function quoteFreshness(quote, nowMs = Date.now()) {

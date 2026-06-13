@@ -1,17 +1,17 @@
 import { TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { Button } from "../../components/ui/button.jsx";
-import { buildPredictionScorecard, predictionProgress } from "./prediction-view-model.js";
 import { relativeTime, shortDateLabel } from "./format.js";
+import { buildPredictionScorecard, predictionProgress } from "./prediction-view-model.js";
 import {
   Badge,
   ConfirmButton,
   EmptyState,
+  filterItems,
+  moneyOrDash,
   Panel,
   SignedPercent,
   Sym,
-  filterItems,
-  moneyOrDash,
 } from "./shared.jsx";
 
 export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool }) {
@@ -19,20 +19,26 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
     () => filterItems(state.predictions ?? [], filter, ["symbol", "direction", "status"]),
     [state.predictions, filter],
   );
-  const scorecard = useMemo(() => buildPredictionScorecard(state.predictions ?? []), [state.predictions]);
+  const scorecard = useMemo(
+    () => buildPredictionScorecard(state.predictions ?? []),
+    [state.predictions],
+  );
   const quotesBySymbol = useMemo(() => {
     const map = new Map();
     for (const quote of state.quoteSnapshot?.watchlistQuotes ?? []) {
       if (quote.status === "ok") map.set(quote.symbol, quote.price);
     }
     for (const quote of state.quoteSnapshot?.portfolioQuotes ?? []) {
-      if (quote.status === "ok" && !map.has(quote.symbol)) map.set(quote.symbol, quote.currentPrice);
+      if (quote.status === "ok" && !map.has(quote.symbol))
+        map.set(quote.symbol, quote.currentPrice);
     }
     return map;
   }, [state.quoteSnapshot]);
 
   const open = rows.filter((prediction) => prediction.status === "open");
-  const scored = rows.filter((prediction) => prediction.status === "resolved" || prediction.status === "expired");
+  const scored = rows.filter(
+    (prediction) => prediction.status === "resolved" || prediction.status === "expired",
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -40,7 +46,11 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
         <section className="flex flex-wrap items-baseline gap-x-10 gap-y-3 rounded-xl border border-border bg-card p-4 shadow-subtle-xs sm:p-5">
           <Stat
             value={`${scorecard.openCount} open`}
-            hint={scorecard.nextExpiry ? `next expires ${shortDateLabel(scorecard.nextExpiry)}` : "no expiries pending"}
+            hint={
+              scorecard.nextExpiry
+                ? `next expires ${shortDateLabel(scorecard.nextExpiry)}`
+                : "no expiries pending"
+            }
           />
           {scorecard.hitRatePercent != null ? (
             <Stat
@@ -61,7 +71,13 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
         title="Open"
         count={open.length}
         actions={
-          <Button type="button" variant="bordered" size="sm" disabled={readOnly} onClick={() => invokeTool("track_prediction", { action: "check" })}>
+          <Button
+            type="button"
+            variant="bordered"
+            size="sm"
+            disabled={readOnly}
+            onClick={() => invokeTool("track_prediction", { action: "check" })}
+          >
             Score now
           </Button>
         }
@@ -71,7 +87,11 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
             icon={TrendingUp}
             title={state.predictions?.length ? "No open predictions" : "No predictions recorded"}
             action="Record a directional call with an entry, target, and timeframe; OpenCandle scores it against live quotes."
-            cta={{ label: "Record prediction", disabled: readOnly, onClick: () => openPanel("thesis-record") }}
+            cta={{
+              label: "Record prediction",
+              disabled: readOnly,
+              onClick: () => openPanel("thesis-record"),
+            }}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -79,7 +99,9 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Call</th>
-                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Entry → Now</th>
+                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">
+                    Entry → Now
+                  </th>
                   <th className="px-4 py-2 font-medium">Progress to target</th>
                   <th className="hidden px-4 py-2 text-right font-medium md:table-cell">Expires</th>
                   <th className="px-4 py-2 pr-4" aria-label="Actions" />
@@ -94,9 +116,10 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
                     targetPrice: prediction.targetPrice,
                     currentPrice,
                   });
-                  const movePercent = currentPrice != null && prediction.entryPrice > 0
-                    ? ((currentPrice - prediction.entryPrice) / prediction.entryPrice) * 100
-                    : null;
+                  const movePercent =
+                    currentPrice != null && prediction.entryPrice > 0
+                      ? ((currentPrice - prediction.entryPrice) / prediction.entryPrice) * 100
+                      : null;
                   return (
                     <tr key={prediction.id} className="border-b border-border/70 last:border-0">
                       <td className="px-4 py-2.5">
@@ -107,7 +130,9 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
                       </td>
                       <td className="hidden px-4 py-2.5 text-right tabular-nums sm:table-cell">
                         {moneyOrDash(prediction.entryPrice)} → {moneyOrDash(currentPrice)}{" "}
-                        {movePercent != null ? <SignedPercent value={movePercent} decimals={1} /> : null}
+                        {movePercent != null ? (
+                          <SignedPercent value={movePercent} decimals={1} />
+                        ) : null}
                       </td>
                       <td className="px-4 py-2.5">
                         {progress ? (
@@ -116,22 +141,31 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
                           ) : (
                             <span className="flex min-w-[160px] items-center gap-2">
                               <span className="relative h-[5px] flex-1 rounded-full bg-tertiary">
-                                <span className="absolute inset-y-0 left-0 rounded-full bg-hard" style={{ width: `${progress.percent}%` }} />
+                                <span
+                                  className="absolute inset-y-0 left-0 rounded-full bg-hard"
+                                  style={{ width: `${progress.percent}%` }}
+                                />
                               </span>
-                              <span className="text-xs tabular-nums text-muted-foreground">{Math.round(progress.percent)}%</span>
+                              <span className="text-xs tabular-nums text-muted-foreground">
+                                {Math.round(progress.percent)}%
+                              </span>
                             </span>
                           )
                         ) : (
                           <span className="text-xs text-muted-foreground">awaiting quote</span>
                         )}
                       </td>
-                      <td className="hidden px-4 py-2.5 text-right text-xs tabular-nums text-muted-foreground md:table-cell">{shortDateLabel(prediction.expiresAt) || "—"}</td>
+                      <td className="hidden px-4 py-2.5 text-right text-xs tabular-nums text-muted-foreground md:table-cell">
+                        {shortDateLabel(prediction.expiresAt) || "—"}
+                      </td>
                       <td className="px-4 py-2.5 pr-4 text-right">
                         <ConfirmButton
                           label="Cancel"
                           confirmLabel="Cancel call?"
                           disabled={readOnly}
-                          onConfirm={() => invokeTool("track_prediction", { action: "cancel", id: prediction.id })}
+                          onConfirm={() =>
+                            invokeTool("track_prediction", { action: "cancel", id: prediction.id })
+                          }
                         />
                       </td>
                     </tr>
@@ -149,9 +183,13 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
             {scored.map((prediction) => {
               const result = parseResult(prediction.resultJson);
               return (
-                <li key={prediction.id} className="grid grid-cols-[90px_minmax(0,1fr)] gap-3 border-b border-border/70 px-4 py-2.5 text-[13px] last:border-0 sm:grid-cols-[110px_minmax(0,1fr)]">
+                <li
+                  key={prediction.id}
+                  className="grid grid-cols-[90px_minmax(0,1fr)] gap-3 border-b border-border/70 px-4 py-2.5 text-[13px] last:border-0 sm:grid-cols-[110px_minmax(0,1fr)]"
+                >
                   <time className="tabular-nums text-muted-foreground">
-                    {relativeTime(prediction.resolvedAt ?? prediction.expiresAt) || shortDateLabel(prediction.expiresAt)}
+                    {relativeTime(prediction.resolvedAt ?? prediction.expiresAt) ||
+                      shortDateLabel(prediction.expiresAt)}
                   </time>
                   <div>
                     <span className="font-semibold">{prediction.symbol}</span>{" "}
@@ -164,7 +202,11 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
                       <span className="text-muted-foreground">{prediction.status}</span>
                     )}
                     {typeof result?.pnlPercent === "number" ? (
-                      <span className="text-muted-foreground"> ({result.pnlPercent > 0 ? "+" : ""}{result.pnlPercent.toFixed(1)}% from entry)</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        ({result.pnlPercent > 0 ? "+" : ""}
+                        {result.pnlPercent.toFixed(1)}% from entry)
+                      </span>
                     ) : null}
                   </div>
                 </li>
@@ -180,7 +222,9 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
 function Stat({ value, hint }) {
   return (
     <div>
-      <div className="text-[22px] font-semibold leading-tight tabular-nums text-foreground">{value}</div>
+      <div className="text-[22px] font-semibold leading-tight tabular-nums text-foreground">
+        {value}
+      </div>
       <div className="text-xs text-muted-foreground">{hint}</div>
     </div>
   );

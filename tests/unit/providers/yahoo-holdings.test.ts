@@ -35,7 +35,7 @@ describe("Yahoo fund holdings provider", () => {
     expect(holdings.sectorWeights).toEqual({
       technology: 0.31,
       communication_services: 0.09,
-      consumer_cyclical: 0.10,
+      consumer_cyclical: 0.1,
     });
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining("modules=price%2CtopHoldings"),
@@ -46,12 +46,13 @@ describe("Yahoo fund holdings provider", () => {
   it("throws the Yahoo quoteSummary error description when holdings are unavailable", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        quoteSummary: {
-          result: null,
-          error: { code: "Not Found", description: "No fundamentals data found" },
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          quoteSummary: {
+            result: null,
+            error: { code: "Not Found", description: "No fundamentals data found" },
+          },
+        }),
     });
 
     await expect(getFundHoldings("MISSING")).rejects.toThrow("No fundamentals data found");
@@ -60,59 +61,67 @@ describe("Yahoo fund holdings provider", () => {
   it("filters malformed holding weights and normalizes sector weights", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        quoteSummary: {
-          result: [{
-            price: { symbol: "ETF", shortName: "ETF" },
-            topHoldings: {
-              holdings: [
-                { symbol: "AAPL", holdingName: "Apple", holdingPercent: 7.2 },
-                { symbol: "MSFT", holdingName: "Microsoft", holdingPercent: 0 },
-                { symbol: "NVDA", holdingName: "NVIDIA", holdingPercent: -1 },
-                { symbol: "", holdingName: "Blank", holdingPercent: 2 },
-              ],
-              equityHoldings: {
-                sectorWeightings: [
-                  { technology: 31, healthcare: 0, energy: -2 },
-                ],
+      json: () =>
+        Promise.resolve({
+          quoteSummary: {
+            result: [
+              {
+                price: { symbol: "ETF", shortName: "ETF" },
+                topHoldings: {
+                  holdings: [
+                    { symbol: "AAPL", holdingName: "Apple", holdingPercent: 7.2 },
+                    { symbol: "MSFT", holdingName: "Microsoft", holdingPercent: 0 },
+                    { symbol: "NVDA", holdingName: "NVIDIA", holdingPercent: -1 },
+                    { symbol: "", holdingName: "Blank", holdingPercent: 2 },
+                  ],
+                  equityHoldings: {
+                    sectorWeightings: [{ technology: 31, healthcare: 0, energy: -2 }],
+                  },
+                },
               },
-            },
-          }],
-          error: null,
-        },
-      }),
+            ],
+            error: null,
+          },
+        }),
     });
 
     const holdings = await getFundHoldings("ETF");
 
-    expect(holdings.holdings).toEqual([
-      { symbol: "AAPL", name: "Apple", weight: 0.072 },
-    ]);
+    expect(holdings.holdings).toEqual([{ symbol: "AAPL", name: "Apple", weight: 0.072 }]);
     expect(holdings.sectorWeights).toEqual({ technology: 0.31 });
   });
 
   it("normalizes Yahoo raw/fmt numeric wrapper weights", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        quoteSummary: {
-          result: [{
-            price: { symbol: "ETF", shortName: "ETF" },
-            topHoldings: {
-              holdings: [
-                { symbol: "AAPL", holdingName: "Apple", holdingPercent: { raw: 0.072, fmt: "7.20%" } },
-                { symbol: "MSFT", holdingName: "Microsoft", holdingPercent: { raw: 6.5, fmt: "6.50%" } },
-              ],
-              equityHoldings: {
-                sectorWeightings: [
-                  { technology: { raw: 0.31, fmt: "31.00%" } },
-                ],
+      json: () =>
+        Promise.resolve({
+          quoteSummary: {
+            result: [
+              {
+                price: { symbol: "ETF", shortName: "ETF" },
+                topHoldings: {
+                  holdings: [
+                    {
+                      symbol: "AAPL",
+                      holdingName: "Apple",
+                      holdingPercent: { raw: 0.072, fmt: "7.20%" },
+                    },
+                    {
+                      symbol: "MSFT",
+                      holdingName: "Microsoft",
+                      holdingPercent: { raw: 6.5, fmt: "6.50%" },
+                    },
+                  ],
+                  equityHoldings: {
+                    sectorWeightings: [{ technology: { raw: 0.31, fmt: "31.00%" } }],
+                  },
+                },
               },
-            },
-          }],
-          error: null,
-        },
-      }),
+            ],
+            error: null,
+          },
+        }),
     });
 
     const holdings = await getFundHoldings("ETF");
@@ -125,7 +134,8 @@ describe("Yahoo fund holdings provider", () => {
   });
 
   it("retries quoteSummary holdings with Yahoo crumb auth after an auth failure", async () => {
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: false,
         status: 401,
@@ -165,12 +175,13 @@ describe("Yahoo fund holdings provider", () => {
     cache.set("yahoo:fund-holdings:VOO", stale, -1);
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        quoteSummary: {
-          result: null,
-          error: { description: "temporarily unavailable" },
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          quoteSummary: {
+            result: null,
+            error: { description: "temporarily unavailable" },
+          },
+        }),
     });
 
     await expect(getFundHoldings("VOO")).resolves.toEqual(stale);

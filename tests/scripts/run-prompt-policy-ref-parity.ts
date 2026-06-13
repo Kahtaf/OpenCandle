@@ -1,8 +1,16 @@
 #!/usr/bin/env tsx
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   comparePromptPolicyReports,
   type PromptPolicyCase,
@@ -43,7 +51,8 @@ interface RefParityRunReport {
 const repoRoot = git(["rev-parse", "--show-toplevel"], process.cwd()).trim();
 const baseRef = process.env.PROMPT_POLICY_BASE_REF ?? "3e3a039";
 const currentRef = process.env.PROMPT_POLICY_CURRENT_REF ?? "WORKTREE";
-const manifestPath = process.env.PROMPT_POLICY_MANIFEST ?? "docs/internal/prompt-to-policy-migration-manifest.json";
+const manifestPath =
+  process.env.PROMPT_POLICY_MANIFEST ?? "docs/internal/prompt-to-policy-migration-manifest.json";
 const strictToolCalls = process.env.PROMPT_POLICY_STRICT_TOOL_CALLS === "1";
 const keepWorktrees = process.env.PROMPT_POLICY_KEEP_WORKTREES === "1";
 const tempRoot = mkdtempSync(join(tmpdir(), "opencandle-prompt-policy-parity-"));
@@ -159,7 +168,10 @@ function writeParityReport(
 ): string {
   const runsDir = join(repoRoot, "tests", "evals", "runs");
   mkdirSync(runsDir, { recursive: true });
-  const path = join(runsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_prompt-policy-ref-parity.json`);
+  const path = join(
+    runsDir,
+    `${new Date().toISOString().replace(/[:.]/g, "-")}_prompt-policy-ref-parity.json`,
+  );
   const report: RefParityRunReport = {
     generatedAt: new Date().toISOString(),
     baseRef,
@@ -189,7 +201,9 @@ function removeWorktree(worktreePath: string): void {
   try {
     git(["worktree", "remove", "--force", worktreePath], repoRoot);
   } catch (error) {
-    console.warn(`Could not remove worktree ${worktreePath}: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(
+      `Could not remove worktree ${worktreePath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 

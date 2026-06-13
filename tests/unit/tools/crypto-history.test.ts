@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { cryptoHistoryTool } from "../../../src/tools/market/crypto-history.js";
 
@@ -34,12 +34,6 @@ function makeOhlcRows(count: number): number[][] {
   const start = Date.UTC(2026, 0, 1);
   return Array.from({ length: count }, (_, index) => {
     const close = 100 + index * 2 + Math.sin(index) * 5;
-    return [
-      start + index * 86_400_000,
-      close - 1,
-      close + 2,
-      close - 3,
-      close,
-    ];
+    return [start + index * 86_400_000, close - 1, close + 2, close - 3, close];
   });
 }

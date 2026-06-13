@@ -82,7 +82,9 @@ export function toolMeta(name) {
 }
 
 function prettifyToolName(name) {
-  return String(name || "tool").replace(/^get_/, "").replace(/_/g, " ");
+  return String(name || "tool")
+    .replace(/^get_/, "")
+    .replace(/_/g, " ");
 }
 
 // Yellow-tinted tool icon square (llmchat-style). Compact, recognizable.
@@ -92,11 +94,12 @@ export function ToolIcon({ name, size = "md", className, status }) {
   const meta = toolMeta(name);
   const Icon = meta.icon;
   const isError = status === "error";
-  const dims = size === "sm"
-    ? "size-5 [&_svg]:size-3"
-    : size === "lg"
-      ? "size-7 [&_svg]:size-4"
-      : "size-6 [&_svg]:size-3.5";
+  const dims =
+    size === "sm"
+      ? "size-5 [&_svg]:size-3"
+      : size === "lg"
+        ? "size-7 [&_svg]:size-4"
+        : "size-6 [&_svg]:size-3.5";
   const colorClass = isError
     ? "border-destructive/40 bg-destructive/10 text-destructive"
     : "border-amber-700/40 bg-amber-100/70 text-amber-800 dark:border-amber-300/30 dark:bg-amber-950/40 dark:text-amber-300";

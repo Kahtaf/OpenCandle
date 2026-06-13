@@ -425,9 +425,7 @@ function migrateV2ToV3(db: Database.Database): void {
   );
 
   if (!cols.includes("turn_type")) {
-    db.exec(
-      `ALTER TABLE workflow_runs ADD COLUMN turn_type TEXT NOT NULL DEFAULT 'workflow'`,
-    );
+    db.exec(`ALTER TABLE workflow_runs ADD COLUMN turn_type TEXT NOT NULL DEFAULT 'workflow'`);
   }
 
   // Ensure any tables or indexes added between versions are present.
@@ -498,7 +496,9 @@ function addColumnIfMissing(
   columnName: string,
   definition: string,
 ): void {
-  const cols = (db.pragma(`table_info(${tableName})`) as Array<{ name: string }>).map((c) => c.name);
+  const cols = (db.pragma(`table_info(${tableName})`) as Array<{ name: string }>).map(
+    (c) => c.name,
+  );
   if (cols.length === 0) {
     if (!tableExists(db, tableName)) return;
   }

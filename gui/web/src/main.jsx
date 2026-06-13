@@ -1,9 +1,9 @@
+import { RouterProvider } from "@tanstack/react-router";
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { RouterProvider } from "@tanstack/react-router";
 import "./styles.css";
-import { router } from "./router.jsx";
 import { TooltipProvider } from "./components/ui/tooltip.jsx";
+import { router } from "./router.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

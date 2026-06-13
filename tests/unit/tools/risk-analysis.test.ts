@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   computeDailyReturns,
   computeMaxDrawdown,
-  computeVaR,
   computeRiskMetrics,
+  computeVaR,
 } from "../../../src/tools/portfolio/risk-analysis.js";
 
 describe("computeDailyReturns", () => {

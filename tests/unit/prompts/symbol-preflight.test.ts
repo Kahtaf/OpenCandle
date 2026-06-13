@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import type { InstrumentCandidate } from "../../../src/market-state/resolve.js";
 import {
   formatPreflightDropAnnotation,
   preflightSymbols,
   type SymbolValidationCache,
 } from "../../../src/prompts/symbol-preflight.js";
-import type { InstrumentCandidate } from "../../../src/market-state/resolve.js";
 
 function candidate(symbol: string): InstrumentCandidate {
   return {
@@ -66,8 +66,12 @@ describe("preflightSymbols", () => {
   });
 
   it("formats a prompt annotation for dropped symbols", () => {
-    expect(formatPreflightDropAnnotation([
-      { symbol: "XXFAKEXX", reason: "no matching ticker found via resolver search" },
-    ])).toBe("[Pre-flight: dropped 1 unknown symbol - XXFAKEXX (no matching ticker found via resolver search)]");
+    expect(
+      formatPreflightDropAnnotation([
+        { symbol: "XXFAKEXX", reason: "no matching ticker found via resolver search" },
+      ]),
+    ).toBe(
+      "[Pre-flight: dropped 1 unknown symbol - XXFAKEXX (no matching ticker found via resolver search)]",
+    );
   });
 });

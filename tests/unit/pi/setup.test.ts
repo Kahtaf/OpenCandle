@@ -56,9 +56,7 @@ describe("OpenCandle setup", () => {
     const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
     const ui = createUi();
-    ui.select
-      .mockResolvedValueOnce("Paste API key")
-      .mockResolvedValueOnce("Google Gemini API");
+    ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Google Gemini API");
     ui.input.mockResolvedValueOnce("test-google-key");
 
     const setModel = vi.fn().mockResolvedValue(true);
@@ -70,11 +68,7 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup(
-      { setModel } as any,
-      ctx as any,
-      { mode: "manual" },
-    );
+    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" });
 
     expect(result).toBe("ready");
     expect(authStorage.get("google")).toEqual({ type: "api_key", key: "test-google-key" });
@@ -125,11 +119,7 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup(
-      { setModel } as any,
-      ctx as any,
-      { mode: "startup" },
-    );
+    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "startup" });
 
     expect(result).toBe("ready");
     expect(setModel).toHaveBeenCalledTimes(1);
@@ -152,11 +142,7 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    await runOpenCandleSetup(
-      { setModel: vi.fn() } as any,
-      ctx as any,
-      { mode: "startup" },
-    );
+    await runOpenCandleSetup({ setModel: vi.fn() } as any, ctx as any, { mode: "startup" });
 
     // The first select call should be the LLM entry-method question.
     const firstSelectCall = ui.select.mock.calls[0];
@@ -177,9 +163,7 @@ describe("OpenCandle setup", () => {
     authStorage.set("google", { type: "api_key", key: "pre-existing" });
     const modelRegistry = ModelRegistry.inMemory(authStorage);
     const models = modelRegistry.getAvailable();
-    const seeded = models.find(
-      (m) => m.provider === "google" && m.id === "gemini-2.5-flash",
-    );
+    const seeded = models.find((m) => m.provider === "google" && m.id === "gemini-2.5-flash");
     expect(seeded).toBeDefined();
 
     const ui = createUi();
@@ -192,11 +176,7 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup(
-      { setModel } as any,
-      ctx as any,
-      { mode: "startup" },
-    );
+    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "startup" });
 
     expect(result).toBe("ready");
     expect(ui.select).not.toHaveBeenCalled();
@@ -213,9 +193,7 @@ describe("OpenCandle setup", () => {
     const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
     const ui = createUi();
-    ui.select
-      .mockResolvedValueOnce("Paste API key")
-      .mockResolvedValueOnce("Anthropic API");
+    ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Anthropic API");
     ui.input.mockResolvedValueOnce("sk-ant-test-abc");
 
     const setModel = vi.fn().mockResolvedValue(true);
@@ -227,11 +205,7 @@ describe("OpenCandle setup", () => {
       shutdown: vi.fn(),
     };
 
-    const result = await runOpenCandleSetup(
-      { setModel } as any,
-      ctx as any,
-      { mode: "manual" },
-    );
+    const result = await runOpenCandleSetup({ setModel } as any, ctx as any, { mode: "manual" });
 
     expect(result).toBe("ready");
     // 15.1 — LoginDialogComponent is only invoked via ctx.ui.custom. API-key path
@@ -251,9 +225,7 @@ describe("OpenCandle setup", () => {
     const authStorage = AuthStorage.inMemory();
     const modelRegistry = ModelRegistry.inMemory(authStorage);
     const ui = createUi();
-    ui.select
-      .mockResolvedValueOnce("Paste API key")
-      .mockResolvedValueOnce("Google Gemini API");
+    ui.select.mockResolvedValueOnce("Paste API key").mockResolvedValueOnce("Google Gemini API");
     ui.input.mockResolvedValueOnce("test-google-key-2");
 
     const setModel = vi.fn().mockResolvedValue(true);
@@ -284,11 +256,9 @@ describe("OpenCandle setup", () => {
       shutdown,
     };
 
-    const result = await runOpenCandleSetup(
-      { setModel: vi.fn() } as any,
-      ctx as any,
-      { mode: "startup" },
-    );
+    const result = await runOpenCandleSetup({ setModel: vi.fn() } as any, ctx as any, {
+      mode: "startup",
+    });
 
     expect(result).toBe("shutdown");
     expect(shutdown).toHaveBeenCalled();

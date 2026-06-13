@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getSeries } from "../../../src/providers/fred.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { getSeries } from "../../../src/providers/fred.js";
 
 const metaFixture = {
   seriess: [
@@ -109,7 +109,8 @@ describe("fred provider", () => {
       ok: false,
       status: 400,
       statusText: "Bad Request",
-      text: () => Promise.resolve('{"error_message":"Bad Request.  Variable series_id is not valid"}'),
+      text: () =>
+        Promise.resolve('{"error_message":"Bad Request.  Variable series_id is not valid"}'),
     });
 
     try {

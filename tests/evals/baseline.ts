@@ -49,9 +49,7 @@ export function buildReport(results: EvalCaseResult[]): EvalReport {
     }
   }
 
-  const safetyCriticalFailures = results
-    .filter((r) => r.safetyCriticalFailure)
-    .map((r) => r.name);
+  const safetyCriticalFailures = results.filter((r) => r.safetyCriticalFailure).map((r) => r.name);
 
   const aggregateRegression = delta !== null && delta < -REGRESSION_THRESHOLD;
   const regression = aggregateRegression || safetyCriticalFailures.length > 0;
@@ -75,7 +73,9 @@ function currentBranchOrChange(): string {
   try {
     const branch = execSync("git branch --show-current", { encoding: "utf-8" }).trim();
     if (branch) return branch;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return "unknown";
 }
 

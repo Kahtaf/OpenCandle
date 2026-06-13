@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { WorkflowRunner } from "../../../src/runtime/workflow-runner.js";
-import { WorkflowEventLogger } from "../../../src/runtime/workflow-events.js";
-import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
-import { initDatabase } from "../../../src/memory/sqlite.js";
-import type { WorkflowStep, StepOutput } from "../../../src/runtime/workflow-types.js";
-import type { StepExecutor } from "../../../src/runtime/workflow-runner.js";
 import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { initDatabase } from "../../../src/memory/sqlite.js";
+import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
+import { WorkflowEventLogger } from "../../../src/runtime/workflow-events.js";
+import type { StepExecutor } from "../../../src/runtime/workflow-runner.js";
+import { WorkflowRunner } from "../../../src/runtime/workflow-runner.js";
+import type { StepOutput, WorkflowStep } from "../../../src/runtime/workflow-types.js";
 
 function makeSteps(...types: string[]): Omit<WorkflowStep, "status">[] {
   return types.map((stepType) => ({
@@ -55,7 +55,11 @@ describe("WorkflowRunner", () => {
   });
 
   it("executes all steps to completion", async () => {
-    const run = await runner.start("portfolio_builder", makeSteps("fetch", "rank", "synthesize"), successExecutor);
+    const run = await runner.start(
+      "portfolio_builder",
+      makeSteps("fetch", "rank", "synthesize"),
+      successExecutor,
+    );
 
     expect(run.status).toBe("completed");
     expect(run.steps[0].status).toBe("completed");
@@ -86,11 +90,7 @@ describe("WorkflowRunner", () => {
       return { stepIndex, stepType: step.stepType, evidence: [] };
     };
 
-    const steps = [
-      ...makeSteps("required"),
-      makeSkippableStep("optional"),
-      ...makeSteps("final"),
-    ];
+    const steps = [...makeSteps("required"), makeSkippableStep("optional"), ...makeSteps("final")];
 
     const run = await runner.start("test", steps, mixedExecutor);
 

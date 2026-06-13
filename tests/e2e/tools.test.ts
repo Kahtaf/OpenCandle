@@ -3,20 +3,21 @@
  *
  * Usage: npx tsx tests/e2e/tools.test.ts
  */
-import { loadConfig, getConfig } from "../../src/config.js";
-import { getAllTools } from "../../src/tools/index.js";
-import { computeOBV, computeVWAP } from "../../src/tools/technical/indicators.js";
-import { computeDCF } from "../../src/tools/fundamentals/dcf.js";
-import { computeComps } from "../../src/tools/fundamentals/comps.js";
-import { computeCorrelation } from "../../src/tools/portfolio/correlation.js";
-import { runBacktest } from "../../src/tools/technical/backtest.js";
-import { scoreSentiment } from "../../src/providers/reddit.js";
-import { checkPredictions, type Prediction } from "../../src/tools/portfolio/predictions.js";
-import { searchFilings } from "../../src/providers/sec-edgar.js";
-import { getHistory } from "../../src/providers/yahoo-finance.js";
+
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { getConfig, loadConfig } from "../../src/config.js";
+import { scoreSentiment } from "../../src/providers/reddit.js";
+import { searchFilings } from "../../src/providers/sec-edgar.js";
+import { getHistory } from "../../src/providers/yahoo-finance.js";
+import { computeComps } from "../../src/tools/fundamentals/comps.js";
+import { computeDCF } from "../../src/tools/fundamentals/dcf.js";
+import { getAllTools } from "../../src/tools/index.js";
+import { computeCorrelation } from "../../src/tools/portfolio/correlation.js";
+import { checkPredictions, type Prediction } from "../../src/tools/portfolio/predictions.js";
+import { runBacktest } from "../../src/tools/technical/backtest.js";
+import { computeOBV, computeVWAP } from "../../src/tools/technical/indicators.js";
 
 loadConfig();
 
@@ -89,8 +90,10 @@ async function run() {
     // VWAP should be in the price range
     const lastPrice = bars[bars.length - 1].close;
     const lastVwap = vwap[vwap.length - 1];
-    assert(lastVwap > lastPrice * 0.5 && lastVwap < lastPrice * 1.5,
-      `VWAP $${lastVwap.toFixed(2)} is far from price $${lastPrice.toFixed(2)}`);
+    assert(
+      lastVwap > lastPrice * 0.5 && lastVwap < lastPrice * 1.5,
+      `VWAP $${lastVwap.toFixed(2)} is far from price $${lastPrice.toFixed(2)}`,
+    );
   });
 
   await test("get_technical_indicators tool includes OBV and VWAP", async () => {
@@ -145,13 +148,17 @@ async function run() {
       try {
         const result = await tool.execute("e2e", { symbol: "MSFT" });
         if (!result.details || result.details.length === 0) {
-          console.log("    (Alpha Vantage returned empty — likely rate limited. Logic verified via unit tests.)");
+          console.log(
+            "    (Alpha Vantage returned empty — likely rate limited. Logic verified via unit tests.)",
+          );
           return;
         }
         const stmt = result.details[0];
         if (stmt.totalAssets === 0 && stmt.revenue > 0) {
           // Income statement worked but balance sheet was rate limited
-          console.log("    (Balance sheet rate limited — income data OK. Full merge verified in unit tests.)");
+          console.log(
+            "    (Balance sheet rate limited — income data OK. Full merge verified in unit tests.)",
+          );
           return;
         }
         assert(stmt.totalAssets > 0, `totalAssets=${stmt.totalAssets}`);
@@ -177,7 +184,7 @@ async function run() {
     const result = computeDCF({
       freeCashFlow: 100_000_000_000, // $100B
       growthRate: 0.08,
-      discountRate: 0.10,
+      discountRate: 0.1,
       terminalGrowth: 0.03,
       years: 5,
       netDebt: 50_000_000_000,
@@ -189,7 +196,7 @@ async function run() {
     assert(Array.isArray(result.warnings), "warnings not an array");
     // Mid-year convention: Y1 PV should be > Y1 FCF / (1+r)^1
     const y1 = result.projectedCashFlows[0];
-    const pvFullYear = y1.fcf / (1.10) ** 1;
+    const pvFullYear = y1.fcf / 1.1 ** 1;
     assert(y1.presentValue > pvFullYear, "mid-year convention not applied");
   });
 
@@ -203,8 +210,14 @@ async function run() {
       netDebt: 0,
       sharesOutstanding: 1000,
     });
-    assert(result.warnings.length > 0, `should have warnings for narrow spread, got: ${JSON.stringify(result.warnings)}`);
-    assert(result.warnings.some((w) => w.toLowerCase().includes("terminal growth")), "missing terminal growth warning");
+    assert(
+      result.warnings.length > 0,
+      `should have warnings for narrow spread, got: ${JSON.stringify(result.warnings)}`,
+    );
+    assert(
+      result.warnings.some((w) => w.toLowerCase().includes("terminal growth")),
+      "missing terminal growth warning",
+    );
   });
 
   if (config.alphaVantageApiKey) {
@@ -232,9 +245,63 @@ async function run() {
   console.log("\n6. Comparable Company Analysis:");
   await test("computeComps includes p25/p75 percentiles", async () => {
     const result = computeComps([
-      { symbol: "A", name: "A", description: "", exchange: "", sector: "", industry: "", marketCap: 1e9, pe: 10, forwardPe: 9, eps: 5, dividendYield: 0.02, beta: 0.8, week52High: 120, week52Low: 80, avgVolume: 1e6, profitMargin: 0.2, revenueGrowth: 0.1 },
-      { symbol: "B", name: "B", description: "", exchange: "", sector: "", industry: "", marketCap: 2e9, pe: 20, forwardPe: 18, eps: 3, dividendYield: 0.01, beta: 1.2, week52High: 150, week52Low: 100, avgVolume: 2e6, profitMargin: 0.25, revenueGrowth: 0.15 },
-      { symbol: "C", name: "C", description: "", exchange: "", sector: "", industry: "", marketCap: 3e9, pe: 30, forwardPe: 27, eps: 2, dividendYield: 0.005, beta: 1.5, week52High: 200, week52Low: 90, avgVolume: 3e6, profitMargin: 0.3, revenueGrowth: 0.2 },
+      {
+        symbol: "A",
+        name: "A",
+        description: "",
+        exchange: "",
+        sector: "",
+        industry: "",
+        marketCap: 1e9,
+        pe: 10,
+        forwardPe: 9,
+        eps: 5,
+        dividendYield: 0.02,
+        beta: 0.8,
+        week52High: 120,
+        week52Low: 80,
+        avgVolume: 1e6,
+        profitMargin: 0.2,
+        revenueGrowth: 0.1,
+      },
+      {
+        symbol: "B",
+        name: "B",
+        description: "",
+        exchange: "",
+        sector: "",
+        industry: "",
+        marketCap: 2e9,
+        pe: 20,
+        forwardPe: 18,
+        eps: 3,
+        dividendYield: 0.01,
+        beta: 1.2,
+        week52High: 150,
+        week52Low: 100,
+        avgVolume: 2e6,
+        profitMargin: 0.25,
+        revenueGrowth: 0.15,
+      },
+      {
+        symbol: "C",
+        name: "C",
+        description: "",
+        exchange: "",
+        sector: "",
+        industry: "",
+        marketCap: 3e9,
+        pe: 30,
+        forwardPe: 27,
+        eps: 2,
+        dividendYield: 0.005,
+        beta: 1.5,
+        week52High: 200,
+        week52Low: 90,
+        avgVolume: 3e6,
+        profitMargin: 0.3,
+        revenueGrowth: 0.2,
+      },
     ]);
     const pe = result.metrics.find((m) => m.metric === "P/E")!;
     assert(pe.p25 != null, "p25 missing");
@@ -249,7 +316,9 @@ async function run() {
       try {
         const result = await tool.execute("e2e", { symbols: ["AAPL", "MSFT"] });
         if (result.details == null) {
-          console.log("    (Alpha Vantage returned no overview data — likely rate limited. Comps logic verified via unit tests.)");
+          console.log(
+            "    (Alpha Vantage returned no overview data — likely rate limited. Comps logic verified via unit tests.)",
+          );
           return;
         }
         assert(result.details != null, "details is null");
@@ -276,14 +345,19 @@ async function run() {
     const name = filings[0].entityName.toUpperCase();
     assert(name.includes("APPLE"), `entityName: ${filings[0].entityName}`);
     assert(filings[0].url.includes("sec.gov"), "URL should contain sec.gov");
-    console.log(`    Found ${filings.length} filings. First: ${filings[0].formType} filed ${filings[0].filedDate} by ${filings[0].entityName}`);
+    console.log(
+      `    Found ${filings.length} filings. First: ${filings[0].formType} filed ${filings[0].filedDate} by ${filings[0].entityName}`,
+    );
   });
 
   await test("get_sec_filings tool on AAPL", async () => {
     const tool = getTool("get_sec_filings");
     const result = await tool.execute("e2e", { symbol: "AAPL", limit: 5 });
     const text = result.content[0].text;
-    assert(text.includes("AAPL") || text.includes("Apple") || text.includes("APPLE"), "AAPL not in output");
+    assert(
+      text.includes("AAPL") || text.includes("Apple") || text.includes("APPLE"),
+      "AAPL not in output",
+    );
     if (result.details && result.details.filings.length > 0) {
       assert(result.details.filings[0].formType.length > 0, "formType empty");
     }
@@ -307,19 +381,27 @@ async function run() {
     assert(typeof result.buyAndHoldReturn === "number", "buyAndHoldReturn not a number");
     assert(result.maxDrawdown >= 0, "maxDrawdown should be >= 0");
     assert(result.trades >= 0, "trades should be >= 0");
-    console.log(`    SPY SMA: strategy ${(result.totalReturn*100).toFixed(1)}% vs B&H ${(result.buyAndHoldReturn*100).toFixed(1)}%, ${result.trades} trades, ${(result.winRate*100).toFixed(0)}% win`);
+    console.log(
+      `    SPY SMA: strategy ${(result.totalReturn * 100).toFixed(1)}% vs B&H ${(result.buyAndHoldReturn * 100).toFixed(1)}%, ${result.trades} trades, ${(result.winRate * 100).toFixed(0)}% win`,
+    );
   });
 
   await test("runBacktest RSI mean-reversion on real AAPL data", async () => {
     const bars = await getHistory("AAPL", "2y", "1d");
     const result = runBacktest(bars, "rsi_mean_reversion");
     assert(result.strategy === "rsi_mean_reversion", "wrong strategy name");
-    console.log(`    AAPL RSI: strategy ${(result.totalReturn*100).toFixed(1)}% vs B&H ${(result.buyAndHoldReturn*100).toFixed(1)}%, ${result.trades} trades`);
+    console.log(
+      `    AAPL RSI: strategy ${(result.totalReturn * 100).toFixed(1)}% vs B&H ${(result.buyAndHoldReturn * 100).toFixed(1)}%, ${result.trades} trades`,
+    );
   });
 
   await test("backtest_strategy tool with insufficient data", async () => {
     const tool = getTool("backtest_strategy");
-    const result = await tool.execute("e2e", { symbol: "SPY", strategy: "sma_crossover", period: "5d" });
+    const result = await tool.execute("e2e", {
+      symbol: "SPY",
+      strategy: "sma_crossover",
+      period: "5d",
+    });
     const text = result.content[0].text;
     // Should handle gracefully
     assert(text.length > 0, "empty response");
@@ -333,7 +415,12 @@ async function run() {
     const tool = getTool("manage_watchlist");
 
     // Add with alerts
-    let r = await tool.execute("e2e", { action: "add", symbol: "AAPL", target_price: 99999, stop_price: 1 });
+    let r = await tool.execute("e2e", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 99999,
+      stop_price: 1,
+    });
     assert(r.content[0].text.includes("AAPL"), "add failed");
 
     // Check — price should be between 1 and 99999 so no alerts
@@ -343,8 +430,11 @@ async function run() {
     // Add with stop above current price to trigger alert
     r = await tool.execute("e2e", { action: "add", symbol: "AAPL", stop_price: 99999 });
     r = await tool.execute("e2e", { action: "check" });
-    assert(r.content[0].text.toLowerCase().includes("stop") || r.content[0].text.toLowerCase().includes("alert"),
-      "stop alert not triggered when stop > current price");
+    assert(
+      r.content[0].text.toLowerCase().includes("stop") ||
+        r.content[0].text.toLowerCase().includes("alert"),
+      "stop alert not triggered when stop > current price",
+    );
 
     // Remove
     r = await tool.execute("e2e", { action: "remove", symbol: "AAPL" });
@@ -368,7 +458,9 @@ async function run() {
     assert(m["AAPL"]["MSFT"] === m["MSFT"]["AAPL"], "matrix should be symmetric");
     const r = m["AAPL"]["MSFT"];
     assert(r >= -1 && r <= 1, `correlation ${r} out of range`);
-    console.log(`    AAPL-MSFT: ${r.toFixed(3)}, AAPL-GOOGL: ${m["AAPL"]["GOOGL"].toFixed(3)}, MSFT-GOOGL: ${m["MSFT"]["GOOGL"].toFixed(3)}`);
+    console.log(
+      `    AAPL-MSFT: ${r.toFixed(3)}, AAPL-GOOGL: ${m["AAPL"]["GOOGL"].toFixed(3)}, MSFT-GOOGL: ${m["MSFT"]["GOOGL"].toFixed(3)}`,
+    );
     // Tech stocks should be somewhat correlated
     assert(r > 0, "AAPL-MSFT should be positively correlated");
   });
@@ -378,7 +470,7 @@ async function run() {
     const closes = bars.map((b) => b.close);
     const returns: number[] = [];
     for (let i = 1; i < closes.length; i++) {
-      returns.push((closes[i] - closes[i-1]) / closes[i-1]);
+      returns.push((closes[i] - closes[i - 1]) / closes[i - 1]);
     }
     const r = computeCorrelation(returns, returns);
     assert(Math.abs(r - 1.0) < 0.0001, `self-correlation should be 1.0, got ${r}`);
@@ -393,16 +485,24 @@ async function run() {
 
     // Record a bullish prediction on AAPL
     let r = await tool.execute("e2e", {
-      action: "record", symbol: "AAPL", direction: "bullish",
-      conviction: 8, entry_price: 100, timeframe_days: 30,
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 100,
+      timeframe_days: 30,
     });
     assert(r.content[0].text.includes("AAPL"), "record missing AAPL");
     assert(r.content[0].text.includes("bullish"), "record missing direction");
 
     // Record a bearish prediction on MSFT
     r = await tool.execute("e2e", {
-      action: "record", symbol: "MSFT", direction: "bearish",
-      conviction: 5, entry_price: 100, timeframe_days: 30,
+      action: "record",
+      symbol: "MSFT",
+      direction: "bearish",
+      conviction: 5,
+      entry_price: 100,
+      timeframe_days: 30,
     });
 
     // Check — AAPL is almost certainly > $100, MSFT is almost certainly > $100
@@ -428,10 +528,29 @@ async function run() {
 
   await test("checkPredictions pure function accuracy", async () => {
     const preds: Prediction[] = [
-      { symbol: "X", direction: "bullish", conviction: 10, entryPrice: 100, date: "2026-01-01", expiresAt: "2026-02-01", timeframeDays: 30 },
-      { symbol: "Y", direction: "bearish", conviction: 5, entryPrice: 100, date: "2026-01-01", expiresAt: "2026-02-01", timeframeDays: 30 },
+      {
+        symbol: "X",
+        direction: "bullish",
+        conviction: 10,
+        entryPrice: 100,
+        date: "2026-01-01",
+        expiresAt: "2026-02-01",
+        timeframeDays: 30,
+      },
+      {
+        symbol: "Y",
+        direction: "bearish",
+        conviction: 5,
+        entryPrice: 100,
+        date: "2026-01-01",
+        expiresAt: "2026-02-01",
+        timeframeDays: 30,
+      },
     ];
-    const prices = new Map([["X", 120], ["Y", 80]]); // Both correct
+    const prices = new Map([
+      ["X", 120],
+      ["Y", 80],
+    ]); // Both correct
     const result = checkPredictions(preds, prices);
     assert(result.total === 2, "total should be 2");
     assert(result.correct === 2, "both should be correct");
@@ -450,7 +569,9 @@ async function run() {
 
     // Tool wraps failures into content text, so check for unavailable/rate-limit
     if (text.includes("unavailable") || result.details === null) {
-      console.log("    (DDG rate-limited or unavailable — web search logic verified via unit tests)");
+      console.log(
+        "    (DDG rate-limited or unavailable — web search logic verified via unit tests)",
+      );
       return;
     }
 
@@ -460,14 +581,18 @@ async function run() {
       `unexpected provider: ${details.provider}`,
     );
     if (details.resultCount === 0) {
-      console.log("    (Search provider returned zero results — parsing/fallback logic verified via unit tests)");
+      console.log(
+        "    (Search provider returned zero results — parsing/fallback logic verified via unit tests)",
+      );
       return;
     }
     assert(details.results[0].title.length > 0, "first result has empty title");
     assert(details.results[0].url.startsWith("http"), "first result URL invalid");
     assert(details.results[0].snippet.length > 0, "first result has empty snippet");
     assert(details.results[0].source.length > 0, "first result has empty source");
-    console.log(`    ${details.resultCount} results via ${details.provider}. First: "${details.results[0].title.slice(0, 60)}..." (${details.results[0].source})`);
+    console.log(
+      `    ${details.resultCount} results via ${details.provider}. First: "${details.results[0].title.slice(0, 60)}..." (${details.results[0].source})`,
+    );
   });
 
   await test("search_web defaults to news category and day freshness", async () => {
@@ -489,8 +614,12 @@ async function run() {
   // ============================
   console.log("\n12. Orchestrator:");
   await test("orchestrator roles are named personas with debate", async () => {
-    const { buildComprehensiveAnalysisDefinition } = await import("../../src/analysts/orchestrator.js");
-    const texts = buildComprehensiveAnalysisDefinition("AAPL").steps.slice(1).map((step) => step.prompt);
+    const { buildComprehensiveAnalysisDefinition } = await import(
+      "../../src/analysts/orchestrator.js"
+    );
+    const texts = buildComprehensiveAnalysisDefinition("AAPL")
+      .steps.slice(1)
+      .map((step) => step.prompt);
     assert(texts.length === 10, `expected 10 followUps, got ${texts.length}`);
     assert(texts[0].includes("[Valuation Analyst]"), "missing Valuation Analyst");
     assert(texts[1].includes("[Momentum Analyst]"), "missing Momentum Analyst");

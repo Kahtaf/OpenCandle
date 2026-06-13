@@ -1,7 +1,7 @@
 import {
-  createChatRenderState,
   type ChatEvent,
   type ChatRenderState,
+  createChatRenderState,
   type MessageContent,
   type RenderMessage,
 } from "./chat-events.js";
@@ -141,7 +141,11 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
   return next;
 }
 
-function ensureMessage(state: ChatRenderState, id: string, role: RenderMessage["role"]): RenderMessage {
+function ensureMessage(
+  state: ChatRenderState,
+  id: string,
+  role: RenderMessage["role"],
+): RenderMessage {
   const existing = state.messageById.get(id);
   if (existing) return existing;
 
@@ -168,10 +172,15 @@ function cloneState(state: ChatRenderState): ChatRenderState {
     seenSeq: new Set(state.seenSeq),
     messages,
     messageById,
-    tools: new Map([...state.tools].map(([id, tool]) => [id, {
-      ...tool,
-      chunks: [...tool.chunks],
-    }])),
+    tools: new Map(
+      [...state.tools].map(([id, tool]) => [
+        id,
+        {
+          ...tool,
+          chunks: [...tool.chunks],
+        },
+      ]),
+    ),
     runs: new Map([...state.runs].map(([id, run]) => [id, { ...run }])),
     thinking: new Map([...state.thinking].map(([id, thinking]) => [id, { ...thinking }])),
     session: state.session ? { ...state.session } : undefined,

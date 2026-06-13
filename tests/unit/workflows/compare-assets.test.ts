@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildCompareAssetsWorkflowDefinition } from "../../../src/workflows/compare-assets.js";
 import type { CompareAssetsSlots, SlotResolution } from "../../../src/routing/types.js";
+import { buildCompareAssetsWorkflowDefinition } from "../../../src/workflows/compare-assets.js";
 
 function makeResolution(
   overrides: Partial<CompareAssetsSlots> = {},
@@ -64,11 +64,13 @@ describe("buildCompareAssetsWorkflowDefinition", () => {
   });
 
   it("keeps macro hedge follow-up guidance generic across symbols", () => {
-    const followUp = followUpPrompt(makeResolution({
-      symbols: ["TLT", "IEF"],
-      timeHorizon: "6mo",
-      metrics: ["macro_hedge"],
-    }));
+    const followUp = followUpPrompt(
+      makeResolution({
+        symbols: ["TLT", "IEF"],
+        timeHorizon: "6mo",
+        metrics: ["macro_hedge"],
+      }),
+    );
 
     expect(followUp).toContain("each asset");
     expect(followUp).not.toContain("BTC");

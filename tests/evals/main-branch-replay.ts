@@ -2,9 +2,7 @@ import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ProductEvalCaseResult, ProductEvalReport, PromptFamily } from "./product/types.js";
 
-export type ProductReplayRunSummary =
-  | ProductReplaySupportedRun
-  | ProductReplayUnsupportedRun;
+export type ProductReplayRunSummary = ProductReplaySupportedRun | ProductReplayUnsupportedRun;
 
 export interface ProductReplaySupportedRun {
   status: "ok";
@@ -81,7 +79,10 @@ export function summarizeProductReplayReport(input: {
   };
 }
 
-export function unsupportedProductReplayRun(ref: string, reason: string): ProductReplayUnsupportedRun {
+export function unsupportedProductReplayRun(
+  ref: string,
+  reason: string,
+): ProductReplayUnsupportedRun {
   return { status: "unsupported", ref, reason };
 }
 
@@ -136,9 +137,7 @@ export function findLatestProductEvalReport(cwd = process.cwd()): string | null 
     return null;
   }
 
-  const reports = files
-    .filter((file) => file.endsWith("_product-evals.json"))
-    .sort();
+  const reports = files.filter((file) => file.endsWith("_product-evals.json")).sort();
   const latest = reports.at(-1);
   return latest ? join(runsDir, latest) : null;
 }

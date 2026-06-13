@@ -1,11 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  buildPortfolioPrompt,
-  buildOptionsScreenerPrompt,
   buildCompareAssetsPrompt,
   buildDisclosureBlock,
+  buildOptionsScreenerPrompt,
+  buildPortfolioPrompt,
 } from "../../../src/prompts/workflow-prompts.js";
-import type { PortfolioSlots, OptionsScreenerSlots, SlotResolution, CompareAssetsSlots } from "../../../src/routing/types.js";
+import type {
+  CompareAssetsSlots,
+  OptionsScreenerSlots,
+  PortfolioSlots,
+  SlotResolution,
+} from "../../../src/routing/types.js";
 
 function makePortfolioResolution(
   overrides: Partial<PortfolioSlots> = {},
@@ -37,7 +42,9 @@ function makePortfolioResolution(
 
 function makeOptionsResolution(
   overrides: Partial<OptionsScreenerSlots> = {},
-  sourceOverrides: Partial<Record<keyof OptionsScreenerSlots, "user" | "preference" | "default">> = {},
+  sourceOverrides: Partial<
+    Record<keyof OptionsScreenerSlots, "user" | "preference" | "default">
+  > = {},
 ): SlotResolution<OptionsScreenerSlots> {
   const resolved: OptionsScreenerSlots = {
     symbol: "MSFT",
@@ -101,7 +108,7 @@ describe("buildPortfolioPrompt", () => {
 
   it("requires a direct bottom-line portfolio commitment after assumptions", () => {
     const prompt = buildPortfolioPrompt(makePortfolioResolution());
-    expect(prompt).toContain("Then start the analysis with \"Bottom line:\"");
+    expect(prompt).toContain('Then start the analysis with "Bottom line:"');
     expect(prompt).toContain("directly say what portfolio you would build");
     expect(prompt).toContain("horizon-specific risks");
     expect(prompt).not.toContain("beginning exactly");
@@ -167,8 +174,12 @@ describe("buildPortfolioPrompt", () => {
   });
 
   it("includes generic balanced portfolio guardrails", () => {
-    const prompt = buildPortfolioPrompt(makePortfolioResolution({ timeHorizon: "3y" }, { timeHorizon: "user" }));
-    expect(prompt).toContain("prefer diversified building blocks over individual-company concentration");
+    const prompt = buildPortfolioPrompt(
+      makePortfolioResolution({ timeHorizon: "3y" }, { timeHorizon: "user" }),
+    );
+    expect(prompt).toContain(
+      "prefer diversified building blocks over individual-company concentration",
+    );
     expect(prompt).toContain("core domestic equity");
     expect(prompt).toContain("international equity");
     expect(prompt).toContain("short-duration or cash-like stability");
@@ -246,10 +257,7 @@ describe("buildOptionsScreenerPrompt", () => {
 
   it("preserves user max premium caps in options ranking instructions", () => {
     const prompt = buildOptionsScreenerPrompt(
-      makeOptionsResolution(
-        { maxPremium: 500 },
-        { maxPremium: "user" },
-      ),
+      makeOptionsResolution({ maxPremium: 500 }, { maxPremium: "user" }),
     );
 
     expect(prompt).toContain("Max premium: $500");
@@ -278,8 +286,12 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Position cost basis: $51");
     expect(prompt).toContain("Catalyst/context tickers: NVDA");
     expect(prompt).toContain("Use get_option_chain for DRAM");
-    expect(prompt).toContain("Do not substitute catalyst/context tickers as the option-chain underlying");
-    expect(prompt).toContain("Treat this as selling covered calls against an existing DRAM share position");
+    expect(prompt).toContain(
+      "Do not substitute catalyst/context tickers as the option-chain underlying",
+    );
+    expect(prompt).toContain(
+      "Treat this as selling covered calls against an existing DRAM share position",
+    );
     expect(prompt).toContain("Do not describe max loss as the option premium paid");
     expect(prompt).toContain("covered-call sale risks");
     expect(prompt).toContain("closed_market_or_stale_quotes");
@@ -355,7 +367,9 @@ describe("buildOptionsScreenerPrompt", () => {
     expect(prompt).toContain("Catalyst/context tickers: NVDA");
     expect(prompt).toContain("Use get_option_chain for AMD");
     expect(prompt).toContain("buying puts to hedge an existing long AMD share position");
-    expect(prompt).toContain("Interpretation: Treating this as buying protective puts on an existing long AMD share position.");
+    expect(prompt).toContain(
+      "Interpretation: Treating this as buying protective puts on an existing long AMD share position.",
+    );
     expect(prompt).not.toContain("selling covered calls");
     expect(prompt).not.toContain("premium received");
     expect(prompt).not.toContain("assignment sale price");
@@ -402,7 +416,9 @@ describe("buildCompareAssetsPrompt", () => {
     expect(prompt).toContain("sector concentration");
     expect(prompt).toContain("not the same as correlation");
     expect(prompt).toContain("mega-cap technology tilt");
-    expect(prompt).toContain("avoid treating price, RSI, or generic risk metrics as the main answer");
+    expect(prompt).toContain(
+      "avoid treating price, RSI, or generic risk metrics as the main answer",
+    );
   });
 
   it("tells ETF overlap comparisons to use the holdings overlap tool before correlation fallback", () => {
@@ -525,11 +541,9 @@ describe("buildDisclosureBlock", () => {
   });
 
   it("includes workflow constraints when provided", () => {
-    const block = buildDisclosureBlock(
-      { budget: "$10,000" },
-      { budget: "user" },
-      ["delta >= 0.20 (balanced objective)"],
-    );
+    const block = buildDisclosureBlock({ budget: "$10,000" }, { budget: "user" }, [
+      "delta >= 0.20 (balanced objective)",
+    ]);
     expect(block).toContain("Workflow constraints");
     expect(block).toContain("delta >= 0.20");
   });

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { extractEntities, extractBudget } from "../../../src/routing/entity-extractor.js";
+import { describe, expect, it } from "vitest";
+import { extractBudget, extractEntities } from "../../../src/routing/entity-extractor.js";
 
 describe("extractEntities", () => {
   describe("budget extraction", () => {
@@ -45,7 +45,9 @@ describe("extractEntities", () => {
     });
 
     it("does not treat cost basis as an investment budget", () => {
-      const result = extractEntities("I own AAPL with a $175 cost basis. What covered call should I sell?");
+      const result = extractEntities(
+        "I own AAPL with a $175 cost basis. What covered call should I sell?",
+      );
       expect(result.costBasis).toBe(175);
       expect(result.budget).toBeUndefined();
     });
@@ -95,7 +97,9 @@ describe("extractEntities", () => {
     });
 
     it("does not treat currency codes as tickers in cost-basis portfolio mutations", () => {
-      const result = extractEntities("Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.");
+      const result = extractEntities(
+        "Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.",
+      );
       expect(result.symbols).toEqual(["ASTS"]);
     });
 
@@ -121,8 +125,12 @@ describe("extractEntities", () => {
     });
 
     it("does not treat macro/source/UI acronyms as tickers unless explicit", () => {
-      expect(extractEntities("Use get_economic_data to show FRED CPI inflation data").symbols).toEqual([]);
-      expect(extractEntities("render the options widget if the GUI supports it").symbols).toEqual([]);
+      expect(
+        extractEntities("Use get_economic_data to show FRED CPI inflation data").symbols,
+      ).toEqual([]);
+      expect(extractEntities("render the options widget if the GUI supports it").symbols).toEqual(
+        [],
+      );
       expect(extractEntities("analyze $CPI as a stock").symbols).toEqual(["CPI"]);
     });
 
@@ -298,7 +306,9 @@ describe("extractEntities", () => {
     });
 
     it("detects explicit multi-year horizon", () => {
-      const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      const result = extractEntities(
+        "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
+      );
       expect(result.timeHorizon).toBe("3_years");
     });
 
@@ -310,7 +320,9 @@ describe("extractEntities", () => {
 
   describe("asset scope extraction", () => {
     it("detects ETF-only scope", () => {
-      const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      const result = extractEntities(
+        "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
+      );
       expect(result.assetScope).toBe("etf_focused");
     });
   });
@@ -322,12 +334,16 @@ describe("extractEntities", () => {
     });
 
     it("detects macro hedge focus", () => {
-      const result = extractEntities("For the next 6 months, should I use BTC or GLD as a macro hedge?");
+      const result = extractEntities(
+        "For the next 6 months, should I use BTC or GLD as a macro hedge?",
+      );
       expect(result.compareMetrics).toEqual(["macro_hedge"]);
     });
 
     it("detects interest-rate comparison focus", () => {
-      const result = extractEntities("For the next 12 months, should I overweight SPY or QQQ if rates start falling?");
+      const result = extractEntities(
+        "For the next 12 months, should I overweight SPY or QQQ if rates start falling?",
+      );
       expect(result.compareMetrics).toEqual(["interest_rates"]);
     });
 

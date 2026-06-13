@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
-import { initDatabase } from "../../../src/memory/sqlite.js";
-import { MarketStateService } from "../../../src/market-state/service.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ALERT_CONDITION_VERSION,
   priceCrossesAbove,
@@ -9,6 +7,8 @@ import {
   rsiThreshold,
   volumeSpike,
 } from "../../../src/market-state/alert-conditions.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
 
 describe("market-state alerts and reports", () => {
   let db: Database.Database;

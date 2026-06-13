@@ -30,7 +30,10 @@ export function ToolDrawerProvider({ children }) {
     setRun(nextRun);
   }, []);
 
-  const value = useMemo(() => ({ run, open, close, requestAutoOpen }), [run, open, close, requestAutoOpen]);
+  const value = useMemo(
+    () => ({ run, open, close, requestAutoOpen }),
+    [run, open, close, requestAutoOpen],
+  );
 
   return <ToolDrawerContext.Provider value={value}>{children}</ToolDrawerContext.Provider>;
 }

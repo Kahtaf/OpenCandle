@@ -23,9 +23,7 @@ function mergeDefaults(
   const out: Record<string, unknown> = { ...defaults };
   for (const [key, value] of Object.entries(args)) {
     const base = out[key];
-    out[key] = isPlainObject(base) && isPlainObject(value)
-      ? mergeDefaults(base, value)
-      : value;
+    out[key] = isPlainObject(base) && isPlainObject(value) ? mergeDefaults(base, value) : value;
   }
   return out;
 }

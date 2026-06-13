@@ -43,7 +43,12 @@ describe("route session state", () => {
 
   it("does not treat session metadata events as stale home transcript content", () => {
     const events = [
-      { type: "session.updated", sessionId: "fresh-session", updatedAt: "2026-06-12T00:00:00.000Z", seq: 1 },
+      {
+        type: "session.updated",
+        sessionId: "fresh-session",
+        updatedAt: "2026-06-12T00:00:00.000Z",
+        seq: 1,
+      },
       { type: "run.started", runId: "run-1", sessionId: "fresh-session", seq: 2 },
     ];
     const view = routeSessionView({
@@ -78,7 +83,12 @@ describe("route session state", () => {
       pathname: "/sessions/current-session",
       currentSessionId: "current-session",
       events: [
-        { type: "session.updated", sessionId: "current-session", updatedAt: "2026-06-12T00:00:00.000Z", seq: 1 },
+        {
+          type: "session.updated",
+          sessionId: "current-session",
+          updatedAt: "2026-06-12T00:00:00.000Z",
+          seq: 1,
+        },
         messageCompleted("duplicated-live", "live duplicate"),
       ],
       runState: "streaming",
@@ -86,72 +96,93 @@ describe("route session state", () => {
     });
 
     expect(view.events).toEqual([
-      { type: "session.updated", sessionId: "current-session", updatedAt: "2026-06-12T00:00:00.000Z", seq: 1 },
+      {
+        type: "session.updated",
+        sessionId: "current-session",
+        updatedAt: "2026-06-12T00:00:00.000Z",
+        seq: 1,
+      },
     ]);
   });
 
   it("targets the route session for sends on session routes", () => {
-    expect(chatRunSessionTarget({
-      pathname: "/sessions/session-1",
-      supportsSessionActions: true,
-    })).toEqual({ mode: "route", sessionId: "session-1" });
+    expect(
+      chatRunSessionTarget({
+        pathname: "/sessions/session-1",
+        supportsSessionActions: true,
+      }),
+    ).toEqual({ mode: "route", sessionId: "session-1" });
   });
 
   it("targets a fresh session for home sends so they never append to a previous session", () => {
-    expect(chatRunSessionTarget({
-      pathname: "/",
-      supportsSessionActions: true,
-    })).toEqual({ mode: "fresh" });
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: true,
+      }),
+    ).toEqual({ mode: "fresh" });
   });
 
   it("falls back to the unguarded current session when session actions are unavailable", () => {
-    expect(chatRunSessionTarget({
-      pathname: "/",
-      supportsSessionActions: false,
-    })).toEqual({ mode: "current" });
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: false,
+      }),
+    ).toEqual({ mode: "current" });
   });
 
   it("starts a fresh writer session when home is showing an existing transcript", () => {
-    expect(shouldStartFreshHomeSession({
-      pathname: "/",
-      role: "writer",
-      currentSessionId: "session-with-history",
-      entryCount: 2,
-      lastResetSessionId: "",
-    })).toBe(true);
+    expect(
+      shouldStartFreshHomeSession({
+        pathname: "/",
+        role: "writer",
+        currentSessionId: "session-with-history",
+        entryCount: 2,
+        lastResetSessionId: "",
+      }),
+    ).toBe(true);
 
-    expect(shouldStartFreshHomeSession({
-      pathname: "/sessions/session-with-history",
-      role: "writer",
-      currentSessionId: "session-with-history",
-      entryCount: 2,
-      lastResetSessionId: "",
-    })).toBe(false);
+    expect(
+      shouldStartFreshHomeSession({
+        pathname: "/sessions/session-with-history",
+        role: "writer",
+        currentSessionId: "session-with-history",
+        entryCount: 2,
+        lastResetSessionId: "",
+      }),
+    ).toBe(false);
 
-    expect(shouldStartFreshHomeSession({
-      pathname: "/",
-      role: "writer",
-      currentSessionId: "session-with-history",
-      entryCount: 2,
-      lastResetSessionId: "session-with-history",
-    })).toBe(false);
+    expect(
+      shouldStartFreshHomeSession({
+        pathname: "/",
+        role: "writer",
+        currentSessionId: "session-with-history",
+        entryCount: 2,
+        lastResetSessionId: "session-with-history",
+      }),
+    ).toBe(false);
 
-    expect(shouldStartFreshHomeSession({
-      pathname: "/",
-      role: "writer",
-      currentSessionId: "fresh-session-after-reset",
-      entryCount: 2,
-      lastResetSessionId: "session-with-history",
-    })).toBe(false);
+    expect(
+      shouldStartFreshHomeSession({
+        pathname: "/",
+        role: "writer",
+        currentSessionId: "fresh-session-after-reset",
+        entryCount: 2,
+        lastResetSessionId: "session-with-history",
+      }),
+    ).toBe(false);
 
-    expect(shouldStartFreshHomeSession({
-      pathname: "/",
-      role: "writer",
-      currentSessionId: "session-with-history",
-      entryCount: 2,
-      lastResetSessionId: "",
-      canStartFreshHomeSession: false,
-    })).toBe(false);
+    expect(
+      shouldStartFreshHomeSession({
+        pathname: "/",
+        role: "writer",
+        currentSessionId: "session-with-history",
+        entryCount: 2,
+        lastResetSessionId: "",
+        canStartFreshHomeSession: false,
+      }),
+    ).toBe(false);
   });
 });
 

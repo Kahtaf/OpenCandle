@@ -1,6 +1,6 @@
 import { getOpenCandleToolDefinitions } from "../../src/index.js";
-import { PROVIDERS, getCredential } from "../../src/onboarding/providers.js";
 import { getAllDefaults, setDefault } from "../../src/memory/tool-defaults.js";
+import { getCredential, PROVIDERS } from "../../src/onboarding/providers.js";
 
 const WORKFLOWS = [
   {
@@ -56,12 +56,7 @@ export function buildCatalog() {
         displayName: provider.displayName,
         source,
         apiKey: credential.value,
-        status:
-          source === "env"
-            ? "From env"
-            : source === "file"
-              ? "Configured"
-              : "Not configured",
+        status: source === "env" ? "From env" : source === "file" ? "Configured" : "Not configured",
         unlocks: provider.unlocks,
         fallbackDescription: provider.fallbackDescription,
         signupUrl: provider.signupUrl,
@@ -78,11 +73,29 @@ export function setToolEnabled(toolName: string, enabled: boolean): void {
 
 function inferDomain(toolName: string): string {
   if (toolName.includes("option")) return "options";
-  if (toolName.includes("portfolio") || toolName.includes("risk") || toolName.includes("correlation")) return "portfolio";
-  if (toolName.includes("sentiment") || toolName.includes("reddit") || toolName.includes("twitter") || toolName.includes("web")) return "sentiment";
+  if (
+    toolName.includes("portfolio") ||
+    toolName.includes("risk") ||
+    toolName.includes("correlation")
+  )
+    return "portfolio";
+  if (
+    toolName.includes("sentiment") ||
+    toolName.includes("reddit") ||
+    toolName.includes("twitter") ||
+    toolName.includes("web")
+  )
+    return "sentiment";
   if (toolName.includes("economic") || toolName.includes("fear")) return "macro";
   if (toolName.includes("technical") || toolName.includes("backtest")) return "technical";
-  if (toolName.includes("company") || toolName.includes("financial") || toolName.includes("earnings") || toolName.includes("dcf") || toolName.includes("sec")) return "fundamentals";
+  if (
+    toolName.includes("company") ||
+    toolName.includes("financial") ||
+    toolName.includes("earnings") ||
+    toolName.includes("dcf") ||
+    toolName.includes("sec")
+  )
+    return "fundamentals";
   if (toolName.includes("ask_user") || toolName.includes("login")) return "interaction";
   return "market";
 }

@@ -54,30 +54,27 @@ export function setDefault(
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
   try {
-    connection.prepare(
-      `INSERT INTO tool_defaults (tool_name, param_path, value_json, set_at)
+    connection
+      .prepare(
+        `INSERT INTO tool_defaults (tool_name, param_path, value_json, set_at)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(tool_name, param_path) DO UPDATE SET
          value_json = excluded.value_json,
          set_at = excluded.set_at`,
-    ).run(toolName, paramPath, JSON.stringify(value), new Date().toISOString());
+      )
+      .run(toolName, paramPath, JSON.stringify(value), new Date().toISOString());
   } finally {
     if (ownedDb) connection.close();
   }
 }
 
-export function clearDefault(
-  toolName: string,
-  paramPath: string,
-  db?: SqliteDb,
-): void {
+export function clearDefault(toolName: string, paramPath: string, db?: SqliteDb): void {
   const ownedDb = db == null;
   const connection = db ?? initDefaultDatabase();
   try {
-    connection.prepare(`DELETE FROM tool_defaults WHERE tool_name = ? AND param_path = ?`).run(
-      toolName,
-      paramPath,
-    );
+    connection
+      .prepare(`DELETE FROM tool_defaults WHERE tool_name = ? AND param_path = ?`)
+      .run(toolName, paramPath);
   } finally {
     if (ownedDb) connection.close();
   }

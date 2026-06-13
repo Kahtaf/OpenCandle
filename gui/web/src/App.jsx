@@ -1,19 +1,26 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Toaster } from "./components/ui/toaster.jsx";
 import { ChatPanel } from "./features/chat/ChatPanel.jsx";
+import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
-import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
+import {
+  chatRunSessionTarget,
+  hasSessionContent,
+  routeSessionView,
+  shouldStartFreshHomeSession,
+} from "./features/sessions/route-session-state.js";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
-import { chatRunSessionTarget, hasSessionContent, routeSessionView, shouldStartFreshHomeSession } from "./features/sessions/route-session-state.js";
 import { useChatRun } from "./hooks/useChatRun.jsx";
 import { useGuiConnection } from "./hooks/useGuiConnection.jsx";
-import { Toaster } from "./components/ui/toaster.jsx";
 
 const loadCatalogOverlay = () => import("./features/catalog/CatalogOverlay.jsx");
-const CatalogOverlay = lazy(() => loadCatalogOverlay().then((module) => ({ default: module.CatalogOverlay })));
+const CatalogOverlay = lazy(() =>
+  loadCatalogOverlay().then((module) => ({ default: module.CatalogOverlay })),
+);
 
 const CATALOG_DRAWERS = new Set(["catalog", "tools", "workflows", "providers"]);
 
@@ -26,22 +33,28 @@ export function AppShell() {
   const [liveBaseEventCount, setLiveBaseEventCount] = useState(0);
   const chatRun = useChatRun({
     setToast: gui.setToast,
-    onRunStart: useCallback((prompt, baseEventCount) => {
-      setLiveBaseEventCount(baseEventCount ?? gui.events.length);
-      setLiveEvents(createOptimisticUserMessageEvents(prompt));
-    }, [gui.events.length]),
-    onEvent: useCallback((event) => {
-      setLiveEvents((current) => [...current, event]);
-      if (event.type !== "run.started" || !event.sessionId) return;
-      const sessionId = String(event.sessionId);
-      const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
-      if (pathname === sessionPath) return;
-      void navigate({
-        to: "/sessions/$sessionId",
-        params: { sessionId },
-        search: (current) => ({ ...current, drawer: undefined }),
-      });
-    }, [pathname, navigate]),
+    onRunStart: useCallback(
+      (prompt, baseEventCount) => {
+        setLiveBaseEventCount(baseEventCount ?? gui.events.length);
+        setLiveEvents(createOptimisticUserMessageEvents(prompt));
+      },
+      [gui.events.length],
+    ),
+    onEvent: useCallback(
+      (event) => {
+        setLiveEvents((current) => [...current, event]);
+        if (event.type !== "run.started" || !event.sessionId) return;
+        const sessionId = String(event.sessionId);
+        const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
+        if (pathname === sessionPath) return;
+        void navigate({
+          to: "/sessions/$sessionId",
+          params: { sessionId },
+          search: (current) => ({ ...current, drawer: undefined }),
+        });
+      },
+      [pathname, navigate],
+    ),
   });
   const activeDrawer = search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
@@ -60,15 +73,17 @@ export function AppShell() {
     liveBaseEventCount,
     canStartFreshHomeSession: gui.supportsSessionActions,
   });
-  const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
-    !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId
+  const visibleAskUserPrompts = gui.askUserPrompts.filter(
+    (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
   );
-  const inputDisabled = gui.role !== "writer"
-    || sessionView.pendingSessionSwitch;
+  const inputDisabled = gui.role !== "writer" || sessionView.pendingSessionSwitch;
 
-  const openDrawer = useCallback((drawer) => {
-    void navigate({ search: (current) => ({ ...current, drawer }) });
-  }, [navigate]);
+  const openDrawer = useCallback(
+    (drawer) => {
+      void navigate({ search: (current) => ({ ...current, drawer }) });
+    },
+    [navigate],
+  );
 
   const closeDrawer = useCallback(() => {
     void navigate({ search: (current) => ({ ...current, drawer: undefined }) });
@@ -90,7 +105,12 @@ export function AppShell() {
   }, [closeDrawer, openDrawer]);
 
   useEffect(() => {
-    if (!sessionView.routeSessionId || sessionView.routeSessionId === gui.currentSessionId || gui.sessions.length === 0) return;
+    if (
+      !sessionView.routeSessionId ||
+      sessionView.routeSessionId === gui.currentSessionId ||
+      gui.sessions.length === 0
+    )
+      return;
     const session = gui.sessions.find((candidate) => candidate.id === sessionView.routeSessionId);
     if (session) gui.send("session.open", { path: session.path });
   }, [gui.currentSessionId, gui.sessions, gui.send, sessionView.routeSessionId]);
@@ -100,28 +120,46 @@ export function AppShell() {
       homeResetSessionRef.current = "";
       return;
     }
-    if (!shouldStartFreshHomeSession({
-      pathname,
-      role: gui.role,
-      currentSessionId: gui.currentSessionId,
-      entryCount: hasSessionContent(gui.events) ? gui.events.length : 0,
-      lastResetSessionId: homeResetSessionRef.current,
-      canStartFreshHomeSession: gui.supportsSessionActions,
-    })) return;
+    if (
+      !shouldStartFreshHomeSession({
+        pathname,
+        role: gui.role,
+        currentSessionId: gui.currentSessionId,
+        entryCount: hasSessionContent(gui.events) ? gui.events.length : 0,
+        lastResetSessionId: homeResetSessionRef.current,
+        canStartFreshHomeSession: gui.supportsSessionActions,
+      })
+    )
+      return;
     homeResetSessionRef.current = gui.currentSessionId;
     void gui.newSession();
-  }, [pathname, gui.role, gui.currentSessionId, gui.events.length, gui.newSession, gui.supportsSessionActions]);
+  }, [
+    pathname,
+    gui.role,
+    gui.currentSessionId,
+    gui.events.length,
+    gui.newSession,
+    gui.supportsSessionActions,
+  ]);
 
   useEffect(() => {
-    if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;
+    if (
+      liveEvents.length === 0 ||
+      chatRun.runState === "connecting" ||
+      chatRun.runState === "streaming"
+    )
+      return;
     if (gui.events.length > liveBaseEventCount) setLiveEvents([]);
   }, [chatRun.runState, gui.events.length, liveBaseEventCount, liveEvents.length]);
 
-  const openCatalog = useCallback((target = "catalog") => {
-    loadCatalogOverlay();
-    const drawer = CATALOG_DRAWERS.has(target) ? target : "catalog";
-    openDrawer(drawer);
-  }, [openDrawer]);
+  const openCatalog = useCallback(
+    (target = "catalog") => {
+      loadCatalogOverlay();
+      const drawer = CATALOG_DRAWERS.has(target) ? target : "catalog";
+      openDrawer(drawer);
+    },
+    [openDrawer],
+  );
 
   const fillComposer = useCallback((text) => {
     setDraft(String(text ?? ""));
@@ -138,62 +176,84 @@ export function AppShell() {
   // Home sends always run in a fresh session so a stale client can never
   // append to the previous writer session; the server rejects mismatches
   // with a session_changed 409, retried once against another fresh session.
-  const startRoutedChatRun = useCallback(async (prompt) => {
-    const target = chatRunSessionTarget({ pathname, supportsSessionActions: gui.supportsSessionActions });
-    if (target.mode === "current") {
-      void chatRun.startChatRun(prompt);
-      return;
-    }
-    if (target.mode === "route") {
-      const result = await chatRun.startChatRun(prompt, { sessionId: target.sessionId });
-      if (result?.sessionChanged) {
+  const startRoutedChatRun = useCallback(
+    async (prompt) => {
+      const target = chatRunSessionTarget({
+        pathname,
+        supportsSessionActions: gui.supportsSessionActions,
+      });
+      if (target.mode === "current") {
+        void chatRun.startChatRun(prompt);
+        return;
+      }
+      if (target.mode === "route") {
+        const result = await chatRun.startChatRun(prompt, { sessionId: target.sessionId });
+        if (result?.sessionChanged) {
+          setLiveEvents([]);
+          gui.setToast("The active session changed before your message was sent. Please resend.", {
+            destructive: true,
+          });
+        }
+        return;
+      }
+      if (freshRunPendingRef.current) return;
+      freshRunPendingRef.current = true;
+      try {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const freshSessionId = await gui.newSession();
+          if (!freshSessionId) return;
+          homeResetSessionRef.current = freshSessionId;
+          const result = await chatRun.startChatRun(prompt, {
+            sessionId: freshSessionId,
+            baseEventCount: 0,
+          });
+          if (!result?.sessionChanged) return;
+        }
         setLiveEvents([]);
-        gui.setToast("The active session changed before your message was sent. Please resend.", { destructive: true });
+        gui.setToast("The active session changed before your message was sent. Please resend.", {
+          destructive: true,
+        });
+      } finally {
+        freshRunPendingRef.current = false;
       }
-      return;
-    }
-    if (freshRunPendingRef.current) return;
-    freshRunPendingRef.current = true;
-    try {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const freshSessionId = await gui.newSession();
-        if (!freshSessionId) return;
-        homeResetSessionRef.current = freshSessionId;
-        const result = await chatRun.startChatRun(prompt, { sessionId: freshSessionId, baseEventCount: 0 });
-        if (!result?.sessionChanged) return;
-      }
-      setLiveEvents([]);
-      gui.setToast("The active session changed before your message was sent. Please resend.", { destructive: true });
-    } finally {
-      freshRunPendingRef.current = false;
-    }
-  }, [pathname, gui.supportsSessionActions, gui.newSession, gui.setToast, chatRun.startChatRun]);
+    },
+    [pathname, gui.supportsSessionActions, gui.newSession, gui.setToast, chatRun.startChatRun],
+  );
 
   const newSession = useCallback(() => {
     void gui.newSession();
     void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
   }, [gui, navigate]);
 
-  const openSession = useCallback((session) => {
-    gui.send("session.open", { path: session.path });
-    setSidebarCollapsed(false);
-    void navigate({
-      to: "/sessions/$sessionId",
-      params: { sessionId: session.id },
-      search: (current) => ({ ...current, drawer: undefined }),
-    });
-  }, [gui, navigate]);
+  const openSession = useCallback(
+    (session) => {
+      gui.send("session.open", { path: session.path });
+      setSidebarCollapsed(false);
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId: session.id },
+        search: (current) => ({ ...current, drawer: undefined }),
+      });
+    },
+    [gui, navigate],
+  );
 
-  const renameSession = useCallback((session, name) => {
-    gui.send("session.rename", { path: session.path, name });
-  }, [gui]);
+  const renameSession = useCallback(
+    (session, name) => {
+      gui.send("session.rename", { path: session.path, name });
+    },
+    [gui],
+  );
 
-  const deleteSession = useCallback((session) => {
-    gui.send("session.delete", { path: session.path });
-    if (session.id === gui.currentSessionId) {
-      void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
-    }
-  }, [gui, navigate]);
+  const deleteSession = useCallback(
+    (session) => {
+      gui.send("session.delete", { path: session.path });
+      if (session.id === gui.currentSessionId) {
+        void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
+      }
+    },
+    [gui, navigate],
+  );
 
   const sidebarProps = {
     sessions: gui.sessions,
@@ -207,13 +267,14 @@ export function AppShell() {
     onNewSession: newSession,
   };
 
-  const initialCatalogTab = activeDrawer === "tools"
-    ? "tools"
-    : activeDrawer === "providers"
-      ? "providers"
-      : activeDrawer === "workflows"
-        ? "workflows"
-        : "workflows";
+  const initialCatalogTab =
+    activeDrawer === "tools"
+      ? "tools"
+      : activeDrawer === "providers"
+        ? "providers"
+        : activeDrawer === "workflows"
+          ? "workflows"
+          : "workflows";
   const marketDomain = domainFromPath(pathname);
   return (
     <ToolDrawerProvider>
@@ -296,9 +357,10 @@ export function AppShell() {
 
 function ConnectionStatusBanner({ role }) {
   if (role !== "connecting" && role !== "disconnected") return null;
-  const message = role === "connecting"
-    ? "Connecting to the GUI session..."
-    : "Reconnecting to the GUI session. Editing is disabled until the writer reconnects.";
+  const message =
+    role === "connecting"
+      ? "Connecting to the GUI session..."
+      : "Reconnecting to the GUI session. Editing is disabled until the writer reconnects.";
   return (
     <div
       className="fixed left-1/2 top-3 z-[90] max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-subtle-md"

@@ -3,23 +3,28 @@
  * trace collector + IPC + ask handler working together.
  * Uses synthetic session events (no LLM needed).
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IpcChannel } from "../../harness/ipc.js";
-import { createTraceCollector } from "../../harness/trace-collector.js";
 import { createIpcAskHandler } from "../../harness/ipc-ask-handler.js";
+import { createTraceCollector } from "../../harness/trace-collector.js";
 
 function createMockSession() {
   let listener: ((event: AgentSessionEvent) => void) | null = null;
   return {
     subscribe(cb: (event: AgentSessionEvent) => void) {
       listener = cb;
-      return () => { listener = null; };
+      return () => {
+        listener = null;
+      };
     },
-    emit(event: AgentSessionEvent) { listener?.(event); },
+    emit(event: AgentSessionEvent) {
+      listener?.(event);
+    },
   };
 }
 
@@ -44,9 +49,24 @@ describe("harness integration", () => {
     });
 
     // Simulate: tool call → text response → end
-    session.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "get_stock_quote", args: { symbol: "AAPL" } });
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "get_stock_quote", result: { price: 248.5 }, isError: false });
-    session.emit({ type: "message_update", message: {} as any, assistantMessageEvent: { type: "text_delta", delta: "AAPL is trading at $248.50" } });
+    session.emit({
+      type: "tool_execution_start",
+      toolCallId: "t1",
+      toolName: "get_stock_quote",
+      args: { symbol: "AAPL" },
+    });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "get_stock_quote",
+      result: { price: 248.5 },
+      isError: false,
+    });
+    session.emit({
+      type: "message_update",
+      message: {} as any,
+      assistantMessageEvent: { type: "text_delta", delta: "AAPL is trading at $248.50" },
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 
@@ -76,8 +96,19 @@ describe("harness integration", () => {
     const handler = createIpcAskHandler(ipc, collector);
 
     // Simulate first tool call
-    session.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "get_stock_quote", args: { symbol: "SPY" } });
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "get_stock_quote", result: { price: 500 }, isError: false });
+    session.emit({
+      type: "tool_execution_start",
+      toolCallId: "t1",
+      toolName: "get_stock_quote",
+      args: { symbol: "SPY" },
+    });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "get_stock_quote",
+      result: { price: 500 },
+      isError: false,
+    });
 
     // Simulate ask_user — external agent writes answer after delay
     setTimeout(() => {
@@ -96,9 +127,24 @@ describe("harness integration", () => {
     expect(result).toEqual({ answer: "Moderate", cancelled: false });
 
     // Continue with more tool calls after answer
-    session.emit({ type: "tool_execution_start", toolCallId: "t2", toolName: "get_stock_quote", args: { symbol: "AAPL" } });
-    session.emit({ type: "tool_execution_end", toolCallId: "t2", toolName: "get_stock_quote", result: { price: 248 }, isError: false });
-    session.emit({ type: "message_update", message: {} as any, assistantMessageEvent: { type: "text_delta", delta: "Here is your portfolio" } });
+    session.emit({
+      type: "tool_execution_start",
+      toolCallId: "t2",
+      toolName: "get_stock_quote",
+      args: { symbol: "AAPL" },
+    });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t2",
+      toolName: "get_stock_quote",
+      result: { price: 248 },
+      isError: false,
+    });
+    session.emit({
+      type: "message_update",
+      message: {} as any,
+      assistantMessageEvent: { type: "text_delta", delta: "Here is your portfolio" },
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 
@@ -126,12 +172,20 @@ describe("harness integration", () => {
 
     // Round 1
     setTimeout(() => IpcChannel.writeAnswer(ipcDir, "Growth"), 30);
-    const r1 = await handler({ question: "Investment goal?", questionType: "select", options: ["Growth", "Income"] });
+    const r1 = await handler({
+      question: "Investment goal?",
+      questionType: "select",
+      options: ["Growth", "Income"],
+    });
     expect(r1.answer).toBe("Growth");
 
     // Round 2
     setTimeout(() => IpcChannel.writeAnswer(ipcDir, "High"), 30);
-    const r2 = await handler({ question: "Risk level?", questionType: "select", options: ["Low", "High"] });
+    const r2 = await handler({
+      question: "Risk level?",
+      questionType: "select",
+      options: ["Low", "High"],
+    });
     expect(r2.answer).toBe("High");
 
     // Round 3
@@ -173,7 +227,13 @@ describe("harness integration", () => {
     expect(afterFirst).toHaveLength(1);
 
     // Second event
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "tool_a", result: "ok", isError: false });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "tool_a",
+      result: "ok",
+      isError: false,
+    });
     const afterSecond = readFileSync(jsonlPath, "utf-8").trim().split("\n");
     expect(afterSecond).toHaveLength(2);
 

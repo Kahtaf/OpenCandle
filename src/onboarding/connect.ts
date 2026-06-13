@@ -18,23 +18,15 @@
 // call will surface any lingering issue via the credential-required tag.
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { openInBrowser } from "../infra/open-url.js";
 import {
-  loadFileConfig,
-  saveFileConfig,
   loadConfig,
+  loadFileConfig,
   type OpenCandleFileConfig,
+  saveFileConfig,
 } from "../config.js";
-import {
-  getProvider,
-  getCredentialSource,
-  type ProviderId,
-} from "./providers.js";
-import {
-  loadOnboardingState,
-  markProviderCompleted,
-  saveOnboardingState,
-} from "./state.js";
+import { openInBrowser } from "../infra/open-url.js";
+import { getCredentialSource, getProvider, type ProviderId } from "./providers.js";
+import { loadOnboardingState, markProviderCompleted, saveOnboardingState } from "./state.js";
 import { validateCredential } from "./validation.js";
 
 export type ConnectResult =
@@ -55,9 +47,7 @@ function writeNested(
     next[head] = value;
   } else {
     const child =
-      next[head] && typeof next[head] === "object"
-        ? (next[head] as Record<string, unknown>)
-        : {};
+      next[head] && typeof next[head] === "object" ? (next[head] as Record<string, unknown>) : {};
     next[head] = writeNested(child, rest, value);
   }
   return next;
@@ -74,17 +64,10 @@ function writeNested(
  * provider-setup form. Validation is the caller's responsibility — both
  * call sites run `validateCredential` before invoking this helper.
  */
-export function persistProviderCredential(
-  providerId: ProviderId,
-  key: string,
-): void {
+export function persistProviderCredential(providerId: ProviderId, key: string): void {
   const descriptor = getProvider(providerId);
   const existing = loadFileConfig() as unknown as Record<string, unknown>;
-  const updated = writeNested(
-    existing,
-    descriptor.configPath,
-    key,
-  ) as OpenCandleFileConfig;
+  const updated = writeNested(existing, descriptor.configPath, key) as OpenCandleFileConfig;
   saveFileConfig(updated);
   loadConfig();
   const state = loadOnboardingState();
@@ -121,10 +104,7 @@ export async function runProviderConnect(
   // the browser can't be opened, the user can still paste a key they
   // already have, so we continue rather than bailing.
   await openInBrowser(descriptor.signupUrl).catch(() => {});
-  ctx.ui.notify(
-    `Opening ${descriptor.displayName} signup in your browser...`,
-    "info",
-  );
+  ctx.ui.notify(`Opening ${descriptor.displayName} signup in your browser...`, "info");
 
   // Prompt for the key. Uses the provider's instructionsHint as the
   // placeholder text to remind the user what they're pasting.
@@ -175,10 +155,7 @@ export async function runProviderConnect(
 
   persistProviderCredential(providerId, trimmed);
 
-  ctx.ui.notify(
-    `${descriptor.displayName} connected. Your key has been saved.`,
-    "info",
-  );
+  ctx.ui.notify(`${descriptor.displayName} connected. Your key has been saved.`, "info");
 
   return { status: "connected" };
 }

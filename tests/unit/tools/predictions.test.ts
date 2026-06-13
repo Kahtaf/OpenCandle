@@ -1,19 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cache } from "../../../src/infra/cache.js";
+import { httpGet } from "../../../src/infra/http-client.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import {
-  predictionsTool,
-  recordPrediction,
   checkPredictions,
   type Prediction,
+  predictionsTool,
+  recordPrediction,
 } from "../../../src/tools/portfolio/predictions.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { httpGet } from "../../../src/infra/http-client.js";
 import type { StockQuote } from "../../../src/types/market.js";
-import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
-import { MarketStateService } from "../../../src/market-state/service.js";
-import { cache } from "../../../src/infra/cache.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -115,25 +115,31 @@ describe("recordPrediction", () => {
   });
 
   it("rejects zero conviction and entry price as invalid instead of treating them as missing", async () => {
-    await expect(predictionsTool.execute("test", {
-      action: "record",
-      symbol: "AAPL",
-      direction: "bullish",
-      conviction: 0,
-      entry_price: 180,
-    })).rejects.toThrow("conviction must be between 1 and 10");
+    await expect(
+      predictionsTool.execute("test", {
+        action: "record",
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 0,
+        entry_price: 180,
+      }),
+    ).rejects.toThrow("conviction must be between 1 and 10");
 
-    await expect(predictionsTool.execute("test", {
-      action: "record",
-      symbol: "AAPL",
-      direction: "bullish",
-      conviction: 5,
-      entry_price: 0,
-    })).rejects.toThrow("entry_price must be greater than 0");
+    await expect(
+      predictionsTool.execute("test", {
+        action: "record",
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 5,
+        entry_price: 0,
+      }),
+    ).rejects.toThrow("entry_price must be greater than 0");
   });
 
   it("returns candidate matches for an unverified prediction symbol without recording", async () => {
-    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
     vi.mocked(httpGet).mockResolvedValue({
       quotes: [
         {
@@ -159,9 +165,7 @@ describe("recordPrediction", () => {
     expect(result.details).toMatchObject({
       status: "needs_selection",
       query: "APL",
-      candidates: [
-        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
-      ],
+      candidates: [expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." })],
     });
 
     const db = initDefaultDatabase();
@@ -261,11 +265,13 @@ describe("predictionsTool check", () => {
 
     expect(prediction.status).toBe("resolved");
     expect(prediction.resolvedAt).toBe("2026-03-01T12:00:00.000Z");
-    expect(prediction.resultJson).toBe(JSON.stringify({
-      currentPrice: 200,
-      pnlPercent: 0.1111111111111111,
-      correct: true,
-    }));
+    expect(prediction.resultJson).toBe(
+      JSON.stringify({
+        currentPrice: 200,
+        pnlPercent: 0.1111111111111111,
+        correct: true,
+      }),
+    );
 
     vi.mocked(getQuote).mockClear();
     const history = await predictionsTool.execute("test", { action: "check" });
@@ -283,16 +289,18 @@ describe("predictionsTool check", () => {
 
   it("keeps predictions with invalid entry prices open without NaN scoring", () => {
     const result = checkPredictions(
-      [{
-        id: 1,
-        symbol: "AAPL",
-        direction: "bullish",
-        conviction: 8,
-        entryPrice: 0,
-        date: "2026-01-01",
-        expiresAt: "2026-01-31",
-        status: "open",
-      }],
+      [
+        {
+          id: 1,
+          symbol: "AAPL",
+          direction: "bullish",
+          conviction: 8,
+          entryPrice: 0,
+          date: "2026-01-01",
+          expiresAt: "2026-01-31",
+          status: "open",
+        },
+      ],
       new Map([["AAPL", 200]]),
       new Date("2026-02-01T12:00:00.000Z"),
     );
@@ -382,11 +390,13 @@ describe("predictionsTool check", () => {
   });
 
   it("keeps expired predictions open when quote data is zero-filled", async () => {
-    vi.mocked(getQuote).mockResolvedValueOnce(quote("AAPL", 0, {
-      volume: 0,
-      week52High: 0,
-      week52Low: 0,
-    }));
+    vi.mocked(getQuote).mockResolvedValueOnce(
+      quote("AAPL", 0, {
+        volume: 0,
+        week52High: 0,
+        week52Low: 0,
+      }),
+    );
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
     service.recordPrediction({
@@ -568,11 +578,7 @@ describe("checkPredictions", () => {
       },
     ];
 
-    const result = checkPredictions(
-      predictions,
-      new Map([["AAPL", 200]]),
-      new Date("2026-03-29"),
-    );
+    const result = checkPredictions(predictions, new Map([["AAPL", 200]]), new Date("2026-03-29"));
     expect(result.open).toBe(1);
     expect(result.correct).toBe(0);
     expect(result.wrong).toBe(0);
@@ -591,11 +597,7 @@ describe("checkPredictions", () => {
       },
     ];
 
-    const result = checkPredictions(
-      predictions,
-      new Map([["AAPL", 200]]),
-      new Date("2026-03-29"),
-    );
+    const result = checkPredictions(predictions, new Map([["AAPL", 200]]), new Date("2026-03-29"));
     expect(result.open).toBe(0);
     expect(result.correct).toBe(1);
   });
@@ -624,7 +626,10 @@ describe("checkPredictions", () => {
 
     const result = checkPredictions(
       predictions,
-      new Map([["AAPL", 200], ["MSFT", 380]]),
+      new Map([
+        ["AAPL", 200],
+        ["MSFT", 380],
+      ]),
       new Date("2026-03-29"),
     );
     expect(result.open).toBe(1);

@@ -1,7 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getHistory } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getHistory } from "../../providers/yahoo-finance.js";
 import type { OHLCV } from "../../types/market.js";
 
 // --- Volume-based indicators ---
@@ -52,7 +52,12 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
     const result = await wrapProvider("yahoo", () => getHistory(symbol, range, "1d"));
     if (result.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Technical indicators unavailable for ${symbol} (${result.reason}).` }],
+        content: [
+          {
+            type: "text",
+            text: `⚠ Technical indicators unavailable for ${symbol} (${result.reason}).`,
+          },
+        ],
         details: null as any,
       };
     }
@@ -61,7 +66,12 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
 
     if (closes.length < 26) {
       return {
-        content: [{ type: "text", text: `Insufficient data for ${symbol} (need 26+ bars, got ${closes.length})` }],
+        content: [
+          {
+            type: "text",
+            text: `Insufficient data for ${symbol} (need 26+ bars, got ${closes.length})`,
+          },
+        ],
         details: null,
       };
     }
@@ -79,9 +89,12 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
     const latestMacd = macd[macd.length - 1];
     const latestBB = bb[bb.length - 1];
     const latestVwap = vwap[vwap.length - 1];
-    const obvTrend = obv.length >= 20
-      ? (obv[obv.length - 1] > obv[obv.length - 20] ? "Rising" : "Falling")
-      : "N/A";
+    const obvTrend =
+      obv.length >= 20
+        ? obv[obv.length - 1] > obv[obv.length - 20]
+          ? "Rising"
+          : "Falling"
+        : "N/A";
 
     const lines = [
       `**${symbol} Technical Analysis** (${bars[0].date} to ${bars[bars.length - 1].date})`,
@@ -103,7 +116,13 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
         range,
         prices: closes,
         dates: bars.map((b) => b.date),
-        sma20, sma50, rsi, macd, bb, obv, vwap,
+        sma20,
+        sma50,
+        rsi,
+        macd,
+        bb,
+        obv,
+        vwap,
       },
     };
   },
@@ -241,16 +260,22 @@ function trendSummary(
 
   if (latestSma20 && price > latestSma20) signals.push("Price above SMA(20) — short-term bullish");
   if (latestSma20 && price < latestSma20) signals.push("Price below SMA(20) — short-term bearish");
-  if (latestSma20 && latestSma50 && latestSma20 > latestSma50) signals.push("Golden cross pattern (SMA20 > SMA50)");
-  if (latestSma20 && latestSma50 && latestSma20 < latestSma50) signals.push("Death cross pattern (SMA20 < SMA50)");
+  if (latestSma20 && latestSma50 && latestSma20 > latestSma50)
+    signals.push("Golden cross pattern (SMA20 > SMA50)");
+  if (latestSma20 && latestSma50 && latestSma20 < latestSma50)
+    signals.push("Death cross pattern (SMA20 < SMA50)");
   if (rsi != null && rsi >= 70) signals.push("RSI overbought — potential reversal");
   if (rsi != null && rsi <= 30) signals.push("RSI oversold — potential bounce");
   if (macd && macd.histogram > 0) signals.push("MACD bullish (histogram positive)");
   if (macd && macd.histogram < 0) signals.push("MACD bearish (histogram negative)");
-  if (obvTrend === "Rising" && price > (latestSma20 ?? 0)) signals.push("Volume confirming price advance (OBV rising)");
-  if (obvTrend === "Falling" && price < (latestSma20 ?? Infinity)) signals.push("Volume confirming price decline (OBV falling)");
-  if (vwap != null && price > vwap) signals.push("Price above cumulative VWAP — bullish volume-weighted bias");
-  if (vwap != null && price < vwap) signals.push("Price below cumulative VWAP — bearish volume-weighted bias");
+  if (obvTrend === "Rising" && price > (latestSma20 ?? 0))
+    signals.push("Volume confirming price advance (OBV rising)");
+  if (obvTrend === "Falling" && price < (latestSma20 ?? Infinity))
+    signals.push("Volume confirming price decline (OBV falling)");
+  if (vwap != null && price > vwap)
+    signals.push("Price above cumulative VWAP — bullish volume-weighted bias");
+  if (vwap != null && price < vwap)
+    signals.push("Price below cumulative VWAP — bearish volume-weighted bias");
 
   return signals.length > 0 ? "Signals: " + signals.join(" | ") : "No strong signals";
 }

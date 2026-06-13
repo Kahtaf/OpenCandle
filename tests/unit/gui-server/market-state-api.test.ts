@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { initDatabase } from "../../../src/memory/sqlite.js";
-import { MarketStateService } from "../../../src/market-state/service.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  buildMarketStateSnapshot,
   buildMarketStateQuoteSnapshot,
+  buildMarketStateSnapshot,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
-import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import { cache } from "../../../src/infra/cache.js";
+import { searchYahooInstruments } from "../../../src/market-state/resolve.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/market-state/resolve.js", async (importOriginal) => {
@@ -110,7 +110,11 @@ describe("market-state API helpers", () => {
       expect.objectContaining({ id: notification.id, title: "Alert checked" }),
     ]);
     expect(snapshot.notificationDeliveryAttempts).toEqual([
-      expect.objectContaining({ notificationEventId: notification.id, channel: "webhook", status: "failed" }),
+      expect.objectContaining({
+        notificationEventId: notification.id,
+        channel: "webhook",
+        status: "failed",
+      }),
     ]);
     db.close();
   });

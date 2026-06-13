@@ -23,7 +23,11 @@ export function priceCrossesBelow(threshold: number): {
   return { threshold, field: "last_price" };
 }
 
-export function percentMove(direction: "up" | "down", percent: number, window = "1d"): {
+export function percentMove(
+  direction: "up" | "down",
+  percent: number,
+  window = "1d",
+): {
   direction: "up" | "down";
   percent: number;
   window: string;
@@ -67,7 +71,10 @@ export function rsiThreshold(
   return { period, threshold, direction };
 }
 
-export function volumeSpike(lookbackPeriod: number, multiplier: number): {
+export function volumeSpike(
+  lookbackPeriod: number,
+  multiplier: number,
+): {
   lookback_period: number;
   multiplier: number;
 } {

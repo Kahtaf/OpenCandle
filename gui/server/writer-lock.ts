@@ -106,7 +106,9 @@ function isPidAlive(pid: number): boolean {
 
 function isLockCurrent(lock: WriterLock, staleGraceMs: number): boolean {
   const heartbeat = Date.parse(lock.lastHeartbeat);
-  return isPidAlive(lock.pid) && Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs;
+  return (
+    isPidAlive(lock.pid) && Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs
+  );
 }
 
 function lockPath(sessionDir: string): string {

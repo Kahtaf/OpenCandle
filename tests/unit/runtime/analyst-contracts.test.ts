@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  collectEvidence,
   parseAnalystOutput,
   tallyVotes,
-  collectEvidence,
 } from "../../../src/analysts/contracts.js";
 import type { AnalystOutput } from "../../../src/runtime/workflow-types.js";
 
@@ -111,9 +111,7 @@ describe("collectEvidence", () => {
         signal: "BUY",
         conviction: 7,
         thesis: "",
-        evidence: [
-          { label: "P/E", value: 25, provenance: { source: "fetched" } },
-        ],
+        evidence: [{ label: "P/E", value: 25, provenance: { source: "fetched" } }],
       },
       {
         role: "momentum",

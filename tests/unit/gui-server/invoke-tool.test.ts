@@ -1,11 +1,11 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 
 describe("invokeToolFromUi", () => {

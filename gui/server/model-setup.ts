@@ -83,8 +83,7 @@ export function findPreferredModel(
   const available = sortModels(registry.getAvailable(), provider.defaultProvider);
   return (
     available.find(
-      (model) =>
-        model.provider === provider.defaultProvider && model.id === provider.defaultModel,
+      (model) => model.provider === provider.defaultProvider && model.id === provider.defaultModel,
     ) ?? available.find((model) => model.provider === provider.defaultProvider)
   );
 }

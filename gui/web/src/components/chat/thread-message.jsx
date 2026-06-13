@@ -1,5 +1,5 @@
-import { Badge } from "../ui/badge.jsx";
 import { renderRichText, textContent } from "../../rendering/text.js";
+import { Badge } from "../ui/badge.jsx";
 
 export function UserMessage({ content }) {
   return (
@@ -14,7 +14,10 @@ export function UserMessage({ content }) {
 export function AssistantMessage({ content }) {
   return (
     <div className="max-w-[min(920px,100%)] text-base leading-[1.65rem] text-foreground">
-      <div className="rich-text chat-markdown" dangerouslySetInnerHTML={{ __html: renderRichText(textContent(content)) }} />
+      <div
+        className="rich-text chat-markdown"
+        dangerouslySetInnerHTML={{ __html: renderRichText(textContent(content)) }}
+      />
     </div>
   );
 }

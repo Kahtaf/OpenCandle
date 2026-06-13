@@ -10,24 +10,34 @@
  *
  * Does NOT require a live LLM — exercises all orchestration logic in isolation.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildMemoryContext, initDatabase, MemoryStorage } from "../../src/memory/index.js";
+import { extractPreferences } from "../../src/memory/preference-extractor.js";
+import {
+  buildCompareAssetsPrompt,
+  buildOptionsScreenerPrompt,
+  buildPortfolioPrompt,
+} from "../../src/prompts/workflow-prompts.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
 import { extractEntities } from "../../src/routing/entity-extractor.js";
-import { resolvePortfolioSlots, resolveOptionsScreenerSlots } from "../../src/routing/slot-resolver.js";
-import { buildPortfolioPrompt, buildOptionsScreenerPrompt, buildCompareAssetsPrompt } from "../../src/prompts/workflow-prompts.js";
-import { buildPortfolioWorkflowDefinition } from "../../src/workflows/portfolio-builder.js";
-import { buildOptionsScreenerWorkflowDefinition } from "../../src/workflows/options-screener.js";
-import { initDatabase, MemoryStorage, buildMemoryContext } from "../../src/memory/index.js";
-import { extractPreferences } from "../../src/memory/preference-extractor.js";
+import {
+  resolveOptionsScreenerSlots,
+  resolvePortfolioSlots,
+} from "../../src/routing/slot-resolver.js";
+import type { CompareAssetsSlots, SlotResolution } from "../../src/routing/types.js";
 import { buildSystemPrompt } from "../../src/system-prompt.js";
-import type Database from "better-sqlite3";
-import type { SlotResolution, CompareAssetsSlots } from "../../src/routing/types.js";
+import { buildOptionsScreenerWorkflowDefinition } from "../../src/workflows/options-screener.js";
+import { buildPortfolioWorkflowDefinition } from "../../src/workflows/portfolio-builder.js";
 
-function workflowPrompts(definition: { steps: { prompt: string }[] }): { initialPrompt: string; followUps: string[] } {
+function workflowPrompts(definition: { steps: { prompt: string }[] }): {
+  initialPrompt: string;
+  followUps: string[];
+} {
   return {
     initialPrompt: definition.steps[0]?.prompt ?? "",
     followUps: definition.steps.slice(1).map((step) => step.prompt),
@@ -105,7 +115,6 @@ describe("E2E integration: full orchestration pipeline", () => {
       const resolvedSlots = JSON.parse(runs[0].resolved_slots_json as string);
       expect(resolvedSlots.budget).toBe(10_000);
     });
-
   });
 
   // -----------------------------------------------------------------------
@@ -535,8 +544,10 @@ describe("E2E integration: full orchestration pipeline", () => {
 
       // Simulate merging into original entities (what index.ts does)
       const entities = extractEntities("What should I invest in?");
-      if (clarificationEntities.budget !== undefined) entities.budget = clarificationEntities.budget;
-      if (clarificationEntities.riskProfile) entities.riskProfile = clarificationEntities.riskProfile;
+      if (clarificationEntities.budget !== undefined)
+        entities.budget = clarificationEntities.budget;
+      if (clarificationEntities.riskProfile)
+        entities.riskProfile = clarificationEntities.riskProfile;
 
       // Now resolve with NO stored preferences — everything should be "user" source
       const resolution = resolvePortfolioSlots(entities);
@@ -558,8 +569,10 @@ describe("E2E integration: full orchestration pipeline", () => {
       // Clarification says aggressive — should win as "user" source
       const entities = extractEntities("What should I invest in?");
       const clarificationEntities = extractEntities("$10k and I'm aggressive");
-      if (clarificationEntities.budget !== undefined) entities.budget = clarificationEntities.budget;
-      if (clarificationEntities.riskProfile) entities.riskProfile = clarificationEntities.riskProfile;
+      if (clarificationEntities.budget !== undefined)
+        entities.budget = clarificationEntities.budget;
+      if (clarificationEntities.riskProfile)
+        entities.riskProfile = clarificationEntities.riskProfile;
 
       const preferences = storage.getWorkflowPreferences("global");
       const resolution = resolvePortfolioSlots(entities, preferences);
@@ -571,8 +584,10 @@ describe("E2E integration: full orchestration pipeline", () => {
     it("prompt labels clarification-extracted values correctly (no SAVED PREFERENCE tag)", () => {
       const entities = extractEntities("What should I invest in?");
       const clarificationEntities = extractEntities("$15k and I'm aggressive");
-      if (clarificationEntities.budget !== undefined) entities.budget = clarificationEntities.budget;
-      if (clarificationEntities.riskProfile) entities.riskProfile = clarificationEntities.riskProfile;
+      if (clarificationEntities.budget !== undefined)
+        entities.budget = clarificationEntities.budget;
+      if (clarificationEntities.riskProfile)
+        entities.riskProfile = clarificationEntities.riskProfile;
 
       const resolution = resolvePortfolioSlots(entities);
       const plan = workflowPrompts(buildPortfolioWorkflowDefinition(resolution));

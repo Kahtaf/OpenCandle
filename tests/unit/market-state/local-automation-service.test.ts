@@ -1,12 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Database from "better-sqlite3";
-import { initDatabase } from "../../../src/memory/sqlite.js";
-import { ALERT_CONDITION_VERSION, priceCrossesAbove } from "../../../src/market-state/alert-conditions.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  runLocalAutomationHeartbeat,
-} from "../../../src/market-state/local-automation-service.js";
+  ALERT_CONDITION_VERSION,
+  priceCrossesAbove,
+} from "../../../src/market-state/alert-conditions.js";
+import {
+  type AlertRunnerProviders,
+  defaultAlertProviderBudget,
+} from "../../../src/market-state/alert-runner.js";
+import { runLocalAutomationHeartbeat } from "../../../src/market-state/local-automation-service.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
-import { defaultAlertProviderBudget, type AlertRunnerProviders } from "../../../src/market-state/alert-runner.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
@@ -134,14 +138,16 @@ describe("local automation service", () => {
 
     let price = 240;
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: price,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: price,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+        })),
+      ),
       getYahooQuote: vi.fn(),
       getHistory: vi.fn(),
     };
@@ -193,14 +199,16 @@ describe("local automation service", () => {
 
     let price = 240;
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: price,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: price,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+        })),
+      ),
       getYahooQuote: vi.fn(),
       getHistory: vi.fn(),
     };

@@ -25,7 +25,8 @@ describe("secFilingsTool", () => {
         entityName: "APPLE INC",
         accessionNumber: "0000320193-24-000123",
         url: "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.htm",
-        primaryDocumentUrl: "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm",
+        primaryDocumentUrl:
+          "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm",
         evidenceSnippets: [],
         evidenceWarning: "Evidence fetch failed for primary document: HTTP 429 Too Many Requests",
       },

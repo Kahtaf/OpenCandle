@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SentimentStore } from "../../../src/sentiment/store.js";
 import type { SentinelRecord } from "../../../src/sentiment/types.js";
 
@@ -117,8 +117,12 @@ describe("SentimentStore", () => {
   describe("getByTicker", () => {
     it("returns records containing the ticker", () => {
       store.insert([
-        makeRecord({ sentiment: { score: 0.3, confidence: 0.7, method: "keyword", tickers: ["AAPL"] } }),
-        makeRecord({ sentiment: { score: -0.2, confidence: 0.6, method: "keyword", tickers: ["TSLA"] } }),
+        makeRecord({
+          sentiment: { score: 0.3, confidence: 0.7, method: "keyword", tickers: ["AAPL"] },
+        }),
+        makeRecord({
+          sentiment: { score: -0.2, confidence: 0.6, method: "keyword", tickers: ["TSLA"] },
+        }),
       ]);
       const results = store.getByTicker("AAPL");
       expect(results.length).toBe(1);
@@ -127,7 +131,9 @@ describe("SentimentStore", () => {
 
     it("handles dotted tickers like RY.TO", () => {
       store.insert([
-        makeRecord({ sentiment: { score: 0.1, confidence: 0.5, method: "keyword", tickers: ["RY.TO"] } }),
+        makeRecord({
+          sentiment: { score: 0.1, confidence: 0.5, method: "keyword", tickers: ["RY.TO"] },
+        }),
       ]);
       const results = store.getByTicker("RY.TO");
       expect(results.length).toBe(1);
@@ -135,7 +141,9 @@ describe("SentimentStore", () => {
 
     it("handles hyphenated tickers like BTC-USD", () => {
       store.insert([
-        makeRecord({ sentiment: { score: 0.4, confidence: 0.6, method: "keyword", tickers: ["BTC-USD"] } }),
+        makeRecord({
+          sentiment: { score: 0.4, confidence: 0.6, method: "keyword", tickers: ["BTC-USD"] },
+        }),
       ]);
       const results = store.getByTicker("BTC-USD");
       expect(results.length).toBe(1);
@@ -151,7 +159,12 @@ describe("SentimentStore", () => {
           makeRecord({
             source: "twitter",
             fetchedAt: new Date(Date.now() - daysAgo * dayMs).toISOString(),
-            sentiment: { score: daysAgo === 3 ? 0.3 : 0.7, confidence: 0.8, method: "keyword", tickers: ["AAPL"] },
+            sentiment: {
+              score: daysAgo === 3 ? 0.3 : 0.7,
+              confidence: 0.8,
+              method: "keyword",
+              tickers: ["AAPL"],
+            },
           }),
         ]);
       }

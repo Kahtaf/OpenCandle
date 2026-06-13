@@ -3,18 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   buildModelSetupState,
   findPreferredModel,
-  modelSetupProviders,
   type ModelSetupRegistry,
+  modelSetupProviders,
 } from "../../../gui/server/model-setup.js";
 
 function model(provider: string, id: string): Model<Api> {
   return { provider, id, name: id } as unknown as Model<Api>;
 }
 
-function registry(
-  available: Model<Api>[],
-  configured = new Set<string>(),
-): ModelSetupRegistry {
+function registry(available: Model<Api>[], configured = new Set<string>()): ModelSetupRegistry {
   return {
     refresh() {},
     getAvailable() {

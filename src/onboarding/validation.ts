@@ -131,28 +131,22 @@ export async function validateCredential(
       );
 
     case "brave":
-      return validateWithFetch(
-        "https://api.search.brave.com/res/v1/web/search?q=test&count=1",
-        {
-          method: "GET",
-          headers: {
-            "X-Subscription-Token": key,
-            Accept: "application/json",
-          },
+      return validateWithFetch("https://api.search.brave.com/res/v1/web/search?q=test&count=1", {
+        method: "GET",
+        headers: {
+          "X-Subscription-Token": key,
+          Accept: "application/json",
         },
-      );
+      });
 
     case "exa":
-      return validateWithFetch(
-        "https://api.exa.ai/search",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": key,
-          },
-          body: JSON.stringify({ query: "test", numResults: 1 }),
+      return validateWithFetch("https://api.exa.ai/search", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
         },
-      );
+        body: JSON.stringify({ query: "test", numResults: 1 }),
+      });
   }
 }

@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import { getCryptoHistory } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { OHLCV } from "../../types/market.js";
@@ -27,7 +27,9 @@ export const cryptoHistoryTool: AgentTool<typeof params, OHLCV[]> = {
     const result = await wrapProvider("coingecko", () => getCryptoHistory(id, days));
     if (result.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Crypto history unavailable for ${id} (${result.reason}).` }],
+        content: [
+          { type: "text", text: `⚠ Crypto history unavailable for ${id} (${result.reason}).` },
+        ],
         details: [],
       };
     }
@@ -54,7 +56,10 @@ export const cryptoHistoryTool: AgentTool<typeof params, OHLCV[]> = {
 
 function buildRiskLines(id: string, bars: OHLCV[]): string[] {
   if (bars.length < 30) return [];
-  const metrics = computeRiskMetrics(id.toUpperCase(), bars.map((bar) => bar.close));
+  const metrics = computeRiskMetrics(
+    id.toUpperCase(),
+    bars.map((bar) => bar.close),
+  );
   return [
     "",
     "Risk metrics from crypto history:",

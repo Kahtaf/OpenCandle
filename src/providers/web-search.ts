@@ -1,15 +1,14 @@
-import { search, searchNews, SafeSearchType, SearchTimeType } from "duck-duck-scrape";
-import type { SearchResult } from "duck-duck-scrape";
-import type { NewsResult } from "duck-duck-scrape";
-import { httpGet, HttpError } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
-import { rateLimiter } from "../infra/rate-limiter.js";
+import type { NewsResult, SearchResult } from "duck-duck-scrape";
+import { SafeSearchType, SearchTimeType, search, searchNews } from "duck-duck-scrape";
 import { getConfig } from "../config.js";
-import { withFallback } from "./with-fallback.js";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { HttpError, httpGet } from "../infra/http-client.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
+import type { ProviderResult } from "../runtime/evidence.js";
+import type { WebSearchEnvelope, WebSearchResult } from "../types/sentiment.js";
 import { exaSearch } from "./exa-search.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
-import type { ProviderResult } from "../runtime/evidence.js";
-import type { WebSearchResult, WebSearchEnvelope } from "../types/sentiment.js";
+import { withFallback } from "./with-fallback.js";
 
 export interface WebSearchOpts {
   category: "news" | "general";
@@ -85,10 +84,7 @@ function ddgCacheKey(query: string, opts: WebSearchOpts): string {
   return `web:ddg:${query}:${opts.category}:${opts.freshness}:${opts.limit}`;
 }
 
-export async function ddgSearch(
-  query: string,
-  opts: WebSearchOpts,
-): Promise<WebSearchEnvelope> {
+export async function ddgSearch(query: string, opts: WebSearchOpts): Promise<WebSearchEnvelope> {
   const key = ddgCacheKey(query, opts);
   const cached = cache.get<WebSearchEnvelope>(key);
   if (cached) return cached;
@@ -139,10 +135,14 @@ const BRAVE_BASE = "https://api.search.brave.com/res/v1";
 
 function mapBraveFreshness(freshness: WebSearchOpts["freshness"]): string {
   switch (freshness) {
-    case "hours": return "ph";
-    case "day": return "pd";
-    case "week": return "pw";
-    case "month": return "pm";
+    case "hours":
+      return "ph";
+    case "day":
+      return "pd";
+    case "week":
+      return "pw";
+    case "month":
+      return "pm";
   }
 }
 
@@ -271,9 +271,16 @@ export async function searchWeb(
         break;
       case "brave":
         if (!config.braveApiKey) {
-          return { status: "unavailable", reason: "BRAVE_API_KEY not configured", provider: "brave_search" };
+          return {
+            status: "unavailable",
+            reason: "BRAVE_API_KEY not configured",
+            provider: "brave_search",
+          };
         }
-        entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
+        entries.push({
+          provider: "brave_search",
+          fn: () => braveSearch(normalized, resolved, config.braveApiKey!),
+        });
         break;
       case "ddg":
         entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
@@ -285,7 +292,10 @@ export async function searchWeb(
   // Default cascade: Exa → Brave → DDG
   entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
   if (config.braveApiKey) {
-    entries.push({ provider: "brave_search", fn: () => braveSearch(normalized, resolved, config.braveApiKey!) });
+    entries.push({
+      provider: "brave_search",
+      fn: () => braveSearch(normalized, resolved, config.braveApiKey!),
+    });
   }
   entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
 

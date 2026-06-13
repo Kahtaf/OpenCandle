@@ -11,9 +11,15 @@ describe("node version guard", () => {
   });
 
   it("rejects unsupported Node versions with an actionable install and rebuild message", () => {
-    expect(getUnsupportedNodeVersionMessage("20.18.0")).toContain("Use Node 20.19+, 22.12+, or 24.x-26.x");
-    expect(getUnsupportedNodeVersionMessage("23.11.1")).toContain("Use Node 20.19+, 22.12+, or 24.x-26.x");
-    expect(getUnsupportedNodeVersionMessage("27.0.0")).toContain("reinstall dependencies under the active Node");
+    expect(getUnsupportedNodeVersionMessage("20.18.0")).toContain(
+      "Use Node 20.19+, 22.12+, or 24.x-26.x",
+    );
+    expect(getUnsupportedNodeVersionMessage("23.11.1")).toContain(
+      "Use Node 20.19+, 22.12+, or 24.x-26.x",
+    );
+    expect(getUnsupportedNodeVersionMessage("27.0.0")).toContain(
+      "reinstall dependencies under the active Node",
+    );
   });
 });
 

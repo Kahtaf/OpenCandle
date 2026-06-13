@@ -2,7 +2,7 @@
  * File-based IPC channel for the agent test harness.
  * The harness process writes questions and traces; the driving agent writes answers.
  */
-import { existsSync, readFileSync, renameSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentTrace } from "./types.js";
 
@@ -48,7 +48,9 @@ export class IpcChannel {
       };
 
       const cleanup = () => {
-        if (timer) { clearInterval(timer); }
+        if (timer) {
+          clearInterval(timer);
+        }
       };
 
       const timer = setInterval(() => {

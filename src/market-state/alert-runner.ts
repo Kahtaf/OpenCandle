@@ -1,12 +1,11 @@
-import { canUseTradingViewQuote } from "../providers/tradingview.js";
-import { getQuotes } from "../providers/tradingview.js";
-import { getHistory, getQuote } from "../providers/yahoo-finance.js";
+import { canUseTradingViewQuote, getQuotes } from "../providers/tradingview.js";
 import { wrapProvider } from "../providers/wrap-provider.js";
+import { getHistory, getQuote } from "../providers/yahoo-finance.js";
+import { computeRSI, computeSMA } from "../tools/technical/indicators.js";
 import type { OHLCV } from "../types/market.js";
+import { ALERT_CONDITION_VERSION } from "./alert-conditions.js";
 import { isZeroFilledQuote } from "./resolve.js";
 import type { AlertRuleRecord, InstrumentRecord, MarketStateService } from "./service.js";
-import { ALERT_CONDITION_VERSION } from "./alert-conditions.js";
-import { computeRSI, computeSMA } from "../tools/technical/indicators.js";
 
 export interface AlertQuoteObservation {
   symbol: string;
@@ -84,7 +83,8 @@ export class AlertProviderBudget {
     const nextFailureCount = current.failureCount + 1;
     this.state.set(provider, {
       failureCount: nextFailureCount,
-      openUntilMs: nextFailureCount >= this.failureThreshold ? new Date(now).getTime() + this.backoffMs : 0,
+      openUntilMs:
+        nextFailureCount >= this.failureThreshold ? new Date(now).getTime() + this.backoffMs : 0,
       reason,
     });
   }
@@ -95,15 +95,19 @@ export class AlertProviderBudget {
 
   snapshot(now: string): Record<string, AlertProviderBudgetSnapshotEntry> {
     const nowMs = new Date(now).getTime();
-    return Object.fromEntries([...this.state.entries()].map(([provider, state]) => [
-      provider,
-      {
-        state: state.openUntilMs > nowMs ? "open" : "available",
-        failureCount: state.failureCount,
-        ...(state.openUntilMs > nowMs ? { openUntil: new Date(state.openUntilMs).toISOString() } : {}),
-        ...(state.reason ? { reason: state.reason } : {}),
-      },
-    ]));
+    return Object.fromEntries(
+      [...this.state.entries()].map(([provider, state]) => [
+        provider,
+        {
+          state: state.openUntilMs > nowMs ? "open" : "available",
+          failureCount: state.failureCount,
+          ...(state.openUntilMs > nowMs
+            ? { openUntil: new Date(state.openUntilMs).toISOString() }
+            : {}),
+          ...(state.reason ? { reason: state.reason } : {}),
+        },
+      ]),
+    );
   }
 }
 
@@ -175,15 +179,15 @@ export async function runAlertChecks(
   const lines: string[] = [];
 
   try {
-    const rules = service.listAlertRules().filter((rule) =>
-      rule.enabled &&
-      rule.status === "active" &&
-      isDue(rule, now)
-    );
+    const rules = service
+      .listAlertRules()
+      .filter((rule) => rule.enabled && rule.status === "active" && isDue(rule, now));
     const runnable = rules.flatMap((rule): RunnableRule[] => {
       if (rule.conditionVersion !== ALERT_CONDITION_VERSION) {
         unavailable++;
-        lines.push(`#${rule.id}: needs review (unsupported condition version ${rule.conditionVersion})`);
+        lines.push(
+          `#${rule.id}: needs review (unsupported condition version ${rule.conditionVersion})`,
+        );
         return [];
       }
       if (rule.instrumentId == null) {
@@ -200,10 +204,17 @@ export async function runAlertChecks(
       return [{ rule, instrument }];
     });
 
-    const priceRules = runnable.filter(({ rule }) =>
-      rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below"
+    const priceRules = runnable.filter(
+      ({ rule }) =>
+        rule.conditionType === "price_crosses_above" ||
+        rule.conditionType === "price_crosses_below",
     );
-    const quoteObservations = await loadPriceObservations(priceRules, options.providers, providerBudget, now);
+    const quoteObservations = await loadPriceObservations(
+      priceRules,
+      options.providers,
+      providerBudget,
+      now,
+    );
 
     for (const item of runnable) {
       const observationKey = isPriceRule(item.rule)
@@ -211,9 +222,16 @@ export async function runAlertChecks(
         : item.instrument.symbol;
       const observation = isPriceRule(item.rule)
         ? quoteObservations.observations.get(observationKey)
-        : await loadHistoricalObservation(item, options.providers, providerBudget, historyCache, now);
+        : await loadHistoricalObservation(
+            item,
+            options.providers,
+            providerBudget,
+            historyCache,
+            now,
+          );
       if (!observation) {
-        const reason = quoteObservations.unavailableReasons.get(observationKey) ??
+        const reason =
+          quoteObservations.unavailableReasons.get(observationKey) ??
           quoteObservations.unavailableReasons.get(item.instrument.symbol) ??
           `no provider observation for ${item.instrument.symbol}`;
         unavailable++;
@@ -253,25 +271,27 @@ export async function runAlertChecks(
         conditionState,
         trigger: shouldTrigger
           ? {
-            instrumentId: item.instrument.id,
-            title: `${item.instrument.symbol} alert triggered`,
-            message: alertTriggerMessage(item.instrument.symbol, item.rule, observation.value),
-            triggeredAt: now,
-            observedAt: now,
-            providerDataAt: observation.providerDataAt ?? null,
-            sourceProvider: observation.sourceProvider,
-            cacheStatus: observation.cacheStatus,
-            dataDelayMs: observation.dataDelayMs ?? null,
-            triggerSource: options.triggerType,
-            dedupeKey: alertDedupeKey(item.rule, observation, options.triggerType),
-            status: options.triggerType === "resume" ? "triggered_late" : "triggered",
-          }
+              instrumentId: item.instrument.id,
+              title: `${item.instrument.symbol} alert triggered`,
+              message: alertTriggerMessage(item.instrument.symbol, item.rule, observation.value),
+              triggeredAt: now,
+              observedAt: now,
+              providerDataAt: observation.providerDataAt ?? null,
+              sourceProvider: observation.sourceProvider,
+              cacheStatus: observation.cacheStatus,
+              dataDelayMs: observation.dataDelayMs ?? null,
+              triggerSource: options.triggerType,
+              dedupeKey: alertDedupeKey(item.rule, observation, options.triggerType),
+              status: options.triggerType === "resume" ? "triggered_late" : "triggered",
+            }
           : undefined,
       });
 
       if (result.triggered) {
         triggered++;
-        lines.push(`TRIGGERED: ${item.instrument.symbol} — ${alertTriggerMessage(item.instrument.symbol, item.rule, observation.value)}${observationSourceSuffix(observation)}`);
+        lines.push(
+          `TRIGGERED: ${item.instrument.symbol} — ${alertTriggerMessage(item.instrument.symbol, item.rule, observation.value)}${observationSourceSuffix(observation)}`,
+        );
       } else {
         lines.push(
           `${item.instrument.symbol}: ${previous == null ? "seeded" : "checked"} — observed ${observation.value.toFixed(2)} vs ${conditionTargetLabel(item.rule)} (condition ${conditionState})${observationSourceSuffix(observation)}`,
@@ -313,14 +333,22 @@ async function loadPriceObservations(
   now: string,
 ): Promise<ObservationSet> {
   const symbols = [...new Set(rules.map(({ instrument }) => instrument.symbol))].sort();
-  const tradingViewSymbols = symbols.filter((symbol) =>
-    canUseTradingViewQuote(symbol) &&
-    rules.some(({ rule, instrument }) => instrument.symbol === symbol && allowsDelayedObservation(rule))
+  const tradingViewSymbols = symbols.filter(
+    (symbol) =>
+      canUseTradingViewQuote(symbol) &&
+      rules.some(
+        ({ rule, instrument }) => instrument.symbol === symbol && allowsDelayedObservation(rule),
+      ),
   );
-  const yahooSymbols = new Set(symbols.filter((symbol) =>
-    !canUseTradingViewQuote(symbol) ||
-    rules.some(({ rule, instrument }) => instrument.symbol === symbol && !allowsDelayedObservation(rule))
-  ));
+  const yahooSymbols = new Set(
+    symbols.filter(
+      (symbol) =>
+        !canUseTradingViewQuote(symbol) ||
+        rules.some(
+          ({ rule, instrument }) => instrument.symbol === symbol && !allowsDelayedObservation(rule),
+        ),
+    ),
+  );
   const observations = new Map<string, AlertQuoteObservation>();
   const unavailableReasons = new Map<string, string>();
 
@@ -336,10 +364,16 @@ async function loadPriceObservations(
       try {
         for (const quote of await providers.getTradingViewQuotes(tradingViewSymbols)) {
           if (quote.cacheStatus === "stale") {
-            unavailableReasons.set(quoteObservationKey(quote.symbol, true), "TradingView returned stale market data");
+            unavailableReasons.set(
+              quoteObservationKey(quote.symbol, true),
+              "TradingView returned stale market data",
+            );
             continue;
           }
-          observations.set(quoteObservationKey(quote.symbol, true), normalizeObservation(quote, now));
+          observations.set(
+            quoteObservationKey(quote.symbol, true),
+            normalizeObservation(quote, now),
+          );
         }
         providerBudget.recordSuccess("tradingview");
       } catch (error) {
@@ -418,56 +452,124 @@ async function loadHistoricalObservation(
     if (item.rule.conditionType === "price_crosses_sma") {
       const condition = item.rule.conditionJson as { period?: unknown };
       const period = typeof condition.period === "number" ? condition.period : 50;
-      const bars = await loadHistory(item.instrument.symbol, "1y", "1d", providers, providerBudget, historyCache, now);
+      const bars = await loadHistory(
+        item.instrument.symbol,
+        "1y",
+        "1d",
+        providers,
+        providerBudget,
+        historyCache,
+        now,
+      );
       const closes = bars.map((bar) => bar.close);
       const sma = computeSMA(closes, period);
       const latestClose = closes.at(-1);
       const latestSma = sma.at(-1);
       if (latestClose == null || latestSma == null) return null;
-      return historicalObservation(item.instrument.symbol, latestClose - latestSma, bars.at(-1)?.date ?? null, now);
+      return historicalObservation(
+        item.instrument.symbol,
+        latestClose - latestSma,
+        bars.at(-1)?.date ?? null,
+        now,
+      );
     }
 
     if (item.rule.conditionType === "percent_move") {
-      const bars = await loadHistory(item.instrument.symbol, "5d", "1d", providers, providerBudget, historyCache, now);
+      const bars = await loadHistory(
+        item.instrument.symbol,
+        "5d",
+        "1d",
+        providers,
+        providerBudget,
+        historyCache,
+        now,
+      );
       const latest = bars.at(-1);
       const prior = bars.at(-2);
       if (latest == null || prior == null || prior.close === 0) return null;
-      const move = ((latest.close / prior.close) - 1) * 100;
-      return historicalObservation(item.instrument.symbol, roundObservation(move), latest.date, now);
+      const move = (latest.close / prior.close - 1) * 100;
+      return historicalObservation(
+        item.instrument.symbol,
+        roundObservation(move),
+        latest.date,
+        now,
+      );
     }
 
     if (item.rule.conditionType === "sma_cross") {
       const condition = item.rule.conditionJson as { fast_period?: unknown; slow_period?: unknown };
       const fastPeriod = typeof condition.fast_period === "number" ? condition.fast_period : 50;
       const slowPeriod = typeof condition.slow_period === "number" ? condition.slow_period : 200;
-      const bars = await loadHistory(item.instrument.symbol, "2y", "1d", providers, providerBudget, historyCache, now);
+      const bars = await loadHistory(
+        item.instrument.symbol,
+        "2y",
+        "1d",
+        providers,
+        providerBudget,
+        historyCache,
+        now,
+      );
       const closes = bars.map((bar) => bar.close);
       const fast = computeSMA(closes, fastPeriod).at(-1);
       const slow = computeSMA(closes, slowPeriod).at(-1);
       if (fast == null || slow == null) return null;
-      return historicalObservation(item.instrument.symbol, roundObservation(fast - slow), bars.at(-1)?.date ?? null, now);
+      return historicalObservation(
+        item.instrument.symbol,
+        roundObservation(fast - slow),
+        bars.at(-1)?.date ?? null,
+        now,
+      );
     }
 
     if (item.rule.conditionType === "rsi_threshold") {
       const condition = item.rule.conditionJson as { period?: unknown };
       const period = typeof condition.period === "number" ? condition.period : 14;
-      const bars = await loadHistory(item.instrument.symbol, "6mo", "1d", providers, providerBudget, historyCache, now);
-      const rsi = computeRSI(bars.map((bar) => bar.close), period);
+      const bars = await loadHistory(
+        item.instrument.symbol,
+        "6mo",
+        "1d",
+        providers,
+        providerBudget,
+        historyCache,
+        now,
+      );
+      const rsi = computeRSI(
+        bars.map((bar) => bar.close),
+        period,
+      );
       const latestRsi = rsi.at(-1);
       if (latestRsi == null) return null;
-      return historicalObservation(item.instrument.symbol, latestRsi, bars.at(-1)?.date ?? null, now);
+      return historicalObservation(
+        item.instrument.symbol,
+        latestRsi,
+        bars.at(-1)?.date ?? null,
+        now,
+      );
     }
 
     if (item.rule.conditionType === "volume_spike") {
       const condition = item.rule.conditionJson as { lookback_period?: unknown };
       const period = typeof condition.lookback_period === "number" ? condition.lookback_period : 20;
-      const bars = await loadHistory(item.instrument.symbol, "6mo", "1d", providers, providerBudget, historyCache, now);
+      const bars = await loadHistory(
+        item.instrument.symbol,
+        "6mo",
+        "1d",
+        providers,
+        providerBudget,
+        historyCache,
+        now,
+      );
       const latest = bars.at(-1);
       const prior = bars.slice(Math.max(0, bars.length - 1 - period), bars.length - 1);
       if (latest == null || prior.length < period) return null;
       const averageVolume = prior.reduce((sum, bar) => sum + bar.volume, 0) / prior.length;
       if (averageVolume <= 0) return null;
-      return historicalObservation(item.instrument.symbol, latest.volume / averageVolume, latest.date, now);
+      return historicalObservation(
+        item.instrument.symbol,
+        latest.volume / averageVolume,
+        latest.date,
+        now,
+      );
     }
   } catch {
     return null;
@@ -489,7 +591,8 @@ function loadHistory(
   const key = `${symbol}:${range}:${interval}`;
   const cached = historyCache.get(key);
   if (cached) return cached;
-  const promise = providers.getHistory(symbol, range, interval)
+  const promise = providers
+    .getHistory(symbol, range, interval)
     .then((bars) => {
       providerBudget.recordSuccess("yahoo");
       return bars;
@@ -505,7 +608,8 @@ function loadHistory(
 
 function isProviderWideFailure(reason: string): boolean {
   const normalized = reason.toLowerCase();
-  return normalized.includes("429") ||
+  return (
+    normalized.includes("429") ||
     normalized.includes("rate limit") ||
     normalized.includes("too many requests") ||
     normalized.includes("provider_budget_exhausted") ||
@@ -514,7 +618,8 @@ function isProviderWideFailure(reason: string): boolean {
     normalized.includes("network") ||
     normalized.includes("fetch failed") ||
     normalized.includes("econn") ||
-    normalized.includes("enotfound");
+    normalized.includes("enotfound")
+  );
 }
 
 function historicalObservation(
@@ -568,9 +673,10 @@ function observationSourceSuffix(observation: {
   sourceProvider: string;
   dataDelayMs?: number | null;
 }): string {
-  const delay = observation.dataDelayMs != null && observation.dataDelayMs > 0
-    ? `, ~${Math.round(observation.dataDelayMs / 60_000)}m delayed`
-    : "";
+  const delay =
+    observation.dataDelayMs != null && observation.dataDelayMs > 0
+      ? `, ~${Math.round(observation.dataDelayMs / 60_000)}m delayed`
+      : "";
   return ` [${observation.sourceProvider}${delay}]`;
 }
 
@@ -587,11 +693,13 @@ function alertTriggerMessage(symbol: string, rule: AlertRuleRecord, value: numbe
     return `${symbol} price/SMA spread at ${formatSignedCurrency(value)}`;
   }
   if (rule.conditionType === "percent_move") {
-    const direction = (rule.conditionJson as { direction?: unknown }).direction === "down" ? "down" : "up";
+    const direction =
+      (rule.conditionJson as { direction?: unknown }).direction === "down" ? "down" : "up";
     return `${symbol} percent move ${direction} ${Math.abs(value).toFixed(2)}%`;
   }
   if (rule.conditionType === "sma_cross") {
-    const direction = (rule.conditionJson as { direction?: unknown }).direction === "below" ? "below" : "above";
+    const direction =
+      (rule.conditionJson as { direction?: unknown }).direction === "below" ? "below" : "above";
     return `${symbol} fast SMA crossed ${direction} slow SMA at ${formatSignedCurrency(value)}`;
   }
   return `${symbol} ${rule.conditionType} at $${value.toFixed(2)}`;
@@ -605,7 +713,10 @@ function roundObservation(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-function normalizeObservation(observation: AlertQuoteObservation, now: string): AlertQuoteObservation {
+function normalizeObservation(
+  observation: AlertQuoteObservation,
+  now: string,
+): AlertQuoteObservation {
   return {
     ...observation,
     symbol: observation.symbol.toUpperCase(),
@@ -615,11 +726,15 @@ function normalizeObservation(observation: AlertQuoteObservation, now: string): 
 }
 
 function isDue(rule: AlertRuleRecord, now: string): boolean {
-  return rule.nextCheckAt == null || new Date(rule.nextCheckAt).getTime() <= new Date(now).getTime();
+  return (
+    rule.nextCheckAt == null || new Date(rule.nextCheckAt).getTime() <= new Date(now).getTime()
+  );
 }
 
 function isPriceRule(rule: AlertRuleRecord): boolean {
-  return rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below";
+  return (
+    rule.conditionType === "price_crosses_above" || rule.conditionType === "price_crosses_below"
+  );
 }
 
 function allowsDelayedObservation(rule: AlertRuleRecord): boolean {
@@ -677,10 +792,18 @@ function conditionIsTrue(rule: AlertRuleRecord, current: number): boolean {
 function crosses(rule: AlertRuleRecord, previous: number, current: number): boolean {
   const condition = rule.conditionJson as { threshold?: unknown };
   if (rule.conditionType === "price_crosses_above") {
-    return typeof condition.threshold === "number" && previous <= condition.threshold && current > condition.threshold;
+    return (
+      typeof condition.threshold === "number" &&
+      previous <= condition.threshold &&
+      current > condition.threshold
+    );
   }
   if (rule.conditionType === "price_crosses_below") {
-    return typeof condition.threshold === "number" && previous >= condition.threshold && current < condition.threshold;
+    return (
+      typeof condition.threshold === "number" &&
+      previous >= condition.threshold &&
+      current < condition.threshold
+    );
   }
   if (rule.conditionType === "price_crosses_sma") {
     const direction = (rule.conditionJson as { direction?: unknown }).direction;
@@ -702,8 +825,10 @@ function crosses(rule: AlertRuleRecord, previous: number, current: number): bool
   if (rule.conditionType === "rsi_threshold") {
     if (typeof condition.threshold !== "number") return false;
     const direction = (rule.conditionJson as { direction?: unknown }).direction;
-    if (direction === "above") return previous <= condition.threshold && current > condition.threshold;
-    if (direction === "below") return previous >= condition.threshold && current < condition.threshold;
+    if (direction === "above")
+      return previous <= condition.threshold && current > condition.threshold;
+    if (direction === "below")
+      return previous >= condition.threshold && current < condition.threshold;
   }
   if (rule.conditionType === "volume_spike") {
     const multiplier = (rule.conditionJson as { multiplier?: unknown }).multiplier;
@@ -714,7 +839,10 @@ function crosses(rule: AlertRuleRecord, previous: number, current: number): bool
 
 function outsideCooldown(rule: AlertRuleRecord, now: string): boolean {
   if (rule.lastTriggeredAt == null || rule.cooldownSeconds == null) return true;
-  return new Date(now).getTime() - new Date(rule.lastTriggeredAt).getTime() >= rule.cooldownSeconds * 1000;
+  return (
+    new Date(now).getTime() - new Date(rule.lastTriggeredAt).getTime() >=
+    rule.cooldownSeconds * 1000
+  );
 }
 
 function alertDedupeKey(

@@ -1,7 +1,7 @@
-import { getQuote } from "../providers/yahoo-finance.js";
 import { wrapProvider } from "../providers/wrap-provider.js";
+import { getQuote } from "../providers/yahoo-finance.js";
 import { isZeroFilledQuote } from "./resolve.js";
-import { MarketStateService, type ReportRunRecord, type ReportTemplateRecord } from "./service.js";
+import type { MarketStateService, ReportRunRecord, ReportTemplateRecord } from "./service.js";
 
 export interface DailyWatchlistReportSummary {
   watchlistId: number;
@@ -17,11 +17,15 @@ export interface DailyWatchlistReport {
   dataGaps: string[];
 }
 
-export function getOrCreateDefaultWatchlistReportTemplate(service: MarketStateService): ReportTemplateRecord {
-  const existing = service.listReportTemplates().find((template) =>
-    template.reportType === "watchlist_daily" &&
-    targetsDefaultWatchlist(template.configJson)
-  );
+export function getOrCreateDefaultWatchlistReportTemplate(
+  service: MarketStateService,
+): ReportTemplateRecord {
+  const existing = service
+    .listReportTemplates()
+    .find(
+      (template) =>
+        template.reportType === "watchlist_daily" && targetsDefaultWatchlist(template.configJson),
+    );
   if (existing) return existing;
   return service.createReportTemplate({
     name: "Morning watchlist",
@@ -67,7 +71,9 @@ export async function recordDailyWatchlistReportRun(
   return { report, run };
 }
 
-export async function generateDailyWatchlistReport(service: MarketStateService): Promise<DailyWatchlistReport> {
+export async function generateDailyWatchlistReport(
+  service: MarketStateService,
+): Promise<DailyWatchlistReport> {
   const generatedAt = new Date().toISOString();
   const watchlist = service.getDefaultWatchlist();
   const items = service.listWatchlistItems(watchlist.id);
@@ -96,17 +102,18 @@ export async function generateDailyWatchlistReport(service: MarketStateService):
   const movers = [...validQuotes].sort(
     (a, b) => Math.abs(b.quote.changePercent) - Math.abs(a.quote.changePercent),
   );
-  const freshnessLines = validQuotes.length === 0
-    ? [`  No quote data available.`]
-    : quoteFreshnessLines(validQuotes);
-  const moverLines = movers.length === 0
-    ? [`  No movers available.`]
-    : movers.slice(0, 5).map(({ item, quote }) =>
-        `  ${item.symbol}: ${formatSigned(quote.changePercent)}% to $${quote.price.toFixed(2)}`,
-      );
-  const dataGapLines = dataGaps.length === 0
-    ? [`  None.`]
-    : dataGaps.map((gap) => `  ${gap}`);
+  const freshnessLines =
+    validQuotes.length === 0 ? [`  No quote data available.`] : quoteFreshnessLines(validQuotes);
+  const moverLines =
+    movers.length === 0
+      ? [`  No movers available.`]
+      : movers
+          .slice(0, 5)
+          .map(
+            ({ item, quote }) =>
+              `  ${item.symbol}: ${formatSigned(quote.changePercent)}% to $${quote.price.toFixed(2)}`,
+          );
+  const dataGapLines = dataGaps.length === 0 ? [`  None.`] : dataGaps.map((gap) => `  ${gap}`);
 
   const lines = [
     `**Daily Watchlist Report**`,
@@ -142,11 +149,22 @@ export async function generateDailyWatchlistReport(service: MarketStateService):
   };
 }
 
-export function nextDailyReportRunAt(timezone: string, localTime: string, now = new Date()): string {
+export function nextDailyReportRunAt(
+  timezone: string,
+  localTime: string,
+  now = new Date(),
+): string {
   const [hourPart, minutePart] = localTime.split(":");
   const hour = Number(hourPart);
   const minute = Number(minutePart);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
     throw new Error(`Invalid report local_time: ${localTime}`);
   }
 
@@ -169,8 +187,9 @@ export function targetsDefaultWatchlist(config: unknown): boolean {
 function quoteFreshnessLines(
   quotes: Array<{ item: { symbol: string }; quote: { timestamp: number; price: number } }>,
 ): string[] {
-  return quotes.map(({ item, quote }) =>
-    `  ${item.symbol}: $${quote.price.toFixed(2)} as of ${new Date(quote.timestamp).toISOString()}`,
+  return quotes.map(
+    ({ item, quote }) =>
+      `  ${item.symbol}: $${quote.price.toFixed(2)} as of ${new Date(quote.timestamp).toISOString()}`,
   );
 }
 
@@ -178,7 +197,10 @@ function formatSigned(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}`;
 }
 
-function zonedDateParts(date: Date, timezone: string): { year: number; month: number; day: number } {
+function zonedDateParts(
+  date: Date,
+  timezone: string,
+): { year: number; month: number; day: number } {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",

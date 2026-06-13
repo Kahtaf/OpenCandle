@@ -1,4 +1,4 @@
-import { searchYahooInstruments, type InstrumentCandidate } from "../market-state/resolve.js";
+import { type InstrumentCandidate, searchYahooInstruments } from "../market-state/resolve.js";
 
 export interface SymbolValidation {
   valid: boolean;
@@ -35,7 +35,7 @@ export async function preflightSymbols(
     if (!symbol) continue;
 
     const cached = cache?.get(symbol);
-    const validation = cached ?? await validateSymbol(symbol, search);
+    const validation = cached ?? (await validateSymbol(symbol, search));
     if (!cached) cache?.set(symbol, validation);
 
     if (validation.valid) {
@@ -71,7 +71,10 @@ function validateSymbol(
     }))
     .catch((error) => ({
       valid: true,
-      reason: error instanceof Error ? `resolver search unavailable: ${error.message}` : "resolver search unavailable",
+      reason:
+        error instanceof Error
+          ? `resolver search unavailable: ${error.message}`
+          : "resolver search unavailable",
       checkedAt: Date.now(),
     }));
 }

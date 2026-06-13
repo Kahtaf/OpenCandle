@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import { httpGet, HttpError } from "../../../src/infra/http-client.js";
+import { HttpError, httpGet } from "../../../src/infra/http-client.js";
 import fixture from "../../fixtures/finnhub/company-news.json";
 
 vi.mock("../../../src/infra/http-client.js", async (importOriginal) => {
@@ -64,9 +64,7 @@ describe("getCompanyNews", () => {
 
     const articles = await getCompanyNews("AAPL", "2026-04-10", "2026-04-11", "test-key");
 
-    expect(mockedHttpGet).toHaveBeenCalledWith(
-      expect.stringContaining("symbol=AAPL"),
-    );
+    expect(mockedHttpGet).toHaveBeenCalledWith(expect.stringContaining("symbol=AAPL"));
     expect(articles.length).toBeGreaterThan(0);
     expect(articles[0]).toHaveProperty("headline");
     expect(articles[0]).toHaveProperty("summary");
@@ -117,9 +115,7 @@ describe("getCompanyNews", () => {
     const { getCompanyNews } = await import("../../../src/providers/finnhub.js");
     mockedHttpGet.mockRejectedValueOnce(new HttpError(429, "Too Many Requests"));
 
-    await expect(
-      getCompanyNews("AAPL", "2026-04-10", "2026-04-11", "test-key"),
-    ).rejects.toThrow();
+    await expect(getCompanyNews("AAPL", "2026-04-10", "2026-04-11", "test-key")).rejects.toThrow();
   });
 
   it("returns stale cache on failure when available", async () => {
@@ -158,7 +154,9 @@ describe("relevance filter", () => {
     const { filterByRelevance } = await import("../../../src/providers/finnhub.js");
     const result = filterByRelevance(fixture, "AAPL");
     const headlines = result.map((a) => a.headline);
-    expect(headlines).toContain("2.5 Billion Reasons Apple Might Be the Best AI Stock to Buy Today");
+    expect(headlines).toContain(
+      "2.5 Billion Reasons Apple Might Be the Best AI Stock to Buy Today",
+    );
   });
 
   it("keeps articles mentioning the company name in summary", async () => {
@@ -173,9 +171,15 @@ describe("relevance filter", () => {
     const { filterByRelevance } = await import("../../../src/providers/finnhub.js");
     const result = filterByRelevance(fixture, "AAPL");
     const headlines = result.map((a) => a.headline);
-    expect(headlines).not.toContain("VTSAX vs VOO ETF: Which Vanguard Fund Should You Buy in 2026?");
-    expect(headlines).not.toContain("Japan Bets $16 Billion to Propel Rapidus in Global AI Chip Race");
-    expect(headlines).not.toContain("Gary Black Says Tesla's 8-Week Slide Driven By Disappointing Deliveries");
+    expect(headlines).not.toContain(
+      "VTSAX vs VOO ETF: Which Vanguard Fund Should You Buy in 2026?",
+    );
+    expect(headlines).not.toContain(
+      "Japan Bets $16 Billion to Propel Rapidus in Global AI Chip Race",
+    );
+    expect(headlines).not.toContain(
+      "Gary Black Says Tesla's 8-Week Slide Driven By Disappointing Deliveries",
+    );
   });
 });
 

@@ -20,10 +20,7 @@ import { fileURLToPath } from "node:url";
 import { getModel, registerBuiltInApiProviders } from "@earendil-works/pi-ai";
 import { route } from "../../src/routing/router.js";
 import { createPiAiRouterClient } from "../../src/routing/router-llm-client.js";
-import type {
-  RouterInputContext,
-  RouterOutput,
-} from "../../src/routing/router-types.js";
+import type { RouterInputContext, RouterOutput } from "../../src/routing/router-types.js";
 
 interface RouterFixture {
   input: string;
@@ -58,12 +55,7 @@ function shallowDiff(expected: unknown, actual: unknown): string[] {
   const diffs: string[] = [];
   function walk(path: string, exp: unknown, act: unknown): void {
     if (JSON.stringify(exp) === JSON.stringify(act)) return;
-    if (
-      exp === null ||
-      act === null ||
-      typeof exp !== "object" ||
-      typeof act !== "object"
-    ) {
+    if (exp === null || act === null || typeof exp !== "object" || typeof act !== "object") {
       diffs.push(`${path}: expected ${JSON.stringify(exp)}, got ${JSON.stringify(act)}`);
       return;
     }
@@ -97,7 +89,9 @@ async function main(): Promise<void> {
   let pass = 0;
   const failures: Array<{ name: string; diffs: string[] }> = [];
 
-  console.log(`Running live router eval against ${fixtures.length} fixtures with model=${DEFAULT_MODEL_ID}...\n`);
+  console.log(
+    `Running live router eval against ${fixtures.length} fixtures with model=${DEFAULT_MODEL_ID}...\n`,
+  );
 
   for (const { name, data } of fixtures) {
     const start = Date.now();
@@ -123,10 +117,7 @@ async function main(): Promise<void> {
     const elapsed = Date.now() - start;
     latencies.push(elapsed);
 
-    const diffs = shallowDiff(
-      stripReasoning(data.expectedRouterOutput),
-      stripReasoning(result),
-    );
+    const diffs = shallowDiff(stripReasoning(data.expectedRouterOutput), stripReasoning(result));
     if (diffs.length === 0) {
       pass += 1;
       console.log(`PASS ${name} (${elapsed}ms)`);

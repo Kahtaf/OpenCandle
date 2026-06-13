@@ -1,7 +1,7 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { Drawer } from "vaul";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { createContext, useContext, useEffect, useState } from "react";
+import { Drawer } from "vaul";
 import { cn } from "../../lib/utils.js";
 
 // Sheet picks the right physical metaphor for the viewport: a centered modal
@@ -35,7 +35,9 @@ export function Sheet({ open, onOpenChange, children }) {
   const Root = isDesktop ? DialogPrimitive.Root : Drawer.Root;
   return (
     <SheetContext.Provider value={{ isDesktop }}>
-      <Root open={open} onOpenChange={onOpenChange}>{children}</Root>
+      <Root open={open} onOpenChange={onOpenChange}>
+        {children}
+      </Root>
     </SheetContext.Provider>
   );
 }

@@ -32,11 +32,14 @@ describe("mergeMarketStateSnapshot", () => {
   });
 
   it("replaces quote snapshots when the response includes one", () => {
-    const next = mergeMarketStateSnapshot({
-      quoteSnapshot: { watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 190 }] },
-    }, {
-      quoteSnapshot: { watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 191 }] },
-    });
+    const next = mergeMarketStateSnapshot(
+      {
+        quoteSnapshot: { watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 190 }] },
+      },
+      {
+        quoteSnapshot: { watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 191 }] },
+      },
+    );
 
     expect(next.quoteSnapshot).toEqual({
       watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 191 }],
@@ -46,7 +49,9 @@ describe("mergeMarketStateSnapshot", () => {
   it("invalidates portfolio quote-derived values when saved lot fields change", () => {
     const current = {
       watchlist: [],
-      portfolio: [{ id: 2, instrumentId: 20, symbol: "VTI", quantity: 2, avgCost: 250, currency: "USD" }],
+      portfolio: [
+        { id: 2, instrumentId: 20, symbol: "VTI", quantity: 2, avgCost: 250, currency: "USD" },
+      ],
       quoteSnapshot: {
         watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 190 }],
         portfolioQuotes: [{ lotId: 2, symbol: "VTI", marketValue: 600, pnl: 100 }],
@@ -55,7 +60,9 @@ describe("mergeMarketStateSnapshot", () => {
     };
 
     const next = mergeMarketStateSnapshot(current, {
-      portfolio: [{ id: 2, instrumentId: 20, symbol: "VTI", quantity: 4, avgCost: 250, currency: "USD" }],
+      portfolio: [
+        { id: 2, instrumentId: 20, symbol: "VTI", quantity: 4, avgCost: 250, currency: "USD" },
+      ],
     });
 
     expect(next.quoteSnapshot.watchlistQuotes).toBe(current.quoteSnapshot.watchlistQuotes);

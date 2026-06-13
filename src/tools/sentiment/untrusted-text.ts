@@ -8,9 +8,10 @@ export function renderUntrustedText(raw: string, maxLength = 200): string {
     .replace(/[\x00-\x1f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const truncated = normalized.length > maxLength
-    ? `${normalized.slice(0, Math.max(0, maxLength - 1))}…`
-    : normalized;
+  const truncated =
+    normalized.length > maxLength
+      ? `${normalized.slice(0, Math.max(0, maxLength - 1))}…`
+      : normalized;
 
   return `«${escapeMd(truncated)}»`;
 }

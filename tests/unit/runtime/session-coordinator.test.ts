@@ -1,15 +1,19 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
-import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
-import { getProviderTracker, setRunContext, clearRunContext } from "../../../src/runtime/run-context.js";
-import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { join } from "node:path";
+import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 import type { WorkflowDefinition } from "../../../src/runtime/prompt-step.js";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
+import {
+  clearRunContext,
+  getProviderTracker,
+  setRunContext,
+} from "../../../src/runtime/run-context.js";
+import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
@@ -135,9 +139,7 @@ function assistantToolOnlyEntry(toolName: string): SessionEntry {
     timestamp: new Date().toISOString(),
     message: {
       role: "assistant",
-      content: [
-        { type: "toolCall", id: "tc-1", name: toolName, arguments: {} },
-      ],
+      content: [{ type: "toolCall", id: "tc-1", name: toolName, arguments: {} }],
       api: "anthropic",
       provider: "anthropic",
       model: "claude-test",
@@ -315,17 +317,13 @@ describe("SessionCoordinator.buildPriorTurns", () => {
 
   it("returns a single user message when the branch has only one", () => {
     const coord = new SessionCoordinator();
-    const turns = coord.buildPriorTurns(
-      fakeSessionManager([userTextEntry("tell me about NVDA")]),
-    );
+    const turns = coord.buildPriorTurns(fakeSessionManager([userTextEntry("tell me about NVDA")]));
     expect(turns).toEqual([{ role: "user", text: "tell me about NVDA" }]);
   });
 
   it("accepts user messages with plain-string content", () => {
     const coord = new SessionCoordinator();
-    const turns = coord.buildPriorTurns(
-      fakeSessionManager([userStringEntry("hello world")]),
-    );
+    const turns = coord.buildPriorTurns(fakeSessionManager([userStringEntry("hello world")]));
     expect(turns).toEqual([{ role: "user", text: "hello world" }]);
   });
 
@@ -347,10 +345,7 @@ describe("SessionCoordinator.buildPriorTurns", () => {
   it("excludes aborted assistant turns with no text content", () => {
     const coord = new SessionCoordinator();
     const turns = coord.buildPriorTurns(
-      fakeSessionManager([
-        userTextEntry("run the analysis"),
-        assistantEmptyEntry(),
-      ]),
+      fakeSessionManager([userTextEntry("run the analysis"), assistantEmptyEntry()]),
     );
     expect(turns).toEqual([{ role: "user", text: "run the analysis" }]);
   });
@@ -444,11 +439,7 @@ describe("SessionCoordinator.buildPriorTurns", () => {
   it("respects a custom max parameter", () => {
     const coord = new SessionCoordinator();
     const turns = coord.buildPriorTurns(
-      fakeSessionManager([
-        userTextEntry("one"),
-        userTextEntry("two"),
-        userTextEntry("three"),
-      ]),
+      fakeSessionManager([userTextEntry("one"), userTextEntry("two"), userTextEntry("three")]),
       2,
     );
     expect(turns.map((t) => t.text)).toEqual(["two", "three"]);
@@ -458,10 +449,7 @@ describe("SessionCoordinator.buildPriorTurns", () => {
 describe("SessionCoordinator.buildRouterContextBase", () => {
   it("includes priorTurns alongside profile + recent runs", () => {
     const coord = new SessionCoordinator();
-    const mgr = fakeSessionManager([
-      userTextEntry("hello"),
-      assistantTextEntry("hi"),
-    ]);
+    const mgr = fakeSessionManager([userTextEntry("hello"), assistantTextEntry("hi")]);
     const ctx = coord.buildRouterContextBase(mgr);
     expect(ctx.priorTurns).toEqual([
       { role: "user", text: "hello" },
@@ -552,7 +540,12 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
 
     const coord = new SessionCoordinator();
     coord.initSession("test-session");
-    const prompt = coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("agent_task"));
+    const prompt = coord.buildSystemPrompt(
+      "base",
+      undefined,
+      undefined,
+      resolvedTurnContext("agent_task"),
+    );
 
     expect(prompt).toContain("Saved Market State");
     expect(prompt).toContain("ASTS");
@@ -591,8 +584,9 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     coord.initSession("test-session");
 
     expect(coord.buildSystemPrompt("base")).not.toContain("Saved Market State");
-    expect(coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("pass_through")))
-      .not.toContain("Saved Market State");
+    expect(
+      coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("pass_through")),
+    ).not.toContain("Saved Market State");
   });
 
   it("injects saved market state for rules-mode finance fallback turns carrying a fallback context", () => {
@@ -630,21 +624,24 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
 });
 
 function resolvedTurnContext(routeKind: "agent_task" | "pass_through") {
-  return buildResolvedTurnContext({
-    text: routeKind === "pass_through" ? "write a poem" : "how does space sector news affect me?",
-    priorTurns: [],
-    profileSnapshot: {},
-    recentWorkflowRuns: [],
-  }, {
-    routeKind,
-    route: "fallback",
-    workflow: routeKind === "pass_through" ? undefined : "general_finance_qa",
-    entities: { symbols: [] },
-    slots: {},
-    preference_updates: [],
-    missing_required: [],
-    tool_bundles: [],
-    diagnostics: [],
-    reasoning: "test context",
-  });
+  return buildResolvedTurnContext(
+    {
+      text: routeKind === "pass_through" ? "write a poem" : "how does space sector news affect me?",
+      priorTurns: [],
+      profileSnapshot: {},
+      recentWorkflowRuns: [],
+    },
+    {
+      routeKind,
+      route: "fallback",
+      workflow: routeKind === "pass_through" ? undefined : "general_finance_qa",
+      entities: { symbols: [] },
+      slots: {},
+      preference_updates: [],
+      missing_required: [],
+      tool_bundles: [],
+      diagnostics: [],
+      reasoning: "test context",
+    },
+  );
 }

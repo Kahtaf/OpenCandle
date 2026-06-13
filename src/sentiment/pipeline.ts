@@ -1,8 +1,14 @@
-import type { SentinelRecord, SentimentSummary, TrendResult, DivergenceResult, SentimentSource } from "./types.js";
 import type { SentimentConfig } from "../config.js";
 import { scoreRecords } from "./scorer.js";
-import { SentimentStore } from "./store.js";
-import { computeTrend, computeDivergence, type SourceStats } from "./trends.js";
+import type { SentimentStore } from "./store.js";
+import { computeDivergence, computeTrend, type SourceStats } from "./trends.js";
+import type {
+  DivergenceResult,
+  SentimentSource,
+  SentimentSummary,
+  SentinelRecord,
+  TrendResult,
+} from "./types.js";
 
 export class SentimentPipeline {
   constructor(
@@ -39,7 +45,12 @@ export class SentimentPipeline {
     // Compute divergence from fresh records
     let divergence: DivergenceResult | null = null;
     const sourceGroups = groupBySource(scored);
-    const sourceStats: { twitter?: SourceStats; reddit?: SourceStats; web?: SourceStats; finnhub?: SourceStats } = {};
+    const sourceStats: {
+      twitter?: SourceStats;
+      reddit?: SourceStats;
+      web?: SourceStats;
+      finnhub?: SourceStats;
+    } = {};
 
     for (const [source, recs] of Object.entries(sourceGroups)) {
       // Exclude comments from divergence calculation

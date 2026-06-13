@@ -51,7 +51,10 @@ function selectCases(cases: ProductEvalCase[]): ProductEvalCase[] {
 function writeReport(report: ReturnType<typeof buildProductEvalReport>): string {
   const runsDir = join(process.cwd(), "tests", "evals", "runs");
   mkdirSync(runsDir, { recursive: true });
-  const path = join(runsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_product-evals.json`);
+  const path = join(
+    runsDir,
+    `${new Date().toISOString().replace(/[:.]/g, "-")}_product-evals.json`,
+  );
   writeFileSync(path, JSON.stringify(report, null, 2) + "\n", "utf-8");
   return path;
 }

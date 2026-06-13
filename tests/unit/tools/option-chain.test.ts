@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { optionChainTool } from "../../../src/tools/options/option-chain.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import { clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
+import { clearCrumbCache } from "../../../src/providers/yahoo-finance.js";
+import { optionChainTool } from "../../../src/tools/options/option-chain.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
 
 function mockCrumbAndOptions(fixture: typeof optionsFixture = optionsFixture) {
@@ -99,10 +99,12 @@ describe("get_option_chain tool", () => {
   it("rejects semantically invalid expiration dates before fetching Yahoo", async () => {
     globalThis.fetch = vi.fn();
 
-    await expect(optionChainTool.execute("call-invalid-expiration", {
-      symbol: "AAPL",
-      expiration: "2026-99-99",
-    })).rejects.toThrow("expiration must be a valid YYYY-MM-DD date");
+    await expect(
+      optionChainTool.execute("call-invalid-expiration", {
+        symbol: "AAPL",
+        expiration: "2026-99-99",
+      }),
+    ).rejects.toThrow("expiration must be a valid YYYY-MM-DD date");
 
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });

@@ -1,20 +1,20 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getSubredditPosts, getPostComments } from "../../providers/reddit.js";
-import { getTwitterSentiment } from "../../providers/twitter.js";
-import { searchWeb } from "../../providers/web-search.js";
-import { getCompanyNews, finnhubDateRange } from "../../providers/finnhub.js";
-import { getQuote } from "../../providers/yahoo-finance.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
-import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
-import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
-import { WebAdapter } from "../../sentiment/adapters/web.js";
-import { FinnhubAdapter, extractTickersFromQuery } from "../../sentiment/adapters/finnhub.js";
-import { getSentimentPipeline } from "../../sentiment/index.js";
-import type { SentinelRecord } from "../../sentiment/types.js";
 import { hasCredential } from "../../onboarding/providers.js";
 import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
+import { finnhubDateRange, getCompanyNews } from "../../providers/finnhub.js";
+import { getPostComments, getSubredditPosts } from "../../providers/reddit.js";
+import { getTwitterSentiment } from "../../providers/twitter.js";
+import { searchWeb } from "../../providers/web-search.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
+import { extractTickersFromQuery, FinnhubAdapter } from "../../sentiment/adapters/finnhub.js";
+import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
+import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
+import { WebAdapter } from "../../sentiment/adapters/web.js";
+import { getSentimentPipeline } from "../../sentiment/index.js";
+import type { SentinelRecord } from "../../sentiment/types.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic for cross-source sentiment summary" }),
@@ -47,26 +47,29 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     const candidateTickers = extractTickersFromQuery(args.query);
     const finnhubTickers = config.finnhubApiKey ? candidateTickers : [];
     const includeFinnhub = finnhubTickers.length > 0 && Boolean(config.finnhubApiKey);
-    const finnhubSoftDegraded =
-      candidateTickers.length > 0 && !hasCredential("finnhub");
+    const finnhubSoftDegraded = candidateTickers.length > 0 && !hasCredential("finnhub");
 
     // Finnhub fetch (built separately to avoid mixing promise types in allSettled)
-    const finnhubFetch: Promise<import("../../providers/finnhub.js").FinnhubArticle[]> = includeFinnhub
-      ? (async () => {
-          const { from, to } = finnhubDateRange("day");
-          const arrays = await Promise.all(
-            finnhubTickers.map((sym) => getCompanyNews(sym, from, to, config.finnhubApiKey!)),
-          );
-          return arrays.flat();
-        })()
-      : Promise.resolve([]);
+    const finnhubFetch: Promise<import("../../providers/finnhub.js").FinnhubArticle[]> =
+      includeFinnhub
+        ? (async () => {
+            const { from, to } = finnhubDateRange("day");
+            const arrays = await Promise.all(
+              finnhubTickers.map((sym) => getCompanyNews(sym, from, to, config.finnhubApiKey!)),
+            );
+            return arrays.flat();
+          })()
+        : Promise.resolve([]);
 
     // Fetch all sources in parallel
     const [twitterResult, redditResults, webResult, finnhubResult] = await Promise.allSettled([
       // Twitter
       wrapProvider("twitter", () => getTwitterSentiment(args.query, 50, hours)),
       // Reddit — cross-subreddit
-      fetchRedditCrossSubreddit(args.query, config.sentiment?.defaultSubreddits ?? ["wallstreetbets", "stocks", "investing", "options"]),
+      fetchRedditCrossSubreddit(
+        args.query,
+        config.sentiment?.defaultSubreddits ?? ["wallstreetbets", "stocks", "investing", "options"],
+      ),
       // Web
       searchWeb(args.query, { freshness: "day", limit: 10, category: "news" }),
       // Finnhub — only when includeFinnhub; otherwise resolves to []
@@ -78,9 +81,10 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
       const records = twitterAdapter.mapToRecords(twitterResult.value.data, args.query);
       allRecords.push(...records);
     } else {
-      const reason = twitterResult.status === "rejected"
-        ? twitterResult.reason?.message ?? "unknown error"
-        : (twitterResult.value as any).reason ?? "unavailable";
+      const reason =
+        twitterResult.status === "rejected"
+          ? (twitterResult.reason?.message ?? "unknown error")
+          : ((twitterResult.value as any).reason ?? "unavailable");
       warnings.push(`Twitter: ${reason}`);
     }
 
@@ -98,9 +102,10 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
       const records = webAdapter.mapToRecords(webResult.value.data, args.query);
       allRecords.push(...records);
     } else {
-      const reason = webResult.status === "rejected"
-        ? webResult.reason?.message ?? "unknown error"
-        : (webResult.value as any).reason ?? "unavailable";
+      const reason =
+        webResult.status === "rejected"
+          ? (webResult.reason?.message ?? "unknown error")
+          : ((webResult.value as any).reason ?? "unavailable");
       warnings.push(`Web: ${reason}`);
     }
 
@@ -161,15 +166,20 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     for (const [source, stats] of Object.entries(bySource)) {
       const avg = stats.count > 0 ? stats.total / stats.count : 0;
       const label = sentimentLabel(avg);
-      const sourceName = source === "web" ? "Web/News" : source.charAt(0).toUpperCase() + source.slice(1);
-      lines.push(`| ${sourceName} | ${avg >= 0 ? "+" : ""}${avg.toFixed(2)} | ${stats.count} | ${label} |`);
+      const sourceName =
+        source === "web" ? "Web/News" : source.charAt(0).toUpperCase() + source.slice(1);
+      lines.push(
+        `| ${sourceName} | ${avg >= 0 ? "+" : ""}${avg.toFixed(2)} | ${stats.count} | ${label} |`,
+      );
       totalScore += stats.total;
       totalCount += stats.count;
     }
 
     const aggregate = totalCount > 0 ? totalScore / totalCount : 0;
     lines.push("");
-    lines.push(`**Aggregate:** ${aggregate >= 0 ? "+" : ""}${aggregate.toFixed(2)} (${sentimentLabel(aggregate)})`);
+    lines.push(
+      `**Aggregate:** ${aggregate >= 0 ? "+" : ""}${aggregate.toFixed(2)} (${sentimentLabel(aggregate)})`,
+    );
 
     const priceContext = await buildPriceContext(candidateTickers[0], aggregate);
     if (priceContext) {
@@ -178,7 +188,9 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     }
 
     lines.push("");
-    lines.push("Source-coverage risk: sentiment can be noisy and missing sources can skew the signal; treat this as supporting evidence, not a standalone buy/sell input.");
+    lines.push(
+      "Source-coverage risk: sentiment can be noisy and missing sources can skew the signal; treat this as supporting evidence, not a standalone buy/sell input.",
+    );
 
     // Divergence
     if (result.divergence && result.divergence.detected) {
@@ -206,16 +218,22 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
   },
 };
 
-async function buildPriceContext(symbol: string | undefined, aggregateSentiment: number): Promise<string | null> {
+async function buildPriceContext(
+  symbol: string | undefined,
+  aggregateSentiment: number,
+): Promise<string | null> {
   if (!symbol) return null;
   try {
     const quote = await getQuote(symbol);
     const sign = quote.changePercent >= 0 ? "+" : "";
-    const direction = quote.changePercent > 0 ? "positive" : quote.changePercent < 0 ? "negative" : "flat";
-    const sentimentDirection = aggregateSentiment > 0 ? "positive" : aggregateSentiment < 0 ? "negative" : "neutral";
-    const relationship = sentimentDirection === "neutral" || direction === "flat" || sentimentDirection === direction
-      ? "roughly aligns with price action"
-      : "diverges from price action";
+    const direction =
+      quote.changePercent > 0 ? "positive" : quote.changePercent < 0 ? "negative" : "flat";
+    const sentimentDirection =
+      aggregateSentiment > 0 ? "positive" : aggregateSentiment < 0 ? "negative" : "neutral";
+    const relationship =
+      sentimentDirection === "neutral" || direction === "flat" || sentimentDirection === direction
+        ? "roughly aligns with price action"
+        : "diverges from price action";
     const freshnessNote = formatQuoteFreshnessNote(quote.timestamp);
     return `Price context: ${quote.symbol}: $${quote.price.toFixed(2)} (${sign}${quote.changePercent.toFixed(2)}%).${freshnessNote} The ${sentimentDirection} sentiment signal ${relationship}.`;
   } catch {
@@ -277,9 +295,10 @@ async function fetchRedditCrossSubreddit(
 
     // Topic filter
     const queryLower = query.toLowerCase();
-    const filtered = postRecords.filter((r) =>
-      r.text.toLowerCase().includes(queryLower) ||
-      (r.title?.toLowerCase().includes(queryLower) ?? false),
+    const filtered = postRecords.filter(
+      (r) =>
+        r.text.toLowerCase().includes(queryLower) ||
+        (r.title?.toLowerCase().includes(queryLower) ?? false),
     );
     records.push(...filtered);
 
@@ -292,7 +311,9 @@ async function fetchRedditCrossSubreddit(
       try {
         const comments = await getPostComments(sub, post.sourceId, commentsPerPost);
         records.push(...adapter.mapCommentsToRecords(comments, post.sourceId, sub, query));
-      } catch { /* non-fatal */ }
+      } catch {
+        /* non-fatal */
+      }
     }
   }
 

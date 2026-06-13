@@ -15,12 +15,18 @@ export function isSupportedNodeVersion(version) {
 export function getUnsupportedNodeVersionMessage(version = process.versions.node) {
   if (isSupportedNodeVersion(version)) return null;
 
-  return `OpenCandle supports Node ${supportedNodeRange}. Current Node is ${version}.\n` +
+  return (
+    `OpenCandle supports Node ${supportedNodeRange}. Current Node is ${version}.\n` +
     "Use a supported Node version; the repo default is Node 22.22.0 via `nvm use`.\n" +
-    "After switching Node versions, reinstall dependencies under the active Node with `npm install` or rebuild native modules with `npm rebuild better-sqlite3`.";
+    "After switching Node versions, reinstall dependencies under the active Node with `npm install` or rebuild native modules with `npm rebuild better-sqlite3`."
+  );
 }
 
-export function getNativeDependencyErrorMessage(error, dependencyName, nodeVersion = process.versions.node) {
+export function getNativeDependencyErrorMessage(
+  error,
+  dependencyName,
+  nodeVersion = process.versions.node,
+) {
   const message = error instanceof Error ? error.message : String(error);
   if (
     !message.includes("NODE_MODULE_VERSION") &&
@@ -29,8 +35,10 @@ export function getNativeDependencyErrorMessage(error, dependencyName, nodeVersi
     return null;
   }
 
-  return `${dependencyName} native binding was built for a different Node ABI than the active Node ${nodeVersion}.\n` +
-    `Run \`npm rebuild ${dependencyName}\` or reinstall dependencies under the active Node with \`npm install\`.`;
+  return (
+    `${dependencyName} native binding was built for a different Node ABI than the active Node ${nodeVersion}.\n` +
+    `Run \`npm rebuild ${dependencyName}\` or reinstall dependencies under the active Node with \`npm install\`.`
+  );
 }
 
 export async function rebuildNativeDependency(dependencyName) {
@@ -53,7 +61,12 @@ export async function rebuildNativeDependency(dependencyName) {
   });
 }
 
-export async function ensureNativeDependency({ dependencyName, load, rebuild = rebuildNativeDependency, log = console.error }) {
+export async function ensureNativeDependency({
+  dependencyName,
+  load,
+  rebuild = rebuildNativeDependency,
+  log = console.error,
+}) {
   try {
     await load();
     return;

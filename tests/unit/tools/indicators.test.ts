@@ -1,22 +1,20 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  computeSMA,
-  computeEMA,
-  computeRSI,
-  computeMACD,
   computeBollingerBands,
+  computeEMA,
+  computeMACD,
   computeOBV,
+  computeRSI,
+  computeSMA,
   computeVWAP,
 } from "../../../src/tools/technical/indicators.js";
 import type { OHLCV } from "../../../src/types/market.js";
 
 // 50-point price series for deterministic testing (need 35+ for MACD)
 const prices = [
-  100, 102, 101, 103, 105, 104, 106, 108, 107, 109,
-  111, 110, 112, 114, 113, 115, 117, 116, 118, 120,
-  119, 121, 123, 122, 124, 126, 125, 127, 129, 128,
-  130, 132, 131, 133, 135, 134, 136, 138, 137, 139,
-  141, 140, 142, 144, 143, 145, 147, 146, 148, 150,
+  100, 102, 101, 103, 105, 104, 106, 108, 107, 109, 111, 110, 112, 114, 113, 115, 117, 116, 118,
+  120, 119, 121, 123, 122, 124, 126, 125, 127, 129, 128, 130, 132, 131, 133, 135, 134, 136, 138,
+  137, 139, 141, 140, 142, 144, 143, 145, 147, 146, 148, 150,
 ];
 
 describe("computeSMA", () => {
@@ -131,7 +129,9 @@ describe("computeBollingerBands", () => {
 });
 
 // Helper to build OHLCV bars for OBV/VWAP tests
-function makeBars(data: Array<{ close: number; volume: number; high?: number; low?: number }>): OHLCV[] {
+function makeBars(
+  data: Array<{ close: number; volume: number; high?: number; low?: number }>,
+): OHLCV[] {
   return data.map((d, i) => ({
     date: `2024-01-${String(i + 1).padStart(2, "0")}`,
     open: d.close,
@@ -146,22 +146,22 @@ describe("computeOBV", () => {
   it("adds volume on up days and subtracts on down days", () => {
     const bars = makeBars([
       { close: 100, volume: 1000 },
-      { close: 105, volume: 2000 },  // up → +2000
-      { close: 103, volume: 1500 },  // down → -1500
-      { close: 108, volume: 3000 },  // up → +3000
+      { close: 105, volume: 2000 }, // up → +2000
+      { close: 103, volume: 1500 }, // down → -1500
+      { close: 108, volume: 3000 }, // up → +3000
     ]);
     const obv = computeOBV(bars);
     expect(obv).toHaveLength(4);
     expect(obv[0]).toBe(0);
-    expect(obv[1]).toBe(2000);      // 0 + 2000
-    expect(obv[2]).toBe(500);       // 2000 - 1500
-    expect(obv[3]).toBe(3500);      // 500 + 3000
+    expect(obv[1]).toBe(2000); // 0 + 2000
+    expect(obv[2]).toBe(500); // 2000 - 1500
+    expect(obv[3]).toBe(3500); // 500 + 3000
   });
 
   it("does not change OBV on flat days", () => {
     const bars = makeBars([
       { close: 100, volume: 1000 },
-      { close: 100, volume: 5000 },  // flat → no change
+      { close: 100, volume: 5000 }, // flat → no change
     ]);
     const obv = computeOBV(bars);
     expect(obv[1]).toBe(0);

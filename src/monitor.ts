@@ -2,9 +2,9 @@
 import "./infra/node-version.js";
 import { parseArgs } from "node:util";
 import { loadEnv } from "./config.js";
-import { initDefaultDatabase } from "./memory/sqlite.js";
 import { runLocalAutomationHeartbeat } from "./market-state/local-automation-service.js";
 import { MarketStateService } from "./market-state/service.js";
+import { initDefaultDatabase } from "./memory/sqlite.js";
 
 const DEFAULT_MONITOR_INTERVAL_MS = 60_000;
 const MIN_MONITOR_INTERVAL_MS = 5_000;
@@ -33,11 +33,15 @@ function parseMonitorOptions(argv = process.argv.slice(2)): MonitorOptions {
 function normalizeMonitorIntervalMs(raw: string | boolean | undefined): number {
   if (typeof raw !== "string" || raw.trim() === "") return DEFAULT_MONITOR_INTERVAL_MS;
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed < MIN_MONITOR_INTERVAL_MS) return DEFAULT_MONITOR_INTERVAL_MS;
+  if (!Number.isFinite(parsed) || parsed < MIN_MONITOR_INTERVAL_MS)
+    return DEFAULT_MONITOR_INTERVAL_MS;
   return Math.floor(parsed);
 }
 
-async function runMonitorHeartbeat(intervalMs: number, releaseLeaseOnComplete = false): Promise<void> {
+async function runMonitorHeartbeat(
+  intervalMs: number,
+  releaseLeaseOnComplete = false,
+): Promise<void> {
   const db = initDefaultDatabase();
   const now = new Date().toISOString();
   try {
@@ -51,7 +55,9 @@ async function runMonitorHeartbeat(intervalMs: number, releaseLeaseOnComplete = 
       releaseLeaseOnComplete,
     });
     if (!result.lease.acquired) {
-      console.log(`OpenCandle monitor standby: runner owned by ${result.lease.ownerId} until ${result.lease.expiresAt}`);
+      console.log(
+        `OpenCandle monitor standby: runner owned by ${result.lease.ownerId} until ${result.lease.expiresAt}`,
+      );
       return;
     }
     const alertSummary = result.alertCheck
@@ -86,10 +92,14 @@ async function main(): Promise<void> {
   await runOnce();
   if (options.once) return;
 
-  console.log(`OpenCandle monitor running locally every ${options.intervalMs}ms. Keep this process open for local alerts and reports.`);
+  console.log(
+    `OpenCandle monitor running locally every ${options.intervalMs}ms. Keep this process open for local alerts and reports.`,
+  );
   const timer = setInterval(() => {
     void runOnce().catch((error) => {
-      console.error(`OpenCandle monitor heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `OpenCandle monitor heartbeat failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     });
   }, options.intervalMs);
 

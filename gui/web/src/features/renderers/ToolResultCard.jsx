@@ -1,7 +1,7 @@
-import { GenericCard, rendererFor } from "./cards/index.jsx";
+import { textContent } from "../../rendering/text.js";
 import { RawDetails, ToolHeader, WarningRow } from "./cards/_shared.jsx";
 import { extractDetails } from "./cards/card-format.js";
-import { textContent } from "../../rendering/text.js";
+import { GenericCard, rendererFor } from "./cards/index.jsx";
 
 export function ToolResultCard({ message }) {
   const text = textContent(message.content);
@@ -15,7 +15,12 @@ export function ToolResultCard({ message }) {
 
   const header = (
     <div className="grid gap-2">
-      <ToolHeader category={category} title={prettyToolName(message.toolName)} manual={manual} isError={isError} />
+      <ToolHeader
+        category={category}
+        title={prettyToolName(message.toolName)}
+        manual={manual}
+        isError={isError}
+      />
       <WarningRow items={warnings} />
     </div>
   );
@@ -31,7 +36,8 @@ export function ToolResultCard({ message }) {
 function extractWarnings(details, text) {
   const warnings = [];
   const source = `${JSON.stringify(details || {})}\n${text || ""}`.toLowerCase();
-  if (source.includes("credential_required") || source.includes("api key")) warnings.push("Credential required");
+  if (source.includes("credential_required") || source.includes("api key"))
+    warnings.push("Credential required");
   if (source.includes("stale")) warnings.push("Stale data");
   if (source.includes("partial") || source.includes("degraded")) warnings.push("Partial data");
   if (source.includes("delayed")) warnings.push("Delayed data");
@@ -39,5 +45,7 @@ function extractWarnings(details, text) {
 }
 
 function prettyToolName(name) {
-  return String(name || "").replace(/^get_/, "").replace(/_/g, " ");
+  return String(name || "")
+    .replace(/^get_/, "")
+    .replace(/_/g, " ");
 }

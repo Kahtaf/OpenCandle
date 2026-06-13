@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
 import {
   AlertCreateForm,
   buildWatchlistRowActions,
@@ -15,53 +15,61 @@ import {
 
 describe("MarketStatePage rendering", () => {
   it("offers a skip-for-now path on the empty portfolio page", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "portfolios",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "portfolios",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).toContain("No holdings yet");
     expect(html).toContain("Skip For Now");
   });
 
   it("uses the shared app shell chrome without duplicate section tabs", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "watchlists",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-      onOpenSidebar: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "watchlists",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+        onOpenSidebar: () => undefined,
+      }),
+    );
 
     expect(html).toContain('aria-label="Open sidebar"');
     expect(html).not.toContain('aria-label="Market state sections"');
   });
 
   it("renders the report schedule and generate action as durable report state", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "reports",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "reports",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).toContain("Generate today");
     expect(html).toContain("History");
   });
 
   it("refreshes quotes in the background instead of offering manual refresh buttons", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "watchlists",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "watchlists",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).not.toContain("Refresh prices");
     expect(html).not.toContain(">Refresh<");
@@ -71,13 +79,15 @@ describe("MarketStatePage rendering", () => {
   });
 
   it("renders the alert log as durable alert state", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "alerts",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).toContain("Active rules");
     expect(html).toContain("Alert log");
@@ -85,13 +95,15 @@ describe("MarketStatePage rendering", () => {
   });
 
   it("frames predictions as scoreable calls with one consistent name", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "predictions",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "predictions",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).toContain("Predictions");
     expect(html).toContain("Record prediction");
@@ -99,13 +111,15 @@ describe("MarketStatePage rendering", () => {
   });
 
   it("keeps follower mode readable while disabling mutation actions", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "alerts",
-      role: "follower",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "alerts",
+        role: "follower",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).toContain("Follower mode: read-only");
     expect(html).toContain("Create alert");
@@ -114,13 +128,15 @@ describe("MarketStatePage rendering", () => {
 
   it("keeps connecting and disconnected market-state pages read-only", () => {
     for (const role of ["connecting", "disconnected"]) {
-      const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-        domain: "watchlists",
-        role,
-        send: () => false,
-        navigate: () => undefined,
-        setToast: () => undefined,
-      }));
+      const html = renderToStaticMarkup(
+        React.createElement(MarketStatePage, {
+          domain: "watchlists",
+          role,
+          send: () => false,
+          navigate: () => undefined,
+          setToast: () => undefined,
+        }),
+      );
 
       expect(html).toContain("read-only");
       expect(html).toContain("disabled");
@@ -128,18 +144,20 @@ describe("MarketStatePage rendering", () => {
   });
 
   it("renders symbol search with combobox semantics", () => {
-    const html = renderToStaticMarkup(React.createElement(SymbolSearchInput, {
-      query: "AA",
-      selected: "",
-      disabled: false,
-      onQueryChange: () => undefined,
-      onSelectedChange: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(SymbolSearchInput, {
+        query: "AA",
+        selected: "",
+        disabled: false,
+        onQueryChange: () => undefined,
+        onSelectedChange: () => undefined,
+      }),
+    );
 
     expect(html).toContain('role="combobox"');
     expect(html).toContain('aria-autocomplete="list"');
     expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('aria-controls=');
+    expect(html).toContain("aria-controls=");
   });
 
   it("derives combobox active index without prop-change state syncing", () => {
@@ -158,40 +176,52 @@ describe("MarketStatePage rendering", () => {
       throw new Error("unexpected invoke");
     };
 
-    const actions = buildWatchlistRowActions({
-      symbol: "AAPL",
-      targetPrice: null,
-    }, invokeTool);
+    const actions = buildWatchlistRowActions(
+      {
+        symbol: "AAPL",
+        targetPrice: null,
+      },
+      invokeTool,
+    );
 
-    expect(actions[0]).toEqual(expect.objectContaining({
-      label: "Set target first",
-      disabled: true,
-    }));
+    expect(actions[0]).toEqual(
+      expect.objectContaining({
+        label: "Set target first",
+        disabled: true,
+      }),
+    );
   });
 
   it("creates a watchlist alert with the saved target as threshold", () => {
     const calls = [];
-    const actions = buildWatchlistRowActions({
-      symbol: "AAPL",
-      targetPrice: 250,
-    }, (toolName, args) => calls.push({ toolName, args }));
+    const actions = buildWatchlistRowActions(
+      {
+        symbol: "AAPL",
+        targetPrice: 250,
+      },
+      (toolName, args) => calls.push({ toolName, args }),
+    );
 
     actions[0].onClick();
 
-    expect(calls).toEqual([{
-      toolName: "manage_alerts",
-      args: { action: "create_price_above", symbol: "AAPL", threshold: 250 },
-    }]);
+    expect(calls).toEqual([
+      {
+        toolName: "manage_alerts",
+        args: { action: "create_price_above", symbol: "AAPL", threshold: 250 },
+      },
+    ]);
   });
 
   it("keeps holding forms out of the first viewport", () => {
-    const html = renderToStaticMarkup(React.createElement(MarketStatePage, {
-      domain: "portfolios",
-      role: "writer",
-      send: () => false,
-      navigate: () => undefined,
-      setToast: () => undefined,
-    }));
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "portfolios",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
 
     expect(html).toContain("Add holding");
     expect(html).toContain("Holdings");
@@ -214,30 +244,39 @@ describe("MarketStatePage rendering", () => {
 
     expect(saved).toBe(false);
     expect(setPendingMutationCalls).toEqual([{ toolName: "manage_watchlist" }, null]);
-    expect(toastCalls).toEqual([expect.objectContaining({
-      message: "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.",
-    })]);
+    expect(toastCalls).toEqual([
+      expect.objectContaining({
+        message:
+          "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.",
+      }),
+    ]);
   });
 
   it("names market-state form controls for assistive technology", () => {
-    const alertHtml = renderToStaticMarkup(React.createElement(AlertCreateForm, {
-      disabled: false,
-      invokeTool: () => true,
-      onSaved: () => undefined,
-    }));
-    const symbolHtml = renderToStaticMarkup(React.createElement(SymbolActionPanel, {
-      title: "Add ticker",
-      disabled: false,
-      fields: [
-        { name: "target_price", label: "Target", type: "number" },
-        { name: "thesis", label: "Thesis", multiline: true },
-      ],
-      onSubmit: () => true,
-    }));
-    const holdingHtml = renderToStaticMarkup(React.createElement(HoldingForm, {
-      disabled: false,
-      onSubmit: () => true,
-    }));
+    const alertHtml = renderToStaticMarkup(
+      React.createElement(AlertCreateForm, {
+        disabled: false,
+        invokeTool: () => true,
+        onSaved: () => undefined,
+      }),
+    );
+    const symbolHtml = renderToStaticMarkup(
+      React.createElement(SymbolActionPanel, {
+        title: "Add ticker",
+        disabled: false,
+        fields: [
+          { name: "target_price", label: "Target", type: "number" },
+          { name: "thesis", label: "Thesis", multiline: true },
+        ],
+        onSubmit: () => true,
+      }),
+    );
+    const holdingHtml = renderToStaticMarkup(
+      React.createElement(HoldingForm, {
+        disabled: false,
+        onSubmit: () => true,
+      }),
+    );
 
     expect(alertHtml).toContain('aria-label="Alert condition"');
     expect(alertHtml).toContain('aria-label="Alert threshold"');

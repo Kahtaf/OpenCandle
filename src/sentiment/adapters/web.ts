@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { SentinelRecord, SentimentAdapter } from "../types.js";
 import type { WebSearchEnvelope } from "../../types/sentiment.js";
+import type { SentimentAdapter, SentinelRecord } from "../types.js";
 
 export class WebAdapter implements SentimentAdapter {
   readonly source = "web" as const;

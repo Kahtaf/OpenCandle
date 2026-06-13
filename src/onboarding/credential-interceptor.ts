@@ -54,10 +54,7 @@ function buildRemediation(providerId: ProviderId): string {
   return `run /connect ${alias} to unlock`;
 }
 
-function skip(
-  providerId: ProviderId,
-  silenced: boolean,
-): InterceptAction {
+function skip(providerId: ProviderId, silenced: boolean): InterceptAction {
   return {
     action: "skip",
     provider: providerId,
@@ -74,17 +71,8 @@ function skip(
  *
  * No side effects. No Pi imports. Trivially unit-testable.
  */
-export function resolveCredentialRequired(
-  input: InterceptInput,
-): InterceptAction {
-  const {
-    provider,
-    reason,
-    state,
-    sessionPromptedSet,
-    hardPromptFiredInWorkflow,
-    now,
-  } = input;
+export function resolveCredentialRequired(input: InterceptInput): InterceptAction {
+  const { provider, reason, state, sessionPromptedSet, hardPromptFiredInWorkflow, now } = input;
 
   const descriptor = getProvider(provider);
   const entry = state.providers[provider];

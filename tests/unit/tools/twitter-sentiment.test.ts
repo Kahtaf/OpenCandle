@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { twitterSentimentTool } from "../../../src/tools/sentiment/twitter-sentiment.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { twitterSentimentTool } from "../../../src/tools/sentiment/twitter-sentiment.js";
 import type { TwitterSentimentResult } from "../../../src/types/sentiment.js";
 
 // Mock the provider

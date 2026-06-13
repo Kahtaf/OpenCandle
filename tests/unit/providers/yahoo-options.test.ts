@@ -1,8 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getOptionsChain, getYahooCrumb, clearCrumbCache, computeTimeToExpiry } from "../../../src/providers/yahoo-finance.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StealthBrowser } from "../../../src/infra/browser.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
-import { StealthBrowser } from "../../../src/infra/browser.js";
+import {
+  clearCrumbCache,
+  computeTimeToExpiry,
+  getOptionsChain,
+  getYahooCrumb,
+} from "../../../src/providers/yahoo-finance.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
 
 describe("computeTimeToExpiry", () => {
@@ -62,7 +67,8 @@ describe("yahoo-finance options provider", () => {
 
   describe("getYahooCrumb", () => {
     it("extracts crumb from consent redirect", async () => {
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           // First call: fc.yahoo.com sets cookie
           ok: true,
@@ -81,7 +87,8 @@ describe("yahoo-finance options provider", () => {
     });
 
     it("caches crumb on second call", async () => {
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           headers: new Headers({ "set-cookie": "A3=d=cookie1; Path=/" }),
@@ -99,7 +106,8 @@ describe("yahoo-finance options provider", () => {
     });
 
     it("accepts Yahoo's 404 cookie bootstrap response when it sets a usable cookie", async () => {
-      globalThis.fetch = vi.fn()
+      globalThis.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           ok: false,
           status: 404,
@@ -140,13 +148,14 @@ describe("yahoo-finance options provider", () => {
         text: () => Promise.resolve(""),
       });
 
-      await expect(getYahooCrumb()).rejects.toThrow("Yahoo crumb cookie request did not return a session cookie");
+      await expect(getYahooCrumb()).rejects.toThrow(
+        "Yahoo crumb cookie request did not return a session cookie",
+      );
       expect(fetch).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("getOptionsChain", () => {
-
     function mockCrumbAndOptions() {
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === "string" && url.includes("fc.yahoo.com")) {

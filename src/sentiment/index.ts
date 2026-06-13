@@ -1,30 +1,29 @@
+export { RedditAdapter } from "./adapters/reddit.js";
+export { TwitterAdapter } from "./adapters/twitter.js";
+export { WebAdapter } from "./adapters/web.js";
+export { BEARISH_TERMS, BULLISH_TERMS } from "./keywords.js";
+export { SentimentPipeline } from "./pipeline.js";
+export { keywordScore, scoreRecords } from "./scorer.js";
+export { SentimentStore } from "./store.js";
+export { computeDivergence, computeTrend, renderSparkline } from "./trends.js";
 export type {
-  SentinelRecord,
-  SentinelEngagement,
-  SentinelSentiment,
-  SentimentAdapter,
+  DivergenceResult,
   ScorerOptions,
+  SentimentAdapter,
+  SentimentSource,
+  SentimentSummary,
+  SentinelEngagement,
+  SentinelRecord,
+  SentinelSentiment,
   TrendBucket,
   TrendResult,
-  DivergenceResult,
-  SentimentSummary,
-  SentimentSource,
 } from "./types.js";
-
 export { isSentinelRecord, SENTIMENT_SOURCES } from "./types.js";
-export { SentimentStore } from "./store.js";
-export { scoreRecords, keywordScore } from "./scorer.js";
-export { SentimentPipeline } from "./pipeline.js";
-export { renderSparkline, computeTrend, computeDivergence } from "./trends.js";
-export { BULLISH_TERMS, BEARISH_TERMS } from "./keywords.js";
-export { TwitterAdapter } from "./adapters/twitter.js";
-export { RedditAdapter } from "./adapters/reddit.js";
-export { WebAdapter } from "./adapters/web.js";
 
-import { SentimentStore } from "./store.js";
-import { SentimentPipeline } from "./pipeline.js";
 import { getConfig } from "../config.js";
 import { resolveOpenCandlePath } from "../infra/opencandle-paths.js";
+import { SentimentPipeline } from "./pipeline.js";
+import { SentimentStore } from "./store.js";
 
 let _pipeline: SentimentPipeline | null = null;
 let _store: SentimentStore | null = null;

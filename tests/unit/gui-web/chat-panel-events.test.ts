@@ -9,7 +9,12 @@ import { ToolDrawerProvider } from "../../../gui/web/src/features/chat/tool-draw
 describe("ChatPanel event transcript rendering", () => {
   it("renders the server-adapted user text for persisted workflow turns", () => {
     const events: ChatEvent[] = [
-      { type: "session.updated", sessionId: "session-1", updatedAt: "2026-06-12T00:00:00.000Z", seq: 1 },
+      {
+        type: "session.updated",
+        sessionId: "session-1",
+        updatedAt: "2026-06-12T00:00:00.000Z",
+        seq: 1,
+      },
       { type: "message.created", messageId: "user-1", role: "user", seq: 2 },
       {
         type: "message.completed",
@@ -27,8 +32,12 @@ describe("ChatPanel event transcript rendering", () => {
     ];
 
     const html = renderToStaticMarkup(
-      React.createElement(TooltipProvider, null,
-        React.createElement(ToolDrawerProvider, null,
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(
+          ToolDrawerProvider,
+          null,
           React.createElement(ChatPanel, {
             events,
             liveEvents: [],

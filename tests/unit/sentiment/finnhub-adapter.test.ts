@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import fixture from "../../fixtures/finnhub/company-news.json";
 
 describe("FinnhubAdapter", () => {
@@ -66,35 +66,47 @@ describe("FinnhubAdapter", () => {
 
   describe("extractTickersFromQuery", () => {
     it("extracts bare ticker", async () => {
-      const { extractTickersFromQuery } = await import("../../../src/sentiment/adapters/finnhub.js");
+      const { extractTickersFromQuery } = await import(
+        "../../../src/sentiment/adapters/finnhub.js"
+      );
       expect(extractTickersFromQuery("AAPL")).toEqual(["AAPL"]);
     });
 
     it("extracts cashtag", async () => {
-      const { extractTickersFromQuery } = await import("../../../src/sentiment/adapters/finnhub.js");
+      const { extractTickersFromQuery } = await import(
+        "../../../src/sentiment/adapters/finnhub.js"
+      );
       expect(extractTickersFromQuery("$TSLA")).toEqual(["TSLA"]);
     });
 
     it("extracts ticker from phrase", async () => {
-      const { extractTickersFromQuery } = await import("../../../src/sentiment/adapters/finnhub.js");
+      const { extractTickersFromQuery } = await import(
+        "../../../src/sentiment/adapters/finnhub.js"
+      );
       const result = extractTickersFromQuery("is AAPL overvalued");
       expect(result).toContain("AAPL");
     });
 
     it("returns empty for non-ticker query", async () => {
-      const { extractTickersFromQuery } = await import("../../../src/sentiment/adapters/finnhub.js");
+      const { extractTickersFromQuery } = await import(
+        "../../../src/sentiment/adapters/finnhub.js"
+      );
       expect(extractTickersFromQuery("tariff impact on tech sector")).toEqual([]);
     });
 
     it("extracts multiple tickers", async () => {
-      const { extractTickersFromQuery } = await import("../../../src/sentiment/adapters/finnhub.js");
+      const { extractTickersFromQuery } = await import(
+        "../../../src/sentiment/adapters/finnhub.js"
+      );
       const result = extractTickersFromQuery("AAPL vs MSFT");
       expect(result).toContain("AAPL");
       expect(result).toContain("MSFT");
     });
 
     it("caps at 3 tickers", async () => {
-      const { extractTickersFromQuery } = await import("../../../src/sentiment/adapters/finnhub.js");
+      const { extractTickersFromQuery } = await import(
+        "../../../src/sentiment/adapters/finnhub.js"
+      );
       const result = extractTickersFromQuery("AAPL MSFT GOOGL NVDA TSLA");
       expect(result.length).toBeLessThanOrEqual(3);
     });

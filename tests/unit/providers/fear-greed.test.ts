@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getFearGreedIndex } from "../../../src/providers/fear-greed.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { getFearGreedIndex } from "../../../src/providers/fear-greed.js";
 import fixture from "../../fixtures/coingecko/fear-greed.json";
 
 describe("fear-greed provider", () => {

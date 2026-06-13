@@ -63,15 +63,12 @@ if (!llmChoice) {
 // -----------------------------------------------------------------------------
 // STEP 2: Dynamic imports — env sandboxing above must be fully applied first.
 // -----------------------------------------------------------------------------
-const [
-  { SessionManager, SettingsManager },
-  { createOpenCandleSession },
-  { cache },
-] = await Promise.all([
-  import("@earendil-works/pi-coding-agent"),
-  import("../../src/index.js"),
-  import("../../src/infra/cache.js"),
-]);
+const [{ SessionManager, SettingsManager }, { createOpenCandleSession }, { cache }] =
+  await Promise.all([
+    import("@earendil-works/pi-coding-agent"),
+    import("../../src/index.js"),
+    import("../../src/infra/cache.js"),
+  ]);
 type AgentSessionEvent = import("@earendil-works/pi-coding-agent").AgentSessionEvent;
 type AskUserHandler = import("../../src/types/index.js").AskUserHandler;
 
@@ -152,7 +149,7 @@ let text = "";
 const toolCalls: Array<{ name: string; args: unknown; result?: unknown }> = [];
 const pendingTools = new Map<string, { name: string; args: unknown }>();
 
-console.log("\nDriving prompt: \"analyze NVDA\"");
+console.log('\nDriving prompt: "analyze NVDA"');
 console.log("(this will hit the live LLM; expect 1–3 minutes)\n");
 
 await new Promise<void>((resolve, reject) => {
@@ -211,10 +208,14 @@ await new Promise<void>((resolve, reject) => {
 // -----------------------------------------------------------------------------
 // STEP 7: Assertions.
 // -----------------------------------------------------------------------------
-console.log(`\nCaptured ${text.length} chars of assistant text across ${toolCalls.length} tool calls`);
+console.log(
+  `\nCaptured ${text.length} chars of assistant text across ${toolCalls.length} tool calls`,
+);
 console.log(`askUserHandler was called ${askUserTranscript.length} time(s)`);
 for (const [i, call] of askUserTranscript.entries()) {
-  console.log(`  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`);
+  console.log(
+    `  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`,
+  );
   console.log(`       A: ${call.answer ?? "(cancelled)"}`);
 }
 
@@ -291,7 +292,9 @@ record("no raw [OPENCANDLE_CREDENTIAL_REQUIRED tag leaked to the user", () => {
 // STEP 8: Summary + cleanup + exit.
 // -----------------------------------------------------------------------------
 console.log(`\n${"=".repeat(50)}`);
-console.log(`Credential-per-workflow-cap E2E: ${passed} passed, ${failed} failed out of ${passed + failed}`);
+console.log(
+  `Credential-per-workflow-cap E2E: ${passed} passed, ${failed} failed out of ${passed + failed}`,
+);
 if (failures.length > 0) {
   console.log("\nFailures:");
   for (const f of failures) console.log(`  ✗ ${f}`);

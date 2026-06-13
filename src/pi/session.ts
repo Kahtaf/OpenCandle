@@ -1,17 +1,17 @@
 import "../infra/node-version.js";
 import {
   type AuthStorage,
+  type CreateAgentSessionResult,
   createAgentSession,
   DefaultResourceLoader,
-  type ModelRegistry,
-  type CreateAgentSessionResult,
-  type SettingsManager,
-  type SessionManager,
   getAgentDir,
+  type ModelRegistry,
+  type SessionManager,
+  type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../config.js";
-import openCandleExtension from "./opencandle-extension.js";
 import type { AskUserHandler } from "../types/index.js";
+import openCandleExtension from "./opencandle-extension.js";
 
 export interface CreateOpenCandleSessionOptions {
   cwd?: string;
@@ -38,7 +38,9 @@ export async function createOpenCandleSession(
         cwd,
         agentDir,
         settingsManager: options.settingsManager,
-        extensionFactories: [(pi) => openCandleExtension(pi, { askUserHandler: options.askUserHandler })],
+        extensionFactories: [
+          (pi) => openCandleExtension(pi, { askUserHandler: options.askUserHandler }),
+        ],
       })
     : undefined;
 

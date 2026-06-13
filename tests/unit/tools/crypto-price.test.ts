@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cryptoPriceTool } from "../../../src/tools/market/crypto-price.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { cryptoPriceTool } from "../../../src/tools/market/crypto-price.js";
 import priceFixture from "../../fixtures/coingecko/bitcoin.json";
 
 describe("get_crypto_price tool", () => {
@@ -42,7 +42,7 @@ describe("get_crypto_price tool", () => {
 
     const result = await cryptoPriceTool.execute("call-2", { id: "Bitcoin" });
     expect(result.details.id).toBe("bitcoin");
-    expect(result.details.price).toBe(69420.50);
+    expect(result.details.price).toBe(69420.5);
   });
 
   it("lowercases the coin id", async () => {
@@ -52,9 +52,6 @@ describe("get_crypto_price tool", () => {
     });
 
     await cryptoPriceTool.execute("call-3", { id: "Bitcoin" });
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/bitcoin?"),
-      expect.anything(),
-    );
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/bitcoin?"), expect.anything());
   });
 });

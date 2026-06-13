@@ -46,7 +46,9 @@ export function ModelSelector({ modelSetup, send, setToast, disabled }) {
           <div className="max-h-[280px] overflow-y-auto py-1">
             {availableModels.length > 0 ? (
               <>
-                <div className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Models</div>
+                <div className="px-2 pb-1 pt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Models
+                </div>
                 {availableModels.map((model) => {
                   const value = `${model.provider}/${model.id}`;
                   const selected = value === currentModel;
@@ -64,9 +66,16 @@ export function ModelSelector({ modelSetup, send, setToast, disabled }) {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">{formatModelLabel(value)}</div>
-                        <div className="truncate text-xs text-muted-foreground">{PROVIDER_LABEL[model.provider] ?? model.provider}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {PROVIDER_LABEL[model.provider] ?? model.provider}
+                        </div>
                       </div>
-                      {selected ? <Check className="mt-1 h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden="true" /> : null}
+                      {selected ? (
+                        <Check
+                          className="mt-1 h-3.5 w-3.5 shrink-0 text-foreground"
+                          aria-hidden="true"
+                        />
+                      ) : null}
                     </button>
                   );
                 })}
@@ -84,7 +93,11 @@ export function ModelSelector({ modelSetup, send, setToast, disabled }) {
               onClick={openSetup}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" strokeWidth={2} />
+              <Plus
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+                strokeWidth={2}
+              />
               <span>Connect more models</span>
             </button>
           </div>

@@ -8,7 +8,8 @@ const EMPTY_DASHBOARD = {
   dataQuality: { softGaps: [], hardSkips: [] },
 };
 
-export const TOOL_INVOKE_TIMEOUT_MESSAGE = "The operation is still running. OpenCandle will refresh state when the server finishes.";
+export const TOOL_INVOKE_TIMEOUT_MESSAGE =
+  "The operation is still running. OpenCandle will refresh state when the server finishes.";
 
 export function buildGuiToastPayload(message, options = {}) {
   if (!message) return null;
@@ -48,7 +49,11 @@ export function useGuiConnection() {
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
-  const [modelSetup, setModelSetup] = useState({ requirement: "unknown", providers: [], availableModels: [] });
+  const [modelSetup, setModelSetup] = useState({
+    requirement: "unknown",
+    providers: [],
+    availableModels: [],
+  });
   const [supportsSessionActions, setSupportsSessionActions] = useState(false);
 
   const setToast = useCallback((message, options = {}) => {
@@ -72,7 +77,9 @@ export function useGuiConnection() {
       setDashboard(snapshot.state || EMPTY_DASHBOARD);
       setEvents(snapshot.events || []);
       setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
-      setModelSetup(data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
+      setModelSetup(
+        data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
+      );
     });
   }, []);
 
@@ -133,12 +140,18 @@ export function useGuiConnection() {
           setAskUserPrompts(message.askUserPrompts || []);
           startTransition(() => {
             setCatalog(message.catalog);
-            setModelSetup(message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] });
+            setModelSetup(
+              message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
+            );
           });
         } else if (message.type === "catalog") {
           startTransition(() => setCatalog(message.catalog));
         } else if (message.type === "model.setup") {
-          startTransition(() => setModelSetup(message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] }));
+          startTransition(() =>
+            setModelSetup(
+              message.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
+            ),
+          );
         } else if (message.type === "sessions") {
           startTransition(() => setSessions(message.sessions));
         } else if (message.type === "state.snapshot") {
@@ -155,7 +168,11 @@ export function useGuiConnection() {
           if (message.ok) {
             settleToolInvoke(requestId, "resolve", message);
           } else {
-            settleToolInvoke(requestId, "reject", new Error(message.error?.message || "Tool invocation failed"));
+            settleToolInvoke(
+              requestId,
+              "reject",
+              new Error(message.error?.message || "Tool invocation failed"),
+            );
           }
         } else if (message.type === "error") {
           setToast(message.message, { destructive: true });
@@ -183,36 +200,42 @@ export function useGuiConnection() {
     };
   }, [applyBootstrap]);
 
-  const send = useCallback((type, payload = {}) => {
-    const socket = wsRef.current;
-    if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
-      setToast("GUI connection is not open.", { destructive: true });
-      return false;
-    }
-    socket.send(JSON.stringify({ type, ...payload }));
-    return true;
-  }, [setToast]);
+  const send = useCallback(
+    (type, payload = {}) => {
+      const socket = wsRef.current;
+      if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
+        setToast("GUI connection is not open.", { destructive: true });
+        return false;
+      }
+      socket.send(JSON.stringify({ type, ...payload }));
+      return true;
+    },
+    [setToast],
+  );
 
-  const invokeTool = useCallback((toolName, args = {}) => {
-    const socket = wsRef.current;
-    if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
-      const error = new Error("GUI connection is not open.");
-      setToast(error.message, { destructive: true });
-      return Promise.reject(error);
-    }
+  const invokeTool = useCallback(
+    (toolName, args = {}) => {
+      const socket = wsRef.current;
+      if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
+        const error = new Error("GUI connection is not open.");
+        setToast(error.message, { destructive: true });
+        return Promise.reject(error);
+      }
 
-    const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
-    const timeout = window.setTimeout(() => {
-      rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
-    }, 30_000);
+      const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
+      const timeout = window.setTimeout(() => {
+        rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
+      }, 30_000);
 
-    const promise = new Promise((resolve, reject) => {
-      pendingToolInvokesRef.current.set(requestId, { resolve, reject, timeout });
-    });
+      const promise = new Promise((resolve, reject) => {
+        pendingToolInvokesRef.current.set(requestId, { resolve, reject, timeout });
+      });
 
-    socket.send(JSON.stringify({ type: "tool.invoke", requestId, toolName, args }));
-    return promise;
-  }, [setToast, settleToolInvoke]);
+      socket.send(JSON.stringify({ type: "tool.invoke", requestId, toolName, args }));
+      return promise;
+    },
+    [setToast, settleToolInvoke],
+  );
 
   const newSession = useCallback(async () => {
     try {
@@ -228,22 +251,40 @@ export function useGuiConnection() {
     }
   }, [applyBootstrap, setToast]);
 
-  return useMemo(() => ({
-    role,
-    catalog,
-    sessions,
-    entries,
-    events,
-    askUserPrompts,
-    dashboard,
-    currentSessionId,
-    modelSetup,
-    supportsSessionActions,
-    setToast,
-    send,
-    invokeTool,
-    newSession,
-  }), [role, catalog, sessions, entries, events, askUserPrompts, dashboard, currentSessionId, modelSetup, supportsSessionActions, setToast, send, invokeTool, newSession]);
+  return useMemo(
+    () => ({
+      role,
+      catalog,
+      sessions,
+      entries,
+      events,
+      askUserPrompts,
+      dashboard,
+      currentSessionId,
+      modelSetup,
+      supportsSessionActions,
+      setToast,
+      send,
+      invokeTool,
+      newSession,
+    }),
+    [
+      role,
+      catalog,
+      sessions,
+      entries,
+      events,
+      askUserPrompts,
+      dashboard,
+      currentSessionId,
+      modelSetup,
+      supportsSessionActions,
+      setToast,
+      send,
+      invokeTool,
+      newSession,
+    ],
+  );
 }
 
 function upsertPrompt(current, prompt) {

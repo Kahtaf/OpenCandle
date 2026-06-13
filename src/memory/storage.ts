@@ -67,10 +67,7 @@ export class MemoryStorage {
       .run(ns, input.key, input.valueJson, confidence, source, now, now);
   }
 
-  getPreference(
-    namespace: string,
-    key: string,
-  ): Record<string, string | number | null> | null {
+  getPreference(namespace: string, key: string): Record<string, string | number | null> | null {
     return (
       (this.db
         .prepare("SELECT * FROM user_preferences WHERE namespace = ? AND key = ?")
@@ -78,9 +75,7 @@ export class MemoryStorage {
     );
   }
 
-  getPreferencesByNamespace(
-    namespace: string,
-  ): Array<Record<string, string | number | null>> {
+  getPreferencesByNamespace(namespace: string): Array<Record<string, string | number | null>> {
     return this.db
       .prepare("SELECT * FROM user_preferences WHERE namespace = ?")
       .all(namespace) as Array<Record<string, string | number | null>>;
@@ -122,8 +117,7 @@ export class MemoryStorage {
         case "options_liquidity":
         case "liquidity_minimum":
           if (typeof raw === "string") {
-            out.liquidityMinimum =
-              raw === "high" ? "high_open_interest_and_tight_spread" : raw;
+            out.liquidityMinimum = raw === "high" ? "high_open_interest_and_tight_spread" : raw;
           }
           break;
       }
@@ -154,9 +148,7 @@ export class MemoryStorage {
     return Number(result.lastInsertRowid);
   }
 
-  getRecentWorkflowRuns(
-    limit: number,
-  ): Array<Record<string, string | number | null>> {
+  getRecentWorkflowRuns(limit: number): Array<Record<string, string | number | null>> {
     return this.db
       .prepare("SELECT * FROM workflow_runs ORDER BY id DESC LIMIT ?")
       .all(limit) as Array<Record<string, string | number | null>>;
@@ -187,9 +179,7 @@ export class MemoryStorage {
     return Number(result.lastInsertRowid);
   }
 
-  getRecommendationsByRun(
-    workflowRunId: number,
-  ): Array<Record<string, string | number | null>> {
+  getRecommendationsByRun(workflowRunId: number): Array<Record<string, string | number | null>> {
     return this.db
       .prepare("SELECT * FROM recommendations WHERE workflow_run_id = ? ORDER BY id")
       .all(workflowRunId) as Array<Record<string, string | number | null>>;

@@ -1,18 +1,18 @@
-import { describe, it, expect, vi } from "vitest";
-import { route, validateRouterOutput } from "../../../src/routing/router.js";
-import { buildRouterPrompt } from "../../../src/routing/router-prompt.js";
+import { describe, expect, it, vi } from "vitest";
+import { PromptContextBuilder } from "../../../src/prompts/context-builder.js";
 import {
   activeToolsForBundles,
   buildResolvedTurnContext,
   ROUTE_CAPABILITY_MANIFEST,
   TOOL_BUNDLE_TOOLS,
 } from "../../../src/routing/index.js";
+import { route, validateRouterOutput } from "../../../src/routing/router.js";
+import { buildRouterPrompt } from "../../../src/routing/router-prompt.js";
 import type {
   RouterInputContext,
   RouterLlmClient,
   RouterOutput,
 } from "../../../src/routing/router-types.js";
-import { PromptContextBuilder } from "../../../src/prompts/context-builder.js";
 
 const BASE_INPUT: RouterInputContext = {
   text: "analyze AAPL",
@@ -22,7 +22,11 @@ const BASE_INPUT: RouterInputContext = {
 };
 
 function fixedClient(text: string): RouterLlmClient {
-  return { async complete() { return text; } };
+  return {
+    async complete() {
+      return text;
+    },
+  };
 }
 
 describe("validateRouterOutput", () => {
@@ -146,9 +150,7 @@ describe("validateRouterOutput", () => {
         route: "fallback",
         entities: { symbols: [] },
         slots: {},
-        preference_updates: [
-          { key: "risk_profile", value: "aggressive", confidence: "high" },
-        ],
+        preference_updates: [{ key: "risk_profile", value: "aggressive", confidence: "high" }],
         missing_required: [],
         reasoning: "",
       }),
@@ -178,22 +180,26 @@ describe("route()", () => {
   it("keeps valid LLM route kind authoritative when legacy rules would classify differently", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "analyze NVDA" },
-      fixedClient(JSON.stringify({
-        routeKind: "agent_task",
-        entities: { symbols: ["NVDA"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        diagnostics: [],
-        reasoning: "valid llm classification",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["NVDA"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "valid llm classification",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
     expect(result.workflow).toBeUndefined();
-    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
-      code: "deterministic_failure_recovery",
-    }));
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({
+        code: "deterministic_failure_recovery",
+      }),
+    );
   });
 
   it("returns validated output on first successful call", async () => {
@@ -230,25 +236,29 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "I already own VOO and QQQ. If I add SCHD, am I actually diversifying or just buying more of the same stuff?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "agent_task",
-        workflow: "compare_assets",
-        entities: { symbols: ["VOO", "QQQ", "SCHD"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        diagnostics: [],
-        reasoning: "compare assets but wrong route kind",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "compare_assets",
+          entities: { symbols: ["VOO", "QQQ", "SCHD"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "compare assets but wrong route kind",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
     expect(result.route).toBe("workflow");
     expect(result.workflow).toBe("compare_assets");
     expect(result.entities.compareMetrics).toEqual(["overlap"]);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "dispatchable_workflow_corrected_to_workflow_dispatch",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "dispatchable_workflow_corrected_to_workflow_dispatch",
+      }),
+    );
   });
 
   it("merges deterministic overlap focus when router emits a different compare metric", async () => {
@@ -257,16 +267,18 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Does buying QQQ on top of VOO create too much overlap?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "compare_assets",
-        entities: { symbols: ["VOO", "QQQ"], compareMetrics: ["sentiment"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        diagnostics: [],
-        reasoning: "compare assets",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["VOO", "QQQ"], compareMetrics: ["sentiment"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "compare assets",
+        }),
+      ),
     );
 
     expect(result.entities.compareMetrics).toEqual(["sentiment", "overlap"]);
@@ -278,23 +290,27 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "I have a $75k portfolio and want BTC exposure. What allocation range would you use, and how bad could the drawdown feel?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: ["BTC"], budget: 75_000 },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        diagnostics: [],
-        reasoning: "mistaken portfolio builder",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: ["BTC"], budget: 75_000 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "mistaken portfolio builder",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
     expect(result.workflow).toBe("general_finance_qa");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "crypto_sizing_corrected_to_agent_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "crypto_sizing_corrected_to_agent_task",
+      }),
+    );
   });
 
   it("preserves portfolio construction when bitcoin is one sleeve in an explicit build request", async () => {
@@ -303,23 +319,27 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Build me a $75k portfolio with a small bitcoin allocation.",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: ["BTC"], budget: 75_000 },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        diagnostics: [],
-        reasoning: "portfolio build with bitcoin sleeve",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: ["BTC"], budget: 75_000 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "portfolio build with bitcoin sleeve",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
     expect(result.workflow).toBe("portfolio_builder");
-    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
-      code: "crypto_sizing_corrected_to_agent_task",
-    }));
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({
+        code: "crypto_sizing_corrected_to_agent_task",
+      }),
+    );
   });
 
   it("retries once on validation failure", async () => {
@@ -350,10 +370,7 @@ describe("route()", () => {
         return "not json at all";
       },
     };
-    const result = await route(
-      { ...BASE_INPUT, text: "hello" },
-      client,
-    );
+    const result = await route({ ...BASE_INPUT, text: "hello" }, client);
     expect(result.route).toBe("fallback");
     expect(result.entities.symbols).toEqual([]);
     expect(result.missing_required).toEqual([]);
@@ -377,23 +394,27 @@ describe("route()", () => {
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "deterministic_failure_recovery",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "deterministic_failure_recovery",
+      }),
+    );
   });
 
   it("enriches omitted compare focus from deterministic extraction", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "For the next 6 months, should I use BTC or GLD as a macro hedge?" },
-      fixedClient(JSON.stringify({
-        route: "workflow",
-        workflow: "compare_assets",
-        entities: { symbols: ["BTC", "GLD"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "x",
-      })),
+      fixedClient(
+        JSON.stringify({
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["BTC", "GLD"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "x",
+        }),
+      ),
     );
 
     expect(result.entities.timeHorizon).toBe("6mo");
@@ -406,14 +427,16 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Analyze the current market structure of the semiconductor industry and predict how emerging technologies like AI could reshape it over the next decade.",
       },
-      fixedClient(JSON.stringify({
-        route: "fallback",
-        entities: { symbols: ["AI"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "broad research prompt",
-      })),
+      fixedClient(
+        JSON.stringify({
+          route: "fallback",
+          entities: { symbols: ["AI"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "broad research prompt",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
@@ -428,14 +451,16 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Analyze AI stock",
       },
-      fixedClient(JSON.stringify({
-        route: "fallback",
-        entities: { symbols: ["AI"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "single ticker request",
-      })),
+      fixedClient(
+        JSON.stringify({
+          route: "fallback",
+          entities: { symbols: ["AI"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "single ticker request",
+        }),
+      ),
     );
 
     expect(result.entities.symbols).toEqual(["AI"]);
@@ -447,25 +472,29 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Compare these assets: IV, ASTS",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        route: "workflow",
-        workflow: "compare_assets",
-        entities: { symbols: ["IV", "ASTS"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        tool_bundles: [],
-        diagnostics: [],
-        reasoning: "compare requested assets",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["IV", "ASTS"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "compare requested assets",
+        }),
+      ),
     );
 
     expect(result.entities.symbols).toEqual(["ASTS"]);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "symbol_dropped",
-      message: expect.stringContaining("IV"),
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "symbol_dropped",
+        message: expect.stringContaining("IV"),
+      }),
+    );
   });
 
   it("removes dropped finance acronyms from router symbol slots before missing-slot checks", async () => {
@@ -474,20 +503,22 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Compare these assets: IV, ASTS",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        route: "workflow",
-        workflow: "compare_assets",
-        entities: { symbols: ["IV", "ASTS"] },
-        slots: {
-          symbols: { value: ["IV", "ASTS"], source: "user", confidence: "high" },
-        },
-        preference_updates: [],
-        missing_required: [],
-        tool_bundles: [],
-        diagnostics: [],
-        reasoning: "compare requested assets",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["IV", "ASTS"] },
+          slots: {
+            symbols: { value: ["IV", "ASTS"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "compare requested assets",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("clarification");
@@ -502,18 +533,20 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "compare KO, the IV ticker, and PEP",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        route: "workflow",
-        workflow: "compare_assets",
-        entities: { symbols: ["KO", "IV", "PEP"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        tool_bundles: [],
-        diagnostics: [],
-        reasoning: "compare requested assets",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["KO", "IV", "PEP"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "compare requested assets",
+        }),
+      ),
     );
 
     expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
@@ -525,15 +558,17 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Use get_economic_data to show FRED CPI inflation data",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "compare_assets",
-        entities: { symbols: ["FRED", "CPI"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread source and macro acronym as tickers",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["FRED", "CPI"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread source and macro acronym as tickers",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
@@ -541,9 +576,11 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "compare_route_corrected_to_macro_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "compare_route_corrected_to_macro_task",
+      }),
+    );
   });
 
   it("keeps macro tools in scope after router validation fallback", async () => {
@@ -559,9 +596,11 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.entities.symbols).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "macro_task_inferred_from_prompt",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "macro_task_inferred_from_prompt",
+      }),
+    );
   });
 
   it("keeps macro-risk portfolio discussion as an agent task after router validation fallback", async () => {
@@ -603,15 +642,17 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Evaluate the prospects of a 60/40 portfolio over the next year and suggest one risk mitigation adjustment.",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread evaluation as construction",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread evaluation as construction",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
@@ -619,9 +660,11 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "portfolio_evaluation_corrected_to_agent_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "portfolio_evaluation_corrected_to_agent_task",
+      }),
+    );
   });
 
   it("corrects compare-assets output for existing-portfolio crash-risk prompts", async () => {
@@ -630,23 +673,27 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "I've got about $50,000 invested, mostly in SPY and a little MSFT. I'm 40 and planning for retirement in 25 years. I'm worried about a big market crash. Does this portfolio look too risky and what's a simple way to protect myself without missing growth?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "compare_assets",
-        entities: { symbols: ["SPY", "MSFT"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread portfolio review as asset comparison",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["SPY", "MSFT"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread portfolio review as asset comparison",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "portfolio_evaluation_corrected_to_agent_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "portfolio_evaluation_corrected_to_agent_task",
+      }),
+    );
   });
 
   it("corrects portfolio-builder clarification for existing-allocation rebalance prompts", async () => {
@@ -657,15 +704,17 @@ describe("route()", () => {
           "My portfolio is 45% tech stocks, 25% S&P 500 ETFs, and 30% bonds. " +
           "Should I rebalance to diversify more?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "clarification",
-        workflow: "portfolio_builder",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: ["budget"],
-        reasoning: "misread rebalance as construction",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "clarification",
+          workflow: "portfolio_builder",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: ["budget"],
+          reasoning: "misread rebalance as construction",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
@@ -673,9 +722,11 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "portfolio_evaluation_corrected_to_agent_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "portfolio_evaluation_corrected_to_agent_task",
+      }),
+    );
   });
 
   it("corrects portfolio-builder output for explicit multi-ETF tradeoff prompts", async () => {
@@ -684,15 +735,17 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "If I have $5,000 for 10-15 years, should I prioritize VYM or SCHD, or something more growth-oriented like VOO or QQQ? What are the tradeoffs?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"], budget: 5000 },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread tradeoff as portfolio construction",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: ["VYM", "SCHD", "VOO", "QQQ"], budget: 5000 },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread tradeoff as portfolio construction",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -700,9 +753,11 @@ describe("route()", () => {
     expect(result.workflow).toBe("compare_assets");
     expect(result.entities.symbols).toEqual(["VYM", "SCHD", "VOO", "QQQ"]);
     expect(result.missing_required).toEqual([]);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "portfolio_tradeoff_corrected_to_compare_assets",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "portfolio_tradeoff_corrected_to_compare_assets",
+      }),
+    );
   });
 
   it("corrects portfolio lot mutations away from compare workflow dispatch", async () => {
@@ -711,20 +766,22 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "compare_assets",
-        entities: { symbols: ["ASTS", "USD"], budget: 28 },
-        slots: {
-          symbols: { value: ["ASTS", "USD"], source: "user", confidence: "high" },
-          budget: { value: 28, source: "user", confidence: "high" },
-        },
-        preference_updates: [],
-        missing_required: [],
-        tool_bundles: ["core_market"],
-        diagnostics: [],
-        reasoning: "misread a portfolio mutation as comparison",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["ASTS", "USD"], budget: 28 },
+          slots: {
+            symbols: { value: ["ASTS", "USD"], source: "user", confidence: "high" },
+            budget: { value: 28, source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["core_market"],
+          diagnostics: [],
+          reasoning: "misread a portfolio mutation as comparison",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
@@ -733,9 +790,11 @@ describe("route()", () => {
     expect(result.entities.symbols).toEqual(["ASTS"]);
     expect(result.missing_required).toEqual([]);
     expect(result.slots.symbols?.value).toEqual(["ASTS"]);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "stateful_tracking_corrected_to_agent_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "stateful_tracking_corrected_to_agent_task",
+      }),
+    );
   });
 
   it("removes live tool bundles for no-symbol conceptual education", async () => {
@@ -744,25 +803,29 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "Explain how to use valuation ratios without over relying on them.",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "agent_task",
-        workflow: "general_finance_qa",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        tool_bundles: ["core_market", "macro"],
-        diagnostics: [],
-        reasoning: "conceptual education prompt",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["core_market", "macro"],
+          diagnostics: [],
+          reasoning: "conceptual education prompt",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.tool_bundles).toEqual([]);
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "conceptual_education_no_tools",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "conceptual_education_no_tools",
+      }),
+    );
   });
 
   it("keeps macro tools for forward-looking rate impact questions", async () => {
@@ -771,37 +834,43 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "How should falling rates affect growth stocks over the next year?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "agent_task",
-        workflow: "general_finance_qa",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        tool_bundles: ["macro"],
-        diagnostics: [],
-        reasoning: "macro rate context",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          workflow: "general_finance_qa",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["macro"],
+          diagnostics: [],
+          reasoning: "macro rate context",
+        }),
+      ),
     );
 
     expect(result.tool_bundles).toContain("macro");
-    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({
-      code: "conceptual_education_no_tools",
-    }));
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({
+        code: "conceptual_education_no_tools",
+      }),
+    );
   });
 
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "options request",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "options request",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("clarification");
@@ -813,15 +882,17 @@ describe("route()", () => {
   it("routes missing portfolio budget to clarification", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me a diversified portfolio" },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "portfolio request",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "portfolio request",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("clarification");
@@ -831,17 +902,19 @@ describe("route()", () => {
   it("does not clarify when resolved slots supply the required budget", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me a portfolio like last time" },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: [] },
-        slots: {
-          budget: { value: 10_000, source: "preference", confidence: "high" },
-        },
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "profile supplies budget",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: [] },
+          slots: {
+            budget: { value: 10_000, source: "preference", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "profile supplies budget",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -852,15 +925,17 @@ describe("route()", () => {
   it("enriches omitted portfolio constraints from deterministic extraction", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "Build a conservative ETF portfolio with $25k for 5 years" },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "portfolio_builder",
-        entities: { symbols: [] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "portfolio request but omitted constraints",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "portfolio request but omitted constraints",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -878,17 +953,19 @@ describe("route()", () => {
         text: "what about a call spread?",
         priorTurns: [{ role: "user", text: "Let's look at NVDA" }],
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: ["NVDA"] },
-        slots: {
-          symbol: { value: "NVDA", source: "prior_context", confidence: "high" },
-        },
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "prior context supplies symbol",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+          slots: {
+            symbol: { value: "NVDA", source: "prior_context", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "prior context supplies symbol",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -899,15 +976,17 @@ describe("route()", () => {
   it("enriches omitted option premium caps from deterministic extraction", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "MSFT puts under $500 premium" },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: ["MSFT"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "options request but omitted cap",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["MSFT"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "options request but omitted cap",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -924,15 +1003,17 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "NVDA earnings are today. If I have DRAM, what is the best covered call to sell right now? Cost basis is $51.",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: ["NVDA"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread catalyst as underlying",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread catalyst as underlying",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -942,9 +1023,11 @@ describe("route()", () => {
     expect(result.entities.catalystSymbols).toEqual(["NVDA"]);
     expect(result.entities.costBasis).toBe(51);
     expect(result.entities.dteHint).toBe("event_week");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "covered_call_underlying_corrected",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "covered_call_underlying_corrected",
+      }),
+    );
   });
 
   it("keeps covered-call education and suitability prompts out of options workflow dispatch", async () => {
@@ -953,24 +1036,28 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "I own 200 shares of Microsoft (MSFT) and it's been flat. How does selling covered calls work, and is it a good idea?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: ["MSFT"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread education as a contract screen",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["MSFT"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread education as a contract screen",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("agent_task");
     expect(result.route).toBe("fallback");
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.tool_bundles).toEqual(expect.arrayContaining(["core_market", "options"]));
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "options_workflow_corrected_to_policy_task",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "options_workflow_corrected_to_policy_task",
+      }),
+    );
   });
 
   it("enriches omitted protective-put hedge context from deterministic extraction", async () => {
@@ -979,15 +1066,17 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "I own 200 shares of NVDA after a big rally. What's a reasonable protective put 30-45 days out that doesn't cost too much?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: ["NVDA"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "options request",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "options request",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -1006,15 +1095,17 @@ describe("route()", () => {
         ...BASE_INPUT,
         text: "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?",
       },
-      fixedClient(JSON.stringify({
-        routeKind: "workflow_dispatch",
-        workflow: "options_screener",
-        entities: { symbols: ["NVDA"] },
-        slots: {},
-        preference_updates: [],
-        missing_required: [],
-        reasoning: "misread catalyst as underlying",
-      })),
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread catalyst as underlying",
+        }),
+      ),
     );
 
     expect(result.routeKind).toBe("workflow_dispatch");
@@ -1026,9 +1117,11 @@ describe("route()", () => {
     expect(result.entities.direction).toBe("bearish");
     expect(result.entities.shareQuantity).toBe(200);
     expect(result.entities.dteHint).toBe("month");
-    expect(result.diagnostics).toContainEqual(expect.objectContaining({
-      code: "existing_position_underlying_corrected",
-    }));
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "existing_position_underlying_corrected",
+      }),
+    );
   });
 });
 
@@ -1134,15 +1227,18 @@ describe("route capability manifest", () => {
   });
 
   it("resolves active tools from selected bundles", () => {
-    const tools = activeToolsForBundles(["core_market", "clarification"], [
-      "get_stock_quote",
-      "screen_stocks",
-      "ask_user",
-      "get_option_chain",
-      "manage_alerts",
-      "daily_watchlist_report",
-      "manage_notifications",
-    ]);
+    const tools = activeToolsForBundles(
+      ["core_market", "clarification"],
+      [
+        "get_stock_quote",
+        "screen_stocks",
+        "ask_user",
+        "get_option_chain",
+        "manage_alerts",
+        "daily_watchlist_report",
+        "manage_notifications",
+      ],
+    );
 
     expect(tools).toEqual([
       "get_stock_quote",
@@ -1163,16 +1259,21 @@ describe("route capability manifest", () => {
   });
 
   it("keeps macro tools for interest-rate comparisons", async () => {
-    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
-      routeKind: "workflow_dispatch",
-      workflow: "compare_assets",
-      entities: { symbols: ["SPY", "QQQ"], compareMetrics: ["interest_rates"] },
-      slots: {},
-      preference_updates: [],
-      missing_required: [],
-      diagnostics: [],
-      reasoning: "rate-sensitive comparison",
-    })));
+    const output = await route(
+      BASE_INPUT,
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "compare_assets",
+          entities: { symbols: ["SPY", "QQQ"], compareMetrics: ["interest_rates"] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "rate-sensitive comparison",
+        }),
+      ),
+    );
     const context = buildResolvedTurnContext(BASE_INPUT, output, {
       availableToolNames: ["get_stock_quote", "get_economic_data"],
     });
@@ -1184,17 +1285,22 @@ describe("route capability manifest", () => {
 
 describe("ResolvedTurnContext", () => {
   it("records route, tool, memory, and diagnostic provenance", async () => {
-    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
-      routeKind: "agent_task",
-      entities: { symbols: ["AAPL"] },
-      slots: {
-        symbol: { value: "AAPL", source: "user", confidence: "high" },
-      },
-      preference_updates: [],
-      missing_required: [],
-      diagnostics: [{ code: "example", message: "corrected" }],
-      reasoning: "x",
-    })));
+    const output = await route(
+      BASE_INPUT,
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["AAPL"] },
+          slots: {
+            symbol: { value: "AAPL", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [{ code: "example", message: "corrected" }],
+          reasoning: "x",
+        }),
+      ),
+    );
     const context = buildResolvedTurnContext(BASE_INPUT, output, {
       availableToolNames: ["get_stock_quote", "search_ticker", "ask_user"],
     });
@@ -1210,17 +1316,22 @@ describe("ResolvedTurnContext", () => {
   });
 
   it("applies planning migration status overrides to the resolved context", async () => {
-    const output = await route(BASE_INPUT, fixedClient(JSON.stringify({
-      routeKind: "agent_task",
-      entities: { symbols: ["AAPL"] },
-      slots: {
-        symbol: { value: "AAPL", source: "user", confidence: "high" },
-      },
-      preference_updates: [],
-      missing_required: [],
-      diagnostics: [],
-      reasoning: "single asset decision",
-    })));
+    const output = await route(
+      BASE_INPUT,
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          entities: { symbols: ["AAPL"] },
+          slots: {
+            symbol: { value: "AAPL", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          diagnostics: [],
+          reasoning: "single asset decision",
+        }),
+      ),
+    );
     const context = buildResolvedTurnContext(BASE_INPUT, output, {
       availableToolNames: ["get_stock_quote", "search_ticker"],
       planning: {

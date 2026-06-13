@@ -46,9 +46,7 @@ function reducer(state, action) {
       return {
         ...state,
         toasts: state.toasts.map((toast) =>
-          toastId === undefined || toast.id === toastId
-            ? { ...toast, open: false }
-            : toast,
+          toastId === undefined || toast.id === toastId ? { ...toast, open: false } : toast,
         ),
       };
     }

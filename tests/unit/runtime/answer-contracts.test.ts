@@ -18,11 +18,13 @@ const tickerEvidence: PlanningEvidenceRecord = {
     selectedMigrationSlice: "ticker_disambiguation",
     requiresSymbolVerification: true,
   },
-  gaps: [{
-    kind: "capability_gap",
-    capabilityGapId: "earnings_event_risk",
-    reason: "No richer earnings-event data in V1.",
-  }],
+  gaps: [
+    {
+      kind: "capability_gap",
+      capabilityGapId: "earnings_event_risk",
+      reason: "No richer earnings-event data in V1.",
+    },
+  ],
   caveats: ["No symbol was verified by this evidence plan."],
 };
 
@@ -32,12 +34,14 @@ describe("answer contracts", () => {
 
     expect(contract.implemented).toBe(true);
     expect(contract.requiredEvidenceTypes).toEqual(["ticker_disambiguation"]);
-    expect(contract.requiredFinalFields).toEqual(expect.arrayContaining([
-      "symbol_verification_disclosure",
-      "framework_or_checklist",
-      "data_gap_disclosure",
-      "risk_downside",
-    ]));
+    expect(contract.requiredFinalFields).toEqual(
+      expect.arrayContaining([
+        "symbol_verification_disclosure",
+        "framework_or_checklist",
+        "data_gap_disclosure",
+        "risk_downside",
+      ]),
+    );
     expect(contract.requiresConcreteCommitment).toBe(false);
     expect(contract.frameworkFallback).toBe("diagnostic_until_parity");
   });
@@ -79,12 +83,14 @@ describe("answer contracts", () => {
 
     expect(contract.implemented).toBe(true);
     expect(contract.requiredEvidenceTypes).toEqual(["market_status"]);
-    expect(contract.requiredFinalFields).toEqual(expect.arrayContaining([
-      "framework_or_checklist",
-      "freshness_disclosure",
-      "source_coverage",
-      "data_gap_disclosure",
-    ]));
+    expect(contract.requiredFinalFields).toEqual(
+      expect.arrayContaining([
+        "framework_or_checklist",
+        "freshness_disclosure",
+        "source_coverage",
+        "data_gap_disclosure",
+      ]),
+    );
     expect(contract.requiresFreshness).toBe(true);
     expect(contract.requiresSourceCoverage).toBe(true);
     expect(contract.requiresDataGapDisclosure).toBe(true);
@@ -123,7 +129,11 @@ describe("answer contracts", () => {
 
     expect(contract.implemented).toBe(true);
     expect(contract.requiredEvidenceTypes).toEqual([]);
-    expect(contract.requiredFinalFields).toEqual(["source_coverage", "data_gap_disclosure", "framework_or_checklist"]);
+    expect(contract.requiredFinalFields).toEqual([
+      "source_coverage",
+      "data_gap_disclosure",
+      "framework_or_checklist",
+    ]);
     expect(contract.requiresFreshness).toBe(false);
     expect(contract.requiresDataGapDisclosure).toBe(true);
     expect(contract.requiresSourceCoverage).toBe(true);
@@ -267,7 +277,10 @@ describe("answer contracts", () => {
     expect(contract.implemented).toBe(true);
     expect(contract.commitmentMode).toBe("update_state");
     expect(contract.requiredEvidenceTypes).toEqual([]);
-    expect(contract.requiredFinalFields).toEqual(["state_update_confirmation", "data_gap_disclosure"]);
+    expect(contract.requiredFinalFields).toEqual([
+      "state_update_confirmation",
+      "data_gap_disclosure",
+    ]);
     expect(contract.requiredFinalFields).not.toContain("clear_commitment");
     expect(contract.requiredFinalFields).not.toContain("constructed_output");
     expect(contract.requiresFreshness).toBe(false);
@@ -294,11 +307,13 @@ describe("structured checks", () => {
     expect(trace.mode).toBe("observe_only");
     expect(trace.activeRetryAllowed).toBe(false);
     expect(trace.retryEligibility.eligible).toBe(true);
-    expect(trace.failures).toEqual(expect.arrayContaining([
-      expect.objectContaining({ checkId: "required_evidence_present" }),
-      expect.objectContaining({ checkId: "data_gap_disclosed" }),
-      expect.objectContaining({ checkId: "capability_gap_disclosure" }),
-    ]));
+    expect(trace.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkId: "required_evidence_present" }),
+        expect.objectContaining({ checkId: "data_gap_disclosed" }),
+        expect.objectContaining({ checkId: "capability_gap_disclosure" }),
+      ]),
+    );
   });
 
   it("passes selected-slice checks when structured metadata satisfies the contract", () => {
@@ -325,12 +340,14 @@ describe("structured checks", () => {
   it("checks freshness and source coverage from metadata rather than prose headings", () => {
     const trace = runStructuredChecks({
       contract: ANSWER_CONTRACT_REGISTRY.current_event_explanation,
-      evidenceRecords: [{
-        ...tickerEvidence,
-        id: "market_status:deterministic",
-        evidenceType: "market_status",
-        normalizedFacts: { marketStatus: "closed_weekend" },
-      }],
+      evidenceRecords: [
+        {
+          ...tickerEvidence,
+          id: "market_status:deterministic",
+          evidenceType: "market_status",
+          normalizedFacts: { marketStatus: "closed_weekend" },
+        },
+      ],
       finalAnswerMetadata: {
         commitmentMode: "framework",
         finalFields: ["freshness_disclosure", "data_gap_disclosure"],
@@ -338,32 +355,43 @@ describe("structured checks", () => {
       },
     });
 
-    expect(trace.failures).toEqual(expect.arrayContaining([
-      expect.objectContaining({ checkId: "freshness_disclosed" }),
-      expect.objectContaining({ checkId: "source_coverage_disclosed" }),
-    ]));
+    expect(trace.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkId: "freshness_disclosed" }),
+        expect.objectContaining({ checkId: "source_coverage_disclosed" }),
+      ]),
+    );
   });
 
   it("passes current-event checks when freshness, sources, and market-calendar gaps are disclosed", () => {
     const trace = runStructuredChecks({
       contract: ANSWER_CONTRACT_REGISTRY.current_event_explanation,
-      evidenceRecords: [{
-        ...tickerEvidence,
-        id: "market_status:deterministic",
-        evidenceType: "market_status",
-        normalizedFacts: {
-          marketStatus: "after_close",
-          lastTradingDay: "2026-05-22",
+      evidenceRecords: [
+        {
+          ...tickerEvidence,
+          id: "market_status:deterministic",
+          evidenceType: "market_status",
+          normalizedFacts: {
+            marketStatus: "after_close",
+            lastTradingDay: "2026-05-22",
+          },
+          gaps: [
+            {
+              kind: "capability_gap",
+              capabilityGapId: "market_calendar",
+              reason: "V1 deterministic market calendar.",
+            },
+          ],
         },
-        gaps: [{
-          kind: "capability_gap",
-          capabilityGapId: "market_calendar",
-          reason: "V1 deterministic market calendar.",
-        }],
-      }],
+      ],
       finalAnswerMetadata: {
         commitmentMode: "framework",
-        finalFields: ["framework_or_checklist", "freshness_disclosure", "source_coverage", "data_gap_disclosure"],
+        finalFields: [
+          "framework_or_checklist",
+          "freshness_disclosure",
+          "source_coverage",
+          "data_gap_disclosure",
+        ],
         freshness: {
           asOfDate: "2026-05-22",
           marketStatus: "after_close",
@@ -416,16 +444,23 @@ describe("structured checks", () => {
         disclosedProviderStatuses: ["skipped"],
         sourceCoverage: { sources: ["user_allocation"] },
       },
-      answerText: "Assuming your stated percentages are current, use 5% target bands before rebalancing.",
+      answerText:
+        "Assuming your stated percentages are current, use 5% target bands before rebalancing.",
     });
 
-    expect(missing.failures).toEqual(expect.arrayContaining([
-      expect.objectContaining({ checkId: "assumption_disclosed" }),
-      expect.objectContaining({ checkId: "target_bands_present" }),
-    ]));
+    expect(missing.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkId: "assumption_disclosed" }),
+        expect.objectContaining({ checkId: "target_bands_present" }),
+      ]),
+    );
     expect(missing.activeRetryAllowed).toBe(false);
-    expect(passing.failures.map((failure) => failure.checkId)).not.toContain("assumption_disclosed");
-    expect(passing.failures.map((failure) => failure.checkId)).not.toContain("target_bands_present");
+    expect(passing.failures.map((failure) => failure.checkId)).not.toContain(
+      "assumption_disclosed",
+    );
+    expect(passing.failures.map((failure) => failure.checkId)).not.toContain(
+      "target_bands_present",
+    );
   });
 
   it("keeps framework fallback diagnostic until parity allows activation", () => {

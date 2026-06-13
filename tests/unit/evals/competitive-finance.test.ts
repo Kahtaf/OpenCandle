@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
-  COMPETITIVE_STATE_FIXTURE,
-  buildSavedStateSummary,
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
   buildComparisonJudgeRetryPrompt,
   buildGenericAgentPrompt,
-  buildPromptGenerationPrompt,
-  competitiveReportAnalysisPath,
   buildPortableAgentPath,
+  buildPromptGenerationPrompt,
+  buildSavedStateSummary,
+  COMPETITIVE_STATE_FIXTURE,
   competitiveBenchmarkExitCode,
   competitivePreflightTimeoutMs,
+  competitiveReportAnalysisPath,
   extractUsableAnswerFromCliFailure,
   findCachedCompetitorAnswer,
   findCachedPromptMetadata,
-  formatCompetitiveReportAnalysisMarkdown,
   fixedPromptFromEnv,
+  formatCompetitiveReportAnalysisMarkdown,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
@@ -27,11 +27,17 @@ import type { EvalTrace } from "../../evals/types.js";
 
 describe("competitive finance benchmarking", () => {
   it("generates broad finance prompts without assuming OpenCandle should win", () => {
-    const prompt = buildPromptGenerationPrompt({ count: 4, seed: "coverage-a", asOfDate: "2026-05-16" });
+    const prompt = buildPromptGenerationPrompt({
+      count: 4,
+      seed: "coverage-a",
+      asOfDate: "2026-05-16",
+    });
 
     expect(prompt).toContain("Generate 4 realistic finance prompts");
     expect(prompt).toContain("Current date for this benchmark run: 2026-05-16");
-    expect(prompt).toContain("Do not bias toward prompts where OpenCandle obviously has a tool advantage");
+    expect(prompt).toContain(
+      "Do not bias toward prompts where OpenCandle obviously has a tool advantage",
+    );
     expect(prompt).toContain("average retail investor");
     expect(prompt).toContain("Do not mention OpenCandle");
     expect(prompt).toContain("or tools inside the user-facing prompt");
@@ -53,7 +59,11 @@ describe("competitive finance benchmarking", () => {
     expect(prompt.toLowerCase()).toContain("saved");
     expect(prompt).toMatch(/my portfolio|my watchlist|my holdings/i);
 
-    const withoutState = buildPromptGenerationPrompt({ count: 5, seed: "s", asOfDate: "2026-06-12" });
+    const withoutState = buildPromptGenerationPrompt({
+      count: 5,
+      seed: "s",
+      asOfDate: "2026-06-12",
+    });
     expect(withoutState).not.toContain(summary);
   });
 
@@ -146,15 +156,21 @@ describe("competitive finance benchmarking", () => {
       ],
     });
 
-    expect(buildGenericAgentPrompt(trace.prompt, { agentName: "Claude", asOfDate: "2026-05-16" })).toContain("Current date: 2026-05-16");
+    expect(
+      buildGenericAgentPrompt(trace.prompt, { agentName: "Claude", asOfDate: "2026-05-16" }),
+    ).toContain("Current date: 2026-05-16");
     expect(judgePrompt).toContain("Current date: 2026-05-16");
     expect(judgePrompt).toContain("Agent: Claude (claude, anthropic/claude-sonnet-4-5)");
     expect(judgePrompt).toContain("Agent: Codex (codex, openai-codex/gpt-5.3-codex-spark)");
     expect(judgePrompt).toContain("Agent: Gemini (gemini, google/gemini-cli)");
     expect(judgePrompt).toContain("It is acceptable for any generic agent to win");
-    expect(judgePrompt).toContain("Treat dates on or before the current date as current or historical");
+    expect(judgePrompt).toContain(
+      "Treat dates on or before the current date as current or historical",
+    );
     expect(judgePrompt).toContain("Do not reward fabricated current facts");
-    expect(judgePrompt).toContain("A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized");
+    expect(judgePrompt).toContain(
+      "A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized",
+    );
     expect(judgePrompt).toContain("get_sec_filings");
     expect(judgePrompt).not.toContain("OpenCandle router telemetry");
   });
@@ -162,10 +178,23 @@ describe("competitive finance benchmarking", () => {
   it("tells the judge to verify saved-state usage when state is seeded", () => {
     const summary = buildSavedStateSummary(COMPETITIVE_STATE_FIXTURE);
     const prompt = buildComparisonJudgePrompt({
-      prompt: { id: "p1", prompt: "How risky is my portfolio?", topic: "portfolio", complexity: "moderate", evaluationFocus: "personalization" },
+      prompt: {
+        id: "p1",
+        prompt: "How risky is my portfolio?",
+        topic: "portfolio",
+        complexity: "moderate",
+        evaluationFocus: "personalization",
+      },
       asOfDate: "2026-06-12",
-      openCandleTrace: { text: "answer", toolCalls: [], classification: {}, planning: null } as never,
-      competitorAnswers: [{ id: "claude", label: "Claude", provider: "anthropic", model: "m", answer: "a" }],
+      openCandleTrace: {
+        text: "answer",
+        toolCalls: [],
+        classification: {},
+        planning: null,
+      } as never,
+      competitorAnswers: [
+        { id: "claude", label: "Claude", provider: "anthropic", model: "m", answer: "a" },
+      ],
       savedStateSummary: summary,
     });
 
@@ -176,10 +205,23 @@ describe("competitive finance benchmarking", () => {
 
   it("anchors the judge score scale so scores are comparable across runs", () => {
     const prompt = buildComparisonJudgePrompt({
-      prompt: { id: "p1", prompt: "Should I buy index funds?", topic: "investing", complexity: "simple", evaluationFocus: "clarity" },
+      prompt: {
+        id: "p1",
+        prompt: "Should I buy index funds?",
+        topic: "investing",
+        complexity: "simple",
+        evaluationFocus: "clarity",
+      },
       asOfDate: "2026-06-12",
-      openCandleTrace: { text: "answer", toolCalls: [], classification: {}, planning: null } as never,
-      competitorAnswers: [{ id: "claude", label: "Claude", provider: "anthropic", model: "m", answer: "a" }],
+      openCandleTrace: {
+        text: "answer",
+        toolCalls: [],
+        classification: {},
+        planning: null,
+      } as never,
+      competitorAnswers: [
+        { id: "claude", label: "Claude", provider: "anthropic", model: "m", answer: "a" },
+      ],
     });
 
     expect(prompt).toContain("0-10");
@@ -190,14 +232,14 @@ describe("competitive finance benchmarking", () => {
   it("builds a retry prompt when comparison judgment JSON is invalid", () => {
     const retryPrompt = buildComparisonJudgeRetryPrompt({
       originalPrompt: "Compare OpenCandle against baselines and return JSON.",
-      invalidResponse: "{ \"winner\": \"opencandle\"",
+      invalidResponse: '{ "winner": "opencandle"',
       errorMessage: "Expected ',' or '}'",
     });
 
     expect(retryPrompt).toContain("previous comparison judgment was invalid JSON");
     expect(retryPrompt).toContain("Expected ',' or '}'");
     expect(retryPrompt).toContain("Return JSON only");
-    expect(retryPrompt).toContain("{ \"winner\": \"opencandle\"");
+    expect(retryPrompt).toContain('{ "winner": "opencandle"');
     expect(retryPrompt).toContain("Compare OpenCandle against baselines and return JSON.");
   });
 
@@ -233,7 +275,9 @@ describe("competitive finance benchmarking", () => {
     }`;
     const allowedWinners = ["opencandle", "claude", "tie"];
 
-    expect(parseComparisonJudgment(raw("OpenCandle "), { allowedWinners }).winner).toBe("opencandle");
+    expect(parseComparisonJudgment(raw("OpenCandle "), { allowedWinners }).winner).toBe(
+      "opencandle",
+    );
     expect(parseComparisonJudgment(raw("TIE"), { allowedWinners }).winner).toBe("tie");
     expect(() => parseComparisonJudgment(raw("gemini"), { allowedWinners })).toThrow(/winner/i);
   });
@@ -304,9 +348,7 @@ describe("competitive finance benchmarking", () => {
       "used live market data",
       "gave a clearer downside case",
     ]);
-    expect(judgment.openCandleImprovementIdeas).toEqual([
-      "trim account-opening background",
-    ]);
+    expect(judgment.openCandleImprovementIdeas).toEqual(["trim account-opening background"]);
   });
 
   it("repairs comparison judgments with an omitted closing array bracket", () => {
@@ -326,9 +368,7 @@ describe("competitive finance benchmarking", () => {
         "lead with the recommendation"
     }`);
 
-    expect(judgment.openCandleImprovementIdeas).toEqual([
-      "lead with the recommendation",
-    ]);
+    expect(judgment.openCandleImprovementIdeas).toEqual(["lead with the recommendation"]);
   });
 
   it("repairs comparison judgments with extra trailing object delimiters", () => {
@@ -351,9 +391,7 @@ describe("competitive finance benchmarking", () => {
     }`);
 
     expect(judgment.winner).toBe("opencandle");
-    expect(judgment.openCandleImprovementIdeas).toEqual([
-      "lead with the recommendation",
-    ]);
+    expect(judgment.openCandleImprovementIdeas).toEqual(["lead with the recommendation"]);
   });
 
   it("extracts usable agent text from non-zero CLI failures", () => {
@@ -366,21 +404,29 @@ describe("competitive finance benchmarking", () => {
 
   it("does not treat infrastructure failures as usable agent answers", () => {
     expect(extractUsableAnswerFromCliFailure("failed: Internal error: bad auth")).toBeNull();
-    expect(extractUsableAnswerFromCliFailure("failed: Gemini CLI ACP startup timed out")).toBeNull();
-    expect(extractUsableAnswerFromCliFailure("failed: Error handling request { denied: true }")).toBeNull();
+    expect(
+      extractUsableAnswerFromCliFailure("failed: Gemini CLI ACP startup timed out"),
+    ).toBeNull();
+    expect(
+      extractUsableAnswerFromCliFailure("failed: Error handling request { denied: true }"),
+    ).toBeNull();
   });
 
   it("prefers stdout answers over stderr diagnostics on CLI failures", () => {
-    expect(selectCliFailureMessage({
-      stdout: "Useful model answer",
-      stderr: "warning: adapter exited non-zero",
-      status: 1,
-    })).toBe("Useful model answer");
-    expect(selectCliFailureMessage({
-      stdout: "",
-      stderr: "warning: adapter exited non-zero",
-      status: 1,
-    })).toBe("warning: adapter exited non-zero");
+    expect(
+      selectCliFailureMessage({
+        stdout: "Useful model answer",
+        stderr: "warning: adapter exited non-zero",
+        status: 1,
+      }),
+    ).toBe("Useful model answer");
+    expect(
+      selectCliFailureMessage({
+        stdout: "",
+        stderr: "warning: adapter exited non-zero",
+        status: 1,
+      }),
+    ).toBe("warning: adapter exited non-zero");
   });
 
   it("builds a portable agent PATH without user-specific toolchain paths", () => {
@@ -418,27 +464,33 @@ describe("competitive finance benchmarking", () => {
   });
 
   it("finds cached competitor answers by exact prompt text and competitor id", () => {
-    const cache = [{
-      path: "/repo/tests/evals/runs/old_competitive-finance.json",
-      report: {
-        results: [{
-          prompt: {
-            id: "macro",
-            prompt: "Evaluate a 60/40 portfolio.",
-            topic: "macro",
-            complexity: "complex",
-            evaluationFocus: "Original neutral focus.",
-          },
-          competitorAnswers: [{
-            id: "claude",
-            label: "Claude",
-            provider: "acpx/claude",
-            model: "subscription",
-            answer: "Cached Claude answer",
-          }],
-        }],
+    const cache = [
+      {
+        path: "/repo/tests/evals/runs/old_competitive-finance.json",
+        report: {
+          results: [
+            {
+              prompt: {
+                id: "macro",
+                prompt: "Evaluate a 60/40 portfolio.",
+                topic: "macro",
+                complexity: "complex",
+                evaluationFocus: "Original neutral focus.",
+              },
+              competitorAnswers: [
+                {
+                  id: "claude",
+                  label: "Claude",
+                  provider: "acpx/claude",
+                  model: "subscription",
+                  answer: "Cached Claude answer",
+                },
+              ],
+            },
+          ],
+        },
       },
-    }];
+    ];
 
     expect(findCachedCompetitorAnswer(cache, "Evaluate a 60/40 portfolio.", "claude")).toEqual({
       id: "claude",
@@ -453,21 +505,25 @@ describe("competitive finance benchmarking", () => {
   });
 
   it("finds cached prompt metadata so reruns keep the original judge focus", () => {
-    const cache = [{
-      path: "/repo/tests/evals/runs/old_competitive-finance.json",
-      report: {
-        results: [{
-          prompt: {
-            id: "generated-id",
-            prompt: "Evaluate a 60/40 portfolio.",
-            topic: "portfolio evaluation",
-            complexity: "complex",
-            evaluationFocus: "Judge the portfolio analysis neutrally.",
-          },
-          competitorAnswers: [],
-        }],
+    const cache = [
+      {
+        path: "/repo/tests/evals/runs/old_competitive-finance.json",
+        report: {
+          results: [
+            {
+              prompt: {
+                id: "generated-id",
+                prompt: "Evaluate a 60/40 portfolio.",
+                topic: "portfolio evaluation",
+                complexity: "complex",
+                evaluationFocus: "Judge the portfolio analysis neutrally.",
+              },
+              competitorAnswers: [],
+            },
+          ],
+        },
       },
-    }];
+    ];
 
     expect(findCachedPromptMetadata(cache, "Evaluate a 60/40 portfolio.")).toEqual({
       id: "generated-id",
@@ -479,46 +535,53 @@ describe("competitive finance benchmarking", () => {
   });
 
   it("analyzes judge output into loss reasons and improvement themes", () => {
-    const analysis = analyzeCompetitiveReport({
-      generatedAt: "2026-05-23T01:30:00.000Z",
-      results: [{
-        prompt: {
-          id: "macro-portfolio",
-          prompt: "Evaluate a 60/40 portfolio.",
-          topic: "macro",
-          complexity: "complex",
-          evaluationFocus: "Synthesis and actionability",
-        },
-        openCandleTrace: {
-          toolCalls: [
-            { name: "get_economic_data", args: { series_id: "FEDFUNDS" } },
-            { name: "search_web", args: { query: "macro outlook" } },
-          ],
-        },
-        competitorAnswers: [{
-          id: "claude",
-          label: "Claude",
-          provider: "acpx/claude",
-          model: "subscription",
-          answer: "Claude answer",
-          cachedFromReport: "old.json",
-        }],
-        judgment: {
-          winner: "claude",
-          openCandleScore: 3,
-          competitorScores: { claude: 4 },
-          reason: "Claude had more portfolio nuance.",
-          openCandleDidBetter: ["used tools"],
-          competitorsDidBetter: {
-            claude: ["named concentration and duration risks"],
+    const analysis = analyzeCompetitiveReport(
+      {
+        generatedAt: "2026-05-23T01:30:00.000Z",
+        results: [
+          {
+            prompt: {
+              id: "macro-portfolio",
+              prompt: "Evaluate a 60/40 portfolio.",
+              topic: "macro",
+              complexity: "complex",
+              evaluationFocus: "Synthesis and actionability",
+            },
+            openCandleTrace: {
+              toolCalls: [
+                { name: "get_economic_data", args: { series_id: "FEDFUNDS" } },
+                { name: "search_web", args: { query: "macro outlook" } },
+              ],
+            },
+            competitorAnswers: [
+              {
+                id: "claude",
+                label: "Claude",
+                provider: "acpx/claude",
+                model: "subscription",
+                answer: "Claude answer",
+                cachedFromReport: "old.json",
+              },
+            ],
+            judgment: {
+              winner: "claude",
+              openCandleScore: 3,
+              competitorScores: { claude: 4 },
+              reason: "Claude had more portfolio nuance.",
+              openCandleDidBetter: ["used tools"],
+              competitorsDidBetter: {
+                claude: ["named concentration and duration risks"],
+              },
+              openCandleImprovementIdeas: [
+                "Integrate current macro data into the synthesis.",
+                "Add a more specific rebalancing adjustment.",
+              ],
+            },
           },
-          openCandleImprovementIdeas: [
-            "Integrate current macro data into the synthesis.",
-            "Add a more specific rebalancing adjustment.",
-          ],
-        },
-      }],
-    }, { reportPath: "report.json" });
+        ],
+      },
+      { reportPath: "report.json" },
+    );
 
     expect(analysis.losses).toBe(1);
     expect(analysis.cases[0]).toMatchObject({
@@ -529,7 +592,9 @@ describe("competitive finance benchmarking", () => {
       toolCalls: ["get_economic_data", "search_web"],
       cachedCompetitors: ["claude"],
     });
-    expect(analysis.themeSummary.map((theme) => theme.theme)).toContain("data retrieval and integration");
+    expect(analysis.themeSummary.map((theme) => theme.theme)).toContain(
+      "data retrieval and integration",
+    );
     expect(analysis.themeSummary.map((theme) => theme.theme)).toContain("actionability");
   });
 
@@ -541,28 +606,32 @@ describe("competitive finance benchmarking", () => {
       openCandleWins: 0,
       losses: 1,
       ties: 0,
-      themeSummary: [{
-        theme: "data retrieval and integration",
-        count: 1,
-        caseIds: ["macro-portfolio"],
-        ideas: ["Integrate current macro data into the synthesis."],
-      }],
-      cases: [{
-        id: "macro-portfolio",
-        prompt: "Evaluate a 60/40 portfolio.",
-        winner: "claude",
-        openCandleScore: 3,
-        competitorScores: { claude: 4 },
-        scoreGap: 1,
-        lostTo: "claude",
-        judgeReason: "Claude had more portfolio nuance.",
-        openCandleDidBetter: [],
-        competitorsDidBetter: { claude: ["named concentration risks"] },
-        openCandleImprovementIdeas: ["Integrate current macro data into the synthesis."],
-        improvementThemes: ["data retrieval and integration"],
-        toolCalls: ["get_economic_data"],
-        cachedCompetitors: ["claude"],
-      }],
+      themeSummary: [
+        {
+          theme: "data retrieval and integration",
+          count: 1,
+          caseIds: ["macro-portfolio"],
+          ideas: ["Integrate current macro data into the synthesis."],
+        },
+      ],
+      cases: [
+        {
+          id: "macro-portfolio",
+          prompt: "Evaluate a 60/40 portfolio.",
+          winner: "claude",
+          openCandleScore: 3,
+          competitorScores: { claude: 4 },
+          scoreGap: 1,
+          lostTo: "claude",
+          judgeReason: "Claude had more portfolio nuance.",
+          openCandleDidBetter: [],
+          competitorsDidBetter: { claude: ["named concentration risks"] },
+          openCandleImprovementIdeas: ["Integrate current macro data into the synthesis."],
+          improvementThemes: ["data retrieval and integration"],
+          toolCalls: ["get_economic_data"],
+          cachedCompetitors: ["claude"],
+        },
+      ],
     });
 
     expect(markdown).toContain("# Competitive Report Analysis");
@@ -588,18 +657,22 @@ describe("competitive finance benchmarking", () => {
     const smallContext = { provider: "openai", id: "gpt-4", contextWindow: 8192 };
     const largeContext = { provider: "openai", id: "gpt-4.1", contextWindow: 1_000_000 };
 
-    expect(selectDefaultCompetitiveModel({
-      googleAuthConfigured: false,
-      googleModel: { provider: "google", id: "gemini-2.5-flash", contextWindow: 1_000_000 },
-      available: [smallContext, largeContext],
-    })).toBe(largeContext);
+    expect(
+      selectDefaultCompetitiveModel({
+        googleAuthConfigured: false,
+        googleModel: { provider: "google", id: "gemini-2.5-flash", contextWindow: 1_000_000 },
+        available: [smallContext, largeContext],
+      }),
+    ).toBe(largeContext);
   });
 
   it("uses the ACP-advertised Codex model id by default", () => {
     expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark[medium]");
-    expect(selectCompetitiveCodexModel({
-      OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",
-    })).toBe("gpt-5.5[high]");
+    expect(
+      selectCompetitiveCodexModel({
+        OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",
+      }),
+    ).toBe("gpt-5.5[high]");
   });
 
   it("marks completed competitive runs as successful CLI exits", () => {
@@ -615,7 +688,11 @@ describe("competitive finance benchmarking", () => {
 
   it("keeps baseline preflight timeouts short", () => {
     expect(competitivePreflightTimeoutMs({})).toBe(60_000);
-    expect(competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "120000" })).toBe(120_000);
-    expect(competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "0" })).toBe(60_000);
+    expect(
+      competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "120000" }),
+    ).toBe(120_000);
+    expect(
+      competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "0" }),
+    ).toBe(60_000);
   });
 });

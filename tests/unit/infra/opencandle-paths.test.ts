@@ -1,17 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { homedir } from "node:os";
+import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   ensureOpenCandleHomeDir,
   getConfigPath,
   getLogsDir,
   getOnboardingPath,
-  getStateDbPath,
   getOpenCandleHomeDir,
+  getStateDbPath,
   resolveOpenCandlePath,
 } from "../../../src/infra/opencandle-paths.js";
-import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
 
 describe("opencandle paths", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;

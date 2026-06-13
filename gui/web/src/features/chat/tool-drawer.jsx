@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
-import { Drawer } from "vaul";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Drawer } from "vaul";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { SourceGrid } from "../../components/ui/source-grid.jsx";
 import { ToolDrawerStep } from "../renderers/ToolDrawerStep.jsx";
-import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { summarizeRunTitle } from "../renderers/tool-icon.jsx";
 import { extractRunSources } from "./run-sources.js";
-import { SourceGrid } from "../../components/ui/source-grid.jsx";
+import { useToolDrawer } from "./tool-drawer-context.jsx";
 
 // Desktop inline drawer. Renders as a flex sibling of the chat panel so the
 // chat layout shrinks left when the drawer opens (a side-by-side splitview
@@ -39,7 +39,12 @@ export function ToolDrawerOverlay() {
   const isMobile = useIsMobile();
   if (!isMobile || !run) return null;
   return (
-    <Drawer.Root open onOpenChange={(open) => { if (!open) close(); }}>
+    <Drawer.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+    >
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 z-40 bg-foreground/40" />
         <Drawer.Content
@@ -49,7 +54,10 @@ export function ToolDrawerOverlay() {
           <VisuallyHidden.Root>
             <Drawer.Title>Tool run timeline</Drawer.Title>
           </VisuallyHidden.Root>
-          <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border" aria-hidden="true" />
+          <div
+            className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border"
+            aria-hidden="true"
+          />
           <DrawerHeader run={run} onClose={close} />
           <DrawerBody run={run} />
         </Drawer.Content>
@@ -74,7 +82,11 @@ function DrawerHeader({ run, onClose }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-foreground">{title}</div>
         <div className="mt-0.5 text-[11px] text-muted-foreground">
-          {run.status === "pending" ? "In progress" : run.status === "error" ? "Errored" : "Completed"}
+          {run.status === "pending"
+            ? "In progress"
+            : run.status === "error"
+              ? "Errored"
+              : "Completed"}
         </div>
       </div>
       <Badge variant="outline" size="sm" className="font-mono">
@@ -93,7 +105,9 @@ function DrawerBody({ run }) {
     <div className="min-h-0 flex-1 overflow-y-auto px-1 py-3 sm:px-2">
       {sources.length > 0 ? (
         <div className="mb-3 px-3">
-          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Sources</div>
+          <div className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Sources
+          </div>
           <SourceGrid sources={sources} max={3} />
         </div>
       ) : null}

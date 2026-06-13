@@ -38,7 +38,9 @@ async function ensureBrowser(): Promise<Page> {
 
 async function withPage<T>(fn: (p: Page) => Promise<T>): Promise<T> {
   let resolve!: () => void;
-  const next = new Promise<void>((r) => { resolve = r; });
+  const next = new Promise<void>((r) => {
+    resolve = r;
+  });
   const prev = pageQueue;
   pageQueue = next;
   await prev;

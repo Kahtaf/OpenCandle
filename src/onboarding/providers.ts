@@ -10,18 +10,9 @@
 
 import { getConfig, loadFileConfig } from "../config.js";
 
-export type ProviderId =
-  | "alpha_vantage"
-  | "fred"
-  | "finnhub"
-  | "brave"
-  | "exa";
+export type ProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa";
 
-export type ProviderCategory =
-  | "fundamentals"
-  | "macro"
-  | "news"
-  | "web_search";
+export type ProviderCategory = "fundamentals" | "macro" | "news" | "web_search";
 
 export type ProviderTier = "hard" | "soft";
 
@@ -87,12 +78,7 @@ export const PROVIDERS = [
     freeTier: true,
     envVar: "FRED_API_KEY",
     configPath: ["providers", "fred", "apiKey"],
-    unlocks: [
-      "interest rates",
-      "inflation data",
-      "yield curve",
-      "economic indicators",
-    ],
+    unlocks: ["interest rates", "inflation data", "yield curve", "economic indicators"],
     fallbackDescription: null,
     snoozeDurationDays: 7,
     instructionsHint: "Free, about 30 seconds, requires a St. Louis Fed account",
@@ -107,10 +93,7 @@ export const PROVIDERS = [
     freeTier: true,
     envVar: "FINNHUB_API_KEY",
     configPath: ["providers", "finnhub", "apiKey"],
-    unlocks: [
-      "ticker-tagged company news",
-      "sentiment enrichment with a dedicated news source",
-    ],
+    unlocks: ["ticker-tagged company news", "sentiment enrichment with a dedicated news source"],
     // Finnhub is a soft enrichment source — sentiment-summary continues to work
     // with Twitter/Reddit/web search when Finnhub is missing. The fallback is
     // "the other sentiment sources still run".
@@ -194,15 +177,11 @@ export function getProvider(id: ProviderId): ProviderDescriptor {
   return found;
 }
 
-export function getProvidersByCategory(
-  category: ProviderCategory,
-): readonly ProviderDescriptor[] {
+export function getProvidersByCategory(category: ProviderCategory): readonly ProviderDescriptor[] {
   return PROVIDERS.filter((p) => p.category === category);
 }
 
-export function getProvidersByTier(
-  tier: ProviderTier,
-): readonly ProviderDescriptor[] {
+export function getProvidersByTier(tier: ProviderTier): readonly ProviderDescriptor[] {
   return PROVIDERS.filter((p) => p.tier === tier);
 }
 
@@ -244,9 +223,7 @@ export function hasCredential(id: ProviderId): boolean {
   return typeof value === "string" && value.length > 0;
 }
 
-export function getCredentialSource(
-  id: ProviderId,
-): "env" | "file" | "absent" {
+export function getCredentialSource(id: ProviderId): "env" | "file" | "absent" {
   return getCredential(id).source;
 }
 
@@ -271,10 +248,7 @@ export function getCredential(
 
 export function resolveProviderFromArgument(
   arg: string,
-):
-  | ProviderDescriptor
-  | readonly ProviderDescriptor[]
-  | undefined {
+): ProviderDescriptor | readonly ProviderDescriptor[] | undefined {
   const needle = arg.trim().toLowerCase();
   if (!needle) return undefined;
 
@@ -291,12 +265,7 @@ export function resolveProviderFromArgument(
   // 3. Category match: if the needle matches a category name, return the
   //    providers in that category. One match → single descriptor. Multiple
   //    matches → array (triggers the sub-picker in the /connect handler).
-  const categories: readonly ProviderCategory[] = [
-    "fundamentals",
-    "macro",
-    "news",
-    "web_search",
-  ];
+  const categories: readonly ProviderCategory[] = ["fundamentals", "macro", "news", "web_search"];
   const normalizedCategory = needle.replace("-", "_");
   if ((categories as readonly string[]).includes(normalizedCategory)) {
     const group = getProvidersByCategory(normalizedCategory as ProviderCategory);

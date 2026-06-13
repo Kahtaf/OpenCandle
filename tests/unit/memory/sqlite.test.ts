@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import Database from "better-sqlite3";
-import { initDatabase, getTableNames, getSchemaVersion } from "../../../src/memory/sqlite.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getSchemaVersion, getTableNames, initDatabase } from "../../../src/memory/sqlite.js";
 import { MemoryStorage } from "../../../src/memory/storage.js";
 
 function rowCount(db: Database.Database, tableName: string): number {
@@ -37,7 +37,9 @@ describe("initDatabase", () => {
     v4.close();
 
     const migrated = initDatabase(path);
-    const columns = (migrated.pragma("table_info(alert_events)") as Array<{ name: string }>).map((c) => c.name);
+    const columns = (migrated.pragma("table_info(alert_events)") as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
     expect(columns).toContain("dedupe_key");
     expect(getSchemaVersion(migrated)).toBeGreaterThanOrEqual(7);
     migrated.close();
@@ -270,9 +272,15 @@ describe("v2 → v3 additive migration", () => {
     expect(getSchemaVersion(migrated)).toBe(7);
 
     // (a) zero row loss
-    const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
-    const runCount = (migrated.prepare("SELECT COUNT(*) AS n FROM workflow_runs").get() as { n: number }).n;
-    const recCount = (migrated.prepare("SELECT COUNT(*) AS n FROM recommendations").get() as { n: number }).n;
+    const prefCount = (
+      migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }
+    ).n;
+    const runCount = (
+      migrated.prepare("SELECT COUNT(*) AS n FROM workflow_runs").get() as { n: number }
+    ).n;
+    const recCount = (
+      migrated.prepare("SELECT COUNT(*) AS n FROM recommendations").get() as { n: number }
+    ).n;
     expect(prefCount).toBe(2);
     expect(runCount).toBe(2);
     expect(recCount).toBe(2);
@@ -283,7 +291,9 @@ describe("v2 → v3 additive migration", () => {
     );
     expect(cols).toContain("turn_type");
 
-    const legacyRows = migrated.prepare("SELECT turn_type FROM workflow_runs ORDER BY id").all() as Array<{ turn_type: string }>;
+    const legacyRows = migrated
+      .prepare("SELECT turn_type FROM workflow_runs ORDER BY id")
+      .all() as Array<{ turn_type: string }>;
     expect(legacyRows).toEqual([{ turn_type: "workflow" }, { turn_type: "workflow" }]);
 
     migrated.close();
@@ -368,7 +378,9 @@ describe("v4 → v5 market-state migration", () => {
     expect(getTableNames(migrated)).toContain("portfolio_lots");
     expect(getTableNames(migrated)).toContain("prediction_records");
 
-    const prefCount = (migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }).n;
+    const prefCount = (
+      migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }
+    ).n;
     expect(prefCount).toBe(1);
 
     migrated.close();
@@ -596,7 +608,9 @@ describe("v5 → v6 import provenance migration", () => {
     expect(rowCount(migrated, "report_runs")).toBe(1);
     expect(rowCount(migrated, "import_rows")).toBe(1);
 
-    const watchlistItem = migrated.prepare("SELECT notes, target_price FROM watchlist_items").get() as {
+    const watchlistItem = migrated
+      .prepare("SELECT notes, target_price FROM watchlist_items")
+      .get() as {
       notes: string;
       target_price: number;
     };
@@ -650,12 +664,12 @@ describe("v5 → v6 import provenance migration", () => {
 
     expect(getSchemaVersion(migrated)).toBe(7);
 
-    const cols = (migrated.pragma("table_info(import_rows)") as Array<{ name: string }>).map((c) => c.name);
-    expect(cols).toEqual(expect.arrayContaining([
-      "source_row_id",
-      "source_account_ref",
-      "source_metadata_json",
-    ]));
+    const cols = (migrated.pragma("table_info(import_rows)") as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    expect(cols).toEqual(
+      expect.arrayContaining(["source_row_id", "source_account_ref", "source_metadata_json"]),
+    );
 
     const row = migrated.prepare("SELECT source_symbol, raw_json FROM import_rows").get() as {
       source_symbol: string;
@@ -798,7 +812,11 @@ describe("v6 → v7 local automation migration", () => {
     expect(getTableNames(migrated)).toContain("notification_events");
     expect(getTableNames(migrated)).toContain("notification_delivery_attempts");
 
-    const rule = migrated.prepare("SELECT status, retrigger_mode, last_condition_state, rule_revision, arm_cycle_id FROM alert_rules").get() as {
+    const rule = migrated
+      .prepare(
+        "SELECT status, retrigger_mode, last_condition_state, rule_revision, arm_cycle_id FROM alert_rules",
+      )
+      .get() as {
       status: string;
       retrigger_mode: string;
       last_condition_state: string;
@@ -813,7 +831,11 @@ describe("v6 → v7 local automation migration", () => {
       arm_cycle_id: 1,
     });
 
-    const event = migrated.prepare("SELECT observed_at, trigger_source, source_provider, cache_status FROM alert_events").get() as {
+    const event = migrated
+      .prepare(
+        "SELECT observed_at, trigger_source, source_provider, cache_status FROM alert_events",
+      )
+      .get() as {
       observed_at: string;
       trigger_source: string;
       source_provider: string | null;
@@ -826,7 +848,9 @@ describe("v6 → v7 local automation migration", () => {
       cache_status: "live",
     });
 
-    const run = migrated.prepare("SELECT trigger_type, scheduled_for, owner_id FROM report_runs").get() as {
+    const run = migrated
+      .prepare("SELECT trigger_type, scheduled_for, owner_id FROM report_runs")
+      .get() as {
       trigger_type: string;
       scheduled_for: string | null;
       owner_id: string | null;

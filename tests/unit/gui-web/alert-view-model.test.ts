@@ -3,34 +3,37 @@ import { buildAlertRows } from "../../../gui/web/src/features/market-state/alert
 
 describe("alert view model", () => {
   it("shows manual mode, last observed value, latest event, and status", () => {
-    const rows = buildAlertRows([
-      {
-        id: 1,
-        scopeType: "instrument",
-        instrumentId: 42,
-        conditionType: "price_crosses_above",
-        conditionVersion: 1,
-        conditionJson: { threshold: 250, field: "last_price" },
-        enabled: true,
-        checkIntervalSeconds: null,
-        lastCheckedAt: "2026-05-31T12:00:00.000Z",
-        lastObservedJson: {
-          field: "last_price",
-          value: 251.25,
-          at: "2026-05-31T12:00:00.000Z",
+    const rows = buildAlertRows(
+      [
+        {
+          id: 1,
+          scopeType: "instrument",
+          instrumentId: 42,
+          conditionType: "price_crosses_above",
+          conditionVersion: 1,
+          conditionJson: { threshold: 250, field: "last_price" },
+          enabled: true,
+          checkIntervalSeconds: null,
+          lastCheckedAt: "2026-05-31T12:00:00.000Z",
+          lastObservedJson: {
+            field: "last_price",
+            value: 251.25,
+            at: "2026-05-31T12:00:00.000Z",
+          },
         },
-      },
-    ], [
-      {
-        id: 1,
-        alertRuleId: 1,
-        instrumentId: 42,
-        observedValueJson: { value: 251.25 },
-        triggeredAt: "2026-05-31T12:00:00.000Z",
-        status: "triggered",
-        message: "AAPL price crossed above $250",
-      },
-    ]);
+      ],
+      [
+        {
+          id: 1,
+          alertRuleId: 1,
+          instrumentId: 42,
+          observedValueJson: { value: 251.25 },
+          triggeredAt: "2026-05-31T12:00:00.000Z",
+          status: "triggered",
+          message: "AAPL price crossed above $250",
+        },
+      ],
+    );
 
     expect(rows).toEqual([
       expect.objectContaining({

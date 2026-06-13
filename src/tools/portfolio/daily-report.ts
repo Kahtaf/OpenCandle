@@ -1,7 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { initDefaultDatabase } from "../../memory/sqlite.js";
-import { MarketStateService } from "../../market-state/service.js";
+import { Type } from "@sinclair/typebox";
 import {
   getOrCreateDefaultWatchlistReportTemplate,
   nextDailyReportRunAt,
@@ -9,6 +7,8 @@ import {
   targetsDefaultWatchlist,
 } from "../../market-state/daily-report.js";
 import { deliverPendingNotifications } from "../../market-state/notification-delivery.js";
+import { MarketStateService } from "../../market-state/service.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
 
 const ACTION_DESCRIPTION = [
   "One of: run, configure, history.",
@@ -18,10 +18,9 @@ const ACTION_DESCRIPTION = [
 ].join(" ");
 
 const params = Type.Object({
-  action: Type.Union(
-    [Type.Literal("run"), Type.Literal("configure"), Type.Literal("history")],
-    { description: ACTION_DESCRIPTION },
-  ),
+  action: Type.Union([Type.Literal("run"), Type.Literal("configure"), Type.Literal("history")], {
+    description: ACTION_DESCRIPTION,
+  }),
   timezone: Type.Optional(
     Type.String({ description: "IANA timezone for future scheduled morning reports" }),
   ),
@@ -52,18 +51,23 @@ export const dailyReportTool: AgentTool<typeof params> = {
           enabled: true,
         };
         const nextRunAt = nextDailyReportRunAt(templateParams.timezone, templateParams.localTime);
-        const existing = service.listReportTemplates().find((template) =>
-          template.reportType === "watchlist_daily" &&
-          targetsDefaultWatchlist(template.configJson)
-        );
+        const existing = service
+          .listReportTemplates()
+          .find(
+            (template) =>
+              template.reportType === "watchlist_daily" &&
+              targetsDefaultWatchlist(template.configJson),
+          );
         const template = existing
           ? service.updateReportTemplate(existing.id, { ...templateParams, nextRunAt })
           : service.createReportTemplate({ ...templateParams, nextRunAt });
         return {
-          content: [{
-            type: "text",
-            text: `Configured daily watchlist report for ${template.localTime} ${template.timezone}.`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Configured daily watchlist report for ${template.localTime} ${template.timezone}.`,
+            },
+          ],
           details: template,
         };
       }

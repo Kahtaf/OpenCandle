@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getQuote, getHistory } from "../../../src/providers/yahoo-finance.js";
-import { InvalidSymbolError } from "../../../src/providers/errors.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
+import { InvalidSymbolError } from "../../../src/providers/errors.js";
+import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
-import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
+import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 describe("yahoo-finance provider", () => {
@@ -33,12 +33,12 @@ describe("yahoo-finance provider", () => {
       expect(quote.symbol).toBe("AAPL");
       expect(quote.price).toBe(178.72);
       expect(quote.open).toBe(176.15);
-      expect(quote.high).toBe(179.50);
+      expect(quote.high).toBe(179.5);
       expect(quote.low).toBe(175.82);
       expect(quote.volume).toBe(55123456);
       expect(quote.marketCap).toBe(2780000000000);
       expect(quote.week52High).toBe(199.62);
-      expect(quote.week52Low).toBe(143.90);
+      expect(quote.week52Low).toBe(143.9);
     });
 
     it("computes change and changePercent from price and previousClose", async () => {
@@ -48,8 +48,8 @@ describe("yahoo-finance provider", () => {
       });
 
       const quote = await getQuote("AAPL");
-      const expectedChange = 178.72 - 175.10;
-      const expectedPercent = (expectedChange / 175.10) * 100;
+      const expectedChange = 178.72 - 175.1;
+      const expectedPercent = (expectedChange / 175.1) * 100;
       expect(quote.change).toBeCloseTo(expectedChange, 2);
       expect(quote.changePercent).toBeCloseTo(expectedPercent, 2);
     });
@@ -96,29 +96,30 @@ describe("yahoo-finance provider", () => {
     it("preserves real low-priced quotes when at least one market field is non-zero", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          chart: {
-            result: [
-              {
-                meta: {
-                  symbol: "PENNY",
-                  regularMarketPrice: 0.04,
-                  chartPreviousClose: 0.03,
-                  regularMarketOpen: 0.03,
-                  regularMarketDayHigh: 0.05,
-                  regularMarketDayLow: 0.03,
-                  regularMarketVolume: 12000,
-                  marketCap: 50000,
-                  fiftyTwoWeekHigh: 0.2,
-                  fiftyTwoWeekLow: 0.01,
+        json: () =>
+          Promise.resolve({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: "PENNY",
+                    regularMarketPrice: 0.04,
+                    chartPreviousClose: 0.03,
+                    regularMarketOpen: 0.03,
+                    regularMarketDayHigh: 0.05,
+                    regularMarketDayLow: 0.03,
+                    regularMarketVolume: 12000,
+                    marketCap: 50000,
+                    fiftyTwoWeekHigh: 0.2,
+                    fiftyTwoWeekLow: 0.01,
+                  },
+                  timestamp: [],
+                  indicators: { quote: [{ open: [], high: [], low: [], close: [], volume: [] }] },
                 },
-                timestamp: [],
-                indicators: { quote: [{ open: [], high: [], low: [], close: [], volume: [] }] },
-              },
-            ],
-            error: null,
-          },
-        }),
+              ],
+              error: null,
+            },
+          }),
       });
 
       const quote = await getQuote("PENNY");
@@ -152,7 +153,7 @@ describe("yahoo-finance provider", () => {
         ok: false,
         status: 429,
         statusText: "Too Many Requests",
-        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        headers: { get: (name: string) => (name.toLowerCase() === "retry-after" ? "60" : null) },
         text: () => Promise.resolve("rate limited"),
       });
 
@@ -180,7 +181,7 @@ describe("yahoo-finance provider", () => {
       const bars = await getHistory("AAPL", "5d", "1d");
       expect(bars).toHaveLength(4);
       expect(bars[0].date).toBeDefined();
-      expect(bars[0].open).toBe(171.00);
+      expect(bars[0].open).toBe(171.0);
       expect(bars[0].close).toBe(172.28);
       expect(bars[3].close).toBe(178.72);
     });

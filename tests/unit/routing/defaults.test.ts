@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { PORTFOLIO_DEFAULTS, OPTIONS_SCREENER_DEFAULTS, parseDteTarget } from "../../../src/routing/defaults.js";
+import { describe, expect, it } from "vitest";
+import {
+  OPTIONS_SCREENER_DEFAULTS,
+  PORTFOLIO_DEFAULTS,
+  parseDteTarget,
+} from "../../../src/routing/defaults.js";
 
 describe("PORTFOLIO_DEFAULTS", () => {
   it("has balanced risk profile", () => {

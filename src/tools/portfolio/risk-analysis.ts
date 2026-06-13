@@ -1,7 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getHistory } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getHistory } from "../../providers/yahoo-finance.js";
 import type { RiskMetrics } from "../../types/portfolio.js";
 
 const RISK_PERIODS = ["6mo", "1y", "2y"] as const;
@@ -9,9 +9,12 @@ const RISK_PERIODS = ["6mo", "1y", "2y"] as const;
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, SPY)" }),
   period: Type.Optional(
-    Type.Union(RISK_PERIODS.map((period) => Type.Literal(period)), {
-      description: "Historical period for analysis: 6mo, 1y, 2y. Default: 1y",
-    }),
+    Type.Union(
+      RISK_PERIODS.map((period) => Type.Literal(period)),
+      {
+        description: "Historical period for analysis: 6mo, 1y, 2y. Default: 1y",
+      },
+    ),
   ),
 });
 
@@ -27,7 +30,9 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
     const result = await wrapProvider("yahoo", () => getHistory(symbol, period, "1d"));
     if (result.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Risk analysis unavailable for ${symbol} (${result.reason}).` }],
+        content: [
+          { type: "text", text: `⚠ Risk analysis unavailable for ${symbol} (${result.reason}).` },
+        ],
         details: null as any,
       };
     }
@@ -36,7 +41,12 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
 
     if (closes.length < 30) {
       return {
-        content: [{ type: "text", text: `Insufficient data for risk analysis (need 30+ days, got ${closes.length})` }],
+        content: [
+          {
+            type: "text",
+            text: `Insufficient data for risk analysis (need 30+ days, got ${closes.length})`,
+          },
+        ],
         details: null as any,
       };
     }
@@ -47,7 +57,12 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
     } catch (error) {
       if (error instanceof Error && error.message === "insufficient usable price history") {
         return {
-          content: [{ type: "text", text: `Insufficient data for risk analysis (no usable price returns after filtering invalid closes)` }],
+          content: [
+            {
+              type: "text",
+              text: `Insufficient data for risk analysis (no usable price returns after filtering invalid closes)`,
+            },
+          ],
           details: null as any,
         };
       }

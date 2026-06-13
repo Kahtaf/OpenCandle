@@ -1,5 +1,5 @@
-import type { EvalCase } from "../types.js";
 import { registerEvalSuite } from "../eval-suite.js";
+import type { EvalCase } from "../types.js";
 
 /**
  * Usually-tier eval cases for analysis quality and E2E workflows.
@@ -9,7 +9,8 @@ const qualityCases: EvalCase[] = [
   {
     name: "analysis-depth",
     tier: "usually",
-    prompt: "Give me a comprehensive analysis of NVDA including fundamentals, technicals, and sentiment.",
+    prompt:
+      "Give me a comprehensive analysis of NVDA including fundamentals, technicals, and sentiment.",
     assertions: {
       requiredTools: ["get_stock_quote", "get_company_overview", "get_technical_indicators"],
       dataFaithfulness: true,
@@ -28,11 +29,7 @@ const qualityCases: EvalCase[] = [
     prompt: "Should I invest in AAPL right now? Walk me through your analysis.",
     assertions: {
       requiredTools: ["get_stock_quote"],
-      rubric: [
-        "reasoning_chain",
-        "actionable_conclusion",
-        "risk_check",
-      ],
+      rubric: ["reasoning_chain", "actionable_conclusion", "risk_check"],
     },
   },
   {
@@ -41,11 +38,7 @@ const qualityCases: EvalCase[] = [
     prompt: "Give me the bull and bear case for TSLA.",
     assertions: {
       requiredTools: ["get_stock_quote"],
-      rubric: [
-        "data_collection",
-        "risk_check",
-        "reasoning_chain",
-      ],
+      rubric: ["data_collection", "risk_check", "reasoning_chain"],
     },
   },
 ];
@@ -53,7 +46,8 @@ const qualityCases: EvalCase[] = [
 import { describe, it } from "vitest";
 
 const tier = process.env.EVAL_TIER;
-const casesToRun = tier === "usually" ? qualityCases : qualityCases.filter((c) => c.tier === "always");
+const casesToRun =
+  tier === "usually" ? qualityCases : qualityCases.filter((c) => c.tier === "always");
 
 if (casesToRun.length > 0) {
   registerEvalSuite("Quality Evals (Usually-tier)", casesToRun, { threshold: 0.6 });

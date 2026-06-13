@@ -1,7 +1,7 @@
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import type { ChatEvent } from "../../../gui/shared/chat-events.js";
 import { createLiveChatEventAdapter } from "../../../gui/server/live-chat-event-adapter.js";
+import type { ChatEvent } from "../../../gui/shared/chat-events.js";
 
 describe("live chat event adapter", () => {
   it("streams text deltas and preserves completed tool outputs for GUI renderers", () => {
@@ -13,40 +13,31 @@ describe("live chat event adapter", () => {
       emit: (event) => events.push(event),
     });
 
-    adapter.handle(agentEvent({
-      type: "message_start",
-      message: { role: "user", content: "quote NVDA", timestamp: Date.now() },
-    }));
-    adapter.handle(agentEvent({
-      type: "message_start",
-      message: {
-        role: "assistant",
-        content: [],
-        api: "openai-responses",
-        provider: "openai",
-        model: "test",
-        usage: emptyUsage(),
-        stopReason: "toolUse",
-        timestamp: Date.now(),
-      },
-    }));
-    adapter.handle(agentEvent({
-      type: "message_update",
-      message: {
-        role: "assistant",
-        content: [{ type: "text", text: "Looking up " }],
-        api: "openai-responses",
-        provider: "openai",
-        model: "test",
-        usage: emptyUsage(),
-        stopReason: "toolUse",
-        timestamp: Date.now(),
-      },
-      assistantMessageEvent: {
-        type: "text_delta",
-        contentIndex: 0,
-        delta: "Looking up ",
-        partial: {
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: { role: "user", content: "quote NVDA", timestamp: Date.now() },
+      }),
+    );
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: {
+          role: "assistant",
+          content: [],
+          api: "openai-responses",
+          provider: "openai",
+          model: "test",
+          usage: emptyUsage(),
+          stopReason: "toolUse",
+          timestamp: Date.now(),
+        },
+      }),
+    );
+    adapter.handle(
+      agentEvent({
+        type: "message_update",
+        message: {
           role: "assistant",
           content: [{ type: "text", text: "Looking up " }],
           api: "openai-responses",
@@ -56,24 +47,43 @@ describe("live chat event adapter", () => {
           stopReason: "toolUse",
           timestamp: Date.now(),
         },
-      },
-    }));
-    adapter.handle(agentEvent({
-      type: "tool_execution_start",
-      toolCallId: "call-1",
-      toolName: "get_stock_quote",
-      args: { symbol: "NVDA" },
-    }));
-    adapter.handle(agentEvent({
-      type: "tool_execution_end",
-      toolCallId: "call-1",
-      toolName: "get_stock_quote",
-      result: {
-        content: [{ type: "text", text: "NVDA quote" }],
-        details: { symbol: "NVDA", price: 185.25 },
-      },
-      isError: false,
-    }));
+        assistantMessageEvent: {
+          type: "text_delta",
+          contentIndex: 0,
+          delta: "Looking up ",
+          partial: {
+            role: "assistant",
+            content: [{ type: "text", text: "Looking up " }],
+            api: "openai-responses",
+            provider: "openai",
+            model: "test",
+            usage: emptyUsage(),
+            stopReason: "toolUse",
+            timestamp: Date.now(),
+          },
+        },
+      }),
+    );
+    adapter.handle(
+      agentEvent({
+        type: "tool_execution_start",
+        toolCallId: "call-1",
+        toolName: "get_stock_quote",
+        args: { symbol: "NVDA" },
+      }),
+    );
+    adapter.handle(
+      agentEvent({
+        type: "tool_execution_end",
+        toolCallId: "call-1",
+        toolName: "get_stock_quote",
+        result: {
+          content: [{ type: "text", text: "NVDA quote" }],
+          details: { symbol: "NVDA", price: 185.25 },
+        },
+        isError: false,
+      }),
+    );
 
     expect(events.map((event) => event.type)).toEqual([
       "message.created",
@@ -107,14 +117,16 @@ describe("live chat event adapter", () => {
       originalPrompt: "I own 200 ASTS shares. Worth selling covered calls?",
     });
 
-    adapter.handle(agentEvent({
-      type: "message_start",
-      message: {
-        role: "user",
-        content: "Current date: 2026-06-12 Screen and rank options contracts for ASTS ...",
-        timestamp: Date.now(),
-      },
-    }));
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: {
+          role: "user",
+          content: "Current date: 2026-06-12 Screen and rank options contracts for ASTS ...",
+          timestamp: Date.now(),
+        },
+      }),
+    );
 
     const completed = events.find((event) => event.type === "message.completed");
     expect(completed).toMatchObject({
@@ -131,26 +143,34 @@ describe("live chat event adapter", () => {
       emit: (event) => events.push(event),
     });
 
-    adapter.handle(agentEvent({
-      type: "message_update",
-      message: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
-      assistantMessageEvent: {
-        type: "thinking_delta",
-        contentIndex: 0,
-        delta: "Check the option expirations",
-        partial: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
-      },
-    }));
-    adapter.handle(agentEvent({
-      type: "message_update",
-      message: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
-      assistantMessageEvent: {
-        type: "thinking_end",
-        contentIndex: 0,
-        content: "Check the option expirations",
-        partial: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
-      },
-    }));
+    adapter.handle(
+      agentEvent({
+        type: "message_update",
+        message: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
+        assistantMessageEvent: {
+          type: "thinking_delta",
+          contentIndex: 0,
+          delta: "Check the option expirations",
+          partial: assistantMessage([
+            { type: "thinking", thinking: "Check the option expirations" },
+          ]),
+        },
+      }),
+    );
+    adapter.handle(
+      agentEvent({
+        type: "message_update",
+        message: assistantMessage([{ type: "thinking", thinking: "Check the option expirations" }]),
+        assistantMessageEvent: {
+          type: "thinking_end",
+          contentIndex: 0,
+          content: "Check the option expirations",
+          partial: assistantMessage([
+            { type: "thinking", thinking: "Check the option expirations" },
+          ]),
+        },
+      }),
+    );
 
     expect(events).toEqual([
       { type: "thinking.delta", runId: "run-1", text: "Check the option expirations", seq: 1 },

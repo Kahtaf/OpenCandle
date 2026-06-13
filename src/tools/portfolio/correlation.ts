@@ -1,15 +1,16 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getHistory } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import { computeDailyReturns } from "./risk-analysis.js";
+import { getHistory } from "../../providers/yahoo-finance.js";
 import type { OHLCV } from "../../types/market.js";
+import { computeDailyReturns } from "./risk-analysis.js";
 
 export function computeCorrelation(returnsA: number[], returnsB: number[]): number {
   const n = Math.min(returnsA.length, returnsB.length);
   if (n === 0) return 0;
 
-  let sumA = 0, sumB = 0;
+  let sumA = 0,
+    sumB = 0;
   for (let i = 0; i < n; i++) {
     sumA += returnsA[i];
     sumB += returnsB[i];
@@ -17,7 +18,9 @@ export function computeCorrelation(returnsA: number[], returnsB: number[]): numb
   const meanA = sumA / n;
   const meanB = sumB / n;
 
-  let cov = 0, varA = 0, varB = 0;
+  let cov = 0,
+    varA = 0,
+    varB = 0;
   for (let i = 0; i < n; i++) {
     const dA = returnsA[i] - meanA;
     const dB = returnsB[i] - meanB;
@@ -50,9 +53,9 @@ export function alignReturnsByDate(
   // Find common dates across all symbols
   const symbols = [...historiesBySymbol.keys()];
   const firstDates = priceByDate.get(symbols[0])!;
-  const commonDates = [...firstDates.keys()].filter((date) =>
-    symbols.every((s) => priceByDate.get(s)!.has(date)),
-  ).sort();
+  const commonDates = [...firstDates.keys()]
+    .filter((date) => symbols.every((s) => priceByDate.get(s)!.has(date)))
+    .sort();
 
   if (commonDates.length < minOverlap) {
     throw new Error(
@@ -73,13 +76,17 @@ export function alignReturnsByDate(
 
 const params = Type.Object({
   symbols: Type.Array(Type.String(), {
-    description: "Array of 2+ ticker symbols to compute correlation matrix (e.g. ['AAPL','MSFT','GOOGL'])",
+    description:
+      "Array of 2+ ticker symbols to compute correlation matrix (e.g. ['AAPL','MSFT','GOOGL'])",
     minItems: 2,
   }),
   period: Type.Optional(
-    Type.Union(CORRELATION_PERIODS.map((period) => Type.Literal(period)), {
-      description: "Historical period: 6mo, 1y, 2y. Default: 1y",
-    }),
+    Type.Union(
+      CORRELATION_PERIODS.map((period) => Type.Literal(period)),
+      {
+        description: "Historical period: 6mo, 1y, 2y. Default: 1y",
+      },
+    ),
   ),
 });
 
@@ -106,20 +113,21 @@ export const correlationTool: AgentTool<typeof params> = {
     );
 
     const dropped = results.flatMap((r) =>
-      r.result.status === "unavailable"
-        ? [{ symbol: r.symbol, reason: r.result.reason }]
-        : [],
+      r.result.status === "unavailable" ? [{ symbol: r.symbol, reason: r.result.reason }] : [],
     );
     const succeeded = results.filter((r) => r.result.status === "ok");
     if (succeeded.length < 2) {
-      const droppedText = dropped.length > 0
-        ? `\n\nSymbols dropped:\n${dropped.map((d) => `  - ${d.symbol}: ${d.reason}`).join("\n")}`
-        : "";
+      const droppedText =
+        dropped.length > 0
+          ? `\n\nSymbols dropped:\n${dropped.map((d) => `  - ${d.symbol}: ${d.reason}`).join("\n")}`
+          : "";
       return {
-        content: [{
-          type: "text",
-          text: `⚠ Correlation analysis unavailable — need at least 2 symbols with usable history.${droppedText}`,
-        }],
+        content: [
+          {
+            type: "text",
+            text: `⚠ Correlation analysis unavailable — need at least 2 symbols with usable history.${droppedText}`,
+          },
+        ],
         details: null as any,
       };
     }

@@ -1,3 +1,7 @@
+import {
+  type ArtifactContractId,
+  artifactContractIdsForPlanning,
+} from "../runtime/artifact-contracts.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
@@ -6,10 +10,6 @@ import type {
   ToolBundleName,
 } from "./router-types.js";
 import type { WorkflowType } from "./types.js";
-import {
-  artifactContractIdsForPlanning,
-  type ArtifactContractId,
-} from "../runtime/artifact-contracts.js";
 
 export const PLANNING_VERSION = "planning-v1" as const;
 
@@ -127,7 +127,8 @@ export const CAPABILITY_GAP_REGISTRY: Record<CapabilityGapId, CapabilityGapDefin
   market_calendar: {
     id: "market_calendar",
     label: "Market calendar",
-    description: "Exchange holiday and session-state data beyond deterministic weekday/known-holiday grounding.",
+    description:
+      "Exchange holiday and session-state data beyond deterministic weekday/known-holiday grounding.",
     v1Status: "classified_gap",
     specialistCompetitive: false,
   },
@@ -141,7 +142,8 @@ export const CAPABILITY_GAP_REGISTRY: Record<CapabilityGapId, CapabilityGapDefin
   brokerage_comparison: {
     id: "brokerage_comparison",
     label: "Brokerage comparison",
-    description: "Live brokerage fees, platform features, account support, and execution-quality comparison data.",
+    description:
+      "Live brokerage fees, platform features, account support, and execution-quality comparison data.",
     v1Status: "classified_gap",
     specialistCompetitive: false,
   },
@@ -155,7 +157,8 @@ export const CAPABILITY_GAP_REGISTRY: Record<CapabilityGapId, CapabilityGapDefin
   earnings_event_risk: {
     id: "earnings_event_risk",
     label: "Earnings-event risk",
-    description: "Upcoming earnings timing, transcript, implied move, and event-specific risk coverage.",
+    description:
+      "Upcoming earnings timing, transcript, implied move, and event-specific risk coverage.",
     v1Status: "classified_gap",
     specialistCompetitive: false,
   },
@@ -176,7 +179,8 @@ export const CAPABILITY_GAP_REGISTRY: Record<CapabilityGapId, CapabilityGapDefin
   sentiment_sample_depth: {
     id: "sentiment_sample_depth",
     label: "Sentiment sample depth",
-    description: "Coverage, sample-size, source-depth, and low-volume confidence metadata for sentiment evidence.",
+    description:
+      "Coverage, sample-size, source-depth, and low-volume confidence metadata for sentiment evidence.",
     v1Status: "classified_gap",
     specialistCompetitive: false,
   },
@@ -238,7 +242,11 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     policyCardId: "asset_compare",
     evidencePlanId: "placeholder_asset_compare",
     answerContractId: "asset_compare_tradeoff",
-    structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
+    structuredCheckIds: [
+      "required_evidence_present",
+      "data_gap_disclosed",
+      "capability_gap_disclosure",
+    ],
     capabilityGapIds: ["etf_holdings_overlap"],
     compatibleToolBundles: ["core_market", "macro", "sentiment", "clarification"],
     migrated: false,
@@ -265,7 +273,11 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     policyCardId: "portfolio_review",
     evidencePlanId: "placeholder_portfolio_review",
     answerContractId: "portfolio_review",
-    structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+    structuredCheckIds: [
+      "required_evidence_present",
+      "data_gap_disclosed",
+      "commitment_mode_respected",
+    ],
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "macro", "sentiment", "clarification"],
     migrated: false,
@@ -334,7 +346,11 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     policyCardId: "sentiment_snapshot",
     evidencePlanId: "placeholder_sentiment_snapshot",
     answerContractId: "sentiment_snapshot",
-    structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+    structuredCheckIds: [
+      "required_evidence_present",
+      "source_coverage_disclosed",
+      "data_gap_disclosed",
+    ],
     capabilityGapIds: ["sentiment_sample_depth"],
     compatibleToolBundles: ["core_market", "sentiment"],
     migrated: false,
@@ -390,7 +406,11 @@ export const PLANNING_MANIFEST: Record<TaskFamily, PlanningManifestEntry> = {
     policyCardId: "backtest_review",
     evidencePlanId: "placeholder_backtest_review",
     answerContractId: "backtest_review",
-    structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+    structuredCheckIds: [
+      "required_evidence_present",
+      "data_gap_disclosed",
+      "source_coverage_disclosed",
+    ],
     capabilityGapIds: [],
     compatibleToolBundles: ["core_market", "options", "sentiment", "sec", "clarification"],
     migrated: false,
@@ -433,11 +453,10 @@ export function buildPlanningEnvelope(
   const proposed = defaultPlanningSelection(input, output);
   const { selection, diagnostics } = validatePlanningSelection(output, proposed);
   const manifestEntry = PLANNING_MANIFEST[selection.taskFamily];
-  const behaviorMode: PlanningBehaviorMode = options.migrationStatuses?.[selection.taskFamily] ??
+  const behaviorMode: PlanningBehaviorMode =
+    options.migrationStatuses?.[selection.taskFamily] ??
     manifestEntry.migrationStatus ??
-    (manifestEntry.migrated
-    ? "replacement_active"
-    : "observe_only");
+    (manifestEntry.migrated ? "replacement_active" : "observe_only");
 
   return {
     version: PLANNING_VERSION,
@@ -449,16 +468,21 @@ export function buildPlanningEnvelope(
     diagnostics: [
       ...diagnostics,
       ...(output.diagnostics.length > 0
-        ? [{
-            code: "planning_after_router_corrections",
-            message: "planning selected after router diagnostics were applied",
-          }]
+        ? [
+            {
+              code: "planning_after_router_corrections",
+              message: "planning selected after router diagnostics were applied",
+            },
+          ]
         : []),
       ...(behaviorMode === "observe_only"
-        ? [{
-            code: "planning_observe_only",
-            message: "planning metadata is recorded without changing active prompt, route, workflow, tools, or answer behavior",
-          }]
+        ? [
+            {
+              code: "planning_observe_only",
+              message:
+                "planning metadata is recorded without changing active prompt, route, workflow, tools, or answer behavior",
+            },
+          ]
         : []),
     ],
   };
@@ -476,10 +500,12 @@ export function validatePlanningSelection(
   const fallback = defaultTaskFamilyForOutput(output, "");
   return {
     selection: selectionForTaskFamily(fallback),
-    diagnostics: [{
-      code: "planning_task_family_corrected",
-      message: `${proposed.taskFamily} is not supported for ${output.routeKind}${output.workflow ? `/${output.workflow}` : ""}; using ${fallback}`,
-    }],
+    diagnostics: [
+      {
+        code: "planning_task_family_corrected",
+        message: `${proposed.taskFamily} is not supported for ${output.routeKind}${output.workflow ? `/${output.workflow}` : ""}; using ${fallback}`,
+      },
+    ],
   };
 }
 
@@ -508,7 +534,10 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   const lower = text.toLowerCase();
   if (output.routeKind === "clarification") return "general_fallback";
   if (output.routeKind === "pass_through") return "general_fallback";
-  if (output.workflow === "portfolio_builder" && isExistingRetirementAllocationReviewPrompt(lower)) {
+  if (
+    output.workflow === "portfolio_builder" &&
+    isExistingRetirementAllocationReviewPrompt(lower)
+  ) {
     return "portfolio_review";
   }
   if (output.workflow === "portfolio_builder") return "portfolio_build";
@@ -532,7 +561,10 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
     return "sentiment_snapshot";
   }
-  if (isPortfolioRebalancePrompt(lower) || isAddToExistingHoldingsPrompt(lower, output.entities.symbols.length)) {
+  if (
+    isPortfolioRebalancePrompt(lower) ||
+    isAddToExistingHoldingsPrompt(lower, output.entities.symbols.length)
+  ) {
     return "portfolio_review";
   }
   if (/\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower)) {
@@ -544,17 +576,29 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\b(?:brokerage|hysa|money-market|t-bills?|cds?|mortgage|taxable account)\b/.test(lower)) {
     return "retail_finance_tradeoff";
   }
-  if (/\b(?:btc|bitcoin|crypto)\b/.test(lower) && /\b(?:allocation|range|position\s+size|sizing|drawdown)\b/.test(lower)) {
+  if (
+    /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
+    /\b(?:allocation|range|position\s+size|sizing|drawdown)\b/.test(lower)
+  ) {
     return "retail_finance_tradeoff";
   }
-  if (/\b(?:60\/40|portfolio|allocation)\b/.test(lower) && /\b(?:evaluate|evaluation|review|risk|prospects)\b/.test(lower)) {
+  if (
+    /\b(?:60\/40|portfolio|allocation)\b/.test(lower) &&
+    /\b(?:evaluate|evaluation|review|risk|prospects)\b/.test(lower)
+  ) {
     return "portfolio_review";
   }
-  if (output.entities.symbols.length === 1 && /\b(?:analyze|buy|sell|wait|avoid|recommendation|attractive)\b/.test(lower)) {
+  if (
+    output.entities.symbols.length === 1 &&
+    /\b(?:analyze|buy|sell|wait|avoid|recommendation|attractive)\b/.test(lower)
+  ) {
     return "single_asset_decision";
   }
   if (output.workflow === "single_asset_analysis") return "single_asset_decision";
-  if (/\b(?:explain|what is|what does|how to|define)\b/.test(lower) && output.entities.symbols.length === 0) {
+  if (
+    /\b(?:explain|what is|what does|how to|define)\b/.test(lower) &&
+    output.entities.symbols.length === 0
+  ) {
     return "concept_explainer";
   }
   return "general_fallback";
@@ -581,7 +625,9 @@ function refinePlanningSelectionForPrompt(
       return {
         ...selection,
         policyCardId: "concept_inflation_cash_education",
-        structuredCheckIds: mergeStructuredChecks(selection.structuredCheckIds, ["tax_caveat_present"]),
+        structuredCheckIds: mergeStructuredChecks(selection.structuredCheckIds, [
+          "tax_caveat_present",
+        ]),
       };
     }
     if (isValuationMetricEducationPrompt(lower)) {
@@ -654,57 +700,99 @@ function refinePlanningSelectionForPrompt(
 }
 
 function isNoToolConceptEducationPrompt(lower: string): boolean {
-  if (!/\b(?:explain|what\s+is|what\s+are|what\s+does|how\s+does|how\s+do|how\s+to|define)\b/.test(lower)) {
+  if (
+    !/\b(?:explain|what\s+is|what\s+are|what\s+does|how\s+does|how\s+do|how\s+to|define)\b/.test(
+      lower,
+    )
+  ) {
     return false;
   }
-  return isOptionsEducationPrompt(lower) ||
+  return (
+    isOptionsEducationPrompt(lower) ||
     isInflationCashEducationPrompt(lower) ||
-    isValuationMetricEducationPrompt(lower);
+    isValuationMetricEducationPrompt(lower)
+  );
 }
 
 function isOptionsEducationPrompt(lower: string): boolean {
-  return /\b(?:covered\s+calls?|protective\s+puts?|options?|option\s+premium|assignment\s+risk|strike|expiration|delta|theta|greeks?)\b/.test(lower);
+  return /\b(?:covered\s+calls?|protective\s+puts?|options?|option\s+premium|assignment\s+risk|strike|expiration|delta|theta|greeks?)\b/.test(
+    lower,
+  );
 }
 
 function isOptionsStrategyPrompt(lower: string): boolean {
-  const explicitOptionsStrategy = /\b(?:covered\s+calls?|protective\s+puts?|buy(?:ing)?\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|options?\s+income|option\s+strategy|options?\s+hedge|collar)\b/.test(lower);
-  const optionsHedge = /\bhedg(?:e|ing)\b.{0,80}\b(?:puts|put\s+options?|options?)\b/.test(lower) ||
+  const explicitOptionsStrategy =
+    /\b(?:covered\s+calls?|protective\s+puts?|buy(?:ing)?\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|options?\s+income|option\s+strategy|options?\s+hedge|collar)\b/.test(
+      lower,
+    );
+  const optionsHedge =
+    /\bhedg(?:e|ing)\b.{0,80}\b(?:puts|put\s+options?|options?)\b/.test(lower) ||
     /\b(?:puts|put\s+options?|options?)\b.{0,80}\bhedg(?:e|ing)\b/.test(lower);
-  return (explicitOptionsStrategy || optionsHedge) &&
-    /\b(?:own|have|shares?|position|cost\s+basis|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge|sell)\b/.test(lower);
+  return (
+    (explicitOptionsStrategy || optionsHedge) &&
+    /\b(?:own|have|shares?|position|cost\s+basis|good\s+idea|make\s+sense|income|premium|strike|expiration|assignment|stable|flat|protect|hedge|sell)\b/.test(
+      lower,
+    )
+  );
 }
 
 function isTickerDisambiguationPrompt(lower: string): boolean {
   if (/\b(?:ticker|symbol|formerly|old ticker)\b/.test(lower)) return true;
-  return /\b(?:earnings are|earnings tonight)\b/.test(lower) &&
+  return (
+    /\b(?:earnings are|earnings tonight)\b/.test(lower) &&
     /\b(?:trim|hedge|hold|event[-\s]?risk|position\s+size)\b/.test(lower) &&
-    !/\b(?:covered\s+calls?|protective\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|option\s+chain|strike|expiration|premium)\b/.test(lower);
+    !/\b(?:covered\s+calls?|protective\s+puts?|sell(?:ing)?\s+calls?|sell(?:ing)?\s+puts?|option\s+chain|strike|expiration|premium)\b/.test(
+      lower,
+    )
+  );
 }
 
 function isInflationCashEducationPrompt(lower: string): boolean {
-  return /\b(?:inflation|purchasing\s+power|real\s+returns?|cash\s+savings?|cash\s+drag|tips|short(?:er)?[-\s]?duration)\b/.test(lower) &&
-    /\b(?:cash|savings?|purchasing\s+power|real\s+returns?|bonds?|tips|protect|protection|affect)\b/.test(lower);
+  return (
+    /\b(?:inflation|purchasing\s+power|real\s+returns?|cash\s+savings?|cash\s+drag|tips|short(?:er)?[-\s]?duration)\b/.test(
+      lower,
+    ) &&
+    /\b(?:cash|savings?|purchasing\s+power|real\s+returns?|bonds?|tips|protect|protection|affect)\b/.test(
+      lower,
+    )
+  );
 }
 
 function isValuationMetricEducationPrompt(lower: string): boolean {
-  return /\b(?:p\/e|pe\s+ratio|price[-\s]?to[-\s]?earnings|ev\/ebitda|p\/s|price[-\s]?to[-\s]?sales|valuation\s+metric|trailing|forward\s+earnings|normalized\s+earnings|cyclically\s+adjusted)\b/.test(lower);
+  return /\b(?:p\/e|pe\s+ratio|price[-\s]?to[-\s]?earnings|ev\/ebitda|p\/s|price[-\s]?to[-\s]?sales|valuation\s+metric|trailing|forward\s+earnings|normalized\s+earnings|cyclically\s+adjusted)\b/.test(
+    lower,
+  );
 }
 
 function isPortfolioRebalancePrompt(lower: string): boolean {
-  return /\b(?:portfolio|allocation|holdings?|sleeves?|ira|etfs?|funds?|s&p\s*500|index|equity|bonds?|cash)\b/.test(lower) &&
-    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|hedge|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
+  return (
+    /\b(?:portfolio|allocation|holdings?|sleeves?|ira|etfs?|funds?|s&p\s*500|index|equity|bonds?|cash)\b/.test(
+      lower,
+    ) &&
+    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|hedge|protect|protection|missing\s+out\s+on\s+growth)\b/.test(
+      lower,
+    )
+  );
 }
 
 function isAddToExistingHoldingsPrompt(lower: string, symbolCount: number): boolean {
-  return symbolCount >= 2 &&
-    /\b(?:already\s+own|already\s+hold|current(?:ly)?\s+own|existing\s+(?:holdings?|portfolio|position)|my\s+portfolio)\b/.test(lower) &&
-    /\b(?:add(?:ing)?|buy(?:ing)?|make\s+sense|fit|long[-\s]?term|growth)\b/.test(lower);
+  return (
+    symbolCount >= 2 &&
+    /\b(?:already\s+own|already\s+hold|current(?:ly)?\s+own|existing\s+(?:holdings?|portfolio|position)|my\s+portfolio)\b/.test(
+      lower,
+    ) &&
+    /\b(?:add(?:ing)?|buy(?:ing)?|make\s+sense|fit|long[-\s]?term|growth)\b/.test(lower)
+  );
 }
 
 function isExistingRetirementAllocationReviewPrompt(lower: string): boolean {
-  return /\b(?:401k|401\(k\)|target[-\s]?date|tdf)\b/.test(lower) &&
+  return (
+    /\b(?:401k|401\(k\)|target[-\s]?date|tdf)\b/.test(lower) &&
     /\b(?:mostly|current(?:ly)?|already|have|holding|invested|allocation)\b/.test(lower) &&
-    /\b(?:review|solid|worried|inflation|diversify|boost returns?|other options?|without taking crazy risks?|risk)\b/.test(lower);
+    /\b(?:review|solid|worried|inflation|diversify|boost returns?|other options?|without taking crazy risks?|risk)\b/.test(
+      lower,
+    )
+  );
 }
 
 function mergeCapabilityGaps(

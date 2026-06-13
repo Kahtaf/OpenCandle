@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
 import { registerAskUserTool } from "../../../src/tools/interaction/ask-user.js";
 import type { AskUserHandler } from "../../../src/types/index.js";
 
@@ -18,7 +18,9 @@ function createMockCtx(hasUI: boolean) {
 function captureRegisteredTool(askUserHandler?: AskUserHandler) {
   let captured: any = null;
   const mockPi = {
-    registerTool: (tool: any) => { captured = tool; },
+    registerTool: (tool: any) => {
+      captured = tool;
+    },
   } as unknown as ExtensionAPI;
   registerAskUserTool(mockPi, askUserHandler);
   return captured;
@@ -39,7 +41,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Which ticker?", question_type: "select", options: ["AAPL", "MSFT"] },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(true);
     expect(result.details.answer).toBeNull();
@@ -50,7 +54,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Which ticker?", question_type: "text" },
-      undefined, undefined, undefined,
+      undefined,
+      undefined,
+      undefined,
     );
     expect(result.details.cancelled).toBe(true);
     expect(result.content[0].text).toContain("UI not available");
@@ -61,13 +67,23 @@ describe("ask_user tool", () => {
     ctx.ui.select.mockResolvedValue("Technology");
     const result = await tool.execute(
       "call-1",
-      { question: "Which sector?", question_type: "select", options: ["Technology", "Healthcare", "Energy"] },
-      undefined, undefined, ctx,
+      {
+        question: "Which sector?",
+        question_type: "select",
+        options: ["Technology", "Healthcare", "Energy"],
+      },
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(false);
     expect(result.details.answer).toBe("Technology");
     expect(result.content[0].text).toContain("Technology");
-    expect(ctx.ui.select).toHaveBeenCalledWith("Which sector?", ["Technology", "Healthcare", "Energy"]);
+    expect(ctx.ui.select).toHaveBeenCalledWith("Which sector?", [
+      "Technology",
+      "Healthcare",
+      "Energy",
+    ]);
   });
 
   it("select — returns cancelled when user dismisses", async () => {
@@ -76,7 +92,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Which sector?", question_type: "select", options: ["Tech", "Health"] },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(true);
     expect(result.details.answer).toBeNull();
@@ -88,7 +106,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Pick one", question_type: "select", options: [] },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(true);
     expect(result.content[0].text).toContain("No options provided");
@@ -100,7 +120,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Enter a ticker symbol", question_type: "text", placeholder: "e.g. AAPL" },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(false);
     expect(result.details.answer).toBe("AAPL");
@@ -113,7 +135,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Enter a ticker", question_type: "text" },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(true);
     expect(result.details.answer).toBeNull();
@@ -125,7 +149,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Enter a ticker", question_type: "text" },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(true);
     expect(result.details.answer).toBeNull();
@@ -136,12 +162,21 @@ describe("ask_user tool", () => {
     ctx.ui.confirm.mockResolvedValue(true);
     const result = await tool.execute(
       "call-1",
-      { question: "Include options analysis?", question_type: "confirm", reason: "Options data adds depth" },
-      undefined, undefined, ctx,
+      {
+        question: "Include options analysis?",
+        question_type: "confirm",
+        reason: "Options data adds depth",
+      },
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(false);
     expect(result.details.answer).toBe("Yes");
-    expect(ctx.ui.confirm).toHaveBeenCalledWith("Include options analysis?", "Options data adds depth");
+    expect(ctx.ui.confirm).toHaveBeenCalledWith(
+      "Include options analysis?",
+      "Options data adds depth",
+    );
   });
 
   it("confirm — returns No", async () => {
@@ -150,7 +185,9 @@ describe("ask_user tool", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Proceed?", question_type: "confirm" },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
     expect(result.details.cancelled).toBe(false);
     expect(result.details.answer).toBe("No");
@@ -159,7 +196,8 @@ describe("ask_user tool", () => {
 
 describe("ask_user tool with injected handler", () => {
   it("handler receives correct params and answer flows back", async () => {
-    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+    const handler = vi
+      .fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
       .mockResolvedValue({ answer: "Technology", cancelled: false });
 
     const tool = captureRegisteredTool(handler);
@@ -174,7 +212,9 @@ describe("ask_user tool with injected handler", () => {
         placeholder: "pick one",
         reason: "need to narrow search",
       },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
 
     // Handler receives all params correctly
@@ -196,14 +236,17 @@ describe("ask_user tool with injected handler", () => {
   });
 
   it("handler cancelled result returns cancelled tool result", async () => {
-    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+    const handler = vi
+      .fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
       .mockResolvedValue({ answer: null, cancelled: true });
 
     const tool = captureRegisteredTool(handler);
     const result = await tool.execute(
       "call-1",
       { question: "Risk tolerance?", question_type: "text" },
-      undefined, undefined, undefined,
+      undefined,
+      undefined,
+      undefined,
     );
 
     expect(result.details.cancelled).toBe(true);
@@ -212,7 +255,8 @@ describe("ask_user tool with injected handler", () => {
   });
 
   it("handler takes priority over ctx.hasUI", async () => {
-    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+    const handler = vi
+      .fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
       .mockResolvedValue({ answer: "Yes", cancelled: false });
 
     const tool = captureRegisteredTool(handler);
@@ -221,7 +265,9 @@ describe("ask_user tool with injected handler", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Proceed?", question_type: "confirm" },
-      undefined, undefined, ctx,
+      undefined,
+      undefined,
+      ctx,
     );
 
     expect(handler).toHaveBeenCalled();
@@ -230,7 +276,8 @@ describe("ask_user tool with injected handler", () => {
   });
 
   it("handler takes priority over no-UI fallback", async () => {
-    const handler = vi.fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
+    const handler = vi
+      .fn<Parameters<AskUserHandler>, ReturnType<AskUserHandler>>()
       .mockResolvedValue({ answer: "AAPL", cancelled: false });
 
     const tool = captureRegisteredTool(handler);
@@ -238,7 +285,9 @@ describe("ask_user tool with injected handler", () => {
     const result = await tool.execute(
       "call-1",
       { question: "Enter ticker", question_type: "text" },
-      undefined, undefined, undefined,
+      undefined,
+      undefined,
+      undefined,
     );
 
     expect(result.details.cancelled).toBe(false);

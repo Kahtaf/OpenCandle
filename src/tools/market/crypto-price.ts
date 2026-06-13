@@ -1,27 +1,27 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import { getCryptoPrice } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CryptoPrice } from "../../types/market.js";
 
 const params = Type.Object({
   id: Type.String({
-    description:
-      "CoinGecko coin ID (e.g. bitcoin, ethereum, solana, dogecoin). Use lowercase.",
+    description: "CoinGecko coin ID (e.g. bitcoin, ethereum, solana, dogecoin). Use lowercase.",
   }),
 });
 
 export const cryptoPriceTool: AgentTool<typeof params, CryptoPrice> = {
   name: "get_crypto_price",
   label: "Crypto Price",
-  description:
-    "Get current crypto price, 24h change, market cap, volume, ATH, and supply data",
+  description: "Get current crypto price, 24h change, market cap, volume, ATH, and supply data",
   parameters: params,
   async execute(_toolCallId, args) {
     const result = await wrapProvider("coingecko", () => getCryptoPrice(args.id.toLowerCase()));
     if (result.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Crypto price unavailable for ${args.id} (${result.reason}).` }],
+        content: [
+          { type: "text", text: `⚠ Crypto price unavailable for ${args.id} (${result.reason}).` },
+        ],
         details: null as any,
       };
     }

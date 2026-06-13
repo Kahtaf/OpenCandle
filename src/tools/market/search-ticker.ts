@@ -1,11 +1,12 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import { httpGet, httpPost } from "../../infra/http-client.js";
 import { rateLimiter } from "../../infra/rate-limiter.js";
 
 const params = Type.Object({
   query: Type.String({
-    description: "Search query — company name, ticker symbol, or crypto name (e.g. 'apple', 'AAPL', 'ethereum', 'bitcoin')",
+    description:
+      "Search query — company name, ticker symbol, or crypto name (e.g. 'apple', 'AAPL', 'ethereum', 'bitcoin')",
   }),
 });
 
@@ -40,18 +41,18 @@ export const searchTickerTool: AgentTool<typeof params> = {
   parameters: params,
   async execute(_toolCallId, args) {
     const yahoo = await searchYahoo(args.query);
-    const fallback = yahoo.quotes.length > 0
-      ? { quotes: [] }
-      : await searchTradingView(args.query);
+    const fallback = yahoo.quotes.length > 0 ? { quotes: [] } : await searchTradingView(args.query);
     const quotes = yahoo.quotes.length > 0 ? yahoo.quotes : fallback.quotes;
 
     if (quotes.length === 0) {
       const fallbackError = "error" in fallback ? fallback.error : undefined;
       return {
-        content: [{
-          type: "text",
-          text: formatNoResultsText(args.query, yahoo.error, fallbackError),
-        }],
+        content: [
+          {
+            type: "text",
+            text: formatNoResultsText(args.query, yahoo.error, fallbackError),
+          },
+        ],
         details: quotes,
       };
     }
@@ -69,7 +70,11 @@ export const searchTickerTool: AgentTool<typeof params> = {
   },
 };
 
-function formatNoResultsText(query: string, yahooError?: string, tradingViewError?: string): string {
+function formatNoResultsText(
+  query: string,
+  yahooError?: string,
+  tradingViewError?: string,
+): string {
   if (yahooError && tradingViewError) {
     return `No results found for "${query}". Yahoo search was unavailable (${yahooError}), and the TradingView fallback was unavailable (${tradingViewError}).`;
   }
@@ -99,26 +104,32 @@ async function searchYahoo(query: string): Promise<{ quotes: YahooSearchQuote[];
   }
 }
 
-async function searchTradingView(query: string): Promise<{ quotes: YahooSearchQuote[]; error?: string }> {
+async function searchTradingView(
+  query: string,
+): Promise<{ quotes: YahooSearchQuote[]; error?: string }> {
   const normalized = query.trim();
   if (!normalized) return { quotes: [] };
 
   try {
     const exactTicker = normalizeTickerQuery(normalized);
     if (exactTicker) {
-      const exact = await fetchTradingViewSearch(buildTradingViewSearchBody({
-        query: normalized,
-        ticker: exactTicker,
-        mode: "ticker",
-      }));
+      const exact = await fetchTradingViewSearch(
+        buildTradingViewSearchBody({
+          query: normalized,
+          ticker: exactTicker,
+          mode: "ticker",
+        }),
+      );
       const exactQuotes = decodeTradingViewSearch(exact, normalized).slice(0, 10);
       if (exactQuotes.length > 0) return { quotes: exactQuotes };
     }
 
-    const matched = await fetchTradingViewSearch(buildTradingViewSearchBody({
-      query: normalized,
-      mode: "description",
-    }));
+    const matched = await fetchTradingViewSearch(
+      buildTradingViewSearchBody({
+        query: normalized,
+        mode: "description",
+      }),
+    );
     return { quotes: decodeTradingViewSearch(matched, normalized).slice(0, 10) };
   } catch (error) {
     return {
@@ -128,7 +139,9 @@ async function searchTradingView(query: string): Promise<{ quotes: YahooSearchQu
   }
 }
 
-async function fetchTradingViewSearch(body: ReturnType<typeof buildTradingViewSearchBody>): Promise<TradingViewSearchResponse> {
+async function fetchTradingViewSearch(
+  body: ReturnType<typeof buildTradingViewSearchBody>,
+): Promise<TradingViewSearchResponse> {
   await rateLimiter.acquire("tradingview");
   return await httpPost<TradingViewSearchResponse>(
     "https://scanner.tradingview.com/america/scan2?label-product=screener-stock",
@@ -137,7 +150,8 @@ async function fetchTradingViewSearch(body: ReturnType<typeof buildTradingViewSe
       headers: {
         Origin: "https://www.tradingview.com",
         Referer: "https://www.tradingview.com/",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       },
     },
   );
@@ -149,16 +163,17 @@ function buildTradingViewSearchBody(options: {
   ticker?: string;
 }) {
   const columns = ["name", "description", "exchange", "type", "typespecs"] as const;
-  const filter = options.mode === "ticker" && options.ticker
-    ? [
-      { left: "name", operation: "equal", right: options.ticker },
-      { left: "is_primary", operation: "equal", right: true },
-      { left: "type", operation: "in_range", right: ["stock", "fund", "dr"] },
-    ]
-    : [
-      { left: "description", operation: "match", right: options.query },
-      { left: "type", operation: "in_range", right: ["stock", "fund", "dr"] },
-    ];
+  const filter =
+    options.mode === "ticker" && options.ticker
+      ? [
+          { left: "name", operation: "equal", right: options.ticker },
+          { left: "is_primary", operation: "equal", right: true },
+          { left: "type", operation: "in_range", right: ["stock", "fund", "dr"] },
+        ]
+      : [
+          { left: "description", operation: "match", right: options.query },
+          { left: "type", operation: "in_range", right: ["stock", "fund", "dr"] },
+        ];
 
   return {
     markets: ["america"],
@@ -170,12 +185,17 @@ function buildTradingViewSearchBody(options: {
   };
 }
 
-function decodeTradingViewSearch(response: TradingViewSearchResponse, query: string): YahooSearchQuote[] {
+function decodeTradingViewSearch(
+  response: TradingViewSearchResponse,
+  query: string,
+): YahooSearchQuote[] {
   const fields = response.fields ?? [];
   const queryTicker = normalizeTickerQuery(query);
   return (response.symbols ?? [])
     .map((row, index) => {
-      const values = Object.fromEntries(fields.map((field, fieldIndex) => [field, row.f[fieldIndex]]));
+      const values = Object.fromEntries(
+        fields.map((field, fieldIndex) => [field, row.f[fieldIndex]]),
+      );
       const symbol = stringValue(values.name) ?? symbolFromTvSymbol(row.s);
       const longname = stringValue(values.description);
       const exchange = stringValue(values.exchange) ?? exchangeFromTvSymbol(row.s);

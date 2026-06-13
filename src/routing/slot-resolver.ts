@@ -1,11 +1,11 @@
+import { OPTIONS_SCREENER_DEFAULTS, PORTFOLIO_DEFAULTS } from "./defaults.js";
 import type {
   ExtractedEntities,
-  PortfolioSlots,
   OptionsScreenerSlots,
+  PortfolioSlots,
   SlotResolution,
   SlotSource,
 } from "./types.js";
-import { PORTFOLIO_DEFAULTS, OPTIONS_SCREENER_DEFAULTS } from "./defaults.js";
 
 interface Preferences {
   riskProfile?: string;
@@ -85,11 +85,19 @@ export function resolvePortfolioSlots(
     sources.budget = "default";
   }
 
-  const risk = resolve(entities.riskProfile, preferences.riskProfile, PORTFOLIO_DEFAULTS.riskProfile);
+  const risk = resolve(
+    entities.riskProfile,
+    preferences.riskProfile,
+    PORTFOLIO_DEFAULTS.riskProfile,
+  );
   sources.riskProfile = risk.source;
   if (risk.source === "default") defaultsUsed.push("riskProfile");
 
-  const horizon = resolve(entities.timeHorizon, preferences.timeHorizon, PORTFOLIO_DEFAULTS.timeHorizon);
+  const horizon = resolve(
+    entities.timeHorizon,
+    preferences.timeHorizon,
+    PORTFOLIO_DEFAULTS.timeHorizon,
+  );
   sources.timeHorizon = horizon.source;
   if (horizon.source === "default") defaultsUsed.push("timeHorizon");
 
@@ -101,7 +109,11 @@ export function resolvePortfolioSlots(
   sources.positionCount = count.source;
   if (count.source === "default") defaultsUsed.push("positionCount");
 
-  const maxPct = resolve(undefined, preferences.maxSinglePositionPct, PORTFOLIO_DEFAULTS.maxSinglePositionPct);
+  const maxPct = resolve(
+    undefined,
+    preferences.maxSinglePositionPct,
+    PORTFOLIO_DEFAULTS.maxSinglePositionPct,
+  );
   sources.maxSinglePositionPct = maxPct.source;
   if (maxPct.source === "default") defaultsUsed.push("maxSinglePositionPct");
 
@@ -140,14 +152,17 @@ export function resolveOptionsScreenerSlots(
   }
 
   // Direction: default to bullish unless the user specified a protective put hedge.
-  const inferredDirection = entities.optionStrategy === "protective_put"
-    ? "bearish"
-    : entities.direction;
+  const inferredDirection =
+    entities.optionStrategy === "protective_put" ? "bearish" : entities.direction;
   const dir = resolve(inferredDirection, undefined, "bullish" as const);
   sources.direction = dir.source;
   if (dir.source === "default") defaultsUsed.push("direction");
 
-  const dte = resolve(mapDteHintToTarget(entities.dteHint), preferences.dteTarget, OPTIONS_SCREENER_DEFAULTS.dteTarget);
+  const dte = resolve(
+    mapDteHintToTarget(entities.dteHint),
+    preferences.dteTarget,
+    OPTIONS_SCREENER_DEFAULTS.dteTarget,
+  );
   sources.dteTarget = dte.source;
   if (dte.source === "default") defaultsUsed.push("dteTarget");
 
@@ -155,11 +170,19 @@ export function resolveOptionsScreenerSlots(
   sources.objective = obj.source;
   if (obj.source === "default") defaultsUsed.push("objective");
 
-  const moneyness = resolve(undefined, preferences.moneynessPreference, OPTIONS_SCREENER_DEFAULTS.moneynessPreference);
+  const moneyness = resolve(
+    undefined,
+    preferences.moneynessPreference,
+    OPTIONS_SCREENER_DEFAULTS.moneynessPreference,
+  );
   sources.moneynessPreference = moneyness.source;
   if (moneyness.source === "default") defaultsUsed.push("moneynessPreference");
 
-  const liquidity = resolve(undefined, preferences.liquidityMinimum, OPTIONS_SCREENER_DEFAULTS.liquidityMinimum);
+  const liquidity = resolve(
+    undefined,
+    preferences.liquidityMinimum,
+    OPTIONS_SCREENER_DEFAULTS.liquidityMinimum,
+  );
   sources.liquidityMinimum = liquidity.source;
   if (liquidity.source === "default") defaultsUsed.push("liquidityMinimum");
 

@@ -12,10 +12,7 @@ interface WorkflowExpectation {
 /**
  * Score trajectory matching: did the agent follow the expected workflow steps?
  */
-export function scoreTrajectory(
-  trace: EvalTrace,
-  expectations: WorkflowExpectation,
-): LayerDetail {
+export function scoreTrajectory(trace: EvalTrace, expectations: WorkflowExpectation): LayerDetail {
   const issues: string[] = [];
   let checks = 0;
   let passed = 0;
@@ -26,7 +23,10 @@ export function scoreTrajectory(
     const actualNames = trace.toolCalls.map((tc) => tc.name);
     let seqIdx = 0;
     for (const name of actualNames) {
-      if (seqIdx < expectations.expectedSequence.length && name === expectations.expectedSequence[seqIdx]) {
+      if (
+        seqIdx < expectations.expectedSequence.length &&
+        name === expectations.expectedSequence[seqIdx]
+      ) {
         seqIdx++;
       }
     }

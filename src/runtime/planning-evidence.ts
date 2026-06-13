@@ -1,5 +1,5 @@
-import { parseToolTag } from "../onboarding/tool-tags.js";
 import type { ParsedTag } from "../onboarding/tool-tags.js";
+import { parseToolTag } from "../onboarding/tool-tags.js";
 import type { CapabilityGapId, EvidencePlanId, TaskFamily } from "../routing/planning.js";
 import type { ProviderResult } from "./evidence.js";
 
@@ -135,23 +135,71 @@ export const EVIDENCE_PLAN_REGISTRY: Record<EvidencePlanId, EvidencePlanDefiniti
     optionalEvidence: ["tool_result"],
     capabilityGapIds: ["earnings_event_risk"],
   },
-  placeholder_single_asset_decision: placeholderPlan("placeholder_single_asset_decision", ["single_asset_decision"], []),
-  placeholder_asset_compare: placeholderPlan("placeholder_asset_compare", ["asset_compare"], ["etf_holdings_overlap"]),
-  placeholder_portfolio_build: placeholderPlan("placeholder_portfolio_build", ["portfolio_build"], []),
-  placeholder_portfolio_review: placeholderPlan("placeholder_portfolio_review", ["portfolio_review"], []),
-  placeholder_options_strategy: placeholderPlan("placeholder_options_strategy", ["options_strategy"], []),
-  placeholder_current_event_explanation: placeholderPlan("placeholder_current_event_explanation", ["current_event_explanation"], ["market_calendar"]),
-  placeholder_sentiment_snapshot: placeholderPlan("placeholder_sentiment_snapshot", ["sentiment_snapshot"], ["sentiment_sample_depth"]),
-  placeholder_filing_thesis_review: placeholderPlan("placeholder_filing_thesis_review", ["filing_thesis_review"], []),
-  placeholder_retail_finance_tradeoff: placeholderPlan("placeholder_retail_finance_tradeoff", ["retail_finance_tradeoff"], [
-    "brokerage_comparison",
-    "cash_yield_products",
-    "fund_tax_efficiency",
-  ]),
-  placeholder_concept_explainer: placeholderPlan("placeholder_concept_explainer", ["concept_explainer"], []),
-  placeholder_backtest_review: placeholderPlan("placeholder_backtest_review", ["backtest_review"], []),
-  placeholder_stateful_tracking_update: placeholderPlan("placeholder_stateful_tracking_update", ["stateful_tracking_update"], []),
-  placeholder_general_fallback: placeholderPlan("placeholder_general_fallback", ["general_fallback"], []),
+  placeholder_single_asset_decision: placeholderPlan(
+    "placeholder_single_asset_decision",
+    ["single_asset_decision"],
+    [],
+  ),
+  placeholder_asset_compare: placeholderPlan(
+    "placeholder_asset_compare",
+    ["asset_compare"],
+    ["etf_holdings_overlap"],
+  ),
+  placeholder_portfolio_build: placeholderPlan(
+    "placeholder_portfolio_build",
+    ["portfolio_build"],
+    [],
+  ),
+  placeholder_portfolio_review: placeholderPlan(
+    "placeholder_portfolio_review",
+    ["portfolio_review"],
+    [],
+  ),
+  placeholder_options_strategy: placeholderPlan(
+    "placeholder_options_strategy",
+    ["options_strategy"],
+    [],
+  ),
+  placeholder_current_event_explanation: placeholderPlan(
+    "placeholder_current_event_explanation",
+    ["current_event_explanation"],
+    ["market_calendar"],
+  ),
+  placeholder_sentiment_snapshot: placeholderPlan(
+    "placeholder_sentiment_snapshot",
+    ["sentiment_snapshot"],
+    ["sentiment_sample_depth"],
+  ),
+  placeholder_filing_thesis_review: placeholderPlan(
+    "placeholder_filing_thesis_review",
+    ["filing_thesis_review"],
+    [],
+  ),
+  placeholder_retail_finance_tradeoff: placeholderPlan(
+    "placeholder_retail_finance_tradeoff",
+    ["retail_finance_tradeoff"],
+    ["brokerage_comparison", "cash_yield_products", "fund_tax_efficiency"],
+  ),
+  placeholder_concept_explainer: placeholderPlan(
+    "placeholder_concept_explainer",
+    ["concept_explainer"],
+    [],
+  ),
+  placeholder_backtest_review: placeholderPlan(
+    "placeholder_backtest_review",
+    ["backtest_review"],
+    [],
+  ),
+  placeholder_stateful_tracking_update: placeholderPlan(
+    "placeholder_stateful_tracking_update",
+    ["stateful_tracking_update"],
+    [],
+  ),
+  placeholder_general_fallback: placeholderPlan(
+    "placeholder_general_fallback",
+    ["general_fallback"],
+    [],
+  ),
 };
 
 const KNOWN_US_MARKET_HOLIDAYS: Record<string, string> = {
@@ -193,11 +241,14 @@ export function buildMarketStatusEvidence(input: MarketStatusInput): PlanningEvi
   const isMarketHoliday = holidayName !== undefined;
   const marketStatus = classifyMarketStatus(local, isWeekend, isMarketHoliday, temporalReferences);
   const lastTradingDate = marketStatus === "open" ? local.date : lastTradingDay(local.date);
-  const gaps: EvidenceGap[] = [{
-    kind: "capability_gap",
-    capabilityGapId: "market_calendar",
-    reason: "V1 uses deterministic weekday and known-holiday grounding, not a live exchange-calendar provider.",
-  }];
+  const gaps: EvidenceGap[] = [
+    {
+      kind: "capability_gap",
+      capabilityGapId: "market_calendar",
+      reason:
+        "V1 uses deterministic weekday and known-holiday grounding, not a live exchange-calendar provider.",
+    },
+  ];
 
   return {
     id: "market_status:deterministic",
@@ -219,20 +270,27 @@ export function buildMarketStatusEvidence(input: MarketStatusInput): PlanningEvi
       lastTradingDay: lastTradingDate,
       quoteAsOfCaveat: quoteAsOfCaveat(marketStatus),
     },
-    rawTracePointer: input.traceId ? { traceId: input.traceId, toolName: "deterministic_market_status" } : undefined,
+    rawTracePointer: input.traceId
+      ? { traceId: input.traceId, toolName: "deterministic_market_status" }
+      : undefined,
     gaps,
-    caveats: ["Market status is deterministic V1 grounding and should be verified against an exchange calendar for edge cases."],
+    caveats: [
+      "Market status is deterministic V1 grounding and should be verified against an exchange calendar for edge cases.",
+    ],
   };
 }
 
 export function buildTickerDisambiguationEvidence(
   input: TickerDisambiguationInput,
 ): PlanningEvidenceRecord {
-  const gaps: EvidenceGap[] = [{
-    kind: "capability_gap",
-    capabilityGapId: "earnings_event_risk",
-    reason: "Ticker disambiguation can preserve symbol-verification gaps, but V1 does not add richer earnings-event data.",
-  }];
+  const gaps: EvidenceGap[] = [
+    {
+      kind: "capability_gap",
+      capabilityGapId: "earnings_event_risk",
+      reason:
+        "Ticker disambiguation can preserve symbol-verification gaps, but V1 does not add richer earnings-event data.",
+    },
+  ];
 
   return {
     id: "ticker_disambiguation:selected_slice",
@@ -247,9 +305,15 @@ export function buildTickerDisambiguationEvidence(
       requiresSymbolVerification: true,
       legacyBehaviorRemainsActive: true,
     },
-    rawTracePointer: input.traceId ? { traceId: input.traceId, toolName: "planning_ticker_disambiguation" } : undefined,
+    rawTracePointer: input.traceId
+      ? { traceId: input.traceId, toolName: "planning_ticker_disambiguation" }
+      : undefined,
     gaps,
-    caveats: input.symbols?.length ? [] : ["No symbol was verified by this evidence plan; active tools remain responsible for lookup."],
+    caveats: input.symbols?.length
+      ? []
+      : [
+          "No symbol was verified by this evidence plan; active tools remain responsible for lookup.",
+        ],
   };
 }
 
@@ -258,7 +322,8 @@ export function buildPortfolioExposureMapEvidence(
 ): PlanningEvidenceRecord {
   const sleeves = extractPortfolioSleeves(input.text);
   const normalizedSleeves = new Set(sleeves.map((sleeve) => sleeve.normalizedSleeve));
-  const hasBroadIndex = normalizedSleeves.has("broad_us_index") || normalizedSleeves.has("broad_equity");
+  const hasBroadIndex =
+    normalizedSleeves.has("broad_us_index") || normalizedSleeves.has("broad_equity");
   const hasSectorSleeve = sleeves.some((sleeve) => sleeve.normalizedSleeve.endsWith("_sector"));
   const broadIndexOverlapCaveat = hasBroadIndex && hasSectorSleeve;
 
@@ -271,24 +336,36 @@ export function buildPortfolioExposureMapEvidence(
     providerStatus: "available",
     normalizedFacts: {
       directSleeves: sleeves,
-      directExposureTotalPercent: roundPercent(sleeves.reduce((sum, sleeve) => sum + sleeve.percent, 0)),
+      directExposureTotalPercent: roundPercent(
+        sleeves.reduce((sum, sleeve) => sum + sleeve.percent, 0),
+      ),
       broadIndexOverlapCaveat,
       exactHoldingsOverlapAvailable: false,
-      targetBandGuidanceNeeded: /\b(?:rebalance|target\s+bands?|drift|overweight|underweight|concentration|diversif)/i.test(input.text),
+      targetBandGuidanceNeeded:
+        /\b(?:rebalance|target\s+bands?|drift|overweight|underweight|concentration|diversif)/i.test(
+          input.text,
+        ),
     },
-    rawTracePointer: input.traceId ? {
-      traceId: input.traceId,
-      toolName: "deterministic_portfolio_exposure_map",
-    } : undefined,
-    gaps: [{
-      kind: "capability_gap",
-      capabilityGapId: "etf_holdings_overlap",
-      reason: "V1 records user-stated sleeves and overlap caveats but does not fetch exact ETF/index holdings or issuer weights.",
-    }],
+    rawTracePointer: input.traceId
+      ? {
+          traceId: input.traceId,
+          toolName: "deterministic_portfolio_exposure_map",
+        }
+      : undefined,
+    gaps: [
+      {
+        kind: "capability_gap",
+        capabilityGapId: "etf_holdings_overlap",
+        reason:
+          "V1 records user-stated sleeves and overlap caveats but does not fetch exact ETF/index holdings or issuer weights.",
+      },
+    ],
     caveats: [
       "Exact ETF/index holdings overlap requires a provider-backed holdings source.",
       ...(broadIndexOverlapCaveat
-        ? ["Broad index exposure may already include sector exposure; V1 does not estimate exact constituent weights."]
+        ? [
+            "Broad index exposure may already include sector exposure; V1 does not estimate exact constituent weights.",
+          ]
         : []),
     ],
   };
@@ -300,7 +377,8 @@ export function captureEvidenceFromToolCall(
 ): PlanningEvidenceRecord {
   const text = toolResultText(toolCall.result);
   const providerGap = text ? normalizeProviderGapFromToolText(text) : undefined;
-  const providerStatus = providerGap?.providerStatus ?? (toolCall.isError ? "unavailable" : "available");
+  const providerStatus =
+    providerGap?.providerStatus ?? (toolCall.isError ? "unavailable" : "available");
   const gaps = providerGap ? [providerGapToEvidenceGap(providerGap)] : [];
   if (toolCall.isError && !providerGap) {
     gaps.push({
@@ -378,12 +456,14 @@ export function providerResultToPlanningEvidence<T>(
     providerStatus: "unavailable",
     normalizedFacts: { label },
     rawTracePointer,
-    gaps: [{
-      kind: "provider_status",
-      providerStatus: "unavailable",
-      provider: result.provider,
-      reason: result.reason,
-    }],
+    gaps: [
+      {
+        kind: "provider_status",
+        providerStatus: "unavailable",
+        provider: result.provider,
+        reason: result.reason,
+      },
+    ],
     caveats: [],
   };
 }
@@ -400,7 +480,9 @@ function providerGapToEvidenceGap(gap: NormalizedProviderGap): EvidenceGap {
   };
 }
 
-function providerStatusFromTag(tag: Exclude<ParsedTag, { kind: "connected" }>): Exclude<PlanningProviderStatus, "available"> {
+function providerStatusFromTag(
+  tag: Exclude<ParsedTag, { kind: "connected" }>,
+): Exclude<PlanningProviderStatus, "available"> {
   if (tag.kind === "credential_required") return "credential_required";
   if (tag.kind === "soft_degraded") return "soft_degraded";
   return "skipped";
@@ -428,11 +510,14 @@ function toolResultText(result: unknown): string | undefined {
   const content = result.content;
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
-    return content.map((item) => {
-      if (typeof item === "string") return item;
-      if (isRecord(item) && typeof item.text === "string") return item.text;
-      return "";
-    }).filter(Boolean).join("\n");
+    return content
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (isRecord(item) && typeof item.text === "string") return item.text;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
   }
   return undefined;
 }
@@ -449,7 +534,8 @@ function symbolsFromArgs(args: Record<string, unknown>): EntityScope {
 
 function extractPortfolioSleeves(text: string): PortfolioExposureSleeve[] {
   const matches: PortfolioExposureSleeve[] = [];
-  const pattern = /(\d+(?:\.\d+)?)\s*%\s*(?:in|to|of|toward|towards|allocated\s+to)?\s*([^,;.\n?]+)/gi;
+  const pattern =
+    /(\d+(?:\.\d+)?)\s*%\s*(?:in|to|of|toward|towards|allocated\s+to)?\s*([^,;.\n?]+)/gi;
   for (const match of text.matchAll(pattern)) {
     const percent = Number(match[1]);
     if (!Number.isFinite(percent)) continue;
@@ -474,15 +560,18 @@ function cleanSleeveLabel(label: string): string {
 function normalizePortfolioSleeve(label: string): string {
   const lower = label.toLowerCase();
   if (/\b(?:s&p\s*500|sp\s*500|index|voo|spy|ivv)\b/.test(lower)) return "broad_us_index";
-  if (/\b(?:tech|technology|software|semis?|semiconductors?)\b/.test(lower)) return "technology_sector";
+  if (/\b(?:tech|technology|software|semis?|semiconductors?)\b/.test(lower))
+    return "technology_sector";
   if (/\b(?:bond|bonds|fixed\s+income|treasur(?:y|ies))\b/.test(lower)) return "bonds";
   if (/\b(?:cash|savings?|money\s*market|t[-\s]?bills?)\b/.test(lower)) return "cash";
   if (/\b(?:international|ex[-\s]?us|foreign|global)\b/.test(lower)) return "international_equity";
   if (/\b(?:stock|stocks|equity|equities)\b/.test(lower)) return "broad_equity";
-  return lower
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 48) || "unknown_sleeve";
+  return (
+    lower
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "unknown_sleeve"
+  );
 }
 
 function roundPercent(value: number): number {
@@ -517,8 +606,10 @@ function classifyMarketStatus(
 }
 
 function quoteAsOfCaveat(marketStatus: string): string {
-  if (marketStatus === "open") return "Quote evidence may be intraday or delayed depending on provider.";
-  if (marketStatus === "pre_market") return "Quote evidence may reflect the previous regular session until premarket data is fetched.";
+  if (marketStatus === "open")
+    return "Quote evidence may be intraday or delayed depending on provider.";
+  if (marketStatus === "pre_market")
+    return "Quote evidence may reflect the previous regular session until premarket data is fetched.";
   return "Quote evidence should distinguish the current calendar date from the most recent trading session.";
 }
 

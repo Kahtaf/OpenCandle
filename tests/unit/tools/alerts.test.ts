@@ -1,16 +1,16 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
-import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
-import { getQuotes } from "../../../src/providers/tradingview.js";
-import { httpGet } from "../../../src/infra/http-client.js";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import type { OHLCV, StockQuote } from "../../../src/types/market.js";
-import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
-import { MarketStateService } from "../../../src/market-state/service.js";
+import { httpGet } from "../../../src/infra/http-client.js";
 import { defaultAlertProviderBudget } from "../../../src/market-state/alert-runner.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { getQuotes } from "../../../src/providers/tradingview.js";
+import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
+import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
+import type { OHLCV, StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -39,7 +39,9 @@ describe("alertsTool", () => {
     process.env.OPENCANDLE_HOME = openCandleHome;
     vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 180));
     vi.mocked(getQuotes).mockRejectedValue(new Error("TradingView unavailable in unit test"));
-    vi.mocked(getHistory).mockResolvedValue(history([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114]));
+    vi.mocked(getHistory).mockResolvedValue(
+      history([100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114]),
+    );
     vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
 
@@ -66,7 +68,9 @@ describe("alertsTool", () => {
     expect(actionDescription).toContain("set_enabled");
     expect(actionDescription).toContain("status");
     expect(actionDescription).toContain("check_after_create");
-    expect(alertsTool.parameters.properties.check_after_create.description).toContain("immediately");
+    expect(alertsTool.parameters.properties.check_after_create.description).toContain(
+      "immediately",
+    );
   });
 
   it("reports local runner status and recent check history for TUI parity", async () => {
@@ -182,7 +186,9 @@ describe("alertsTool", () => {
   });
 
   it("returns candidate matches for an unverified alert symbol without creating a rule", async () => {
-    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
     vi.mocked(httpGet).mockResolvedValue({
       quotes: [
         {
@@ -205,9 +211,7 @@ describe("alertsTool", () => {
     expect(result.details).toMatchObject({
       status: "needs_selection",
       query: "APL",
-      candidates: [
-        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
-      ],
+      candidates: [expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." })],
     });
 
     const db = initDefaultDatabase();
@@ -365,16 +369,16 @@ describe("alertsTool", () => {
       threshold: 30,
       period: 14,
     });
-    vi.mocked(getHistory).mockResolvedValue(history([
-      100, 98, 96, 94, 92, 90, 88, 86, 84, 82, 80, 78, 76, 74, 72,
-    ]));
+    vi.mocked(getHistory).mockResolvedValue(
+      history([100, 98, 96, 94, 92, 90, 88, 86, 84, 82, 80, 78, 76, 74, 72]),
+    );
 
     const seeded = await alertsTool.execute("test", { action: "check" });
     expect(seeded.content[0].text).toContain("seeded");
 
-    vi.mocked(getHistory).mockResolvedValue(history([
-      72, 74, 73, 75, 74, 76, 75, 77, 76, 78, 77, 79, 78, 80, 60,
-    ]));
+    vi.mocked(getHistory).mockResolvedValue(
+      history([72, 74, 73, 75, 74, 76, 75, 77, 76, 78, 77, 79, 78, 80, 60]),
+    );
     const checked = await alertsTool.execute("test", { action: "check" });
     expect(checked.details.checked).toBe(1);
   });
@@ -423,12 +427,14 @@ describe("alertsTool", () => {
   });
 
   it("rejects fractional SMA-cross lookback periods before storing a rule", async () => {
-    await expect(alertsTool.execute("test", {
-      action: "create_sma_cross_above",
-      symbol: "AAPL",
-      fast_period: 2.5,
-      slow_period: 5,
-    })).rejects.toThrow("fast_period and slow_period must be whole-number lookback periods");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_sma_cross_above",
+        symbol: "AAPL",
+        fast_period: 2.5,
+        slow_period: 5,
+      }),
+    ).rejects.toThrow("fast_period and slow_period must be whole-number lookback periods");
 
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
@@ -437,17 +443,21 @@ describe("alertsTool", () => {
   });
 
   it("rejects invalid indicator alert lookback periods before storing a rule", async () => {
-    await expect(alertsTool.execute("test", {
-      action: "create_price_above_sma",
-      symbol: "AAPL",
-      period: 2.5,
-    })).rejects.toThrow("period must be a whole-number lookback period");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_price_above_sma",
+        symbol: "AAPL",
+        period: 2.5,
+      }),
+    ).rejects.toThrow("period must be a whole-number lookback period");
 
-    await expect(alertsTool.execute("test", {
-      action: "create_volume_spike",
-      symbol: "AAPL",
-      period: -5,
-    })).rejects.toThrow("period must be a whole-number lookback period");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_volume_spike",
+        symbol: "AAPL",
+        period: -5,
+      }),
+    ).rejects.toThrow("period must be a whole-number lookback period");
 
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
@@ -456,31 +466,39 @@ describe("alertsTool", () => {
   });
 
   it("rejects lookback periods longer than the alert runner's history window", async () => {
-    await expect(alertsTool.execute("test", {
-      action: "create_sma_cross_above",
-      symbol: "AAPL",
-      fast_period: 50,
-      slow_period: 1000,
-    })).rejects.toThrow("slow_period must be at most 400");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_sma_cross_above",
+        symbol: "AAPL",
+        fast_period: 50,
+        slow_period: 1000,
+      }),
+    ).rejects.toThrow("slow_period must be at most 400");
 
-    await expect(alertsTool.execute("test", {
-      action: "create_price_above_sma",
-      symbol: "AAPL",
-      period: 500,
-    })).rejects.toThrow("period must be at most 200");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_price_above_sma",
+        symbol: "AAPL",
+        period: 500,
+      }),
+    ).rejects.toThrow("period must be at most 200");
 
-    await expect(alertsTool.execute("test", {
-      action: "create_rsi_above",
-      symbol: "AAPL",
-      threshold: 70,
-      period: 500,
-    })).rejects.toThrow("period must be at most 100");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_rsi_above",
+        symbol: "AAPL",
+        threshold: 70,
+        period: 500,
+      }),
+    ).rejects.toThrow("period must be at most 100");
 
-    await expect(alertsTool.execute("test", {
-      action: "create_volume_spike",
-      symbol: "AAPL",
-      period: 500,
-    })).rejects.toThrow("period must be at most 100");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_volume_spike",
+        symbol: "AAPL",
+        period: 500,
+      }),
+    ).rejects.toThrow("period must be at most 100");
 
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
@@ -497,12 +515,14 @@ describe("alertsTool", () => {
     });
     expect(created.details).toMatchObject({ cooldownSeconds: 0 });
 
-    await expect(alertsTool.execute("test", {
-      action: "create_price_below",
-      symbol: "AAPL",
-      threshold: 100,
-      cooldown_seconds: -1,
-    })).rejects.toThrow("cooldown_seconds must be a whole number greater than or equal to 0");
+    await expect(
+      alertsTool.execute("test", {
+        action: "create_price_below",
+        symbol: "AAPL",
+        threshold: 100,
+        cooldown_seconds: -1,
+      }),
+    ).rejects.toThrow("cooldown_seconds must be a whole number greater than or equal to 0");
 
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
@@ -524,17 +544,15 @@ describe("alertsTool", () => {
       timeframe: "1d",
     });
 
-    vi.mocked(getHistory).mockResolvedValue(historyWithVolumes(
-      [100, 101, 102, 103, 104, 105],
-      [100, 100, 100, 100, 100, 150],
-    ));
+    vi.mocked(getHistory).mockResolvedValue(
+      historyWithVolumes([100, 101, 102, 103, 104, 105], [100, 100, 100, 100, 100, 150]),
+    );
     const seeded = await alertsTool.execute("test", { action: "check" });
     expect(seeded.content[0].text).toContain("seeded");
 
-    vi.mocked(getHistory).mockResolvedValue(historyWithVolumes(
-      [100, 101, 102, 103, 104, 105],
-      [100, 100, 100, 100, 100, 250],
-    ));
+    vi.mocked(getHistory).mockResolvedValue(
+      historyWithVolumes([100, 101, 102, 103, 104, 105], [100, 100, 100, 100, 100, 250]),
+    );
     const triggered = await alertsTool.execute("test", { action: "check" });
     expect(triggered.content[0].text).toContain("TRIGGERED");
     expect(triggered.details).toMatchObject({ checked: 1, triggered: 1 });
@@ -546,7 +564,9 @@ describe("alertsTool", () => {
       symbol: "AAPL",
       threshold: 250,
     });
-    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("AAPL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
 
     const checked = await alertsTool.execute("test", { action: "check" });
 

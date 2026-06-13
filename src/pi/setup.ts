@@ -1,8 +1,8 @@
 import type { Model } from "@earendil-works/pi-ai";
 import {
-  LoginDialogComponent,
   type ExtensionAPI,
   type ExtensionContext,
+  LoginDialogComponent,
 } from "@earendil-works/pi-coding-agent";
 
 type SetupMode = "startup" | "manual";
@@ -54,14 +54,18 @@ function getAvailableModels(ctx: ExtensionContext, preferredProvider?: string): 
   return sortModels(ctx.modelRegistry.getAvailable(), preferredProvider);
 }
 
-export function getLlmSetupRequirement(ctx: Pick<ExtensionContext, "model" | "modelRegistry">): SetupRequirement {
+export function getLlmSetupRequirement(
+  ctx: Pick<ExtensionContext, "model" | "modelRegistry">,
+): SetupRequirement {
   if (ctx.model && ctx.modelRegistry.hasConfiguredAuth(ctx.model)) {
     return "ready";
   }
   return ctx.modelRegistry.getAvailable().length > 0 ? "select_model" : "connect_auth";
 }
 
-async function selectProviderForApiKey(ctx: ExtensionContext): Promise<ApiKeyProviderId | undefined> {
+async function selectProviderForApiKey(
+  ctx: ExtensionContext,
+): Promise<ApiKeyProviderId | undefined> {
   const choice = await ctx.ui.select("Connect an AI model", [
     "Google Gemini API",
     "OpenAI API",
@@ -79,7 +83,9 @@ async function selectProviderForApiKey(ctx: ExtensionContext): Promise<ApiKeyPro
   }
 }
 
-async function selectProviderForLogin(ctx: ExtensionContext): Promise<OAuthProviderChoice | undefined> {
+async function selectProviderForLogin(
+  ctx: ExtensionContext,
+): Promise<OAuthProviderChoice | undefined> {
   const choice = await ctx.ui.select("Connect an AI model", [
     "Google",
     "OpenAI",
@@ -112,7 +118,9 @@ async function selectAdvancedOAuthProvider(ctx: ExtensionContext): Promise<strin
 }
 
 async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promise<boolean> {
-  const provider = ctx.modelRegistry.authStorage.getOAuthProviders().find((item) => item.id === providerId);
+  const provider = ctx.modelRegistry.authStorage
+    .getOAuthProviders()
+    .find((item) => item.id === providerId);
   const providerName = provider?.name ?? providerId;
   const usesCallbackServer = provider?.usesCallbackServer ?? false;
 
@@ -136,43 +144,49 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
     });
 
     // Cast required: advanced providers return dynamic IDs outside the SDK's static union type
-    void ctx.modelRegistry.authStorage.login(providerId as any, {
-      onAuth: (info) => {
-        dialog.showAuth(info.url, info.instructions);
-        if (usesCallbackServer) {
-          void dialog
-            .showManualInput("Paste redirect URL below, or complete login in your browser:")
-            .then((value) => {
-              if (value && manualCodeResolve) {
-                manualCodeResolve(value);
-                manualCodeResolve = undefined;
-              }
-            })
-            .catch(() => {
-              if (manualCodeReject) {
-                manualCodeReject(new Error("Login cancelled"));
-                manualCodeReject = undefined;
-              }
-            });
-        } else if (providerId === "github-copilot") {
-          dialog.showWaiting("Waiting for browser authentication...");
-        }
-      },
-      onDeviceCode: (info) => {
-        dialog.showDeviceCode(info);
-        dialog.showWaiting("Waiting for authentication...");
-      },
-      onPrompt: async (prompt) => dialog.showPrompt(prompt.message, prompt.placeholder),
-      onProgress: (message) => dialog.showProgress(message),
-      onSelect: async (prompt) => {
-        const options = prompt.options.map((option, index) => `${index + 1}. ${option.label}`).join("\n");
-        const answer = await dialog.showPrompt(`${prompt.message}\n\n${options}`, "Enter a number");
-        const selectedIndex = Number.parseInt(answer.trim(), 10) - 1;
-        return prompt.options[selectedIndex]?.id;
-      },
-      onManualCodeInput: () => manualCodePromise,
-      signal: dialog.signal,
-    })
+    void ctx.modelRegistry.authStorage
+      .login(providerId as any, {
+        onAuth: (info) => {
+          dialog.showAuth(info.url, info.instructions);
+          if (usesCallbackServer) {
+            void dialog
+              .showManualInput("Paste redirect URL below, or complete login in your browser:")
+              .then((value) => {
+                if (value && manualCodeResolve) {
+                  manualCodeResolve(value);
+                  manualCodeResolve = undefined;
+                }
+              })
+              .catch(() => {
+                if (manualCodeReject) {
+                  manualCodeReject(new Error("Login cancelled"));
+                  manualCodeReject = undefined;
+                }
+              });
+          } else if (providerId === "github-copilot") {
+            dialog.showWaiting("Waiting for browser authentication...");
+          }
+        },
+        onDeviceCode: (info) => {
+          dialog.showDeviceCode(info);
+          dialog.showWaiting("Waiting for authentication...");
+        },
+        onPrompt: async (prompt) => dialog.showPrompt(prompt.message, prompt.placeholder),
+        onProgress: (message) => dialog.showProgress(message),
+        onSelect: async (prompt) => {
+          const options = prompt.options
+            .map((option, index) => `${index + 1}. ${option.label}`)
+            .join("\n");
+          const answer = await dialog.showPrompt(
+            `${prompt.message}\n\n${options}`,
+            "Enter a number",
+          );
+          const selectedIndex = Number.parseInt(answer.trim(), 10) - 1;
+          return prompt.options[selectedIndex]?.id;
+        },
+        onManualCodeInput: () => manualCodePromise,
+        signal: dialog.signal,
+      })
       .then(() => finish(true))
       .catch((error) => {
         const message = error instanceof Error ? error.message : String(error);
@@ -248,7 +262,11 @@ async function activateDefaultModel(
   return true;
 }
 
-async function selectModel(api: ExtensionAPI, ctx: ExtensionContext, preferredProvider?: string): Promise<boolean> {
+async function selectModel(
+  api: ExtensionAPI,
+  ctx: ExtensionContext,
+  preferredProvider?: string,
+): Promise<boolean> {
   const models = getAvailableModels(ctx, preferredProvider);
   if (models.length === 0) {
     ctx.ui.notify("No available models found yet. Connect a provider first.", "warning");

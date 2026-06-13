@@ -7,10 +7,11 @@
  *   npx tsx tests/harness/cli.ts answer --ipc <dir> --value "..."
  *   npx tsx tests/harness/cli.ts trace  --ipc <dir>
  */
-import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 import { IpcChannel } from "./ipc.js";
@@ -81,7 +82,9 @@ async function cmdRun() {
     // Deferred collector proxy — the handler captures this ref; the real collector
     // is wired up after createOpenCandleSession returns.
     const collectorProxy = {
-      addInteraction: (...a: Parameters<ReturnType<typeof createTraceCollector>["addInteraction"]>) => {
+      addInteraction: (
+        ...a: Parameters<ReturnType<typeof createTraceCollector>["addInteraction"]>
+      ) => {
         collector?.addInteraction(...a);
       },
     } as ReturnType<typeof createTraceCollector>;
@@ -155,15 +158,16 @@ async function cmdRun() {
   }
 }
 
-function drainOpenCandleCustomEntries(
-  sessionManager: { getEntries(): Array<Record<string, unknown>> },
-): CustomEntryTrace[] {
+function drainOpenCandleCustomEntries(sessionManager: {
+  getEntries(): Array<Record<string, unknown>>;
+}): CustomEntryTrace[] {
   return sessionManager
     .getEntries()
-    .filter((entry) =>
-      entry.type === "custom" &&
-      typeof entry.customType === "string" &&
-      entry.customType.startsWith("opencandle-")
+    .filter(
+      (entry) =>
+        entry.type === "custom" &&
+        typeof entry.customType === "string" &&
+        entry.customType.startsWith("opencandle-"),
     )
     .map((entry) => ({
       customType: String(entry.customType),

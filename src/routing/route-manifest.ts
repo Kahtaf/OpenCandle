@@ -1,14 +1,6 @@
-import type {
-  ExtractedEntities,
-  WorkflowType,
-} from "./types.js";
-import type {
-  RouterOutput,
-  RouterRoute,
-  RouterRouteKind,
-  ToolBundleName,
-} from "./router-types.js";
 import type { MemoryCategory } from "../memory/types.js";
+import type { RouterOutput, RouterRoute, RouterRouteKind, ToolBundleName } from "./router-types.js";
+import type { ExtractedEntities, WorkflowType } from "./types.js";
 
 export const ROUTE_KINDS: readonly RouterRouteKind[] = [
   "workflow_dispatch",
@@ -220,7 +212,11 @@ export function computeMissingRequiredSlots(
     if (slot === "symbol" && entities.symbols.length === 0 && !slotHasValue(slots.symbol)) {
       missing.add("symbol");
     }
-    if (slot === "symbols" && entities.symbols.length < 2 && !slotHasSymbolListValue(slots.symbols, 2)) {
+    if (
+      slot === "symbols" &&
+      entities.symbols.length < 2 &&
+      !slotHasSymbolListValue(slots.symbols, 2)
+    ) {
       missing.add("symbols");
     }
     existing.delete(slot);
@@ -237,13 +233,19 @@ function slotHasValue(slot: RouterOutput["slots"][string] | undefined): boolean 
   return slot.value !== undefined && slot.value !== null && slot.value !== "";
 }
 
-function slotHasSymbolListValue(slot: RouterOutput["slots"][string] | undefined, minLength: number): boolean {
+function slotHasSymbolListValue(
+  slot: RouterOutput["slots"][string] | undefined,
+  minLength: number,
+): boolean {
   if (!slot) return false;
-  if (Array.isArray(slot.value)) return slot.value.filter((value) => typeof value === "string").length >= minLength;
+  if (Array.isArray(slot.value))
+    return slot.value.filter((value) => typeof value === "string").length >= minLength;
   return false;
 }
 
-export function selectToolBundles(output: Pick<RouterOutput, "routeKind" | "workflow" | "entities">): ToolBundleName[] {
+export function selectToolBundles(
+  output: Pick<RouterOutput, "routeKind" | "workflow" | "entities">,
+): ToolBundleName[] {
   if (output.routeKind === "pass_through") return [];
   if (output.routeKind === "clarification") return ["clarification"];
 
@@ -258,7 +260,11 @@ export function selectToolBundles(output: Pick<RouterOutput, "routeKind" | "work
 
   const metrics = output.entities.compareMetrics ?? [];
   const horizon = output.entities.timeHorizon ?? "";
-  if (metrics.includes("macro_hedge") || metrics.includes("interest_rates") || /\b(?:macro|rate|inflation)\b/i.test(horizon)) {
+  if (
+    metrics.includes("macro_hedge") ||
+    metrics.includes("interest_rates") ||
+    /\b(?:macro|rate|inflation)\b/i.test(horizon)
+  ) {
     bundles.add("macro");
   }
 

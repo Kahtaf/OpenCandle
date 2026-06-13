@@ -1,5 +1,5 @@
-import { useMemo } from "react";
 import { Activity, CheckCircle2, KeyRound, RefreshCcw, Settings2 } from "lucide-react";
+import { useMemo } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
@@ -24,9 +24,21 @@ const MARKET_STATE_LINKS = [
   { path: "/predictions", label: "Predictions" },
 ];
 
-export function FinancialContextDrawer({ open, state, catalog, onClose, onConfigureProvider, onOpenMarketState }) {
+export function FinancialContextDrawer({
+  open,
+  state,
+  catalog,
+  onClose,
+  onConfigureProvider,
+  onOpenMarketState,
+}) {
   return (
-    <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
       <SheetContent width="sm" handleLabel="Context" className="bg-card p-0">
         <Header state={state} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -34,7 +46,11 @@ export function FinancialContextDrawer({ open, state, catalog, onClose, onConfig
           <Watchlist rows={state?.watchlist ?? []} />
           <Analyses rows={state?.activeAnalyses ?? []} />
           <Research rows={state?.recentResearch ?? []} />
-          <DataQuality state={state?.dataQuality ?? { softGaps: [], hardSkips: [] }} catalog={catalog} onConfigureProvider={onConfigureProvider} />
+          <DataQuality
+            state={state?.dataQuality ?? { softGaps: [], hardSkips: [] }}
+            catalog={catalog}
+            onConfigureProvider={onConfigureProvider}
+          />
         </div>
       </SheetContent>
     </Sheet>
@@ -71,22 +87,28 @@ function Header({ state }) {
   const pill = useMemo(() => summarize(state), [state]);
   return (
     <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Context</span>
+      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Context
+      </span>
       {pill ? (
-        <span className={cn(
-          "inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-[11px] font-medium tabular-nums",
-          pill.tone === "success" && "text-success",
-          pill.tone === "warning" && "text-warning",
-          pill.tone === "info" && "text-info",
-          pill.tone === "muted" && "text-muted-foreground",
-        )}>
-          <span className={cn(
-            "inline-block h-1.5 w-1.5 rounded-full",
-            pill.tone === "success" && "bg-success",
-            pill.tone === "warning" && "bg-warning",
-            pill.tone === "info" && "bg-info",
-            pill.tone === "muted" && "bg-muted-foreground/40",
-          )} />
+        <span
+          className={cn(
+            "inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-[11px] font-medium tabular-nums",
+            pill.tone === "success" && "text-success",
+            pill.tone === "warning" && "text-warning",
+            pill.tone === "info" && "text-info",
+            pill.tone === "muted" && "text-muted-foreground",
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block h-1.5 w-1.5 rounded-full",
+              pill.tone === "success" && "bg-success",
+              pill.tone === "warning" && "bg-warning",
+              pill.tone === "info" && "bg-info",
+              pill.tone === "muted" && "bg-muted-foreground/40",
+            )}
+          />
           {pill.label}
         </span>
       ) : null}
@@ -98,9 +120,15 @@ function summarize(state) {
   if (!state) return null;
   const hardSet = new Set((state.dataQuality?.hardSkips ?? []).map((g) => g.provider));
   const softSet = new Set((state.dataQuality?.softGaps ?? []).map((g) => g.provider));
-  if (hardSet.size > 0) return { tone: "warning", label: `${hardSet.size} provider${hardSet.size === 1 ? "" : "s"} need a key` };
-  if ((state.activeAnalyses ?? []).length > 0) return { tone: "info", label: `${state.activeAnalyses.length} running` };
-  if (softSet.size > 0) return { tone: "muted", label: `${softSet.size} data gap${softSet.size === 1 ? "" : "s"}` };
+  if (hardSet.size > 0)
+    return {
+      tone: "warning",
+      label: `${hardSet.size} provider${hardSet.size === 1 ? "" : "s"} need a key`,
+    };
+  if ((state.activeAnalyses ?? []).length > 0)
+    return { tone: "info", label: `${state.activeAnalyses.length} running` };
+  if (softSet.size > 0)
+    return { tone: "muted", label: `${softSet.size} data gap${softSet.size === 1 ? "" : "s"}` };
   if ((state.watchlist ?? []).length > 0) return { tone: "success", label: "All clear" };
   return null;
 }
@@ -114,8 +142,12 @@ function Section({ title, meta, children, last = false }) {
   return (
     <section className={cn("px-3 pt-3", last ? "pb-4" : "pb-3 border-b border-border")}>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{title}</h3>
-        {meta ? <span className="text-[11px] tabular-nums text-muted-foreground/70">{meta}</span> : null}
+        <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+          {title}
+        </h3>
+        {meta ? (
+          <span className="text-[11px] tabular-nums text-muted-foreground/70">{meta}</span>
+        ) : null}
       </div>
       {children}
     </section>
@@ -128,7 +160,12 @@ function EmptyHint({ children }) {
 
 function Row({ children, className }) {
   return (
-    <div className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 first:pt-1 last:pb-0", className)}>
+    <div
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2 first:pt-1 last:pb-0",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -140,16 +177,23 @@ function Row({ children, className }) {
 // ---------------------------------------------------------------------------
 
 function Watchlist({ rows }) {
-  const sorted = useMemo(() => [...rows].sort((a, b) => {
-    const ta = Date.parse(a.lastSeen ?? "") || 0;
-    const tb = Date.parse(b.lastSeen ?? "") || 0;
-    return tb - ta;
-  }), [rows]);
+  const sorted = useMemo(
+    () =>
+      [...rows].sort((a, b) => {
+        const ta = Date.parse(a.lastSeen ?? "") || 0;
+        const tb = Date.parse(b.lastSeen ?? "") || 0;
+        return tb - ta;
+      }),
+    [rows],
+  );
 
   return (
     <Section title="Recent quotes" meta={sorted.length ? `${sorted.length}` : null}>
       {sorted.length === 0 ? (
-        <EmptyHint>No quotes pulled yet. Try <code className="font-mono text-foreground/70">/quote AAPL</code> or run a workflow.</EmptyHint>
+        <EmptyHint>
+          No quotes pulled yet. Try{" "}
+          <code className="font-mono text-foreground/70">/quote AAPL</code> or run a workflow.
+        </EmptyHint>
       ) : (
         <div className="divide-y divide-border">
           {sorted.map((row) => (
@@ -172,15 +216,29 @@ function QuoteRow({ row }) {
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold tabular-nums text-foreground">{row.symbol}</span>
-          {row.lastSeen ? <span className="text-[11px] text-muted-foreground/70">{relativeTime(row.lastSeen)}</span> : null}
+          {row.lastSeen ? (
+            <span className="text-[11px] text-muted-foreground/70">
+              {relativeTime(row.lastSeen)}
+            </span>
+          ) : null}
         </div>
         <div className="text-xs tabular-nums text-muted-foreground">
-          {hasQuote ? formatPrice(price) : <span className="italic text-muted-foreground/70">No quote</span>}
+          {hasQuote ? (
+            formatPrice(price)
+          ) : (
+            <span className="italic text-muted-foreground/70">No quote</span>
+          )}
         </div>
       </div>
       {hasChange ? (
-        <span className={cn("text-sm font-medium tabular-nums", positive ? "text-success" : "text-destructive")}>
-          {positive ? "+" : ""}{pct.toFixed(2)}%
+        <span
+          className={cn(
+            "text-sm font-medium tabular-nums",
+            positive ? "text-success" : "text-destructive",
+          )}
+        >
+          {positive ? "+" : ""}
+          {pct.toFixed(2)}%
         </span>
       ) : null}
     </Row>
@@ -195,7 +253,10 @@ function Analyses({ rows }) {
   return (
     <Section title="Active analyses" meta={rows.length ? `${rows.length}` : null}>
       {rows.length === 0 ? (
-        <EmptyHint>None running. Start one from <span className="text-foreground/80">Catalog → Workflows</span>.</EmptyHint>
+        <EmptyHint>
+          None running. Start one from{" "}
+          <span className="text-foreground/80">Catalog → Workflows</span>.
+        </EmptyHint>
       ) : (
         <div className="divide-y divide-border">
           {rows.map((item) => (
@@ -203,13 +264,22 @@ function Analyses({ rows }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <Activity aria-hidden="true" className="h-3 w-3 animate-pulse text-info" />
-                  <span className="truncate text-sm font-medium text-foreground">{friendlyWorkflow(item.workflow)}</span>
-                  {item.symbol ? <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-foreground">{item.symbol}</span> : null}
+                  <span className="truncate text-sm font-medium text-foreground">
+                    {friendlyWorkflow(item.workflow)}
+                  </span>
+                  {item.symbol ? (
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-foreground">
+                      {item.symbol}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                   {item.startedAt ? `${relativeTime(item.startedAt)}` : "just started"}
                   {item.analystsTotal > 0 ? (
-                    <span> · {item.analystsDone}/{item.analystsTotal} analysts</span>
+                    <span>
+                      {" "}
+                      · {item.analystsDone}/{item.analystsTotal} analysts
+                    </span>
                   ) : null}
                 </div>
               </div>
@@ -243,10 +313,18 @@ function Research({ rows }) {
           {rows.map((item) => (
             <Row key={`${item.sessionId}-${item.completedAt}`}>
               <div className="min-w-0 flex items-center gap-2">
-                <span className="truncate text-sm text-foreground">{friendlyWorkflow(item.workflow)}</span>
-                {item.symbol ? <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-foreground">{item.symbol}</span> : null}
+                <span className="truncate text-sm text-foreground">
+                  {friendlyWorkflow(item.workflow)}
+                </span>
+                {item.symbol ? (
+                  <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-foreground">
+                    {item.symbol}
+                  </span>
+                ) : null}
               </div>
-              <span className="text-[11px] tabular-nums text-muted-foreground">{relativeTime(item.completedAt)}</span>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {relativeTime(item.completedAt)}
+              </span>
             </Row>
           ))}
         </div>
@@ -275,7 +353,11 @@ function DataQuality({ state, catalog, onConfigureProvider }) {
       ) : (
         <div className="grid divide-y divide-border">
           {aggregated.map((gap) => (
-            <GapRow key={`${gap.kind}-${gap.providerId}`} gap={gap} onConfigure={() => onConfigureProvider?.(gap.providerId)} />
+            <GapRow
+              key={`${gap.kind}-${gap.providerId}`}
+              gap={gap}
+              onConfigure={() => onConfigureProvider?.(gap.providerId)}
+            />
           ))}
         </div>
       )}
@@ -287,7 +369,13 @@ function GapRow({ gap, onConfigure }) {
   const isHard = gap.kind === "hard";
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 py-2.5">
-      <span aria-hidden="true" className={cn("mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full", isHard ? "bg-warning/15 text-warning" : "bg-muted/15 text-muted-foreground")}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full",
+          isHard ? "bg-warning/15 text-warning" : "bg-muted/15 text-muted-foreground",
+        )}
+      >
         {isHard ? <KeyRound className="h-3 w-3" /> : <RefreshCcw className="h-3 w-3" />}
       </span>
       <div className="min-w-0">
@@ -298,14 +386,28 @@ function GapRow({ gap, onConfigure }) {
           </Badge>
         </div>
         <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-          {isHard
-            ? <>Skipped {gap.count}× — add an API key to unlock {gap.unlocks || "this provider's tools"}.</>
-            : <>Reported a data gap {gap.count}× this session{gap.fallbackDescription ? ` — ${gap.fallbackDescription}` : ""}.</>}
+          {isHard ? (
+            <>
+              Skipped {gap.count}× — add an API key to unlock{" "}
+              {gap.unlocks || "this provider's tools"}.
+            </>
+          ) : (
+            <>
+              Reported a data gap {gap.count}× this session
+              {gap.fallbackDescription ? ` — ${gap.fallbackDescription}` : ""}.
+            </>
+          )}
           {gap.lastSeen ? <> · last {relativeTime(gap.lastSeen)}</> : null}
         </p>
       </div>
       {isHard ? (
-        <Button variant="bordered" size="xs" prefixIcon={Settings2} onClick={onConfigure} className="shrink-0">
+        <Button
+          variant="bordered"
+          size="xs"
+          prefixIcon={Settings2}
+          onClick={onConfigure}
+          className="shrink-0"
+        >
           Configure
         </Button>
       ) : null}
@@ -321,7 +423,9 @@ function friendlyWorkflow(id) {
   if (!id) return "Workflow";
   const known = WORKFLOW_NAMES[id];
   if (known) return known;
-  return String(id).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return String(id)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function relativeTime(iso) {
@@ -389,5 +493,7 @@ function aggregateGaps(state, catalog) {
 }
 
 function defaultProviderName(id) {
-  return String(id || "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return String(id || "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }

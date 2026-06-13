@@ -17,7 +17,10 @@ export function validateRequired(fields, values) {
     }
     if (Array.isArray(value)) {
       if (value.length === 0) issues.push(`${field.label} is required.`);
-      else if (field.min != null && value.length < field.min) issues.push(`${field.label} needs at least ${field.min} entr${field.min === 1 ? "y" : "ies"}.`);
+      else if (field.min != null && value.length < field.min)
+        issues.push(
+          `${field.label} needs at least ${field.min} entr${field.min === 1 ? "y" : "ies"}.`,
+        );
     }
   }
   return issues;

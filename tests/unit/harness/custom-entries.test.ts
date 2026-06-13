@@ -7,8 +7,9 @@
  * the opencandle extension writes at runtime — then assert the resulting array
  * shape and ordering.
  */
-import { describe, it, expect } from "vitest";
+
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it } from "vitest";
 import { drainOpenCandleCustomEntries } from "../../harness/opencandle-runner.js";
 
 describe("harness opencandle-* custom-entry drain", () => {

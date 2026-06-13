@@ -1,24 +1,39 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  buildComprehensiveAnalysisDefinition,
   isAnalysisRequest,
   normalizeSymbol,
 } from "../analysts/orchestrator.js";
-import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.js";
 import { getConfig } from "../config.js";
+import type { InstrumentCandidate } from "../market-state/resolve.js";
+import { runProviderConnect } from "../onboarding/connect.js";
+import { resolveCredentialRequired } from "../onboarding/credential-interceptor.js";
+import { createDegradationAccumulator } from "../onboarding/degradation-accumulator.js";
+import { promptUser } from "../onboarding/prompt-user.js";
+import { getProvider, type ProviderId } from "../onboarding/providers.js";
 import {
+  loadOnboardingState,
+  markProviderNeverAsk,
+  markProviderSnoozed,
+  markWelcomeShown,
+  saveOnboardingState,
+  shouldShowWelcome,
+} from "../onboarding/state.js";
+import { buildConnectedTag, buildSkippedTag, parseToolTag } from "../onboarding/tool-tags.js";
+import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
+import { formatPreflightDropAnnotation, preflightSymbols } from "../prompts/symbol-preflight.js";
+import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
+import {
+  buildResolvedTurnContext,
   classifyWithLegacyRules,
-  hasFinanceSignals,
   createPiAiRouterClient,
+  hasFinanceSignals,
   resolveOptionsScreenerSlots,
   resolvePortfolioSlots,
   route as routeLlm,
-  buildResolvedTurnContext,
 } from "../routing/index.js";
-import type {
-  RouterInputContext,
-  RouterLlmClient,
-  RouterOutput,
-} from "../routing/router-types.js";
+import type { RouterInputContext, RouterLlmClient, RouterOutput } from "../routing/router-types.js";
+import { disambiguateSymbols } from "../routing/symbol-disambiguator.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type {
   CompareAssetsSlots,
@@ -26,42 +41,17 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
-import { disambiguateSymbols } from "../routing/symbol-disambiguator.js";
-import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
-import {
-  formatPreflightDropAnnotation,
-  preflightSymbols,
-} from "../prompts/symbol-preflight.js";
-import {
-  buildPortfolioWorkflowDefinition,
-  buildOptionsScreenerWorkflowDefinition,
-  buildCompareAssetsWorkflowDefinition,
-} from "../workflows/index.js";
-import type { InstrumentCandidate } from "../market-state/resolve.js";
-import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
-import { registerAskUserTool } from "../tools/interaction/ask-user.js";
-import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
 import { generateSessionTitle } from "../runtime/session-title.js";
-import {
-  getProvider,
-  type ProviderId,
-} from "../onboarding/providers.js";
-import {
-  loadOnboardingState,
-  saveOnboardingState,
-  markProviderSnoozed,
-  markProviderNeverAsk,
-  markWelcomeShown,
-  shouldShowWelcome,
-} from "../onboarding/state.js";
-import { parseToolTag, buildSkippedTag, buildConnectedTag } from "../onboarding/tool-tags.js";
-import { resolveCredentialRequired } from "../onboarding/credential-interceptor.js";
-import { createDegradationAccumulator } from "../onboarding/degradation-accumulator.js";
-import { promptUser } from "../onboarding/prompt-user.js";
-import { runProviderConnect } from "../onboarding/connect.js";
+import { registerAskUserTool } from "../tools/interaction/ask-user.js";
+import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import type { AskUserHandler } from "../types/index.js";
-import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
+import {
+  buildCompareAssetsWorkflowDefinition,
+  buildOptionsScreenerWorkflowDefinition,
+  buildPortfolioWorkflowDefinition,
+} from "../workflows/index.js";
+import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 
 export interface OpenCandleExtensionOptions {
   askUserHandler?: AskUserHandler;
@@ -79,7 +69,10 @@ export interface OpenCandleExtensionOptions {
   titleCompletion?: (prompt: string) => Promise<string>;
 }
 
-export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
+export default function openCandleExtension(
+  pi: ExtensionAPI,
+  options?: OpenCandleExtensionOptions,
+): void {
   const coordinator = new SessionCoordinator();
 
   // Workflow transforms replace the user's turn with the expanded prompt; this
@@ -127,7 +120,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         ctx.ui.notify("Usage: /analyze <ticker>", "warning");
         return;
       }
-      const definition = buildComprehensiveAnalysisDefinition(symbol, { debate: getConfig().debate });
+      const definition = buildComprehensiveAnalysisDefinition(symbol, {
+        debate: getConfig().debate,
+      });
       coordinator.executeWorkflow(pi, definition, ctx);
     },
   });
@@ -190,10 +185,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           const all = listAllProviders()
             .map((p) => `  ${p.displayName} (${p.aliases.join(", ")})`)
             .join("\n");
-          ctx.ui.notify(
-            `Unknown provider: "${trimmed}". Available:\n${all}`,
-            "warning",
-          );
+          ctx.ui.notify(`Unknown provider: "${trimmed}". Available:\n${all}`, "warning");
           return;
         }
         if (Array.isArray(resolved)) {
@@ -292,8 +284,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   // footer status pinned at session_start is the primary user-visible channel.
   pi.on("turn_end", async (event) => {
     const msg = event.message;
-    const isFinalAssistantTurn =
-      msg.role === "assistant" && msg.stopReason === "stop";
+    const isFinalAssistantTurn = msg.role === "assistant" && msg.stopReason === "stop";
     if (isFinalAssistantTurn) {
       pi.appendEntry("opencandle-disclaimer", { text: DISCLAIMER_TEXT });
       restoreRouteToolScope();
@@ -448,10 +439,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       // action === "prompt": pause and ask the user via promptUser.
       const descriptor = getProvider(parsed.provider);
       const connectLabel = `Connect now — ${descriptor.instructionsHint}`;
-      const continueLabel =
-        descriptor.fallbackDescription
-          ? `Continue with ${descriptor.fallbackDescription} for this run`
-          : `Continue without ${descriptor.displayName} for this run`;
+      const continueLabel = descriptor.fallbackDescription
+        ? `Continue with ${descriptor.fallbackDescription} for this run`
+        : `Continue without ${descriptor.displayName} for this run`;
       const snoozeLabel = `Snooze ${descriptor.snoozeDurationDays} days`;
       const neverLabel = `Never ask again`;
       const questionBody =
@@ -480,12 +470,11 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           content: [
             {
               type: "text",
-              text:
-                `${buildSkippedTag({
-                  provider: parsed.provider,
-                  reason: "credential_not_provided",
-                  remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
-                })}\n\nPrompt was cancelled.`,
+              text: `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
+              })}\n\nPrompt was cancelled.`,
             },
           ],
         };
@@ -523,12 +512,11 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           content: [
             {
               type: "text",
-              text:
-                `${buildSkippedTag({
-                  provider: parsed.provider,
-                  reason: "credential_not_provided",
-                  remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
-                })}\n\n${descriptor.displayName} connect was ${connectOutcomeDescription}.`,
+              text: `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
+              })}\n\n${descriptor.displayName} connect was ${connectOutcomeDescription}.`,
             },
           ],
         };
@@ -550,13 +538,12 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         content: [
           {
             type: "text",
-            text:
-              `${buildSkippedTag({
-                provider: parsed.provider,
-                reason: "credential_not_provided",
-                remediation,
-                silenced,
-              })}\n\n${descriptor.displayName} data was omitted per your choice.`,
+            text: `${buildSkippedTag({
+              provider: parsed.provider,
+              reason: "credential_not_provided",
+              remediation,
+              silenced,
+            })}\n\n${descriptor.displayName} data was omitted per your choice.`,
           },
         ],
       };
@@ -597,7 +584,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     // Check for comprehensive analysis pattern — same in both modes.
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
-      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
+      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, {
+        debate: getConfig().debate,
+      });
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
@@ -665,23 +654,20 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         })),
         reasoning: "rules-mode acronym disambiguation left fewer than two symbols for comparison",
       };
-      const resolvedTurnContext = buildResolvedTurnContext(
-        { text: event.text, ...base },
-        output,
-        {
-          availableToolNames: safeGetAllToolNames(),
-          planning: {
-            migrationStatuses: getConfig().planningMigrationStatuses,
-          },
+      const resolvedTurnContext = buildResolvedTurnContext({ text: event.text, ...base }, output, {
+        availableToolNames: safeGetAllToolNames(),
+        planning: {
+          migrationStatuses: getConfig().planningMigrationStatuses,
         },
-      );
+      });
       coordinator.setPendingResolvedTurnContext({
         ...resolvedTurnContext,
         diagnostics: [
           ...resolvedTurnContext.diagnostics,
           {
             code: "compare_workflow_aborted",
-            message: "compare workflow needs at least two validated symbols after acronym disambiguation",
+            message:
+              "compare workflow needs at least two validated symbols after acronym disambiguation",
           },
         ],
       });
@@ -694,9 +680,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           `  dropped ambiguous ticker-like tokens: ${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")} (no positive ticker signal)`,
         ].join("\n"),
         missingRequired: ["symbols"],
-        extraContext: "Dropped ambiguous ticker-like tokens: "
-          + `${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")}. `
-          + "Ask the user which ticker symbols they want compared before calling comparison tools.",
+        extraContext:
+          "Dropped ambiguous ticker-like tokens: " +
+          `${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")}. ` +
+          "Ask the user which ticker symbols they want compared before calling comparison tools.",
       });
       applyRouteToolScope(resolvedTurnContext);
       return undefined;
@@ -704,8 +691,17 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
 
     if (classification.workflow === "portfolio_builder") {
       const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);
-      coordinator.recordWorkflowRun("portfolio_builder", classification.entities, resolution.resolved, resolution.defaultsUsed);
-      pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
+      coordinator.recordWorkflowRun(
+        "portfolio_builder",
+        classification.entities,
+        resolution.resolved,
+        resolution.defaultsUsed,
+      );
+      pi.appendEntry("opencandle-workflow", {
+        workflow: "portfolio_builder",
+        entities: classification.entities,
+        resolved: resolution.resolved,
+      });
       const definition = buildPortfolioWorkflowDefinition(resolution);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       if (prompt) markOriginalInput(event.text);
@@ -715,16 +711,28 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     if (classification.workflow === "options_screener") {
       const resolution = resolveOptionsScreenerSlots(classification.entities, workflowPrefs);
       if (resolution.missingRequired.length === 0) {
-        coordinator.recordWorkflowRun("options_screener", classification.entities, resolution.resolved, resolution.defaultsUsed);
-        pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
+        coordinator.recordWorkflowRun(
+          "options_screener",
+          classification.entities,
+          resolution.resolved,
+          resolution.defaultsUsed,
+        );
+        pi.appendEntry("opencandle-workflow", {
+          workflow: "options_screener",
+          entities: classification.entities,
+          resolved: resolution.resolved,
+        });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
         if (prompt) markOriginalInput(event.text);
-      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
+        return prompt ? { action: "transform", text: prompt } : { action: "handled" };
       }
     }
 
-    if (classification.workflow === "compare_assets" && classification.entities.symbols.length >= 2) {
+    if (
+      classification.workflow === "compare_assets" &&
+      classification.entities.symbols.length >= 2
+    ) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
         resolved: {
           symbols: classification.entities.symbols,
@@ -743,8 +751,16 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         defaultsUsed: [],
         missingRequired: [],
       };
-      coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
-      pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
+      coordinator.recordWorkflowRun(
+        "compare_assets",
+        classification.entities,
+        resolution.resolved,
+        resolution.defaultsUsed,
+      );
+      pi.appendEntry("opencandle-workflow", {
+        workflow: "compare_assets",
+        symbols: classification.entities.symbols,
+      });
       const preflight = await preflightCompareResolution(resolution);
       if (!preflight) {
         coordinator.recordWorkflowRun(
@@ -760,7 +776,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
             `  original symbols: ${classification.entities.symbols.join(", ")} (user)`,
           ].join("\n"),
           missingRequired: ["symbols"],
-          extraContext: "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers before calling comparison tools.",
+          extraContext:
+            "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers before calling comparison tools.",
         });
         return undefined;
       }
@@ -785,9 +802,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       coordinator.setPendingFallbackContext({
         assumptionsBlock: "",
         missingRequired: [],
-        extraContext: classification.entities.symbols.length > 0
-          ? `Rules-router extracted symbols: ${classification.entities.symbols.join(", ")}.`
-          : undefined,
+        extraContext:
+          classification.entities.symbols.length > 0
+            ? `Rules-router extracted symbols: ${classification.entities.symbols.join(", ")}.`
+            : undefined,
       });
       pi.appendEntry("opencandle-fallback-context", {
         mode: "rules",
@@ -810,8 +828,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
   ): Promise<{ action: "transform"; text: string } | false> {
     const storage = coordinator.getStorage();
-    const { profileSnapshot, recentWorkflowRuns, priorTurns } =
-      coordinator.buildRouterContextBase(ctx.sessionManager);
+    const { profileSnapshot, recentWorkflowRuns, priorTurns } = coordinator.buildRouterContextBase(
+      ctx.sessionManager,
+    );
     // priorTurns is not scrubbed for /forget — tracked in proposal.md follow-ups.
     const input: RouterInputContext = {
       text,
@@ -912,10 +931,11 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     coordinator.setPendingFallbackContext({
       assumptionsBlock,
       missingRequired: output.missing_required,
-      extraContext: output.entities.symbols.length > 0
-        ? `Router-extracted symbols: ${output.entities.symbols.join(", ")}.`
-          + ` Route kind: ${output.routeKind}. Tool bundles: ${output.tool_bundles.join(", ") || "(none)"}.`
-        : undefined,
+      extraContext:
+        output.entities.symbols.length > 0
+          ? `Router-extracted symbols: ${output.entities.symbols.join(", ")}.` +
+            ` Route kind: ${output.routeKind}. Tool bundles: ${output.tool_bundles.join(", ") || "(none)"}.`
+          : undefined,
     });
     return false;
   }
@@ -975,7 +995,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
         if (prompt) markOriginalInput(originalText);
-      return prompt ? { action: "transform", text: prompt } : false;
+        return prompt ? { action: "transform", text: prompt } : false;
       }
       // Missing required symbol — treat as fallback with ask_user directive.
     }
@@ -992,7 +1012,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           symbols: sourceForRouterSlot(output, "symbols", "user"),
           ...(entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
           ...(entities.compareMetrics ? { metrics: "user" as const } : {}),
-          ...(entities.budget !== undefined ? { budget: sourceForRouterSlot(output, "budget", "user") } : {}),
+          ...(entities.budget !== undefined
+            ? { budget: sourceForRouterSlot(output, "budget", "user") }
+            : {}),
           ...(entities.assetScope ? { assetScope: "user" as const } : {}),
         },
         defaultsUsed: [],
@@ -1022,7 +1044,8 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         coordinator.setPendingFallbackContext({
           assumptionsBlock: buildAssumptionsBlockFromRouter(output.slots),
           missingRequired: ["symbols"],
-          extraContext: "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers.",
+          extraContext:
+            "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers.",
         });
         return false;
       }
@@ -1056,13 +1079,18 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     for (const diagnostic of output.diagnostics) {
       if (diagnostic.code !== "symbol_dropped") continue;
       const details = diagnostic.details ?? {};
-      appendSymbolDropEntries([{
-        token: String(details.token ?? ""),
-        reason: String(details.reason ?? ""),
-        signalsChecked: Array.isArray(details.signalsChecked)
-          ? details.signalsChecked.map(String)
-          : [],
-      }], String(details.source ?? "llm"));
+      appendSymbolDropEntries(
+        [
+          {
+            token: String(details.token ?? ""),
+            reason: String(details.reason ?? ""),
+            signalsChecked: Array.isArray(details.signalsChecked)
+              ? details.signalsChecked.map(String)
+              : [],
+          },
+        ],
+        String(details.source ?? "llm"),
+      );
     }
   }
 
@@ -1083,7 +1111,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   function disambiguateRulesModeSymbols(
     text: string,
     extractedSymbols: string[],
-  ): { kept: string[]; dropped: Array<{ token: string; reason: string; signalsChecked: string[] }> } {
+  ): {
+    kept: string[];
+    dropped: Array<{ token: string; reason: string; signalsChecked: string[] }>;
+  } {
     const candidates = mergeSymbols(extractedSymbols, rawTickerLikeTokens(text));
     const disambiguated = disambiguateSymbols(candidates, text);
     return {
@@ -1109,7 +1140,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
 
   async function preflightCompareResolution(
     resolution: SlotResolution<CompareAssetsSlots>,
-  ): Promise<{ resolution: SlotResolution<CompareAssetsSlots>; dropped: Array<{ symbol: string; reason: string }> } | null> {
+  ): Promise<{
+    resolution: SlotResolution<CompareAssetsSlots>;
+    dropped: Array<{ symbol: string; reason: string }>;
+  } | null> {
     const result = await preflightSymbols(resolution.resolved.symbols, {
       cache: coordinator.getTickerValidationCache(),
       search: options?.symbolSearch,
@@ -1158,8 +1192,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     }
 
     const droppedSymbols = droppedSymbolsFromDiagnostics(output);
-    const slotSymbols = symbolsFromRouterSlots(output)
-      .filter((symbol) => !droppedSymbols.has(symbol));
+    const slotSymbols = symbolsFromRouterSlots(output).filter(
+      (symbol) => !droppedSymbols.has(symbol),
+    );
     if (slotSymbols.length > 0 && slotSymbols.length > entities.symbols.length) {
       entities.symbols = mergeSymbols(slotSymbols, entities.symbols);
     }
@@ -1350,10 +1385,7 @@ function extractMessageText(content: unknown): string {
  * title may replace: unset, exactly one of the candidate user texts, or the
  * GUI server's truncated "first 77 chars + ..." form of one of them.
  */
-function isPlaceholderSessionName(
-  name: string | undefined,
-  candidates: string[],
-): boolean {
+function isPlaceholderSessionName(name: string | undefined, candidates: string[]): boolean {
   if (name === undefined || name.trim().length === 0) return true;
   const trimmed = name.trim();
   for (const candidate of candidates) {

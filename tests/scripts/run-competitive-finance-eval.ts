@@ -1,54 +1,54 @@
 #!/usr/bin/env tsx
 import { spawnSync } from "node:child_process";
 import {
-  cpSync,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
+  type Api,
   completeSimple,
   getModel,
-  registerBuiltInApiProviders,
-  type Api,
   type Model,
+  registerBuiltInApiProviders,
 } from "@earendil-works/pi-ai";
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";
 import {
-  COMPETITIVE_STATE_FIXTURE,
-  buildSavedStateSummary,
+  analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
   buildComparisonJudgeRetryPrompt,
   buildGenericAgentPrompt,
-  buildPromptGenerationPrompt,
   buildPortableAgentPath,
-  analyzeCompetitiveReport,
-  competitiveReportAnalysisPath,
+  buildPromptGenerationPrompt,
+  buildSavedStateSummary,
+  COMPETITIVE_STATE_FIXTURE,
+  type ComparisonJudgment,
+  type CompetitorAnswer,
   competitiveBenchmarkExitCode,
   competitivePreflightTimeoutMs,
+  competitiveReportAnalysisPath,
   extractUsableAnswerFromCliFailure,
-  formatCompetitiveReportAnalysisMarkdown,
   findCachedCompetitorAnswer,
   findCachedPromptMetadata,
   fixedPromptFromEnv,
+  formatCompetitiveReportAnalysisMarkdown,
+  type GeneratedFinancePrompt,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
-  type ComparisonJudgment,
-  type CompetitorAnswer,
-  type GeneratedFinancePrompt,
 } from "../evals/competitive-finance.js";
 import type { EvalTrace } from "../evals/types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
@@ -90,7 +90,12 @@ loadEnv();
 
 const DEFAULT_ACPX_COMMAND = join(process.cwd(), "node_modules", ".bin", "acpx");
 const DEFAULT_COMPETITOR_CWD = join(tmpdir(), "oc-competitive-agents");
-const DEFAULT_CLAUDE_AGENT_COMMAND = join(process.cwd(), "node_modules", ".bin", "claude-agent-acp");
+const DEFAULT_CLAUDE_AGENT_COMMAND = join(
+  process.cwd(),
+  "node_modules",
+  ".bin",
+  "claude-agent-acp",
+);
 const DEFAULT_GEMINI_AGENT_COMMAND = "gemini --acp --skip-trust";
 
 const asOfDate = new Date().toISOString().slice(0, 10);
@@ -120,33 +125,49 @@ const judgeModel = await resolveModelWithAuth(
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
 const fixedPrompt = fixedPromptFromEnv(process.env);
-const rawPrompts = fixedPrompt ? [fixedPrompt] : parseGeneratedPrompts(await completeText(
-  judgeModel,
-  buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
-  { temperature: 0.8, maxTokens: 3000 },
-));
+const rawPrompts = fixedPrompt
+  ? [fixedPrompt]
+  : parseGeneratedPrompts(
+      await completeText(
+        judgeModel,
+        buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
+        { temperature: 0.8, maxTokens: 3000 },
+      ),
+    );
 const prompts = rawPrompts.map((prompt) => {
   const cached = findCachedPromptMetadata(competitorAnswerCache, prompt.prompt);
   return cached
-    ? { ...prompt, topic: cached.topic, complexity: cached.complexity, evaluationFocus: cached.evaluationFocus }
+    ? {
+        ...prompt,
+        topic: cached.topic,
+        complexity: cached.complexity,
+        evaluationFocus: cached.evaluationFocus,
+      }
     : prompt;
 });
 if (prompts.length === 0) throw new Error("Prompt generator returned no prompts");
 
 const allCompetitors = resolveCompetitors();
 const competitorsNeedingLiveRun = allCompetitors.filter((competitor) =>
-  prompts.slice(0, promptCount).some((prompt) =>
-    !findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id)
-  )
+  prompts
+    .slice(0, promptCount)
+    .some(
+      (prompt) => !findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id),
+    ),
 );
 const preflight = preflightCompetitors(competitorsNeedingLiveRun);
-const activeLiveCompetitors = new Map(preflight.active.map((competitor) => [competitor.id, competitor]));
+const activeLiveCompetitors = new Map(
+  preflight.active.map((competitor) => [competitor.id, competitor]),
+);
 if (
   allCompetitors.every((competitor) =>
-    prompts.slice(0, promptCount).every((prompt) =>
-      !findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id) &&
-      !activeLiveCompetitors.has(competitor.id)
-    )
+    prompts
+      .slice(0, promptCount)
+      .every(
+        (prompt) =>
+          !findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id) &&
+          !activeLiveCompetitors.has(competitor.id),
+      ),
   )
 ) {
   throw new Error("No cached or live competitive baseline agents are available");
@@ -160,7 +181,9 @@ for (const prompt of prompts.slice(0, promptCount)) {
   for (const competitor of allCompetitors) {
     const cached = findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id);
     if (cached) {
-      console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model}) [cached from ${cached.cachedFromReport}]`);
+      console.log(
+        `--- ${competitor.label} baseline (${competitor.provider}/${competitor.model}) [cached from ${cached.cachedFromReport}]`,
+      );
       competitorAnswers.push(cached);
       continue;
     }
@@ -168,7 +191,11 @@ for (const prompt of prompts.slice(0, promptCount)) {
     console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
     try {
       const result = competitor.run(
-        buildGenericAgentPrompt(prompt.prompt, { agentName: competitor.label, asOfDate, savedStateSummary }),
+        buildGenericAgentPrompt(prompt.prompt, {
+          agentName: competitor.label,
+          asOfDate,
+          savedStateSummary,
+        }),
       );
       competitorAnswers.push({
         id: competitor.id,
@@ -195,10 +222,18 @@ for (const prompt of prompts.slice(0, promptCount)) {
     }
   }
   if (competitorAnswers.length === 0) {
-    throw new Error(`No cached or live competitive baseline answers are available for prompt ${prompt.id}`);
+    throw new Error(
+      `No cached or live competitive baseline answers are available for prompt ${prompt.id}`,
+    );
   }
   const judgment = await completeComparisonJudgment(
-    buildComparisonJudgePrompt({ prompt, asOfDate, openCandleTrace, competitorAnswers, savedStateSummary }),
+    buildComparisonJudgePrompt({
+      prompt,
+      asOfDate,
+      openCandleTrace,
+      competitorAnswers,
+      savedStateSummary,
+    }),
     ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
   );
   results.push({ prompt, openCandleTrace, competitorAnswers, judgment });
@@ -287,29 +322,31 @@ async function completeText(
   throw new Error("model call failed after retries");
 }
 
-async function completeComparisonJudgment(prompt: string, allowedWinners: string[]): Promise<ComparisonJudgment> {
+async function completeComparisonJudgment(
+  prompt: string,
+  allowedWinners: string[],
+): Promise<ComparisonJudgment> {
   const maxAttempts = numberFromEnv("OPENCANDLE_COMPETITIVE_JUDGE_PARSE_ATTEMPTS", 3);
   let lastText = "";
   let lastError = "";
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const candidatePrompt = attempt === 1
-      ? prompt
-      : buildComparisonJudgeRetryPrompt({
-        originalPrompt: prompt,
-        invalidResponse: lastText,
-        errorMessage: lastError,
-      });
-    lastText = await completeText(
-      judgeModel,
-      candidatePrompt,
-      { temperature: 0, maxTokens: 3000 },
-    );
+    const candidatePrompt =
+      attempt === 1
+        ? prompt
+        : buildComparisonJudgeRetryPrompt({
+            originalPrompt: prompt,
+            invalidResponse: lastText,
+            errorMessage: lastError,
+          });
+    lastText = await completeText(judgeModel, candidatePrompt, { temperature: 0, maxTokens: 3000 });
     try {
       return parseComparisonJudgment(lastText, { allowedWinners });
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       if (attempt >= maxAttempts) throw error;
-      console.warn(`Comparison judgment parse failed on attempt ${attempt}/${maxAttempts}: ${lastError}. Retrying...`);
+      console.warn(
+        `Comparison judgment parse failed on attempt ${attempt}/${maxAttempts}: ${lastError}. Retrying...`,
+      );
     }
   }
   throw new Error("comparison judgment failed to parse after retries");
@@ -344,9 +381,13 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
   const active: CompetitorRunner[] = [];
   const skipped: Array<{ id: string; label: string; reason: string }> = [];
   for (const competitor of competitors) {
-    console.log(`Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
+    console.log(
+      `Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`,
+    );
     try {
-      const result = competitor.run("Reply exactly: OK", { timeout: competitivePreflightTimeoutMs(process.env) });
+      const result = competitor.run("Reply exactly: OK", {
+        timeout: competitivePreflightTimeoutMs(process.env),
+      });
       if (!result.answer.trim()) {
         throw new Error(`${competitor.label} baseline returned an empty preflight response`);
       }
@@ -566,7 +607,9 @@ async function seedEvalMarketState(home: string): Promise<void> {
     });
   }
   db.close();
-  console.log(`Seeded eval market state into ${home} (${COMPETITIVE_STATE_FIXTURE.lots.length} lots, ${COMPETITIVE_STATE_FIXTURE.watchlist.length} watchlist, ${COMPETITIVE_STATE_FIXTURE.predictions.length} predictions)`);
+  console.log(
+    `Seeded eval market state into ${home} (${COMPETITIVE_STATE_FIXTURE.lots.length} lots, ${COMPETITIVE_STATE_FIXTURE.watchlist.length} watchlist, ${COMPETITIVE_STATE_FIXTURE.predictions.length} predictions)`,
+  );
 }
 
 function createSeededEvalHome(sourceHome: string): string {
@@ -598,7 +641,9 @@ function loadCompetitiveReportCache(): Array<{ path: string; report: unknown }> 
         try {
           return [{ path, report: JSON.parse(readFileSync(path, "utf-8")) }];
         } catch (error) {
-          console.warn(`Skipping unreadable competitive cache report ${path}: ${error instanceof Error ? error.message : String(error)}`);
+          console.warn(
+            `Skipping unreadable competitive cache report ${path}: ${error instanceof Error ? error.message : String(error)}`,
+          );
           return [];
         }
       });
@@ -681,7 +726,5 @@ function resolveModel(provider: string | undefined, modelId: string | undefined)
   });
   if (selected) return selected;
 
-  throw new Error(
-    "No configured model found.",
-  );
+  throw new Error("No configured model found.");
 }

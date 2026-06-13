@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it } from "vitest";
 import { BackgroundQuoteRefreshes } from "../../../gui/server/background-quotes.js";
 
 describe("BackgroundQuoteRefreshes", () => {

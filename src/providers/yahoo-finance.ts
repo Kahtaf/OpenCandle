@@ -1,11 +1,16 @@
-import { HttpError, httpGet } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
-import { rateLimiter } from "../infra/rate-limiter.js";
 import { StealthBrowser } from "../infra/browser.js";
-import type { StockQuote, OHLCV } from "../types/market.js";
-import type { OptionsChain, OptionContract, OptionsMarketSession, OptionsQuoteStatus } from "../types/options.js";
-import type { FundHoldings } from "../types/portfolio.js";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { HttpError, httpGet } from "../infra/http-client.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
 import { computeGreeks } from "../tools/options/greeks.js";
+import type { OHLCV, StockQuote } from "../types/market.js";
+import type {
+  OptionContract,
+  OptionsChain,
+  OptionsMarketSession,
+  OptionsQuoteStatus,
+} from "../types/options.js";
+import type { FundHoldings } from "../types/portfolio.js";
 import { InvalidSymbolError } from "./errors.js";
 
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
@@ -102,9 +107,10 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       week52High: meta.fiftyTwoWeekHigh ?? 0,
       week52Low: meta.fiftyTwoWeekLow ?? 0,
       timestamp: Date.now(),
-      currency: typeof meta.currency === "string" && meta.currency.trim() !== ""
-        ? meta.currency.trim().toUpperCase()
-        : null,
+      currency:
+        typeof meta.currency === "string" && meta.currency.trim() !== ""
+          ? meta.currency.trim().toUpperCase()
+          : null,
     };
 
     if (isZeroResultQuote(quote)) {
@@ -121,11 +127,13 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
 }
 
 function isZeroResultQuote(quote: StockQuote): boolean {
-  return quote.price === 0 &&
+  return (
+    quote.price === 0 &&
     quote.volume === 0 &&
     quote.week52High === 0 &&
     quote.week52Low === 0 &&
-    quote.marketCap === 0;
+    quote.marketCap === 0
+  );
 }
 
 export async function getHistory(
@@ -185,7 +193,9 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
     const data = await getFundHoldingsSummary(normalizedSymbol);
     const result = data.quoteSummary.result?.[0];
     if (data.quoteSummary.error) {
-      throw new Error(`Yahoo Finance: ${data.quoteSummary.error.description ?? data.quoteSummary.error.code ?? "quoteSummary error"}`);
+      throw new Error(
+        `Yahoo Finance: ${data.quoteSummary.error.description ?? data.quoteSummary.error.code ?? "quoteSummary error"}`,
+      );
     }
     if (!result?.topHoldings?.holdings?.length) {
       throw new Error(`Yahoo Finance: no fund holdings returned for ${normalizedSymbol}`);
@@ -199,11 +209,13 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
         const holdingSymbol = holding.symbol?.trim().toUpperCase();
         const weight = normalizeHoldingWeight(holding.holdingPercent);
         if (!holdingSymbol || weight === undefined) return [];
-        return [{
-          symbol: holdingSymbol,
-          name: holding.holdingName?.trim() || holdingSymbol,
-          weight,
-        }];
+        return [
+          {
+            symbol: holdingSymbol,
+            name: holding.holdingName?.trim() || holdingSymbol,
+            weight,
+          },
+        ];
       }),
       sectorWeights: normalizeSectorWeights(result.topHoldings.equityHoldings?.sectorWeightings),
     };
@@ -237,7 +249,9 @@ async function fetchFundHoldingsSummary(symbol: string): Promise<YahooQuoteSumma
   });
 }
 
-async function fetchFundHoldingsSummaryWithCrumb(symbol: string): Promise<YahooQuoteSummaryResponse> {
+async function fetchFundHoldingsSummaryWithCrumb(
+  symbol: string,
+): Promise<YahooQuoteSummaryResponse> {
   const modules = encodeURIComponent("price,topHoldings");
   const { crumb, cookie } = await getYahooCrumb();
   const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
@@ -310,7 +324,9 @@ export async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }
   const cookie = setCookie.split(";")[0]; // Extract just the cookie value
   if (!cookie) {
     if (!cookieRes.ok) {
-      throw new Error(`Yahoo crumb cookie request failed: HTTP ${cookieRes.status} ${cookieRes.statusText}`.trim());
+      throw new Error(
+        `Yahoo crumb cookie request failed: HTTP ${cookieRes.status} ${cookieRes.statusText}`.trim(),
+      );
     }
     throw new Error("Yahoo crumb cookie request did not return a session cookie");
   }
@@ -321,7 +337,9 @@ export async function getYahooCrumb(): Promise<{ crumb: string; cookie: string }
     signal: yahooRawFetchSignal(),
   });
   if (!crumbRes.ok) {
-    throw new Error(`Yahoo crumb request failed: HTTP ${crumbRes.status} ${crumbRes.statusText}`.trim());
+    throw new Error(
+      `Yahoo crumb request failed: HTTP ${crumbRes.status} ${crumbRes.statusText}`.trim(),
+    );
   }
   const crumb = (await crumbRes.text()).trim();
 
@@ -350,10 +368,7 @@ interface YahooOptionsResponse {
   };
 }
 
-export async function getOptionsChain(
-  symbol: string,
-  expiration?: number,
-): Promise<OptionsChain> {
+export async function getOptionsChain(symbol: string, expiration?: number): Promise<OptionsChain> {
   const cacheKey = `yahoo:options:${symbol}:${expiration ?? "nearest"}`;
   const cached = cache.get<OptionsChain>(cacheKey);
   if (cached) return cached;
@@ -415,10 +430,13 @@ export async function getOptionsChain(
       throw new Error(message);
     }
     if (browserError instanceof Error) {
-      const message = fetchError instanceof Error ? fetchError.message : "Yahoo Finance options: fetch failed";
+      const message =
+        fetchError instanceof Error ? fetchError.message : "Yahoo Finance options: fetch failed";
       throw new Error(`${message}; browser fallback failed: ${browserError.message}`);
     }
-    throw fetchError instanceof Error ? fetchError : new Error("Yahoo Finance options: fetch failed");
+    throw fetchError instanceof Error
+      ? fetchError
+      : new Error("Yahoo Finance options: fetch failed");
   }
 
   const data: YahooOptionsResponse = await res.json();
@@ -439,7 +457,7 @@ function yahooRawFetchSignal(): AbortSignal {
  */
 export function computeTimeToExpiry(expirationTs: number, nowMs: number = Date.now()): number {
   const MARKET_CLOSE_OFFSET_S = 21 * 3600; // 21:00 UTC ≈ 4 PM ET
-  const MIN_TIME_YEARS = 1 / (365 * 24);   // ~1 hour floor
+  const MIN_TIME_YEARS = 1 / (365 * 24); // ~1 hour floor
   const SECONDS_PER_YEAR = 365 * 24 * 3600;
 
   const expiryCloseTs = expirationTs + MARKET_CLOSE_OFFSET_S;
@@ -536,7 +554,14 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
   const mapContract = (c: any, type: "call" | "put"): OptionContract => {
     const strike = c.strike ?? c.strike?.raw ?? 0;
     const iv = c.impliedVolatility ?? c.impliedVolatility?.raw ?? 0;
-    const greeks = computeGreeks({ type, spot: underlyingPrice, strike, timeYears, iv, riskFreeRate });
+    const greeks = computeGreeks({
+      type,
+      spot: underlyingPrice,
+      strike,
+      timeYears,
+      iv,
+      riskFreeRate,
+    });
     return {
       contractSymbol: c.contractSymbol ?? "",
       type,
@@ -563,7 +588,9 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
     symbol: result.underlyingSymbol,
     underlyingPrice,
     expirationDate,
-    expirationDates: result.expirationDates.map((ts) => new Date(ts * 1000).toISOString().split("T")[0]),
+    expirationDates: result.expirationDates.map(
+      (ts) => new Date(ts * 1000).toISOString().split("T")[0],
+    ),
     calls,
     puts,
     totalCallVolume,

@@ -1,13 +1,25 @@
-import { cloneElement, forwardRef, isValidElement, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  cloneElement,
+  forwardRef,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../../lib/utils.js";
 
 export function Popover({ open: openProp, defaultOpen = false, onOpenChange, children }) {
   const [openState, setOpenState] = useState(defaultOpen);
   const open = openProp !== undefined ? openProp : openState;
-  const setOpen = useCallback((next) => {
-    if (openProp === undefined) setOpenState(next);
-    onOpenChange?.(next);
-  }, [onOpenChange, openProp]);
+  const setOpen = useCallback(
+    (next) => {
+      if (openProp === undefined) setOpenState(next);
+      onOpenChange?.(next);
+    },
+    [onOpenChange, openProp],
+  );
   const triggerRef = useRef(null);
   const contentRef = useRef(null);
   const triggerId = useId();
@@ -37,14 +49,11 @@ export function Popover({ open: openProp, defaultOpen = false, onOpenChange, chi
   }, [open, setOpen]);
 
   const context = { open, setOpen, triggerRef, contentRef, triggerId, contentId };
-  return (
-    <PopoverContext.Provider value={context}>
-      {children}
-    </PopoverContext.Provider>
-  );
+  return <PopoverContext.Provider value={context}>{children}</PopoverContext.Provider>;
 }
 
 import { createContext, useContext } from "react";
+
 const PopoverContext = createContext(null);
 function usePopover() {
   const ctx = useContext(PopoverContext);
@@ -52,7 +61,10 @@ function usePopover() {
   return ctx;
 }
 
-export const PopoverTrigger = forwardRef(function PopoverTrigger({ children, asChild = false, onClick, ...props }, _ref) {
+export const PopoverTrigger = forwardRef(function PopoverTrigger(
+  { children, asChild = false, onClick, ...props },
+  _ref,
+) {
   const { open, setOpen, triggerRef, triggerId, contentId } = usePopover();
   const handleClick = (event) => {
     onClick?.(event);
@@ -71,16 +83,25 @@ export const PopoverTrigger = forwardRef(function PopoverTrigger({ children, asC
   if (asChild && isValidElement(children)) {
     return cloneElement(children, triggerProps);
   }
-  return <button type="button" {...triggerProps}>{children}</button>;
+  return (
+    <button type="button" {...triggerProps}>
+      {children}
+    </button>
+  );
 });
 
-export const PopoverContent = forwardRef(function PopoverContent({ className, align = "start", side = "bottom", sideOffset = 6, children, ...props }, _ref) {
+export const PopoverContent = forwardRef(function PopoverContent(
+  { className, align = "start", side = "bottom", sideOffset = 6, children, ...props },
+  _ref,
+) {
   const { open, contentRef, contentId, triggerId } = usePopover();
   if (!open) return null;
-  const alignClass = align === "end" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0";
-  const sideClass = side === "top"
-    ? `bottom-full mb-[var(--popover-offset)]`
-    : `top-full mt-[var(--popover-offset)]`;
+  const alignClass =
+    align === "end" ? "right-0" : align === "center" ? "left-1/2 -translate-x-1/2" : "left-0";
+  const sideClass =
+    side === "top"
+      ? `bottom-full mb-[var(--popover-offset)]`
+      : `top-full mt-[var(--popover-offset)]`;
   return (
     <div
       ref={contentRef}

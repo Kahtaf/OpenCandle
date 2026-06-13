@@ -84,7 +84,11 @@ describe("TradingView provider", () => {
     const quotes = await getQuotes(["AAPL", "BRK.A", "SPY", "BTC-USD"]);
 
     expect(quotes.map((quote) => quote.requestedSymbol)).toEqual(["AAPL", "BRK.A", "SPY"]);
-    expect(quotes.map((quote) => quote.tvSymbol)).toEqual(["NASDAQ:AAPL", "NYSE:BRK.A", "AMEX:SPY"]);
+    expect(quotes.map((quote) => quote.tvSymbol)).toEqual([
+      "NASDAQ:AAPL",
+      "NYSE:BRK.A",
+      "AMEX:SPY",
+    ]);
     expect(fetch).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
     expect(body.symbols).toEqual({ query: { types: [] } });
@@ -96,7 +100,8 @@ describe("TradingView provider", () => {
   });
 
   it("uses at most two POSTs for mixed qualified and bare inputs and preserves caller order", async () => {
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(qualifiedQuotesFixture),
@@ -109,10 +114,22 @@ describe("TradingView provider", () => {
     const quotes = await getQuotes(["NASDAQ:AAPL", "SPY", "NASDAQ:MSFT"]);
 
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("https://scanner.tradingview.com/global/scan2?label-product=screener-stock");
-    expect(vi.mocked(fetch).mock.calls[1][0]).toBe("https://scanner.tradingview.com/america/scan2?label-product=screener-stock");
-    expect(quotes.map((quote) => quote.requestedSymbol)).toEqual(["NASDAQ:AAPL", "SPY", "NASDAQ:MSFT"]);
-    expect(quotes.map((quote) => quote.tvSymbol)).toEqual(["NASDAQ:AAPL", "AMEX:SPY", "NASDAQ:MSFT"]);
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      "https://scanner.tradingview.com/global/scan2?label-product=screener-stock",
+    );
+    expect(vi.mocked(fetch).mock.calls[1][0]).toBe(
+      "https://scanner.tradingview.com/america/scan2?label-product=screener-stock",
+    );
+    expect(quotes.map((quote) => quote.requestedSymbol)).toEqual([
+      "NASDAQ:AAPL",
+      "SPY",
+      "NASDAQ:MSFT",
+    ]);
+    expect(quotes.map((quote) => quote.tvSymbol)).toEqual([
+      "NASDAQ:AAPL",
+      "AMEX:SPY",
+      "NASDAQ:MSFT",
+    ]);
   });
 
   it("caches scanner results under a canonical body key", async () => {
@@ -160,13 +177,16 @@ describe("TradingView provider", () => {
   it("treats quote rows without a finite close as unresolved", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        fields: ["name", "volume", "exchange", "market", "description", "type", "typespecs"],
-        symbols: [{
-          s: "NASDAQ:AAPL",
-          f: ["AAPL", 1000, "NASDAQ", "america", "Apple Inc.", "stock", ["common"]],
-        }],
-      }),
+      json: () =>
+        Promise.resolve({
+          fields: ["name", "volume", "exchange", "market", "description", "type", "typespecs"],
+          symbols: [
+            {
+              s: "NASDAQ:AAPL",
+              f: ["AAPL", 1000, "NASDAQ", "america", "Apple Inc.", "stock", ["common"]],
+            },
+          ],
+        }),
     });
 
     await expect(getQuotes(["AAPL"])).resolves.toEqual([]);
@@ -176,7 +196,8 @@ describe("TradingView provider", () => {
     let now = new Date("2026-06-01T00:00:00.000Z").getTime();
     vi.spyOn(Date, "now").mockImplementation(() => now);
     rateLimiter.configure("tradingview", 1000, 1000);
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(screenResultsFixture),

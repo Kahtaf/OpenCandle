@@ -1,15 +1,15 @@
-import { describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ProductEvalReport } from "../../evals/product/types.js";
+import { describe, expect, it } from "vitest";
 import {
   buildProductReplayComparison,
   findLatestProductEvalReport,
-  writeProductReplayComparisonReport,
   summarizeProductReplayReport,
   unsupportedProductReplayRun,
+  writeProductReplayComparisonReport,
 } from "../../evals/main-branch-replay.js";
+import type { ProductEvalReport } from "../../evals/product/types.js";
 
 function productReport(overrides: Partial<ProductEvalReport> = {}): ProductEvalReport {
   return {
@@ -152,8 +152,12 @@ describe("main branch product replay comparison", () => {
       "utf-8",
     );
 
-    expect(outputPath).toMatch(/tests\/evals\/runs\/2026-05-25T10-00-00-000Z_product-replay-comparison\.json$/);
+    expect(outputPath).toMatch(
+      /tests\/evals\/runs\/2026-05-25T10-00-00-000Z_product-replay-comparison\.json$/,
+    );
     expect(JSON.parse(readFileSync(outputPath, "utf-8")).status).toBe("compared");
-    expect(findLatestProductEvalReport(cwd)).toMatch(/2026-05-25T11-00-00-000Z_product-evals\.json$/);
+    expect(findLatestProductEvalReport(cwd)).toMatch(
+      /2026-05-25T11-00-00-000Z_product-evals\.json$/,
+    );
   });
 });

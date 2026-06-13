@@ -1,13 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { computeDCF, computeNetDebt } from "../../../src/tools/fundamentals/dcf.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 
 describe("computeDCF", () => {
   const baseParams = {
     freeCashFlow: 1_000_000_000, // $1B FCF
-    growthRate: 0.10,            // 10% growth
-    discountRate: 0.10,          // 10% WACC
-    terminalGrowth: 0.03,        // 3% terminal growth
+    growthRate: 0.1, // 10% growth
+    discountRate: 0.1, // 10% WACC
+    terminalGrowth: 0.03, // 3% terminal growth
     years: 5,
     netDebt: 0,
     sharesOutstanding: 1_000_000_000, // 1B shares
@@ -24,13 +24,9 @@ describe("computeDCF", () => {
     const result = computeDCF(baseParams);
     expect(result.projectedCashFlows).toHaveLength(5);
     // Year 1 FCF should be baseParams.freeCashFlow * (1 + growthRate)
-    expect(result.projectedCashFlows[0].fcf).toBeCloseTo(
-      baseParams.freeCashFlow * 1.10, 0,
-    );
+    expect(result.projectedCashFlows[0].fcf).toBeCloseTo(baseParams.freeCashFlow * 1.1, 0);
     // Year 2 should compound
-    expect(result.projectedCashFlows[1].fcf).toBeCloseTo(
-      baseParams.freeCashFlow * 1.10 ** 2, 0,
-    );
+    expect(result.projectedCashFlows[1].fcf).toBeCloseTo(baseParams.freeCashFlow * 1.1 ** 2, 0);
   });
 
   it("present values use mid-year convention discounting", () => {
@@ -52,7 +48,8 @@ describe("computeDCF", () => {
     const withDebt = computeDCF({ ...baseParams, netDebt: 500_000_000 });
     const noDebt = computeDCF({ ...baseParams, netDebt: 0 });
     expect(withDebt.intrinsicValue).toBeCloseTo(
-      noDebt.intrinsicValue - 500_000_000 / baseParams.sharesOutstanding, 2,
+      noDebt.intrinsicValue - 500_000_000 / baseParams.sharesOutstanding,
+      2,
     );
   });
 
@@ -60,8 +57,8 @@ describe("computeDCF", () => {
     const result = computeDCF(baseParams);
     // Margin of safety = (intrinsic - current) / intrinsic
     // Without a current price in the pure function, we verify the formula via assumptions
-    expect(result.assumptions.growthRate).toBe(0.10);
-    expect(result.assumptions.discountRate).toBe(0.10);
+    expect(result.assumptions.growthRate).toBe(0.1);
+    expect(result.assumptions.discountRate).toBe(0.1);
   });
 
   it("builds a sensitivity table", () => {
@@ -105,7 +102,9 @@ describe("computeDCF", () => {
     const pvTV = result.terminalValue / (1 + 0.06) ** 5;
     const tvPct = pvTV / result.enterpriseValue;
     if (tvPct > 0.85) {
-      expect(result.warnings.some((w: string) => w.toLowerCase().includes("terminal value"))).toBe(true);
+      expect(result.warnings.some((w: string) => w.toLowerCase().includes("terminal value"))).toBe(
+        true,
+      );
     }
   });
 
@@ -115,7 +114,9 @@ describe("computeDCF", () => {
       discountRate: 0.06,
       terminalGrowth: 0.05, // Only 1% spread
     });
-    expect(result.warnings.some((w: string) => w.toLowerCase().includes("terminal growth"))).toBe(true);
+    expect(result.warnings.some((w: string) => w.toLowerCase().includes("terminal growth"))).toBe(
+      true,
+    );
   });
 
   it("uses mid-year convention for discounting", () => {

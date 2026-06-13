@@ -1,6 +1,6 @@
+import { runWithStaleMetadata } from "../infra/cache.js";
 import type { ProviderResult } from "../runtime/evidence.js";
 import { getProviderTracker } from "../runtime/run-context.js";
-import { runWithStaleMetadata } from "../infra/cache.js";
 import { InvalidSymbolError } from "./errors.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
@@ -59,8 +59,7 @@ export async function wrapProvider<T>(
       };
     }
     tracker?.recordFailure(providerId);
-    const reason =
-      error instanceof Error ? error.message : "unknown_error";
+    const reason = error instanceof Error ? error.message : "unknown_error";
     return {
       status: "unavailable",
       reason,

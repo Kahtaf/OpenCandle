@@ -1,5 +1,5 @@
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AssistantMessage, Message } from "@earendil-works/pi-ai";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { ChatEvent, MessageContent, ToolOutput } from "../shared/chat-events.js";
 
 export interface LiveChatEventAdapterOptions {
@@ -19,7 +19,9 @@ export interface LiveChatEventAdapter {
   nextSeq(): number;
 }
 
-export function createLiveChatEventAdapter(options: LiveChatEventAdapterOptions): LiveChatEventAdapter {
+export function createLiveChatEventAdapter(
+  options: LiveChatEventAdapterOptions,
+): LiveChatEventAdapter {
   let seq = options.startSeq;
   let userCount = 0;
   let assistantCount = 0;
@@ -60,9 +62,10 @@ export function createLiveChatEventAdapter(options: LiveChatEventAdapterOptions)
           const message = event.message as Message;
           if (message.role === "user") {
             const messageId = `${options.runId}-user-${++userCount}`;
-            const text = userCount === 1 && options.originalPrompt
-              ? options.originalPrompt
-              : messageText(message.content);
+            const text =
+              userCount === 1 && options.originalPrompt
+                ? options.originalPrompt
+                : messageText(message.content);
             emit({ type: "message.created", messageId, role: "user" });
             emit({
               type: "message.completed",
@@ -169,14 +172,18 @@ function messageText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
-    .map((part) => typeof part === "object" && part !== null && "text" in part && typeof part.text === "string" ? part.text : "")
+    .map((part) =>
+      typeof part === "object" && part !== null && "text" in part && typeof part.text === "string"
+        ? part.text
+        : "",
+    )
     .join("");
 }
 
 function toolOutput(result: unknown, isError: boolean): ToolOutput {
   const record = asRecord(result);
   return {
-    content: Array.isArray(record.content) ? record.content as ToolOutput["content"] : [],
+    content: Array.isArray(record.content) ? (record.content as ToolOutput["content"]) : [],
     details: record.details,
     isError,
   };
@@ -184,6 +191,6 @@ function toolOutput(result: unknown, isError: boolean): ToolOutput {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }

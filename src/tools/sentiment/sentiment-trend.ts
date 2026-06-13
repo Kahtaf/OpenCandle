@@ -1,7 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { SentimentStore } from "../../sentiment/store.js";
+import { Type } from "@sinclair/typebox";
 import { getSentimentStore } from "../../sentiment/index.js";
+import type { SentimentStore } from "../../sentiment/store.js";
 import { computeTrend } from "../../sentiment/trends.js";
 
 const params = Type.Object({
@@ -10,9 +10,17 @@ const params = Type.Object({
     Type.Number({ description: "Number of days of history. Default: 7, max: 30" }),
   ),
   source: Type.Optional(
-    Type.Union([Type.Literal("twitter"), Type.Literal("reddit"), Type.Literal("web"), Type.Literal("finnhub")], {
-      description: "Filter to a single source. Default: all sources.",
-    }),
+    Type.Union(
+      [
+        Type.Literal("twitter"),
+        Type.Literal("reddit"),
+        Type.Literal("web"),
+        Type.Literal("finnhub"),
+      ],
+      {
+        description: "Filter to a single source. Default: all sources.",
+      },
+    ),
   ),
 });
 
@@ -22,7 +30,11 @@ interface TrendToolResult {
 }
 
 export const sentimentTrendTool: AgentTool<typeof params> & {
-  executeWithStore: (toolCallId: string, args: { query: string; days?: number; source?: string }, store: SentimentStore) => Promise<TrendToolResult>;
+  executeWithStore: (
+    toolCallId: string,
+    args: { query: string; days?: number; source?: string },
+    store: SentimentStore,
+  ) => Promise<TrendToolResult>;
 } = {
   name: "get_sentiment_trend",
   label: "Sentiment Trend",
@@ -39,7 +51,12 @@ export const sentimentTrendTool: AgentTool<typeof params> & {
 
     if (series.length === 0) {
       return {
-        content: [{ type: "text", text: `No historical sentiment data for "${args.query}". Run a sentiment query first to populate the store.` }],
+        content: [
+          {
+            type: "text",
+            text: `No historical sentiment data for "${args.query}". Run a sentiment query first to populate the store.`,
+          },
+        ],
         details: null,
       };
     }

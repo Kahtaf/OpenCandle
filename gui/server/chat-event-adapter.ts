@@ -1,5 +1,5 @@
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ChatEvent, MessageContent, ToolOutput } from "../shared/chat-events.js";
 
 export interface SessionEventOptions {
@@ -119,13 +119,17 @@ export function sessionEntriesToChatEvents(
 }
 
 export function isOriginalInputEntry(entry: SessionEntry): boolean {
-  return entry.type === "custom" &&
-    (entry as { customType?: unknown }).customType === "opencandle-user-input";
+  return (
+    entry.type === "custom" &&
+    (entry as { customType?: unknown }).customType === "opencandle-user-input"
+  );
 }
 
 export function originalInputText(entry: SessionEntry): string | null {
   const data = (entry as { data?: { original?: unknown } }).data;
-  return typeof data?.original === "string" && data.original.trim().length > 0 ? data.original : null;
+  return typeof data?.original === "string" && data.original.trim().length > 0
+    ? data.original
+    : null;
 }
 
 function customMessageText(content: unknown): string {
@@ -136,16 +140,15 @@ function customMessageText(content: unknown): string {
 function messageText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
-  return content
-    .map((part) => typeof part.text === "string" ? part.text : "")
-    .join("");
+  return content.map((part) => (typeof part.text === "string" ? part.text : "")).join("");
 }
 
 function toolOutput(message: ToolResultMessage): ToolOutput {
   const details = message.details;
-  const source = typeof details === "object" && details !== null && "source" in details
-    ? String((details as { source?: unknown }).source ?? "")
-    : undefined;
+  const source =
+    typeof details === "object" && details !== null && "source" in details
+      ? String((details as { source?: unknown }).source ?? "")
+      : undefined;
   return {
     content: message.content,
     details,

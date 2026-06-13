@@ -64,15 +64,7 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
 
     const result = spawnSync(
       helperPath,
-      [
-        "--mode",
-        "commit",
-        "--commit",
-        mergeCommit,
-        "--codex-bin",
-        fakeCodex,
-        "--no-web-search",
-      ],
+      ["--mode", "commit", "--commit", mergeCommit, "--codex-bin", fakeCodex, "--no-web-search"],
       { cwd: dir, encoding: "utf8" },
     );
 
@@ -92,11 +84,10 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
     git(dir, "commit", "--quiet", "-m", "initial");
     writeFileSync(join(dir, "app.js"), "export const value = 2;\n");
 
-    const result = spawnSync(
-      helperPath,
-      ["--mode", "branch", "--base", "HEAD", "--dry-run"],
-      { cwd: dir, encoding: "utf8" },
-    );
+    const result = spawnSync(helperPath, ["--mode", "branch", "--base", "HEAD", "--dry-run"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("branch review requires a clean worktree");

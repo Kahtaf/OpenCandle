@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { runBacktest, type BacktestResult } from "../../../src/tools/technical/backtest.js";
+import { describe, expect, it } from "vitest";
+import { type BacktestResult, runBacktest } from "../../../src/tools/technical/backtest.js";
 import type { OHLCV } from "../../../src/types/market.js";
 
 // Generate deterministic uptrending bars
@@ -120,17 +120,24 @@ describe("runBacktest", () => {
     for (let i = 0; i < 60; i++) {
       bars.push({
         date: `2024-01-${String(i + 1).padStart(2, "0")}`,
-        open: 100 + i * 0.5, high: 101 + i * 0.5,
-        low: 99 + i * 0.5, close: 100 + i * 0.5, volume: 1_000_000,
+        open: 100 + i * 0.5,
+        high: 101 + i * 0.5,
+        low: 99 + i * 0.5,
+        close: 100 + i * 0.5,
+        volume: 1_000_000,
       });
     }
     const peakPrice = bars[bars.length - 1].close; // ~129.5
     // Decline 15% over 10 bars — too gentle/short to flip SMA20 < SMA50
     for (let i = 0; i < 10; i++) {
-      const price = peakPrice * (1 - 0.15 * (i + 1) / 10);
+      const price = peakPrice * (1 - (0.15 * (i + 1)) / 10);
       bars.push({
         date: `2024-03-${String(i + 1).padStart(2, "0")}`,
-        open: price, high: price + 1, low: price - 1, close: price, volume: 1_000_000,
+        open: price,
+        high: price + 1,
+        low: price - 1,
+        close: price,
+        volume: 1_000_000,
       });
     }
 

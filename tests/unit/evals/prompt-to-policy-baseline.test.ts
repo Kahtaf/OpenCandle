@@ -163,12 +163,14 @@ describe("prompt-to-policy baseline comparison", () => {
       },
     });
 
-    expect(report.cases[0]).toEqual(expect.objectContaining({
-      promptId: "safe-cash-products",
-      passed: true,
-      parityStatus: "legacy_active",
-      regressionClassification: "none",
-    }));
+    expect(report.cases[0]).toEqual(
+      expect.objectContaining({
+        promptId: "safe-cash-products",
+        passed: true,
+        parityStatus: "legacy_active",
+        regressionClassification: "none",
+      }),
+    );
     expect(report.cases[0]?.planning?.taskFamily).toBe("retail_finance_tradeoff");
   });
 

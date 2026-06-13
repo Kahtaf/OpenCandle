@@ -1,11 +1,7 @@
 import type { ExtractedEntities, SlotSource, WorkflowType } from "./types.js";
 
 export type RouterRoute = "workflow" | "fallback";
-export type RouterRouteKind =
-  | "workflow_dispatch"
-  | "agent_task"
-  | "clarification"
-  | "pass_through";
+export type RouterRouteKind = "workflow_dispatch" | "agent_task" | "clarification" | "pass_through";
 
 export type ToolBundleName =
   | "core_market"

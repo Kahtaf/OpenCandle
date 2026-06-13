@@ -1,8 +1,11 @@
-import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { httpGet } from "../../../src/infra/http-client.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
-import { resolveYahooInstrument, searchYahooInstruments } from "../../../src/market-state/resolve.js";
+import {
+  resolveYahooInstrument,
+  searchYahooInstruments,
+} from "../../../src/market-state/resolve.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 

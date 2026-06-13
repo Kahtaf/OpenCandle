@@ -185,7 +185,10 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
-    debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
+    debate:
+      debateEnv !== undefined
+        ? debateEnv !== "false" && debateEnv !== "0"
+        : (fileConfig.debate ?? true),
     routerMode: resolveRouterMode(),
     toolScopeMode: resolveToolScopeMode(),
     planningMigrationStatuses: resolvePlanningMigrationStatuses(),
@@ -193,7 +196,8 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,
       commentsPerPost: fileSentiment?.commentsPerPost ?? SENTIMENT_DEFAULTS.commentsPerPost,
-      divergenceThreshold: fileSentiment?.divergenceThreshold ?? SENTIMENT_DEFAULTS.divergenceThreshold,
+      divergenceThreshold:
+        fileSentiment?.divergenceThreshold ?? SENTIMENT_DEFAULTS.divergenceThreshold,
     },
   };
 }

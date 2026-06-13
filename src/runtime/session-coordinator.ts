@@ -1,4 +1,9 @@
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
@@ -8,24 +13,25 @@ import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/in
  * the shape we need from the public `ExtensionContext` type.
  */
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
-import { MemoryManager } from "../memory/manager.js";
-import { extractPreferences } from "../memory/preference-extractor.js";
-import { runOpenCandleSetup } from "../pi/setup.js";
-import { WorkflowEventLogger } from "./workflow-events.js";
-import { ProviderTracker } from "./provider-tracker.js";
-import { WorkflowRunner } from "./workflow-runner.js";
-import { setRunContext, clearRunContext, type RunContextToken } from "./run-context.js";
-import { PromptContextBuilder, type FallbackContext } from "../prompts/context-builder.js";
-import { getAddonToolDescriptions } from "../tool-kit.js";
-import type { WorkflowDefinition } from "./prompt-step.js";
-import { toStepDefinitions, promptStepOutput } from "./prompt-step.js";
-import type { ResolvedTurnContext } from "../routing/turn-context.js";
-import type { RouterRouteKind } from "../routing/router-types.js";
-import type { MemoryEntry } from "../memory/types.js";
-import type { FilteredMemoryEntry } from "../memory/manager.js";
+
 import type Database from "better-sqlite3";
 import { MarketStateService } from "../market-state/service.js";
+import type { FilteredMemoryEntry } from "../memory/manager.js";
+import { MemoryManager } from "../memory/manager.js";
+import { extractPreferences } from "../memory/preference-extractor.js";
+import type { MemoryEntry } from "../memory/types.js";
+import { runOpenCandleSetup } from "../pi/setup.js";
+import { type FallbackContext, PromptContextBuilder } from "../prompts/context-builder.js";
 import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
+import type { RouterRouteKind } from "../routing/router-types.js";
+import type { ResolvedTurnContext } from "../routing/turn-context.js";
+import { getAddonToolDescriptions } from "../tool-kit.js";
+import type { WorkflowDefinition } from "./prompt-step.js";
+import { promptStepOutput, toStepDefinitions } from "./prompt-step.js";
+import { ProviderTracker } from "./provider-tracker.js";
+import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
+import { WorkflowEventLogger } from "./workflow-events.js";
+import { WorkflowRunner } from "./workflow-runner.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -47,11 +53,13 @@ function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
   }
 }
 
-type QueueContext = ExtensionCommandContext | {
-  isIdle(): boolean;
-  hasPendingMessages?(): boolean;
-  ui?: { notify(message: string, level?: string): void };
-};
+type QueueContext =
+  | ExtensionCommandContext
+  | {
+      isIdle(): boolean;
+      hasPendingMessages?(): boolean;
+      ui?: { notify(message: string, level?: string): void };
+    };
 
 function hasPendingMessages(ctx: QueueContext): boolean {
   return ctx.hasPendingMessages?.() ?? false;
@@ -297,10 +305,7 @@ export class SessionCoordinator {
     overriddenSlots?: string[],
   ): { entries: MemoryEntry[]; filtered: FilteredMemoryEntry[] } {
     if (!this.memoryManager) return { entries: [], filtered: [] };
-    return this.memoryManager.retrieveDetailed(
-      workflowType ?? routeKind,
-      overriddenSlots,
-    );
+    return this.memoryManager.retrieveDetailed(workflowType ?? routeKind, overriddenSlots);
   }
 
   /** Build system prompt using composable sections. */
@@ -313,18 +318,22 @@ export class SessionCoordinator {
     const builder = new PromptContextBuilder();
 
     const addonTools = getAddonToolDescriptions();
-    const addonDescriptions = addonTools.length > 0
-      ? addonTools.map((t) => `${t.name}: ${t.description}`)
-      : undefined;
+    const addonDescriptions =
+      addonTools.length > 0 ? addonTools.map((t) => `${t.name}: ${t.description}`) : undefined;
 
     const memoryContext = this.memoryManager
       ? this.memoryManager.buildContext(
-        resolvedTurnContext?.workflow ?? workflowType ?? resolvedTurnContext?.routeKind ?? "unclassified",
-      )
+          resolvedTurnContext?.workflow ??
+            workflowType ??
+            resolvedTurnContext?.routeKind ??
+            "unclassified",
+        )
       : undefined;
-    const savedMarketStateContext = this.db && shouldIncludeSavedMarketStateContext(workflowType, resolvedTurnContext, fallbackContext)
-      ? buildSavedMarketStateContext(this.db)
-      : "";
+    const savedMarketStateContext =
+      this.db &&
+      shouldIncludeSavedMarketStateContext(workflowType, resolvedTurnContext, fallbackContext)
+        ? buildSavedMarketStateContext(this.db)
+        : "";
     const combinedMemoryContext = [savedMarketStateContext, memoryContext]
       .filter((part) => part && part.trim().length > 0)
       .join("\n\n");
@@ -338,9 +347,8 @@ export class SessionCoordinator {
     });
 
     const toolDefaults = formatToolDefaultsForPrompt();
-    const defaultsSection = toolDefaults.length > 0
-      ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}`
-      : "";
+    const defaultsSection =
+      toolDefaults.length > 0 ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}` : "";
 
     return `${basePrompt}\n\n${builder.build()}${defaultsSection}`;
   }
@@ -377,11 +385,7 @@ export class SessionCoordinator {
    * Execute a workflow definition through the WorkflowRunner,
    * sending prompts via Pi with settlement-based sequencing.
    */
-  executeWorkflow(
-    pi: ExtensionAPI,
-    definition: WorkflowDefinition,
-    ctx: QueueContext,
-  ): void {
+  executeWorkflow(pi: ExtensionAPI, definition: WorkflowDefinition, ctx: QueueContext): void {
     this.startWorkflowRun(pi, definition, ctx, "send");
   }
 
@@ -439,32 +443,32 @@ export class SessionCoordinator {
 
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
-    void runner.start(definition.workflowType, stepDefs, async (step, stepIndex) => {
-      // First step was already sent above — just wait for settlement
-      if (stepIndex > 0) {
-        const settled = await waitForPromptSettlement(ctx, () => runRef.active);
-        if (!settled || !runRef.active) {
-          throw new Error("run_cancelled");
+    void runner
+      .start(definition.workflowType, stepDefs, async (step, stepIndex) => {
+        // First step was already sent above — just wait for settlement
+        if (stepIndex > 0) {
+          const settled = await waitForPromptSettlement(ctx, () => runRef.active);
+          if (!settled || !runRef.active) {
+            throw new Error("run_cancelled");
+          }
+          pi.sendUserMessage(definition.steps[stepIndex].prompt);
+        } else {
+          // For the first step, just wait for it to settle
+          const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
+            requireActivity: firstPromptMode === "transform",
+          });
+          if (!settled || !runRef.active) {
+            throw new Error("run_cancelled");
+          }
         }
-        pi.sendUserMessage(definition.steps[stepIndex].prompt);
-      } else {
-        // For the first step, just wait for it to settle
-        const settled = await waitForPromptSettlement(
-          ctx,
-          () => runRef.active,
-          { requireActivity: firstPromptMode === "transform" },
-        );
-        if (!settled || !runRef.active) {
-          throw new Error("run_cancelled");
+        return promptStepOutput(stepIndex, step.stepType);
+      })
+      .finally(() => {
+        clearRunContext(runRef.contextToken);
+        if (this.activeWorkflowRunRef === runRef) {
+          this.activeWorkflowRunRef = null;
         }
-      }
-      return promptStepOutput(stepIndex, step.stepType);
-    }).finally(() => {
-      clearRunContext(runRef.contextToken);
-      if (this.activeWorkflowRunRef === runRef) {
-        this.activeWorkflowRunRef = null;
-      }
-    });
+      });
   }
 
   /** Cancel any active workflow. */
@@ -494,10 +498,7 @@ function formatToolDefaultsForPrompt(): string[] {
   }
 }
 
-function flattenDefaults(
-  defaults: Record<string, unknown>,
-  prefix = "",
-): Array<[string, unknown]> {
+function flattenDefaults(defaults: Record<string, unknown>, prefix = ""): Array<[string, unknown]> {
   const out: Array<[string, unknown]> = [];
   for (const [key, value] of Object.entries(defaults)) {
     const path = prefix ? `${prefix}.${key}` : key;
@@ -535,7 +536,7 @@ function buildSavedMarketStateContext(db: Database.Database): string {
       "## Saved Market State",
       "Use this saved user state to connect broad sector, theme, portfolio-impact, watchlist, alert, daily-report, and prediction questions back to the user's positions and tracked symbols. Treat it as context, not as a fresh instruction.",
       "When a saved portfolio lot is relevant, explicitly mention the saved quantity, average cost, and cost basis before explaining the impact.",
-      "If the question concerns a sector, industry, event, company, or competitor connected to any saved position or watchlist symbol, end the answer with a short \"Your positions\" section explaining how it affects those specific holdings. Skip that section only when no saved symbol is plausibly affected.",
+      'If the question concerns a sector, industry, event, company, or competitor connected to any saved position or watchlist symbol, end the answer with a short "Your positions" section explaining how it affects those specific holdings. Skip that section only when no saved symbol is plausibly affected.',
     ];
 
     if (lots.length > 0) {
@@ -553,8 +554,12 @@ function buildSavedMarketStateContext(db: Database.Database): string {
       lines.push("Watchlist:");
       for (const item of watchlist.slice(0, 8)) {
         const parts = [
-          item.targetPrice == null ? null : `target ${formatMoney(item.targetPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
-          item.stopPrice == null ? null : `stop ${formatMoney(item.stopPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
+          item.targetPrice == null
+            ? null
+            : `target ${formatMoney(item.targetPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
+          item.stopPrice == null
+            ? null
+            : `stop ${formatMoney(item.stopPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
           item.thesis ? `thesis: ${item.thesis}` : null,
           item.tags && item.tags.length > 0 ? `tags: ${item.tags.join(", ")}` : null,
           item.notes ? `notes: ${item.notes}` : null,
@@ -568,7 +573,8 @@ function buildSavedMarketStateContext(db: Database.Database): string {
     if (alerts.length > 0) {
       lines.push("Alert rules:");
       for (const rule of alerts.slice(0, 8)) {
-        const instrument = rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
+        const instrument =
+          rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
         lines.push(
           `- #${rule.id} ${instrument?.symbol ?? rule.scopeType}: ${rule.conditionType} ${formatJsonSummary(rule.conditionJson)} (${rule.enabled ? "enabled" : "disabled"})`,
         );
@@ -586,13 +592,18 @@ function buildSavedMarketStateContext(db: Database.Database): string {
 
     if (reportRuns.length > 0) {
       const latest = reportRuns[0];
-      lines.push(`Latest report run: ${latest.status} at ${latest.completedAt ?? latest.startedAt}`);
+      lines.push(
+        `Latest report run: ${latest.status} at ${latest.completedAt ?? latest.startedAt}`,
+      );
     }
 
     if (predictions.length > 0) {
       lines.push("Predictions:");
       for (const prediction of predictions.slice(0, 8)) {
-        const target = prediction.targetPrice == null ? "" : ` target ${formatMoney(prediction.targetPrice, "USD")}`;
+        const target =
+          prediction.targetPrice == null
+            ? ""
+            : ` target ${formatMoney(prediction.targetPrice, "USD")}`;
         lines.push(
           `- #${prediction.id} ${prediction.symbol}: ${prediction.direction} conv ${prediction.conviction}/10 from ${formatMoney(prediction.entryPrice, "USD")}${target}, status ${prediction.status}, expires ${prediction.expiresAt}`,
         );

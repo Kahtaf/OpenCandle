@@ -160,7 +160,12 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     commitmentMode: "decision",
     implemented: true,
     requiredEvidenceTypes: [],
-    requiredFinalFields: ["clear_commitment", "risk_downside", "freshness_disclosure", "data_gap_disclosure"],
+    requiredFinalFields: [
+      "clear_commitment",
+      "risk_downside",
+      "freshness_disclosure",
+      "data_gap_disclosure",
+    ],
     requiresFreshness: true,
     requiresDataGapDisclosure: true,
     requiresRiskDownside: true,
@@ -175,7 +180,12 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     commitmentMode: "compare_tradeoffs",
     implemented: true,
     requiredEvidenceTypes: [],
-    requiredFinalFields: ["comparison_tradeoffs", "risk_downside", "data_gap_disclosure", "source_coverage"],
+    requiredFinalFields: [
+      "comparison_tradeoffs",
+      "risk_downside",
+      "data_gap_disclosure",
+      "source_coverage",
+    ],
     requiresFreshness: false,
     requiresDataGapDisclosure: true,
     requiresRiskDownside: true,
@@ -184,7 +194,9 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     capabilityGapIds: ["etf_holdings_overlap"],
     frameworkFallback: "not_allowed",
   },
-  portfolio_build: placeholderContract("portfolio_build", "portfolio_build", "construct", ["constructed_output"]),
+  portfolio_build: placeholderContract("portfolio_build", "portfolio_build", "construct", [
+    "constructed_output",
+  ]),
   portfolio_review: {
     id: "portfolio_review",
     taskFamily: "portfolio_review",
@@ -255,7 +267,12 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     commitmentMode: "framework",
     implemented: true,
     requiredEvidenceTypes: [],
-    requiredFinalFields: ["framework_or_checklist", "risk_downside", "data_gap_disclosure", "source_coverage"],
+    requiredFinalFields: [
+      "framework_or_checklist",
+      "risk_downside",
+      "data_gap_disclosure",
+      "source_coverage",
+    ],
     requiresFreshness: false,
     requiresDataGapDisclosure: true,
     requiresRiskDownside: true,
@@ -285,7 +302,12 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     commitmentMode: "framework",
     implemented: true,
     requiredEvidenceTypes: ["market_status"],
-    requiredFinalFields: ["framework_or_checklist", "freshness_disclosure", "source_coverage", "data_gap_disclosure"],
+    requiredFinalFields: [
+      "framework_or_checklist",
+      "freshness_disclosure",
+      "source_coverage",
+      "data_gap_disclosure",
+    ],
     requiresFreshness: true,
     requiresDataGapDisclosure: true,
     requiresRiskDownside: false,
@@ -374,7 +396,9 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     capabilityGapIds: [],
     frameworkFallback: "not_allowed",
   },
-  general_fallback: placeholderContract("general_fallback", "general_fallback", "framework", ["data_gap_disclosure"]),
+  general_fallback: placeholderContract("general_fallback", "general_fallback", "framework", [
+    "data_gap_disclosure",
+  ]),
 };
 
 export function runStructuredChecks(input: StructuredCheckInput): StructuredCheckTrace {
@@ -389,7 +413,9 @@ export function runStructuredChecks(input: StructuredCheckInput): StructuredChec
     ...semanticChecks(requestedChecks, input.answerText),
   ];
   const failures = results.filter((result) => !result.passed);
-  const retryReasons = failures.map((failure) => `${failure.checkId}: ${failure.failureReason ?? "failed"}`);
+  const retryReasons = failures.map(
+    (failure) => `${failure.checkId}: ${failure.failureReason ?? "failed"}`,
+  );
 
   return {
     mode: "observe_only",
@@ -411,36 +437,44 @@ function semanticChecks(
 ): StructuredCheckResult[] {
   const checks: StructuredCheckResult[] = [];
   if (requestedChecks.has("assumption_disclosed")) {
-    checks.push(checkAnswerText(
-      "assumption_disclosed",
-      answerText,
-      /\b(?:assuming|assumption|assuming that|if your|based on your stated|given your stated)\b/i,
-      "Explicit assumption disclosure is missing.",
-    ));
+    checks.push(
+      checkAnswerText(
+        "assumption_disclosed",
+        answerText,
+        /\b(?:assuming|assumption|assuming that|if your|based on your stated|given your stated)\b/i,
+        "Explicit assumption disclosure is missing.",
+      ),
+    );
   }
   if (requestedChecks.has("tax_caveat_present")) {
-    checks.push(checkAnswerText(
-      "tax_caveat_present",
-      answerText,
-      /\b(?:tax|taxable|after[-\s]?tax|capital gains?|ordinary income|qualified dividend|tax advisor|jurisdiction|account type)\b/i,
-      "Tax/account caveat is missing.",
-    ));
+    checks.push(
+      checkAnswerText(
+        "tax_caveat_present",
+        answerText,
+        /\b(?:tax|taxable|after[-\s]?tax|capital gains?|ordinary income|qualified dividend|tax advisor|jurisdiction|account type)\b/i,
+        "Tax/account caveat is missing.",
+      ),
+    );
   }
   if (requestedChecks.has("target_bands_present")) {
-    checks.push(checkAnswerText(
-      "target_bands_present",
-      answerText,
-      /\b(?:target bands?|bands?|range|threshold|drift|5\s*%|percentage points?)\b/i,
-      "Target band, range, or rebalance threshold guidance is missing.",
-    ));
+    checks.push(
+      checkAnswerText(
+        "target_bands_present",
+        answerText,
+        /\b(?:target bands?|bands?|range|threshold|drift|5\s*%|percentage points?)\b/i,
+        "Target band, range, or rebalance threshold guidance is missing.",
+      ),
+    );
   }
   if (requestedChecks.has("when_not_ideal_present")) {
-    checks.push(checkAnswerText(
-      "when_not_ideal_present",
-      answerText,
-      /\b(?:not ideal|avoid|bad fit|poor fit|when this fails|where it fails|doesn'?t work|not suitable|watch out)\b/i,
-      "When-not-ideal or unsuitability guidance is missing.",
-    ));
+    checks.push(
+      checkAnswerText(
+        "when_not_ideal_present",
+        answerText,
+        /\b(?:not ideal|avoid|bad fit|poor fit|when this fails|where it fails|doesn'?t work|not suitable|watch out)\b/i,
+        "When-not-ideal or unsuitability guidance is missing.",
+      ),
+    );
   }
   return checks;
 }
@@ -452,11 +486,7 @@ function checkAnswerText(
   failureReason: string,
 ): StructuredCheckResult {
   const passed = typeof answerText === "string" && pattern.test(answerText);
-  return structuredResult(
-    checkId,
-    passed,
-    passed ? undefined : failureReason,
-  );
+  return structuredResult(checkId, passed, passed ? undefined : failureReason);
 }
 
 export function evaluateFrameworkFallbackEligibility(
@@ -471,9 +501,12 @@ export function evaluateFrameworkFallbackEligibility(
     };
   }
 
-  const hasUnresolvedSymbol = input.evidenceRecords.some((record) =>
-    record.evidenceType === "ticker_disambiguation" &&
-    (record.caveats.length > 0 || record.entityScope.symbols === undefined || record.entityScope.symbols.length === 0),
+  const hasUnresolvedSymbol = input.evidenceRecords.some(
+    (record) =>
+      record.evidenceType === "ticker_disambiguation" &&
+      (record.caveats.length > 0 ||
+        record.entityScope.symbols === undefined ||
+        record.entityScope.symbols.length === 0),
   );
   if (!hasUnresolvedSymbol) {
     return {
@@ -513,7 +546,8 @@ function placeholderContract(
     requiresDataGapDisclosure: requiredFinalFields.includes("data_gap_disclosure"),
     requiresRiskDownside: requiredFinalFields.includes("risk_downside"),
     requiresSourceCoverage: requiredFinalFields.includes("source_coverage"),
-    requiresConcreteCommitment: COMMITMENT_MODE_CONTRACTS[commitmentMode].requiresConcreteCommitment,
+    requiresConcreteCommitment:
+      COMMITMENT_MODE_CONTRACTS[commitmentMode].requiresConcreteCommitment,
     capabilityGapIds: [],
     frameworkFallback: "not_allowed",
   };
@@ -537,7 +571,8 @@ function checkFreshness(
   metadata: FinalAnswerMetadata,
 ): StructuredCheckResult {
   if (!contract.requiresFreshness) return structuredResult("freshness_disclosed", true);
-  const present = metadata.finalFields.includes("freshness_disclosure") && metadata.freshness !== undefined;
+  const present =
+    metadata.finalFields.includes("freshness_disclosure") && metadata.freshness !== undefined;
   return structuredResult(
     "freshness_disclosed",
     present,
@@ -569,7 +604,9 @@ function checkCommitmentMode(
 ): StructuredCheckResult {
   const modeContract = COMMITMENT_MODE_CONTRACTS[contract.commitmentMode];
   const fields = new Set(metadata.finalFields);
-  const requiredFieldsPresent = modeContract.requiredFinalFields.every((field) => fields.has(field));
+  const requiredFieldsPresent = modeContract.requiredFinalFields.every((field) =>
+    fields.has(field),
+  );
   const passed =
     metadata.commitmentMode === contract.commitmentMode &&
     requiredFieldsPresent &&
@@ -577,7 +614,9 @@ function checkCommitmentMode(
   return structuredResult(
     "commitment_mode_respected",
     passed,
-    passed ? undefined : `Expected ${contract.commitmentMode} metadata and fields: ${modeContract.requiredFinalFields.join(", ")}`,
+    passed
+      ? undefined
+      : `Expected ${contract.commitmentMode} metadata and fields: ${modeContract.requiredFinalFields.join(", ")}`,
   );
 }
 

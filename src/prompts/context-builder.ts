@@ -1,7 +1,7 @@
-import type { PromptSection, SectionName } from "./sections.js";
-import { SECTION_ORDER, DEFAULT_BUDGETS, truncateTobudget } from "./sections.js";
-import { renderPolicyCardForPlanning } from "./policy-cards.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
+import { renderPolicyCardForPlanning } from "./policy-cards.js";
+import type { PromptSection, SectionName } from "./sections.js";
+import { DEFAULT_BUDGETS, SECTION_ORDER, truncateTobudget } from "./sections.js";
 
 export interface PromptSectionReport {
   name: SectionName;
@@ -122,10 +122,7 @@ export class PromptContextBuilder {
         policyCard ? `${policyCard}\n\n${routePlaybook}` : routePlaybook,
       );
     } else if (options.fallbackContext) {
-      this.setSection(
-        "workflow-instructions",
-        buildFallbackPlaybook(options.fallbackContext),
-      );
+      this.setSection("workflow-instructions", buildFallbackPlaybook(options.fallbackContext));
     }
     if (options.memoryContext) {
       this.setSection("memory-context", formatMemorySection(options.memoryContext));
@@ -154,15 +151,18 @@ export function buildRoutePlaybook(ctx: ResolvedTurnContext): string {
     .filter((diagnostic) => diagnostic.code === "symbol_dropped")
     .map((diagnostic) => diagnostic.details?.token)
     .filter((token): token is string => typeof token === "string" && token.length > 0);
-  const dropContext = droppedSymbols.length > 0
-    ? `Dropped ambiguous ticker-like tokens: ${droppedSymbols.join(", ")}.`
-    : undefined;
+  const dropContext =
+    droppedSymbols.length > 0
+      ? `Dropped ambiguous ticker-like tokens: ${droppedSymbols.join(", ")}.`
+      : undefined;
   const extraContext = [
     ctx.entities.symbols.length > 0
       ? `Router-extracted symbols: ${ctx.entities.symbols.join(", ")}. Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`
       : `Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`,
     dropContext,
-  ].filter((part): part is string => Boolean(part)).join(" ");
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
   const fallbackContext: FallbackContext = {
     assumptionsBlock,
     missingRequired: ctx.missingRequired,

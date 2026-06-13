@@ -1,22 +1,24 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getOptionsChain } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import type { OptionsChain, OptionContract } from "../../types/options.js";
+import { getOptionsChain } from "../../providers/yahoo-finance.js";
+import type { OptionContract, OptionsChain } from "../../types/options.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, TSLA, SPY, MSFT)" }),
   expiration: Type.Optional(
     Type.String({
       pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-      description:
-        "Expiration date as YYYY-MM-DD. If omitted, uses the nearest expiration.",
+      description: "Expiration date as YYYY-MM-DD. If omitted, uses the nearest expiration.",
     }),
   ),
   type: Type.Optional(
-    Type.Union([Type.Literal("call"), Type.Literal("put"), Type.Literal("CALL"), Type.Literal("PUT")], {
-      description: "Filter by option type. Omit for both calls and puts.",
-    }),
+    Type.Union(
+      [Type.Literal("call"), Type.Literal("put"), Type.Literal("CALL"), Type.Literal("PUT")],
+      {
+        description: "Filter by option type. Omit for both calls and puts.",
+      },
+    ),
   ),
 });
 
@@ -34,7 +36,9 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     const result = await wrapProvider("yahoo", () => getOptionsChain(symbol, expirationTs));
     if (result.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Options chain unavailable for ${symbol} (${result.reason}).` }],
+        content: [
+          { type: "text", text: `⚠ Options chain unavailable for ${symbol} (${result.reason}).` },
+        ],
         details: null as any,
       };
     }
@@ -46,7 +50,9 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
       `Quote status: ${chain.quoteStatus.marketSession} / ${chain.quoteStatus.bidAskState}`,
       "Option bid/ask and last prices are quoted per share; multiply by 100 for one standard contract premium.",
       ...(chain.quoteStatus.warning
-        ? [`⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification; do not stop at the stale quote caveat. Disclose the gap, avoid naming tradable live premiums, and finish the strategy explanation with mechanics, assignment outcomes, labeled hypotheticals, and what live broker quotes would change.`]
+        ? [
+            `⚠ ${chain.quoteStatus.warning} do not treat zero bid/ask as confirmed live illiquidity without broker verification; do not stop at the stale quote caveat. Disclose the gap, avoid naming tradable live premiums, and finish the strategy explanation with mechanics, assignment outcomes, labeled hypotheticals, and what live broker quotes would change.`,
+          ]
         : []),
       `Available expirations: ${formatAvailableExpirations(chain.expirationDates)}`,
       "",
@@ -56,8 +62,12 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     const showPuts = !normalizedType || normalizedType === "put";
 
     if (showCalls && chain.calls.length > 0) {
-      lines.push(`**CALLS** (${chain.calls.length} contracts, volume: ${chain.totalCallVolume.toLocaleString()})`);
-      lines.push("Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
+      lines.push(
+        `**CALLS** (${chain.calls.length} contracts, volume: ${chain.totalCallVolume.toLocaleString()})`,
+      );
+      lines.push(
+        "Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho",
+      );
       const topCalls = sortByVolume(chain.calls).slice(0, 10);
       for (const c of topCalls) {
         lines.push(formatContract(c));
@@ -66,8 +76,12 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     }
 
     if (showPuts && chain.puts.length > 0) {
-      lines.push(`**PUTS** (${chain.puts.length} contracts, volume: ${chain.totalPutVolume.toLocaleString()})`);
-      lines.push("Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho");
+      lines.push(
+        `**PUTS** (${chain.puts.length} contracts, volume: ${chain.totalPutVolume.toLocaleString()})`,
+      );
+      lines.push(
+        "Strike | Bid/Ask (per share) | Last (per share) | Vol | OI | IV | Delta | Gamma | Theta | Vega | Rho",
+      );
       const topPuts = sortByVolume(chain.puts).slice(0, 10);
       for (const c of topPuts) {
         lines.push(formatContract(c));

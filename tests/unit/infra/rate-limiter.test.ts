@@ -1,8 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import {
-  ALPHA_VANTAGE_RATE_LIMIT,
-  RateLimiter,
-} from "../../../src/infra/rate-limiter.js";
+import { describe, expect, it, vi } from "vitest";
+import { ALPHA_VANTAGE_RATE_LIMIT, RateLimiter } from "../../../src/infra/rate-limiter.js";
 
 describe("RateLimiter", () => {
   it("allows requests within limit", async () => {

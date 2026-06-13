@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseDebateOutput, isAnalystSplit } from "../../../src/analysts/contracts.js";
+import { describe, expect, it } from "vitest";
+import { isAnalystSplit, parseDebateOutput } from "../../../src/analysts/contracts.js";
 import type { AnalystOutput } from "../../../src/runtime/workflow-types.js";
 
 describe("parseDebateOutput", () => {

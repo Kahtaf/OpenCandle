@@ -93,8 +93,7 @@ export function scoreDataFaithfulness(trace: EvalTrace): LayerDetail {
   const ungrounded: number[] = [];
   for (const num of responseNumbers) {
     const grounded =
-      groundTruth.has(num) ||
-      [...groundTruth].some((ref) => isWithinTolerance(num, ref));
+      groundTruth.has(num) || [...groundTruth].some((ref) => isWithinTolerance(num, ref));
     if (!grounded) {
       ungrounded.push(num);
     }

@@ -1,7 +1,4 @@
-import {
-  ROUTE_CAPABILITY_MANIFEST,
-  WORKFLOW_CAPABILITY_MANIFEST,
-} from "./route-manifest.js";
+import { ROUTE_CAPABILITY_MANIFEST, WORKFLOW_CAPABILITY_MANIFEST } from "./route-manifest.js";
 import type { RouterInputContext } from "./router-types.js";
 
 /**
@@ -20,18 +17,21 @@ function renderCatalog(): string {
     portfolio_builder: "user asks to build/allocate a portfolio, invest a budget across positions",
     options_screener: "user asks for options trades / calls / puts on a specific ticker",
     compare_assets: "user asks to compare two or more symbols (vs / versus / which is better)",
-    single_asset_analysis: "user asks for a full analysis / deep dive / 'is X attractive' on ONE symbol",
+    single_asset_analysis:
+      "user asks for a full analysis / deep dive / 'is X attractive' on ONE symbol",
     watchlist_or_tracking: "user manages or asks about their saved watchlist / prediction history",
-    general_finance_qa: "definitional / conceptual questions plus broad market structure, sector, industry, monetary policy, and emerging markets research",
+    general_finance_qa:
+      "definitional / conceptual questions plus broad market structure, sector, industry, monetary policy, and emerging markets research",
   };
 
-  return Object.values(WORKFLOW_CAPABILITY_MANIFEST).map((w) => {
-    const required = w.requiredSlots.length > 0
-      ? ` [required: ${w.requiredSlots.join(", ")}]`
-      : "";
-    const mode = w.dispatchable ? "dispatchable workflow" : "agent-task workflow label";
-    return `- "${w.workflow}" (${mode}): ${descriptions[w.workflow]}${required}`;
-  }).join("\n");
+  return Object.values(WORKFLOW_CAPABILITY_MANIFEST)
+    .map((w) => {
+      const required =
+        w.requiredSlots.length > 0 ? ` [required: ${w.requiredSlots.join(", ")}]` : "";
+      const mode = w.dispatchable ? "dispatchable workflow" : "agent-task workflow label";
+      return `- "${w.workflow}" (${mode}): ${descriptions[w.workflow]}${required}`;
+    })
+    .join("\n");
 }
 
 function renderRouteKinds(): string {
@@ -46,13 +46,9 @@ function renderProfile(profile: Record<string, unknown>): string {
   return entries.map(([k, v]) => `- ${k}: ${JSON.stringify(v)}`).join("\n");
 }
 
-function renderPriorTurns(
-  turns: Array<{ role: "user" | "assistant"; text: string }>,
-): string {
+function renderPriorTurns(turns: Array<{ role: "user" | "assistant"; text: string }>): string {
   if (turns.length === 0) return "(none)";
-  return turns
-    .map((t) => `[${t.role}] ${t.text.replace(/\n+/g, " ").slice(0, 400)}`)
-    .join("\n");
+  return turns.map((t) => `[${t.role}] ${t.text.replace(/\n+/g, " ").slice(0, 400)}`).join("\n");
 }
 
 function renderRecentRuns(

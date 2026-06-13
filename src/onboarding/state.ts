@@ -53,9 +53,7 @@ function parseEntry(raw: unknown): ProviderOnboardingEntry | undefined {
   return { status: "never_ask", lastPromptAt };
 }
 
-function parseProvidersMap(
-  raw: unknown,
-): Partial<Record<ProviderId, ProviderOnboardingEntry>> {
+function parseProvidersMap(raw: unknown): Partial<Record<ProviderId, ProviderOnboardingEntry>> {
   if (!raw || typeof raw !== "object") return {};
   const result: Partial<Record<ProviderId, ProviderOnboardingEntry>> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
@@ -96,10 +94,7 @@ export function loadOnboardingState(path = getOnboardingPath()): OnboardingState
   return { version, welcomeShownAt, providers };
 }
 
-export function saveOnboardingState(
-  state: OnboardingState,
-  path = getOnboardingPath(),
-): void {
+export function saveOnboardingState(state: OnboardingState, path = getOnboardingPath()): void {
   ensureParentDir(path);
   // Strip undefined fields for cleaner on-disk output.
   const serializable: Record<string, unknown> = {
@@ -120,10 +115,7 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function markProviderCompleted(
-  state: OnboardingState,
-  id: ProviderId,
-): OnboardingState {
+export function markProviderCompleted(state: OnboardingState, id: ProviderId): OnboardingState {
   return {
     ...state,
     providers: {
@@ -153,10 +145,7 @@ export function markProviderSnoozed(
   };
 }
 
-export function markProviderNeverAsk(
-  state: OnboardingState,
-  id: ProviderId,
-): OnboardingState {
+export function markProviderNeverAsk(state: OnboardingState, id: ProviderId): OnboardingState {
   return {
     ...state,
     providers: {

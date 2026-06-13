@@ -3,28 +3,31 @@ import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
+import { quoteFreshness, shortDateLabel } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
 import { predictionProgress } from "./prediction-view-model.js";
-import { quoteFreshness, shortDateLabel } from "./format.js";
 import {
   Badge,
   ConfirmButton,
   EmptyState,
+  filterItems,
+  groupBy,
+  groupByOne,
+  money,
+  moneyOrDash,
   Panel,
   PanelSearch,
   SignedMoney,
   SignedPercent,
   StatusDot,
   Sym,
-  filterItems,
-  groupBy,
-  groupByOne,
-  money,
-  moneyOrDash,
 } from "./shared.jsx";
 
 export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, invokeTool }) {
-  const quotesByItem = useMemo(() => groupByOne(state.quoteSnapshot?.watchlistQuotes, "itemId"), [state.quoteSnapshot]);
+  const quotesByItem = useMemo(
+    () => groupByOne(state.quoteSnapshot?.watchlistQuotes, "itemId"),
+    [state.quoteSnapshot],
+  );
   const alertsByInstrument = useMemo(() => groupBy(state.alerts, "instrumentId"), [state.alerts]);
   const rows = useMemo(
     () => filterItems(state.watchlist, filter, ["symbol", "name", "thesis", "notes", "tags"]),
@@ -34,18 +37,31 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
   const selected = rows.find((item) => item.id === selectedId) ?? rows[0] ?? null;
 
   return (
-    <div className={cn("grid min-w-0 grid-cols-1 items-start gap-3", selected && "xl:grid-cols-[minmax(0,1fr)_350px]")}>
+    <div
+      className={cn(
+        "grid min-w-0 grid-cols-1 items-start gap-3",
+        selected && "xl:grid-cols-[minmax(0,1fr)_350px]",
+      )}
+    >
       <Panel
         title="Watchlist"
         count={rows.length}
-        actions={state.watchlist.length > 0 ? <PanelSearch label="Search symbols" filter={filter} setFilter={setFilter} /> : null}
+        actions={
+          state.watchlist.length > 0 ? (
+            <PanelSearch label="Search symbols" filter={filter} setFilter={setFilter} />
+          ) : null
+        }
       >
         {rows.length === 0 ? (
           <EmptyState
             icon={ListPlus}
             title={state.watchlist.length === 0 ? "No tickers yet" : "No symbols match this search"}
             action="Add a ticker to start the watchlist, then keep thesis, targets, stops, and alerts on its row."
-            cta={{ label: "Add ticker", disabled: readOnly, onClick: () => openPanel("watchlist-add") }}
+            cta={{
+              label: "Add ticker",
+              disabled: readOnly,
+              onClick: () => openPanel("watchlist-add"),
+            }}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -55,7 +71,9 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
                   <th className="px-4 py-2 font-medium">Symbol</th>
                   <th className="px-4 py-2 text-right font-medium">Last</th>
                   <th className="px-4 py-2 text-right font-medium">Today</th>
-                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">To target</th>
+                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">
+                    To target
+                  </th>
                   <th className="hidden px-4 py-2 font-medium sm:table-cell">Signals</th>
                 </tr>
               </thead>
@@ -73,13 +91,26 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
                       )}
                       onClick={() => setSelectedId(item.id)}
                     >
-                      <td className="px-4 py-2.5"><Sym symbol={item.symbol} name={item.name} /></td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{quote?.status === "ok" ? money(quote.price) : "—"}</td>
-                      <td className="px-4 py-2.5 text-right"><SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} /></td>
+                      <td className="px-4 py-2.5">
+                        <Sym symbol={item.symbol} name={item.name} />
+                      </td>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
+                        {quote?.status === "ok" ? money(quote.price) : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <SignedPercent
+                          value={quote?.status === "ok" ? quote.changePercent : null}
+                        />
+                      </td>
                       <td className="hidden px-4 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
                         {toTargetLabel(item, quote)}
                       </td>
-                      <td className="hidden px-4 py-2.5 sm:table-cell"><SignalBadge alerts={alertsByInstrument.get(item.instrumentId)} quote={quote} /></td>
+                      <td className="hidden px-4 py-2.5 sm:table-cell">
+                        <SignalBadge
+                          alerts={alertsByInstrument.get(item.instrumentId)}
+                          quote={quote}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -136,11 +167,12 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
     return rows[0] ?? null;
   }, [state.portfolio, state.quoteSnapshot, item.symbol]);
   const alertRows = useMemo(
-    () => buildAlertSentenceRows(
-      (state.alerts ?? []).filter((rule) => rule.instrumentId === item.instrumentId),
-      state.alertEvents ?? [],
-      state.instruments ?? [],
-    ),
+    () =>
+      buildAlertSentenceRows(
+        (state.alerts ?? []).filter((rule) => rule.instrumentId === item.instrumentId),
+        state.alertEvents ?? [],
+        state.instruments ?? [],
+      ),
     [state.alerts, state.alertEvents, state.instruments, item.instrumentId],
   );
   const openPredictions = (state.predictions ?? []).filter(
@@ -148,7 +180,10 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
   );
 
   return (
-    <aside className="rounded-xl border border-border bg-card shadow-subtle-xs xl:sticky xl:top-4" aria-label={`${item.symbol} details`}>
+    <aside
+      className="rounded-xl border border-border bg-card shadow-subtle-xs xl:sticky xl:top-4"
+      aria-label={`${item.symbol} details`}
+    >
       <div className="border-b border-border p-4">
         <Sym symbol={item.symbol} name={[item.name, item.exchange].filter(Boolean).join(" · ")} />
         <div className="mt-2 text-[28px] font-semibold leading-tight tabular-nums text-foreground">
@@ -156,7 +191,11 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           {quote?.status === "ok" ? <SignedPercent value={quote.changePercent} /> : null}
-          <span>{quote?.status === "ok" || !quote ? freshness.label : (quote.reason || "Quote unavailable")}</span>
+          <span>
+            {quote?.status === "ok" || !quote
+              ? freshness.label
+              : quote.reason || "Quote unavailable"}
+          </span>
           {freshness.stale ? <Badge tone="warn">stale</Badge> : null}
         </div>
         <TargetRange item={item} quote={quote} />
@@ -164,10 +203,14 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
 
       {item.thesis || item.tags?.length ? (
         <InspectorSection title="Thesis">
-          {item.thesis ? <p className="text-[13px] leading-5 text-foreground">{item.thesis}</p> : null}
+          {item.thesis ? (
+            <p className="text-[13px] leading-5 text-foreground">{item.thesis}</p>
+          ) : null}
           {item.tags?.length ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {item.tags.map((tag) => <Badge key={tag}>{tag}</Badge>)}
+              {item.tags.map((tag) => (
+                <Badge key={tag}>{tag}</Badge>
+              ))}
             </div>
           ) : null}
         </InspectorSection>
@@ -177,13 +220,20 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
         <InspectorSection title="Position">
           <div className="flex items-baseline justify-between text-[13px]">
             <span className="text-muted-foreground">
-              {positionRow.totalQuantity.toLocaleString()} shares @ {moneyOrDash(positionRow.blendedCost, positionRow.currency)}
+              {positionRow.totalQuantity.toLocaleString()} shares @{" "}
+              {moneyOrDash(positionRow.blendedCost, positionRow.currency)}
             </span>
-            <span className="tabular-nums">{moneyOrDash(positionRow.marketValue, positionRow.currency)}</span>
+            <span className="tabular-nums">
+              {moneyOrDash(positionRow.marketValue, positionRow.currency)}
+            </span>
           </div>
           <div className="mt-1 flex items-baseline justify-between text-[13px]">
             <span className="text-muted-foreground">Unrealized</span>
-            <SignedMoney value={positionRow.pnl} percent={positionRow.pnlPercent} currency={positionRow.currency} />
+            <SignedMoney
+              value={positionRow.pnl}
+              percent={positionRow.pnlPercent}
+              currency={positionRow.currency}
+            />
           </div>
         </InspectorSection>
       ) : null}
@@ -196,7 +246,9 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
             {alertRows.map((row) => (
               <li key={row.id} className="flex items-center justify-between gap-2 text-[13px]">
                 <StatusDot tone={row.tone} label={row.sentence} />
-                <span className="text-[11px] text-muted-foreground">{row.enabled ? "armed" : "paused"}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {row.enabled ? "armed" : "paused"}
+                </span>
               </li>
             ))}
           </ul>
@@ -207,13 +259,17 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
           size="sm"
           className="mt-3 w-full"
           disabled={readOnly || item.targetPrice == null}
-          onClick={() => invokeTool("manage_alerts", {
-            action: "create_price_above",
-            symbol: item.symbol,
-            threshold: item.targetPrice,
-          })}
+          onClick={() =>
+            invokeTool("manage_alerts", {
+              action: "create_price_above",
+              symbol: item.symbol,
+              threshold: item.targetPrice,
+            })
+          }
         >
-          {item.targetPrice == null ? "Set a target to enable alerts" : `Alert at target ${money(item.targetPrice)}`}
+          {item.targetPrice == null
+            ? "Set a target to enable alerts"
+            : `Alert at target ${money(item.targetPrice)}`}
         </Button>
       </InspectorSection>
 
@@ -229,9 +285,12 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
             return (
               <div key={prediction.id} className="flex items-baseline justify-between text-[13px]">
                 <span className="text-muted-foreground">
-                  {capitalize(prediction.direction)} to {moneyOrDash(prediction.targetPrice)} by {relativeDateLabel(prediction.expiresAt)}
+                  {capitalize(prediction.direction)} to {moneyOrDash(prediction.targetPrice)} by{" "}
+                  {relativeDateLabel(prediction.expiresAt)}
                 </span>
-                <span className="tabular-nums">{progress ? `${Math.round(progress.percent)}% there` : "—"}</span>
+                <span className="tabular-nums">
+                  {progress ? `${Math.round(progress.percent)}% there` : "—"}
+                </span>
               </div>
             );
           })}
@@ -239,7 +298,14 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
       ) : null}
 
       <div className="flex gap-2 p-4">
-        <Button type="button" variant="bordered" size="sm" className="flex-1" disabled={readOnly} onClick={() => openPanel("watchlist-edit", { item })}>
+        <Button
+          type="button"
+          variant="bordered"
+          size="sm"
+          className="flex-1"
+          disabled={readOnly}
+          onClick={() => openPanel("watchlist-edit", { item })}
+        >
           Edit
         </Button>
         <ConfirmButton
@@ -247,7 +313,9 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
           confirmLabel={`Remove ${item.symbol}?`}
           size="sm"
           disabled={readOnly}
-          onConfirm={() => invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol })}
+          onConfirm={() =>
+            invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol })
+          }
         />
       </div>
     </aside>
@@ -259,18 +327,27 @@ function TargetRange({ item, quote }) {
   const stop = item.stopPrice;
   if (typeof target !== "number" && typeof stop !== "number") return null;
   const price = quote?.status === "ok" ? quote.price : null;
-  const low = typeof stop === "number" ? stop : Math.min(price ?? target, target ?? price ?? 0) * 0.8;
-  const high = typeof target === "number" ? target : Math.max(price ?? stop, stop ?? price ?? 0) * 1.2;
+  const low =
+    typeof stop === "number" ? stop : Math.min(price ?? target, target ?? price ?? 0) * 0.8;
+  const high =
+    typeof target === "number" ? target : Math.max(price ?? stop, stop ?? price ?? 0) * 1.2;
   const span = high - low;
-  const position = price != null && span > 0 ? Math.min(1, Math.max(0, (price - low) / span)) : null;
+  const position =
+    price != null && span > 0 ? Math.min(1, Math.max(0, (price - low) / span)) : null;
 
   return (
     <div className="mt-3">
       <div className="relative h-[5px] rounded-full bg-tertiary">
         {position != null ? (
           <>
-            <div className="absolute inset-y-0 left-0 rounded-full bg-hard" style={{ width: `${position * 100}%` }} />
-            <div className="absolute top-[-3px] h-[11px] w-[2px] rounded-sm bg-foreground" style={{ left: `${position * 100}%` }} />
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-hard"
+              style={{ width: `${position * 100}%` }}
+            />
+            <div
+              className="absolute top-[-3px] h-[11px] w-[2px] rounded-sm bg-foreground"
+              style={{ left: `${position * 100}%` }}
+            />
           </>
         ) : null}
       </div>
@@ -285,7 +362,9 @@ function TargetRange({ item, quote }) {
 function InspectorSection({ title, children }) {
   return (
     <section className="border-b border-border p-4 last:border-0">
-      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </h3>
       {children}
     </section>
   );

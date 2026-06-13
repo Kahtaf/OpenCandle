@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { buildPortfolioWorkflowDefinition } from "../../../src/workflows/portfolio-builder.js";
+import { describe, expect, it } from "vitest";
 import type { PortfolioSlots, SlotResolution } from "../../../src/routing/types.js";
+import { buildPortfolioWorkflowDefinition } from "../../../src/workflows/portfolio-builder.js";
 
 function makeResolution(overrides: Partial<PortfolioSlots> = {}): SlotResolution<PortfolioSlots> {
   const resolved: PortfolioSlots = {
@@ -22,7 +22,13 @@ function makeResolution(overrides: Partial<PortfolioSlots> = {}): SlotResolution
       positionCount: "default",
       maxSinglePositionPct: "default",
     },
-    defaultsUsed: ["riskProfile", "timeHorizon", "assetScope", "positionCount", "maxSinglePositionPct"],
+    defaultsUsed: [
+      "riskProfile",
+      "timeHorizon",
+      "assetScope",
+      "positionCount",
+      "maxSinglePositionPct",
+    ],
     missingRequired: [],
   };
 }
@@ -32,7 +38,9 @@ function promptAt(index: number, resolution = makeResolution()): string {
 }
 
 function followUpPrompts(resolution = makeResolution()): string[] {
-  return buildPortfolioWorkflowDefinition(resolution).steps.slice(1).map((step) => step.prompt);
+  return buildPortfolioWorkflowDefinition(resolution)
+    .steps.slice(1)
+    .map((step) => step.prompt);
 }
 
 describe("buildPortfolioWorkflowDefinition", () => {
@@ -49,15 +57,15 @@ describe("buildPortfolioWorkflowDefinition", () => {
   });
 
   it("follow-up messages include risk check", () => {
-    const riskFollowUp = followUpPrompts().find((f) =>
-      f.toLowerCase().includes("risk") || f.toLowerCase().includes("diversif"),
+    const riskFollowUp = followUpPrompts().find(
+      (f) => f.toLowerCase().includes("risk") || f.toLowerCase().includes("diversif"),
     );
     expect(riskFollowUp).toBeTruthy();
   });
 
   it("follow-up messages include structured presentation", () => {
-    const presentFollowUp = followUpPrompts().find((f) =>
-      f.toLowerCase().includes("assumption") || f.toLowerCase().includes("table"),
+    const presentFollowUp = followUpPrompts().find(
+      (f) => f.toLowerCase().includes("assumption") || f.toLowerCase().includes("table"),
     );
     expect(presentFollowUp).toBeTruthy();
   });

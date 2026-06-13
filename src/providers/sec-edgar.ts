@@ -1,5 +1,5 @@
-import { httpGet } from "../infra/http-client.js";
 import { cache, TTL } from "../infra/cache.js";
+import { httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 
 const EFTS_BASE = "https://efts.sec.gov/LATEST/search-index";
@@ -74,7 +74,9 @@ export async function searchFilings(
   if (cached) return cached;
 
   if (options.includeSnippets) {
-    const submissions = await searchFilingsFromCompanySubmissions(ticker, formTypes, limit).catch(() => []);
+    const submissions = await searchFilingsFromCompanySubmissions(ticker, formTypes, limit).catch(
+      () => [],
+    );
     if (submissions.length > 0) {
       await enrichWithEvidenceSnippets(submissions, options.snippetLimitPerFiling ?? 3);
       cache.set(cacheKey, submissions, TTL.FUNDAMENTALS);
@@ -189,7 +191,10 @@ async function resolveCompanyTicker(ticker: string): Promise<CompanyTickerEntry 
 
 function splitFilingItems(raw: string | undefined): string[] {
   return raw
-    ? raw.split(",").map((item) => item.trim()).filter(Boolean)
+    ? raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
     : [];
 }
 
@@ -225,7 +230,10 @@ function getDateYearsAgo(years: number): string {
   return d.toISOString().split("T")[0];
 }
 
-async function enrichWithEvidenceSnippets(filings: SECFiling[], limitPerFiling: number): Promise<void> {
+async function enrichWithEvidenceSnippets(
+  filings: SECFiling[],
+  limitPerFiling: number,
+): Promise<void> {
   await Promise.all(
     filings.map(async (filing) => {
       if (!filing.primaryDocumentUrl) return;
@@ -306,7 +314,7 @@ function stripFilingMarkup(raw: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&#160;/g, " ")
     .replace(/&#8217;/g, "'")
-    .replace(/&#8220;|&#8221;/g, "\"")
+    .replace(/&#8220;|&#8221;/g, '"')
     .replace(/\s+/g, " ")
     .trim();
 }

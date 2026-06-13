@@ -1,8 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { buildOptionsScreenerWorkflowDefinition } from "../../../src/workflows/options-screener.js";
+import { describe, expect, it } from "vitest";
 import type { OptionsScreenerSlots, SlotResolution } from "../../../src/routing/types.js";
+import { buildOptionsScreenerWorkflowDefinition } from "../../../src/workflows/options-screener.js";
 
-function makeResolution(overrides: Partial<OptionsScreenerSlots> = {}): SlotResolution<OptionsScreenerSlots> {
+function makeResolution(
+  overrides: Partial<OptionsScreenerSlots> = {},
+): SlotResolution<OptionsScreenerSlots> {
   const resolved: OptionsScreenerSlots = {
     symbol: "MSFT",
     direction: "bullish",
@@ -47,9 +49,10 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
   it("returns follow-up for ranking presentation", () => {
     const def = buildOptionsScreenerWorkflowDefinition(makeResolution());
     expect(def.steps.slice(1).length).toBeGreaterThanOrEqual(1);
-    const rankFollowUp = def.steps.slice(1).map((step) => step.prompt).find((f) =>
-      f.toLowerCase().includes("rank") || f.toLowerCase().includes("top"),
-    );
+    const rankFollowUp = def.steps
+      .slice(1)
+      .map((step) => step.prompt)
+      .find((f) => f.toLowerCase().includes("rank") || f.toLowerCase().includes("top"));
     expect(rankFollowUp).toBeTruthy();
   });
 
@@ -107,7 +110,9 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
   });
 
   it("follow-up prompt requires actionable guidance when no chain data is usable", () => {
-    const followUp = followUpPrompt(makeResolution({ symbol: "MSFT", dteTarget: "7_to_14_days", optionStrategy: "covered_call" }));
+    const followUp = followUpPrompt(
+      makeResolution({ symbol: "MSFT", dteTarget: "7_to_14_days", optionStrategy: "covered_call" }),
+    );
 
     expect(followUp.toLowerCase()).toContain("do not promise to retry later");
     expect(followUp.toLowerCase()).toContain("how to evaluate covered calls");
@@ -129,7 +134,12 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
 
   it("follow-up prompt gives a covered-call fallback when quotes are unusable", () => {
     const followUp = followUpPrompt(
-      makeResolution({ symbol: "DRAM", costBasis: 51, catalystSymbols: ["NVDA"], dteTarget: "0_to_7_days" }),
+      makeResolution({
+        symbol: "DRAM",
+        costBasis: 51,
+        catalystSymbols: ["NVDA"],
+        dteTarget: "0_to_7_days",
+      }),
     );
 
     expect(followUp).toContain("zero bid/ask");
@@ -142,11 +152,13 @@ describe("buildOptionsScreenerWorkflowDefinition", () => {
     expect(followUp).toContain("Do NOT conclude");
     expect(followUp).toContain("overrides the normal ranking/table requirements");
     expect(followUp).toContain("premium: use live broker bid/ask");
-    expect(followUp).toContain("Treat this as selling covered calls against an existing DRAM share position");
+    expect(followUp).toContain(
+      "Treat this as selling covered calls against an existing DRAM share position",
+    );
     expect(followUp).toContain("premium collected");
     expect(followUp).toContain("Do not describe max loss as the option premium paid");
     expect(followUp).toContain("Reproduce the exact Assumptions block");
-    expect(followUp).toContain("do not shorten it to \"Assumptions:\"");
+    expect(followUp).toContain('do not shorten it to "Assumptions:"');
     expect(followUp).toContain("Risk section: max 3 bullets");
     expect(followUp).toContain("closed_market_or_stale_quotes");
     expect(followUp).toContain("recheck after regular options trading opens");

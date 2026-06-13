@@ -2,15 +2,81 @@ import { describe, expect, it } from "vitest";
 import { buildHoldingRows } from "../../../gui/web/src/features/market-state/portfolio-view-model.js";
 
 const LOTS = [
-  { id: 1, instrumentId: 10, symbol: "AAPL", instrumentName: "Apple Inc.", quantity: 50, avgCost: 168.4, currency: "USD", openedAt: "2024-11-12T14:30:00Z" },
-  { id: 2, instrumentId: 10, symbol: "AAPL", instrumentName: "Apple Inc.", quantity: 25, avgCost: 231.1, currency: "USD", openedAt: "2025-09-03T14:30:00Z" },
-  { id: 3, instrumentId: 11, symbol: "NVDA", instrumentName: "NVIDIA Corporation", quantity: 80, avgCost: 117.8, currency: "USD", openedAt: "2025-02-20T14:30:00Z" },
+  {
+    id: 1,
+    instrumentId: 10,
+    symbol: "AAPL",
+    instrumentName: "Apple Inc.",
+    quantity: 50,
+    avgCost: 168.4,
+    currency: "USD",
+    openedAt: "2024-11-12T14:30:00Z",
+  },
+  {
+    id: 2,
+    instrumentId: 10,
+    symbol: "AAPL",
+    instrumentName: "Apple Inc.",
+    quantity: 25,
+    avgCost: 231.1,
+    currency: "USD",
+    openedAt: "2025-09-03T14:30:00Z",
+  },
+  {
+    id: 3,
+    instrumentId: 11,
+    symbol: "NVDA",
+    instrumentName: "NVIDIA Corporation",
+    quantity: 80,
+    avgCost: 117.8,
+    currency: "USD",
+    openedAt: "2025-02-20T14:30:00Z",
+  },
 ];
 
 const QUOTES = [
-  { lotId: 1, symbol: "AAPL", status: "ok", currentPrice: 291.46, marketValue: 14573, totalCost: 8420, pnl: 6153, pnlPercent: 73.08, allocationPercent: 30, currency: "USD", includedInTotals: true, fetchedAt: "2026-06-12T14:58:00Z" },
-  { lotId: 2, symbol: "AAPL", status: "ok", currentPrice: 291.46, marketValue: 7286.5, totalCost: 5777.5, pnl: 1509, pnlPercent: 26.12, allocationPercent: 15, currency: "USD", includedInTotals: true, fetchedAt: "2026-06-12T14:58:00Z" },
-  { lotId: 3, symbol: "NVDA", status: "ok", currentPrice: 204.25, marketValue: 16340, totalCost: 9424, pnl: 6916, pnlPercent: 73.39, allocationPercent: 55, currency: "USD", includedInTotals: true, fetchedAt: "2026-06-12T14:58:00Z" },
+  {
+    lotId: 1,
+    symbol: "AAPL",
+    status: "ok",
+    currentPrice: 291.46,
+    marketValue: 14573,
+    totalCost: 8420,
+    pnl: 6153,
+    pnlPercent: 73.08,
+    allocationPercent: 30,
+    currency: "USD",
+    includedInTotals: true,
+    fetchedAt: "2026-06-12T14:58:00Z",
+  },
+  {
+    lotId: 2,
+    symbol: "AAPL",
+    status: "ok",
+    currentPrice: 291.46,
+    marketValue: 7286.5,
+    totalCost: 5777.5,
+    pnl: 1509,
+    pnlPercent: 26.12,
+    allocationPercent: 15,
+    currency: "USD",
+    includedInTotals: true,
+    fetchedAt: "2026-06-12T14:58:00Z",
+  },
+  {
+    lotId: 3,
+    symbol: "NVDA",
+    status: "ok",
+    currentPrice: 204.25,
+    marketValue: 16340,
+    totalCost: 9424,
+    pnl: 6916,
+    pnlPercent: 73.39,
+    allocationPercent: 55,
+    currency: "USD",
+    includedInTotals: true,
+    fetchedAt: "2026-06-12T14:58:00Z",
+  },
 ];
 
 describe("buildHoldingRows", () => {
@@ -44,7 +110,15 @@ describe("buildHoldingRows", () => {
   it("excludes currency-mismatched lots from rollup math but keeps them listed", () => {
     const quotes = [
       { ...QUOTES[0] },
-      { lotId: 2, symbol: "AAPL", status: "unavailable", totalCost: 5777.5, currency: "CAD", includedInTotals: false, reason: "No FX conversion from CAD to USD" },
+      {
+        lotId: 2,
+        symbol: "AAPL",
+        status: "unavailable",
+        totalCost: 5777.5,
+        currency: "CAD",
+        includedInTotals: false,
+        reason: "No FX conversion from CAD to USD",
+      },
       { ...QUOTES[2] },
     ];
     const rows = buildHoldingRows(LOTS, quotes);

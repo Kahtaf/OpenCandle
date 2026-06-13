@@ -1,12 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { getQuotes } from "../../../src/providers/tradingview.js";
-import { httpGet } from "../../../src/infra/http-client.js";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { httpGet } from "../../../src/infra/http-client.js";
+import { getQuotes } from "../../../src/providers/tradingview.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
@@ -28,7 +28,9 @@ describe("watchlistTool", () => {
     cache.clear();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-watchlist-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
-    vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol, symbol === "BTC-USD" ? 68_000 : 180));
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol, symbol === "BTC-USD" ? 68_000 : 180),
+    );
     vi.mocked(getQuotes).mockResolvedValue([]);
     vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
@@ -172,7 +174,8 @@ describe("watchlistTool", () => {
         changePercent: 1.25,
         volume: 123,
         sourceProvider: "tradingview",
-        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        dataCaveat:
+          "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       },
     ]);
     vi.mocked(getQuote).mockResolvedValue(quote("BTC-USD", 68_000));
@@ -186,8 +189,16 @@ describe("watchlistTool", () => {
     expect(result.content[0].text).toContain("BTC-USD: $68000.00");
     expect(result.content[0].text).toContain("TradingView scanner data may be delayed");
     expect(result.details?.items).toEqual([
-      expect.objectContaining({ symbol: "AAPL", sourceProvider: "tradingview", dataCaveat: expect.stringContaining("TradingView") }),
-      expect.objectContaining({ symbol: "BTC-USD", sourceProvider: "yahoo", dataCaveat: undefined }),
+      expect.objectContaining({
+        symbol: "AAPL",
+        sourceProvider: "tradingview",
+        dataCaveat: expect.stringContaining("TradingView"),
+      }),
+      expect.objectContaining({
+        symbol: "BTC-USD",
+        sourceProvider: "yahoo",
+        dataCaveat: undefined,
+      }),
     ]);
   });
 
@@ -207,7 +218,8 @@ describe("watchlistTool", () => {
         changePercent: 0,
         volume: 1000,
         sourceProvider: "tradingview",
-        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        dataCaveat:
+          "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       })),
     );
 
@@ -218,7 +230,11 @@ describe("watchlistTool", () => {
     expect(getQuote).not.toHaveBeenCalled();
     expect(result.details?.items).toHaveLength(101);
     expect(result.details?.items).toContainEqual(
-      expect.objectContaining({ symbol: "SYM100", currentPrice: 200, sourceProvider: "tradingview" }),
+      expect.objectContaining({
+        symbol: "SYM100",
+        currentPrice: 200,
+        sourceProvider: "tradingview",
+      }),
     );
   });
 
@@ -234,7 +250,8 @@ describe("watchlistTool", () => {
         changePercent: 1.25,
         volume: 123,
         sourceProvider: "tradingview",
-        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        dataCaveat:
+          "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       },
     ]);
     cache.set("test:stale-flag", { ok: true }, -1);
@@ -250,7 +267,8 @@ describe("watchlistTool", () => {
           changePercent: 1.25,
           volume: 123,
           sourceProvider: "tradingview",
-          dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+          dataCaveat:
+            "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
         },
       ];
     });
@@ -276,7 +294,8 @@ describe("watchlistTool", () => {
         changePercent: 1.25,
         volume: 123,
         sourceProvider: "tradingview",
-        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        dataCaveat:
+          "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       },
     ]);
     vi.mocked(getQuote).mockResolvedValue(quote("UNKNOWN", 12.34));
@@ -287,7 +306,11 @@ describe("watchlistTool", () => {
     expect(getQuote).toHaveBeenCalledTimes(1);
     expect(getQuote).toHaveBeenCalledWith("UNKNOWN");
     expect(result.details?.items).toEqual([
-      expect.objectContaining({ symbol: "AAPL", currentPrice: 190.5, sourceProvider: "tradingview" }),
+      expect.objectContaining({
+        symbol: "AAPL",
+        currentPrice: 190.5,
+        sourceProvider: "tradingview",
+      }),
       expect.objectContaining({ symbol: "UNKNOWN", currentPrice: 12.34, sourceProvider: "yahoo" }),
     ]);
   });
@@ -318,11 +341,13 @@ describe("watchlistTool", () => {
       target_price: 200,
     });
     vi.mocked(getQuotes).mockResolvedValue([]);
-    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 0, {
-      volume: 0,
-      week52High: 0,
-      week52Low: 0,
-    }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("AAPL", 0, {
+        volume: 0,
+        week52High: 0,
+        week52Low: 0,
+      }),
+    );
 
     const result = await watchlistTool.execute("test", { action: "check" });
 
@@ -374,18 +399,22 @@ describe("watchlistTool", () => {
   });
 
   it("rejects zero-filled provider responses before saving", async () => {
-    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
 
-    await expect(
-      watchlistTool.execute("test", { action: "add", symbol: "APL" }),
-    ).rejects.toThrow(/could not resolve/i);
+    await expect(watchlistTool.execute("test", { action: "add", symbol: "APL" })).rejects.toThrow(
+      /could not resolve/i,
+    );
 
     const result = await watchlistTool.execute("test", { action: "check" });
     expect(result.content[0].text.toLowerCase()).toContain("empty");
   });
 
   it("returns candidate matches for an unverified add without mutating the watchlist", async () => {
-    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
     vi.mocked(httpGet).mockResolvedValue({
       quotes: [
         {
@@ -407,9 +436,7 @@ describe("watchlistTool", () => {
     expect(result.details).toMatchObject({
       status: "needs_selection",
       query: "APL",
-      candidates: [
-        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
-      ],
+      candidates: [expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." })],
     });
 
     const check = await watchlistTool.execute("test", { action: "check" });
@@ -422,11 +449,7 @@ describe("watchlistTool", () => {
   });
 });
 
-function quote(
-  symbol: string,
-  price: number,
-  overrides: Partial<StockQuote> = {},
-): StockQuote {
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
     price,

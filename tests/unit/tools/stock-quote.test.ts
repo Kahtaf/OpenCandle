@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
@@ -54,10 +54,7 @@ describe("get_stock_quote tool", () => {
     });
 
     await stockQuoteTool.execute("call-3", { symbol: "aapl" });
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining("AAPL"),
-      expect.anything(),
-    );
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("AAPL"), expect.anything());
   });
 
   it("surfaces invalid sparse quote responses as unavailable without zero-filled details", async () => {

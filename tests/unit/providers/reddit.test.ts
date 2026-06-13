@@ -1,9 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getSubredditPosts, getPostComments, scoreSentiment } from "../../../src/providers/reddit.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import fixture from "../../fixtures/yahoo/reddit-wallstreetbets.json";
-import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
+import {
+  getPostComments,
+  getSubredditPosts,
+  scoreSentiment,
+} from "../../../src/providers/reddit.js";
 import commentsFixture from "../../fixtures/reddit/comments.json";
+import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
+import fixture from "../../fixtures/yahoo/reddit-wallstreetbets.json";
 
 describe("reddit provider", () => {
   const originalFetch = globalThis.fetch;
@@ -157,9 +161,7 @@ describe("scoreSentiment", () => {
   });
 
   it("returns balanced score for mixed sentiment", () => {
-    const posts = [
-      { title: "I'm bullish but this could crash" },
-    ];
+    const posts = [{ title: "I'm bullish but this could crash" }];
     const result = scoreSentiment(posts);
     // 1 bullish + 1 bearish = score of 0
     expect(result.score).toBe(0);

@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import { searchWeb } from "../../providers/web-search.js";
 import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
@@ -12,9 +12,7 @@ const params = Type.Object({
       description: "Time window for results. Default: day",
     }),
   ),
-  limit: Type.Optional(
-    Type.Number({ description: "Max results. Default: 10, max: 20" }),
-  ),
+  limit: Type.Optional(Type.Number({ description: "Max results. Default: 10, max: 20" })),
 });
 
 export const webSentimentTool: AgentTool<typeof params> = {
@@ -31,7 +29,12 @@ export const webSentimentTool: AgentTool<typeof params> = {
 
     if (providerResult.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Web sentiment unavailable for "${args.query}" (${providerResult.reason}).` }],
+        content: [
+          {
+            type: "text",
+            text: `⚠ Web sentiment unavailable for "${args.query}" (${providerResult.reason}).`,
+          },
+        ],
         details: null as any,
       };
     }
@@ -45,9 +48,12 @@ export const webSentimentTool: AgentTool<typeof params> = {
     if (result.fresh.length === 0) {
       lines.push(`No web results found for "${args.query}".`);
     } else {
-      const avgScore = result.fresh.reduce((s, r) => s + r.sentiment.score, 0) / result.fresh.length;
+      const avgScore =
+        result.fresh.reduce((s, r) => s + r.sentiment.score, 0) / result.fresh.length;
       const label = sentimentLabel(avgScore);
-      lines.push(`**Web sentiment for "${args.query}"** — ${result.fresh.length} results (${label}, ${avgScore.toFixed(2)})`);
+      lines.push(
+        `**Web sentiment for "${args.query}"** — ${result.fresh.length} results (${label}, ${avgScore.toFixed(2)})`,
+      );
       lines.push("");
       lines.push(untrustedContentHeader("web sentiment results"));
 
@@ -57,7 +63,9 @@ export const webSentimentTool: AgentTool<typeof params> = {
         const titleText = isHttpUrl(rec.url) ? `[${title}](${rec.url})` : title;
         lines.push(`${indicator} ${titleText} — *${rec.author}*`);
         lines.push(`  ${renderUntrustedText(rec.text, 150)}`);
-        lines.push(`  Score: ${rec.sentiment.score.toFixed(2)} | Confidence: ${rec.sentiment.confidence.toFixed(2)}`);
+        lines.push(
+          `  Score: ${rec.sentiment.score.toFixed(2)} | Confidence: ${rec.sentiment.confidence.toFixed(2)}`,
+        );
       }
 
       if (result.trend) {

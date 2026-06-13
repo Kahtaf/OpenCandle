@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_AUTOMATION_HEARTBEAT_MS,
   createAutomationHeartbeatRunner,
+  DEFAULT_AUTOMATION_HEARTBEAT_MS,
   normalizeAutomationHeartbeatMs,
 } from "../../../gui/server/automation-heartbeat.js";
 

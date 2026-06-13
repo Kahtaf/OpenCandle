@@ -1,9 +1,9 @@
 import type Database from "better-sqlite3";
-import { initDefaultDatabase } from "../../src/memory/sqlite.js";
-import { MarketStateService } from "../../src/market-state/service.js";
 import { isZeroFilledQuote, searchYahooInstruments } from "../../src/market-state/resolve.js";
-import { getQuote } from "../../src/providers/yahoo-finance.js";
+import { MarketStateService } from "../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
+import { getQuote } from "../../src/providers/yahoo-finance.js";
 
 export interface MarketStateSnapshot {
   instruments: Array<NonNullable<ReturnType<MarketStateService["getInstrument"]>>>;
@@ -66,7 +66,9 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
   const service = new MarketStateService(ownedDb);
   try {
     const alerts = service.listAlertRules();
-    const instrumentIds = [...new Set(alerts.map((rule) => rule.instrumentId).filter((id) => id != null))];
+    const instrumentIds = [
+      ...new Set(alerts.map((rule) => rule.instrumentId).filter((id) => id != null)),
+    ];
     return {
       instruments: instrumentIds
         .map((id) => service.getInstrument(id))
@@ -88,13 +90,17 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
   }
 }
 
-export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Promise<MarketStateQuoteSnapshot> {
+export async function buildMarketStateQuoteSnapshot(
+  db?: Database.Database,
+): Promise<MarketStateQuoteSnapshot> {
   const ownedDb = db ?? initDefaultDatabase();
   const service = new MarketStateService(ownedDb);
   try {
     const watchlist = service.listWatchlistItems();
     const portfolio = service.listPortfolioLots();
-    const symbols = [...new Set([...watchlist.map((item) => item.symbol), ...portfolio.map((lot) => lot.symbol)])];
+    const symbols = [
+      ...new Set([...watchlist.map((item) => item.symbol), ...portfolio.map((lot) => lot.symbol)]),
+    ];
     const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>();
     for (const symbol of symbols) {
       quoteMap.set(symbol, await fetchQuoteSnapshot(symbol));
@@ -178,10 +184,14 @@ export async function buildMarketStateQuoteSnapshot(db?: Database.Database): Pro
         includedInTotals,
         fetchedAt: quote.fetchedAt,
         stale: quote.stale,
-        reason: includedInTotals ? undefined : `No FX conversion from ${lotCurrency === baseCurrency ? quoteCurrency : lotCurrency} to ${baseCurrency}`,
+        reason: includedInTotals
+          ? undefined
+          : `No FX conversion from ${lotCurrency === baseCurrency ? quoteCurrency : lotCurrency} to ${baseCurrency}`,
       };
     });
-    const included = portfolioQuotes.filter((quote) => quote.status === "ok" && quote.includedInTotals);
+    const included = portfolioQuotes.filter(
+      (quote) => quote.status === "ok" && quote.includedInTotals,
+    );
     const totalValue = included.reduce((sum, quote) => sum + (quote.marketValue ?? 0), 0);
     const totalCost = included.reduce((sum, quote) => sum + quote.totalCost, 0);
     const portfolioQuotesWithAllocation = portfolioQuotes.map((quote) => {
@@ -239,7 +249,14 @@ export async function searchInstrumentCandidates(query: string): Promise<{
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<
-  | { status: "ok"; price: number; changePercent: number; fetchedAt: string; stale?: boolean; currency: string | null }
+  | {
+      status: "ok";
+      price: number;
+      changePercent: number;
+      fetchedAt: string;
+      stale?: boolean;
+      currency: string | null;
+    }
   | { status: "unavailable"; reason: string }
 > {
   const result = await wrapProvider("yahoo", () => getQuote(symbol));

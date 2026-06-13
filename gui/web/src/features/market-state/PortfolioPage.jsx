@@ -1,29 +1,40 @@
 import { BriefcaseBusiness, ChevronDown, ChevronRight } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
-import { buildHoldingRows } from "./portfolio-view-model.js";
 import { shortDateLabel } from "./format.js";
+import { buildHoldingRows } from "./portfolio-view-model.js";
 import {
   ConfirmButton,
   EmptyState,
+  filterItems,
+  money,
+  moneyOrDash,
   Panel,
   PanelSearch,
   SignedMoney,
   SignedPercent,
   Sym,
-  filterItems,
-  money,
-  moneyOrDash,
 } from "./shared.jsx";
 
 const ALLOCATION_RAMP = ["#18181b", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7"];
 
-export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, invokeTool, navigate }) {
+export function PortfolioPage({
+  state,
+  filter,
+  setFilter,
+  readOnly,
+  openPanel,
+  invokeTool,
+  navigate,
+}) {
   const holdings = useMemo(
     () => buildHoldingRows(state.portfolio ?? [], state.quoteSnapshot?.portfolioQuotes ?? []),
     [state.portfolio, state.quoteSnapshot],
   );
-  const rows = useMemo(() => filterItems(holdings, filter, ["symbol", "name", "currency"]), [holdings, filter]);
+  const rows = useMemo(
+    () => filterItems(holdings, filter, ["symbol", "name", "currency"]),
+    [holdings, filter],
+  );
   const summary = state.quoteSnapshot?.portfolioSummary;
   const [expanded, setExpanded] = useState(() => new Set());
 
@@ -77,8 +88,12 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
                   <th className="hidden px-2 py-2 text-right font-medium md:table-cell">Last</th>
                   <th className="px-2 py-2 text-right font-medium">Value</th>
                   <th className="px-2 py-2 text-right font-medium">Today</th>
-                  <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">Total return</th>
-                  <th className="hidden px-2 py-2 pr-4 text-right font-medium md:table-cell">Weight</th>
+                  <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">
+                    Total return
+                  </th>
+                  <th className="hidden px-2 py-2 pr-4 text-right font-medium md:table-cell">
+                    Weight
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -99,50 +114,100 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
                             toggleExpanded(row.symbol);
                           }}
                         >
-                          {expanded.has(row.symbol) ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                          {expanded.has(row.symbol) ? (
+                            <ChevronDown className="size-3.5" />
+                          ) : (
+                            <ChevronRight className="size-3.5" />
+                          )}
                         </button>
                       </td>
-                      <td className="px-2 py-2.5"><Sym symbol={row.symbol} name={row.name} /></td>
-                      <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">{row.totalQuantity.toLocaleString()}</td>
-                      <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">{moneyOrDash(row.currentPrice, row.currency)}</td>
-                      <td className="px-2 py-2.5 text-right tabular-nums">{moneyOrDash(row.marketValue, row.currency)}</td>
-                      <td className="px-2 py-2.5 text-right"><SignedPercent value={row.changePercent} /></td>
-                      <td className="hidden px-2 py-2.5 text-right sm:table-cell"><SignedMoney value={row.pnl} percent={row.pnlPercent} currency={row.currency} /></td>
+                      <td className="px-2 py-2.5">
+                        <Sym symbol={row.symbol} name={row.name} />
+                      </td>
+                      <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">
+                        {row.totalQuantity.toLocaleString()}
+                      </td>
+                      <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">
+                        {moneyOrDash(row.currentPrice, row.currency)}
+                      </td>
+                      <td className="px-2 py-2.5 text-right tabular-nums">
+                        {moneyOrDash(row.marketValue, row.currency)}
+                      </td>
+                      <td className="px-2 py-2.5 text-right">
+                        <SignedPercent value={row.changePercent} />
+                      </td>
+                      <td className="hidden px-2 py-2.5 text-right sm:table-cell">
+                        <SignedMoney
+                          value={row.pnl}
+                          percent={row.pnlPercent}
+                          currency={row.currency}
+                        />
+                      </td>
                       <td className="hidden px-2 py-2.5 pr-4 text-right tabular-nums md:table-cell">
-                        {typeof row.allocationPercent === "number" ? `${row.allocationPercent.toFixed(1)}%` : "—"}
+                        {typeof row.allocationPercent === "number"
+                          ? `${row.allocationPercent.toFixed(1)}%`
+                          : "—"}
                       </td>
                     </tr>
                     {expanded.has(row.symbol)
                       ? row.lots.map((lot) => (
-                        <tr key={lot.id} className="border-b border-border/70 bg-secondary/60 text-[13px] last:border-0">
-                          <td className="px-2 py-2" />
-                          <td className="px-2 py-2">
-                            <div className="font-mono text-xs text-muted-foreground">
-                              Lot · {shortDateLabel(lot.openedAt) || "—"}{lot.notes ? ` · ${lot.notes}` : ""}
-                            </div>
-                            <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
-                              {lot.quantity.toLocaleString()} @ {money(lot.avgCost, lot.currency)}
-                            </div>
-                            <div className="mt-1 flex gap-1 md:hidden">
-                              <LotActions lot={lot} readOnly={readOnly} openPanel={openPanel} invokeTool={invokeTool} />
-                            </div>
-                          </td>
-                          <td className="hidden px-2 py-2 text-right tabular-nums md:table-cell">{lot.quantity.toLocaleString()}</td>
-                          <td className="hidden px-2 py-2 text-right font-mono text-xs text-muted-foreground md:table-cell">cost {money(lot.avgCost, lot.currency)}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{moneyOrDash(lot.quote?.marketValue, lot.currency)}</td>
-                          <td className="px-2 py-2" />
-                          <td className="hidden px-2 py-2 text-right sm:table-cell">
-                            {lot.quote?.status === "ok"
-                              ? <SignedMoney value={lot.quote.pnl} percent={lot.quote.pnlPercent} currency={lot.currency} />
-                              : <span className="text-xs text-muted-foreground">{lot.quote?.reason ?? "Awaiting quote"}</span>}
-                          </td>
-                          <td className="hidden px-2 py-2 pr-4 text-right md:table-cell">
-                            <div className="flex justify-end gap-1">
-                              <LotActions lot={lot} readOnly={readOnly} openPanel={openPanel} invokeTool={invokeTool} />
-                            </div>
-                          </td>
-                        </tr>
-                      ))
+                          <tr
+                            key={lot.id}
+                            className="border-b border-border/70 bg-secondary/60 text-[13px] last:border-0"
+                          >
+                            <td className="px-2 py-2" />
+                            <td className="px-2 py-2">
+                              <div className="font-mono text-xs text-muted-foreground">
+                                Lot · {shortDateLabel(lot.openedAt) || "—"}
+                                {lot.notes ? ` · ${lot.notes}` : ""}
+                              </div>
+                              <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
+                                {lot.quantity.toLocaleString()} @ {money(lot.avgCost, lot.currency)}
+                              </div>
+                              <div className="mt-1 flex gap-1 md:hidden">
+                                <LotActions
+                                  lot={lot}
+                                  readOnly={readOnly}
+                                  openPanel={openPanel}
+                                  invokeTool={invokeTool}
+                                />
+                              </div>
+                            </td>
+                            <td className="hidden px-2 py-2 text-right tabular-nums md:table-cell">
+                              {lot.quantity.toLocaleString()}
+                            </td>
+                            <td className="hidden px-2 py-2 text-right font-mono text-xs text-muted-foreground md:table-cell">
+                              cost {money(lot.avgCost, lot.currency)}
+                            </td>
+                            <td className="px-2 py-2 text-right tabular-nums">
+                              {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                            </td>
+                            <td className="px-2 py-2" />
+                            <td className="hidden px-2 py-2 text-right sm:table-cell">
+                              {lot.quote?.status === "ok" ? (
+                                <SignedMoney
+                                  value={lot.quote.pnl}
+                                  percent={lot.quote.pnlPercent}
+                                  currency={lot.currency}
+                                />
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  {lot.quote?.reason ?? "Awaiting quote"}
+                                </span>
+                              )}
+                            </td>
+                            <td className="hidden px-2 py-2 pr-4 text-right md:table-cell">
+                              <div className="flex justify-end gap-1">
+                                <LotActions
+                                  lot={lot}
+                                  readOnly={readOnly}
+                                  openPanel={openPanel}
+                                  invokeTool={invokeTool}
+                                />
+                              </div>
+                            </td>
+                          </tr>
+                        ))
                       : null}
                   </Fragment>
                 ))}
@@ -152,7 +217,8 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
         )}
         {summary?.excludedFromTotals?.length ? (
           <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-            Excluded from totals: {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
+            Excluded from totals:{" "}
+            {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
           </p>
         ) : null}
       </Panel>
@@ -163,7 +229,13 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
 function LotActions({ lot, readOnly, openPanel, invokeTool }) {
   return (
     <>
-      <Button type="button" variant="ghost" size="xs" disabled={readOnly} onClick={() => openPanel("holding-edit", { lot })}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={readOnly}
+        onClick={() => openPanel("holding-edit", { lot })}
+      >
         Edit
       </Button>
       <ConfirmButton
@@ -206,12 +278,24 @@ function ValueHeader({ summary, holdings }) {
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px]">
         {todayPnl != null && summary ? (
           <>
-            <SignedMoney value={todayPnl} percent={summary.totalValue - todayPnl > 0 ? (todayPnl / (summary.totalValue - todayPnl)) * 100 : null} currency={summary.baseCurrency} />
+            <SignedMoney
+              value={todayPnl}
+              percent={
+                summary.totalValue - todayPnl > 0
+                  ? (todayPnl / (summary.totalValue - todayPnl)) * 100
+                  : null
+              }
+              currency={summary.baseCurrency}
+            />
             <span className="text-muted-foreground">today ·</span>
           </>
         ) : null}
         {summary ? (
-          <SignedMoney value={summary.totalPnl} percent={summary.totalPnlPercent} currency={summary.baseCurrency} />
+          <SignedMoney
+            value={summary.totalPnl}
+            percent={summary.totalPnlPercent}
+            currency={summary.baseCurrency}
+          />
         ) : (
           <span className="text-muted-foreground">Totals appear once quotes load.</span>
         )}
@@ -221,13 +305,21 @@ function ValueHeader({ summary, holdings }) {
         <>
           <div className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
             {segments.map((segment) => (
-              <div key={segment.symbol} className="rounded-sm" style={{ width: `${segment.percent}%`, backgroundColor: segment.color }} />
+              <div
+                key={segment.symbol}
+                className="rounded-sm"
+                style={{ width: `${segment.percent}%`, backgroundColor: segment.color }}
+              />
             ))}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             {segments.map((segment) => (
               <span key={segment.symbol} className="inline-flex items-center gap-1.5">
-                <i className="size-2 rounded-sm" style={{ backgroundColor: segment.color }} aria-hidden="true" />
+                <i
+                  className="size-2 rounded-sm"
+                  style={{ backgroundColor: segment.color }}
+                  aria-hidden="true"
+                />
                 {segment.symbol} {segment.percent.toFixed(1)}%
               </span>
             ))}

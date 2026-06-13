@@ -1,5 +1,5 @@
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { ToolResultMessage } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export interface BackgroundQuoteRefresh {
   symbol: string;

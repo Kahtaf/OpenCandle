@@ -139,7 +139,7 @@ describe("httpGet", () => {
         ok: false,
         status: 429,
         statusText: "Too Many Requests",
-        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "2" : null },
+        headers: { get: (name: string) => (name.toLowerCase() === "retry-after" ? "2" : null) },
         text: () => Promise.resolve("Rate limited"),
       })
       .mockResolvedValueOnce({
@@ -169,7 +169,7 @@ describe("httpGet", () => {
         ok: false,
         status: 429,
         statusText: "Too Many Requests",
-        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        headers: { get: (name: string) => (name.toLowerCase() === "retry-after" ? "60" : null) },
         text: () => Promise.resolve("Rate limited"),
       })
       .mockResolvedValueOnce({
@@ -198,7 +198,7 @@ describe("httpGet", () => {
         ok: false,
         status: 429,
         statusText: "Too Many Requests",
-        headers: { get: (name: string) => name.toLowerCase() === "retry-after" ? "60" : null },
+        headers: { get: (name: string) => (name.toLowerCase() === "retry-after" ? "60" : null) },
         text: () => Promise.resolve("Rate limited"),
       })
       .mockResolvedValueOnce({

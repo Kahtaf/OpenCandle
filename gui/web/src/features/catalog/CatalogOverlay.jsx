@@ -1,13 +1,25 @@
+import {
+  ArrowRight,
+  ChevronLeft,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Play,
+  Search,
+  Sparkles,
+  Wrench,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, ChevronLeft, ExternalLink, Eye, EyeOff, KeyRound, Play, Search, Sparkles, Wrench, X } from "lucide-react";
-import { cn } from "../../lib/utils.js";
-import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
+import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
-import { Badge } from "../../components/ui/badge.jsx";
+import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
+import { cn } from "../../lib/utils.js";
 import { FieldRenderer } from "./field-renderer.jsx";
 import { defaultValuesFor, validateRequired } from "./field-utils.js";
-import { schemaForTool, DOMAIN_LABELS } from "./tool-schemas.js";
+import { DOMAIN_LABELS, schemaForTool } from "./tool-schemas.js";
 import { schemaForWorkflow } from "./workflow-schemas.js";
 
 const TABS = [
@@ -58,12 +70,13 @@ export function CatalogOverlay({
   const lookupSymbol = undefined;
 
   return (
-    <Sheet open={open} onOpenChange={(next) => { if (!next) close(); }}>
-      <SheetContent
-        width="xl"
-        handleLabel="Catalog"
-        className="bg-card p-0"
-      >
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close();
+      }}
+    >
+      <SheetContent width="xl" handleLabel="Catalog" className="bg-card p-0">
         <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
           {selection ? (
             <BuilderHeader
@@ -131,15 +144,19 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
                 aria-pressed={selected}
                 className={cn(
                   "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition-colors",
-                  selected ? "bg-card text-foreground shadow-subtle-xs" : "text-muted-foreground hover:text-foreground",
+                  selected
+                    ? "bg-card text-foreground shadow-subtle-xs"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 <Icon className="hidden h-3.5 w-3.5 sm:inline" aria-hidden="true" />
                 <span className="truncate">{entry.label}</span>
-                <span className={cn(
-                  "hidden rounded-full px-1.5 text-[10px] tabular-nums sm:inline",
-                  selected ? "bg-secondary text-muted-foreground" : "text-muted-foreground/70",
-                )}>
+                <span
+                  className={cn(
+                    "hidden rounded-full px-1.5 text-[10px] tabular-nums sm:inline",
+                    selected ? "bg-secondary text-muted-foreground" : "text-muted-foreground/70",
+                  )}
+                >
                   {counts[entry.id] ?? 0}
                 </span>
               </button>
@@ -158,7 +175,12 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
           className="h-8 px-0 text-sm shadow-none"
         />
         {query ? (
-          <Button variant="ghost" size="icon-xs" aria-label="Clear search" onClick={() => setQuery("")}>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Clear search"
+            onClick={() => setQuery("")}
+          >
             <X />
           </Button>
         ) : null}
@@ -201,9 +223,19 @@ function ListBody({ tab, query, catalog, onSelect }) {
   const tools = filterTools(catalog?.tools ?? [], query);
   if (tools.length === 0) return <EmptyState query={query} kind="tools" />;
   const grouped = groupBy(tools, (tool) => tool.domain ?? "tool");
-  const order = ["market", "fundamentals", "options", "portfolio", "technical", "sentiment", "macro", "interaction"];
+  const order = [
+    "market",
+    "fundamentals",
+    "options",
+    "portfolio",
+    "technical",
+    "sentiment",
+    "macro",
+    "interaction",
+  ];
   const sortedDomains = [...grouped.keys()].sort((a, b) => {
-    const ai = order.indexOf(a); const bi = order.indexOf(b);
+    const ai = order.indexOf(a);
+    const bi = order.indexOf(b);
     return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
   });
   return (
@@ -237,9 +269,14 @@ function WorkflowRow({ workflow, onSelect }) {
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground">{workflow.name}</span>
           </div>
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{workflow.description}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {workflow.description}
+          </p>
         </div>
-        <ArrowRight aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <ArrowRight
+          aria-hidden="true"
+          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+        />
       </button>
     </li>
   );
@@ -260,13 +297,24 @@ function ToolRow({ tool, onSelect }) {
         <Wrench aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">{tool.label || prettyToolName(tool.name)}</span>
-            <code className="hidden truncate text-[11px] tabular-nums text-muted-foreground/70 sm:inline">{tool.name}</code>
-            {disabled ? <Badge variant="outline" className="h-5 px-1.5 text-[10px]">disabled</Badge> : null}
+            <span className="text-sm font-medium text-foreground">
+              {tool.label || prettyToolName(tool.name)}
+            </span>
+            <code className="hidden truncate text-[11px] tabular-nums text-muted-foreground/70 sm:inline">
+              {tool.name}
+            </code>
+            {disabled ? (
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                disabled
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{tool.description}</p>
         </div>
-        <ArrowRight aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <ArrowRight
+          aria-hidden="true"
+          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+        />
       </button>
     </li>
   );
@@ -288,9 +336,14 @@ function ProviderRow({ provider, onSelect }) {
             <ProviderStatusDot status={status} />
             <span className={cn("text-[11px]", statusColor(status))}>{statusLabel(status)}</span>
           </div>
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{(provider.unlocks || []).join(" · ")}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {(provider.unlocks || []).join(" · ")}
+          </p>
         </div>
-        <ArrowRight aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <ArrowRight
+          aria-hidden="true"
+          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+        />
       </button>
     </li>
   );
@@ -304,7 +357,9 @@ function EmptyState({ query, kind }) {
         {query ? `No ${kind} match "${query}"` : `No ${kind} available`}
       </p>
       <p className="mx-auto max-w-xs text-xs text-muted-foreground">
-        {query ? "Try a shorter query or check spelling." : "OpenCandle did not return entries for this section."}
+        {query
+          ? "Try a shorter query or check spelling."
+          : "OpenCandle did not return entries for this section."}
       </p>
     </div>
   );
@@ -322,62 +377,132 @@ function BuilderHeader({ selection, catalog, onBack }) {
         <ChevronLeft />
       </Button>
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        {selection.kind === "workflow" ? <Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" /> : null}
-        {selection.kind === "tool" ? <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> : null}
-        {selection.kind === "provider" ? <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" /> : null}
-        <h2 className="truncate text-sm font-semibold text-foreground">{builderTitle(selection, entity)}</h2>
+        {selection.kind === "workflow" ? (
+          <Sparkles className="h-4 w-4 text-foreground" aria-hidden="true" />
+        ) : null}
+        {selection.kind === "tool" ? (
+          <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        ) : null}
+        {selection.kind === "provider" ? (
+          <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        ) : null}
+        <h2 className="truncate text-sm font-semibold text-foreground">
+          {builderTitle(selection, entity)}
+        </h2>
         {selection.kind === "tool" && entity?.domain ? (
-          <Badge variant="outline" className="hidden h-5 px-1.5 text-[10px] sm:inline-flex">{DOMAIN_LABELS[entity.domain] ?? entity.domain}</Badge>
+          <Badge variant="outline" className="hidden h-5 px-1.5 text-[10px] sm:inline-flex">
+            {DOMAIN_LABELS[entity.domain] ?? entity.domain}
+          </Badge>
         ) : null}
       </div>
     </div>
   );
 }
 
-function BuilderBody({ selection, catalog, send, setToast, startChatRun, fillComposer, onClose, lookupSymbol }) {
+function BuilderBody({
+  selection,
+  catalog,
+  send,
+  setToast,
+  startChatRun,
+  fillComposer,
+  onClose,
+  lookupSymbol,
+}) {
   const entity = resolveSelection(selection, catalog);
   if (!entity) {
     return (
       <div className="grid gap-2 p-12 text-center">
         <p className="text-sm font-medium text-foreground">Selection no longer available</p>
-        <p className="text-xs text-muted-foreground">The catalog refreshed while you were viewing this entry.</p>
+        <p className="text-xs text-muted-foreground">
+          The catalog refreshed while you were viewing this entry.
+        </p>
       </div>
     );
   }
   if (selection.kind === "workflow") {
-    return <WorkflowBuilder workflow={entity} startChatRun={startChatRun} fillComposer={fillComposer} onClose={onClose} setToast={setToast} lookupSymbol={lookupSymbol} />;
+    return (
+      <WorkflowBuilder
+        workflow={entity}
+        startChatRun={startChatRun}
+        fillComposer={fillComposer}
+        onClose={onClose}
+        setToast={setToast}
+        lookupSymbol={lookupSymbol}
+      />
+    );
   }
   if (selection.kind === "tool") {
-    return <ToolBuilder tool={entity} send={send} startChatRun={startChatRun} fillComposer={fillComposer} onClose={onClose} setToast={setToast} lookupSymbol={lookupSymbol} />;
+    return (
+      <ToolBuilder
+        tool={entity}
+        send={send}
+        startChatRun={startChatRun}
+        fillComposer={fillComposer}
+        onClose={onClose}
+        setToast={setToast}
+        lookupSymbol={lookupSymbol}
+      />
+    );
   }
   return <ProviderBuilder provider={entity} send={send} setToast={setToast} />;
 }
 
-function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToast, lookupSymbol }) {
+function WorkflowBuilder({
+  workflow,
+  startChatRun,
+  fillComposer,
+  onClose,
+  setToast,
+  lookupSymbol,
+}) {
   const schema = schemaForWorkflow(workflow.id);
   const fields = schema?.fields ?? [];
   const [values, setValues] = useState(() => defaultValuesFor(fields));
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const setField = useCallback((name, value) => setValues((prev) => ({ ...prev, [name]: value })), []);
+  const setField = useCallback(
+    (name, value) => setValues((prev) => ({ ...prev, [name]: value })),
+    [],
+  );
   const issues = validateRequired(fields, values);
-  const prompt = useMemo(() => schema ? safeBuildPrompt(schema, values) : workflow.prompt || workflow.name, [schema, values, workflow]);
+  const prompt = useMemo(
+    () => (schema ? safeBuildPrompt(schema, values) : workflow.prompt || workflow.name),
+    [schema, values, workflow],
+  );
   const baseFields = fields.filter((f) => !f.advanced);
   const advancedFields = fields.filter((f) => f.advanced);
 
   if (!schema) {
     return (
       <div className="p-6">
-        <p className="text-sm text-muted-foreground">No builder defined for "{workflow.name}". The agent will use its default planner.</p>
+        <p className="text-sm text-muted-foreground">
+          No builder defined for "{workflow.name}". The agent will use its default planner.
+        </p>
         <div className="mt-4 flex gap-2">
-          <Button variant="brand" onClick={() => { void startChatRun(workflow.prompt || workflow.name); onClose(); }}>Run with defaults</Button>
+          <Button
+            variant="brand"
+            onClick={() => {
+              void startChatRun(workflow.prompt || workflow.name);
+              onClose();
+            }}
+          >
+            Run with defaults
+          </Button>
         </div>
       </div>
     );
   }
 
   const submit = (mode) => {
-    if (issues.length > 0) { setToast?.(issues[0]); return; }
-    if (mode === "send") { void startChatRun(prompt); onClose(); return; }
+    if (issues.length > 0) {
+      setToast?.(issues[0]);
+      return;
+    }
+    if (mode === "send") {
+      void startChatRun(prompt);
+      onClose();
+      return;
+    }
     fillComposer?.(prompt);
     setToast?.("Draft loaded — edit and send when ready.");
     onClose();
@@ -388,7 +513,13 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
       <p className="text-sm leading-5 text-muted-foreground">{schema.description}</p>
       <div className="grid gap-3.5">
         {baseFields.map((field) => (
-          <FieldRenderer key={field.name} field={field} value={values[field.name]} onChange={setField} lookupSymbol={lookupSymbol} />
+          <FieldRenderer
+            key={field.name}
+            field={field}
+            value={values[field.name]}
+            onChange={setField}
+            lookupSymbol={lookupSymbol}
+          />
         ))}
       </div>
       {advancedFields.length > 0 ? (
@@ -399,17 +530,32 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
             className="inline-flex w-fit items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground"
           >
             <span>{showAdvanced ? "Hide" : "Show"} advanced</span>
-            <ArrowRight aria-hidden="true" className={cn("h-3 w-3 transition-transform", showAdvanced && "rotate-90")} />
+            <ArrowRight
+              aria-hidden="true"
+              className={cn("h-3 w-3 transition-transform", showAdvanced && "rotate-90")}
+            />
           </button>
-          {showAdvanced ? advancedFields.map((field) => (
-            <FieldRenderer key={field.name} field={field} value={values[field.name]} onChange={setField} lookupSymbol={lookupSymbol} />
-          )) : null}
+          {showAdvanced
+            ? advancedFields.map((field) => (
+                <FieldRenderer
+                  key={field.name}
+                  field={field}
+                  value={values[field.name]}
+                  onChange={setField}
+                  lookupSymbol={lookupSymbol}
+                />
+              ))
+            : null}
         </div>
       ) : null}
       <PromptPreview prompt={prompt} />
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="bordered" onClick={() => submit("draft")} disabled={!prompt}>Edit in chat</Button>
-        <Button variant="brand" onClick={() => submit("send")} disabled={!prompt} prefixIcon={Play}>Run workflow</Button>
+        <Button variant="bordered" onClick={() => submit("draft")} disabled={!prompt}>
+          Edit in chat
+        </Button>
+        <Button variant="brand" onClick={() => submit("send")} disabled={!prompt} prefixIcon={Play}>
+          Run workflow
+        </Button>
       </div>
     </div>
   );
@@ -418,16 +564,34 @@ function WorkflowBuilder({ workflow, startChatRun, fillComposer, onClose, setToa
 function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast, lookupSymbol }) {
   const schema = useMemo(() => schemaForTool(tool.name) ?? deriveGenericSchema(tool), [tool]);
   const [values, setValues] = useState(() => defaultValuesFor(schema));
-  const setField = useCallback((name, value) => setValues((prev) => ({ ...prev, [name]: value })), []);
+  const setField = useCallback(
+    (name, value) => setValues((prev) => ({ ...prev, [name]: value })),
+    [],
+  );
   const issues = validateRequired(schema, values);
 
   const cleanArgs = useMemo(() => stripEmpty(values), [values]);
-  const promptText = useMemo(() => `Use ${tool.name}${formatArgsForPrompt(cleanArgs)}`, [tool, cleanArgs]);
+  const promptText = useMemo(
+    () => `Use ${tool.name}${formatArgsForPrompt(cleanArgs)}`,
+    [tool, cleanArgs],
+  );
 
   const submit = (mode) => {
-    if (issues.length > 0) { setToast?.(issues[0]); return; }
-    if (mode === "send") { void startChatRun(promptText); onClose(); return; }
-    if (mode === "draft") { fillComposer?.(promptText); setToast?.("Draft loaded — edit and send when ready."); onClose(); return; }
+    if (issues.length > 0) {
+      setToast?.(issues[0]);
+      return;
+    }
+    if (mode === "send") {
+      void startChatRun(promptText);
+      onClose();
+      return;
+    }
+    if (mode === "draft") {
+      fillComposer?.(promptText);
+      setToast?.("Draft loaded — edit and send when ready.");
+      onClose();
+      return;
+    }
     if (mode === "run") {
       if (send?.("tool.invoke", { toolName: tool.name, args: cleanArgs })) {
         setToast?.(`Running ${tool.label || tool.name}…`);
@@ -446,14 +610,24 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
       ) : (
         <div className="grid gap-3.5">
           {schema.map((field) => (
-            <FieldRenderer key={field.name} field={field} value={values[field.name]} onChange={setField} lookupSymbol={lookupSymbol} />
+            <FieldRenderer
+              key={field.name}
+              field={field}
+              value={values[field.name]}
+              onChange={setField}
+              lookupSymbol={lookupSymbol}
+            />
           ))}
         </div>
       )}
       <PromptPreview prompt={promptText} title="Chat preview" />
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
-        <Button variant="bordered" size="sm" onClick={() => submit("draft")}>Edit in chat</Button>
-        <Button variant="brand" size="sm" prefixIcon={Play} onClick={() => submit("run")}>Run now</Button>
+        <Button variant="bordered" size="sm" onClick={() => submit("draft")}>
+          Edit in chat
+        </Button>
+        <Button variant="brand" size="sm" prefixIcon={Play} onClick={() => submit("run")}>
+          Run now
+        </Button>
       </div>
     </div>
   );
@@ -473,7 +647,12 @@ function ProviderBuilder({ provider, send, setToast }) {
   }, [provider.id, provider.apiKey]);
 
   const save = () => {
-    if (envBlocked) { setToast?.(`${provider.displayName} is set via ${provider.envVar}. Unset it to override here.`); return; }
+    if (envBlocked) {
+      setToast?.(
+        `${provider.displayName} is set via ${provider.envVar}. Unset it to override here.`,
+      );
+      return;
+    }
     if (!trimmed) return;
     setToast?.(`Verifying ${provider.displayName} key…`);
     if (send?.("provider.save_api_key", { providerId: provider.id, apiKey: trimmed })) {
@@ -486,20 +665,26 @@ function ProviderBuilder({ provider, send, setToast }) {
       <div className="grid gap-1.5">
         <div className="flex items-center gap-2">
           <ProviderStatusDot status={status} />
-          <span className={cn("text-xs font-medium", statusColor(status))}>{statusLabel(status)}</span>
+          <span className={cn("text-xs font-medium", statusColor(status))}>
+            {statusLabel(status)}
+          </span>
           {envBlocked ? (
             <code className="text-[11px] text-muted-foreground">env: {provider.envVar}</code>
           ) : null}
         </div>
         <p className="text-sm leading-5 text-muted-foreground">
-          {provider.fallbackDescription
-            ? <>If absent: {provider.fallbackDescription}.</>
-            : <>Required for: {(provider.unlocks || []).join(", ") || "this provider's tools"}.</>}
+          {provider.fallbackDescription ? (
+            <>If absent: {provider.fallbackDescription}.</>
+          ) : (
+            <>Required for: {(provider.unlocks || []).join(", ") || "this provider's tools"}.</>
+          )}
         </p>
       </div>
 
       <div className="grid gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Unlocks</span>
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Unlocks
+        </span>
         <ul className="grid gap-1">
           {(provider.unlocks || []).map((entry) => (
             <li key={entry} className="flex items-baseline gap-2 text-sm text-foreground">
@@ -511,7 +696,12 @@ function ProviderBuilder({ provider, send, setToast }) {
       </div>
 
       <div className="grid gap-2">
-        <label htmlFor={`provider-api-key-${provider.id}`} className="text-xs font-medium text-foreground">API key</label>
+        <label
+          htmlFor={`provider-api-key-${provider.id}`}
+          className="text-xs font-medium text-foreground"
+        >
+          API key
+        </label>
         <div className="relative">
           <Input
             id={`provider-api-key-${provider.id}`}
@@ -524,7 +714,12 @@ function ProviderBuilder({ provider, send, setToast }) {
             autoCapitalize="none"
             autoComplete="off"
             spellCheck={false}
-            onKeyDown={(event) => { if (event.key === "Enter" && canSave) { event.preventDefault(); save(); } }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && canSave) {
+                event.preventDefault();
+                save();
+              }
+            }}
           />
           <Button
             type="button"
@@ -550,7 +745,12 @@ function ProviderBuilder({ provider, send, setToast }) {
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
         {provider.signupUrl ? (
-          <Button variant="ghost" size="sm" suffixIcon={ExternalLink} onClick={() => window.open(provider.signupUrl, "_blank", "noreferrer")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            suffixIcon={ExternalLink}
+            onClick={() => window.open(provider.signupUrl, "_blank", "noreferrer")}
+          >
             Get a key
           </Button>
         ) : null}
@@ -565,7 +765,9 @@ function ProviderBuilder({ provider, send, setToast }) {
 function PromptPreview({ prompt, title = "Chat prompt" }) {
   return (
     <div className="grid gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{title}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {title}
+      </span>
       <pre className="overflow-auto whitespace-pre-wrap rounded-md border border-border bg-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground">
         {prompt || "Fill the required fields to preview the chat prompt."}
       </pre>
@@ -579,9 +781,11 @@ function PromptPreview({ prompt, title = "Chat prompt" }) {
 
 function resolveSelection(selection, catalog) {
   if (!selection || !catalog) return null;
-  if (selection.kind === "workflow") return catalog.workflows?.find((w) => w.id === selection.id) ?? null;
+  if (selection.kind === "workflow")
+    return catalog.workflows?.find((w) => w.id === selection.id) ?? null;
   if (selection.kind === "tool") return catalog.tools?.find((t) => t.name === selection.id) ?? null;
-  if (selection.kind === "provider") return catalog.providers?.find((p) => p.id === selection.id) ?? null;
+  if (selection.kind === "provider")
+    return catalog.providers?.find((p) => p.id === selection.id) ?? null;
   return null;
 }
 
@@ -594,7 +798,9 @@ function builderTitle(selection, entity) {
 }
 
 function prettyToolName(name) {
-  return String(name || "").replace(/^get_/, "").replace(/_/g, " ");
+  return String(name || "")
+    .replace(/^get_/, "")
+    .replace(/_/g, " ");
 }
 
 function deriveGenericSchema(tool) {
@@ -619,7 +825,8 @@ function friendlyLabel(name) {
 function stripEmpty(values) {
   const out = {};
   for (const [key, value] of Object.entries(values)) {
-    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) continue;
+    if (value === undefined || value === "" || (Array.isArray(value) && value.length === 0))
+      continue;
     out[key] = value;
   }
   return out;
@@ -648,22 +855,38 @@ function safeBuildPrompt(schema, values) {
 function filterTools(tools, query) {
   if (!query.trim()) return tools;
   const q = query.toLowerCase();
-  return tools.filter((tool) => [tool.name, tool.label, tool.description, tool.domain]
-    .some((field) => String(field || "").toLowerCase().includes(q)));
+  return tools.filter((tool) =>
+    [tool.name, tool.label, tool.description, tool.domain].some((field) =>
+      String(field || "")
+        .toLowerCase()
+        .includes(q),
+    ),
+  );
 }
 
 function filterWorkflows(workflows, query) {
   if (!query.trim()) return workflows;
   const q = query.toLowerCase();
-  return workflows.filter((workflow) => [workflow.id, workflow.name, workflow.description]
-    .some((field) => String(field || "").toLowerCase().includes(q)));
+  return workflows.filter((workflow) =>
+    [workflow.id, workflow.name, workflow.description].some((field) =>
+      String(field || "")
+        .toLowerCase()
+        .includes(q),
+    ),
+  );
 }
 
 function filterProviders(providers, query) {
   if (!query.trim()) return providers;
   const q = query.toLowerCase();
-  return providers.filter((provider) => [provider.id, provider.displayName, provider.envVar, ...(provider.unlocks || [])]
-    .some((field) => String(field || "").toLowerCase().includes(q)));
+  return providers.filter((provider) =>
+    [provider.id, provider.displayName, provider.envVar, ...(provider.unlocks || [])].some(
+      (field) =>
+        String(field || "")
+          .toLowerCase()
+          .includes(q),
+    ),
+  );
 }
 
 function groupBy(items, keyFn) {
@@ -681,11 +904,7 @@ function providerStatus(provider) {
 }
 
 function ProviderStatusDot({ status }) {
-  const cls = status === "file"
-    ? "bg-success"
-    : status === "env"
-      ? "bg-info"
-      : "bg-warning";
+  const cls = status === "file" ? "bg-success" : status === "env" ? "bg-info" : "bg-warning";
   return <span aria-hidden="true" className={cn("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 

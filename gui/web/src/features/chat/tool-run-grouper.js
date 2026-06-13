@@ -43,7 +43,11 @@ export function groupToolRuns(rows) {
   };
 
   for (const row of rows) {
-    if (row.type !== "assistant_message" && row.type !== "tool_result" && row.type !== "user_message") {
+    if (
+      row.type !== "assistant_message" &&
+      row.type !== "tool_result" &&
+      row.type !== "user_message"
+    ) {
       flushRun();
       out.push(row);
       continue;
@@ -80,7 +84,8 @@ export function groupToolRuns(rows) {
         // beneath the prior tool's result in the drawer timeline.
         const lastStep = run.steps[run.steps.length - 1];
         if (lastStep) {
-          lastStep.narrationAfter = `${lastStep.narrationAfter || ""}${lastStep.narrationAfter ? "\n\n" : ""}${text}`.trim();
+          lastStep.narrationAfter =
+            `${lastStep.narrationAfter || ""}${lastStep.narrationAfter ? "\n\n" : ""}${text}`.trim();
         }
       }
 
@@ -119,8 +124,9 @@ export function groupToolRuns(rows) {
           messageId: null,
         });
       }
-      const step = run.steps.find((s) => s.id === message.toolCallId)
-        ?? run.steps.find((s) => s.name === message.toolName && !s.result);
+      const step =
+        run.steps.find((s) => s.id === message.toolCallId) ??
+        run.steps.find((s) => s.name === message.toolName && !s.result);
       if (step) {
         step.result = message;
         step.status = message.isError ? "error" : "completed";

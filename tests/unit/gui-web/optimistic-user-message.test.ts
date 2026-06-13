@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createOptimisticUserMessageEvents } from "../../../gui/web/src/features/chat/optimistic-user-message.js";
 import { chatRowsFromEvents } from "../../../gui/web/src/features/chat/chat-rows.js";
+import { createOptimisticUserMessageEvents } from "../../../gui/web/src/features/chat/optimistic-user-message.js";
 
 describe("optimistic GUI user messages", () => {
   it("renders the submitted user prompt before any server run events arrive", () => {
-    const rows = chatRowsFromEvents([], createOptimisticUserMessageEvents("What is AAPL trading at?"));
+    const rows = chatRowsFromEvents(
+      [],
+      createOptimisticUserMessageEvents("What is AAPL trading at?"),
+    );
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -25,6 +28,11 @@ describe("optimistic GUI user messages", () => {
 function persistedUserEvents(messageId: string, text: string) {
   return [
     { type: "message.created" as const, messageId, role: "user" as const, seq: 1 },
-    { type: "message.completed" as const, messageId, content: [{ type: "text" as const, text }], seq: 2 },
+    {
+      type: "message.completed" as const,
+      messageId,
+      content: [{ type: "text" as const, text }],
+      seq: 2,
+    },
   ];
 }

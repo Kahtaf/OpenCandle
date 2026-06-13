@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { classifyIntent, hasFinanceSignals } from "../../../src/routing/classify-intent.js";
 
 describe("classifyIntent", () => {
@@ -50,7 +50,9 @@ describe("classifyIntent", () => {
     });
 
     it("matches bull/bear case prompts for a single symbol", () => {
-      const result = classifyIntent("Give me the bull and bear case for PLTR, then force yourself to pick a side.");
+      const result = classifyIntent(
+        "Give me the bull and bear case for PLTR, then force yourself to pick a side.",
+      );
       expect(result.workflow).toBe("single_asset_analysis");
       expect(result.entities.symbols).toEqual(["PLTR"]);
     });
@@ -84,7 +86,9 @@ describe("classifyIntent", () => {
     });
 
     it("matches ETF portfolio prompts with explicit budget and risk profile", () => {
-      const result = classifyIntent("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      const result = classifyIntent(
+        "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
+      );
       expect(result.workflow).toBe("portfolio_builder");
       expect(result.entities.budget).toBe(25_000);
       expect(result.entities.riskProfile).toBe("conservative");
@@ -219,14 +223,18 @@ describe("classifyIntent", () => {
     });
 
     it("routes portfolio lot mutations before compare or builder workflows", () => {
-      const result = classifyIntent("Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.");
+      const result = classifyIntent(
+        "Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.",
+      );
       expect(result.workflow).toBe("watchlist_or_tracking");
       expect(result.entities.symbols).toEqual(["ASTS"]);
       expect(result.entities.budget).toBeUndefined();
     });
 
     it("matches owned-holdings portfolio risk prompts before compare routing", () => {
-      const result = classifyIntent("I own 40% NVDA, 25% MSFT, 20% AAPL, 15% cash. What is my biggest portfolio risk?");
+      const result = classifyIntent(
+        "I own 40% NVDA, 25% MSFT, 20% AAPL, 15% cash. What is my biggest portfolio risk?",
+      );
       expect(result.workflow).toBe("watchlist_or_tracking");
       expect(result.entities.symbols).toEqual(["NVDA", "MSFT", "AAPL"]);
     });
@@ -255,19 +263,25 @@ describe("classifyIntent", () => {
     });
 
     it("matches SEC filing thesis prompts without treating SEC as a compared ticker", () => {
-      const result = classifyIntent("What recent SEC filings for COIN could change the investment thesis?");
+      const result = classifyIntent(
+        "What recent SEC filings for COIN could change the investment thesis?",
+      );
       expect(result.workflow).toBe("general_finance_qa");
       expect(result.entities.symbols).toEqual(["COIN"]);
     });
 
     it("matches backtest strategy prompts for the tool-backed general path", () => {
-      const result = classifyIntent("Backtest a simple moving-average strategy on SPY and tell me if it beats buy-and-hold.");
+      const result = classifyIntent(
+        "Backtest a simple moving-average strategy on SPY and tell me if it beats buy-and-hold.",
+      );
       expect(result.workflow).toBe("general_finance_qa");
       expect(result.entities.symbols).toEqual(["SPY"]);
     });
 
     it("matches single-asset sentiment/price prompts for the tool-backed general path", () => {
-      const result = classifyIntent("Is Bitcoin sentiment getting overheated or improving? Compare price action and retail sentiment.");
+      const result = classifyIntent(
+        "Is Bitcoin sentiment getting overheated or improving? Compare price action and retail sentiment.",
+      );
       expect(result.workflow).toBe("general_finance_qa");
       expect(result.entities.symbols).toEqual([]);
     });
@@ -289,7 +303,9 @@ describe("classifyIntent", () => {
     });
 
     it("routes macro risk discussion for a portfolio to the general path", () => {
-      const result = classifyIntent("What macro risks matter most for a balanced portfolio right now?");
+      const result = classifyIntent(
+        "What macro risks matter most for a balanced portfolio right now?",
+      );
 
       expect(result.workflow).toBe("general_finance_qa");
       expect(result.entities.symbols).toEqual([]);
@@ -373,7 +389,9 @@ describe("classifyIntent", () => {
 
 describe("hasFinanceSignals", () => {
   it("detects finance vocabulary in prompts without resolvable tickers", () => {
-    expect(hasFinanceSignals("Thoughts on the SpaceX IPO today? Worth getting exposure?")).toBe(true);
+    expect(hasFinanceSignals("Thoughts on the SpaceX IPO today? Worth getting exposure?")).toBe(
+      true,
+    );
     expect(hasFinanceSignals("Should I buy more semiconductor stocks before earnings?")).toBe(true);
     expect(hasFinanceSignals("How is the bond market reacting to the Fed?")).toBe(true);
     expect(hasFinanceSignals("Is now a good time to invest in clean energy ETFs?")).toBe(true);

@@ -77,7 +77,9 @@ function contentForMessage(message, tools) {
     return part;
   });
 
-  const contentToolIds = new Set(content.filter((part) => part.type === "toolCall").map((part) => part.id));
+  const contentToolIds = new Set(
+    content.filter((part) => part.type === "toolCall").map((part) => part.id),
+  );
   for (const tool of tools) {
     if (contentToolIds.has(tool.id) || isBackgroundTool(tool)) continue;
     content.push({
@@ -127,9 +129,9 @@ export function compactDuplicateUserRows(rows) {
   for (const row of rows) {
     const previous = compacted[compacted.length - 1];
     if (
-      row.type === "user_message"
-      && previous?.type === "user_message"
-      && textContent(row.content) === textContent(previous.content)
+      row.type === "user_message" &&
+      previous?.type === "user_message" &&
+      textContent(row.content) === textContent(previous.content)
     ) {
       continue;
     }
@@ -139,11 +141,15 @@ export function compactDuplicateUserRows(rows) {
 }
 
 function isBackgroundTool(tool) {
-  return String(tool.id || "").startsWith("background-")
-    || tool.output?.source === "background"
-    || tool.output?.details?.source === "background";
+  return (
+    String(tool.id || "").startsWith("background-") ||
+    tool.output?.source === "background" ||
+    tool.output?.details?.source === "background"
+  );
 }
 
 function isBackgroundAssistantMessage(content) {
-  return content.some((part) => part.type === "toolCall" && String(part.id || "").startsWith("background-"));
+  return content.some(
+    (part) => part.type === "toolCall" && String(part.id || "").startsWith("background-"),
+  );
 }

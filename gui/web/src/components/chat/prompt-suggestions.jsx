@@ -9,7 +9,12 @@ const DEFAULT_PROMPTS = [
   ["Compare NVDA and AMD", "Compare NVDA and AMD using latest quotes."],
 ];
 
-export function EmptyThread({ prompts = DEFAULT_PROMPTS, onPrompt, onOpenCatalog, disabled = false }) {
+export function EmptyThread({
+  prompts = DEFAULT_PROMPTS,
+  onPrompt,
+  onOpenCatalog,
+  disabled = false,
+}) {
   return (
     <div className="mx-auto grid w-full max-w-[760px] animate-fade-in-once justify-items-center gap-6 px-2 pb-20 pt-16 text-center sm:pt-24">
       <div className="grid gap-2">

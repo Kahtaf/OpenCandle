@@ -125,7 +125,7 @@ function marketStateToolMapping(toolName: string): { domain: string; targetType:
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? value as Record<string, unknown> : null;
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null;
 }
 
 function numericField(record: Record<string, unknown> | null, key: string): number | undefined {
@@ -133,7 +133,10 @@ function numericField(record: Record<string, unknown> | null, key: string): numb
   return typeof value === "number" ? value : undefined;
 }
 
-function numericArrayField(record: Record<string, unknown> | null, key: string): number[] | undefined {
+function numericArrayField(
+  record: Record<string, unknown> | null,
+  key: string,
+): number[] | undefined {
   const value = record?.[key];
   if (!Array.isArray(value)) return undefined;
   const numbers = value.filter((item): item is number => typeof item === "number");

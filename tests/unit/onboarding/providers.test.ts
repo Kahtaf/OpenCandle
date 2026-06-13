@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as configModule from "../../../src/config.js";
 import {
-  PROVIDERS,
+  getCredential,
+  getCredentialSource,
   getProvider,
   getProvidersByCategory,
   getProvidersByTier,
   hasCredential,
-  getCredentialSource,
-  getCredential,
-  resolveProviderFromArgument,
   listAllProviders,
+  PROVIDERS,
   type ProviderId,
+  resolveProviderFromArgument,
 } from "../../../src/onboarding/providers.js";
 
 const ENV_KEYS = [
@@ -53,9 +53,7 @@ afterEach(() => {
 describe("provider registry — shape", () => {
   it("contains exactly five credentialed providers with stable ids", () => {
     const ids = PROVIDERS.map((p) => p.id).sort();
-    expect(ids).toEqual(
-      ["alpha_vantage", "brave", "exa", "finnhub", "fred"].sort(),
-    );
+    expect(ids).toEqual(["alpha_vantage", "brave", "exa", "finnhub", "fred"].sort());
   });
 
   it("every descriptor has all required fields", () => {
@@ -75,7 +73,9 @@ describe("provider registry — shape", () => {
       expect(p.snoozeDurationDays).toBeGreaterThan(0);
       expect(p.instructionsHint).toBeTruthy();
       // fallbackDescription may be null or string, never undefined
-      expect(p.fallbackDescription === null || typeof p.fallbackDescription === "string").toBe(true);
+      expect(p.fallbackDescription === null || typeof p.fallbackDescription === "string").toBe(
+        true,
+      );
     }
   });
 
@@ -151,12 +151,16 @@ describe("provider registry — lookup helpers", () => {
   });
 
   it("getProvidersByTier('hard') returns alpha_vantage and fred", () => {
-    const ids = getProvidersByTier("hard").map((p) => p.id).sort();
+    const ids = getProvidersByTier("hard")
+      .map((p) => p.id)
+      .sort();
     expect(ids).toEqual(["alpha_vantage", "fred"]);
   });
 
   it("getProvidersByTier('soft') returns finnhub, brave, exa", () => {
-    const ids = getProvidersByTier("soft").map((p) => p.id).sort();
+    const ids = getProvidersByTier("soft")
+      .map((p) => p.id)
+      .sort();
     expect(ids).toEqual(["brave", "exa", "finnhub"]);
   });
 });

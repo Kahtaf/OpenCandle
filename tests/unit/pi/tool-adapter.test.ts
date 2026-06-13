@@ -20,7 +20,13 @@ describe("tool adapter", () => {
     };
 
     const adapted = agentToolToPiTool(source);
-    const result = await adapted.execute("tool-1", { symbol: "MSFT" }, undefined, undefined, {} as never);
+    const result = await adapted.execute(
+      "tool-1",
+      { symbol: "MSFT" },
+      undefined,
+      undefined,
+      {} as never,
+    );
 
     expect(execute).toHaveBeenCalledWith("tool-1", { symbol: "MSFT" }, undefined, undefined);
     expect(adapted.name).toBe(source.name);
@@ -32,8 +38,12 @@ describe("tool adapter", () => {
   });
 
   it("exposes every OpenCandle tool as a Pi tool definition", () => {
-    const sourceNames = getAllTools().map((tool) => tool.name).sort();
-    const adaptedNames = getOpenCandleToolDefinitions().map((tool) => tool.name).sort();
+    const sourceNames = getAllTools()
+      .map((tool) => tool.name)
+      .sort();
+    const adaptedNames = getOpenCandleToolDefinitions()
+      .map((tool) => tool.name)
+      .sort();
 
     expect(adaptedNames).toEqual(sourceNames);
   });
@@ -62,7 +72,9 @@ describe("tool adapter", () => {
       },
     }));
 
-    const { getOpenCandleToolDefinitions: getDefinitions } = await import("../../../src/pi/tool-adapter.js");
+    const { getOpenCandleToolDefinitions: getDefinitions } = await import(
+      "../../../src/pi/tool-adapter.js"
+    );
 
     expect(getDefinitions().map((tool) => tool.name)).toEqual(["fake_tool"]);
     expect(defaultsPassedToWrapper).toEqual([{ symbol: "NVDA" }]);

@@ -1,5 +1,9 @@
 export function predictionProgress({ direction, entryPrice, targetPrice, currentPrice }) {
-  if (typeof targetPrice !== "number" || typeof currentPrice !== "number" || typeof entryPrice !== "number") {
+  if (
+    typeof targetPrice !== "number" ||
+    typeof currentPrice !== "number" ||
+    typeof entryPrice !== "number"
+  ) {
     return null;
   }
   const span = targetPrice - entryPrice;
@@ -10,7 +14,8 @@ export function predictionProgress({ direction, entryPrice, targetPrice, current
   return {
     percent,
     targetHit: ratio >= 1,
-    directionCorrect: direction === "bearish" ? currentPrice <= entryPrice : currentPrice >= entryPrice,
+    directionCorrect:
+      direction === "bearish" ? currentPrice <= entryPrice : currentPrice >= entryPrice,
   };
 }
 
@@ -25,17 +30,20 @@ export function buildPredictionScorecard(predictions = []) {
     .filter((result) => result != null);
   const hits = results.filter((result) => result.correct === true);
 
-  const nextExpiry = open
-    .map((prediction) => prediction.expiresAt)
-    .filter(Boolean)
-    .sort()[0] ?? null;
+  const nextExpiry =
+    open
+      .map((prediction) => prediction.expiresAt)
+      .filter(Boolean)
+      .sort()[0] ?? null;
 
   return {
     openCount: open.length,
     resolvedCount: scored.length,
     hitRatePercent: scored.length > 0 ? (hits.length / scored.length) * 100 : null,
     avgHitPnlPercent:
-      hits.length > 0 ? hits.reduce((sum, result) => sum + (result.pnlPercent ?? 0), 0) / hits.length : null,
+      hits.length > 0
+        ? hits.reduce((sum, result) => sum + (result.pnlPercent ?? 0), 0) / hits.length
+        : null,
     nextExpiry,
   };
 }

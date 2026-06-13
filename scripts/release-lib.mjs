@@ -1,6 +1,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-export function updateChangelogForRelease(changelogPath, version, date = new Date().toISOString().split("T")[0]) {
+export function updateChangelogForRelease(
+  changelogPath,
+  version,
+  date = new Date().toISOString().split("T")[0],
+) {
   const content = readFileSync(changelogPath, "utf-8");
   if (!content.includes("## [Unreleased]")) {
     throw new Error(`Missing [Unreleased] section in ${changelogPath}`);

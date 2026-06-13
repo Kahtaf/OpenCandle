@@ -88,27 +88,27 @@ export const cache = new Cache();
 
 // Default TTLs
 export const TTL = {
-  QUOTE: 60_000,         // 1 minute
-  HISTORY: 3_600_000,    // 1 hour
+  QUOTE: 60_000, // 1 minute
+  HISTORY: 3_600_000, // 1 hour
   FUNDAMENTALS: 86_400_000, // 24 hours
-  MACRO: 3_600_000,      // 1 hour
-  SENTIMENT: 300_000,    // 5 minutes
+  MACRO: 3_600_000, // 1 hour
+  SENTIMENT: 300_000, // 5 minutes
   OPTIONS_CHAIN: 120_000, // 2 minutes
-  SCREENER: 60_000,      // 1 minute
-  CRUMB: 900_000,        // 15 minutes
-  WEB_SEARCH: 300_000,   // 5 minutes
+  SCREENER: 60_000, // 1 minute
+  CRUMB: 900_000, // 15 minutes
+  WEB_SEARCH: 300_000, // 5 minutes
   FINNHUB_NEWS: 300_000, // 5 minutes
 } as const;
 
 // Stale limits — how long past TTL expiry a cached value is still useful as fallback
 export const STALE_LIMIT = {
-  QUOTE: 15 * 60_000,             // 15 minutes
-  HISTORY: 24 * 3_600_000,        // 24 hours
-  FUNDAMENTALS: 7 * 86_400_000,   // 7 days
-  MACRO: 24 * 3_600_000,          // 24 hours
-  SENTIMENT: 3_600_000,           // 1 hour
-  OPTIONS_CHAIN: 30 * 60_000,     // 30 minutes
-  SCREENER: 15 * 60_000,           // 15 minutes
-  WEB_SEARCH: 3_600_000,          // 1 hour
-  FINNHUB_NEWS: 3_600_000,        // 1 hour
+  QUOTE: 15 * 60_000, // 15 minutes
+  HISTORY: 24 * 3_600_000, // 24 hours
+  FUNDAMENTALS: 7 * 86_400_000, // 7 days
+  MACRO: 24 * 3_600_000, // 24 hours
+  SENTIMENT: 3_600_000, // 1 hour
+  OPTIONS_CHAIN: 30 * 60_000, // 30 minutes
+  SCREENER: 15 * 60_000, // 15 minutes
+  WEB_SEARCH: 3_600_000, // 1 hour
+  FINNHUB_NEWS: 3_600_000, // 1 hour
 } as const;

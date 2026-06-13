@@ -13,7 +13,8 @@ export function routeSessionView({
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
-  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && hasSessionContent(events);
+  const pendingFreshHomeSession =
+    canStartFreshHomeSession && pathname === "/" && hasSessionContent(events);
   const streaming = runState === "connecting" || runState === "streaming";
 
   return {
@@ -21,11 +22,12 @@ export function routeSessionView({
     pendingSessionSwitch,
     pendingFreshHomeSession,
     activeSessionId: routeSessionId || currentSessionId || "",
-    events: pendingSessionSwitch || pendingFreshHomeSession
-      ? []
-      : streaming
-        ? events.slice(0, liveBaseEventCount)
-        : events,
+    events:
+      pendingSessionSwitch || pendingFreshHomeSession
+        ? []
+        : streaming
+          ? events.slice(0, liveBaseEventCount)
+          : events,
   };
 }
 
@@ -37,8 +39,8 @@ export function chatRunSessionTarget({ pathname, supportsSessionActions }) {
 }
 
 export function hasSessionContent(events) {
-  return (events || []).some((event) =>
-    event.type === "message.completed" || event.type === "custom.message"
+  return (events || []).some(
+    (event) => event.type === "message.completed" || event.type === "custom.message",
   );
 }
 
@@ -50,10 +52,12 @@ export function shouldStartFreshHomeSession({
   lastResetSessionId,
   canStartFreshHomeSession = true,
 }) {
-  return pathname === "/"
-    && role === "writer"
-    && canStartFreshHomeSession
-    && Boolean(currentSessionId)
-    && entryCount > 0
-    && lastResetSessionId === "";
+  return (
+    pathname === "/" &&
+    role === "writer" &&
+    canStartFreshHomeSession &&
+    Boolean(currentSessionId) &&
+    entryCount > 0 &&
+    lastResetSessionId === ""
+  );
 }

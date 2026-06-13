@@ -20,9 +20,7 @@ describe("useGuiConnection helpers", () => {
 
   it("rejects timed-out invokes without removing the pending entry", () => {
     const reject = vi.fn();
-    const pendingInvokes = new Map([
-      ["req-1", { resolve: vi.fn(), reject, timeout: 123 }],
-    ]);
+    const pendingInvokes = new Map([["req-1", { resolve: vi.fn(), reject, timeout: 123 }]]);
 
     expect(rejectTimedOutToolInvoke(pendingInvokes, "req-1")).toBe(true);
 
@@ -32,9 +30,7 @@ describe("useGuiConnection helpers", () => {
 
   it("lets late invoke acknowledgements clear timed-out pending entries", () => {
     const resolve = vi.fn();
-    const pendingInvokes = new Map([
-      ["req-1", { resolve, reject: vi.fn(), timeout: 123 }],
-    ]);
+    const pendingInvokes = new Map([["req-1", { resolve, reject: vi.fn(), timeout: 123 }]]);
 
     rejectTimedOutToolInvoke(pendingInvokes, "req-1");
 

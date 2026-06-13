@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import {
   type AuthStorage,
@@ -5,25 +8,9 @@ import {
   SessionManager as PiSessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
-import { cache } from "../../src/infra/cache.js";
 import { createOpenCandleSession } from "../../src/index.js";
-import {
-  ANSWER_CONTRACT_REGISTRY,
-  type FinalAnswerField,
-  runStructuredChecks,
-} from "../../src/runtime/answer-contracts.js";
-import {
-  buildMarketStatusEvidence,
-  buildPortfolioExposureMapEvidence,
-  buildTickerDisambiguationEvidence,
-  captureEvidenceFromToolCall,
-  type PlanningEvidenceRecord,
-} from "../../src/runtime/planning-evidence.js";
-import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
+import { cache } from "../../src/infra/cache.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
 import type {
   AnswerContractId,
@@ -31,7 +18,24 @@ import type {
   CommitmentMode,
   StructuredCheckId,
 } from "../../src/routing/planning.js";
-import type { ClassificationResult, ExtractedEntities, WorkflowType } from "../../src/routing/types.js";
+import type {
+  ClassificationResult,
+  ExtractedEntities,
+  WorkflowType,
+} from "../../src/routing/types.js";
+import {
+  ANSWER_CONTRACT_REGISTRY,
+  type FinalAnswerField,
+  runStructuredChecks,
+} from "../../src/runtime/answer-contracts.js";
+import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
+import {
+  buildMarketStatusEvidence,
+  buildPortfolioExposureMapEvidence,
+  buildTickerDisambiguationEvidence,
+  captureEvidenceFromToolCall,
+  type PlanningEvidenceRecord,
+} from "../../src/runtime/planning-evidence.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 import type { EvalTrace, PlanningTelemetry, TraceToolCall } from "../evals/types.js";
 import { createTraceCollector, type TraceCollector } from "./trace-collector.js";
@@ -71,9 +75,7 @@ export async function runOpenCandleSession(
   process.env.OPENCANDLE_HOME = openCandleHome;
 
   let collector: TraceCollector | null = null;
-  let session:
-    | Awaited<ReturnType<typeof createOpenCandleSession>>["session"]
-    | null = null;
+  let session: Awaited<ReturnType<typeof createOpenCandleSession>>["session"] | null = null;
 
   try {
     const collectorProxy: Pick<TraceCollector, "addInteraction"> = {
@@ -82,10 +84,7 @@ export async function runOpenCandleSession(
       },
     };
 
-    const askUserHandler = createScriptedAskHandler(
-      options.scriptedAnswers ?? [],
-      collectorProxy,
-    );
+    const askUserHandler = createScriptedAskHandler(options.scriptedAnswers ?? [], collectorProxy);
 
     const created = await createOpenCandleSession({
       cwd: options.cwd ?? process.cwd(),
@@ -167,7 +166,11 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
     prompt: agentTrace.prompt,
     classification: classificationFromTrace(agentTrace),
     router: routerTelemetryFromTrace(agentTrace),
-    planning: planningTelemetryFromTrace(agentTrace, toolCalls, agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join("")),
+    planning: planningTelemetryFromTrace(
+      agentTrace,
+      toolCalls,
+      agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join(""),
+    ),
     toolCalls,
     askUserTranscript: agentTrace.interactions.map((interaction) => ({
       question: interaction.question,
@@ -184,9 +187,7 @@ function createScriptedAskHandler(
 ): AskUserHandler {
   let scriptedIndex = 0;
   return async (params) => {
-    const answer = scriptedIndex < scriptedAnswers.length
-      ? scriptedAnswers[scriptedIndex++]
-      : null;
+    const answer = scriptedIndex < scriptedAnswers.length ? scriptedAnswers[scriptedIndex++] : null;
     const interaction: InteractionTrace = {
       question: params.question,
       method: params.questionType,
@@ -305,7 +306,9 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
     routeKind: stringOrUndefined(routeContext?.routeKind ?? routerOutput?.routeKind),
     legacyRoute: stringOrUndefined(routeContext?.legacyRoute ?? routerOutput?.route),
     workflow: stringOrUndefined(routeContext?.workflow ?? routerOutput?.workflow),
-    missingRequired: stringArrayOrUndefined(routeContext?.missingRequired ?? routerOutput?.missing_required),
+    missingRequired: stringArrayOrUndefined(
+      routeContext?.missingRequired ?? routerOutput?.missing_required,
+    ),
     toolBundles: stringArrayOrUndefined(routeContext?.toolBundles ?? routerOutput?.tool_bundles),
     activeToolNames: stringArrayOrUndefined(routeContext?.activeToolNames),
     memoryCategories: stringArrayOrUndefined(memoryQueryPlan?.categories),
@@ -313,7 +316,7 @@ function routerTelemetryFromTrace(agentTrace: AgentTrace): EvalTrace["router"] {
       ? routeContext.memoryProvenance
       : undefined,
     diagnostics: Array.isArray(routeContext?.diagnostics ?? routerOutput?.diagnostics)
-      ? (routeContext?.diagnostics ?? routerOutput?.diagnostics) as unknown[]
+      ? ((routeContext?.diagnostics ?? routerOutput?.diagnostics) as unknown[])
       : undefined,
     toolScopeViolations: violations.length > 0 ? violations : undefined,
     ...(scopeEntries.length > 0 ? { toolScope: scopeEntries } : {}),
@@ -335,7 +338,7 @@ function planningTelemetryFromTrace(
   const answerContractId = answerContractIdOrUndefined(planning.answerContractId);
   const capabilityGapIds = capabilityGapArrayOrEmpty(planning.capabilityGapIds);
   const symbols = isRecord(routeContext?.entities)
-    ? stringArrayOrUndefined(routeContext.entities.symbols) ?? []
+    ? (stringArrayOrUndefined(routeContext.entities.symbols) ?? [])
     : [];
   const evidenceRecords = [
     ...plannedEvidenceRecords({
@@ -344,33 +347,46 @@ function planningTelemetryFromTrace(
       policyCardId: stringOrUndefined(planning.policyCardId),
       symbols,
     }),
-    ...toolCalls.map((toolCall, index) => captureEvidenceFromToolCall({
-      name: toolCall.name,
-      args: toolCall.args,
-      result: toolCall.result,
-      isError: false,
-    }, {
-      traceId: "eval-trace",
-      toolCallIndex: index,
-    })),
+    ...toolCalls.map((toolCall, index) =>
+      captureEvidenceFromToolCall(
+        {
+          name: toolCall.name,
+          args: toolCall.args,
+          result: toolCall.result,
+          isError: false,
+        },
+        {
+          traceId: "eval-trace",
+          toolCallIndex: index,
+        },
+      ),
+    ),
   ];
 
   const contract = answerContractId ? ANSWER_CONTRACT_REGISTRY[answerContractId] : undefined;
-  const structuredTrace = contract && commitmentMode
-    ? runStructuredChecks({
-      contract,
-      evidenceRecords,
-      structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
-      answerText: finalText,
-      finalAnswerMetadata: {
-        commitmentMode,
-        finalFields: inferFinalAnswerFieldsForEval(finalText),
-        sourceCoverage: inferSourceCoverageForEval(finalText, evidenceRecords),
-        disclosedProviderStatuses: inferDisclosedProviderStatusesForEval(finalText, evidenceRecords),
-        disclosedCapabilityGapIds: inferDisclosedCapabilityGapIdsForEval(finalText, capabilityGapIds, evidenceRecords),
-      },
-    })
-    : undefined;
+  const structuredTrace =
+    contract && commitmentMode
+      ? runStructuredChecks({
+          contract,
+          evidenceRecords,
+          structuredCheckIds: structuredCheckArrayOrEmpty(planning.structuredCheckIds),
+          answerText: finalText,
+          finalAnswerMetadata: {
+            commitmentMode,
+            finalFields: inferFinalAnswerFieldsForEval(finalText),
+            sourceCoverage: inferSourceCoverageForEval(finalText, evidenceRecords),
+            disclosedProviderStatuses: inferDisclosedProviderStatusesForEval(
+              finalText,
+              evidenceRecords,
+            ),
+            disclosedCapabilityGapIds: inferDisclosedCapabilityGapIdsForEval(
+              finalText,
+              capabilityGapIds,
+              evidenceRecords,
+            ),
+          },
+        })
+      : undefined;
 
   return {
     version: stringOrUndefined(planning.version),
@@ -400,7 +416,11 @@ function planningTelemetryFromTrace(
 function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   const lower = text.toLowerCase();
   const fields: FinalAnswerField[] = [];
-  if (/\b(bottom line|framework|checklist|workflow|how it works|mental model|main risks?|steps?)\b/.test(lower)) {
+  if (
+    /\b(bottom line|framework|checklist|workflow|how it works|mental model|main risks?|steps?)\b/.test(
+      lower,
+    )
+  ) {
     fields.push("framework_or_checklist");
   }
   if (/\b(risk|downside|trade[- ]?off|caveat|uncertain|loss|not ideal)\b/.test(lower)) {
@@ -412,10 +432,16 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   if (/\b(buy|sell|hold|avoid|trim|add|recommend|bottom line: (?:yes|no))\b/.test(lower)) {
     fields.push("clear_commitment");
   }
-  if (/\b(unavailable|missing|data gap|cannot verify|not available|no live|unknown)\b/.test(lower)) {
+  if (
+    /\b(unavailable|missing|data gap|cannot verify|not available|no live|unknown)\b/.test(lower)
+  ) {
     fields.push("data_gap_disclosure");
   }
-  if (/\b(not verified|not verify|unverified|exact .* not|requires? .* provider|requires? .* source)\b/.test(lower)) {
+  if (
+    /\b(not verified|not verify|unverified|exact .* not|requires? .* provider|requires? .* source)\b/.test(
+      lower,
+    )
+  ) {
     fields.push("data_gap_disclosure");
   }
   if (/\b(as of|market closed|last trading day|freshness|quote date)\b/.test(lower)) {
@@ -424,7 +450,11 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
   if (/\b(source|coverage|filing|news|reddit|twitter|x\/twitter)\b/.test(lower)) {
     fields.push("source_coverage");
   }
-  if (/\b(based on your|stated percentages?|stated allocation|user[- ]stated|provided allocation)\b/.test(lower)) {
+  if (
+    /\b(based on your|stated percentages?|stated allocation|user[- ]stated|provided allocation)\b/.test(
+      lower,
+    )
+  ) {
     fields.push("source_coverage");
   }
   if (/\b(confirmed|saved|recorded|updated|tracked)\b/.test(lower)) {
@@ -448,8 +478,8 @@ function inferSourceCoverageForEval(
 ): { sources: string[] } | undefined {
   const fields = inferFinalAnswerFieldsForEval(text);
   if (!fields.includes("source_coverage")) return undefined;
-  const sources = evidenceRecords.map((record) =>
-    record.source.toolName ?? record.source.provider ?? record.evidenceType
+  const sources = evidenceRecords.map(
+    (record) => record.source.toolName ?? record.source.provider ?? record.evidenceType,
   );
   return { sources: [...new Set(sources.length > 0 ? sources : ["final_answer"])] };
 }
@@ -458,7 +488,11 @@ function inferDisclosedProviderStatusesForEval(
   text: string,
   evidenceRecords: PlanningEvidenceRecord[],
 ): string[] | undefined {
-  if (!/\b(unavailable|missing|skipped|credential|required|no live|cannot verify|not available|not verified|unverified)\b/i.test(text)) {
+  if (
+    !/\b(unavailable|missing|skipped|credential|required|no live|cannot verify|not available|not verified|unverified)\b/i.test(
+      text,
+    )
+  ) {
     return undefined;
   }
   const statuses = evidenceRecords
@@ -481,19 +515,29 @@ function inferDisclosedCapabilityGapIdsForEval(
   const lower = text.toLowerCase();
   const disclosed = [...required].filter((gapId) => {
     if (gapId === "etf_holdings_overlap") {
-      return /\b(?:exact .*holdings?|holdings? overlap|etf overlap|index overlap|constituent|not verified|not available)\b/.test(lower);
+      return /\b(?:exact .*holdings?|holdings? overlap|etf overlap|index overlap|constituent|not verified|not available)\b/.test(
+        lower,
+      );
     }
     if (gapId === "market_calendar") {
-      return /\b(?:market calendar|holiday|last trading day|market status|after close|weekend)\b/.test(lower);
+      return /\b(?:market calendar|holiday|last trading day|market status|after close|weekend)\b/.test(
+        lower,
+      );
     }
     if (gapId === "forward_rate_probabilities") {
-      return /\b(?:forward rate|rate probabilities|fed probabilities|market-implied|probabilities unavailable)\b/.test(lower);
+      return /\b(?:forward rate|rate probabilities|fed probabilities|market-implied|probabilities unavailable)\b/.test(
+        lower,
+      );
     }
     if (gapId === "sentiment_sample_depth") {
-      return /\b(?:sample depth|sample size|sentiment coverage|low volume|source coverage)\b/.test(lower);
+      return /\b(?:sample depth|sample size|sentiment coverage|low volume|source coverage)\b/.test(
+        lower,
+      );
     }
     if (gapId === "earnings_event_risk") {
-      return /\b(?:earnings event|event risk|implied move|earnings timing|not verified)\b/.test(lower);
+      return /\b(?:earnings event|event risk|implied move|earnings timing|not verified)\b/.test(
+        lower,
+      );
     }
     return lower.includes(gapId.replaceAll("_", " "));
   });
@@ -514,23 +558,32 @@ function plannedEvidenceRecords(options: {
   symbols: string[];
 }) {
   if (options.evidencePlanId === "market_status") {
-    return [buildMarketStatusEvidence({
-      text: options.prompt,
-      traceId: "eval-trace",
-    })];
+    return [
+      buildMarketStatusEvidence({
+        text: options.prompt,
+        traceId: "eval-trace",
+      }),
+    ];
   }
   if (options.evidencePlanId === "ticker_disambiguation") {
-    return [buildTickerDisambiguationEvidence({
-      text: options.prompt,
-      symbols: options.symbols,
-      traceId: "eval-trace",
-    })];
+    return [
+      buildTickerDisambiguationEvidence({
+        text: options.prompt,
+        symbols: options.symbols,
+        traceId: "eval-trace",
+      }),
+    ];
   }
-  if (options.policyCardId === "portfolio_rebalance_review" && /\d+(?:\.\d+)?\s*%/.test(options.prompt)) {
-    return [buildPortfolioExposureMapEvidence({
-      text: options.prompt,
-      traceId: "eval-trace",
-    })];
+  if (
+    options.policyCardId === "portfolio_rebalance_review" &&
+    /\d+(?:\.\d+)?\s*%/.test(options.prompt)
+  ) {
+    return [
+      buildPortfolioExposureMapEvidence({
+        text: options.prompt,
+        traceId: "eval-trace",
+      }),
+    ];
   }
   return [];
 }
@@ -542,16 +595,17 @@ function getRouterOutput(data: unknown): {
 } | null {
   const output = getRouterOutputRecord(data);
   if (!output) return null;
-  const workflow = typeof output.workflow === "string" && isWorkflowType(output.workflow)
-    ? output.workflow
-    : undefined;
+  const workflow =
+    typeof output.workflow === "string" && isWorkflowType(output.workflow)
+      ? output.workflow
+      : undefined;
   const entities = isRecord(output.entities)
-    ? {
-      ...output.entities,
-      symbols: Array.isArray(output.entities.symbols)
-        ? output.entities.symbols.filter((symbol): symbol is string => typeof symbol === "string")
-        : [],
-    } as ExtractedEntities
+    ? ({
+        ...output.entities,
+        symbols: Array.isArray(output.entities.symbols)
+          ? output.entities.symbols.filter((symbol): symbol is string => typeof symbol === "string")
+          : [],
+      } as ExtractedEntities)
     : { symbols: [] };
   return {
     workflow,
@@ -576,13 +630,15 @@ function confidenceToNumber(confidence: unknown): number {
 }
 
 function isWorkflowType(value: string): value is WorkflowType {
-  return value === "single_asset_analysis" ||
+  return (
+    value === "single_asset_analysis" ||
     value === "portfolio_builder" ||
     value === "options_screener" ||
     value === "compare_assets" ||
     value === "watchlist_or_tracking" ||
     value === "general_finance_qa" ||
-    value === "unclassified";
+    value === "unclassified"
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -612,7 +668,7 @@ function structuredCheckArrayOrEmpty(value: unknown): StructuredCheckId[] {
     "when_not_ideal_present",
   ]);
   return (stringArrayOrUndefined(value) ?? []).filter((item): item is StructuredCheckId =>
-    allowed.has(item as StructuredCheckId)
+    allowed.has(item as StructuredCheckId),
   );
 }
 
@@ -628,7 +684,7 @@ function capabilityGapArrayOrEmpty(value: unknown): CapabilityGapId[] {
     "sentiment_sample_depth",
   ]);
   return (stringArrayOrUndefined(value) ?? []).filter((item): item is CapabilityGapId =>
-    allowed.has(item as CapabilityGapId)
+    allowed.has(item as CapabilityGapId),
   );
 }
 
@@ -639,7 +695,9 @@ function artifactContractArrayOrEmpty(value: unknown): ArtifactContractId[] {
     "rebalance_action_plan",
     "source_coverage_table",
   ]);
-  return (stringArrayOrUndefined(value) ?? []).filter((item): item is ArtifactContractId => allowed.has(item));
+  return (stringArrayOrUndefined(value) ?? []).filter((item): item is ArtifactContractId =>
+    allowed.has(item),
+  );
 }
 
 function commitmentModeOrUndefined(value: unknown): CommitmentMode | undefined {
@@ -655,5 +713,5 @@ function commitmentModeOrUndefined(value: unknown): CommitmentMode | undefined {
 
 function answerContractIdOrUndefined(value: unknown): AnswerContractId | undefined {
   if (typeof value !== "string") return undefined;
-  return value in ANSWER_CONTRACT_REGISTRY ? value as AnswerContractId : undefined;
+  return value in ANSWER_CONTRACT_REGISTRY ? (value as AnswerContractId) : undefined;
 }

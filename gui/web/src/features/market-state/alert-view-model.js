@@ -1,6 +1,11 @@
 import { relativeTime } from "./format.js";
 
-export function buildAlertSentenceRows(alerts = [], alertEvents = [], instruments = [], nowMs = Date.now()) {
+export function buildAlertSentenceRows(
+  alerts = [],
+  alertEvents = [],
+  instruments = [],
+  nowMs = Date.now(),
+) {
   const symbolsById = new Map(instruments.map((instrument) => [instrument.id, instrument.symbol]));
   const latestEvents = new Map();
   for (const event of alertEvents) {
@@ -15,7 +20,9 @@ export function buildAlertSentenceRows(alerts = [], alertEvents = [], instrument
     const event = latestEvents.get(rule.id);
     return {
       id: rule.id,
-      symbol: rule.instrumentId ? (symbolsById.get(rule.instrumentId) ?? "Unknown") : scopeLabel(rule),
+      symbol: rule.instrumentId
+        ? (symbolsById.get(rule.instrumentId) ?? "Unknown")
+        : scopeLabel(rule),
       sentence: conditionSentence(rule.conditionType, rule.conditionJson),
       detail: detailLine(rule, enabled, nowMs),
       tone: rowTone(rule, enabled, event),
@@ -60,12 +67,17 @@ function detailLine(rule, enabled, nowMs) {
 
 function rowTone(rule, enabled, event) {
   if (!enabled) return "paused";
-  if (event?.status === "unavailable" || rule.lastConditionState === "unavailable") return "degraded";
+  if (event?.status === "unavailable" || rule.lastConditionState === "unavailable")
+    return "degraded";
   return "armed";
 }
 
 function scopeLabel(rule) {
-  return rule.scopeType === "watchlist" ? "Watchlist" : rule.scopeType === "portfolio" ? "Portfolio" : "Unknown";
+  return rule.scopeType === "watchlist"
+    ? "Watchlist"
+    : rule.scopeType === "portfolio"
+      ? "Portfolio"
+      : "Unknown";
 }
 
 function moneyLabel(value) {
@@ -142,5 +154,7 @@ function compareIso(a, b) {
 
 function shortDate(value) {
   if (!value) return "N/A";
-  return String(value).replace("T", " ").replace(/\.\d{3}Z$/, "Z");
+  return String(value)
+    .replace("T", " ")
+    .replace(/\.\d{3}Z$/, "Z");
 }

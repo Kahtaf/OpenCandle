@@ -162,9 +162,7 @@ export function findLatestCompetitiveReport(cwd = process.cwd()): string | null 
     return null;
   }
 
-  const reports = files
-    .filter((file) => file.endsWith("_competitive-finance.json"))
-    .sort();
+  const reports = files.filter((file) => file.endsWith("_competitive-finance.json")).sort();
   const latest = reports.at(-1);
   return latest ? join(runsDir, latest) : null;
 }

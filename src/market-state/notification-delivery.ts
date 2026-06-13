@@ -44,7 +44,8 @@ export async function deliverPendingNotifications(
     }
   }
 
-  const pendingNotifications = service.listNotificationEvents()
+  const pendingNotifications = service
+    .listNotificationEvents()
     .filter((notification) => !deliveredWebhookIds.has(notification.id))
     .sort((left, right) => {
       const leftAttempt = lastWebhookAttemptAt.get(left.id);
@@ -69,7 +70,10 @@ export async function deliverPendingNotifications(
     if (attempted >= maxAttempts) break;
     attempted++;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(new Error(`Webhook delivery timed out after ${timeoutMs}ms`)), timeoutMs);
+    const timeout = setTimeout(
+      () => controller.abort(new Error(`Webhook delivery timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
     try {
       const response = await fetchImpl(webhookUrl, {
         method: "POST",
@@ -102,7 +106,9 @@ export async function deliverPendingNotifications(
       clearTimeout(timeout);
       const message = controller.signal.aborted
         ? `Webhook delivery timed out after ${timeoutMs}ms`
-        : error instanceof Error ? error.message : String(error);
+        : error instanceof Error
+          ? error.message
+          : String(error);
       service.recordNotificationDeliveryAttempt({
         notificationEventId: notification.id,
         channel: "webhook",

@@ -1,11 +1,11 @@
 #!/usr/bin/env tsx
 import { readFileSync } from "node:fs";
+import type { CompetitiveReplayComparison } from "../evals/main-branch-competitive-replay.js";
+import type { ProductReplayComparison } from "../evals/main-branch-replay.js";
 import {
   buildOcSuperiorityScorecard,
   writeOcSuperiorityScorecard,
 } from "../evals/oc-superiority-scorecard.js";
-import type { CompetitiveReplayComparison } from "../evals/main-branch-competitive-replay.js";
-import type { ProductReplayComparison } from "../evals/main-branch-replay.js";
 
 interface CliOptions {
   productReplay?: string;
@@ -15,8 +15,12 @@ interface CliOptions {
 
 const options = parseArgs(process.argv.slice(2));
 const scorecard = buildOcSuperiorityScorecard({
-  productReplay: options.productReplay ? readJson<ProductReplayComparison>(options.productReplay) : undefined,
-  competitiveReplay: options.competitiveReplay ? readJson<CompetitiveReplayComparison>(options.competitiveReplay) : undefined,
+  productReplay: options.productReplay
+    ? readJson<ProductReplayComparison>(options.productReplay)
+    : undefined,
+  competitiveReplay: options.competitiveReplay
+    ? readJson<CompetitiveReplayComparison>(options.competitiveReplay)
+    : undefined,
   promptPolicy: options.promptPolicy ? readJson(options.promptPolicy) : undefined,
 });
 const outputPath = writeOcSuperiorityScorecard(scorecard);

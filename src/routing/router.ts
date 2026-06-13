@@ -1,7 +1,9 @@
-import { extractEntities, isAmbiguousConceptUsage, isCurrencyCodeUsage } from "./entity-extractor.js";
+import {
+  extractEntities,
+  isAmbiguousConceptUsage,
+  isCurrencyCodeUsage,
+} from "./entity-extractor.js";
 import { classifyWithLegacyRules } from "./legacy-rule-router.js";
-import { buildRouterPrompt } from "./router-prompt.js";
-import { disambiguateSymbols } from "./symbol-disambiguator.js";
 import {
   computeMissingRequiredSlots,
   isDispatchableWorkflow,
@@ -11,6 +13,7 @@ import {
   routeKindFromLegacyRoute,
   selectToolBundles,
 } from "./route-manifest.js";
+import { buildRouterPrompt } from "./router-prompt.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
@@ -22,6 +25,7 @@ import type {
   RouterSlot,
   ToolBundleName,
 } from "./router-types.js";
+import { disambiguateSymbols } from "./symbol-disambiguator.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
 const VALID_ROUTES: readonly RouterRoute[] = ["workflow", "fallback"];
@@ -106,11 +110,19 @@ export function validateRouterOutput(raw: string): RouterOutput {
       : routeKindFromLegacyRoute(route, rawMissingRequired);
 
   if (route === "workflow" || routeKind === "workflow_dispatch") {
-    if (typeof obj.workflow !== "string" || !VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)) {
-      throw new Error(`workflow route requires a valid workflow; got ${JSON.stringify(obj.workflow)}`);
+    if (
+      typeof obj.workflow !== "string" ||
+      !VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)
+    ) {
+      throw new Error(
+        `workflow route requires a valid workflow; got ${JSON.stringify(obj.workflow)}`,
+      );
     }
     workflow = obj.workflow as Exclude<WorkflowType, "unclassified">;
-  } else if (typeof obj.workflow === "string" && VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)) {
+  } else if (
+    typeof obj.workflow === "string" &&
+    VALID_WORKFLOWS.includes(obj.workflow as Exclude<WorkflowType, "unclassified">)
+  ) {
     workflow = obj.workflow as Exclude<WorkflowType, "unclassified">;
   }
 
@@ -120,8 +132,7 @@ export function validateRouterOutput(raw: string): RouterOutput {
   const missing_required = rawMissingRequired;
   const tool_bundles = validateToolBundles(obj.tool_bundles);
   const diagnostics = validateDiagnostics(obj.diagnostics);
-  const reasoning =
-    typeof obj.reasoning === "string" ? obj.reasoning : "";
+  const reasoning = typeof obj.reasoning === "string" ? obj.reasoning : "";
 
   return {
     routeKind,
@@ -157,9 +168,7 @@ function validateEntities(raw: unknown): ExtractedEntities {
     throw new Error("entities must be an object");
   }
   const e = raw as Record<string, unknown>;
-  const symbols = validateStringArray(e.symbols, "entities.symbols").map((s) =>
-    s.toUpperCase(),
-  );
+  const symbols = validateStringArray(e.symbols, "entities.symbols").map((s) => s.toUpperCase());
 
   const out: ExtractedEntities = { symbols };
   if (typeof e.budget === "number") out.budget = e.budget;
@@ -170,10 +179,11 @@ function validateEntities(raw: unknown): ExtractedEntities {
   if (typeof e.riskProfile === "string") out.riskProfile = e.riskProfile;
   if (e.direction === "bullish" || e.direction === "bearish") out.direction = e.direction;
   if (typeof e.dteHint === "string") out.dteHint = e.dteHint;
-  if (e.optionStrategy === "covered_call" || e.optionStrategy === "protective_put") out.optionStrategy = e.optionStrategy;
+  if (e.optionStrategy === "covered_call" || e.optionStrategy === "protective_put")
+    out.optionStrategy = e.optionStrategy;
   if (typeof e.heldSymbol === "string") out.heldSymbol = e.heldSymbol.toUpperCase();
-  const catalystSymbols = validateStringArray(e.catalystSymbols, "entities.catalystSymbols").map((s) =>
-    s.toUpperCase(),
+  const catalystSymbols = validateStringArray(e.catalystSymbols, "entities.catalystSymbols").map(
+    (s) => s.toUpperCase(),
   );
   if (catalystSymbols.length > 0) out.catalystSymbols = catalystSymbols;
   const compareMetrics = validateStringArray(e.compareMetrics, "entities.compareMetrics");
@@ -189,9 +199,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     ...output,
     entities: {
       ...output.entities,
-      symbols: output.entities.symbols.filter((symbol) =>
-        !isAmbiguousConceptUsage(text, symbol),
-      ),
+      symbols: output.entities.symbols.filter((symbol) => !isAmbiguousConceptUsage(text, symbol)),
       budget: output.entities.budget ?? extracted.budget,
       maxPremium: output.entities.maxPremium ?? extracted.maxPremium,
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
@@ -204,21 +212,30 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       shareQuantity: output.entities.shareQuantity ?? extracted.shareQuantity,
       heldSymbol: output.entities.heldSymbol ?? extracted.heldSymbol,
       catalystSymbols: output.entities.catalystSymbols ?? extracted.catalystSymbols,
-      dteHint: output.entities.dteHint ?? (output.workflow === "options_screener" ? extracted.dteHint : undefined),
+      dteHint:
+        output.entities.dteHint ??
+        (output.workflow === "options_screener" ? extracted.dteHint : undefined),
     },
     diagnostics,
   };
 
-  if (next.workflow === "options_screener" && isExistingPositionOptionRequest(text, extracted) && extracted.heldSymbol) {
+  if (
+    next.workflow === "options_screener" &&
+    isExistingPositionOptionRequest(text, extracted) &&
+    extracted.heldSymbol
+  ) {
     const reorderedSymbols = [
       extracted.heldSymbol,
-      ...mergeSymbols(next.entities.symbols, extracted.symbols).filter((symbol) => symbol !== extracted.heldSymbol),
+      ...mergeSymbols(next.entities.symbols, extracted.symbols).filter(
+        (symbol) => symbol !== extracted.heldSymbol,
+      ),
     ];
     if (next.entities.symbols[0] !== extracted.heldSymbol) {
       diagnostics.push({
-        code: extracted.optionStrategy === "protective_put"
-          ? "existing_position_underlying_corrected"
-          : "covered_call_underlying_corrected",
+        code:
+          extracted.optionStrategy === "protective_put"
+            ? "existing_position_underlying_corrected"
+            : "covered_call_underlying_corrected",
         message: `using owned position ${extracted.heldSymbol} as the option-chain underlying`,
       });
     }
@@ -246,7 +263,8 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   ) {
     diagnostics.push({
       code: "options_workflow_corrected_to_policy_task",
-      message: "options education or suitability prompt should use policy-card synthesis, not contract-screen workflow dispatch",
+      message:
+        "options education or suitability prompt should use policy-card synthesis, not contract-screen workflow dispatch",
     });
     next = {
       ...next,
@@ -279,7 +297,10 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         timeHorizon: deterministic.entities.timeHorizon ?? extracted.timeHorizon,
         riskProfile: deterministic.entities.riskProfile ?? extracted.riskProfile,
         assetScope: deterministic.entities.assetScope ?? extracted.assetScope,
-        compareMetrics: mergeStringArrays(deterministic.entities.compareMetrics, extracted.compareMetrics),
+        compareMetrics: mergeStringArrays(
+          deterministic.entities.compareMetrics,
+          extracted.compareMetrics,
+        ),
         direction: deterministic.entities.direction ?? extracted.direction,
         costBasis: deterministic.entities.costBasis ?? extracted.costBasis,
         shareQuantity: deterministic.entities.shareQuantity ?? extracted.shareQuantity,
@@ -321,7 +342,8 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   ) {
     diagnostics.push({
       code: "stateful_tracking_corrected_to_agent_task",
-      message: "portfolio/watchlist tracking mutation should use stateful tracking tools, not compare or construction workflow dispatch",
+      message:
+        "portfolio/watchlist tracking mutation should use stateful tracking tools, not compare or construction workflow dispatch",
     });
     next = {
       ...next,
@@ -373,7 +395,8 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   if (next.workflow === "compare_assets" && isPortfolioEvaluationRequest(text)) {
     diagnostics.push({
       code: "portfolio_evaluation_corrected_to_agent_task",
-      message: "existing portfolio/allocation risk review should not be reduced to asset comparison",
+      message:
+        "existing portfolio/allocation risk review should not be reduced to asset comparison",
     });
     next = {
       ...next,
@@ -405,7 +428,8 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   if (next.workflow === "portfolio_builder" && isCryptoSizingRequest(text)) {
     diagnostics.push({
       code: "crypto_sizing_corrected_to_agent_task",
-      message: "crypto allocation-range and drawdown questions are advisory tradeoffs, not portfolio construction",
+      message:
+        "crypto allocation-range and drawdown questions are advisory tradeoffs, not portfolio construction",
     });
     next = {
       ...next,
@@ -420,7 +444,8 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   if (next.workflow === "portfolio_builder" && isPortfolioEvaluationRequest(text)) {
     diagnostics.push({
       code: "portfolio_evaluation_corrected_to_agent_task",
-      message: "existing portfolio/allocation evaluation does not require portfolio-construction budget",
+      message:
+        "existing portfolio/allocation evaluation does not require portfolio-construction budget",
     });
     next = {
       ...next,
@@ -439,7 +464,8 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
   ) {
     diagnostics.push({
       code: "portfolio_tradeoff_corrected_to_compare_assets",
-      message: "explicit multi-asset tradeoff question should compare the requested assets before constructing a portfolio",
+      message:
+        "explicit multi-asset tradeoff question should compare the requested assets before constructing a portfolio",
     });
     next = {
       ...next,
@@ -451,10 +477,7 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
-  if (
-    next.workflow === "single_asset_analysis" &&
-    isSpecializedSingleAssetPolicyRequest(text)
-  ) {
+  if (next.workflow === "single_asset_analysis" && isSpecializedSingleAssetPolicyRequest(text)) {
     diagnostics.push({
       code: "single_asset_workflow_corrected_to_general_policy_task",
       message: "prompt asks for policy-card planning outside a single-asset buy/sell analysis",
@@ -486,7 +509,10 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
         ...next.entities,
         symbols: disambiguated.kept,
       },
-      slots: removeDroppedSymbolSlots(next.slots, disambiguated.dropped.map((drop) => drop.token)),
+      slots: removeDroppedSymbolSlots(
+        next.slots,
+        disambiguated.dropped.map((drop) => drop.token),
+      ),
       diagnostics,
     };
   }
@@ -522,7 +548,9 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
       message: "conceptual education prompt does not need live finance tools",
     });
   }
-  const emittedUnsupported = next.tool_bundles.filter((bundle) => !selectedToolBundles.includes(bundle));
+  const emittedUnsupported = next.tool_bundles.filter(
+    (bundle) => !selectedToolBundles.includes(bundle),
+  );
   if (emittedUnsupported.length > 0) {
     diagnostics.push({
       code: "tool_bundles_corrected",
@@ -539,22 +567,34 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
 }
 
 function isExplicitMacroDataRequest(text: string): boolean {
-  return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro)\b/i.test(text);
+  return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro)\b/i.test(
+    text,
+  );
 }
 
 function isConceptualEducationRequest(text: string, output: RouterOutput): boolean {
   if (output.routeKind !== "agent_task") return false;
   if (output.entities.symbols.length > 0) return false;
   if (isForwardLookingMacroContextRequest(text)) return false;
-  if (/\b(?:current|recent|today|right now|latest|news|sentiment|build|portfolio|buy|sell|allocate|compare)\b/i.test(text)) {
+  if (
+    /\b(?:current|recent|today|right now|latest|news|sentiment|build|portfolio|buy|sell|allocate|compare)\b/i.test(
+      text,
+    )
+  ) {
     return false;
   }
-  return /\b(?:explain|what is|define|how (?:do|should|to)|teach me|help me understand)\b/i.test(text);
+  return /\b(?:explain|what is|define|how (?:do|should|to)|teach me|help me understand)\b/i.test(
+    text,
+  );
 }
 
 function isForwardLookingMacroContextRequest(text: string): boolean {
-  return /\b(?:rates?|rate\s*cuts?|fed|inflation|macro)\b/i.test(text) &&
-    /\b(?:next\s+(?:year|12\s*months?)|over\s+the\s+next|outlook|affect|impact|falling|rising)\b/i.test(text);
+  return (
+    /\b(?:rates?|rate\s*cuts?|fed|inflation|macro)\b/i.test(text) &&
+    /\b(?:next\s+(?:year|12\s*months?)|over\s+the\s+next|outlook|affect|impact|falling|rising)\b/i.test(
+      text,
+    )
+  );
 }
 
 function isCoveredCallRequest(text: string): boolean {
@@ -564,12 +604,16 @@ function isCoveredCallRequest(text: string): boolean {
 function isPortfolioEvaluationRequest(text: string): boolean {
   const lower = text.toLowerCase();
   const hasEvaluationIntent =
-    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|risky|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(lower);
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|risky|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(
+      lower,
+    );
   const hasPortfolioObject =
-    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
+    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(
+      lower,
+    );
   const hasConstructionIntent =
     /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
-    (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
+    /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
   return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
 }
 
@@ -578,11 +622,15 @@ function isStatefulTrackingRequest(text: string): boolean {
   const hasPortfolioConstructionIntent =
     /\b(?:build|create|construct|put\s+together)\b/.test(lower) &&
     /\bportfolio\b/.test(lower) &&
-    (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
+    /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
   const hasStateVerb =
-    /\b(?:add|remove|update|record|track|create|configure|check|show|list|view|cancel)\b/.test(lower);
+    /\b(?:add|remove|update|record|track|create|configure|check|show|list|view|cancel)\b/.test(
+      lower,
+    );
   const hasStateObject =
-    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(lower);
+    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(
+      lower,
+    );
   const hasPortfolioLotShape =
     /\b(?:add|record|track)\b/.test(lower) &&
     /\b\d+(?:\.\d+)?\s+shares?\b/.test(lower) &&
@@ -604,8 +652,8 @@ function removeCurrencyUnitSymbolSlots(
     const slot = next[key];
     if (!slot) continue;
     if (Array.isArray(slot.value)) {
-      const value = slot.value.filter((item) =>
-        typeof item !== "string" || !isCurrencyCodeUsage(text, item.toUpperCase())
+      const value = slot.value.filter(
+        (item) => typeof item !== "string" || !isCurrencyCodeUsage(text, item.toUpperCase()),
       );
       if (value.length === 0) delete next[key];
       else next[key] = { ...slot, value };
@@ -620,8 +668,11 @@ function removeCurrencyUnitSymbolSlots(
 
 function isPortfolioTradeoffComparisonRequest(text: string): boolean {
   const lower = text.toLowerCase();
-  return /\b(?:prioritize|tradeoffs?|growth[-\s]?oriented|dividend|income|which\s+(?:one|is)\s+better|should\s+i)\b/.test(lower) &&
-    /\b(?:or|vs\.?|versus|compare)\b/.test(lower);
+  return (
+    /\b(?:prioritize|tradeoffs?|growth[-\s]?oriented|dividend|income|which\s+(?:one|is)\s+better|should\s+i)\b/.test(
+      lower,
+    ) && /\b(?:or|vs\.?|versus|compare)\b/.test(lower)
+  );
 }
 
 function isCryptoSizingRequest(text: string): boolean {
@@ -630,16 +681,20 @@ function isCryptoSizingRequest(text: string): boolean {
     /\b(?:build|create|construct|put\s+together)\b/.test(lower) &&
     /\b(?:portfolio|allocation)\b/.test(lower);
   if (hasPortfolioConstructionIntent) return false;
-  return /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
-    /\b(?:allocation|range|position\s+size|sizing|exposure|drawdown)\b/.test(lower);
+  return (
+    /\b(?:btc|bitcoin|crypto)\b/.test(lower) &&
+    /\b(?:allocation|range|position\s+size|sizing|exposure|drawdown)\b/.test(lower)
+  );
 }
 
 function isSpecializedSingleAssetPolicyRequest(text: string): boolean {
   const lower = text.toLowerCase();
-  return /\b(?:ticker|symbol|formerly|old ticker|earnings are|earnings tonight)\b/.test(lower) ||
+  return (
+    /\b(?:ticker|symbol|formerly|old ticker|earnings are|earnings tonight)\b/.test(lower) ||
     /\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower) ||
     /\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower) ||
-    /\b(?:filing|10-k|10-q|8-k|sec)\b/.test(lower);
+    /\b(?:filing|10-k|10-q|8-k|sec)\b/.test(lower)
+  );
 }
 
 function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntities): boolean {
@@ -648,14 +703,23 @@ function isExistingPositionOptionRequest(text: string, extracted: ExtractedEntit
 
 function isOptionsEducationOrSuitabilityRequest(text: string): boolean {
   const lower = text.toLowerCase();
-  return /\b(?:how\s+does|how\s+do|explain|what\s+is|good\s+idea|make\s+sense|suitable|suitability|is\s+it\s+(?:good|worth|smart))\b/.test(lower) &&
-    /\b(?:covered\s+calls?|protective\s+puts?|options?|selling\s+calls?|option\s+income)\b/.test(lower);
+  return (
+    /\b(?:how\s+does|how\s+do|explain|what\s+is|good\s+idea|make\s+sense|suitable|suitability|is\s+it\s+(?:good|worth|smart))\b/.test(
+      lower,
+    ) &&
+    /\b(?:covered\s+calls?|protective\s+puts?|options?|selling\s+calls?|option\s+income)\b/.test(
+      lower,
+    )
+  );
 }
 
 function isSpecificOptionContractSelectionRequest(text: string): boolean {
   const lower = text.toLowerCase();
-  return /\b(?:best|which|what\s+(?:strike|contract|option)|rank|screen|specific|right\s+now|today|around\s+earnings|expiration|dte|premium\s+under)\b/.test(lower) &&
-    /\b(?:sell|buy|trade|contract|strike|expiration|premium|call|put)\b/.test(lower);
+  return (
+    /\b(?:best|which|what\s+(?:strike|contract|option)|rank|screen|specific|right\s+now|today|around\s+earnings|expiration|dte|premium\s+under)\b/.test(
+      lower,
+    ) && /\b(?:sell|buy|trade|contract|strike|expiration|premium|call|put)\b/.test(lower)
+  );
 }
 
 function mergeSymbols(primary: string[], secondary: string[]): string[] {
@@ -733,7 +797,9 @@ function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {
     // (normalized), but any explicit non-"inferred" value is an invariant
     // violation the caller should see rather than silently lose.
     if (p.source !== undefined && p.source !== "inferred") {
-      throw new Error(`preference_updates[${idx}].source must be "inferred" (got ${JSON.stringify(p.source)})`);
+      throw new Error(
+        `preference_updates[${idx}].source must be "inferred" (got ${JSON.stringify(p.source)})`,
+      );
     }
     return {
       key: p.key,
@@ -799,7 +865,11 @@ function validateDiagnostics(raw: unknown): RouterDiagnostic[] {
       code: diagnostic.code,
       message: diagnostic.message,
     };
-    if (diagnostic.details && typeof diagnostic.details === "object" && !Array.isArray(diagnostic.details)) {
+    if (
+      diagnostic.details &&
+      typeof diagnostic.details === "object" &&
+      !Array.isArray(diagnostic.details)
+    ) {
       out.details = diagnostic.details as Record<string, unknown>;
     }
     return out;

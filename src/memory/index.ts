@@ -1,10 +1,10 @@
-export { initDatabase, initDefaultDatabase, getTableNames, getSchemaVersion } from "./sqlite.js";
-export { MemoryStorage } from "./storage.js";
-export type { WorkflowPreferences } from "./storage.js";
-export { buildMemoryContext } from "./retrieval.js";
-export { extractPreferences } from "./preference-extractor.js";
 export { MemoryManager } from "./manager.js";
-export { getAllDefaults, getDefaults, setDefault, clearDefault } from "./tool-defaults.js";
+export { extractPreferences } from "./preference-extractor.js";
+export { buildMemoryContext } from "./retrieval.js";
+export { getSchemaVersion, getTableNames, initDatabase, initDefaultDatabase } from "./sqlite.js";
+export type { WorkflowPreferences } from "./storage.js";
+export { MemoryStorage } from "./storage.js";
 export type { ToolDefaults } from "./tool-defaults.js";
+export { clearDefault, getAllDefaults, getDefaults, setDefault } from "./tool-defaults.js";
 export type { MemoryCategory, MemoryEntry } from "./types.js";
-export { isStale, STALENESS_THRESHOLDS, NEVER_TRUST_FROM_MEMORY } from "./types.js";
+export { isStale, NEVER_TRUST_FROM_MEMORY, STALENESS_THRESHOLDS } from "./types.js";

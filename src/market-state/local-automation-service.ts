@@ -1,13 +1,17 @@
 import type Database from "better-sqlite3";
 import {
-  defaultAlertRunnerProviders,
-  runAlertChecks,
   type AlertRunnerProviders,
   type AlertRunnerResult,
+  defaultAlertRunnerProviders,
+  runAlertChecks,
 } from "./alert-runner.js";
 import { nextDailyReportRunAt, recordDailyWatchlistReportRun } from "./daily-report.js";
-import { MarketStateService, type AutomationRunnerLeaseResult, type ReportRunRecord } from "./service.js";
 import { deliverPendingNotifications } from "./notification-delivery.js";
+import {
+  type AutomationRunnerLeaseResult,
+  MarketStateService,
+  type ReportRunRecord,
+} from "./service.js";
 
 type DailyReportRunRecorder = typeof recordDailyWatchlistReportRun;
 type NotificationDeliverer = typeof deliverPendingNotifications;
@@ -51,13 +55,14 @@ export async function runLocalAutomationHeartbeat(
       return { lease, alertCheck: null, reportRuns: [] };
     }
 
-    const reportRuns = params.checkReports === false
-      ? []
-      : await runDueReports(service, {
-          ownerId: params.ownerId,
-          now,
-          recordDailyReportRun: params.recordDailyReportRun ?? recordDailyWatchlistReportRun,
-        });
+    const reportRuns =
+      params.checkReports === false
+        ? []
+        : await runDueReports(service, {
+            ownerId: params.ownerId,
+            now,
+            recordDailyReportRun: params.recordDailyReportRun ?? recordDailyWatchlistReportRun,
+          });
     if (params.checkAlerts === false || !hasDueAlertRules(service, now)) {
       await (params.deliverNotifications ?? deliverPendingNotifications)(service, { now });
       return { lease, alertCheck: null, reportRuns };
@@ -96,12 +101,15 @@ async function runDueReports(
   params: { ownerId: string; now: string; recordDailyReportRun: DailyReportRunRecorder },
 ): Promise<ReportRunRecord[]> {
   const nowMs = new Date(params.now).getTime();
-  const dueTemplates = service.listReportTemplates().filter((template) =>
-    template.enabled &&
-    template.reportType === "watchlist_daily" &&
-    template.nextRunAt != null &&
-    new Date(template.nextRunAt).getTime() <= nowMs
-  );
+  const dueTemplates = service
+    .listReportTemplates()
+    .filter(
+      (template) =>
+        template.enabled &&
+        template.reportType === "watchlist_daily" &&
+        template.nextRunAt != null &&
+        new Date(template.nextRunAt).getTime() <= nowMs,
+    );
   const runs: ReportRunRecord[] = [];
   for (const template of dueTemplates) {
     const scheduledFor = template.nextRunAt;

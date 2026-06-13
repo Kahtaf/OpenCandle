@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SentinelRecord } from "../types.js";
 import type { FinnhubArticle } from "../../providers/finnhub.js";
 import { extractEntities } from "../../routing/entity-extractor.js";
+import type { SentinelRecord } from "../types.js";
 
 const MAX_TICKERS = 3;
 
@@ -31,7 +31,12 @@ export class FinnhubAdapter {
         score: 0,
         confidence: 0,
         method: "keyword" as const,
-        tickers: article.related ? article.related.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        tickers: article.related
+          ? article.related
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : [],
       },
       metadata: { category: article.category },
     }));

@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  resolvePortfolioSlots,
   resolveOptionsScreenerSlots,
+  resolvePortfolioSlots,
 } from "../../../src/routing/slot-resolver.js";
 import type { ExtractedEntities } from "../../../src/routing/types.js";
 

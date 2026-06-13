@@ -1,14 +1,14 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { httpGet } from "../../../src/infra/http-client.js";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import type { StockQuote } from "../../../src/types/market.js";
-import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { httpGet } from "../../../src/infra/http-client.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
+import type { StockQuote } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
@@ -26,7 +26,9 @@ describe("portfolioTrackerTool", () => {
     cache.clear();
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-portfolio-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
-    vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol.toUpperCase(), 300));
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol.toUpperCase(), 300),
+    );
     vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
 
@@ -61,23 +63,30 @@ describe("portfolioTrackerTool", () => {
   });
 
   it("rejects zero shares and cost as invalid instead of treating them as missing", async () => {
-    await expect(portfolioTrackerTool.execute("test", {
-      action: "add",
-      symbol: "VTI",
-      shares: 0,
-      avg_cost: 250,
-    })).rejects.toThrow("shares must be greater than 0");
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "add",
+        symbol: "VTI",
+        shares: 0,
+        avg_cost: 250,
+      }),
+    ).rejects.toThrow("shares must be greater than 0");
 
-    await expect(portfolioTrackerTool.execute("test", {
-      action: "add",
-      symbol: "VTI",
-      shares: 1,
-      avg_cost: 0,
-    })).rejects.toThrow("avg_cost must be greater than 0");
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "add",
+        symbol: "VTI",
+        shares: 1,
+        avg_cost: 0,
+      }),
+    ).rejects.toThrow("avg_cost must be greater than 0");
   });
 
   it("ignores pre-existing portfolio.json as a state source", async () => {
-    writeFileSync(join(openCandleHome, "portfolio.json"), JSON.stringify([{ symbol: "VTI", shares: 2 }]));
+    writeFileSync(
+      join(openCandleHome, "portfolio.json"),
+      JSON.stringify([{ symbol: "VTI", shares: 2 }]),
+    );
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
@@ -127,7 +136,22 @@ describe("portfolioTrackerTool", () => {
          source_row_id, source_metadata_json, created_at, updated_at
        )
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(portfolio.id, instrument.id, 2, 0, "USD", now, null, null, null, null, null, null, now, now);
+    ).run(
+      portfolio.id,
+      instrument.id,
+      2,
+      0,
+      "USD",
+      now,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      now,
+      now,
+    );
     db.close();
     vi.mocked(getQuote).mockResolvedValue(quote("VTI", 300));
 
@@ -149,15 +173,19 @@ describe("portfolioTrackerTool", () => {
       shares: 2,
       avg_cost: 250,
     });
-    vi.mocked(getQuote).mockResolvedValue(quote("VTI", 0, {
-      volume: 0,
-      week52High: 0,
-      week52Low: 0,
-    }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("VTI", 0, {
+        volume: 0,
+        week52High: 0,
+        week52Low: 0,
+      }),
+    );
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
-    expect(result.content[0].text).toContain("Quote unavailable: Yahoo returned no valid market data.");
+    expect(result.content[0].text).toContain(
+      "Quote unavailable: Yahoo returned no valid market data.",
+    );
     expect(result.details).toMatchObject({
       totalValue: 0,
       totalCost: 0,
@@ -194,7 +222,9 @@ describe("portfolioTrackerTool", () => {
 
     const result = await portfolioTrackerTool.execute("test", { action: "view" });
 
-    expect(result.content[0].text).toContain("Quote unavailable: provider returned stale market data");
+    expect(result.content[0].text).toContain(
+      "Quote unavailable: provider returned stale market data",
+    );
     expect(result.details).toMatchObject({
       totalValue: 0,
       totalCost: 0,
@@ -431,7 +461,9 @@ describe("portfolioTrackerTool", () => {
   });
 
   it("returns candidate matches for an unverified add without mutating the portfolio", async () => {
-    vi.mocked(getQuote).mockResolvedValue(quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
+    );
     vi.mocked(httpGet).mockResolvedValue({
       quotes: [
         {
@@ -455,9 +487,7 @@ describe("portfolioTrackerTool", () => {
     expect(result.details).toMatchObject({
       status: "needs_selection",
       query: "APL",
-      candidates: [
-        expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
-      ],
+      candidates: [expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." })],
     });
 
     const view = await portfolioTrackerTool.execute("test", { action: "view" });

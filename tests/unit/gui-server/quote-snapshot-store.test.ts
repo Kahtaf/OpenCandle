@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { QuoteSnapshotStore } from "../../../gui/server/quote-snapshot-store.js";
+import { describe, expect, it } from "vitest";
 import type { MarketStateQuoteSnapshot } from "../../../gui/server/market-state-api.js";
+import { QuoteSnapshotStore } from "../../../gui/server/quote-snapshot-store.js";
 
 function snapshot(generatedAt: string): MarketStateQuoteSnapshot {
   return {

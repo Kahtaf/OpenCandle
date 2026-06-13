@@ -1,13 +1,12 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { initDefaultDatabase } from "../../memory/sqlite.js";
+import { Type } from "@sinclair/typebox";
 import { MarketStateService } from "../../market-state/service.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
 
 const params = Type.Object({
-  action: Type.Union(
-    [Type.Literal("list"), Type.Literal("acknowledge")],
-    { description: "One of: list, acknowledge. Use acknowledge with id to mark a notification read." },
-  ),
+  action: Type.Union([Type.Literal("list"), Type.Literal("acknowledge")], {
+    description: "One of: list, acknowledge. Use acknowledge with id to mark a notification read.",
+  }),
   id: Type.Optional(Type.Number({ description: "Notification id for acknowledge." })),
 });
 

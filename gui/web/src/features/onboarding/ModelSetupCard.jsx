@@ -31,10 +31,15 @@ function ModelSetupHeader({ variant, hasReady }) {
   if (variant === "first-run") {
     return (
       <div className="grid gap-2">
-        <Badge variant="success" className="w-fit">First run</Badge>
-        <h2 className="m-0 text-2xl font-semibold tracking-tight text-foreground">Connect an AI model</h2>
+        <Badge variant="success" className="w-fit">
+          First run
+        </Badge>
+        <h2 className="m-0 text-2xl font-semibold tracking-tight text-foreground">
+          Connect an AI model
+        </h2>
         <p className="m-0 text-sm leading-relaxed text-muted-foreground">
-          OpenCandle needs one model key before chat can run. The key is saved in Pi&apos;s local auth store and used only for the selected provider.
+          OpenCandle needs one model key before chat can run. The key is saved in Pi&apos;s local
+          auth store and used only for the selected provider.
         </p>
       </div>
     );
@@ -79,18 +84,24 @@ function ModelSetupBody({ modelSetup, send, setToast }) {
           >
             <option value="">Choose model</option>
             {availableModels.map((model) => (
-              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>{model.label}</option>
+              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                {model.label}
+              </option>
             ))}
           </select>
         </label>
       ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {providers.map((provider) => (
-          <div className="grid content-start gap-3 rounded-md border border-border bg-secondary p-3" key={provider.id}>
+          <div
+            className="grid content-start gap-3 rounded-md border border-border bg-secondary p-3"
+            key={provider.id}
+          >
             <div>
               <h3 className="m-0 mb-1 text-sm font-semibold text-foreground">{provider.label}</h3>
               <p className="m-0 text-xs leading-5 text-muted-foreground">
-                Uses <code>{provider.envVar}</code> or a saved local key. Default model: <code>{provider.defaultModel}</code>.
+                Uses <code>{provider.envVar}</code> or a saved local key. Default model:{" "}
+                <code>{provider.defaultModel}</code>.
               </p>
             </div>
             <label className="grid gap-1.5" htmlFor={`${provider.id}-api-key`}>
@@ -100,22 +111,35 @@ function ModelSetupBody({ modelSetup, send, setToast }) {
                 type="password"
                 name={`${provider.id}-api-key`}
                 value={keys[provider.id] || ""}
-                onChange={(event) => setKeys((current) => ({ ...current, [provider.id]: event.target.value }))}
+                onChange={(event) =>
+                  setKeys((current) => ({ ...current, [provider.id]: event.target.value }))
+                }
                 autoComplete="off"
                 placeholder={`${provider.label} API key`}
                 spellCheck={false}
               />
             </label>
             <div className="flex flex-wrap gap-2">
-              <Button variant="brand" size="sm" onClick={() => saveKey(provider.id)}>Save key</Button>
-              <Button asChild variant="bordered" size="sm"><a href={provider.signupUrl} target="_blank" rel="noreferrer">Get key</a></Button>
+              <Button variant="brand" size="sm" onClick={() => saveKey(provider.id)}>
+                Save key
+              </Button>
+              <Button asChild variant="bordered" size="sm">
+                <a href={provider.signupUrl} target="_blank" rel="noreferrer">
+                  Get key
+                </a>
+              </Button>
             </div>
           </div>
         ))}
       </div>
       <div className="flex flex-col items-stretch justify-between gap-3 border-t border-border pt-4 text-sm leading-relaxed text-muted-foreground sm:flex-row sm:items-center">
-        <span className="text-xs">Prefer the terminal? Run <code>/login</code> or export an API key, then refresh this panel.</span>
-        <Button variant="bordered" size="sm" onClick={() => send?.("model.setup.refresh")}>Refresh</Button>
+        <span className="text-xs">
+          Prefer the terminal? Run <code>/login</code> or export an API key, then refresh this
+          panel.
+        </span>
+        <Button variant="bordered" size="sm" onClick={() => send?.("model.setup.refresh")}>
+          Refresh
+        </Button>
       </div>
     </>
   );

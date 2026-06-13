@@ -1,8 +1,8 @@
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { ExternalLink } from "lucide-react";
+import { cn } from "../../lib/utils.js";
 import { Favicon } from "./favicon.jsx";
 import { hostFrom, shortHost } from "./favicon-utils.js";
-import { cn } from "../../lib/utils.js";
 
 // Compact pill: favicon + hostname. Clickable when given a url; the surrounding
 // HoverCard supplies the rich preview (title/snippet) lazily.
@@ -43,8 +43,16 @@ export function SourcePill({ url, label, title, snippet, className, onClick }) {
               <span className="truncate">{hostFrom(url)}</span>
               {url ? <ExternalLink className="ml-auto h-3 w-3" aria-hidden="true" /> : null}
             </div>
-            {title ? <div className="mt-1.5 line-clamp-2 text-[13px] font-medium text-foreground">{title}</div> : null}
-            {snippet ? <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">{snippet}</div> : null}
+            {title ? (
+              <div className="mt-1.5 line-clamp-2 text-[13px] font-medium text-foreground">
+                {title}
+              </div>
+            ) : null}
+            {snippet ? (
+              <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+                {snippet}
+              </div>
+            ) : null}
           </Tooltip.Content>
         </Tooltip.Portal>
       </Tooltip.Root>

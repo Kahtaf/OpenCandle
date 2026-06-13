@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import type { EvalTrace } from "../../evals/types.js";
+import { describe, expect, it } from "vitest";
 import { evaluateFinalAnswerAssertion } from "../../evals/prompt-policy-assertions.js";
+import type { EvalTrace } from "../../evals/types.js";
 
 describe("prompt-policy final answer assertions", () => {
   it("fails unregistered hard assertions instead of treating them as passing evidence", () => {
@@ -15,7 +15,9 @@ describe("prompt-policy final answer assertions", () => {
   });
 
   it("registers deterministic checkers for every migration-manifest hard assertion", () => {
-    const manifest = JSON.parse(readFileSync("docs/internal/prompt-to-policy-migration-manifest.json", "utf-8")) as {
+    const manifest = JSON.parse(
+      readFileSync("docs/internal/prompt-to-policy-migration-manifest.json", "utf-8"),
+    ) as {
       prompts: Array<{ expected: { finalAnswerHardAssertions?: string[] } }>;
     };
     const unregistered: string[] = [];
@@ -35,7 +37,10 @@ describe("prompt-policy final answer assertions", () => {
   it("checks portfolio-construction routing without broad budget-text matching", () => {
     const result = evaluateFinalAnswerAssertion(
       "does not route as portfolio construction requiring a budget",
-      trace("Budget can be relevant after this comparison, but this is not a construction request.", "compare_assets"),
+      trace(
+        "Budget can be relevant after this comparison, but this is not a construction request.",
+        "compare_assets",
+      ),
     );
 
     expect(result.passed).toBe(true);
@@ -46,7 +51,9 @@ describe("prompt-policy final answer assertions", () => {
       "states the ticker could not be verified if lookup fails",
       {
         ...trace("Which company or ticker did you mean by ZZZZ?"),
-        askUserTranscript: [{ question: "Which company or ticker did you mean by ZZZZ?", answer: null }],
+        askUserTranscript: [
+          { question: "Which company or ticker did you mean by ZZZZ?", answer: null },
+        ],
       },
     );
 

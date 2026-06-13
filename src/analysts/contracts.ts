@@ -1,22 +1,19 @@
-import type { AnalystOutput, AnalystSignal, DebateSide, DebateOutput } from "../runtime/workflow-types.js";
 import type { EvidenceRecord } from "../runtime/evidence.js";
+import type {
+  AnalystOutput,
+  AnalystSignal,
+  DebateOutput,
+  DebateSide,
+} from "../runtime/workflow-types.js";
 
 /** All analyst roles. */
-export type AnalystRole =
-  | "valuation"
-  | "momentum"
-  | "options"
-  | "contrarian"
-  | "risk";
+export type AnalystRole = "valuation" | "momentum" | "options" | "contrarian" | "risk";
 
 /**
  * Parse an LLM response into a structured AnalystOutput.
  * Falls back to raw text if parsing fails.
  */
-export function parseAnalystOutput(
-  role: string,
-  responseText: string,
-): AnalystOutput {
+export function parseAnalystOutput(role: string, responseText: string): AnalystOutput {
   const signal = extractSignal(responseText);
   const conviction = extractConviction(responseText);
   const thesis = extractThesis(responseText);
@@ -82,9 +79,8 @@ export function tallyVotes(outputs: AnalystOutput[]): {
     weightedSum += signalValue * output.conviction;
   }
 
-  const weightedConviction = totalWeight > 0
-    ? Math.round((totalWeight / outputs.length) * 10) / 10
-    : 0;
+  const weightedConviction =
+    totalWeight > 0 ? Math.round((totalWeight / outputs.length) * 10) / 10 : 0;
 
   let verdict: AnalystSignal;
   if (weightedSum > 0) verdict = "BUY";

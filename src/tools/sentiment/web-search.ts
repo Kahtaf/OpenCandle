@@ -1,16 +1,17 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { searchWeb } from "../../providers/web-search.js";
-import type { WebSearchEnvelope } from "../../types/sentiment.js";
+import { Type } from "@sinclair/typebox";
 import { hasCredential } from "../../onboarding/providers.js";
 import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
+import { searchWeb } from "../../providers/web-search.js";
+import type { WebSearchEnvelope } from "../../types/sentiment.js";
 import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Search query — ticker, topic, or question" }),
   category: Type.Optional(
     Type.Union([Type.Literal("news"), Type.Literal("general")], {
-      description: 'Search category. "news" for recent articles, "general" for broader web. Default: "news"',
+      description:
+        'Search category. "news" for recent articles, "general" for broader web. Default: "news"',
     }),
   ),
   freshness: Type.Optional(
@@ -80,21 +81,28 @@ function buildOfficialSourceGapPrefix(query: string, data: WebSearchEnvelope): s
   if (!hasOfficialFedSourceGap(query, data)) return "";
 
   return [
-    "[OPENCANDLE_SOURCE_GAP source=fed_official evidence=missing remediation=\"verify against federalreserve.gov/FOMC before stating Fed announcements\"]",
+    '[OPENCANDLE_SOURCE_GAP source=fed_official evidence=missing remediation="verify against federalreserve.gov/FOMC before stating Fed announcements"]',
     "Hard source gap: no official Fed/FOMC source was returned. Do not present meeting announcements, votes, quotes, appointments, leadership changes, or named policy rationales as verified; treat results as market commentary only.",
     "",
   ].join("\n");
 }
 
 function hasOfficialFedSourceGap(query: string, data: WebSearchEnvelope): boolean {
-  return isFedAnnouncementQuery(query) &&
-    !data.results.some((result) => isOfficialFedSource(result.source) || isOfficialFedSource(result.url));
+  return (
+    isFedAnnouncementQuery(query) &&
+    !data.results.some(
+      (result) => isOfficialFedSource(result.source) || isOfficialFedSource(result.url),
+    )
+  );
 }
 
 function isFedAnnouncementQuery(query: string): boolean {
   const lower = query.toLowerCase();
   const mentionsFed = /\b(?:fed|fomc|federal reserve)\b/.test(lower);
-  const asksOfficialFact = /\b(?:announcement|meeting|minutes|statement|decision|vote|chair|governor|appointment|leadership)\b/.test(lower);
+  const asksOfficialFact =
+    /\b(?:announcement|meeting|minutes|statement|decision|vote|chair|governor|appointment|leadership)\b/.test(
+      lower,
+    );
   return mentionsFed && asksOfficialFact;
 }
 
@@ -150,9 +158,7 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
       };
     }
 
-    const stalePrefix = result.stale
-      ? `⚠ Using cached data from ${result.timestamp}\n\n`
-      : "";
+    const stalePrefix = result.stale ? `⚠ Using cached data from ${result.timestamp}\n\n` : "";
 
     const softDegradedPrefix = buildSoftDegradedPrefix(data);
     const sourceGapPrefix = buildOfficialSourceGapPrefix(query, data);

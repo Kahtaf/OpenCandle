@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import type { WebSearchResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
+import { describe, expect, it } from "vitest";
+import type { WebSearchEnvelope, WebSearchResult } from "../../../src/types/sentiment.js";
 
 describe("WebSearchResult", () => {
   it("accepts a valid news result with all fields", () => {

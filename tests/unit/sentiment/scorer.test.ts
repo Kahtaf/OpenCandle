@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { keywordScore, scoreRecords } from "../../../src/sentiment/scorer.js";
 import type { SentinelRecord } from "../../../src/sentiment/types.js";
 

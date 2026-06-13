@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as configModule from "../../../src/config.js";
 import { withCredentialCheck } from "../../../src/onboarding/tool-helpers.js";
-import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 import { parseToolTag } from "../../../src/onboarding/tool-tags.js";
+import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 
 const EMPTY_CONFIG = {
   alphaVantageApiKey: undefined,
@@ -66,9 +66,7 @@ describe("withCredentialCheck — upfront missing check", () => {
 describe("withCredentialCheck — catches ProviderCredentialError from fn", () => {
   it("catches missing-reason error thrown by fn and emits tagged content", async () => {
     mockConfig({ fredApiKey: "stale-key" }); // upfront check passes
-    const fn = vi.fn().mockRejectedValue(
-      new ProviderCredentialError("fred", "missing"),
-    );
+    const fn = vi.fn().mockRejectedValue(new ProviderCredentialError("fred", "missing"));
 
     const result = await withCredentialCheck("fred", fn);
 
@@ -82,9 +80,7 @@ describe("withCredentialCheck — catches ProviderCredentialError from fn", () =
 
   it("catches stale-reason error and preserves httpStatus in the tag", async () => {
     mockConfig({ finnhubApiKey: "stale-key" });
-    const fn = vi.fn().mockRejectedValue(
-      new ProviderCredentialError("finnhub", "stale", 401),
-    );
+    const fn = vi.fn().mockRejectedValue(new ProviderCredentialError("finnhub", "stale", 401));
 
     const result = await withCredentialCheck("finnhub", fn);
 

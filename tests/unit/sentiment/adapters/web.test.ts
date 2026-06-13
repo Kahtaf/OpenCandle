@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { WebAdapter } from "../../../../src/sentiment/adapters/web.js";
 import type { WebSearchEnvelope } from "../../../../src/types/sentiment.js";
 

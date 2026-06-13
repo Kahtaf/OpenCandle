@@ -1,10 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { initDefaultDatabase } from "../../memory/sqlite.js";
-import { MarketStateService, type AlertRuleRecord } from "../../market-state/service.js";
-import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
-import { defaultAlertRunnerProviders, runAlertChecks } from "../../market-state/alert-runner.js";
-import { deliverPendingNotifications } from "../../market-state/notification-delivery.js";
+import { Type } from "@sinclair/typebox";
 import {
   ALERT_CONDITION_VERSION,
   percentMove,
@@ -15,6 +10,11 @@ import {
   smaCross,
   volumeSpike,
 } from "../../market-state/alert-conditions.js";
+import { defaultAlertRunnerProviders, runAlertChecks } from "../../market-state/alert-runner.js";
+import { deliverPendingNotifications } from "../../market-state/notification-delivery.js";
+import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
+import { type AlertRuleRecord, MarketStateService } from "../../market-state/service.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
 
 const ACTION_DESCRIPTION = [
   "One of: create_price_above, create_price_below, create_price_above_sma,",
@@ -54,12 +54,34 @@ const params = Type.Object({
     { description: ACTION_DESCRIPTION },
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol for create actions" })),
-  threshold: Type.Optional(Type.Number({ description: "Price or indicator threshold for create actions" })),
-  period: Type.Optional(Type.Integer({ minimum: 1, description: "Indicator lookback period for SMA/RSI alerts. Max: 200 for price-SMA, 100 for RSI/volume alerts" })),
-  fast_period: Type.Optional(Type.Integer({ minimum: 1, description: "Fast SMA lookback period for SMA-cross alerts. Default: 50" })),
-  slow_period: Type.Optional(Type.Integer({ minimum: 1, maximum: 400, description: "Slow SMA lookback period for SMA-cross alerts. Default: 200, max: 400" })),
+  threshold: Type.Optional(
+    Type.Number({ description: "Price or indicator threshold for create actions" }),
+  ),
+  period: Type.Optional(
+    Type.Integer({
+      minimum: 1,
+      description:
+        "Indicator lookback period for SMA/RSI alerts. Max: 200 for price-SMA, 100 for RSI/volume alerts",
+    }),
+  ),
+  fast_period: Type.Optional(
+    Type.Integer({
+      minimum: 1,
+      description: "Fast SMA lookback period for SMA-cross alerts. Default: 50",
+    }),
+  ),
+  slow_period: Type.Optional(
+    Type.Integer({
+      minimum: 1,
+      maximum: 400,
+      description: "Slow SMA lookback period for SMA-cross alerts. Default: 200, max: 400",
+    }),
+  ),
   cooldown_seconds: Type.Optional(
-    Type.Integer({ minimum: 0, description: "Cooldown between repeated trigger events. Default: 3600" }),
+    Type.Integer({
+      minimum: 0,
+      description: "Cooldown between repeated trigger events. Default: 3600",
+    }),
   ),
   id: Type.Optional(Type.Number({ description: "Alert rule id for update actions" })),
   enabled: Type.Optional(Type.Boolean({ description: "Whether an alert rule is enabled" })),
@@ -227,17 +249,23 @@ export const alertsTool: AgentTool<typeof params> = {
         const fastPeriod = args.fast_period ?? 50;
         const slowPeriod = args.slow_period ?? 200;
         if (!Number.isInteger(fastPeriod) || !Number.isInteger(slowPeriod)) {
-          throw new Error("fast_period and slow_period must be whole-number lookback periods for SMA-cross alert actions.");
+          throw new Error(
+            "fast_period and slow_period must be whole-number lookback periods for SMA-cross alert actions.",
+          );
         }
         if (fastPeriod <= 0 || slowPeriod <= 0) {
-          throw new Error("fast_period and slow_period must be greater than 0 for SMA-cross alert actions.");
+          throw new Error(
+            "fast_period and slow_period must be greater than 0 for SMA-cross alert actions.",
+          );
         }
         if (fastPeriod >= slowPeriod) {
           throw new Error("fast_period must be less than slow_period for SMA-cross alert actions.");
         }
         // Runner evaluates sma_cross against 2y of daily bars (~504).
         if (slowPeriod > 400) {
-          throw new Error("slow_period must be at most 400 so alert checks can evaluate it against the runner's 2y daily history window.");
+          throw new Error(
+            "slow_period must be at most 400 so alert checks can evaluate it against the runner's 2y daily history window.",
+          );
         }
         const resolution = await resolveInstrumentForMutation(args.symbol);
         if (resolution.status === "needs_selection") return candidateResult(resolution, "alert");
@@ -267,7 +295,8 @@ export const alertsTool: AgentTool<typeof params> = {
         }
         const lines = ["**Alerts** — local runner eligible; manual checks available", ""];
         for (const rule of rules) {
-          const instrument = rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
+          const instrument =
+            rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
           lines.push(
             `  #${rule.id} ${instrument?.symbol ?? "watchlist"} ${rule.conditionType} (${rule.enabled ? "enabled" : "disabled"})`,
           );
@@ -305,18 +334,22 @@ export const alertsTool: AgentTool<typeof params> = {
         const rule = service.setAlertRuleEnabled(args.id, args.enabled);
         if (rule == null) {
           return {
-            content: [{
-              type: "text",
-              text: `Alert #${args.id} not found. Use the list action to see alert ids.`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Alert #${args.id} not found. Use the list action to see alert ids.`,
+              },
+            ],
             details: null,
           };
         }
         return {
-          content: [{
-            type: "text",
-            text: `${rule.enabled ? "Enabled" : "Disabled"} alert #${rule.id}.`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `${rule.enabled ? "Enabled" : "Disabled"} alert #${rule.id}.`,
+            },
+          ],
           details: rule,
         };
       }
@@ -334,10 +367,14 @@ export const alertsTool: AgentTool<typeof params> = {
 
 function validateLookbackPeriod(period: number, maxPeriod: number): number {
   if (!Number.isInteger(period) || period <= 0) {
-    throw new Error("period must be a whole-number lookback period greater than 0 for indicator alert actions.");
+    throw new Error(
+      "period must be a whole-number lookback period greater than 0 for indicator alert actions.",
+    );
   }
   if (period > maxPeriod) {
-    throw new Error(`period must be at most ${maxPeriod} so alert checks can evaluate it against the runner's daily history window.`);
+    throw new Error(
+      `period must be at most ${maxPeriod} so alert checks can evaluate it against the runner's daily history window.`,
+    );
   }
   return period;
 }
@@ -355,8 +392,11 @@ async function checkAlerts(service: MarketStateService): Promise<{
   triggered: number;
   lines: string[];
 }> {
-  const enabled = service.listAlertRules().filter((rule) => rule.enabled && rule.status === "active");
-  if (enabled.length === 0) return { checked: 0, triggered: 0, lines: ["No enabled alert rules to check."] };
+  const enabled = service
+    .listAlertRules()
+    .filter((rule) => rule.enabled && rule.status === "active");
+  if (enabled.length === 0)
+    return { checked: 0, triggered: 0, lines: ["No enabled alert rules to check."] };
 
   const result = await runAlertChecks(service, {
     ownerId: "manual-tool",
@@ -367,16 +407,28 @@ async function checkAlerts(service: MarketStateService): Promise<{
   return {
     checked: result.checked,
     triggered: result.triggered,
-    lines: [`**Manual Alert Check** — ${enabled.length} rule(s)`, "", ...result.lines.map((line) => `  ${line}`)],
+    lines: [
+      `**Manual Alert Check** — ${enabled.length} rule(s)`,
+      "",
+      ...result.lines.map((line) => `  ${line}`),
+    ],
   };
 }
 
-function candidateResult(resolution: Extract<Awaited<ReturnType<typeof resolveInstrumentForMutation>>, { status: "needs_selection" }>, target: string) {
+function candidateResult(
+  resolution: Extract<
+    Awaited<ReturnType<typeof resolveInstrumentForMutation>>,
+    { status: "needs_selection" }
+  >,
+  target: string,
+) {
   return {
-    content: [{
-      type: "text" as const,
-      text: `Could not verify ${resolution.query}. Choose one of the returned candidates before creating the ${target}.`,
-    }],
+    content: [
+      {
+        type: "text" as const,
+        text: `Could not verify ${resolution.query}. Choose one of the returned candidates before creating the ${target}.`,
+      },
+    ],
     details: resolution,
   };
 }

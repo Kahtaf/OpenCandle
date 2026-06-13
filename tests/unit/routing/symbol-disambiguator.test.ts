@@ -25,10 +25,7 @@ describe("disambiguateSymbols", () => {
   });
 
   it("keeps acronym tickers when a local ticker phrase marks the token", () => {
-    const result = disambiguateSymbols(
-      ["KO", "IV", "PEP"],
-      "compare KO, the IV ticker, and PEP",
-    );
+    const result = disambiguateSymbols(["KO", "IV", "PEP"], "compare KO, the IV ticker, and PEP");
 
     expect(result.kept).toEqual(["KO", "IV", "PEP"]);
     expect(result.dropped).toEqual([]);

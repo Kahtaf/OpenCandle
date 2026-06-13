@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import ddgGeneralFixture from "../../fixtures/web-search/ddg-general.json";
@@ -12,18 +12,18 @@ vi.mock("duck-duck-scrape", () => ({
   SearchTimeType: { ALL: "a", DAY: "d", WEEK: "w", MONTH: "m", YEAR: "y" },
 }));
 
-import { search, searchNews, SafeSearchType, SearchTimeType } from "duck-duck-scrape";
-import {
-  ddgSearch,
-  braveSearch,
-  searchWeb,
-  normalizeFinancialQuery,
-} from "../../../src/providers/web-search.js";
-import { exaSearch } from "../../../src/providers/exa-search.js";
-import { httpGet } from "../../../src/infra/http-client.js";
+import { SafeSearchType, SearchTimeType, search, searchNews } from "duck-duck-scrape";
 import { getConfig } from "../../../src/config.js";
-import braveNewsFixture from "../../fixtures/web-search/brave-news.json";
+import { httpGet } from "../../../src/infra/http-client.js";
+import { exaSearch } from "../../../src/providers/exa-search.js";
+import {
+  braveSearch,
+  ddgSearch,
+  normalizeFinancialQuery,
+  searchWeb,
+} from "../../../src/providers/web-search.js";
 import braveGeneralFixture from "../../fixtures/web-search/brave-general.json";
+import braveNewsFixture from "../../fixtures/web-search/brave-news.json";
 
 vi.mock("../../../src/infra/http-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/infra/http-client.js")>();
@@ -56,7 +56,9 @@ describe("normalizeFinancialQuery", () => {
 
   it("passes free-form queries unchanged", () => {
     expect(normalizeFinancialQuery("AAPL earnings call", "news")).toBe("AAPL earnings call");
-    expect(normalizeFinancialQuery("Fed rate decision impact on banks", "news")).toBe("Fed rate decision impact on banks");
+    expect(normalizeFinancialQuery("Fed rate decision impact on banks", "news")).toBe(
+      "Fed rate decision impact on banks",
+    );
     expect(normalizeFinancialQuery("what is a SPAC", "news")).toBe("what is a SPAC");
   });
 
@@ -222,15 +224,27 @@ describe("ddgSearch", () => {
   it("returns cached results within TTL", async () => {
     mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
 
-    const first = await ddgSearch("AAPL stock news", { category: "news", freshness: "day", limit: 10 });
-    const second = await ddgSearch("AAPL stock news", { category: "news", freshness: "day", limit: 10 });
+    const first = await ddgSearch("AAPL stock news", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+    });
+    const second = await ddgSearch("AAPL stock news", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+    });
 
     expect(mockedSearchNews).toHaveBeenCalledTimes(1);
     expect(second.resultCount).toBe(first.resultCount);
   });
 
   it("throws on DDG anomaly detection (rate limit)", async () => {
-    mockedSearch.mockRejectedValue(new Error("DDG detected an anomaly in the request, you are likely making requests too quickly."));
+    mockedSearch.mockRejectedValue(
+      new Error(
+        "DDG detected an anomaly in the request, you are likely making requests too quickly.",
+      ),
+    );
 
     await expect(
       ddgSearch("test", { category: "general", freshness: "day", limit: 10 }),
@@ -246,14 +260,24 @@ describe("ddgSearch", () => {
     cache.clear();
     // Re-set as stale (expired TTL but within stale limit)
     cache["store"].set("web:ddg:AAPL stock news:news:day:10", {
-      value: { query: "AAPL stock news", results: [], resultCount: 0, fetchedAt: "2026-04-11T00:00:00Z", provider: "ddg" },
+      value: {
+        query: "AAPL stock news",
+        results: [],
+        resultCount: 0,
+        fetchedAt: "2026-04-11T00:00:00Z",
+        provider: "ddg",
+      },
       expiresAt: Date.now() - 1000, // expired
       cachedAt: Date.now() - 60_000, // 1 min ago (within 1h stale limit)
     });
 
     mockedSearchNews.mockRejectedValue(new Error("DDG rate limited"));
 
-    const result = await ddgSearch("AAPL stock news", { category: "news", freshness: "day", limit: 10 });
+    const result = await ddgSearch("AAPL stock news", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+    });
     expect(result.resultCount).toBe(0); // stale data
   });
 
@@ -311,25 +335,41 @@ describe("braveSearch", () => {
     mockedHttpGet.mockResolvedValue(braveNewsFixture);
 
     await braveSearch("test", { category: "news", freshness: "hours", limit: 10 }, "key");
-    expect(mockedHttpGet).toHaveBeenCalledWith(expect.stringContaining("freshness=ph"), expect.any(Object));
+    expect(mockedHttpGet).toHaveBeenCalledWith(
+      expect.stringContaining("freshness=ph"),
+      expect.any(Object),
+    );
 
     mockedHttpGet.mockClear();
     await braveSearch("test", { category: "news", freshness: "day", limit: 10 }, "key");
-    expect(mockedHttpGet).toHaveBeenCalledWith(expect.stringContaining("freshness=pd"), expect.any(Object));
+    expect(mockedHttpGet).toHaveBeenCalledWith(
+      expect.stringContaining("freshness=pd"),
+      expect.any(Object),
+    );
 
     mockedHttpGet.mockClear();
     await braveSearch("test", { category: "news", freshness: "week", limit: 10 }, "key");
-    expect(mockedHttpGet).toHaveBeenCalledWith(expect.stringContaining("freshness=pw"), expect.any(Object));
+    expect(mockedHttpGet).toHaveBeenCalledWith(
+      expect.stringContaining("freshness=pw"),
+      expect.any(Object),
+    );
 
     mockedHttpGet.mockClear();
     await braveSearch("test", { category: "news", freshness: "month", limit: 10 }, "key");
-    expect(mockedHttpGet).toHaveBeenCalledWith(expect.stringContaining("freshness=pm"), expect.any(Object));
+    expect(mockedHttpGet).toHaveBeenCalledWith(
+      expect.stringContaining("freshness=pm"),
+      expect.any(Object),
+    );
   });
 
   it("maps news results to WebSearchResult", async () => {
     mockedHttpGet.mockResolvedValue(braveNewsFixture);
 
-    const result = await braveSearch("AAPL", { category: "news", freshness: "day", limit: 10 }, "key");
+    const result = await braveSearch(
+      "AAPL",
+      { category: "news", freshness: "day", limit: 10 },
+      "key",
+    );
 
     expect(result.provider).toBe("brave");
     expect(result.resultCount).toBe(2);
@@ -341,7 +381,11 @@ describe("braveSearch", () => {
   it("maps general results to WebSearchResult", async () => {
     mockedHttpGet.mockResolvedValue(braveGeneralFixture);
 
-    const result = await braveSearch("AAPL", { category: "general", freshness: "day", limit: 10 }, "key");
+    const result = await braveSearch(
+      "AAPL",
+      { category: "general", freshness: "day", limit: 10 },
+      "key",
+    );
 
     expect(result.provider).toBe("brave");
     expect(result.resultCount).toBe(2);
@@ -349,7 +393,7 @@ describe("braveSearch", () => {
   });
 
   it("throws ProviderCredentialError with reason=stale on 401", async () => {
-    const { HttpError } = await import("../../../src/infra/http-client.js") as any;
+    const { HttpError } = (await import("../../../src/infra/http-client.js")) as any;
     const { ProviderCredentialError } = await import(
       "../../../src/providers/provider-credential-error.js"
     );
@@ -368,7 +412,7 @@ describe("braveSearch", () => {
   });
 
   it("throws on 429 for cascade fallback", async () => {
-    const { HttpError } = await import("../../../src/infra/http-client.js") as any;
+    const { HttpError } = (await import("../../../src/infra/http-client.js")) as any;
     mockedHttpGet.mockRejectedValue(new HttpError(429, "Too Many Requests", ""));
 
     await expect(
@@ -377,7 +421,7 @@ describe("braveSearch", () => {
   });
 
   it("throws on 5xx for cascade fallback", async () => {
-    const { HttpError } = await import("../../../src/infra/http-client.js") as any;
+    const { HttpError } = (await import("../../../src/infra/http-client.js")) as any;
     mockedHttpGet.mockRejectedValue(new HttpError(500, "Internal Server Error", ""));
 
     await expect(
@@ -398,7 +442,16 @@ describe("braveSearch", () => {
 describe("searchWeb cascade", () => {
   const exaEnvelope = {
     query: "AAPL stock news",
-    results: [{ title: "Exa Result", url: "https://exa.com/1", snippet: "exa", source: "exa.com", published: null, category: "news" as const }],
+    results: [
+      {
+        title: "Exa Result",
+        url: "https://exa.com/1",
+        snippet: "exa",
+        source: "exa.com",
+        published: null,
+        category: "news" as const,
+      },
+    ],
     resultCount: 1,
     fetchedAt: "2026-04-11T00:00:00Z",
     provider: "exa" as const,
@@ -433,7 +486,10 @@ describe("searchWeb cascade", () => {
 
   it("uses Exa first when it succeeds (general)", async () => {
     mockedGetConfig.mockReturnValue({ braveApiKey: "my-key" } as any);
-    mockedExaSearch.mockResolvedValue({ ...exaEnvelope, results: [{ ...exaEnvelope.results[0], category: "general" }] });
+    mockedExaSearch.mockResolvedValue({
+      ...exaEnvelope,
+      results: [{ ...exaEnvelope.results[0], category: "general" }],
+    });
 
     const result = await searchWeb("test", { category: "general", freshness: "day", limit: 10 });
 
@@ -519,17 +575,19 @@ describe("searchWeb cascade", () => {
     const result = await searchWeb("AAPL");
 
     expect(result.status).toBe("ok");
-    expect(mockedExaSearch).toHaveBeenCalledWith(
-      "AAPL stock news",
-      expect.any(Object),
-    );
+    expect(mockedExaSearch).toHaveBeenCalledWith("AAPL stock news", expect.any(Object));
   });
 
   it("provider override: ddg skips Exa entirely", async () => {
     mockedGetConfig.mockReturnValue({} as any);
     mockedSearchNews.mockResolvedValue(ddgNewsFixture as any);
 
-    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10, provider: "ddg" });
+    const result = await searchWeb("AAPL", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+      provider: "ddg",
+    });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -542,7 +600,12 @@ describe("searchWeb cascade", () => {
     mockedGetConfig.mockReturnValue({} as any);
     mockedExaSearch.mockResolvedValue(exaEnvelope);
 
-    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10, provider: "exa" });
+    const result = await searchWeb("AAPL", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+      provider: "exa",
+    });
 
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
@@ -555,7 +618,12 @@ describe("searchWeb cascade", () => {
   it("provider override: brave returns unavailable when no key", async () => {
     mockedGetConfig.mockReturnValue({} as any);
 
-    const result = await searchWeb("AAPL", { category: "news", freshness: "day", limit: 10, provider: "brave" });
+    const result = await searchWeb("AAPL", {
+      category: "news",
+      freshness: "day",
+      limit: 10,
+      provider: "brave",
+    });
 
     expect(result.status).toBe("unavailable");
     if (result.status === "unavailable") {

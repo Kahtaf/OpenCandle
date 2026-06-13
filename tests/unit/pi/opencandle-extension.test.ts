@@ -1,16 +1,16 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
-import {
-  buildOptionsScreenerWorkflowDefinition,
-  buildPortfolioWorkflowDefinition,
-  buildCompareAssetsWorkflowDefinition,
-} from "../../../src/workflows/index.js";
-import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
-import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { resetConfigCache } from "../../../src/config.js";
+import openCandleExtension from "../../../src/pi/opencandle-extension.js";
+import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
+import {
+  buildCompareAssetsWorkflowDefinition,
+  buildOptionsScreenerWorkflowDefinition,
+  buildPortfolioWorkflowDefinition,
+} from "../../../src/workflows/index.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
@@ -34,7 +34,10 @@ interface FakeCommandContext {
 
 function createFakeApi() {
   const tools: any[] = [];
-  const commands = new Map<string, { description?: string; handler: (args: string, ctx: FakeCommandContext) => Promise<void> }>();
+  const commands = new Map<
+    string,
+    { description?: string; handler: (args: string, ctx: FakeCommandContext) => Promise<void> }
+  >();
   const handlers = new Map<string, EventHandler[]>();
   const sendUserMessage = vi.fn();
 
@@ -79,15 +82,17 @@ function exactSymbolSearch(validSymbols: string[]) {
   const valid = new Set(validSymbols.map((symbol) => symbol.toUpperCase()));
   return async (query: string) =>
     valid.has(query.toUpperCase())
-      ? [{
-          symbol: query.toUpperCase(),
-          name: query.toUpperCase(),
-          quoteType: "EQUITY",
-          assetType: "equity",
-          exchange: "NMS",
-          provider: "yahoo" as const,
-          score: 1,
-        }]
+      ? [
+          {
+            symbol: query.toUpperCase(),
+            name: query.toUpperCase(),
+            quoteType: "EQUITY",
+            assetType: "equity",
+            exchange: "NMS",
+            provider: "yahoo" as const,
+            score: 1,
+          },
+        ]
       : [];
 }
 
@@ -149,10 +154,7 @@ describe("opencandle extension", () => {
     expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length);
     for (const [index, prompt] of prompts.entries()) {
       if (index === 0) continue;
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(
-        index + 1,
-        prompt,
-      );
+      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
     }
   });
 
@@ -227,11 +229,19 @@ describe("opencandle extension", () => {
     };
 
     await inputHandler!(
-      { type: "input", text: "Thoughts on the SpaceX IPO today? Worth getting exposure?", source: "interactive" },
+      {
+        type: "input",
+        text: "Thoughts on the SpaceX IPO today? Worth getting exposure?",
+        source: "interactive",
+      },
       ctx,
     );
     const result = await beforeStartHandler!(
-      { type: "before_agent_start", prompt: "Thoughts on the SpaceX IPO today?", systemPrompt: "BASE" },
+      {
+        type: "before_agent_start",
+        prompt: "Thoughts on the SpaceX IPO today?",
+        systemPrompt: "BASE",
+      },
       {},
     );
 
@@ -255,7 +265,11 @@ describe("opencandle extension", () => {
       ctx,
     );
     const result = await beforeStartHandler!(
-      { type: "before_agent_start", prompt: "write me a poem about autumn leaves", systemPrompt: "BASE" },
+      {
+        type: "before_agent_start",
+        prompt: "write me a poem about autumn leaves",
+        systemPrompt: "BASE",
+      },
       {},
     );
 
@@ -296,16 +310,24 @@ describe("opencandle extension", () => {
     };
 
     const result = await inputHandler!(
-      { type: "input", text: "Build me a diversified ETF portfolio with $10000 for a balanced risk profile.", source: "interactive" },
+      {
+        type: "input",
+        text: "Build me a diversified ETF portfolio with $10000 for a balanced risk profile.",
+        source: "interactive",
+      },
       ctx,
     );
 
-    const prompt = firstWorkflowPrompt(buildPortfolioWorkflowDefinition(resolvePortfolioSlots({
-      symbols: [],
-      budget: 10_000,
-      riskProfile: "balanced",
-      assetScope: "etf_focused",
-    })));
+    const prompt = firstWorkflowPrompt(
+      buildPortfolioWorkflowDefinition(
+        resolvePortfolioSlots({
+          symbols: [],
+          budget: 10_000,
+          riskProfile: "balanced",
+          assetScope: "etf_focused",
+        }),
+      ),
+    );
 
     expect(result).toEqual({ action: "transform", text: prompt });
     expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
@@ -322,15 +344,23 @@ describe("opencandle extension", () => {
     };
 
     const result = await inputHandler!(
-      { type: "input", text: "Screen bullish AAPL call options around 30 to 45 DTE with good liquidity.", source: "interactive" },
+      {
+        type: "input",
+        text: "Screen bullish AAPL call options around 30 to 45 DTE with good liquidity.",
+        source: "interactive",
+      },
       ctx,
     );
 
-    const prompt = firstWorkflowPrompt(buildOptionsScreenerWorkflowDefinition(resolveOptionsScreenerSlots({
-      symbols: ["AAPL"],
-      direction: "bullish",
-      dteHint: "30 to 45 DTE",
-    })));
+    const prompt = firstWorkflowPrompt(
+      buildOptionsScreenerWorkflowDefinition(
+        resolveOptionsScreenerSlots({
+          symbols: ["AAPL"],
+          direction: "bullish",
+          dteHint: "30 to 45 DTE",
+        }),
+      ),
+    );
 
     expect(result).toEqual({ action: "transform", text: prompt });
     expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
@@ -351,12 +381,14 @@ describe("opencandle extension", () => {
       ctx,
     );
 
-    const prompt = firstWorkflowPrompt(buildCompareAssetsWorkflowDefinition({
-      resolved: { symbols: ["AAPL", "MSFT"] },
-      sources: { symbols: "user" },
-      defaultsUsed: [],
-      missingRequired: [],
-    }));
+    const prompt = firstWorkflowPrompt(
+      buildCompareAssetsWorkflowDefinition({
+        resolved: { symbols: ["AAPL", "MSFT"] },
+        sources: { symbols: "user" },
+        defaultsUsed: [],
+        missingRequired: [],
+      }),
+    );
 
     expect(result).toEqual({ action: "transform", text: prompt });
     expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
@@ -505,10 +537,7 @@ describe("opencandle extension", () => {
       // Store a preference via input
       const inputHandler = fake.handlers.get("input")?.[0];
       const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
-      await inputHandler!(
-        { type: "input", text: "I'm conservative", source: "interactive" },
-        ctx,
-      );
+      await inputHandler!({ type: "input", text: "I'm conservative", source: "interactive" }, ctx);
 
       // Check system prompt includes the preference
       const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
@@ -548,8 +577,14 @@ describe("opencandle extension", () => {
     await vi.runAllTimersAsync();
 
     const calls = fake.sendUserMessage.mock.calls.map((call) => call[0]);
-    expect(firstResult).toEqual({ action: "transform", text: comprehensiveAnalysisPrompts("NVDA")[0] });
-    expect(secondResult).toEqual({ action: "transform", text: comprehensiveAnalysisPrompts("AAPL")[0] });
+    expect(firstResult).toEqual({
+      action: "transform",
+      text: comprehensiveAnalysisPrompts("NVDA")[0],
+    });
+    expect(secondResult).toEqual({
+      action: "transform",
+      text: comprehensiveAnalysisPrompts("AAPL")[0],
+    });
     // The NVDA follow-ups should have been cancelled
     expect(calls).not.toContain(comprehensiveAnalysisPrompts("NVDA")[1]);
     // The AAPL follow-ups should proceed
@@ -647,7 +682,9 @@ describe("opencandle extension", () => {
     );
     expect(promptResult.systemPrompt).toContain("Fallback Playbook");
     expect(promptResult.systemPrompt).toContain("ask_user");
-    expect(promptResult.systemPrompt).toContain("ticker preflight left fewer than two valid symbols");
+    expect(promptResult.systemPrompt).toContain(
+      "ticker preflight left fewer than two valid symbols",
+    );
   });
 
   describe("llm router mode dispatch signal", () => {
@@ -963,7 +1000,9 @@ describe("opencandle extension", () => {
         {},
       );
       expect(promptResult.systemPrompt).toContain("Fallback Playbook");
-      expect(promptResult.systemPrompt).toContain("ticker preflight left fewer than two valid symbols");
+      expect(promptResult.systemPrompt).toContain(
+        "ticker preflight left fewer than two valid symbols",
+      );
       expect(promptResult.systemPrompt).not.toContain("compare_assets");
     });
 
@@ -986,7 +1025,11 @@ describe("opencandle extension", () => {
       };
 
       const result = await inputHandler!(
-        { type: "input", text: "Give me entry levels on ASTS for a 6 month horizon", source: "interactive" },
+        {
+          type: "input",
+          text: "Give me entry levels on ASTS for a 6 month horizon",
+          source: "interactive",
+        },
         ctx,
       );
 
@@ -1054,10 +1097,7 @@ describe("opencandle extension", () => {
         sessionManager: emptySessionManager,
       };
 
-      await inputHandler!(
-        { type: "input", text: "maybe aggressive", source: "interactive" },
-        ctx,
-      );
+      await inputHandler!({ type: "input", text: "maybe aggressive", source: "interactive" }, ctx);
 
       const call = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
         (c) => c[0] === "opencandle-router-prefs-dropped",
@@ -1326,9 +1366,7 @@ describe("opencandle extension", () => {
       await fireTurnEnd(fake, ctx);
 
       expect(titleCompletion).toHaveBeenCalledTimes(1);
-      expect(titleCompletion.mock.calls[0]![0]).toContain(
-        "what does a covered call actually do",
-      );
+      expect(titleCompletion.mock.calls[0]![0]).toContain("what does a covered call actually do");
       expect(fake.api.setSessionName).toHaveBeenCalledWith("Covered Call Mechanics Explained");
     });
 
@@ -1379,9 +1417,7 @@ describe("opencandle extension", () => {
     it("leaves manually renamed sessions alone", async () => {
       const fake = createFakeApi();
       const titleCompletion = vi.fn(async () => "Covered Call Mechanics Explained");
-      (fake.api.getSessionName as ReturnType<typeof vi.fn>).mockReturnValue(
-        "My research notes",
-      );
+      (fake.api.getSessionName as ReturnType<typeof vi.fn>).mockReturnValue("My research notes");
       openCandleExtension(fake.api, { titleCompletion });
 
       const ctx = titleCtx(chatBranch());

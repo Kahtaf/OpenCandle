@@ -26,10 +26,7 @@ export class HttpError extends Error {
   }
 }
 
-export async function httpGet<T>(
-  url: string,
-  options: HttpClientOptions = {},
-): Promise<T> {
+export async function httpGet<T>(url: string, options: HttpClientOptions = {}): Promise<T> {
   return httpRequest<T>(url, { ...options, method: "GET" });
 }
 
@@ -54,10 +51,7 @@ interface HttpRequestOptions extends HttpClientOptions {
   body?: string;
 }
 
-async function httpRequest<T>(
-  url: string,
-  options: HttpRequestOptions,
-): Promise<T> {
+async function httpRequest<T>(url: string, options: HttpRequestOptions): Promise<T> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   let lastError: Error | undefined;
 
@@ -92,9 +86,10 @@ async function httpRequest<T>(
         throw error; // Don't retry client errors
       }
       if (attempt < opts.maxRetries) {
-        retryDelayMs = error instanceof HttpError && error.status === 429 && error.retryAfterMs !== undefined
-          ? capRetryAfterMs(error.retryAfterMs, opts.maxRetryAfterMs)
-          : opts.retryDelayMs * (attempt + 1);
+        retryDelayMs =
+          error instanceof HttpError && error.status === 429 && error.retryAfterMs !== undefined
+            ? capRetryAfterMs(error.retryAfterMs, opts.maxRetryAfterMs)
+            : opts.retryDelayMs * (attempt + 1);
       }
     } finally {
       clearTimeout(timeout);

@@ -1,10 +1,10 @@
 #!/usr/bin/env tsx
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { EvalTrace } from "../evals/types.js";
-import { evaluateFinalAnswerAssertion } from "../evals/prompt-policy-assertions.js";
-import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 import { DEFAULT_BUDGETS } from "../../src/prompts/sections.js";
+import { evaluateFinalAnswerAssertion } from "../evals/prompt-policy-assertions.js";
+import type { EvalTrace } from "../evals/types.js";
+import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
 interface Manifest {
   manifestVersion: number;
@@ -30,7 +30,15 @@ interface ManifestPrompt {
 }
 
 interface AcceptedObservedChange {
-  field: "routeKind" | "workflow" | "taskFamily" | "commitmentMode" | "policyCardId" | "evidencePlanId" | "answerContractId" | "retryEligible";
+  field:
+    | "routeKind"
+    | "workflow"
+    | "taskFamily"
+    | "commitmentMode"
+    | "policyCardId"
+    | "evidencePlanId"
+    | "answerContractId"
+    | "retryEligible";
   from?: string;
   to: string;
   reason: string;
@@ -90,8 +98,8 @@ interface ManifestReport {
   };
 }
 
-const manifestPath = process.env.PROMPT_POLICY_MANIFEST ??
-  "docs/internal/prompt-to-policy-migration-manifest.json";
+const manifestPath =
+  process.env.PROMPT_POLICY_MANIFEST ?? "docs/internal/prompt-to-policy-migration-manifest.json";
 const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Manifest;
 const selected = selectPrompts(manifest.prompts);
 if (selected.length === 0) throw new Error("No prompt-to-policy manifest prompts selected");
@@ -107,7 +115,9 @@ for (const prompt of selected) {
   });
   const report = comparePrompt(prompt, evalTrace);
   reports.push(report);
-  console.log(`${report.passed ? "PASS" : "FAIL"} route=${report.observed.routeKind ?? "(none)"} task=${report.observed.taskFamily ?? "(none)"} tools=${report.observed.toolCalls.join(",") || "none"}`);
+  console.log(
+    `${report.passed ? "PASS" : "FAIL"} route=${report.observed.routeKind ?? "(none)"} task=${report.observed.taskFamily ?? "(none)"} tools=${report.observed.toolCalls.join(",") || "none"}`,
+  );
   for (const failure of report.failures) {
     console.log(`  - ${failure.field}: ${failure.message}`);
   }
@@ -153,21 +163,56 @@ function comparePrompt(prompt: ManifestPrompt, trace: EvalTrace): ManifestCaseRe
     toolCalls: trace.toolCalls.map((call) => call.name),
     evidenceTypes: trace.planning?.evidenceRecords.map((record) => record.evidenceType) ?? [],
     capabilityGapIds: trace.planning?.capabilityGapIds ?? [],
-    structuredCheckFailures: trace.planning?.structuredCheckFailures.map((failure) => failure.checkId) ?? [],
+    structuredCheckFailures:
+      trace.planning?.structuredCheckFailures.map((failure) => failure.checkId) ?? [],
     retryEligible: trace.planning?.retryEligibility.eligible,
     finalTextLength: trace.text.length,
   };
   const failures: ComparisonFailure[] = [];
-  addStringMismatch(failures, "routeKind", prompt.expected.routeKind, observed.routeKind, prompt.expected.acceptedObservedChanges);
-  addStringMismatch(failures, "workflow", prompt.expected.workflow, observed.workflow, prompt.expected.acceptedObservedChanges);
-  addStringMismatch(failures, "taskFamily", prompt.expected.taskFamily, observed.taskFamily, prompt.expected.acceptedObservedChanges);
-  addStringMismatch(failures, "commitmentMode", prompt.expected.commitmentMode, observed.commitmentMode, prompt.expected.acceptedObservedChanges);
-  addMissingValues(failures, "toolBundles", prompt.expected.toolBundles ?? [], observed.toolBundles);
+  addStringMismatch(
+    failures,
+    "routeKind",
+    prompt.expected.routeKind,
+    observed.routeKind,
+    prompt.expected.acceptedObservedChanges,
+  );
+  addStringMismatch(
+    failures,
+    "workflow",
+    prompt.expected.workflow,
+    observed.workflow,
+    prompt.expected.acceptedObservedChanges,
+  );
+  addStringMismatch(
+    failures,
+    "taskFamily",
+    prompt.expected.taskFamily,
+    observed.taskFamily,
+    prompt.expected.acceptedObservedChanges,
+  );
+  addStringMismatch(
+    failures,
+    "commitmentMode",
+    prompt.expected.commitmentMode,
+    observed.commitmentMode,
+    prompt.expected.acceptedObservedChanges,
+  );
+  addMissingValues(
+    failures,
+    "toolBundles",
+    prompt.expected.toolBundles ?? [],
+    observed.toolBundles,
+  );
   addEvidenceFailures(failures, prompt.expected.requiredEvidence ?? [], observed);
-  addMissingValues(failures, "providerGapDisclosure", prompt.expected.providerGapDisclosure ?? [], observed.capabilityGapIds);
+  addMissingValues(
+    failures,
+    "providerGapDisclosure",
+    prompt.expected.providerGapDisclosure ?? [],
+    observed.capabilityGapIds,
+  );
 
-  const finalAnswerHardAssertions = (prompt.expected.finalAnswerHardAssertions ?? []).map((assertion) =>
-    evaluateFinalAnswerAssertion(assertion, trace)
+  const finalAnswerHardAssertions = (prompt.expected.finalAnswerHardAssertions ?? []).map(
+    (assertion) => evaluateFinalAnswerAssertion(assertion, trace),
   );
   for (const assertion of finalAnswerHardAssertions) {
     if (!assertion.passed) {
@@ -199,12 +244,11 @@ function addStringMismatch(
   acceptedChanges: readonly AcceptedObservedChange[] = [],
 ): void {
   if (expected === undefined || expected === actual) return;
-  const accepted = acceptedChanges.find((change) =>
-    change.field === field &&
-    (
-      (change.from === expected && change.to === actual) ||
-      (change.to === expected && (change.from === undefined || change.from === actual))
-    )
+  const accepted = acceptedChanges.find(
+    (change) =>
+      change.field === field &&
+      ((change.from === expected && change.to === actual) ||
+        (change.to === expected && (change.from === undefined || change.from === actual))),
   );
   if (accepted) return;
   failures.push({
@@ -257,7 +301,10 @@ function addEvidenceFailures(
         message: "missing market_status evidence record",
       });
     }
-    if (expected === "holdings_overlap_tool_when_available" && !observed.toolCalls.includes("analyze_holdings_overlap")) {
+    if (
+      expected === "holdings_overlap_tool_when_available" &&
+      !observed.toolCalls.includes("analyze_holdings_overlap")
+    ) {
       failures.push({
         field: "requiredEvidence",
         expected,
@@ -269,21 +316,21 @@ function addEvidenceFailures(
 }
 
 function selectPrompts(prompts: ManifestPrompt[]): ManifestPrompt[] {
-  const ids = process.env.PROMPT_POLICY_IDS
-    ?.split(",")
+  const ids = process.env.PROMPT_POLICY_IDS?.split(",")
     .map((id) => id.trim())
     .filter(Boolean);
   const limit = numberFromEnv("PROMPT_POLICY_LIMIT");
-  const selected = ids?.length
-    ? prompts.filter((prompt) => ids.includes(prompt.id))
-    : prompts;
+  const selected = ids?.length ? prompts.filter((prompt) => ids.includes(prompt.id)) : prompts;
   return limit ? selected.slice(0, limit) : selected;
 }
 
 function writeReport(report: ManifestReport): string {
   const runsDir = join(process.cwd(), "tests", "evals", "runs");
   mkdirSync(runsDir, { recursive: true });
-  const path = join(runsDir, `${new Date().toISOString().replace(/[:.]/g, "-")}_prompt-policy-manifest.json`);
+  const path = join(
+    runsDir,
+    `${new Date().toISOString().replace(/[:.]/g, "-")}_prompt-policy-manifest.json`,
+  );
   writeFileSync(path, JSON.stringify(report, null, 2) + "\n", "utf-8");
   return path;
 }

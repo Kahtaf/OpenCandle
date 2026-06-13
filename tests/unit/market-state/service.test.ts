@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import type Database from "better-sqlite3";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { initDatabase } from "../../../src/memory/sqlite.js";
+import { join } from "node:path";
+import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
 
 describe("MarketStateService", () => {
   let db: Database.Database;
@@ -30,8 +30,12 @@ describe("MarketStateService", () => {
     expect(samePortfolio.id).toBe(portfolio.id);
     expect(portfolio.name).toBe("Default");
 
-    const watchlistCount = db.prepare("SELECT COUNT(*) AS n FROM watchlists").get() as { n: number };
-    const portfolioCount = db.prepare("SELECT COUNT(*) AS n FROM portfolios").get() as { n: number };
+    const watchlistCount = db.prepare("SELECT COUNT(*) AS n FROM watchlists").get() as {
+      n: number;
+    };
+    const portfolioCount = db.prepare("SELECT COUNT(*) AS n FROM portfolios").get() as {
+      n: number;
+    };
     expect(watchlistCount.n).toBe(1);
     expect(portfolioCount.n).toBe(1);
   });
@@ -54,8 +58,12 @@ describe("MarketStateService", () => {
       expect(secondWatchlist.id).toBe(firstWatchlist.id);
       expect(secondPortfolio.id).toBe(firstPortfolio.id);
 
-      const watchlistCount = firstDb.prepare("SELECT COUNT(*) AS n FROM watchlists").get() as { n: number };
-      const portfolioCount = firstDb.prepare("SELECT COUNT(*) AS n FROM portfolios").get() as { n: number };
+      const watchlistCount = firstDb.prepare("SELECT COUNT(*) AS n FROM watchlists").get() as {
+        n: number;
+      };
+      const portfolioCount = firstDb.prepare("SELECT COUNT(*) AS n FROM portfolios").get() as {
+        n: number;
+      };
       expect(watchlistCount.n).toBe(1);
       expect(portfolioCount.n).toBe(1);
     } finally {
@@ -98,7 +106,9 @@ describe("MarketStateService", () => {
     expect(second.stopPrice).toBe(180);
     expect(second.notes).toBe("Updated thesis");
 
-    const itemCount = db.prepare("SELECT COUNT(*) AS n FROM watchlist_items").get() as { n: number };
+    const itemCount = db.prepare("SELECT COUNT(*) AS n FROM watchlist_items").get() as {
+      n: number;
+    };
     expect(itemCount.n).toBe(1);
   });
 
@@ -176,24 +186,30 @@ describe("MarketStateService", () => {
       provider: "yahoo",
     };
 
-    expect(() => service.addPortfolioLot({
-      instrument,
-      quantity: 0,
-      avgCost: 250,
-      currency: "USD",
-    })).toThrow("Portfolio lot quantity must be a positive finite number.");
-    expect(() => service.addPortfolioLot({
-      instrument,
-      quantity: 1,
-      avgCost: -1,
-      currency: "USD",
-    })).toThrow("Portfolio lot average cost must be a positive finite number.");
-    expect(() => service.addPortfolioLot({
-      instrument,
-      quantity: Number.NaN,
-      avgCost: 250,
-      currency: "USD",
-    })).toThrow("Portfolio lot quantity must be a positive finite number.");
+    expect(() =>
+      service.addPortfolioLot({
+        instrument,
+        quantity: 0,
+        avgCost: 250,
+        currency: "USD",
+      }),
+    ).toThrow("Portfolio lot quantity must be a positive finite number.");
+    expect(() =>
+      service.addPortfolioLot({
+        instrument,
+        quantity: 1,
+        avgCost: -1,
+        currency: "USD",
+      }),
+    ).toThrow("Portfolio lot average cost must be a positive finite number.");
+    expect(() =>
+      service.addPortfolioLot({
+        instrument,
+        quantity: Number.NaN,
+        avgCost: 250,
+        currency: "USD",
+      }),
+    ).toThrow("Portfolio lot quantity must be a positive finite number.");
 
     const lot = service.addPortfolioLot({
       instrument,
@@ -306,17 +322,21 @@ describe("MarketStateService", () => {
       },
     });
 
-    expect(service.findInstrumentByAlias({
-      source: "tradingview",
-      sourceSymbol: "NASDAQ:AAPL",
-      sourceId: "tv-symbol-apple",
-    })?.id).toBe(item.instrumentId);
-    expect(service.findInstrumentByAlias({
-      source: "interactive_brokers",
-      sourceSymbol: "AAPL",
-      sourceExchange: "NASDAQ",
-      sourceAssetType: "stock",
-    })?.id).toBe(item.instrumentId);
+    expect(
+      service.findInstrumentByAlias({
+        source: "tradingview",
+        sourceSymbol: "NASDAQ:AAPL",
+        sourceId: "tv-symbol-apple",
+      })?.id,
+    ).toBe(item.instrumentId);
+    expect(
+      service.findInstrumentByAlias({
+        source: "interactive_brokers",
+        sourceSymbol: "AAPL",
+        sourceExchange: "NASDAQ",
+        sourceAssetType: "stock",
+      })?.id,
+    ).toBe(item.instrumentId);
   });
 
   it("records predictions as open rows", () => {

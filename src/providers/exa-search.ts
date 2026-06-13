@@ -1,8 +1,8 @@
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
-import { rateLimiter } from "../infra/rate-limiter.js";
 import { getConfig } from "../config.js";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
+import type { WebSearchEnvelope, WebSearchResult } from "../types/sentiment.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
-import type { WebSearchResult, WebSearchEnvelope } from "../types/sentiment.js";
 import type { WebSearchOpts } from "./web-search.js";
 
 const EXA_MCP_URL = "https://mcp.exa.ai/mcp";
@@ -19,19 +19,27 @@ let requestIdCounter = 0;
 
 function freshnessToMs(freshness: WebSearchOpts["freshness"]): number {
   switch (freshness) {
-    case "hours": return 60 * 60 * 1000;
-    case "day": return 24 * 60 * 60 * 1000;
-    case "week": return 7 * 24 * 60 * 60 * 1000;
-    case "month": return 30 * 24 * 60 * 60 * 1000;
+    case "hours":
+      return 60 * 60 * 1000;
+    case "day":
+      return 24 * 60 * 60 * 1000;
+    case "week":
+      return 7 * 24 * 60 * 60 * 1000;
+    case "month":
+      return 30 * 24 * 60 * 60 * 1000;
   }
 }
 
 function enrichQueryForMcp(query: string, freshness: WebSearchOpts["freshness"]): string {
   switch (freshness) {
-    case "hours": return `${query} past hour`;
-    case "day": return `${query} past 24 hours`;
-    case "week": return `${query} past week`;
-    case "month": return `${query} past month`;
+    case "hours":
+      return `${query} past hour`;
+    case "day":
+      return `${query} past 24 hours`;
+    case "week":
+      return `${query} past week`;
+    case "month":
+      return `${query} past month`;
   }
 }
 
@@ -192,10 +200,7 @@ function exaCacheKey(query: string, opts: WebSearchOpts): string {
 // MCP path
 // ---------------------------------------------------------------------------
 
-async function exaMcpSearch(
-  query: string,
-  opts: WebSearchOpts,
-): Promise<WebSearchEnvelope> {
+async function exaMcpSearch(query: string, opts: WebSearchOpts): Promise<WebSearchEnvelope> {
   const enrichedQuery = enrichQueryForMcp(query, opts.freshness);
 
   const response = await fetch(EXA_MCP_URL, {
@@ -330,10 +335,7 @@ async function exaApiSearch(
 // Public entry point
 // ---------------------------------------------------------------------------
 
-export async function exaSearch(
-  query: string,
-  opts: WebSearchOpts,
-): Promise<WebSearchEnvelope> {
+export async function exaSearch(query: string, opts: WebSearchOpts): Promise<WebSearchEnvelope> {
   const key = exaCacheKey(query, opts);
   const cached = cache.get<WebSearchEnvelope>(key);
   if (cached) return cached;
@@ -362,12 +364,12 @@ export async function exaSearch(
   }
 }
 
+export type { ExaApiResponse, McpRpcResponse, ParsedResult };
 // Exported for testing
 export {
-  parseMcpResultBlocks,
-  extractJsonRpcPayload,
   enrichQueryForMcp,
+  extractJsonRpcPayload,
   filterByFreshness,
   mapApiResults,
+  parseMcpResultBlocks,
 };
-export type { ParsedResult, McpRpcResponse, ExaApiResponse };

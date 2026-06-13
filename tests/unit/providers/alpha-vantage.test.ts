@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getEarnings, getFinancials, getOverview, getGlobalQuote, getDailyHistory } from "../../../src/providers/alpha-vantage.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
-import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
+import {
+  getDailyHistory,
+  getEarnings,
+  getFinancials,
+  getGlobalQuote,
+  getOverview,
+} from "../../../src/providers/alpha-vantage.js";
 import balanceFixture from "../../fixtures/alphavantage/AAPL-balance-sheet.json";
 import cashFlowFixture from "../../fixtures/alphavantage/AAPL-cash-flow.json";
 import globalQuoteFixture from "../../fixtures/alphavantage/AAPL-global-quote.json";
+import incomeFixture from "../../fixtures/alphavantage/AAPL-income-statement.json";
 import dailyHistoryFixture from "../../fixtures/alphavantage/AAPL-time-series-daily.json";
 
 describe("alpha-vantage provider", () => {
@@ -107,9 +113,10 @@ describe("alpha-vantage provider", () => {
     it("throws on Alpha Vantage rate-limit payloads instead of returning empty financials", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          Note: "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute.",
-        }),
+        json: () =>
+          Promise.resolve({
+            Note: "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute.",
+          }),
       });
 
       await expect(getFinancials("AAPL", "test-key")).rejects.toThrow("Alpha Vantage rate limited");
@@ -120,9 +127,11 @@ describe("alpha-vantage provider", () => {
     it("throws on Alpha Vantage information payloads instead of returning empty earnings", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          Information: "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute.",
-        }),
+        json: () =>
+          Promise.resolve({
+            Information:
+              "Thank you for using Alpha Vantage! Our standard API call frequency is 5 calls per minute.",
+          }),
       });
 
       await expect(getEarnings("AAPL", "test-key")).rejects.toThrow("Alpha Vantage rate limited");
@@ -202,19 +211,24 @@ describe("alpha-vantage provider", () => {
 
     it("returns only current-year bars for ytd ranges", async () => {
       const bar = (close: string) => ({
-        "1. open": close, "2. high": close, "3. low": close, "4. close": close, "5. volume": "1000",
+        "1. open": close,
+        "2. high": close,
+        "3. low": close,
+        "4. close": close,
+        "5. volume": "1000",
       });
       const currentYear = new Date().getFullYear();
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          "Time Series (Daily)": {
-            [`${currentYear - 1}-12-30`]: bar("100"),
-            [`${currentYear - 1}-12-31`]: bar("101"),
-            [`${currentYear}-01-02`]: bar("102"),
-            [`${currentYear}-01-05`]: bar("103"),
-          },
-        }),
+        json: () =>
+          Promise.resolve({
+            "Time Series (Daily)": {
+              [`${currentYear - 1}-12-30`]: bar("100"),
+              [`${currentYear - 1}-12-31`]: bar("101"),
+              [`${currentYear}-01-02`]: bar("102"),
+              [`${currentYear}-01-05`]: bar("103"),
+            },
+          }),
       });
 
       const bars = await getDailyHistory("YTDTEST", "test-key", "ytd");
@@ -239,30 +253,31 @@ describe("alpha-vantage provider", () => {
     it("does not map a price field to avgVolume", async () => {
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          Symbol: "AAPL",
-          Name: "Apple Inc",
-          Description: "Apple Inc designs and manufactures...",
-          Exchange: "NASDAQ",
-          Sector: "Technology",
-          Industry: "Consumer Electronics",
-          MarketCapitalization: "3000000000000",
-          PERatio: "30",
-          ForwardPE: "28",
-          EPS: "6.50",
-          DividendYield: "0.005",
-          Beta: "1.25",
-          "52WeekHigh": "200",
-          "52WeekLow": "150",
-          "50DayMovingAverage": "180.50",
-          ProfitMargin: "0.25",
-          QuarterlyRevenueGrowthYOY: "0.08",
-        }),
+        json: () =>
+          Promise.resolve({
+            Symbol: "AAPL",
+            Name: "Apple Inc",
+            Description: "Apple Inc designs and manufactures...",
+            Exchange: "NASDAQ",
+            Sector: "Technology",
+            Industry: "Consumer Electronics",
+            MarketCapitalization: "3000000000000",
+            PERatio: "30",
+            ForwardPE: "28",
+            EPS: "6.50",
+            DividendYield: "0.005",
+            Beta: "1.25",
+            "52WeekHigh": "200",
+            "52WeekLow": "150",
+            "50DayMovingAverage": "180.50",
+            ProfitMargin: "0.25",
+            QuarterlyRevenueGrowthYOY: "0.08",
+          }),
       });
 
       const overview = await getOverview("AAPL", "test-key");
       // avgVolume should NOT be 180.50 (the 50DayMovingAverage price)
-      expect(overview.avgVolume).not.toBe(180.50);
+      expect(overview.avgVolume).not.toBe(180.5);
     });
   });
 

@@ -1,14 +1,20 @@
 import { FileText } from "lucide-react";
 import { Button } from "../../components/ui/button.jsx";
-import { relativeTime, shortDateLabel } from "./format.js";
 import { NotificationsPanel } from "./AlertsPage.jsx";
+import { relativeTime, shortDateLabel } from "./format.js";
 import { Badge, EmptyState, Panel } from "./shared.jsx";
 
 export function ReportsPage({ state, readOnly, openPanel, invokeTool }) {
-  const template = state.reportTemplates.find((candidate) => candidate.enabled) ?? state.reportTemplates[0] ?? null;
+  const template =
+    state.reportTemplates.find((candidate) => candidate.enabled) ??
+    state.reportTemplates[0] ??
+    null;
   const latestRun = state.reportRuns.find((run) => run.status === "completed") ?? null;
-  const reportText = typeof latestRun?.summaryJson?.text === "string" ? latestRun.summaryJson.text : null;
-  const reportNotifications = state.notifications.filter((notification) => notification.sourceType === "report_run");
+  const reportText =
+    typeof latestRun?.summaryJson?.text === "string" ? latestRun.summaryJson.text : null;
+  const reportNotifications = state.notifications.filter(
+    (notification) => notification.sourceType === "report_run",
+  );
 
   const scheduleMeta = template
     ? `Daily at ${template.localTime} (${template.timezone})${template.nextRunAt ? ` · next run ${shortDateLabel(template.nextRunAt)}` : ""}`
@@ -20,7 +26,13 @@ export function ReportsPage({ state, readOnly, openPanel, invokeTool }) {
         title="Morning report"
         meta={scheduleMeta}
         actions={
-          <Button type="button" variant="bordered" size="sm" disabled={readOnly} onClick={() => openPanel("report-configure")}>
+          <Button
+            type="button"
+            variant="bordered"
+            size="sm"
+            disabled={readOnly}
+            onClick={() => openPanel("report-configure")}
+          >
             Edit schedule
           </Button>
         }
@@ -28,17 +40,25 @@ export function ReportsPage({ state, readOnly, openPanel, invokeTool }) {
         {reportText ? (
           <article className="max-w-[720px] px-5 py-4">
             <p className="text-xs text-muted-foreground">
-              Generated {relativeTime(latestRun.completedAt || latestRun.startedAt) || shortDateLabel(latestRun.startedAt)}
+              Generated{" "}
+              {relativeTime(latestRun.completedAt || latestRun.startedAt) ||
+                shortDateLabel(latestRun.startedAt)}
               {latestRun.triggerType === "scheduled" ? " · scheduled" : " · manual"}
             </p>
-            <pre className="mt-3 whitespace-pre-wrap font-sans text-[13px] leading-6 text-foreground">{reportText}</pre>
+            <pre className="mt-3 whitespace-pre-wrap font-sans text-[13px] leading-6 text-foreground">
+              {reportText}
+            </pre>
           </article>
         ) : (
           <EmptyState
             icon={FileText}
             title="No report yet"
             action="Generate today's watchlist report to see movers, levels approaching, and data gaps in one place."
-            cta={{ label: "Generate today", disabled: readOnly, onClick: () => invokeTool("daily_watchlist_report", { action: "run" }) }}
+            cta={{
+              label: "Generate today",
+              disabled: readOnly,
+              onClick: () => invokeTool("daily_watchlist_report", { action: "run" }),
+            }}
           />
         )}
       </Panel>
@@ -50,14 +70,26 @@ export function ReportsPage({ state, readOnly, openPanel, invokeTool }) {
           ) : (
             <ul>
               {state.reportRuns.slice(0, 10).map((run) => (
-                <li key={run.id ?? run.startedAt} className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-2.5 text-[13px] last:border-0">
+                <li
+                  key={run.id ?? run.startedAt}
+                  className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-2.5 text-[13px] last:border-0"
+                >
                   <div>
-                    <div className="font-medium text-foreground">{shortDateLabel(run.startedAt) || "—"}</div>
+                    <div className="font-medium text-foreground">
+                      {shortDateLabel(run.startedAt) || "—"}
+                    </div>
                     <div className="text-xs text-muted-foreground">
-                      {run.triggerType}{Array.isArray(run.errorsJson) && run.errorsJson.length ? ` · ${run.errorsJson.length} data gap${run.errorsJson.length === 1 ? "" : "s"}` : ""}
+                      {run.triggerType}
+                      {Array.isArray(run.errorsJson) && run.errorsJson.length
+                        ? ` · ${run.errorsJson.length} data gap${run.errorsJson.length === 1 ? "" : "s"}`
+                        : ""}
                     </div>
                   </div>
-                  {run.status === "completed" ? <Badge tone="ok">done</Badge> : <Badge tone="warn">{run.status}</Badge>}
+                  {run.status === "completed" ? (
+                    <Badge tone="ok">done</Badge>
+                  ) : (
+                    <Badge tone="warn">{run.status}</Badge>
+                  )}
                 </li>
               ))}
             </ul>

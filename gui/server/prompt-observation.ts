@@ -49,13 +49,10 @@ function messageTextFromContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
-    .map((part) => (
-      typeof part === "object" &&
-        part !== null &&
-        "text" in part &&
-        typeof part.text === "string"
+    .map((part) =>
+      typeof part === "object" && part !== null && "text" in part && typeof part.text === "string"
         ? part.text
-        : ""
-    ))
+        : "",
+    )
     .join("");
 }

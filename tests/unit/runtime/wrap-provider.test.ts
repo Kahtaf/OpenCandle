@@ -1,12 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
-import { wrapProvider } from "../../../src/providers/wrap-provider.js";
-import { InvalidSymbolError } from "../../../src/providers/errors.js";
+import { afterEach, describe, expect, it } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import {
-  setRunContext,
-  clearRunContext,
-} from "../../../src/runtime/run-context.js";
+import { InvalidSymbolError } from "../../../src/providers/errors.js";
+import { wrapProvider } from "../../../src/providers/wrap-provider.js";
+import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
+import { clearRunContext, setRunContext } from "../../../src/runtime/run-context.js";
 
 afterEach(() => {
   clearRunContext();

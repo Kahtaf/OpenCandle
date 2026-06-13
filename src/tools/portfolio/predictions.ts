@@ -1,11 +1,11 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getQuote } from "../../providers/yahoo-finance.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
-import { initDefaultDatabase } from "../../memory/sqlite.js";
-import { MarketStateService, type PredictionRecord } from "../../market-state/service.js";
+import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote, resolveYahooInstrument } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
+import { MarketStateService, type PredictionRecord } from "../../market-state/service.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
 
 export interface Prediction {
   id?: number;
@@ -178,32 +178,37 @@ export function checkPredictions(
 }
 
 const params = Type.Object({
-  action: Type.Union(
-    [Type.Literal("record"), Type.Literal("check"), Type.Literal("cancel")],
-    {
-      description:
-        "record: save a new prediction. check: evaluate all predictions against current prices. cancel: close an open prediction without scoring it.",
-    },
+  action: Type.Union([Type.Literal("record"), Type.Literal("check"), Type.Literal("cancel")], {
+    description:
+      "record: save a new prediction. check: evaluate all predictions against current prices. cancel: close an open prediction without scoring it.",
+  }),
+  id: Type.Optional(
+    Type.Integer({ minimum: 1, description: "Prediction id (required for cancel)" }),
   ),
-  id: Type.Optional(Type.Integer({ minimum: 1, description: "Prediction id (required for cancel)" })),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for record)" })),
   direction: Type.Optional(
-    Type.Union(
-      [Type.Literal("bullish"), Type.Literal("bearish"), Type.Literal("neutral")],
-      { description: "Predicted direction (required for record)" },
-    ),
+    Type.Union([Type.Literal("bullish"), Type.Literal("bearish"), Type.Literal("neutral")], {
+      description: "Predicted direction (required for record)",
+    }),
   ),
   conviction: Type.Optional(
     Type.Integer({ minimum: 1, maximum: 10, description: "Conviction 1-10 (required for record)" }),
   ),
   entry_price: Type.Optional(
-    Type.Number({ exclusiveMinimum: 0, description: "Entry price at time of prediction (required for record)" }),
+    Type.Number({
+      exclusiveMinimum: 0,
+      description: "Entry price at time of prediction (required for record)",
+    }),
   ),
   target_price: Type.Optional(
     Type.Number({ exclusiveMinimum: 0, description: "Optional target price" }),
   ),
   timeframe_days: Type.Optional(
-    Type.Integer({ minimum: 1, maximum: 3650, description: "Timeframe in days for the prediction (default: 30)" }),
+    Type.Integer({
+      minimum: 1,
+      maximum: 3650,
+      description: "Timeframe in days for the prediction (default: 30)",
+    }),
   ),
 });
 
@@ -230,7 +235,9 @@ export const predictionsTool: AgentTool<typeof params> = {
         }
         if (existing.status !== "open") {
           return {
-            content: [{ type: "text", text: `Prediction #${args.id} is already ${existing.status}.` }],
+            content: [
+              { type: "text", text: `Prediction #${args.id} is already ${existing.status}.` },
+            ],
             details: existing,
           };
         }
@@ -242,7 +249,9 @@ export const predictionsTool: AgentTool<typeof params> = {
           result: { reason: "user_cancelled" },
         });
         return {
-          content: [{ type: "text", text: `Cancelled prediction #${args.id} for ${cancelled.symbol}.` }],
+          content: [
+            { type: "text", text: `Cancelled prediction #${args.id} for ${cancelled.symbol}.` },
+          ],
           details: cancelled,
         };
       } finally {
@@ -252,7 +261,9 @@ export const predictionsTool: AgentTool<typeof params> = {
 
     if (args.action === "record") {
       if (!args.symbol || !args.direction || args.conviction == null || args.entry_price == null) {
-        throw new Error("symbol, direction, conviction, and entry_price are required for record action.");
+        throw new Error(
+          "symbol, direction, conviction, and entry_price are required for record action.",
+        );
       }
       if (!Number.isInteger(args.conviction) || args.conviction < 1 || args.conviction > 10) {
         throw new Error("conviction must be between 1 and 10.");
@@ -265,7 +276,9 @@ export const predictionsTool: AgentTool<typeof params> = {
       }
       if (
         args.timeframe_days != null &&
-        (!Number.isInteger(args.timeframe_days) || args.timeframe_days < 1 || args.timeframe_days > 3650)
+        (!Number.isInteger(args.timeframe_days) ||
+          args.timeframe_days < 1 ||
+          args.timeframe_days > 3650)
       ) {
         throw new Error("timeframe_days must be an integer between 1 and 3650.");
       }
@@ -273,10 +286,12 @@ export const predictionsTool: AgentTool<typeof params> = {
       const resolution = await resolveInstrumentForMutation(args.symbol);
       if (resolution.status === "needs_selection") {
         return {
-          content: [{
-            type: "text",
-            text: `Could not verify ${resolution.query}. Choose one of the returned candidates before recording the prediction.`,
-          }],
+          content: [
+            {
+              type: "text",
+              text: `Could not verify ${resolution.query}. Choose one of the returned candidates before recording the prediction.`,
+            },
+          ],
           details: resolution,
         };
       }
@@ -299,7 +314,12 @@ export const predictionsTool: AgentTool<typeof params> = {
       }
 
       return {
-        content: [{ type: "text", text: `Recorded: ${prediction.symbol} ${prediction.direction} (conviction ${prediction.conviction}/10) at $${prediction.entryPrice}. Expires ${prediction.expiresAt}.` }],
+        content: [
+          {
+            type: "text",
+            text: `Recorded: ${prediction.symbol} ${prediction.direction} (conviction ${prediction.conviction}/10) at $${prediction.entryPrice}. Expires ${prediction.expiresAt}.`,
+          },
+        ],
         details: prediction,
       };
     }
@@ -313,7 +333,12 @@ export const predictionsTool: AgentTool<typeof params> = {
       const historicalDetails = storedResolvedPredictionDetails(records);
       if (records.length === 0) {
         return {
-          content: [{ type: "text", text: "No predictions recorded yet. Use record action to track your calls." }],
+          content: [
+            {
+              type: "text",
+              text: "No predictions recorded yet. Use record action to track your calls.",
+            },
+          ],
           details: null,
         };
       }
@@ -384,7 +409,11 @@ function persistPredictionOutcomes(
   for (const record of records) {
     if (usedRecordIds.has(record.id)) continue;
     if (record.expiresAt > now) continue;
-    if (result.details.some((detail) => detail.status === "open" && matchesPredictionRecord(record, detail))) {
+    if (
+      result.details.some(
+        (detail) => detail.status === "open" && matchesPredictionRecord(record, detail),
+      )
+    ) {
       continue;
     }
     service.updatePredictionOutcome({
@@ -396,7 +425,9 @@ function persistPredictionOutcomes(
   }
 }
 
-function storedResolvedPredictionDetails(records: PredictionRecord[]): PredictionCheckResult["details"] {
+function storedResolvedPredictionDetails(
+  records: PredictionRecord[],
+): PredictionCheckResult["details"] {
   return records.flatMap((record) => {
     if (record.status !== "resolved" || record.resultJson == null) return [];
     const result = JSON.parse(record.resultJson) as {
@@ -411,20 +442,24 @@ function storedResolvedPredictionDetails(records: PredictionRecord[]): Predictio
     ) {
       return [];
     }
-    return [{
-      symbol: record.symbol,
-      direction: record.direction,
-      conviction: record.conviction,
-      entryPrice: record.entryPrice,
-      currentPrice: result.currentPrice,
-      pnlPercent: result.pnlPercent,
-      correct: result.correct,
-      status: "resolved" as const,
-    }];
+    return [
+      {
+        symbol: record.symbol,
+        direction: record.direction,
+        conviction: record.conviction,
+        entryPrice: record.entryPrice,
+        currentPrice: result.currentPrice,
+        pnlPercent: result.pnlPercent,
+        correct: result.correct,
+        status: "resolved" as const,
+      },
+    ];
   });
 }
 
-function predictionResultFromDetails(details: PredictionCheckResult["details"]): PredictionCheckResult {
+function predictionResultFromDetails(
+  details: PredictionCheckResult["details"],
+): PredictionCheckResult {
   const resolved = details.filter((detail) => detail.status === "resolved");
   const correct = resolved.filter((detail) => detail.correct);
   const totalConviction = resolved.reduce((sum, detail) => sum + detail.conviction, 0);
@@ -455,11 +490,12 @@ function formatPredictionScorecard(result: PredictionCheckResult): string {
         return `${icon} ${d.symbol} ${d.direction}: quote unavailable (open)`;
       }
       const sign = d.pnlPercent >= 0 ? "+" : "";
-      const label = d.status === "open"
-        ? d.targetHit && d.targetPrice != null
-          ? ` (open — target hit: $${d.targetPrice.toFixed(2)} reached before expiry; resolve or let it ride)`
-          : " (open)"
-        : "";
+      const label =
+        d.status === "open"
+          ? d.targetHit && d.targetPrice != null
+            ? ` (open — target hit: $${d.targetPrice.toFixed(2)} reached before expiry; resolve or let it ride)`
+            : " (open)"
+          : "";
       return `  [${icon}] ${d.symbol}: ${d.direction} (conv ${d.conviction}) → $${d.entryPrice.toFixed(2)} → $${d.currentPrice.toFixed(2)} (${sign}${(d.pnlPercent * 100).toFixed(1)}%)${label}`;
     }),
   ];
@@ -471,12 +507,19 @@ function findMatchingOpenRecord(
   detail: PredictionCheckResult["details"][number],
   usedRecordIds: Set<number>,
 ): PredictionRecord | null {
-  return records.find((record) => !usedRecordIds.has(record.id) && matchesPredictionRecord(record, detail)) ?? null;
+  return (
+    records.find(
+      (record) => !usedRecordIds.has(record.id) && matchesPredictionRecord(record, detail),
+    ) ?? null
+  );
 }
 
 function matchesPredictionRecord(
   record: PredictionRecord,
-  detail: Pick<PredictionCheckResult["details"][number], "symbol" | "direction" | "conviction" | "entryPrice">,
+  detail: Pick<
+    PredictionCheckResult["details"][number],
+    "symbol" | "direction" | "conviction" | "entryPrice"
+  >,
 ): boolean {
   return (
     record.symbol === detail.symbol &&

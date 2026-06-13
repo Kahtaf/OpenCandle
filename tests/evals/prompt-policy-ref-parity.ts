@@ -29,7 +29,7 @@ export interface PromptPolicyCase {
 }
 
 export interface PromptPolicyAcceptedObservedChange {
-  field: typeof stableScalarFields[number];
+  field: (typeof stableScalarFields)[number];
   from?: string;
   to: string;
   reason: string;
@@ -78,23 +78,48 @@ export function comparePromptPolicyReports(input: {
     const warnings: PromptPolicyParityIssue[] = [];
 
     if (!base) {
-      failures.push(issue("case", "present in base", "missing", `${id} missing from ${input.baseLabel}`));
+      failures.push(
+        issue("case", "present in base", "missing", `${id} missing from ${input.baseLabel}`),
+      );
       return { id, passed: false, failures, warnings };
     }
     if (!current) {
-      failures.push(issue("case", "present in current", "missing", `${id} missing from ${input.currentLabel}`));
+      failures.push(
+        issue("case", "present in current", "missing", `${id} missing from ${input.currentLabel}`),
+      );
       return { id, passed: false, failures, warnings };
     }
 
     if (!base.passed) {
-      failures.push(issue("basePassed", true, false, `${id} did not pass manifest assertions in ${input.baseLabel}`));
+      failures.push(
+        issue(
+          "basePassed",
+          true,
+          false,
+          `${id} did not pass manifest assertions in ${input.baseLabel}`,
+        ),
+      );
     }
     if (!current.passed) {
-      failures.push(issue("currentPassed", true, false, `${id} did not pass manifest assertions in ${input.currentLabel}`));
+      failures.push(
+        issue(
+          "currentPassed",
+          true,
+          false,
+          `${id} did not pass manifest assertions in ${input.currentLabel}`,
+        ),
+      );
     }
 
     for (const field of stableScalarFields) {
-      addScalarMismatch(failures, warnings, field, base.observed[field], current.observed[field], current);
+      addScalarMismatch(
+        failures,
+        warnings,
+        field,
+        base.observed[field],
+        current.observed[field],
+        current,
+      );
     }
     for (const field of stableSetFields) {
       addSetParityIssues(failures, warnings, field, base.observed[field], current.observed[field]);
@@ -113,14 +138,19 @@ export function comparePromptPolicyReports(input: {
       base.observed.behaviorMode &&
       current.observed.behaviorMode &&
       base.observed.behaviorMode !== current.observed.behaviorMode &&
-      !(base.observed.behaviorMode === "dual_run" && current.observed.behaviorMode === "replacement_active")
+      !(
+        base.observed.behaviorMode === "dual_run" &&
+        current.observed.behaviorMode === "replacement_active"
+      )
     ) {
-      warnings.push(issue(
-        "behaviorMode",
-        base.observed.behaviorMode,
-        current.observed.behaviorMode,
-        `${id}: behavior mode changed`,
-      ));
+      warnings.push(
+        issue(
+          "behaviorMode",
+          base.observed.behaviorMode,
+          current.observed.behaviorMode,
+          `${id}: behavior mode changed`,
+        ),
+      );
     }
 
     return {
@@ -169,16 +199,17 @@ function indexCases(cases: readonly PromptPolicyCase[]): Map<string, PromptPolic
 function addScalarMismatch(
   failures: PromptPolicyParityIssue[],
   warnings: PromptPolicyParityIssue[],
-  field: typeof stableScalarFields[number],
+  field: (typeof stableScalarFields)[number],
   expected: unknown,
   actual: unknown,
   current: PromptPolicyCase,
 ): void {
   if (expected === actual) return;
-  const accepted = current.acceptedObservedChanges?.find((change) =>
-    change.field === field &&
-    (change.from === undefined || change.from === expected) &&
-    change.to === actual
+  const accepted = current.acceptedObservedChanges?.find(
+    (change) =>
+      change.field === field &&
+      (change.from === undefined || change.from === expected) &&
+      change.to === actual,
   );
   if (accepted) {
     warnings.push(issue(field, expected, actual, `accepted observed change: ${accepted.reason}`));
@@ -190,7 +221,7 @@ function addScalarMismatch(
 function addSetParityIssues(
   failures: PromptPolicyParityIssue[],
   warnings: PromptPolicyParityIssue[],
-  field: typeof stableSetFields[number],
+  field: (typeof stableSetFields)[number],
   expected: readonly string[],
   actual: readonly string[],
 ): void {
@@ -199,10 +230,19 @@ function addSetParityIssues(
   const missing = expectedSet.filter((value) => !actualSet.includes(value));
   const added = actualSet.filter((value) => !expectedSet.includes(value));
   if (missing.length > 0) {
-    failures.push(issue(field, expectedSet, actualSet, `${field} missing baseline values: ${missing.join(", ")}`));
+    failures.push(
+      issue(
+        field,
+        expectedSet,
+        actualSet,
+        `${field} missing baseline values: ${missing.join(", ")}`,
+      ),
+    );
   }
   if (added.length > 0) {
-    warnings.push(issue(field, expectedSet, actualSet, `${field} added values: ${added.join(", ")}`));
+    warnings.push(
+      issue(field, expectedSet, actualSet, `${field} added values: ${added.join(", ")}`),
+    );
   }
 }
 
@@ -217,12 +257,14 @@ function addAssertionMismatches(
   for (const assertion of base.finalAnswerHardAssertions) {
     const currentPassed = currentAssertions.get(assertion.assertion);
     if (currentPassed === assertion.passed) continue;
-    failures.push(issue(
-      "finalAnswerHardAssertions",
-      { assertion: assertion.assertion, passed: assertion.passed },
-      { assertion: assertion.assertion, passed: currentPassed ?? "(missing)" },
-      `${base.id}: final-answer assertion status changed`,
-    ));
+    failures.push(
+      issue(
+        "finalAnswerHardAssertions",
+        { assertion: assertion.assertion, passed: assertion.passed },
+        { assertion: assertion.assertion, passed: currentPassed ?? "(missing)" },
+        `${base.id}: final-answer assertion status changed`,
+      ),
+    );
   }
 }
 

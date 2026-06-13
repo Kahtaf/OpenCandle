@@ -19,10 +19,7 @@ const SLOT_TO_PREF_KEYS: Record<string, string[]> = {
  *   The corresponding preference keys will be excluded from memory context to avoid
  *   conflicting provenance signals.
  */
-export function buildMemoryContext(
-  storage: MemoryStorage,
-  overriddenSlots?: string[],
-): string {
+export function buildMemoryContext(storage: MemoryStorage, overriddenSlots?: string[]): string {
   const sections: string[] = [];
 
   // Build set of preference keys to suppress

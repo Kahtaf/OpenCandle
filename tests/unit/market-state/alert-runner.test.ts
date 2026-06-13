@@ -1,14 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type Database from "better-sqlite3";
-import { initDatabase } from "../../../src/memory/sqlite.js";
-import { MarketStateService } from "../../../src/market-state/service.js";
-import { ALERT_CONDITION_VERSION, percentMove, priceCrossesAbove, rsiThreshold, smaCross, volumeSpike } from "../../../src/market-state/alert-conditions.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  ALERT_CONDITION_VERSION,
+  percentMove,
+  priceCrossesAbove,
+  rsiThreshold,
+  smaCross,
+  volumeSpike,
+} from "../../../src/market-state/alert-conditions.js";
 import {
   AlertProviderBudget,
+  type AlertRunnerProviders,
   defaultAlertProviderBudget,
   runAlertChecks,
-  type AlertRunnerProviders,
 } from "../../../src/market-state/alert-runner.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
 
 describe("alert runner", () => {
   let db: Database.Database;
@@ -61,16 +68,18 @@ describe("alert runner", () => {
     });
 
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: symbol === "AAPL" ? 240 : 0,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-        dataDelayMs: 15 * 60_000,
-        caveat: "delayed",
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: symbol === "AAPL" ? 240 : 0,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+          dataDelayMs: 15 * 60_000,
+          caveat: "delayed",
+        })),
+      ),
       getYahooQuote: vi.fn(async (symbol) => ({
         symbol,
         value: 69_000,
@@ -463,15 +472,17 @@ describe("alert runner", () => {
     });
 
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: 260,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-        dataDelayMs: 15 * 60_000,
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: 260,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+          dataDelayMs: 15 * 60_000,
+        })),
+      ),
       getYahooQuote: vi.fn(async () => {
         throw new Error("Yahoo unavailable");
       }),
@@ -519,14 +530,16 @@ describe("alert runner", () => {
     });
 
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: 260,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:00:00.000Z",
-        cacheStatus: "stale",
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: 260,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:00:00.000Z",
+          cacheStatus: "stale",
+        })),
+      ),
       getYahooQuote: vi.fn(async () => {
         throw new Error("Yahoo fallback unavailable");
       }),
@@ -581,15 +594,17 @@ describe("alert runner", () => {
 
     let price = 240;
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: price,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-        dataDelayMs: 15 * 60_000,
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: price,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+          dataDelayMs: 15 * 60_000,
+        })),
+      ),
       getYahooQuote: vi.fn(),
       getHistory: vi.fn(),
     };
@@ -692,14 +707,16 @@ describe("alert runner", () => {
     });
 
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: 240,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: 240,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+        })),
+      ),
       getYahooQuote: vi.fn(async () => {
         throw new Error("rate limited");
       }),
@@ -740,14 +757,16 @@ describe("alert runner", () => {
     const providers: AlertRunnerProviders = {
       getTradingViewQuotes: vi.fn(),
       getYahooQuote: vi.fn(),
-      getHistory: vi.fn(async () => closes.map((close, index) => ({
-        date: `2026-06-0${index + 1}`,
-        open: close,
-        high: close,
-        low: close,
-        close,
-        volume: 1_000,
-      }))),
+      getHistory: vi.fn(async () =>
+        closes.map((close, index) => ({
+          date: `2026-06-0${index + 1}`,
+          open: close,
+          high: close,
+          low: close,
+          close,
+          volume: 1_000,
+        })),
+      ),
     };
 
     await runAlertChecks(service, {
@@ -797,14 +816,16 @@ describe("alert runner", () => {
     const providers: AlertRunnerProviders = {
       getTradingViewQuotes: vi.fn(),
       getYahooQuote: vi.fn(),
-      getHistory: vi.fn(async () => closes.map((close, index) => ({
-        date: `2026-06-0${index + 1}`,
-        open: close,
-        high: close,
-        low: close,
-        close,
-        volume: 1_000,
-      }))),
+      getHistory: vi.fn(async () =>
+        closes.map((close, index) => ({
+          date: `2026-06-0${index + 1}`,
+          open: close,
+          high: close,
+          low: close,
+          close,
+          volume: 1_000,
+        })),
+      ),
     };
 
     await runAlertChecks(service, {
@@ -851,14 +872,16 @@ describe("alert runner", () => {
     const providers: AlertRunnerProviders = {
       getTradingViewQuotes: vi.fn(),
       getYahooQuote: vi.fn(),
-      getHistory: vi.fn(async () => closes.map((close, index) => ({
-        date: `2026-06-0${index + 1}`,
-        open: close,
-        high: close,
-        low: close,
-        close,
-        volume: 1_000,
-      }))),
+      getHistory: vi.fn(async () =>
+        closes.map((close, index) => ({
+          date: `2026-06-0${index + 1}`,
+          open: close,
+          high: close,
+          low: close,
+          close,
+          volume: 1_000,
+        })),
+      ),
     };
 
     await runAlertChecks(service, {
@@ -952,14 +975,16 @@ describe("alert runner", () => {
 
     let price = 240;
     const providers: AlertRunnerProviders = {
-      getTradingViewQuotes: vi.fn(async (symbols) => symbols.map((symbol) => ({
-        symbol,
-        value: price,
-        sourceProvider: "tradingview",
-        observedAt: "2026-06-01T12:00:00.000Z",
-        providerDataAt: "2026-06-01T11:45:00.000Z",
-        cacheStatus: "live",
-      }))),
+      getTradingViewQuotes: vi.fn(async (symbols) =>
+        symbols.map((symbol) => ({
+          symbol,
+          value: price,
+          sourceProvider: "tradingview",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T11:45:00.000Z",
+          cacheStatus: "live",
+        })),
+      ),
       getYahooQuote: vi.fn(),
       getHistory: vi.fn(),
     };

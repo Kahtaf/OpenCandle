@@ -1,9 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
 import {
-  setRunContext,
   clearRunContext,
   getProviderTracker,
+  setRunContext,
 } from "../../../src/runtime/run-context.js";
 
 afterEach(() => {

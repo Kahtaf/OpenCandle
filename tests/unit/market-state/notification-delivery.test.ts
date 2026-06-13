@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type Database from "better-sqlite3";
-import { initDatabase } from "../../../src/memory/sqlite.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { deliverPendingNotifications } from "../../../src/market-state/notification-delivery.js";
 import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
 
 describe("notification delivery", () => {
   let db: Database.Database;
@@ -35,11 +35,14 @@ describe("notification delivery", () => {
     });
 
     expect(result).toMatchObject({ attempted: 1, succeeded: 1, failed: 0 });
-    expect(fetchImpl).toHaveBeenCalledWith("https://example.test/opencandle", expect.objectContaining({
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: expect.stringContaining("AAPL alert triggered"),
-    }));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://example.test/opencandle",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: expect.stringContaining("AAPL alert triggered"),
+      }),
+    );
     expect(service.listNotificationDeliveryAttempts()).toEqual([
       expect.objectContaining({
         notificationEventId: notification.id,
@@ -160,9 +163,12 @@ describe("notification delivery", () => {
     });
 
     expect(result).toMatchObject({ attempted: 1, succeeded: 1, failed: 0 });
-    expect(fetchImpl).toHaveBeenCalledWith("http://127.0.0.1:9999/hook", expect.objectContaining({
-      method: "POST",
-    }));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://127.0.0.1:9999/hook",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
   });
 
   it("times out hanging webhook deliveries and records a failed attempt", async () => {
@@ -172,9 +178,12 @@ describe("notification delivery", () => {
       title: "AAPL alert triggered",
       body: "AAPL crossed 250.",
     });
-    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
-    }));
+    const fetchImpl = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
 
     const result = await deliverPendingNotifications(service, {
       webhookUrl: "https://example.test/opencandle",
@@ -184,9 +193,12 @@ describe("notification delivery", () => {
     });
 
     expect(result).toMatchObject({ attempted: 1, succeeded: 0, failed: 1 });
-    expect(fetchImpl).toHaveBeenCalledWith("https://example.test/opencandle", expect.objectContaining({
-      signal: expect.any(AbortSignal),
-    }));
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://example.test/opencandle",
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
     expect(service.listNotificationDeliveryAttempts()).toEqual([
       expect.objectContaining({
         notificationEventId: notification.id,
@@ -223,13 +235,15 @@ describe("notification delivery", () => {
   it("rotates webhook retries by oldest pending attempt instead of starving older notifications", async () => {
     const notifications = [];
     for (let index = 0; index < 6; index++) {
-      notifications.push(service.recordNotificationEvent({
-        sourceType: "alert_event",
-        severity: "warning",
-        title: `Alert ${index + 1}`,
-        body: "A price alert triggered.",
-        createdAt: `2026-06-01T12:0${index}:00.000Z`,
-      }));
+      notifications.push(
+        service.recordNotificationEvent({
+          sourceType: "alert_event",
+          severity: "warning",
+          title: `Alert ${index + 1}`,
+          body: "A price alert triggered.",
+          createdAt: `2026-06-01T12:0${index}:00.000Z`,
+        }),
+      );
     }
     for (const notification of notifications.slice(1)) {
       service.recordNotificationDeliveryAttempt({

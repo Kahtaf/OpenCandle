@@ -1,8 +1,8 @@
-import { httpGet, HttpError } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import type { FredObservation, FredSeries } from "../types/macro.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
-import type { FredSeries, FredObservation } from "../types/macro.js";
 
 const BASE_URL = "https://api.stlouisfed.org/fred";
 

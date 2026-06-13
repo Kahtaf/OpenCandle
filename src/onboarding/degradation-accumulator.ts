@@ -58,9 +58,7 @@ export function createDegradationAccumulator(): DegradationAccumulator {
         const silenced = entry?.status === "never_ask";
         const alias = descriptor.aliases[0] ?? descriptor.id;
         const baseRemediation = `run /connect ${alias} to unlock`;
-        const remediation = silenced
-          ? `${baseRemediation} (silenced)`
-          : baseRemediation;
+        const remediation = silenced ? `${baseRemediation} (silenced)` : baseRemediation;
         lines.push(
           buildSkippedTag({
             provider,

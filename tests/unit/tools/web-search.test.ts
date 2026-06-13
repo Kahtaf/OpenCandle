@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import type { WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
+import type { WebSearchEnvelope } from "../../../src/types/sentiment.js";
 
 // Mock the provider
 vi.mock("../../../src/providers/web-search.js", () => ({
@@ -11,16 +11,15 @@ vi.mock("../../../src/providers/web-search.js", () => ({
 // Mock hasCredential so we can drive the soft-degraded tag branches in the
 // tool directly without touching process.env or the on-disk config file.
 vi.mock("../../../src/onboarding/providers.js", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../../src/onboarding/providers.js")>();
+  const actual = await importOriginal<typeof import("../../../src/onboarding/providers.js")>();
   return {
     ...actual,
     hasCredential: vi.fn(() => true),
   };
 });
 
-import { searchWeb } from "../../../src/providers/web-search.js";
 import { hasCredential } from "../../../src/onboarding/providers.js";
+import { searchWeb } from "../../../src/providers/web-search.js";
 import { webSearchTool } from "../../../src/tools/sentiment/web-search.js";
 
 const mockedSearchWeb = vi.mocked(searchWeb);

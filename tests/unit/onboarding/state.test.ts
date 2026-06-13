@@ -1,20 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getDefaultOnboardingState,
-  loadOnboardingState,
-  saveOnboardingState,
-  markProviderCompleted,
-  markProviderSnoozed,
-  markProviderNeverAsk,
-  markWelcomeShown,
-  shouldPrompt,
-  shouldShowWelcome,
   getProviderEntry,
+  loadOnboardingState,
+  markProviderCompleted,
+  markProviderNeverAsk,
+  markProviderSnoozed,
+  markWelcomeShown,
   ONBOARDING_VERSION,
   type OnboardingState,
+  saveOnboardingState,
+  shouldPrompt,
+  shouldShowWelcome,
 } from "../../../src/onboarding/state.js";
 
 describe("onboarding state — defaults and persistence", () => {

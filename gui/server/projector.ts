@@ -1,5 +1,5 @@
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export interface DashboardState {
   watchlist: Array<{
@@ -220,7 +220,10 @@ function parseSoftGapProviders(text: string): string[] {
   return providers;
 }
 
-function inferDirectToolGapProvider(toolName: string | undefined, text: string): string | undefined {
+function inferDirectToolGapProvider(
+  toolName: string | undefined,
+  text: string,
+): string | undefined {
   if (!toolName || !/(?:⚠|unavailable|No .*data found|LOGIN_NEEDED)/i.test(text)) return undefined;
   return DIRECT_TOOL_GAP_PROVIDERS[toolName];
 }
@@ -233,7 +236,7 @@ function inferSymbolFromContent(content: ToolResultMessage["content"]): string |
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 

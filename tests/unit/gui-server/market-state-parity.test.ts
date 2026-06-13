@@ -1,15 +1,15 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Message } from "@earendil-works/pi-ai";
 import type { SessionManager } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 import { buildMarketStateSnapshot } from "../../../gui/server/market-state-api.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { predictionsTool } from "../../../src/tools/portfolio/predictions.js";
+import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import type { StockQuote } from "../../../src/types/market.js";
 
@@ -33,7 +33,9 @@ describe("market-state GUI/TUI parity", () => {
         messages.push(message);
       },
     } as unknown as SessionManager;
-    vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol.toUpperCase(), 180));
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol.toUpperCase(), 180),
+    );
   });
 
   afterEach(() => {
@@ -85,13 +87,16 @@ describe("market-state GUI/TUI parity", () => {
     expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
     expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
     expect(snapshot.predictions.map((prediction) => prediction.symbol)).toEqual(["AAPL"]);
-    expect(messages.some((message) =>
-      message.role === "toolResult" &&
-      message.toolName === "track_prediction" &&
-      message.details?.stateChange?.source === "ui" &&
-      typeof message.details.stateChange.targetId === "number" &&
-      typeof message.details.stateChange.instrumentId === "number"
-    )).toBe(true);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "toolResult" &&
+          message.toolName === "track_prediction" &&
+          message.details?.stateChange?.source === "ui" &&
+          typeof message.details.stateChange.targetId === "number" &&
+          typeof message.details.stateChange.instrumentId === "number",
+      ),
+    ).toBe(true);
   });
 
   it("makes GUI-originated portfolio lots visible to later TUI reads", async () => {
@@ -117,14 +122,17 @@ describe("market-state GUI/TUI parity", () => {
         avgCost: 150,
       }),
     ]);
-    expect(messages.some((message) =>
-      message.role === "toolResult" &&
-      message.toolName === "track_portfolio" &&
-      message.details?.stateChange?.source === "ui" &&
-      message.details.stateChange.domain === "portfolio" &&
-      typeof message.details.stateChange.targetId === "number" &&
-      typeof message.details.stateChange.instrumentId === "number"
-    )).toBe(true);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "toolResult" &&
+          message.toolName === "track_portfolio" &&
+          message.details?.stateChange?.source === "ui" &&
+          message.details.stateChange.domain === "portfolio" &&
+          typeof message.details.stateChange.targetId === "number" &&
+          typeof message.details.stateChange.instrumentId === "number",
+      ),
+    ).toBe(true);
   });
 });
 

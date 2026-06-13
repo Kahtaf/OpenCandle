@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import * as configModule from "../../../src/config.js";
 import { buildCatalog } from "../../../gui/server/tool-metadata.js";
+import * as configModule from "../../../src/config.js";
 
 describe("GUI tool metadata catalog", () => {
   const originalOpenCandleHome = process.env.OPENCANDLE_HOME;

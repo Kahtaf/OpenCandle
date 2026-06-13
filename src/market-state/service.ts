@@ -535,29 +535,30 @@ export class MarketStateService {
   findInstrumentByAlias(lookup: InstrumentAliasLookup): InstrumentRecord | null {
     const source = normalizeSource(lookup.source);
     const sourceId = normalizeNullable(lookup.sourceId);
-    const alias = sourceId == null
-      ? this.db
-        .prepare(
-          `SELECT id, instrument_id FROM instrument_aliases
+    const alias =
+      sourceId == null
+        ? (this.db
+            .prepare(
+              `SELECT id, instrument_id FROM instrument_aliases
            WHERE source = ?
              AND source_symbol = ?
              AND IFNULL(source_exchange, '') = IFNULL(?, '')
              AND IFNULL(source_asset_type, '') = IFNULL(?, '')
            LIMIT 1`,
-        )
-        .get(
-          source,
-          normalizeSourceSymbol(lookup.sourceSymbol ?? ""),
-          normalizeExchange(lookup.sourceExchange),
-          normalizeAssetType(lookup.sourceAssetType),
-        ) as InstrumentAliasRow | undefined
-      : this.db
-        .prepare(
-          `SELECT id, instrument_id FROM instrument_aliases
+            )
+            .get(
+              source,
+              normalizeSourceSymbol(lookup.sourceSymbol ?? ""),
+              normalizeExchange(lookup.sourceExchange),
+              normalizeAssetType(lookup.sourceAssetType),
+            ) as InstrumentAliasRow | undefined)
+        : (this.db
+            .prepare(
+              `SELECT id, instrument_id FROM instrument_aliases
            WHERE source = ? AND source_id = ?
            LIMIT 1`,
-        )
-        .get(source, sourceId) as InstrumentAliasRow | undefined;
+            )
+            .get(source, sourceId) as InstrumentAliasRow | undefined);
 
     if (alias == null) return null;
 
@@ -608,7 +609,9 @@ export class MarketStateService {
             params.notes ?? existing.notes,
             params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
             params.source === undefined ? existing.source : normalizeNullable(params.source),
-            params.sourceRowId === undefined ? existing.source_row_id : normalizeNullable(params.sourceRowId),
+            params.sourceRowId === undefined
+              ? existing.source_row_id
+              : normalizeNullable(params.sourceRowId),
             params.sourceMetadata === undefined
               ? existing.source_metadata_json
               : params.sourceMetadata == null
@@ -663,7 +666,10 @@ export class MarketStateService {
     return rows.map(mapWatchlistItem);
   }
 
-  removeWatchlistItemBySymbol(symbol: string, watchlistId = this.getDefaultWatchlist().id): boolean {
+  removeWatchlistItemBySymbol(
+    symbol: string,
+    watchlistId = this.getDefaultWatchlist().id,
+  ): boolean {
     const result = this.db
       .prepare(
         `DELETE FROM watchlist_items
@@ -783,7 +789,10 @@ export class MarketStateService {
     return rows.map(mapPortfolioLot);
   }
 
-  removePortfolioLotsBySymbol(symbol: string, portfolioId = this.getDefaultPortfolio().id): boolean {
+  removePortfolioLotsBySymbol(
+    symbol: string,
+    portfolioId = this.getDefaultPortfolio().id,
+  ): boolean {
     const result = this.db
       .prepare(
         `DELETE FROM portfolio_lots
@@ -1022,10 +1031,16 @@ export class MarketStateService {
     const expiresAt = new Date(nowMs + params.ttlSeconds * 1000).toISOString();
     const tx = this.db.transaction(() => {
       const current = this.db
-        .prepare("SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1")
+        .prepare(
+          "SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1",
+        )
         .get() as AutomationRunnerLeaseRow | undefined;
 
-      if (current != null && current.owner_id !== params.ownerId && new Date(current.expires_at).getTime() > nowMs) {
+      if (
+        current != null &&
+        current.owner_id !== params.ownerId &&
+        new Date(current.expires_at).getTime() > nowMs
+      ) {
         return { acquired: false, ...mapAutomationRunnerLease(current) };
       }
 
@@ -1058,7 +1073,9 @@ export class MarketStateService {
 
   getAutomationRunnerLease(now = new Date().toISOString()): AutomationRunnerLeaseRecord | null {
     const row = this.db
-      .prepare("SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1")
+      .prepare(
+        "SELECT owner_id, owner_kind, acquired_at, heartbeat_at, expires_at FROM automation_runner_leases WHERE id = 1",
+      )
       .get() as AutomationRunnerLeaseRow | undefined;
     if (row == null) return null;
     if (new Date(row.expires_at).getTime() <= new Date(now).getTime()) return null;
@@ -1089,15 +1106,18 @@ export class MarketStateService {
     return this.getAlertCheckRun(Number(result.lastInsertRowid));
   }
 
-  completeAlertCheckRun(id: number, params: {
-    completedAt?: string;
-    status: string;
-    checkedCount: number;
-    triggeredCount: number;
-    unavailableCount: number;
-    error?: unknown;
-    providerStatus?: unknown;
-  }): AlertCheckRunRecord {
+  completeAlertCheckRun(
+    id: number,
+    params: {
+      completedAt?: string;
+      status: string;
+      checkedCount: number;
+      triggeredCount: number;
+      unavailableCount: number;
+      error?: unknown;
+      providerStatus?: unknown;
+    },
+  ): AlertCheckRunRecord {
     const completedAt = params.completedAt ?? new Date().toISOString();
     this.db
       .prepare(
@@ -1139,10 +1159,10 @@ export class MarketStateService {
     return rows.map(mapAlertCheckRun);
   }
 
-  markStaleAutomationRunsLost(params: {
-    now?: string;
-    graceSeconds: number;
-  }): { alertCheckRuns: number; reportRuns: number } {
+  markStaleAutomationRunsLost(params: { now?: string; graceSeconds: number }): {
+    alertCheckRuns: number;
+    reportRuns: number;
+  } {
     const now = params.now ?? new Date().toISOString();
     const cutoff = new Date(new Date(now).getTime() - params.graceSeconds * 1000).toISOString();
     const tx = this.db.transaction(() => {
@@ -1218,7 +1238,10 @@ export class MarketStateService {
     return mapNotificationEvent(row);
   }
 
-  acknowledgeNotificationEvent(id: number, acknowledgedAt = new Date().toISOString()): NotificationEventRecord {
+  acknowledgeNotificationEvent(
+    id: number,
+    acknowledgedAt = new Date().toISOString(),
+  ): NotificationEventRecord {
     this.db
       .prepare(
         `UPDATE notification_events
@@ -1260,14 +1283,21 @@ export class MarketStateService {
     return this.getNotificationDeliveryAttempt(Number(result.lastInsertRowid));
   }
 
-  listNotificationDeliveryAttempts(notificationEventId?: number): NotificationDeliveryAttemptRecord[] {
-    const rows = notificationEventId == null
-      ? this.db
-        .prepare("SELECT * FROM notification_delivery_attempts ORDER BY attempted_at DESC, id DESC")
-        .all()
-      : this.db
-        .prepare("SELECT * FROM notification_delivery_attempts WHERE notification_event_id = ? ORDER BY attempted_at DESC, id DESC")
-        .all(notificationEventId);
+  listNotificationDeliveryAttempts(
+    notificationEventId?: number,
+  ): NotificationDeliveryAttemptRecord[] {
+    const rows =
+      notificationEventId == null
+        ? this.db
+            .prepare(
+              "SELECT * FROM notification_delivery_attempts ORDER BY attempted_at DESC, id DESC",
+            )
+            .all()
+        : this.db
+            .prepare(
+              "SELECT * FROM notification_delivery_attempts WHERE notification_event_id = ? ORDER BY attempted_at DESC, id DESC",
+            )
+            .all(notificationEventId);
     return (rows as NotificationDeliveryAttemptRow[]).map(mapNotificationDeliveryAttempt);
   }
 
@@ -1354,7 +1384,8 @@ export class MarketStateService {
 
       const currentPrevious = lastObservedValueFromJson(row.last_observed_json);
       const currentLastTriggeredAt = row.last_triggered_at ?? null;
-      const canTrigger = params.trigger != null &&
+      const canTrigger =
+        params.trigger != null &&
         currentPrevious === params.trigger.expectedPreviousValue &&
         currentLastTriggeredAt === params.trigger.expectedLastTriggeredAt;
 
@@ -1429,7 +1460,8 @@ export class MarketStateService {
       const rearmed = params.conditionState === "false" && row.last_condition_state === "true";
       const nextArmCycleId = rearmed ? row.arm_cycle_id + 1 : row.arm_cycle_id;
       let eventId: number | null = null;
-      const canInsertTrigger = params.trigger != null &&
+      const canInsertTrigger =
+        params.trigger != null &&
         row.enabled === 1 &&
         row.status === "active" &&
         row.last_condition_state !== "true";
@@ -1562,7 +1594,12 @@ export class MarketStateService {
                updated_at = ?
            WHERE id = ?`,
         )
-        .run(params.checkedAt, nextAlertCheckAt(row, params.checkedAt), params.checkedAt, params.ruleId);
+        .run(
+          params.checkedAt,
+          nextAlertCheckAt(row, params.checkedAt),
+          params.checkedAt,
+          params.ruleId,
+        );
 
       return Number(result.lastInsertRowid);
     });
@@ -1611,16 +1648,19 @@ export class MarketStateService {
     return this.getReportTemplate(Number(result.lastInsertRowid));
   }
 
-  updateReportTemplate(id: number, params: {
-    name?: string;
-    reportType?: string;
-    cadence?: string;
-    timezone?: string;
-    localTime?: string;
-    config?: unknown;
-    enabled?: boolean;
-    nextRunAt?: string | null;
-  }): ReportTemplateRecord {
+  updateReportTemplate(
+    id: number,
+    params: {
+      name?: string;
+      reportType?: string;
+      cadence?: string;
+      timezone?: string;
+      localTime?: string;
+      config?: unknown;
+      enabled?: boolean;
+      nextRunAt?: string | null;
+    },
+  ): ReportTemplateRecord {
     const existing = this.getReportTemplate(id);
     const now = new Date().toISOString();
     this.db
@@ -1645,23 +1685,21 @@ export class MarketStateService {
     return this.getReportTemplate(id);
   }
 
-  claimDueReportTemplateRun(id: number, params: {
-    scheduledFor: string;
-    nextRunAt: string;
-    claimedAt?: string;
-  }): ReportTemplateRecord | null {
+  claimDueReportTemplateRun(
+    id: number,
+    params: {
+      scheduledFor: string;
+      nextRunAt: string;
+      claimedAt?: string;
+    },
+  ): ReportTemplateRecord | null {
     const result = this.db
       .prepare(
         `UPDATE report_templates
          SET next_run_at = ?, updated_at = ?
          WHERE id = ? AND enabled = 1 AND next_run_at = ?`,
       )
-      .run(
-        params.nextRunAt,
-        params.claimedAt ?? new Date().toISOString(),
-        id,
-        params.scheduledFor,
-      );
+      .run(params.nextRunAt, params.claimedAt ?? new Date().toISOString(), id, params.scheduledFor);
     return result.changes === 0 ? null : this.getReportTemplate(id);
   }
 
@@ -1820,7 +1858,9 @@ export class MarketStateService {
           existing.id,
         );
       this.upsertInstrumentAliases(existing.id, input.aliases ?? []);
-      return this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(existing.id) as InstrumentRow;
+      return this.db
+        .prepare("SELECT * FROM instruments WHERE id = ?")
+        .get(existing.id) as InstrumentRow;
     }
 
     const result = this.db
@@ -1845,7 +1885,9 @@ export class MarketStateService {
       );
     const instrumentId = Number(result.lastInsertRowid);
     this.upsertInstrumentAliases(instrumentId, input.aliases ?? []);
-    return this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(instrumentId) as InstrumentRow;
+    return this.db
+      .prepare("SELECT * FROM instruments WHERE id = ?")
+      .get(instrumentId) as InstrumentRow;
   }
 
   private upsertInstrumentAliases(instrumentId: number, aliases: InstrumentAliasInput[]): void {
@@ -1859,24 +1901,27 @@ export class MarketStateService {
       const sourceAssetType = normalizeAssetType(alias.sourceAssetType);
       const sourceId = normalizeNullable(alias.sourceId);
       const rawJson = alias.raw == null ? null : JSON.stringify(alias.raw);
-      const existing = sourceId == null
-        ? this.db
-          .prepare(
-            `SELECT id, instrument_id FROM instrument_aliases
+      const existing =
+        sourceId == null
+          ? (this.db
+              .prepare(
+                `SELECT id, instrument_id FROM instrument_aliases
              WHERE source = ?
                AND source_symbol = ?
                AND IFNULL(source_exchange, '') = IFNULL(?, '')
                AND IFNULL(source_asset_type, '') = IFNULL(?, '')
              LIMIT 1`,
-          )
-          .get(source, sourceSymbol, sourceExchange, sourceAssetType) as InstrumentAliasRow | undefined
-        : this.db
-          .prepare(
-            `SELECT id, instrument_id FROM instrument_aliases
+              )
+              .get(source, sourceSymbol, sourceExchange, sourceAssetType) as
+              | InstrumentAliasRow
+              | undefined)
+          : (this.db
+              .prepare(
+                `SELECT id, instrument_id FROM instrument_aliases
              WHERE source = ? AND source_id = ?
              LIMIT 1`,
-          )
-          .get(source, sourceId) as InstrumentAliasRow | undefined;
+              )
+              .get(source, sourceId) as InstrumentAliasRow | undefined);
 
       if (existing) {
         this.db
@@ -1988,7 +2033,9 @@ export class MarketStateService {
   }
 
   private getImportBatch(id: number): ImportBatchRecord {
-    const row = this.db.prepare("SELECT * FROM import_batches WHERE id = ?").get(id) as ImportBatchRow;
+    const row = this.db
+      .prepare("SELECT * FROM import_batches WHERE id = ?")
+      .get(id) as ImportBatchRow;
     return mapImportBatch(row);
   }
 
@@ -2037,7 +2084,7 @@ function mapWatchlistItem(row: WatchlistItemRow): WatchlistItemRecord {
     priceCurrency: row.price_currency,
     thesis: row.thesis,
     notes: row.notes,
-    tags: row.tags_json == null ? null : JSON.parse(row.tags_json) as string[],
+    tags: row.tags_json == null ? null : (JSON.parse(row.tags_json) as string[]),
     source: row.source,
     sourceRowId: row.source_row_id,
     sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
@@ -2158,7 +2205,8 @@ function mapAlertCheckRun(row: AlertCheckRunRow): AlertCheckRunRecord {
     unavailableCount: row.unavailable_count,
     ownerId: row.owner_id,
     errorJson: row.error_json == null ? null : JSON.parse(row.error_json),
-    providerStatusJson: row.provider_status_json == null ? null : JSON.parse(row.provider_status_json),
+    providerStatusJson:
+      row.provider_status_json == null ? null : JSON.parse(row.provider_status_json),
   };
 }
 
@@ -2177,7 +2225,9 @@ function mapNotificationEvent(row: NotificationEventRow): NotificationEventRecor
   };
 }
 
-function mapNotificationDeliveryAttempt(row: NotificationDeliveryAttemptRow): NotificationDeliveryAttemptRecord {
+function mapNotificationDeliveryAttempt(
+  row: NotificationDeliveryAttemptRow,
+): NotificationDeliveryAttemptRecord {
   return {
     id: row.id,
     notificationEventId: row.notification_event_id,
@@ -2262,7 +2312,10 @@ function normalizeNullable(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-function assertPositiveFinitePortfolioLotNumber(value: number, label: "quantity" | "average cost"): void {
+function assertPositiveFinitePortfolioLotNumber(
+  value: number,
+  label: "quantity" | "average cost",
+): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`Portfolio lot ${label} must be a positive finite number.`);
   }

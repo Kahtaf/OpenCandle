@@ -1,13 +1,13 @@
-import { useEffect } from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
+import { useEffect } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
+import { SourceStack } from "../../components/ui/source-stack.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
-import { SourceStack } from "../../components/ui/source-stack.jsx";
-import { ToolIcon, summarizeRunTitle, toolMeta } from "../renderers/tool-icon.jsx";
-import { useToolDrawer } from "./tool-drawer-context.jsx";
-import { extractRunSources } from "./run-sources.js";
 import { cn } from "../../lib/utils.js";
+import { summarizeRunTitle, ToolIcon, toolMeta } from "../renderers/tool-icon.jsx";
+import { extractRunSources } from "./run-sources.js";
+import { useToolDrawer } from "./tool-drawer-context.jsx";
 
 // In-thread collapsed view of a tool_run. Clicking opens the drawer with the
 // full timeline. Layout follows llmchat's pattern: small eyebrow ("Working"
@@ -60,7 +60,9 @@ export function StepsCard({ run, autoOpen = false }) {
           ) : (
             <div className="truncate text-[11px] text-muted-foreground">
               {completedCount} of {stepCount} {stepCount === 1 ? "step" : "steps"}
-              {sources.length > 0 ? ` · ${sources.length} ${sources.length === 1 ? "source" : "sources"}` : ""}
+              {sources.length > 0
+                ? ` · ${sources.length} ${sources.length === 1 ? "source" : "sources"}`
+                : ""}
             </div>
           )}
         </div>
@@ -72,7 +74,10 @@ export function StepsCard({ run, autoOpen = false }) {
         <Badge variant="outline" size="sm" className="shrink-0 font-mono">
           {stepCount} {stepCount === 1 ? "step" : "steps"}
         </Badge>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+        <ChevronRight
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
       </button>
     </div>
   );
@@ -86,7 +91,9 @@ function RunLeadingIcon({ run }) {
   // yellow icon).
   const first = run.steps[0];
   if (!first) return <StatusDot status="pending" />;
-  return <ToolIcon name={first.name} size="lg" status={run.status === "error" ? "error" : undefined} />;
+  return (
+    <ToolIcon name={first.name} size="lg" status={run.status === "error" ? "error" : undefined} />
+  );
 }
 
 function argSummary(step) {

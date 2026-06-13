@@ -1,12 +1,7 @@
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
 
-export type AnalystRole =
-  | "valuation"
-  | "momentum"
-  | "options"
-  | "contrarian"
-  | "risk";
+export type AnalystRole = "valuation" | "momentum" | "options" | "contrarian" | "risk";
 
 const SYMBOL_CAPTURE = "(\\$?[A-Za-z]{1,5}(?:[./-][A-Za-z]{1,2})?)";
 const NORMALIZED_SYMBOL_PATTERN = /^[A-Z]{1,5}(?:[./-][A-Z]{1,2})?$/;
@@ -176,7 +171,10 @@ export interface ComprehensiveAnalysisOptions {
   debate?: boolean;
 }
 
-export function buildComprehensiveAnalysisDefinition(symbol: string, options?: ComprehensiveAnalysisOptions): WorkflowDefinition {
+export function buildComprehensiveAnalysisDefinition(
+  symbol: string,
+  options?: ComprehensiveAnalysisOptions,
+): WorkflowDefinition {
   const debate = options?.debate ?? true;
   const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
 

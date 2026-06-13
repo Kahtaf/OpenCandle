@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  isAnalysisRequest,
-  normalizeSymbol,
-  buildBullPrompt,
   buildBearPrompt,
+  buildBullPrompt,
+  buildComprehensiveAnalysisDefinition,
   buildRebuttalPrompt,
   buildSynthesisPrompt,
-  buildComprehensiveAnalysisDefinition,
+  isAnalysisRequest,
+  normalizeSymbol,
 } from "../../../src/analysts/orchestrator.js";
 
 describe("isAnalysisRequest", () => {
@@ -71,7 +71,9 @@ describe("normalizeSymbol", () => {
 
 describe("comprehensive analysis follow-up prompts", () => {
   function followUpPrompts(symbol: string) {
-    return buildComprehensiveAnalysisDefinition(symbol).steps.slice(1).map((step) => step.prompt);
+    return buildComprehensiveAnalysisDefinition(symbol)
+      .steps.slice(1)
+      .map((step) => step.prompt);
   }
 
   it("queues 10 follow-up messages (5 analysts + 3 debate + synthesis + validation)", () => {
@@ -253,8 +255,8 @@ describe("buildComprehensiveAnalysisDefinition", () => {
 
 describe("comprehensive analysis follow-up prompts with debate toggle", () => {
   it("queues 7 follow-ups with debate off (5 analysts + synthesis + validation)", () => {
-    const calls = buildComprehensiveAnalysisDefinition("AAPL", { debate: false }).steps
-      .slice(1)
+    const calls = buildComprehensiveAnalysisDefinition("AAPL", { debate: false })
+      .steps.slice(1)
       .map((step) => step.prompt);
     expect(calls).toHaveLength(7);
     expect(calls[5]).toContain("[Synthesis]");

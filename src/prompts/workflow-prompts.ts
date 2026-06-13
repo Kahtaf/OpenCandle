@@ -1,14 +1,14 @@
-import type {
-  PortfolioSlots,
-  OptionsScreenerSlots,
-  CompareAssetsSlots,
-  SlotResolution,
-  SlotSource,
-} from "../routing/types.js";
-import type { RouterOutput } from "../routing/router-types.js";
 import { parseDteTarget } from "../routing/defaults.js";
 import { areLikelyFundOrIndexSymbols, isFundOrIndexAssetScope } from "../routing/fund-symbols.js";
 import { isLongInvestmentHorizon } from "../routing/horizon.js";
+import type { RouterOutput } from "../routing/router-types.js";
+import type {
+  CompareAssetsSlots,
+  OptionsScreenerSlots,
+  PortfolioSlots,
+  SlotResolution,
+  SlotSource,
+} from "../routing/types.js";
 
 function tag(source: string | undefined): string {
   switch (source) {
@@ -98,8 +98,10 @@ export function buildDisclosureBlock(
   const lines: string[] = [];
   lines.push("Assumptions (reproduce this block exactly — do not relabel sources):");
   if (userSpecified.length > 0) lines.push(`  User-specified: ${userSpecified.join(", ")}`);
-  if (fromPreferences.length > 0) lines.push(`  From saved preferences: ${fromPreferences.join(", ")}`);
-  if (fromPriorContext.length > 0) lines.push(`  From prior context: ${fromPriorContext.join(", ")}`);
+  if (fromPreferences.length > 0)
+    lines.push(`  From saved preferences: ${fromPreferences.join(", ")}`);
+  if (fromPriorContext.length > 0)
+    lines.push(`  From prior context: ${fromPriorContext.join(", ")}`);
   if (fromMemory.length > 0) lines.push(`  From memory: ${fromMemory.join(", ")}`);
   if (defaults.length > 0) lines.push(`  Defaults: ${defaults.join(", ")}`);
   if (workflowConstraints && workflowConstraints.length > 0) {
@@ -141,7 +143,10 @@ function formatSlotValue(value: unknown): string {
 export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>): string {
   const { resolved: s, sources } = resolution;
   const normalizedScope = s.assetScope.toLowerCase();
-  const isFundBuildingBlocks = normalizedScope.includes("etf") || normalizedScope.includes("fund") || normalizedScope.includes("building_blocks");
+  const isFundBuildingBlocks =
+    normalizedScope.includes("etf") ||
+    normalizedScope.includes("fund") ||
+    normalizedScope.includes("building_blocks");
 
   const disclosureBlock = buildDisclosureBlock(
     {
@@ -200,7 +205,9 @@ Response format:
 - Suggest what to change for more growth or more safety.`;
 }
 
-export function buildOptionsScreenerPrompt(resolution: SlotResolution<OptionsScreenerSlots>): string {
+export function buildOptionsScreenerPrompt(
+  resolution: SlotResolution<OptionsScreenerSlots>,
+): string {
   const { resolved: s, sources } = resolution;
 
   const dateStr = todayStr();
@@ -227,14 +234,15 @@ Ranking constraints:
 - Do NOT rank ultra-cheap near-zero-delta contracts as "best."
 `
     : "";
-  const longDatedInstructions = s.dteTarget === "180_plus_days"
-    ? `
+  const longDatedInstructions =
+    s.dteTarget === "180_plus_days"
+      ? `
 For LEAPS / long-dated options:
 - First call get_option_chain without an expiration to inspect available expirations.
 - Choose available expirations inside the target window, then call get_option_chain again with explicit \`expiration\` dates before ranking contracts.
 - Do not rank the nearest-expiration chain as a LEAPS result.
 `
-    : "";
+      : "";
 
   const disclosureBlock = buildDisclosureBlock(
     {
@@ -255,18 +263,26 @@ For LEAPS / long-dated options:
   );
 
   const coveredCallContext = [
-    s.optionStrategy ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}` : "",
-    s.costBasis !== undefined ? `\n- Cost basis: ${formatBudget(s.costBasis)} (Position cost basis: ${formatBudget(s.costBasis)})${tag(sources.costBasis)}` : "",
-    s.shareQuantity !== undefined ? `\n- Share quantity: ${s.shareQuantity} shares${tag(sources.shareQuantity)}` : "",
-    s.catalystSymbols?.length ? `\n- Catalyst/context tickers: ${s.catalystSymbols.join(", ")}${tag(sources.catalystSymbols)}` : "",
+    s.optionStrategy
+      ? `\n- Option strategy: ${s.optionStrategy}${tag(sources.optionStrategy)}`
+      : "",
+    s.costBasis !== undefined
+      ? `\n- Cost basis: ${formatBudget(s.costBasis)} (Position cost basis: ${formatBudget(s.costBasis)})${tag(sources.costBasis)}`
+      : "",
+    s.shareQuantity !== undefined
+      ? `\n- Share quantity: ${s.shareQuantity} shares${tag(sources.shareQuantity)}`
+      : "",
+    s.catalystSymbols?.length
+      ? `\n- Catalyst/context tickers: ${s.catalystSymbols.join(", ")}${tag(sources.catalystSymbols)}`
+      : "",
   ].join("");
 
   const isProtectivePutContext = s.optionStrategy === "protective_put";
-  const isCoveredCallContext = !isProtectivePutContext && (
-    s.optionStrategy === "covered_call" ||
-    s.costBasis !== undefined ||
-    (s.catalystSymbols?.length ?? 0) > 0
-  );
+  const isCoveredCallContext =
+    !isProtectivePutContext &&
+    (s.optionStrategy === "covered_call" ||
+      s.costBasis !== undefined ||
+      (s.catalystSymbols?.length ?? 0) > 0);
   const coveredCallInstructions = isCoveredCallContext
     ? `
 Covered-call sale guidance:
@@ -316,9 +332,17 @@ Steps:
 3. Filter contracts matching: ${s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts"}, DTE near ${s.dteTarget}, ${s.moneynessPreference} strikes.
 4. ${isProtectivePutContext ? "Rank by hedge quality: protection per dollar of premium, expiration fit, moneyness, liquidity, and hedge floor." : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit.`}${s.maxPremium !== undefined ? ` Do not rank contracts above the user's max premium of ${formatBudget(s.maxPremium)} unless no contracts under that cap are liquid; if so, say the cap could not be met.` : ""}
 5. Filter for ${s.liquidityMinimum}: high open interest and tight bid-ask spread.
-${s.optionStrategy === "covered_call" ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
-` : ""}${isCoveredCallContext && s.costBasis !== undefined ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
-` : ""}
+${
+  s.optionStrategy === "covered_call"
+    ? `6. Covered call framing: treat option premium as premium received, not paid. Use the user's cost basis when provided, and include return-if-assigned and assignment/downside risk instead of long-call max-loss framing.
+`
+    : ""
+}${
+  isCoveredCallContext && s.costBasis !== undefined
+    ? `Cost-basis math: if assigned, share gain/loss is strike minus ${formatBudget(s.costBasis)} before premium. Total return if assigned is (strike - cost basis + premium received) / cost basis.
+`
+    : ""
+}
 ${longDatedInstructions}
 ${coveredCallInstructions}
 ${protectivePutInstructions}
@@ -343,8 +367,10 @@ export function buildCompareAssetsPrompt(resolution: SlotResolution<CompareAsset
   const isMacroHedge = resolution.resolved.metrics?.includes("macro_hedge") ?? false;
   const isInterestRateSensitive = resolution.resolved.metrics?.includes("interest_rates") ?? false;
   const isOverlapComparison = resolution.resolved.metrics?.includes("overlap") ?? false;
-  const hasFundContext = isFundOrIndexAssetScope(resolution.resolved.assetScope) || areLikelyFundOrIndexSymbols(symbols);
-  const shouldProbeFundOverlap = !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
+  const hasFundContext =
+    isFundOrIndexAssetScope(resolution.resolved.assetScope) || areLikelyFundOrIndexSymbols(symbols);
+  const shouldProbeFundOverlap =
+    !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
   const sentimentStep = includeSentiment
     ? `\n6. Use get_sentiment_summary for each of: ${symbolList} to compare retail/news sentiment and note source availability.`
     : "";
@@ -379,7 +405,7 @@ ETF/fund overlap check:
 - Include expense ratios, dividend yields, and AUM only when fetched evidence supports them; otherwise tell the user to verify current fund facts before acting.
 - Treat holdings overlap and sector concentration as different from correlation; correlation is supporting evidence, not a substitute for constituent exposure.
 - If provider holdings coverage is partial or unavailable, say so directly and continue with the available price, risk, and correlation evidence.`
-    : "";
+      : "";
   const macroHedgeSteps = isMacroHedge
     ? `
 macro hedge decision guidance:
@@ -396,7 +422,7 @@ macro hedge decision guidance:
       ? "- Present an ETF overlap table with columns: fund role, shared top holdings/overlap weight from provider when available, sector concentration, what exposure is duplicated, what exposure is new, and diversification implication."
       : shouldProbeFundOverlap
         ? "- Present a long-horizon fund comparison table with columns: fund role/style, dividend/income versus growth tradeoff, risk evidence, holdings-overlap availability, tax and expense/yield/AUM verification gaps, and horizon fit."
-    : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
+        : `- Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown${sentimentMetric}.
 - Highlight which asset is stronger on each metric.`;
   const technicalRiskSteps = isOverlapComparison
     ? `3. Use analyze_holdings_overlap with symbols [${symbolList}] to fetch provider top holdings and compute pairwise overlap by weight.
@@ -407,7 +433,7 @@ macro hedge decision guidance:
 4. Use analyze_correlation across [${symbolList}] as supporting diversification evidence.
 5. Use analyze_risk for each to compare long-horizon risk context.
 6. Use get_technical_indicators only as secondary timing context; do not let RSI or short-term momentum dominate the long-horizon fund decision.`
-    : `3. Use get_technical_indicators for each to compare momentum and trend.
+      : `3. Use get_technical_indicators for each to compare momentum and trend.
 4. Use analyze_risk for each to compare risk metrics.
 5. Use analyze_correlation across [${symbolList}] to check diversification.`;
   const horizonLine = timeHorizon ? `\nTime horizon: ${timeHorizon}` : "";

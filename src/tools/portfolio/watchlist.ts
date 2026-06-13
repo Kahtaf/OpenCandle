@@ -1,12 +1,12 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getQuote } from "../../providers/yahoo-finance.js";
-import { getQuotes, type TradingViewQuote } from "../../providers/tradingview.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
-import { initDefaultDatabase } from "../../memory/sqlite.js";
-import { MarketStateService, type WatchlistItemRecord } from "../../market-state/service.js";
+import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
+import { MarketStateService, type WatchlistItemRecord } from "../../market-state/service.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
+import { getQuotes, type TradingViewQuote } from "../../providers/tradingview.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
 
 interface WatchlistCheck extends WatchlistItemRecord {
   currentPrice: number | null;
@@ -21,18 +21,14 @@ const params = Type.Object({
     [Type.Literal("add"), Type.Literal("update"), Type.Literal("remove"), Type.Literal("check")],
     { description: "One of: 'add', 'update', 'remove', or 'check'" },
   ),
-  symbol: Type.Optional(
-    Type.String({ description: "Ticker symbol (required for add/remove)" }),
-  ),
+  symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
   target_price: Type.Optional(
     Type.Number({ description: "Alert when price rises above this level" }),
   ),
   stop_price: Type.Optional(
     Type.Number({ description: "Alert when price falls below this level" }),
   ),
-  notes: Type.Optional(
-    Type.String({ description: "Optional notes for why you're watching this" }),
-  ),
+  notes: Type.Optional(Type.String({ description: "Optional notes for why you're watching this" })),
   thesis: Type.Optional(
     Type.String({ description: "Optional thesis for why you're watching this" }),
   ),
@@ -59,10 +55,12 @@ export const watchlistTool: AgentTool<typeof params> = {
         const instrument = await resolveInstrumentForMutation(args.symbol);
         if (instrument.status === "needs_selection") {
           return {
-            content: [{
-              type: "text",
-              text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the watchlist.`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the watchlist.`,
+              },
+            ],
             details: instrument,
           };
         }
@@ -140,11 +138,17 @@ export const watchlistTool: AgentTool<typeof params> = {
         "",
       ];
 
-      const tradingViewCaveats = Array.from(new Set(
-        checks
-          .filter((c) => c.sourceProvider === "tradingview")
-          .map((c) => c.dataCaveat ?? "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint."),
-      ));
+      const tradingViewCaveats = Array.from(
+        new Set(
+          checks
+            .filter((c) => c.sourceProvider === "tradingview")
+            .map(
+              (c) =>
+                c.dataCaveat ??
+                "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+            ),
+        ),
+      );
       if (tradingViewCaveats.length > 0) {
         lines.push(...tradingViewCaveats.map((caveat) => `Data caveat: ${caveat}`), "");
       }
@@ -154,9 +158,14 @@ export const watchlistTool: AgentTool<typeof params> = {
         const statusStr = c.statuses.length > 0 ? ` | ${c.statuses.join(" | ")}` : "";
         const targetStr = c.targetPrice ? ` | Target: $${c.targetPrice}` : "";
         const stopStr = c.stopPrice ? ` | Stop: $${c.stopPrice}` : "";
-        const sourceStr = c.sourceProvider ? ` | Source: ${c.sourceProvider === "tradingview" ? "TradingView" : "Yahoo"}` : "";
-        const priceStr = typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
-        lines.push(`  ${c.symbol}: ${priceStr}${targetStr}${stopStr}${sourceStr}${statusStr}${alertStr}`);
+        const sourceStr = c.sourceProvider
+          ? ` | Source: ${c.sourceProvider === "tradingview" ? "TradingView" : "Yahoo"}`
+          : "";
+        const priceStr =
+          typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
+        lines.push(
+          `  ${c.symbol}: ${priceStr}${targetStr}${stopStr}${sourceStr}${statusStr}${alertStr}`,
+        );
       }
 
       return {
@@ -193,19 +202,39 @@ async function checkWatchlistPrices(items: WatchlistItemRecord[]): Promise<Watch
     items.map(async (item) => {
       const tradingViewQuote = tradingViewQuotes.get(item.symbol.toUpperCase());
       if (tradingViewQuote) {
-        return buildCheckResult(item, tradingViewQuote.price, "tradingview", tradingViewQuote.dataCaveat);
+        return buildCheckResult(
+          item,
+          tradingViewQuote.price,
+          "tradingview",
+          tradingViewQuote.dataCaveat,
+        );
       }
 
       const result = await wrapProvider("yahoo", () => getQuote(item.symbol));
       if (result.status === "unavailable") {
-        return { ...item, currentPrice: null, alerts: [`UNAVAILABLE: ${result.reason}`], statuses: [] };
+        return {
+          ...item,
+          currentPrice: null,
+          alerts: [`UNAVAILABLE: ${result.reason}`],
+          statuses: [],
+        };
       }
       if (result.stale) {
-        return { ...item, currentPrice: null, alerts: ["UNAVAILABLE: provider returned stale market data"], statuses: [] };
+        return {
+          ...item,
+          currentPrice: null,
+          alerts: ["UNAVAILABLE: provider returned stale market data"],
+          statuses: [],
+        };
       }
       const quote = result.data;
       if (isZeroFilledQuote(quote)) {
-        return { ...item, currentPrice: null, alerts: ["UNAVAILABLE: Yahoo returned no valid market data."], statuses: [] };
+        return {
+          ...item,
+          currentPrice: null,
+          alerts: ["UNAVAILABLE: Yahoo returned no valid market data."],
+          statuses: [],
+        };
       }
       return buildCheckResult(item, quote.price, "yahoo");
     }),

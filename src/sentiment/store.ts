@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { SentinelRecord, SentimentSource, TrendBucket } from "./types.js";
+import Database from "better-sqlite3";
+import type { SentimentSource, SentinelRecord, TrendBucket } from "./types.js";
 
 const SCHEMA_VERSION = 1;
 

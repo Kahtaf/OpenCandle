@@ -1,14 +1,16 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getQuote } from "../../providers/yahoo-finance.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
-import type { Position, PortfolioSummary } from "../../types/portfolio.js";
-import { initDefaultDatabase } from "../../memory/sqlite.js";
-import { MarketStateService } from "../../market-state/service.js";
+import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
+import { MarketStateService } from "../../market-state/service.js";
+import { initDefaultDatabase } from "../../memory/sqlite.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
+import type { PortfolioSummary, Position } from "../../types/portfolio.js";
 
-async function getCurrentPrice(symbol: string): Promise<
+async function getCurrentPrice(
+  symbol: string,
+): Promise<
   | { status: "ok"; price: number; currency: string | null }
   | { status: "unavailable"; reason: string }
 > {
@@ -22,26 +24,36 @@ async function getCurrentPrice(symbol: string): Promise<
 }
 
 const params = Type.Object({
-  action: Type.Union([
-    Type.Literal("add"),
-    Type.Literal("update"),
-    Type.Literal("remove"),
-    Type.Literal("view"),
-  ], { description: "Action: add a position, update a lot, remove a position, or view portfolio" }),
+  action: Type.Union(
+    [Type.Literal("add"), Type.Literal("update"), Type.Literal("remove"), Type.Literal("view")],
+    { description: "Action: add a position, update a lot, remove a position, or view portfolio" },
+  ),
   lot_id: Type.Optional(
-    Type.Integer({ minimum: 1, description: "Portfolio lot id for precise update or single-lot removal" }),
+    Type.Integer({
+      minimum: 1,
+      description: "Portfolio lot id for precise update or single-lot removal",
+    }),
   ),
   symbol: Type.Optional(
-    Type.String({ description: "Ticker symbol — stocks (AAPL, MSFT) or crypto with -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker to find the right ticker." }),
+    Type.String({
+      description:
+        "Ticker symbol — stocks (AAPL, MSFT) or crypto with -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker to find the right ticker.",
+    }),
   ),
   shares: Type.Optional(
     Type.Number({ exclusiveMinimum: 0, description: "Number of shares/units (required for add)" }),
   ),
   avg_cost: Type.Optional(
-    Type.Number({ exclusiveMinimum: 0, description: "Average cost per share/unit in the lot currency (required for add)" }),
+    Type.Number({
+      exclusiveMinimum: 0,
+      description: "Average cost per share/unit in the lot currency (required for add)",
+    }),
   ),
   currency: Type.Optional(
-    Type.String({ description: "Lot currency, such as USD or CAD (defaults to the resolved instrument currency)" }),
+    Type.String({
+      description:
+        "Lot currency, such as USD or CAD (defaults to the resolved instrument currency)",
+    }),
   ),
 });
 
@@ -65,20 +77,24 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         const instrument = await resolveInstrumentForMutation(args.symbol);
         if (instrument.status === "needs_selection") {
           return {
-            content: [{
-              type: "text",
-              text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the portfolio.`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the portfolio.`,
+              },
+            ],
             details: instrument,
           };
         }
         const resolvedCurrency = args.currency?.trim() || instrument.instrument.currency?.trim();
         if (!resolvedCurrency) {
           return {
-            content: [{
-              type: "text",
-              text: `Could not determine currency for ${instrument.instrument.symbol}. Supply currency explicitly before adding it to the portfolio.`,
-            }],
+            content: [
+              {
+                type: "text",
+                text: `Could not determine currency for ${instrument.instrument.symbol}. Supply currency explicitly before adding it to the portfolio.`,
+              },
+            ],
             details: {
               status: "needs_currency",
               symbol: instrument.instrument.symbol,
@@ -93,7 +109,12 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           currency,
         });
         return {
-          content: [{ type: "text", text: `Added ${args.shares} shares of ${lot.symbol} at ${formatMoney(args.avg_cost, lot.currency)}` }],
+          content: [
+            {
+              type: "text",
+              text: `Added ${args.shares} shares of ${lot.symbol} at ${formatMoney(args.avg_cost, lot.currency)}`,
+            },
+          ],
           details: lot,
         };
       }
@@ -108,7 +129,9 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
             };
           }
           return {
-            content: [{ type: "text", text: `Removed ${removed.symbol} portfolio lot ${removed.id}` }],
+            content: [
+              { type: "text", text: `Removed ${removed.symbol} portfolio lot ${removed.id}` },
+            ],
             details: removed,
           };
         }
@@ -137,7 +160,12 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
       if (args.action === "update") {
         if (args.lot_id == null) {
           return {
-            content: [{ type: "text", text: "lot_id is required for update action. Use view to find the lot id before updating a holding." }],
+            content: [
+              {
+                type: "text",
+                text: "lot_id is required for update action. Use view to find the lot id before updating a holding.",
+              },
+            ],
             details: {
               status: "needs_lot_id",
               symbol: args.symbol?.toUpperCase(),
@@ -164,7 +192,9 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           };
         }
         return {
-          content: [{ type: "text", text: `Updated ${updated.symbol} portfolio lot ${updated.id}` }],
+          content: [
+            { type: "text", text: `Updated ${updated.symbol} portfolio lot ${updated.id}` },
+          ],
           details: updated,
         };
       }
@@ -184,21 +214,23 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           const quote = await getCurrentPrice(p.symbol);
           const totalCost = p.avgCost * p.quantity;
           const lotCurrency = p.currency || baseCurrency;
-          const quoteCurrency = quote.status === "ok"
-            ? quote.currency ?? p.instrumentCurrency ?? lotCurrency
-            : p.instrumentCurrency ?? lotCurrency;
+          const quoteCurrency =
+            quote.status === "ok"
+              ? (quote.currency ?? p.instrumentCurrency ?? lotCurrency)
+              : (p.instrumentCurrency ?? lotCurrency);
           const canValueRow = quote.status === "ok" && quoteCurrency === lotCurrency;
           const currentPrice = canValueRow ? quote.price : null;
           const marketValue = currentPrice == null ? null : currentPrice * p.quantity;
           const canComputePnlPercent = totalCost > 0;
           const includedInTotals = canValueRow && lotCurrency === baseCurrency;
-          const exclusionReason = quote.status === "unavailable"
-            ? `Quote unavailable: ${quote.reason}`
-            : includedInTotals
-              ? undefined
-              : canValueRow
-                ? `No FX conversion from ${lotCurrency} to ${baseCurrency}`
-                : `No FX conversion from ${quoteCurrency} to ${lotCurrency}`;
+          const exclusionReason =
+            quote.status === "unavailable"
+              ? `Quote unavailable: ${quote.reason}`
+              : includedInTotals
+                ? undefined
+                : canValueRow
+                  ? `No FX conversion from ${lotCurrency} to ${baseCurrency}`
+                  : `No FX conversion from ${quoteCurrency} to ${lotCurrency}`;
           const position: Position = {
             symbol: p.symbol,
             shares: p.quantity,
@@ -212,7 +244,10 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
             marketValue,
             totalCost,
             pnl: marketValue == null ? null : marketValue - totalCost,
-            pnlPercent: marketValue == null || !canComputePnlPercent ? null : ((marketValue - totalCost) / totalCost) * 100,
+            pnlPercent:
+              marketValue == null || !canComputePnlPercent
+                ? null
+                : ((marketValue - totalCost) / totalCost) * 100,
             includedInTotals,
             quoteStatus: quote.status,
             exclusionReason,
@@ -243,7 +278,9 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
 
       const header = `**Portfolio** — ${enriched.length} positions | Value: ${formatMoney(totalValue, baseCurrency)} | P&L: ${formatMoney(summary.totalPnl, baseCurrency)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
       const rows = enriched.map((p) => {
-        const excluded = p.includedInTotals ? "" : ` [excluded from ${baseCurrency} totals: ${p.exclusionReason}]`;
+        const excluded = p.includedInTotals
+          ? ""
+          : ` [excluded from ${baseCurrency} totals: ${p.exclusionReason}]`;
         if (p.currentPrice == null || p.pnl == null || p.pnlPercent == null) {
           return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → unavailable | P&L: unavailable${excluded}`;
         }
@@ -251,9 +288,12 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         return `  ${p.symbol}: ${p.shares} @ ${formatMoney(p.avgCost, p.currency)} → ${formatMoney(p.currentPrice, p.currency)} | P&L: ${formatMoney(p.pnl, p.currency)} (${sign}${p.pnlPercent.toFixed(2)}%)${excluded}`;
       });
 
-      const exclusions = excludedFromTotals.length === 0
-        ? []
-        : [`Excluded from ${baseCurrency} totals: ${excludedFromTotals.map((p) => `${p.symbol} (${p.currency})`).join(", ")}`];
+      const exclusions =
+        excludedFromTotals.length === 0
+          ? []
+          : [
+              `Excluded from ${baseCurrency} totals: ${excludedFromTotals.map((p) => `${p.symbol} (${p.currency})`).join(", ")}`,
+            ];
       const text = [header, ...rows, ...exclusions].join("\n");
       return { content: [{ type: "text", text }], details: summary };
     } finally {

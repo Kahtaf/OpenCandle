@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { buildRouterPrompt } from "../../../src/routing/router-prompt.js";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
+import { describe, expect, it } from "vitest";
+import { buildRouterPrompt } from "../../../src/routing/router-prompt.js";
 import type { RouterLlmClient } from "../../../src/routing/router-types.js";
+import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
@@ -91,8 +91,7 @@ describe("opencandle-extension router prompt assembly (task 7.2)", () => {
     ]);
 
     const coord = new SessionCoordinator();
-    const { profileSnapshot, recentWorkflowRuns, priorTurns } =
-      coord.buildRouterContextBase(mgr);
+    const { profileSnapshot, recentWorkflowRuns, priorTurns } = coord.buildRouterContextBase(mgr);
 
     // Sanity: the helper pulled both turns.
     expect(priorTurns).toHaveLength(2);
@@ -121,8 +120,7 @@ describe("opencandle-extension router prompt assembly (task 7.2)", () => {
   it("produces an empty priorTurns block when the session branch is empty", () => {
     const mgr = fakeSessionManager([]);
     const coord = new SessionCoordinator();
-    const { profileSnapshot, recentWorkflowRuns, priorTurns } =
-      coord.buildRouterContextBase(mgr);
+    const { profileSnapshot, recentWorkflowRuns, priorTurns } = coord.buildRouterContextBase(mgr);
     expect(priorTurns).toEqual([]);
 
     const prompt = buildRouterPrompt({

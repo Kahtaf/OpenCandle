@@ -1,16 +1,16 @@
-import type { TSchema } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { TSchema } from "@sinclair/typebox";
 import { agentToolToPiTool } from "./pi/tool-adapter.js";
 
-// Re-exports for tool authors — import from "opencandle/tool-kit"
-export { cache, Cache, TTL } from "./infra/cache.js";
-export { rateLimiter, RateLimiter } from "./infra/rate-limiter.js";
-export { httpGet, HttpError, type HttpClientOptions } from "./infra/http-client.js";
-export { agentToolToPiTool } from "./pi/tool-adapter.js";
-export { Type } from "@sinclair/typebox";
-export type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 export type { AgentTool } from "@earendil-works/pi-agent-core";
+export type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+export { Type } from "@sinclair/typebox";
+// Re-exports for tool authors — import from "opencandle/tool-kit"
+export { Cache, cache, TTL } from "./infra/cache.js";
+export { type HttpClientOptions, HttpError, httpGet } from "./infra/http-client.js";
+export { RateLimiter, rateLimiter } from "./infra/rate-limiter.js";
+export { agentToolToPiTool } from "./pi/tool-adapter.js";
 
 // Module-level registry — all extensions run in the same Node.js process,
 // so keep a deduped index keyed by tool name.
@@ -20,7 +20,8 @@ export function getAddonToolDescriptions(): ReadonlyArray<{ name: string; descri
   return Array.from(addonToolRegistry.values());
 }
 
-const SNAKE_CASE_VERB_RE = /^(get|analyze|search|calculate|compare|compute|track|manage|backtest|list|fetch|check)_[a-z][a-z0-9_]*$/;
+const SNAKE_CASE_VERB_RE =
+  /^(get|analyze|search|calculate|compare|compute|track|manage|backtest|list|fetch|check)_[a-z][a-z0-9_]*$/;
 
 export interface ToolConfig<TParams extends TSchema, TDetails = unknown> {
   name: string;
@@ -36,7 +37,7 @@ export function createTool<TParams extends TSchema, TDetails = unknown>(
   if (!config.name || !SNAKE_CASE_VERB_RE.test(config.name)) {
     throw new Error(
       `Invalid tool name "${config.name}": must be snake_case and start with a verb prefix ` +
-      `(get_, analyze_, search_, calculate_, compare_, compute_, track_, manage_, backtest_, list_, fetch_, check_)`,
+        `(get_, analyze_, search_, calculate_, compare_, compute_, track_, manage_, backtest_, list_, fetch_, check_)`,
     );
   }
   if (!config.description || config.description.trim().length === 0) {

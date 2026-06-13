@@ -1,8 +1,8 @@
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { httpGet } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import { BEARISH_TERMS, BULLISH_TERMS } from "../sentiment/keywords.js";
 import type { RedditSentimentResult } from "../types/sentiment.js";
-import { BULLISH_TERMS, BEARISH_TERMS } from "../sentiment/keywords.js";
 
 interface RedditListingResponse {
   data: {
@@ -108,7 +108,16 @@ export async function getPostComments(
 
   await rateLimiter.acquire("reddit_comments");
   const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${postId}.json`;
-  const data = await httpGet<Array<{ data: { children: Array<{ kind: string; data: { id: string; body?: string; author?: string; score?: number; permalink?: string } }> } }>>(url, {
+  const data = await httpGet<
+    Array<{
+      data: {
+        children: Array<{
+          kind: string;
+          data: { id: string; body?: string; author?: string; score?: number; permalink?: string };
+        }>;
+      };
+    }>
+  >(url, {
     headers: REDDIT_HEADERS,
   });
 
@@ -132,9 +141,11 @@ export async function getPostComments(
 
 // ── Sentiment scoring ───────────────────────────────────
 
-export function scoreSentiment(
-  posts: Array<{ title: string }>,
-): { score: number; bullish: number; bearish: number } {
+export function scoreSentiment(posts: Array<{ title: string }>): {
+  score: number;
+  bullish: number;
+  bearish: number;
+} {
   let bullish = 0;
   let bearish = 0;
   for (const post of posts) {

@@ -1,8 +1,8 @@
-import { getQuote } from "../providers/yahoo-finance.js";
-import { wrapProvider } from "../providers/wrap-provider.js";
-import { httpGet } from "../infra/http-client.js";
 import { cache, TTL } from "../infra/cache.js";
+import { httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
+import { wrapProvider } from "../providers/wrap-provider.js";
+import { getQuote } from "../providers/yahoo-finance.js";
 import type { StockQuote } from "../types/market.js";
 import type { InstrumentInput } from "./service.js";
 
@@ -44,15 +44,17 @@ export async function searchYahooInstruments(query: string): Promise<InstrumentC
   const candidates = (data.quotes ?? []).flatMap((quote) => {
     if (!quote.symbol) return [];
     const quoteType = quote.quoteType ?? "UNKNOWN";
-    return [{
-      symbol: quote.symbol.toUpperCase(),
-      name: quote.longname ?? quote.shortname ?? null,
-      quoteType,
-      assetType: assetTypeFromQuoteType(quoteType, quote.symbol),
-      exchange: quote.exchange ?? null,
-      provider: "yahoo" as const,
-      score: quote.score ?? null,
-    }];
+    return [
+      {
+        symbol: quote.symbol.toUpperCase(),
+        name: quote.longname ?? quote.shortname ?? null,
+        quoteType,
+        assetType: assetTypeFromQuoteType(quoteType, quote.symbol),
+        exchange: quote.exchange ?? null,
+        provider: "yahoo" as const,
+        score: quote.score ?? null,
+      },
+    ];
   });
   cache.set(cacheKey, candidates, TTL.WEB_SEARCH);
   return candidates;
@@ -90,12 +92,7 @@ export async function resolveYahooInstrument(symbol: string): Promise<Instrument
 }
 
 export function isZeroFilledQuote(quote: StockQuote): boolean {
-  return (
-    quote.price === 0 &&
-    quote.volume === 0 &&
-    quote.week52High === 0 &&
-    quote.week52Low === 0
-  );
+  return quote.price === 0 && quote.volume === 0 && quote.week52High === 0 && quote.week52Low === 0;
 }
 
 function inferAssetType(symbol: string): string {

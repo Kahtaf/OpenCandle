@@ -1,6 +1,6 @@
+import { cn } from "../../lib/utils.js";
 import { Favicon } from "./favicon.jsx";
 import { hostFrom } from "./favicon-utils.js";
-import { cn } from "../../lib/utils.js";
 
 // 4-column source summary grid; on mobile collapses to 2 columns. The fourth
 // tile becomes the "+N more" stacked-favicon card when there are more sources
@@ -23,7 +23,9 @@ export function SourceGrid({ sources, onOpenAll, className, max = 3 }) {
         >
           <div className="flex items-center gap-1.5">
             <Favicon url={s.url} size="xs" />
-            <span className="line-clamp-1 text-[11px] text-muted-foreground">{hostFrom(s.url) || s.source || "source"}</span>
+            <span className="line-clamp-1 text-[11px] text-muted-foreground">
+              {hostFrom(s.url) || s.source || "source"}
+            </span>
           </div>
           <span className="mt-1 line-clamp-2 text-[12px] font-medium text-foreground">
             {s.title || s.snippet || s.url || "—"}
@@ -43,7 +45,9 @@ export function SourceGrid({ sources, onOpenAll, className, max = 3 }) {
               </span>
             ))}
           </span>
-          <span className="mt-1 text-[12px] font-medium text-muted-foreground">+{overflow.length} sources</span>
+          <span className="mt-1 text-[12px] font-medium text-muted-foreground">
+            +{overflow.length} sources
+          </span>
         </button>
       ) : null}
     </div>

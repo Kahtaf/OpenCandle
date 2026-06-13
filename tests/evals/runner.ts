@@ -1,5 +1,5 @@
-import type { EvalCase, EvalTrace } from "./types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
+import type { EvalCase, EvalTrace } from "./types.js";
 
 /**
  * Runs an eval case through the OpenCandle harness and returns the trace.

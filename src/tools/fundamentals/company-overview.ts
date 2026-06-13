@@ -1,16 +1,19 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getOverview } from "../../providers/alpha-vantage.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
+import { getOverview } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
 });
 
-export const companyOverviewTool: AgentTool<typeof params, CompanyOverview | { credentialRequired: unknown }> = {
+export const companyOverviewTool: AgentTool<
+  typeof params,
+  CompanyOverview | { credentialRequired: unknown }
+> = {
   name: "get_company_overview",
   label: "Company Overview",
   description:
@@ -19,10 +22,17 @@ export const companyOverviewTool: AgentTool<typeof params, CompanyOverview | { c
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
       const apiKey = getConfig().alphaVantageApiKey!;
-      const result = await wrapProvider("alphavantage", () => getOverview(args.symbol.toUpperCase(), apiKey));
+      const result = await wrapProvider("alphavantage", () =>
+        getOverview(args.symbol.toUpperCase(), apiKey),
+      );
       if (result.status === "unavailable") {
         return {
-          content: [{ type: "text", text: `⚠ Company overview unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without fundamentals.` }],
+          content: [
+            {
+              type: "text",
+              text: `⚠ Company overview unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without fundamentals.`,
+            },
+          ],
           details: null as any,
         };
       }

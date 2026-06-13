@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relativeTime, quoteFreshness } from "../../../gui/web/src/features/market-state/format.js";
+import { quoteFreshness, relativeTime } from "../../../gui/web/src/features/market-state/format.js";
 
 const NOW = Date.parse("2026-06-12T15:00:00Z");
 

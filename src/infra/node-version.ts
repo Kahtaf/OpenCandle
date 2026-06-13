@@ -10,7 +10,9 @@ function isSupportedNodeVersion(version: string): boolean {
   return major >= 24 && major < 27;
 }
 
-export function getUnsupportedNodeVersionMessage(version: string = process.versions.node): string | null {
+export function getUnsupportedNodeVersionMessage(
+  version: string = process.versions.node,
+): string | null {
   if (isSupportedNodeVersion(version)) return null;
 
   return `OpenCandle supports Node ${SUPPORTED_NODE_RANGE}. Current Node is ${version}. Use Node ${SUPPORTED_NODE_RANGE}; the repo default is Node 22.22.0 via \`nvm use\`. After switching Node versions, reinstall dependencies under the active Node with \`npm install\` or rebuild native modules with \`npm rebuild better-sqlite3\`.`;

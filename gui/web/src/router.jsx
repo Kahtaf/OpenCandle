@@ -1,4 +1,4 @@
-import { createRoute, createRootRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AppShell } from "./App.jsx";
 
 const rootRoute = createRootRoute({
@@ -80,7 +80,10 @@ const VALID_DRAWERS = new Set(["history", "context", "catalog", "tools", "provid
 
 function validateGuiSearch(search) {
   return {
-    drawer: typeof search.drawer === "string" && VALID_DRAWERS.has(search.drawer) ? search.drawer : undefined,
+    drawer:
+      typeof search.drawer === "string" && VALID_DRAWERS.has(search.drawer)
+        ? search.drawer
+        : undefined,
     prompt: typeof search.prompt === "string" ? search.prompt : undefined,
   };
 }

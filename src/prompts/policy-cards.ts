@@ -27,7 +27,7 @@ export const POLICY_CARD_IDS = [
   "general_fallback",
 ] as const;
 
-export type PromptPolicyCardId = typeof POLICY_CARD_IDS[number];
+export type PromptPolicyCardId = (typeof POLICY_CARD_IDS)[number];
 
 export interface PolicyCard {
   id: PromptPolicyCardId;

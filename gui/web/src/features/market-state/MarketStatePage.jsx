@@ -3,17 +3,17 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Textarea } from "../../components/ui/textarea.jsx";
-import { cn } from "../../lib/utils.js";
-import { searchInstruments, useMarketState } from "../../hooks/useMarketState.jsx";
-import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
-import { quoteFreshness } from "./format.js";
-import { Badge, StatusBand } from "./shared.jsx";
-import { WatchlistPage } from "./WatchlistPage.jsx";
-import { PortfolioPage } from "./PortfolioPage.jsx";
+import { searchInstruments, useMarketState } from "../../hooks/useMarketState.jsx";
+import { cn } from "../../lib/utils.js";
+import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
+import { quoteFreshness } from "./format.js";
+import { PortfolioPage } from "./PortfolioPage.jsx";
 import { PredictionsPage } from "./PredictionsPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
+import { Badge, StatusBand } from "./shared.jsx";
+import { WatchlistPage } from "./WatchlistPage.jsx";
 
 const PAGE_META = {
   watchlists: {
@@ -42,7 +42,8 @@ const PAGE_META = {
   },
 };
 
-const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE = "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
+const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
+  "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
 
 export async function invokeMarketStateMutation({
   readOnly,
@@ -54,7 +55,9 @@ export async function invokeMarketStateMutation({
   setPendingMutation,
 }) {
   if (readOnly) {
-    setToast?.("This GUI session is read-only until it reconnects as the writer.", { destructive: true });
+    setToast?.("This GUI session is read-only until it reconnects as the writer.", {
+      destructive: true,
+    });
     return false;
   }
   setPendingMutation?.({ toolName });
@@ -78,7 +81,17 @@ export async function invokeMarketStateMutation({
   }
 }
 
-export function MarketStatePage({ domain, role, send, invokeTool: invokeToolRequest, navigate, setToast, onOpenSidebar, sidebarCollapsed = false, onExpandSidebar }) {
+export function MarketStatePage({
+  domain,
+  role,
+  send,
+  invokeTool: invokeToolRequest,
+  navigate,
+  setToast,
+  onOpenSidebar,
+  sidebarCollapsed = false,
+  onExpandSidebar,
+}) {
   const { state, loading, error, refresh } = useMarketState();
   const readOnly = role !== "writer";
   const active = PAGE_META[domain] ?? PAGE_META.watchlists;
@@ -102,9 +115,10 @@ export function MarketStatePage({ domain, role, send, invokeTool: invokeToolRequ
   };
 
   const openPanel = (type, data) => {
-    panelOpenerRef.current = typeof document !== "undefined" && document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    panelOpenerRef.current =
+      typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     setPanel({ type, data });
   };
   const closePanel = () => {
@@ -138,18 +152,68 @@ export function MarketStatePage({ domain, role, send, invokeTool: invokeToolRequ
             quoteSnapshot={state.quoteSnapshot}
           />
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
-          {mutationPending ? <StatusBand>Saving market-state change. Controls will unlock after the server acknowledges the operation.</StatusBand> : null}
+          {mutationPending ? (
+            <StatusBand>
+              Saving market-state change. Controls will unlock after the server acknowledges the
+              operation.
+            </StatusBand>
+          ) : null}
           {readOnly ? <StatusBand>{readOnlyMessage(role)}</StatusBand> : null}
-          <div className={cn(
-            "grid min-h-0 gap-3",
-            panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : "grid-cols-1",
-          )}>
+          <div
+            className={cn(
+              "grid min-h-0 gap-3",
+              panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : "grid-cols-1",
+            )}
+          >
             <div className="flex min-w-0 flex-col gap-3">
-              {activeId === "watchlists" ? <WatchlistPage state={state} filter={filter} setFilter={setFilter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
-              {activeId === "portfolios" ? <PortfolioPage state={state} filter={filter} setFilter={setFilter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} navigate={navigate} /> : null}
-              {activeId === "alerts" ? <AlertsPage state={state} filter={filter} setFilter={setFilter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
-              {activeId === "reports" ? <ReportsPage state={state} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
-              {activeId === "predictions" ? <PredictionsPage state={state} filter={filter} readOnly={readOnly || mutationPending} openPanel={openPanel} invokeTool={invokeTool} /> : null}
+              {activeId === "watchlists" ? (
+                <WatchlistPage
+                  state={state}
+                  filter={filter}
+                  setFilter={setFilter}
+                  readOnly={readOnly || mutationPending}
+                  openPanel={openPanel}
+                  invokeTool={invokeTool}
+                />
+              ) : null}
+              {activeId === "portfolios" ? (
+                <PortfolioPage
+                  state={state}
+                  filter={filter}
+                  setFilter={setFilter}
+                  readOnly={readOnly || mutationPending}
+                  openPanel={openPanel}
+                  invokeTool={invokeTool}
+                  navigate={navigate}
+                />
+              ) : null}
+              {activeId === "alerts" ? (
+                <AlertsPage
+                  state={state}
+                  filter={filter}
+                  setFilter={setFilter}
+                  readOnly={readOnly || mutationPending}
+                  openPanel={openPanel}
+                  invokeTool={invokeTool}
+                />
+              ) : null}
+              {activeId === "reports" ? (
+                <ReportsPage
+                  state={state}
+                  readOnly={readOnly || mutationPending}
+                  openPanel={openPanel}
+                  invokeTool={invokeTool}
+                />
+              ) : null}
+              {activeId === "predictions" ? (
+                <PredictionsPage
+                  state={state}
+                  filter={filter}
+                  readOnly={readOnly || mutationPending}
+                  openPanel={openPanel}
+                  invokeTool={invokeTool}
+                />
+              ) : null}
             </div>
             {panel ? (
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
@@ -205,7 +269,12 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
         disabled={readOnly}
         initialSymbol={item?.symbol}
         fields={[
-          { name: "target_price", label: "Target", type: "number", defaultValue: item?.targetPrice },
+          {
+            name: "target_price",
+            label: "Target",
+            type: "number",
+            defaultValue: item?.targetPrice,
+          },
           { name: "stop_price", label: "Stop", type: "number", defaultValue: item?.stopPrice },
           { name: "thesis", label: "Thesis", multiline: true, defaultValue: item?.thesis },
           { name: "notes", label: "Notes", multiline: true, defaultValue: item?.notes },
@@ -255,7 +324,9 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
   }
 
   if (panel.type === "report-configure") {
-    return <ReportScheduleForm disabled={readOnly} invokeTool={invokeTool} closePanel={closePanel} />;
+    return (
+      <ReportScheduleForm disabled={readOnly} invokeTool={invokeTool} closePanel={closePanel} />
+    );
   }
 
   if (panel.type === "thesis-record") {
@@ -315,7 +386,8 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
       }}
     >
       <p className="text-sm text-muted-foreground">
-        The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}).
+        The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}
+        ).
       </p>
       <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         Run at
@@ -352,7 +424,11 @@ function ContextPanel({ title, onClose, children }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-foreground/25 xl:hidden" aria-hidden="true" onClick={onClose} />
+      <div
+        className="fixed inset-0 z-40 bg-foreground/25 xl:hidden"
+        aria-hidden="true"
+        onClick={onClose}
+      />
       <aside
         ref={panelRef}
         tabIndex={-1}
@@ -360,7 +436,15 @@ function ContextPanel({ title, onClose, children }) {
       >
         <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <Button type="button" variant="ghost" size="xs" icon={X} tooltip="Close panel" aria-label="Close panel" onClick={onClose} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            icon={X}
+            tooltip="Close panel"
+            aria-label="Close panel"
+            onClick={onClose}
+          />
         </div>
         <div className="p-4">{children}</div>
       </aside>
@@ -369,7 +453,9 @@ function ContextPanel({ title, onClose, children }) {
 }
 
 export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubmit }) {
-  const [values, setValues] = useState(() => Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])));
+  const [values, setValues] = useState(() =>
+    Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])),
+  );
   const [query, setQuery] = useState(initialSymbol);
   const [selected, setSelected] = useState(initialSymbol);
   const resolvedSymbol = selected || initialSymbol;
@@ -387,7 +473,9 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
   return (
     <form className="space-y-3" onSubmit={submit}>
       <p className="text-xs text-muted-foreground">
-        {resolvedSymbol ? `Selected ${resolvedSymbol}` : "Search and select a ticker before saving."}
+        {resolvedSymbol
+          ? `Selected ${resolvedSymbol}`
+          : "Search and select a ticker before saving."}
       </p>
       <SymbolSearchInput
         query={query}
@@ -407,9 +495,15 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
                 value={values[field.name] || ""}
                 disabled={disabled}
                 required={field.required}
-                onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
+                onChange={(event) =>
+                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                }
               >
-                {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                {field.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
               </select>
             ) : field.multiline ? (
               <Textarea
@@ -418,7 +512,9 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
                 value={values[field.name] || ""}
                 disabled={disabled}
                 required={field.required}
-                onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
+                onChange={(event) =>
+                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                }
               />
             ) : (
               <Input
@@ -429,7 +525,9 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
                 value={values[field.name] || ""}
                 disabled={disabled}
                 required={field.required}
-                onChange={(event) => setValues((current) => ({ ...current, [field.name]: event.target.value }))}
+                onChange={(event) =>
+                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                }
               />
             )}
           </label>
@@ -461,7 +559,9 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
   return (
     <form className="space-y-3" onSubmit={submit}>
       <p className="text-xs text-muted-foreground">
-        {resolvedSymbol ? `Selected ${resolvedSymbol}` : "Search provider-backed candidates and select a resolved ticker before saving."}
+        {resolvedSymbol
+          ? `Selected ${resolvedSymbol}`
+          : "Search provider-backed candidates and select a resolved ticker before saving."}
       </p>
       <SymbolSearchInput
         query={query}
@@ -472,17 +572,48 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
       />
       <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         Quantity
-        <Input aria-label="Quantity" type="number" step="any" value={values.shares} disabled={disabled} required onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))} />
+        <Input
+          aria-label="Quantity"
+          type="number"
+          step="any"
+          value={values.shares}
+          disabled={disabled}
+          required
+          onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))}
+        />
       </label>
       <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         Average cost per share
-        <Input aria-label="Average cost" type="number" step="any" value={values.avg_cost} disabled={disabled} required onChange={(event) => setValues((current) => ({ ...current, avg_cost: event.target.value }))} />
+        <Input
+          aria-label="Average cost"
+          type="number"
+          step="any"
+          value={values.avg_cost}
+          disabled={disabled}
+          required
+          onChange={(event) =>
+            setValues((current) => ({ ...current, avg_cost: event.target.value }))
+          }
+        />
       </label>
       <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         Currency
-        <Input aria-label="Currency" value={values.currency} disabled={disabled} onChange={(event) => setValues((current) => ({ ...current, currency: event.target.value }))} />
+        <Input
+          aria-label="Currency"
+          value={values.currency}
+          disabled={disabled}
+          onChange={(event) =>
+            setValues((current) => ({ ...current, currency: event.target.value }))
+          }
+        />
       </label>
-      <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol || !values.shares || !values.avg_cost}>Save</Button>
+      <Button
+        type="submit"
+        variant="brand"
+        disabled={disabled || !resolvedSymbol || !values.shares || !values.avg_cost}
+      >
+        Save
+      </Button>
     </form>
   );
 }
@@ -495,9 +626,7 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
   const visibleCandidates = query.trim().length >= 2 && !selected ? candidates : [];
   const clampedActiveIndex = clampComboboxActiveIndex(activeIndex, visibleCandidates.length);
   const activeCandidate = clampedActiveIndex >= 0 ? visibleCandidates[clampedActiveIndex] : null;
-  const activeOptionId = activeCandidate
-    ? `${listboxId}-option-${clampedActiveIndex}`
-    : undefined;
+  const activeOptionId = activeCandidate ? `${listboxId}-option-${clampedActiveIndex}` : undefined;
 
   const selectCandidate = (candidate) => {
     onSelectedChange(candidate.symbol);
@@ -510,11 +639,13 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
     if (query.trim().length < 2 || selected) return undefined;
     let disposed = false;
     const timer = window.setTimeout(() => {
-      searchInstruments(query).then((items) => {
-        if (!disposed) setCandidates(items.slice(0, 5));
-      }).catch(() => {
-        if (!disposed) setCandidates([]);
-      });
+      searchInstruments(query)
+        .then((items) => {
+          if (!disposed) setCandidates(items.slice(0, 5));
+        })
+        .catch(() => {
+          if (!disposed) setCandidates([]);
+        });
     }, 180);
     return () => {
       disposed = true;
@@ -524,8 +655,13 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
 
   return (
     <div className="relative">
-      <label className="sr-only" htmlFor={inputId}>Search ticker or company</label>
-      <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" aria-hidden="true" />
+      <label className="sr-only" htmlFor={inputId}>
+        Search ticker or company
+      </label>
+      <Search
+        className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground"
+        aria-hidden="true"
+      />
       <Input
         id={inputId}
         role="combobox"
@@ -541,11 +677,15 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
           if (event.key === "ArrowDown") {
             event.preventDefault();
             if (visibleCandidates.length === 0) return;
-            setActiveIndex((index) => nextComboboxActiveIndex(index, visibleCandidates.length, "next"));
+            setActiveIndex((index) =>
+              nextComboboxActiveIndex(index, visibleCandidates.length, "next"),
+            );
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
             if (visibleCandidates.length === 0) return;
-            setActiveIndex((index) => nextComboboxActiveIndex(index, visibleCandidates.length, "previous"));
+            setActiveIndex((index) =>
+              nextComboboxActiveIndex(index, visibleCandidates.length, "previous"),
+            );
           } else if (event.key === "Enter" && activeCandidate) {
             event.preventDefault();
             selectCandidate(activeCandidate);
@@ -585,7 +725,9 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
               onClick={() => selectCandidate(candidate)}
             >
               <span className="font-medium text-foreground">{candidate.symbol}</span>
-              <span className="truncate text-muted-foreground">{candidate.name || candidate.quoteType}</span>
+              <span className="truncate text-muted-foreground">
+                {candidate.name || candidate.quoteType}
+              </span>
             </button>
           ))}
         </div>
@@ -620,7 +762,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
   const { query, selected, threshold, condition, period, cooldown } = draft;
   const needsThreshold = !condition.includes("_sma") && condition !== "create_volume_spike";
   const supportsThreshold = needsThreshold || condition === "create_volume_spike";
-  const needsPeriod = condition.includes("_sma") || condition.includes("_rsi_") || condition === "create_volume_spike";
+  const needsPeriod =
+    condition.includes("_sma") ||
+    condition.includes("_rsi_") ||
+    condition === "create_volume_spike";
   const resolvedSymbol = selected;
   const summary = resolvedSymbol
     ? `Notify once when ${resolvedSymbol} ${conditionSummary(condition, threshold, period)} during a manual or local-runner check.`
@@ -645,7 +790,9 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         }
       }}
     >
-      <p className="text-xs text-muted-foreground">Pick a symbol and condition. Rules are checked while OpenCandle is open.</p>
+      <p className="text-xs text-muted-foreground">
+        Pick a symbol and condition. Rules are checked while OpenCandle is open.
+      </p>
       <SymbolSearchInput
         query={query}
         selected={selected}
@@ -673,7 +820,9 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
       </label>
       {supportsThreshold ? (
         <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-          {condition === "create_volume_spike" ? "Multiplier (× average volume, optional)" : "Threshold"}
+          {condition === "create_volume_spike"
+            ? "Multiplier (× average volume, optional)"
+            : "Threshold"}
           <Input
             aria-label="Alert threshold"
             type="number"
@@ -687,22 +836,46 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
       {needsPeriod ? (
         <label className="grid gap-1 text-xs font-medium text-muted-foreground">
           Period (days)
-          <Input aria-label="Alert period" type="number" step="any" value={period} disabled={disabled} onChange={(event) => setDraftField("period", event.target.value)} />
+          <Input
+            aria-label="Alert period"
+            type="number"
+            step="any"
+            value={period}
+            disabled={disabled}
+            onChange={(event) => setDraftField("period", event.target.value)}
+          />
         </label>
       ) : null}
       <label className="grid gap-1 text-xs font-medium text-muted-foreground">
         Cooldown between triggers (seconds)
-        <Input aria-label="Alert cooldown seconds" type="number" step="any" value={cooldown} disabled={disabled} onChange={(event) => setDraftField("cooldown", event.target.value)} />
+        <Input
+          aria-label="Alert cooldown seconds"
+          type="number"
+          step="any"
+          value={cooldown}
+          disabled={disabled}
+          onChange={(event) => setDraftField("cooldown", event.target.value)}
+        />
       </label>
-      <div className="rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">{summary}</div>
-      <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol || (needsThreshold && !threshold)}>Create alert</Button>
+      <div className="rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
+        {summary}
+      </div>
+      <Button
+        type="submit"
+        variant="brand"
+        disabled={disabled || !resolvedSymbol || (needsThreshold && !threshold)}
+      >
+        Create alert
+      </Button>
     </form>
   );
 }
 
 function readOnlyMessage(role) {
-  if (role === "connecting") return "Connecting to the GUI session: read-only until the writer connection is ready.";
-  if (role === "disconnected") return "Disconnected from the GUI session: read-only until the writer reconnects.";
+  if (role === "connecting")
+    return "Connecting to the GUI session: read-only until the writer connection is ready.";
+  if (role === "disconnected")
+    return "Disconnected from the GUI session: read-only until the writer reconnects.";
   return "Follower mode: read-only. Take over the session to mutate saved state; tables, summaries, and details remain available here.";
 }
 
@@ -717,11 +890,12 @@ export function buildWatchlistRowActions(item, invokeTool) {
   } else {
     actions.push({
       label: "Create alert",
-      onClick: () => invokeTool("manage_alerts", {
-        action: "create_price_above",
-        symbol: item.symbol,
-        threshold: item.targetPrice,
-      }),
+      onClick: () =>
+        invokeTool("manage_alerts", {
+          action: "create_price_above",
+          symbol: item.symbol,
+          threshold: item.targetPrice,
+        }),
     });
   }
   actions.push({
@@ -744,12 +918,12 @@ function panelTitle(type) {
   return titles[type] || "Details";
 }
 function conditionSummary(condition, threshold, period) {
-  const label = condition
-    .replace("create_", "")
-    .replaceAll("_", " ");
+  const label = condition.replace("create_", "").replaceAll("_", " ");
   if (condition.includes("_sma")) return `${label} over ${period || "the selected"} periods`;
-  if (condition.includes("_rsi_")) return `${label} ${threshold || "the threshold"} over ${period || "the selected"} periods`;
-  if (condition === "create_volume_spike") return `has a volume spike above ${threshold || "2"}x the ${period || "selected"}-period average`;
+  if (condition.includes("_rsi_"))
+    return `${label} ${threshold || "the threshold"} over ${period || "the selected"} periods`;
+  if (condition === "create_volume_spike")
+    return `has a volume spike above ${threshold || "2"}x the ${period || "selected"}-period average`;
   return `${label} $${threshold || "the threshold"}`;
 }
 

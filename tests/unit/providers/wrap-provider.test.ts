@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { wrapProvider } from "../../../src/providers/wrap-provider.js";
+import { describe, expect, it } from "vitest";
 import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
+import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 
 describe("wrapProvider", () => {
   it("returns ok result on success", async () => {

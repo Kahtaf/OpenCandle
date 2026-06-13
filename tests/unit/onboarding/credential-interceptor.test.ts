@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  resolveCredentialRequired,
   type InterceptInput,
+  resolveCredentialRequired,
 } from "../../../src/onboarding/credential-interceptor.js";
 import type { OnboardingState } from "../../../src/onboarding/state.js";
 
@@ -42,9 +42,7 @@ describe("resolveCredentialRequired — never_ask", () => {
       },
     };
     expect(resolveCredentialRequired(input({ state })).action).toBe("skip");
-    expect(
-      resolveCredentialRequired(input({ state, reason: "stale" })).action,
-    ).toBe("skip");
+    expect(resolveCredentialRequired(input({ state, reason: "stale" })).action).toBe("skip");
   });
 
   it("the skipped placeholder carries silenced=true for never_ask", () => {
@@ -103,9 +101,8 @@ describe("resolveCredentialRequired — snoozed", () => {
       },
     };
     expect(
-      resolveCredentialRequired(
-        input({ state, sessionPromptedSet: new Set(["alpha_vantage"]) }),
-      ).action,
+      resolveCredentialRequired(input({ state, sessionPromptedSet: new Set(["alpha_vantage"]) }))
+        .action,
     ).toBe("skip");
   });
 });
@@ -118,9 +115,7 @@ describe("resolveCredentialRequired — completed + stale", () => {
         alpha_vantage: { status: "completed", lastPromptAt: "2026-04-01T00:00:00.000Z" },
       },
     };
-    expect(
-      resolveCredentialRequired(input({ state, reason: "stale" })).action,
-    ).toBe("prompt");
+    expect(resolveCredentialRequired(input({ state, reason: "stale" })).action).toBe("prompt");
   });
 
   it("skips when completed and reason is missing (defensive — shouldn't happen normally)", () => {
@@ -130,9 +125,7 @@ describe("resolveCredentialRequired — completed + stale", () => {
         alpha_vantage: { status: "completed", lastPromptAt: "2026-04-01T00:00:00.000Z" },
       },
     };
-    expect(
-      resolveCredentialRequired(input({ state, reason: "missing" })).action,
-    ).toBe("skip");
+    expect(resolveCredentialRequired(input({ state, reason: "missing" })).action).toBe("skip");
   });
 });
 

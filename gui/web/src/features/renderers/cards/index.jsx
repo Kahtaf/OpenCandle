@@ -1,11 +1,23 @@
-import { CompanyOverviewCard, DcfCard, EarningsCard, FinancialsCard } from "./fundamentals.jsx";
-import { CompareCard, CryptoPriceCard, HistoryCard, StockQuoteCard } from "./market.jsx";
-import { FearGreedCard, MacroSeriesCard } from "./macro.jsx";
-import { SentimentSummaryCard, SocialSentimentCard, WebSearchCard, WebSentimentCard } from "./news.jsx";
-import { OptionsChainCard } from "./options.jsx";
-import { CorrelationCard, PortfolioCard, PredictionCard, RiskCard, SECFilingsCard, WatchlistCard } from "./portfolio.jsx";
-import { TechnicalIndicatorsCard } from "./technical.jsx";
 import { PlainOutput, ToolCard } from "./_shared.jsx";
+import { CompanyOverviewCard, DcfCard, EarningsCard, FinancialsCard } from "./fundamentals.jsx";
+import { FearGreedCard, MacroSeriesCard } from "./macro.jsx";
+import { CompareCard, CryptoPriceCard, HistoryCard, StockQuoteCard } from "./market.jsx";
+import {
+  SentimentSummaryCard,
+  SocialSentimentCard,
+  WebSearchCard,
+  WebSentimentCard,
+} from "./news.jsx";
+import { OptionsChainCard } from "./options.jsx";
+import {
+  CorrelationCard,
+  PortfolioCard,
+  PredictionCard,
+  RiskCard,
+  SECFilingsCard,
+  WatchlistCard,
+} from "./portfolio.jsx";
+import { TechnicalIndicatorsCard } from "./technical.jsx";
 
 const RENDERERS = new Map([
   ["get_stock_quote", { category: "Stock quote", Component: StockQuoteCard }],
@@ -21,15 +33,30 @@ const RENDERERS = new Map([
 
   ["get_option_chain", { category: "Options chain", Component: OptionsChainCard }],
 
-  ["get_technical_indicators", { category: "Technical indicators", Component: TechnicalIndicatorsCard }],
+  [
+    "get_technical_indicators",
+    { category: "Technical indicators", Component: TechnicalIndicatorsCard },
+  ],
 
   ["get_economic_data", { category: "Macro series", Component: MacroSeriesCard }],
   ["get_fear_greed", { category: "Fear & greed", Component: FearGreedCard }],
 
   ["search_web", { category: "Web search", Component: WebSearchCard }],
   ["get_web_sentiment", { category: "Web sentiment", Component: WebSentimentCard }],
-  ["get_reddit_sentiment", { category: "Reddit sentiment", Component: (props) => <SocialSentimentCard {...props} sourceLabel="Reddit" /> }],
-  ["get_twitter_sentiment", { category: "Twitter sentiment", Component: (props) => <SocialSentimentCard {...props} sourceLabel="Twitter / X" /> }],
+  [
+    "get_reddit_sentiment",
+    {
+      category: "Reddit sentiment",
+      Component: (props) => <SocialSentimentCard {...props} sourceLabel="Reddit" />,
+    },
+  ],
+  [
+    "get_twitter_sentiment",
+    {
+      category: "Twitter sentiment",
+      Component: (props) => <SocialSentimentCard {...props} sourceLabel="Twitter / X" />,
+    },
+  ],
   ["get_sentiment_summary", { category: "Sentiment summary", Component: SentimentSummaryCard }],
   ["get_sentiment_trend", { category: "Sentiment trend", Component: SentimentSummaryCard }],
 

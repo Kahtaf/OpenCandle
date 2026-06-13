@@ -1,4 +1,4 @@
-import type { WorkflowStep, StepOutput } from "./workflow-types.js";
+import type { StepOutput, WorkflowStep } from "./workflow-types.js";
 
 /**
  * A workflow step definition that carries its prompt text.

@@ -39,11 +39,32 @@ describe("buildAlertSentenceRows", () => {
   it("describes RSI, percent-move, SMA, and volume rules in plain English", () => {
     const rows = buildAlertSentenceRows(
       [
-        rule({ id: 1, instrumentId: 3, conditionType: "rsi_threshold", conditionJson: { direction: "above", threshold: 70, period: 14 } }),
-        rule({ id: 2, conditionType: "percent_move", conditionJson: { direction: "down", percent: 5, window: "1d" } }),
-        rule({ id: 3, conditionType: "price_crosses_sma", conditionJson: { direction: "below", period: 50, price_field: "close" } }),
-        rule({ id: 4, conditionType: "sma_cross", conditionJson: { direction: "above", fast_period: 50, slow_period: 200 } }),
-        rule({ id: 5, conditionType: "volume_spike", conditionJson: { lookback_period: 20, multiplier: 3 } }),
+        rule({
+          id: 1,
+          instrumentId: 3,
+          conditionType: "rsi_threshold",
+          conditionJson: { direction: "above", threshold: 70, period: 14 },
+        }),
+        rule({
+          id: 2,
+          conditionType: "percent_move",
+          conditionJson: { direction: "down", percent: 5, window: "1d" },
+        }),
+        rule({
+          id: 3,
+          conditionType: "price_crosses_sma",
+          conditionJson: { direction: "below", period: 50, price_field: "close" },
+        }),
+        rule({
+          id: 4,
+          conditionType: "sma_cross",
+          conditionJson: { direction: "above", fast_period: 50, slow_period: 200 },
+        }),
+        rule({
+          id: 5,
+          conditionType: "volume_spike",
+          conditionJson: { lookback_period: 20, multiplier: 3 },
+        }),
       ],
       [],
       INSTRUMENTS,

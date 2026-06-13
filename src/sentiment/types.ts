@@ -9,9 +9,9 @@ export interface SentinelEngagement {
 }
 
 export interface SentinelSentiment {
-  score: number;       // -1.0 to +1.0
-  confidence: number;  // 0.0 to 1.0
-  method: "keyword";   // v1 is keyword-only; future: "llm"
+  score: number; // -1.0 to +1.0
+  confidence: number; // 0.0 to 1.0
+  method: "keyword"; // v1 is keyword-only; future: "llm"
   tickers: string[];
 }
 
@@ -36,7 +36,8 @@ export function isSentinelRecord(val: unknown): val is SentinelRecord {
   const r = val as Record<string, unknown>;
 
   if (typeof r.id !== "string") return false;
-  if (typeof r.source !== "string" || !SENTIMENT_SOURCES.includes(r.source as SentimentSource)) return false;
+  if (typeof r.source !== "string" || !SENTIMENT_SOURCES.includes(r.source as SentimentSource))
+    return false;
   if (typeof r.sourceId !== "string") return false;
   if (typeof r.query !== "string") return false;
   if (r.title !== null && typeof r.title !== "string") return false;

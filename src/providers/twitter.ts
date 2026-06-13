@@ -1,10 +1,10 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import Database from "better-sqlite3";
 import { Scraper, SearchMode } from "@the-convocation/twitter-scraper";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
-import { rateLimiter } from "../infra/rate-limiter.js";
+import Database from "better-sqlite3";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { getBrowserProfileDir } from "../infra/opencandle-paths.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
 import type { TwitterSentimentResult, TwitterTweet } from "../types/sentiment.js";
 
 // ── Cookie extraction ────────────────────────────────────
@@ -35,7 +35,7 @@ export function readTwitterCookies(profileDir: string): FirefoxCookie[] {
 
 // ── Sentiment scoring ────────────────────────────────────
 
-import { BULLISH_TERMS, BEARISH_TERMS } from "../sentiment/keywords.js";
+import { BEARISH_TERMS, BULLISH_TERMS } from "../sentiment/keywords.js";
 
 export function scoreTwitterSentiment(
   tweets: Array<{ text: string; likes: number; retweets: number }>,
@@ -135,9 +135,7 @@ export async function getTwitterSentiment(
     const tickerRegex = /\$([A-Z]{1,5})\b/g;
     const mentionCounts = new Map<string, number>();
     // Exclude the searched ticker itself from co-mentions
-    const searchedTicker = normalizedQuery.startsWith("$")
-      ? normalizedQuery.slice(1)
-      : null;
+    const searchedTicker = normalizedQuery.startsWith("$") ? normalizedQuery.slice(1) : null;
     for (const t of tweets) {
       for (const match of t.text.matchAll(tickerRegex)) {
         const ticker = match[1];

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import type { WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
+import type { WebSearchEnvelope } from "../../../src/types/sentiment.js";
 
 // Mock the web-search provider
 vi.mock("../../../src/providers/web-search.js", () => ({
@@ -49,8 +49,12 @@ const successEnvelope: WebSearchEnvelope = {
   provider: "ddg",
 };
 
-beforeEach(() => { cache.clear(); });
-afterEach(() => { vi.restoreAllMocks(); });
+beforeEach(() => {
+  cache.clear();
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("get_web_sentiment tool", () => {
   it("has correct tool name", () => {

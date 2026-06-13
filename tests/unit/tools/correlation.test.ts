@@ -1,6 +1,10 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getHistory } from "../../../src/providers/yahoo-finance.js";
-import { computeCorrelation, alignReturnsByDate, correlationTool } from "../../../src/tools/portfolio/correlation.js";
+import {
+  alignReturnsByDate,
+  computeCorrelation,
+  correlationTool,
+} from "../../../src/tools/portfolio/correlation.js";
 import type { OHLCV } from "../../../src/types/market.js";
 
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
@@ -72,10 +76,16 @@ describe("alignReturnsByDate", () => {
   it("aligns two series with misaligned dates to common dates only", () => {
     // Symbol A has dates 1-5, Symbol B has dates 2-6 (overlap: 2-5)
     const barsA = makeBars(["2025-01-01", "2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05"]);
-    const barsB = makeBars(["2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05", "2025-01-06"], 200);
+    const barsB = makeBars(
+      ["2025-01-02", "2025-01-03", "2025-01-04", "2025-01-05", "2025-01-06"],
+      200,
+    );
 
     const result = alignReturnsByDate(
-      new Map([["A", barsA], ["B", barsB]]),
+      new Map([
+        ["A", barsA],
+        ["B", barsB],
+      ]),
       2,
     );
 
@@ -92,7 +102,10 @@ describe("alignReturnsByDate", () => {
     const barsB = makeBars(["2025-01-01", "2025-01-02", "2025-01-04", "2025-01-05"], 200);
 
     const result = alignReturnsByDate(
-      new Map([["A", barsA], ["B", barsB]]),
+      new Map([
+        ["A", barsA],
+        ["B", barsB],
+      ]),
       2,
     );
 
@@ -108,7 +121,12 @@ describe("alignReturnsByDate", () => {
     const barsB = makeBars(["2025-01-10", "2025-01-11", "2025-01-12"], 200);
 
     expect(() =>
-      alignReturnsByDate(new Map([["A", barsA], ["B", barsB]]))
+      alignReturnsByDate(
+        new Map([
+          ["A", barsA],
+          ["B", barsB],
+        ]),
+      ),
     ).toThrow();
   });
 });

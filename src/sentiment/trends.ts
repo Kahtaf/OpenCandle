@@ -1,4 +1,4 @@
-import type { TrendBucket, TrendResult, DivergenceResult, SentimentSource } from "./types.js";
+import type { DivergenceResult, SentimentSource, TrendBucket, TrendResult } from "./types.js";
 
 const SPARKLINE_CHARS = "▁▂▃▄▅▆▇█";
 
@@ -24,7 +24,8 @@ export function computeTrend(
 ): TrendResult {
   const scores = buckets.map((b) => b.avgScore);
   const totalCount = buckets.reduce((sum, b) => sum + b.count, 0);
-  const avgScore = totalCount === 0 ? 0 : buckets.reduce((sum, b) => sum + b.avgScore * b.count, 0) / totalCount;
+  const avgScore =
+    totalCount === 0 ? 0 : buckets.reduce((sum, b) => sum + b.avgScore * b.count, 0) / totalCount;
 
   const sparkline = renderSparkline(scores);
 
@@ -45,7 +46,12 @@ export interface SourceStats {
 }
 
 export function computeDivergence(
-  sources: { twitter?: SourceStats; reddit?: SourceStats; web?: SourceStats; finnhub?: SourceStats },
+  sources: {
+    twitter?: SourceStats;
+    reddit?: SourceStats;
+    web?: SourceStats;
+    finnhub?: SourceStats;
+  },
   threshold: number,
 ): DivergenceResult {
   const retailSources: SourceStats[] = [];

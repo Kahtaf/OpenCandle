@@ -2,10 +2,10 @@ import type { Greeks } from "../../types/options.js";
 
 interface GreeksInput {
   type: "call" | "put";
-  spot: number;       // underlying price
-  strike: number;     // strike price
-  timeYears: number;  // time to expiration in years
-  iv: number;         // implied volatility (e.g. 0.30 for 30%)
+  spot: number; // underlying price
+  strike: number; // strike price
+  timeYears: number; // time to expiration in years
+  iv: number; // implied volatility (e.g. 0.30 for 30%)
   riskFreeRate: number; // risk-free rate (e.g. 0.05 for 5%)
 }
 
@@ -71,7 +71,7 @@ function cdf(x: number): number {
   const sign = x < 0 ? -1 : 1;
   const absX = Math.abs(x);
   const t = 1 / (1 + p * absX);
-  const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-absX * absX / 2);
+  const y = 1 - ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp((-absX * absX) / 2);
   return 0.5 * (1 + sign * y);
 }
 

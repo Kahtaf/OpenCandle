@@ -1,61 +1,66 @@
+import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomBytes } from "node:crypto";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AgentSession,
   AuthStorage,
   createAgentSessionRuntime,
   createAgentSessionServices,
-  type AgentSession,
   getAgentDir,
   ModelRegistry,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
-import { getAllTools } from "../../src/tools/index.js";
+import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
+import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
-import {
-  getCredentialSource,
-  PROVIDERS,
-  type ProviderId,
-} from "../../src/onboarding/providers.js";
+import { getCredentialSource, PROVIDERS, type ProviderId } from "../../src/onboarding/providers.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
-import { buildModelSetupState, findPreferredModel, modelSetupProviders } from "./model-setup.js";
-import { projectDashboard } from "./projector.js";
-import { acceptWebSocket, type WsClient } from "./websocket.js";
-import { invokeToolFromUi, type InvokeToolResult } from "./invoke-tool.js";
-import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
-import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
-import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
-import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
-import { chatRunSessionConflict } from "./chat-run-session.js";
+import { getAllTools } from "../../src/tools/index.js";
+import type { ChatEvent } from "../shared/chat-events.js";
+import { createAskUserBridge } from "./ask-user-bridge.js";
+import {
+  createAutomationHeartbeatRunner,
+  normalizeAutomationHeartbeatMs,
+} from "./automation-heartbeat.js";
+import { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
+import { chatRunSessionConflict } from "./chat-run-session.js";
+import { createInitialGuiSessionManager } from "./gui-session-manager.js";
+import { type InvokeToolResult, invokeToolFromUi } from "./invoke-tool.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
-import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
+import {
+  buildMarketStateQuoteSnapshot,
+  buildMarketStateSnapshot,
+  searchInstrumentCandidates,
+} from "./market-state-api.js";
+import { buildModelSetupState, findPreferredModel, modelSetupProviders } from "./model-setup.js";
+import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
+import { projectDashboard } from "./projector.js";
 import {
   createPromptObservation,
   observePromptEvent,
-  selectReplayPrompt,
   type PromptObservation,
+  selectReplayPrompt,
 } from "./prompt-observation.js";
-import { BackgroundQuoteRefreshes } from "./background-quotes.js";
-import { createAskUserBridge } from "./ask-user-bridge.js";
-import { createInitialGuiSessionManager } from "./gui-session-manager.js";
-import { createGracefulShutdown } from "./shutdown.js";
-import { buildMarketStateQuoteSnapshot, buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
-import { createAutomationHeartbeatRunner, normalizeAutomationHeartbeatMs } from "./automation-heartbeat.js";
-import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
-import { initDefaultDatabase } from "../../src/memory/sqlite.js";
-import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
-import type { ChatEvent } from "../shared/chat-events.js";
+import { deleteSessionFile, renameSessionFile } from "./session-actions.js";
+import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
+import { createGracefulShutdown } from "./shutdown.js";
+import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
+import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
+import { acceptWebSocket, type WsClient } from "./websocket.js";
+import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
 const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
-const automationHeartbeatMs = normalizeAutomationHeartbeatMs(process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS);
+const automationHeartbeatMs = normalizeAutomationHeartbeatMs(
+  process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS,
+);
 const allowRemotePrivateApi = process.env.OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API === "1";
 const privateApiSessionToken = randomBytes(32).toString("base64url");
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
@@ -222,7 +227,9 @@ server.listen(port, host, () => {
     console.log(`OpenCandle GUI is accepting LAN/Tailscale connections on port ${port}`);
   }
   if (allowRemotePrivateApi) {
-    console.log("OpenCandle GUI private market-state API accepts cookie-authenticated remote requests.");
+    console.log(
+      "OpenCandle GUI private market-state API accepts cookie-authenticated remote requests.",
+    );
   }
   console.log(`Writer role: ${lockResult.role}`);
   startLocalAutomationHeartbeat();
@@ -338,12 +345,10 @@ async function handlePrompt(prompt: string): Promise<void> {
       modelSetup.requirement === "select_model"
         ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
         : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
-    sessionManager.appendCustomMessageEntry(
-      "opencandle-model-setup",
-      message,
-      true,
-      { source: "gui", requirement: modelSetup.requirement },
-    );
+    sessionManager.appendCustomMessageEntry("opencandle-model-setup", message, true, {
+      source: "gui",
+      requirement: modelSetup.requirement,
+    });
     broadcastState();
     return;
   }
@@ -425,7 +430,9 @@ async function handleSaveModelApiKey(providerId: string, apiKey: string): Promis
 
   const model = findPreferredModel(session.modelRegistry, provider);
   if (!model) {
-    throw new Error(`Saved the ${provider.label} key, but no ${provider.label} models are available yet.`);
+    throw new Error(
+      `Saved the ${provider.label} key, but no ${provider.label} models are available yet.`,
+    );
   }
 
   await session.setModel(model);
@@ -456,7 +463,8 @@ async function handleSaveProviderApiKey(providerId: string, apiKey: string): Pro
 
   const validation = await validateCredential(descriptor.id as ProviderId, trimmed);
   if (validation.status === "invalid") {
-    const statusHint = validation.httpStatus !== undefined ? ` (HTTP ${validation.httpStatus})` : "";
+    const statusHint =
+      validation.httpStatus !== undefined ? ` (HTTP ${validation.httpStatus})` : "";
     const messageHint = validation.message ? ` — ${validation.message}` : "";
     throw new Error(
       `${descriptor.displayName} rejected the key${statusHint}${messageHint}. The existing configuration was not changed.`,
@@ -470,12 +478,11 @@ async function handleSaveProviderApiKey(providerId: string, apiKey: string): Pro
       ? `Saved ${descriptor.displayName} key but couldn't verify it (${validation.reason}). The next request will surface any issue.`
       : `Connected ${descriptor.displayName}. Key saved to ~/.opencandle/config.json.`;
 
-  sessionManager.appendCustomMessageEntry(
-    "opencandle-provider-setup",
-    verifiedNote,
-    true,
-    { source: "gui", provider: descriptor.id, status: validation.status },
-  );
+  sessionManager.appendCustomMessageEntry("opencandle-provider-setup", verifiedNote, true, {
+    source: "gui",
+    provider: descriptor.id,
+    status: validation.status,
+  });
   broadcastState();
 }
 
@@ -488,7 +495,10 @@ async function handleSelectModel(provider: string, modelId: string): Promise<voi
   await session.settingsManager.flush();
 }
 
-async function handleToolInvoke(toolName: string, args: Record<string, unknown>): Promise<InvokeToolResult> {
+async function handleToolInvoke(
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<InvokeToolResult> {
   if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
   const tool = getAllTools().find((candidate) => candidate.name === toolName);
   if (!tool) throw new Error(`Unknown tool: ${toolName}`);
@@ -497,7 +507,10 @@ async function handleToolInvoke(toolName: string, args: Record<string, unknown>)
   return result;
 }
 
-async function handleToolInvokeMessage(client: WsClient, data: Record<string, unknown>): Promise<void> {
+async function handleToolInvokeMessage(
+  client: WsClient,
+  data: Record<string, unknown>,
+): Promise<void> {
   const requestId = typeof data.requestId === "string" ? data.requestId : "";
   const toolName = String(data.toolName ?? "");
   try {
@@ -536,7 +549,9 @@ function sendBoot(client: WsClient): void {
     type: "state.snapshot",
     ...snapshot,
   });
-  void SessionManager.list(cwd, sessionDir).then((sessions) => client.send({ type: "sessions", sessions }));
+  void SessionManager.list(cwd, sessionDir).then((sessions) =>
+    client.send({ type: "sessions", sessions }),
+  );
 }
 
 function broadcastModelSetup(): void {
@@ -563,7 +578,10 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
     return;
   }
 
-  const sessionConflict = chatRunSessionConflict(asRecord(body).sessionId, sessionManager.getSessionId());
+  const sessionConflict = chatRunSessionConflict(
+    asRecord(body).sessionId,
+    sessionManager.getSessionId(),
+  );
   if (sessionConflict) {
     writeJson(res, sessionConflict, 409);
     return;
@@ -612,12 +630,10 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
         modelSetup.requirement === "select_model"
           ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
           : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
-      runSessionManager.appendCustomMessageEntry(
-        "opencandle-model-setup",
-        message,
-        true,
-        { source: "gui", requirement: modelSetup.requirement },
-      );
+      runSessionManager.appendCustomMessageEntry("opencandle-model-setup", message, true, {
+        source: "gui",
+        requirement: modelSetup.requirement,
+      });
       broadcastState();
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
@@ -629,7 +645,8 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
         () => runSessionManager.getEntries().map((entry) => entry.id),
         beforeIds,
       );
-      const newEntries = runSessionManager.getEntries()
+      const newEntries = runSessionManager
+        .getEntries()
         .slice(beforeCount)
         .filter((entry) => !beforeIds.has(entry.id));
       const events = sessionEntriesToChatEvents(newEntries, {
@@ -664,7 +681,10 @@ async function promptAndSettle(
     isStreaming: runSession.isStreaming,
     pendingMessageCount: runSession.pendingMessageCount,
   }));
-  await waitForNewEntryId(() => runSession.sessionManager.getEntries().map((entry) => entry.id), beforeIds);
+  await waitForNewEntryId(
+    () => runSession.sessionManager.getEntries().map((entry) => entry.id),
+    beforeIds,
+  );
   await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
 }
 
@@ -706,7 +726,9 @@ function currentChatEvents(entries = sessionManager.getEntries()): ChatEvent[] {
 }
 
 function broadcastSessions(): void {
-  void SessionManager.list(cwd, sessionDir).then((sessions) => broadcast({ type: "sessions", sessions }));
+  void SessionManager.list(cwd, sessionDir).then((sessions) =>
+    broadcast({ type: "sessions", sessions }),
+  );
 }
 
 function buildCurrentModelSetupState() {
@@ -727,7 +749,10 @@ function subscribeToSessionEvents(): () => void {
 function startLocalAutomationHeartbeat(): void {
   if (lockResult.role !== "writer") return;
   void runGuiAutomationHeartbeat(true);
-  automationHeartbeat = setInterval(() => void runGuiAutomationHeartbeat(true), automationHeartbeatMs);
+  automationHeartbeat = setInterval(
+    () => void runGuiAutomationHeartbeat(true),
+    automationHeartbeatMs,
+  );
 }
 
 const runGuiAutomationHeartbeat = createAutomationHeartbeatRunner(executeGuiAutomationHeartbeat);
@@ -742,7 +767,9 @@ async function executeGuiAutomationHeartbeat(checkAlerts: boolean): Promise<void
       checkAlerts,
     });
   } catch (error) {
-    console.warn(`Local automation heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(
+      `Local automation heartbeat failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     db.close();
   }
@@ -784,7 +811,9 @@ async function pollVisibleQuotes(): Promise<void> {
     }
     broadcastState();
   } catch (error) {
-    console.warn(`Background quote refresh failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.warn(
+      `Background quote refresh failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     quotePollInFlight = false;
   }
@@ -796,14 +825,18 @@ function writeJson(res: ServerResponse, value: unknown, status = 200): void {
 }
 
 function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
-  if (isTrustedPrivateApiRequest(
-    req.headers,
-    privateApiSessionToken,
-    req.socket.remoteAddress,
-    { allowRemote: allowRemotePrivateApi },
-  )) return true;
+  if (
+    isTrustedPrivateApiRequest(req.headers, privateApiSessionToken, req.socket.remoteAddress, {
+      allowRemote: allowRemotePrivateApi,
+    })
+  )
+    return true;
   res.writeHead(403, { "content-type": "application/json" });
-  res.end(JSON.stringify({ error: "Market-state API is only available to trusted GUI browser sessions." }));
+  res.end(
+    JSON.stringify({
+      error: "Market-state API is only available to trusted GUI browser sessions.",
+    }),
+  );
   return false;
 }
 
@@ -845,6 +878,6 @@ function contentType(path: string): string {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
