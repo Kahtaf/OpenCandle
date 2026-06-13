@@ -14,9 +14,6 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
-import { persistProviderCredential } from "../../src/onboarding/connect.js";
-import { getCredentialSource, PROVIDERS, type ProviderId } from "../../src/onboarding/providers.js";
-import { validateCredential } from "../../src/onboarding/validation.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
@@ -35,7 +32,7 @@ import {
   buildMarketStateSnapshot,
   searchInstrumentCandidates,
 } from "./market-state-api.js";
-import { buildModelSetupState, findPreferredModel, modelSetupProviders } from "./model-setup.js";
+import { buildModelSetupState, createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { projectDashboard } from "./projector.js";
 import {
@@ -113,6 +110,12 @@ const localAutomationHeartbeat = createLocalAutomationHeartbeat({
   role: lockResult.role,
   getSessionId: () => sessionManager.getSessionId(),
   intervalMs: automationHeartbeatMs,
+});
+const modelSetupController = createModelSetupController({
+  role: lockResult.role,
+  getSession: () => session,
+  getSessionManager: () => sessionManager,
+  broadcastState,
 });
 
 let unsubscribeSession = subscribeToSessionEvents();
@@ -288,15 +291,24 @@ async function handleClientMessage(client: WsClient, message: unknown): Promise<
         broadcastModelSetup();
         break;
       case "model.setup.save_api_key":
-        await handleSaveModelApiKey(String(data.provider ?? ""), String(data.apiKey ?? ""));
+        await modelSetupController.handleSaveModelApiKey(
+          String(data.provider ?? ""),
+          String(data.apiKey ?? ""),
+        );
         broadcastModelSetup();
         break;
       case "model.setup.select_model":
-        await handleSelectModel(String(data.provider ?? ""), String(data.modelId ?? ""));
+        await modelSetupController.handleSelectModel(
+          String(data.provider ?? ""),
+          String(data.modelId ?? ""),
+        );
         broadcastModelSetup();
         break;
       case "provider.save_api_key":
-        await handleSaveProviderApiKey(String(data.providerId ?? ""), String(data.apiKey ?? ""));
+        await modelSetupController.handleSaveProviderApiKey(
+          String(data.providerId ?? ""),
+          String(data.apiKey ?? ""),
+        );
         broadcast({ type: "catalog", catalog: buildCatalog() });
         break;
       case "session.new":
@@ -414,85 +426,6 @@ async function handleDeleteSession(client: WsClient, path: string): Promise<void
     broadcastState();
   }
   broadcastSessions();
-}
-
-async function handleSaveModelApiKey(providerId: string, apiKey: string): Promise<void> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-
-  const provider = modelSetupProviders.find((candidate) => candidate.id === providerId);
-  if (!provider) throw new Error(`Unknown model provider: ${providerId}`);
-
-  const trimmed = apiKey.trim();
-  if (!trimmed) throw new Error(`Paste a ${provider.label} API key first.`);
-
-  session.modelRegistry.authStorage.set(provider.id, { type: "api_key", key: trimmed });
-  session.modelRegistry.refresh();
-
-  const model = findPreferredModel(session.modelRegistry, provider);
-  if (!model) {
-    throw new Error(
-      `Saved the ${provider.label} key, but no ${provider.label} models are available yet.`,
-    );
-  }
-
-  await session.setModel(model);
-  await session.settingsManager.flush();
-  sessionManager.appendCustomMessageEntry(
-    "opencandle-model-setup",
-    `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
-    true,
-    { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
-  );
-  broadcastState();
-}
-
-async function handleSaveProviderApiKey(providerId: string, apiKey: string): Promise<void> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-
-  const descriptor = PROVIDERS.find((candidate) => candidate.id === providerId);
-  if (!descriptor) throw new Error(`Unknown provider: ${providerId}`);
-
-  if (getCredentialSource(descriptor.id) === "env") {
-    throw new Error(
-      `${descriptor.displayName} is set via the ${descriptor.envVar} environment variable. Unset it to override here.`,
-    );
-  }
-
-  const trimmed = apiKey.trim();
-  if (!trimmed) throw new Error(`Paste a ${descriptor.displayName} API key first.`);
-
-  const validation = await validateCredential(descriptor.id as ProviderId, trimmed);
-  if (validation.status === "invalid") {
-    const statusHint =
-      validation.httpStatus !== undefined ? ` (HTTP ${validation.httpStatus})` : "";
-    const messageHint = validation.message ? ` — ${validation.message}` : "";
-    throw new Error(
-      `${descriptor.displayName} rejected the key${statusHint}${messageHint}. The existing configuration was not changed.`,
-    );
-  }
-
-  persistProviderCredential(descriptor.id as ProviderId, trimmed);
-
-  const verifiedNote =
-    validation.status === "transient"
-      ? `Saved ${descriptor.displayName} key but couldn't verify it (${validation.reason}). The next request will surface any issue.`
-      : `Connected ${descriptor.displayName}. Key saved to ~/.opencandle/config.json.`;
-
-  sessionManager.appendCustomMessageEntry("opencandle-provider-setup", verifiedNote, true, {
-    source: "gui",
-    provider: descriptor.id,
-    status: validation.status,
-  });
-  broadcastState();
-}
-
-async function handleSelectModel(provider: string, modelId: string): Promise<void> {
-  if (lockResult.role !== "writer") throw new Error("Read-only follower mode");
-  session.modelRegistry.refresh();
-  const model = session.modelRegistry.find(provider, modelId);
-  if (!model) throw new Error(`Unknown model: ${provider}/${modelId}`);
-  await session.setModel(model);
-  await session.settingsManager.flush();
 }
 
 async function handleToolInvoke(
@@ -732,7 +665,7 @@ function broadcastSessions(): void {
 }
 
 function buildCurrentModelSetupState() {
-  return buildModelSetupState(session.modelRegistry, session.model);
+  return modelSetupController.buildCurrentModelSetupState();
 }
 
 function broadcast(message: unknown): void {
