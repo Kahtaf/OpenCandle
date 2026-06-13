@@ -205,24 +205,25 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   }
 
   if (url.pathname === "/api/market-state" && req.method === "GET") {
-    if (!allowPrivateMarketStateApi(req, res)) return;
+    if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
     writeJson(res, buildMarketStateSnapshot());
     return;
   }
 
   if (url.pathname === "/api/market-state/quotes" && req.method === "GET") {
-    if (!allowPrivateMarketStateApi(req, res)) return;
+    if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
     writeJson(res, await quoteSnapshotStore.get());
     return;
   }
 
   if (url.pathname === "/api/instruments/search" && req.method === "GET") {
-    if (!allowPrivateMarketStateApi(req, res)) return;
+    if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
     writeJson(res, await searchInstrumentCandidates(url.searchParams.get("q") ?? ""));
     return;
   }
 
   if (url.pathname === "/api/chat/run" && req.method === "POST") {
+    if (!allowTrustedGuiRequest(req, res, "Chat run API")) return;
     await handleSseChatRun(req, res);
     return;
   }
@@ -388,7 +389,11 @@ function writeJson(res: ServerResponse, value: unknown, status = 200): void {
   res.end(JSON.stringify(value));
 }
 
-function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
+function allowTrustedGuiRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  label: string,
+): boolean {
   if (
     isTrustedPrivateApiRequest(req.headers, privateApiSessionToken, req.socket.remoteAddress, {
       allowRemote: allowRemotePrivateApi,
@@ -398,7 +403,7 @@ function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): 
   res.writeHead(403, { "content-type": "application/json" });
   res.end(
     JSON.stringify({
-      error: "Market-state API is only available to trusted GUI browser sessions.",
+      error: `${label} is only available to trusted GUI browser sessions.`,
     }),
   );
   return false;
