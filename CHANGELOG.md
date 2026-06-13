@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub Actions workflows now use Node 24-compatible first-party action majors, clearing the hosted-runner Node 20 deprecation warning.
+
 ## [0.6.0] - 2026-06-13
 
 ### Added
