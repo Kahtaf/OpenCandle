@@ -69,6 +69,28 @@ describe("sessionEntriesToChatEvents", () => {
     expect(events.filter((event) => event.type === "message.created")).toHaveLength(1);
   });
 
+  it("preserves visible custom messages as custom chat events", () => {
+    const events = sessionEntriesToChatEvents([
+      {
+        type: "custom_message",
+        id: "setup-1",
+        parentId: null,
+        timestamp: new Date().toISOString(),
+        customType: "opencandle-model-setup",
+        content: "Connect a model before chat can run.",
+      } as unknown as SessionEntry,
+    ], { sessionId: "s1", startSeq: 1 });
+
+    expect(events).toContainEqual({
+      type: "custom.message",
+      messageId: "setup-1",
+      customType: "opencandle-model-setup",
+      content: [{ type: "text", text: "Connect a model before chat can run." }],
+      seq: 2,
+    });
+    expect(events.some((event) => event.type === "message.created")).toBe(false);
+  });
+
   it("preserves final assistant prose after a normal Pi tool turn", () => {
     const events = sessionEntriesToChatEvents([
       messageEntry("u1", { role: "user", content: "Show options chain for AAPL", timestamp: Date.now() } as Message),

@@ -12,12 +12,12 @@ import { cn } from "../../lib/utils.js";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
-import { compactDuplicateUserMessages, eventsToLiveEntries } from "./live-entries.js";
+import { chatRowsFromEvents } from "./chat-rows.js";
 import { groupToolRuns } from "./tool-run-grouper.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 
-export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup, role, inputDisabled = false, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
+export function ChatPanel({ events = [], liveEvents = [], askUserPrompts = [], modelSetup, role, inputDisabled = false, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
@@ -25,22 +25,21 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
   const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
-  const liveEntries = useMemo(() => eventsToLiveEntries(liveEvents), [liveEvents]);
-  const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
-  const groupedEntries = useMemo(() => groupToolRuns(visibleEntries), [visibleEntries]);
+  const visibleRows = useMemo(() => chatRowsFromEvents(events, liveEvents), [events, liveEvents]);
+  const groupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
   const autoOpenRunId = useMemo(() => {
     if (!allowToolAutoOpen) return null;
-    const pendingRuns = groupedEntries.filter((entry) => entry.type === "tool_run" && entry.status === "pending");
+    const pendingRuns = groupedRows.filter((row) => row.type === "tool_run" && row.status === "pending");
     return pendingRuns[pendingRuns.length - 1]?.id ?? null;
-  }, [allowToolAutoOpen, groupedEntries]);
+  }, [allowToolAutoOpen, groupedRows]);
   const drawer = useToolDrawer();
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
     if (!drawer.run) return;
-    const latest = groupedEntries.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
+    const latest = groupedRows.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
     if (latest && latest !== drawer.run) drawer.open(latest);
-  }, [groupedEntries, drawer]);
+  }, [groupedRows, drawer]);
   useEffect(() => {
     if (!allowToolAutoOpen) return;
     if (autoOpenRunId || runState === "connecting" || runState === "streaming") return;
@@ -68,11 +67,11 @@ export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
-        ) : visibleEntries.length === 0 && !activity ? (
+        ) : visibleRows.length === 0 && !activity ? (
           <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} disabled={chatDisabled} />
         ) : (
           <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
-            {groupedEntries.map((entry) => (
+            {groupedRows.map((entry) => (
               <MessageRow
                 key={entry.id}
                 entry={entry}
@@ -246,28 +245,10 @@ function MessageRow({ entry, catalog, autoOpenToolRun = false }) {
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;
   }
-  const message = entry.message;
-  if (!message) return null;
-  if (message.role === "user") return <UserMessage content={message.content} />;
-  if (message.role === "toolResult") return <ToolResultCard message={message} catalog={catalog} />;
-  if (message.role === "assistant") {
-    // After grouping, assistant entries here are pure-text (their tool calls
-    // were absorbed into the surrounding tool_run). Render only the text part.
-    return <AssistantMessage content={message.content} />;
-  }
-  return <div className="rounded-lg border border-border bg-card p-4 text-sm">{JSON.stringify(message)}</div>;
-}
-
-function isVisibleEntry(entry) {
-  if (entry.type === "custom_message") return true;
-  if (entry.type !== "message") return false;
-  return !isBackgroundToolEntry(entry.message);
-}
-
-function isBackgroundToolEntry(message) {
-  if (message?.role === "toolResult") return message.details?.source === "background";
-  if (message?.role !== "assistant") return false;
-  return Boolean(message.content?.some?.((part) => part.type === "toolCall" && String(part.id || "").startsWith("background-")));
+  if (entry.type === "user_message") return <UserMessage content={entry.content} />;
+  if (entry.type === "tool_result") return <ToolResultCard message={entry.message} catalog={catalog} />;
+  if (entry.type === "assistant_message") return <AssistantMessage content={entry.content} />;
+  return <div className="rounded-lg border border-border bg-card p-4 text-sm">{JSON.stringify(entry)}</div>;
 }
 
 function buildAgentActivity(liveState, runState) {

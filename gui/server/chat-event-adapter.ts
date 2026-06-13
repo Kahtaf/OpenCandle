@@ -37,10 +37,10 @@ export function sessionEntriesToChatEvents(
 
     if (entry.type === "custom_message") {
       const messageId = entry.id;
-      events.push({ type: "message.created", messageId, role: "assistant", seq: seq++ });
       events.push({
-        type: "message.completed",
+        type: "custom.message",
         messageId,
+        customType: String((entry as { customType?: unknown }).customType || "custom"),
         content: [{ type: "text", text: customMessageText(entry.content) }],
         seq: seq++,
       });

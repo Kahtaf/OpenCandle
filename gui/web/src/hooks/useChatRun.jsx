@@ -20,7 +20,7 @@ export function useChatRun({ setToast, onEvent, onRunStart }) {
     setLastRun({ prompt: trimmed, sessionId: options.sessionId });
     setRunState("connecting");
     setToast("");
-    onRunStart?.(trimmed, options.baseEntryCount);
+    onRunStart?.(trimmed, options.baseEventCount);
     const abort = new AbortController();
     abortRef.current = abort;
 

@@ -51,6 +51,7 @@ export type ChatEvent =
   | { type: "message.created"; messageId: string; role: ChatRole; seq: number }
   | { type: "message.delta"; messageId: string; text: string; seq: number }
   | { type: "message.completed"; messageId: string; content: MessageContent[]; seq: number }
+  | { type: "custom.message"; messageId: string; customType: string; content: MessageContent[]; seq: number }
   | { type: "tool.started"; toolCallId: string; messageId: string; name: string; input: unknown; seq: number }
   | { type: "tool.delta"; toolCallId: string; chunk: unknown; seq: number }
   | { type: "tool.completed"; toolCallId: string; output: ToolOutput; seq: number }
@@ -65,6 +66,7 @@ export interface RenderMessage {
   status: "streaming" | "completed";
   content: MessageContent[];
   text: string;
+  customType?: string;
 }
 
 export interface RenderToolCall {

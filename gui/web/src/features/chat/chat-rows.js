@@ -1,0 +1,149 @@
+import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
+import { textContent } from "../../rendering/text.js";
+
+export function chatRowsFromEvents(events = [], liveEvents = []) {
+  const state = reduceChatEvents(mergeChatEvents(events, liveEvents));
+  const toolsByMessage = groupToolsByMessage([...state.tools.values()]);
+  const rows = [];
+
+  for (const message of state.messages) {
+    const tools = toolsByMessage.get(message.id) || [];
+    if (message.customType) {
+      rows.push({
+        type: "custom_message",
+        id: `message-${message.id}`,
+        customType: message.customType,
+        content: message.content,
+      });
+      continue;
+    }
+
+    if (message.role === "user") {
+      rows.push({
+        type: "user_message",
+        id: `message-${message.id}`,
+        content: message.content,
+      });
+      continue;
+    }
+
+    if (message.role === "assistant") {
+      const content = contentForMessage(message, tools);
+      if (content.length > 0 && !isBackgroundAssistantMessage(content)) {
+        rows.push({
+          type: "assistant_message",
+          id: `message-${message.id}`,
+          content,
+          messageId: message.id,
+        });
+      }
+    }
+
+    for (const tool of tools) {
+      if (!tool.output && !tool.error) continue;
+      if (isBackgroundTool(tool)) continue;
+      rows.push({
+        type: "tool_result",
+        id: `tool-${tool.id}`,
+        message: toolResultMessage(tool),
+      });
+    }
+  }
+
+  return compactDuplicateUserRows(rows);
+}
+
+export function mergeChatEvents(events = [], liveEvents = []) {
+  if (!liveEvents.length) return events;
+  const maxSeq = events.reduce((max, event) => Math.max(max, Number(event.seq) || 0), 0);
+  const normalizedLive = liveEvents.map((event, index) => ({
+    ...event,
+    seq: maxSeq + index + 1,
+  }));
+  return [...events, ...normalizedLive];
+}
+
+function contentForMessage(message, tools) {
+  const content = (message.content || []).map((part) => {
+    if (part.type === "tool") {
+      const tool = tools.find((candidate) => candidate.id === part.toolCallId);
+      return {
+        type: "toolCall",
+        id: part.toolCallId,
+        name: tool?.name || "tool",
+        arguments: tool?.input || {},
+      };
+    }
+    return part;
+  });
+
+  const contentToolIds = new Set(content.filter((part) => part.type === "toolCall").map((part) => part.id));
+  for (const tool of tools) {
+    if (contentToolIds.has(tool.id) || isBackgroundTool(tool)) continue;
+    content.push({
+      type: "toolCall",
+      id: tool.id,
+      name: tool.name,
+      arguments: tool.input || {},
+    });
+  }
+  return content;
+}
+
+function toolResultMessage(tool) {
+  if (tool.output) {
+    return {
+      role: "toolResult",
+      toolCallId: tool.id,
+      toolName: tool.name,
+      content: tool.output.content || [],
+      details: tool.output.details,
+      isError: Boolean(tool.output.isError),
+    };
+  }
+
+  return {
+    role: "toolResult",
+    toolCallId: tool.id,
+    toolName: tool.name,
+    content: [{ type: "text", text: tool.error?.message || "Tool failed" }],
+    details: tool.error?.details,
+    isError: true,
+  };
+}
+
+function groupToolsByMessage(tools) {
+  const grouped = new Map();
+  for (const tool of tools) {
+    const group = grouped.get(tool.messageId) || [];
+    group.push(tool);
+    grouped.set(tool.messageId, group);
+  }
+  return grouped;
+}
+
+export function compactDuplicateUserRows(rows) {
+  const compacted = [];
+  for (const row of rows) {
+    const previous = compacted[compacted.length - 1];
+    if (
+      row.type === "user_message"
+      && previous?.type === "user_message"
+      && textContent(row.content) === textContent(previous.content)
+    ) {
+      continue;
+    }
+    compacted.push(row);
+  }
+  return compacted;
+}
+
+function isBackgroundTool(tool) {
+  return String(tool.id || "").startsWith("background-")
+    || tool.output?.source === "background"
+    || tool.output?.details?.source === "background";
+}
+
+function isBackgroundAssistantMessage(content) {
+  return content.some((part) => part.type === "toolCall" && String(part.id || "").startsWith("background-"));
+}

@@ -12,9 +12,9 @@ function narrativeText(content) {
     .trim();
 }
 
-// Group adjacent tool-related messages into a single "tool_run" entry so the
+// Group adjacent tool-related rows into a single "tool_run" row so the
 // chat thread can show one collapsed StepsCard per run instead of N separate
-// tool call + tool result cards. Walks the entries once and accumulates a run
+// tool call + tool result cards. Walks the rows once and accumulates a run
 // until the assistant emits a text-only message or a new user turn starts.
 //
 // Run shape:
@@ -30,7 +30,7 @@ function narrativeText(content) {
 //
 // `status` is "pending" while any step lacks a result; "error" if any step
 // errored; otherwise "completed".
-export function groupToolRuns(entries) {
+export function groupToolRuns(rows) {
   const out = [];
   let run = null;
   let pendingNarration = "";
@@ -42,37 +42,30 @@ export function groupToolRuns(entries) {
     run = null;
   };
 
-  for (const entry of entries) {
-    if (entry.type !== "message") {
+  for (const row of rows) {
+    if (row.type !== "assistant_message" && row.type !== "tool_result" && row.type !== "user_message") {
       flushRun();
-      out.push(entry);
+      out.push(row);
       continue;
     }
 
-    const message = entry.message;
-    if (!message) {
-      flushRun();
-      out.push(entry);
-      continue;
-    }
-
-    if (message.role === "user") {
+    if (row.type === "user_message") {
       flushRun();
       pendingNarration = "";
-      out.push(entry);
+      out.push(row);
       continue;
     }
 
-    if (message.role === "assistant") {
-      const parts = Array.isArray(message.content) ? message.content : [];
+    if (row.type === "assistant_message") {
+      const parts = Array.isArray(row.content) ? row.content : [];
       const toolCalls = parts.filter((p) => p?.type === "toolCall");
-      const text = narrativeText(message.content);
+      const text = narrativeText(row.content);
 
       if (toolCalls.length === 0) {
         // pure text assistant message — flush the current run, emit the message
         flushRun();
         pendingNarration = "";
-        if (text) out.push(entry);
+        if (text) out.push(row);
         continue;
       }
 
@@ -98,13 +91,14 @@ export function groupToolRuns(entries) {
           args: tc.arguments || {},
           status: "pending",
           result: null,
-          messageId: message.id,
+          messageId: row.messageId,
         });
       }
       continue;
     }
 
-    if (message.role === "toolResult") {
+    if (row.type === "tool_result") {
+      const message = row.message;
       if (!run) {
         // Orphaned result with no current run — start a one-step run anchored
         // to it so the user still sees the data.
@@ -145,7 +139,7 @@ export function groupToolRuns(entries) {
 
     // Unknown — flush + pass through.
     flushRun();
-    out.push(entry);
+    out.push(row);
   }
 
   flushRun();

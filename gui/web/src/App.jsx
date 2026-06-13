@@ -23,13 +23,13 @@ export function AppShell() {
   const search = useRouterState({ select: (state) => state.location.search });
   const gui = useGuiConnection();
   const [liveEvents, setLiveEvents] = useState([]);
-  const [liveBaseEntryCount, setLiveBaseEntryCount] = useState(0);
+  const [liveBaseEventCount, setLiveBaseEventCount] = useState(0);
   const chatRun = useChatRun({
     setToast: gui.setToast,
-    onRunStart: useCallback((prompt, baseEntryCount) => {
-      setLiveBaseEntryCount(baseEntryCount ?? gui.entries.length);
+    onRunStart: useCallback((prompt, baseEventCount) => {
+      setLiveBaseEventCount(baseEventCount ?? gui.events.length);
       setLiveEvents(createOptimisticUserMessageEvents(prompt));
-    }, [gui.entries.length]),
+    }, [gui.events.length]),
     onEvent: useCallback((event) => {
       setLiveEvents((current) => [...current, event]);
       if (event.type !== "run.started" || !event.sessionId) return;
@@ -55,9 +55,9 @@ export function AppShell() {
   const sessionView = routeSessionView({
     pathname,
     currentSessionId: gui.currentSessionId,
-    entries: gui.entries,
+    events: gui.events,
     runState: chatRun.runState,
-    liveBaseEntryCount,
+    liveBaseEventCount,
     canStartFreshHomeSession: gui.supportsSessionActions,
   });
   const visibleAskUserPrompts = gui.askUserPrompts.filter((prompt) =>
@@ -104,18 +104,18 @@ export function AppShell() {
       pathname,
       role: gui.role,
       currentSessionId: gui.currentSessionId,
-      entryCount: hasSessionContent(gui.entries) ? gui.entries.length : 0,
+      entryCount: hasSessionContent(gui.events) ? gui.events.length : 0,
       lastResetSessionId: homeResetSessionRef.current,
       canStartFreshHomeSession: gui.supportsSessionActions,
     })) return;
     homeResetSessionRef.current = gui.currentSessionId;
     void gui.newSession();
-  }, [pathname, gui.role, gui.currentSessionId, gui.entries.length, gui.newSession, gui.supportsSessionActions]);
+  }, [pathname, gui.role, gui.currentSessionId, gui.events.length, gui.newSession, gui.supportsSessionActions]);
 
   useEffect(() => {
     if (liveEvents.length === 0 || chatRun.runState === "connecting" || chatRun.runState === "streaming") return;
-    if (gui.entries.length > liveBaseEntryCount) setLiveEvents([]);
-  }, [chatRun.runState, gui.entries.length, liveBaseEntryCount, liveEvents.length]);
+    if (gui.events.length > liveBaseEventCount) setLiveEvents([]);
+  }, [chatRun.runState, gui.events.length, liveBaseEventCount, liveEvents.length]);
 
   const openCatalog = useCallback((target = "catalog") => {
     loadCatalogOverlay();
@@ -159,7 +159,7 @@ export function AppShell() {
         const freshSessionId = await gui.newSession();
         if (!freshSessionId) return;
         homeResetSessionRef.current = freshSessionId;
-        const result = await chatRun.startChatRun(prompt, { sessionId: freshSessionId, baseEntryCount: 0 });
+        const result = await chatRun.startChatRun(prompt, { sessionId: freshSessionId, baseEventCount: 0 });
         if (!result?.sessionChanged) return;
       }
       setLiveEvents([]);
@@ -234,7 +234,7 @@ export function AppShell() {
           />
         ) : (
           <ChatPanel
-            entries={sessionView.entries}
+            events={sessionView.events}
             liveEvents={liveEvents}
             askUserPrompts={visibleAskUserPrompts}
             modelSetup={gui.modelSetup}

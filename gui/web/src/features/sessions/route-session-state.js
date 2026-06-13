@@ -6,14 +6,14 @@ export function sessionIdFromPath(pathname) {
 export function routeSessionView({
   pathname,
   currentSessionId,
-  entries,
+  events,
   runState,
-  liveBaseEntryCount,
+  liveBaseEventCount,
   canStartFreshHomeSession = true,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
-  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && hasSessionContent(entries);
+  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && hasSessionContent(events);
   const streaming = runState === "connecting" || runState === "streaming";
 
   return {
@@ -21,11 +21,11 @@ export function routeSessionView({
     pendingSessionSwitch,
     pendingFreshHomeSession,
     activeSessionId: routeSessionId || currentSessionId || "",
-    entries: pendingSessionSwitch || pendingFreshHomeSession
+    events: pendingSessionSwitch || pendingFreshHomeSession
       ? []
       : streaming
-        ? entries.slice(0, liveBaseEntryCount)
-        : entries,
+        ? events.slice(0, liveBaseEventCount)
+        : events,
   };
 }
 
@@ -36,8 +36,10 @@ export function chatRunSessionTarget({ pathname, supportsSessionActions }) {
   return { mode: "current" };
 }
 
-export function hasSessionContent(entries) {
-  return entries.some((entry) => entry.type === "message" || entry.type === "custom_message");
+export function hasSessionContent(events) {
+  return (events || []).some((event) =>
+    event.type === "message.completed" || event.type === "custom.message"
+  );
 }
 
 export function shouldStartFreshHomeSession({

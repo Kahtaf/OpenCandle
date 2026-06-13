@@ -66,6 +66,15 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
       break;
     }
 
+    case "custom.message": {
+      const message = ensureMessage(next, event.messageId, "assistant");
+      message.status = "completed";
+      message.content = event.content;
+      message.text = contentText(event.content);
+      message.customType = event.customType;
+      break;
+    }
+
     case "tool.started":
       ensureMessage(next, event.messageId, "assistant");
       next.tools.set(event.toolCallId, {

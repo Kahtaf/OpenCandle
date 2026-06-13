@@ -244,6 +244,11 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
           }],
         },
       }];
+      const events = [
+        { type: "message.created", messageId: "assistant-tools-1", role: "assistant", seq: 1 },
+        { type: "tool.started", toolCallId: "tool-call-sofi", messageId: "assistant-tools-1", name: "get_stock_quote", input: { symbol: "SOFI" }, seq: 2 },
+        { type: "message.completed", messageId: "assistant-tools-1", content: [{ type: "tool", toolCallId: "tool-call-sofi" }], seq: 3 },
+      ];
       window.fetch = (input) => {
         const url = typeof input === "string" ? input : input.url;
         if (url.endsWith("/api/bootstrap")) {
@@ -257,7 +262,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
             snapshot: {
               sessionId: "mock-session",
               entries,
-              events: [],
+              events,
               state: { watchlist: [], activeAnalyses: [], recentResearch: [], dataQuality: { softGaps: [], hardSkips: [] } },
             },
           }), {
@@ -670,7 +675,7 @@ async function installMockSocket(page: Page, overrides: Record<string, unknown> 
             sessionId: "mock-session",
             state: mockOverrides.dashboard ?? { watchlist: [], activeAnalyses: [], recentResearch: [], dataQuality: { softGaps: [], hardSkips: [] } },
             entries: mockOverrides.entries ?? [],
-            events: [],
+            events: mockOverrides.events ?? entriesToEvents(mockOverrides.entries ?? []),
           });
           this.emit({ type: "sessions", sessions: this.sessions });
         });
@@ -702,6 +707,70 @@ async function installMockSocket(page: Page, overrides: Record<string, unknown> 
         this.dispatchEvent(event);
         this.onmessage?.(event);
       }
+    }
+
+    function entriesToEvents(entries) {
+      let seq = 1;
+      const events = [];
+      const seenToolCalls = new Set();
+      for (const entry of entries) {
+        if (entry.type === "custom_message") {
+          events.push({
+            type: "custom.message",
+            messageId: entry.id,
+            customType: entry.customType || "custom",
+            content: normalizeContent(entry.content),
+            seq: seq++,
+          });
+          continue;
+        }
+        if (entry.type !== "message") continue;
+        const message = entry.message || {};
+        if (message.role === "user") {
+          events.push({ type: "message.created", messageId: entry.id, role: "user", seq: seq++ });
+          events.push({ type: "message.completed", messageId: entry.id, content: normalizeContent(message.content), seq: seq++ });
+          continue;
+        }
+        if (message.role === "assistant") {
+          events.push({ type: "message.created", messageId: entry.id, role: "assistant", seq: seq++ });
+          const content = [];
+          for (const part of Array.isArray(message.content) ? message.content : normalizeContent(message.content)) {
+            if (part.type === "toolCall") {
+              seenToolCalls.add(part.id);
+              content.push({ type: "tool", toolCallId: part.id });
+              events.push({ type: "tool.started", toolCallId: part.id, messageId: entry.id, name: part.name, input: part.arguments || {}, seq: seq++ });
+            } else {
+              content.push(part);
+            }
+          }
+          events.push({ type: "message.completed", messageId: entry.id, content, seq: seq++ });
+          continue;
+        }
+        if (message.role === "toolResult") {
+          const toolCallId = message.toolCallId || `tool-${entry.id}`;
+          if (!seenToolCalls.has(toolCallId)) {
+            events.push({ type: "tool.started", toolCallId, messageId: entry.id, name: message.toolName || "tool", input: message.details?.args || {}, seq: seq++ });
+          }
+          events.push({
+            type: message.isError ? "tool.failed" : "tool.completed",
+            toolCallId,
+            ...(message.isError
+              ? { error: { message: textContent(message.content), details: message.details } }
+              : { output: { content: normalizeContent(message.content), details: message.details, isError: Boolean(message.isError) } }),
+            seq: seq++,
+          });
+        }
+      }
+      return events;
+    }
+
+    function normalizeContent(content) {
+      if (Array.isArray(content)) return content;
+      return [{ type: "text", text: String(content || "") }];
+    }
+
+    function textContent(content) {
+      return normalizeContent(content).map((part) => part.text || "").join("");
     }
 
     window.WebSocket = MockWebSocket;
