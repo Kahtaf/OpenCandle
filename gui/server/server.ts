@@ -14,8 +14,6 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
-import { runLocalAutomationHeartbeat } from "../../src/market-state/local-automation-service.js";
-import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
 import { getCredentialSource, PROVIDERS, type ProviderId } from "../../src/onboarding/providers.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
@@ -23,7 +21,7 @@ import { getAllTools } from "../../src/tools/index.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import {
-  createAutomationHeartbeatRunner,
+  createLocalAutomationHeartbeat,
   normalizeAutomationHeartbeatMs,
 } from "./automation-heartbeat.js";
 import { BackgroundQuoteRefreshes, createBackgroundQuotePoller } from "./background-quotes.js";
@@ -105,12 +103,16 @@ const clients = new Set<WsClient>();
 const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
-let automationHeartbeat: NodeJS.Timeout | null = null;
 const quotePoller = createBackgroundQuotePoller({
   getClientCount: () => clients.size,
   getSessionManager: () => sessionManager,
   refreshes: backgroundQuoteRefreshes,
   broadcastState,
+});
+const localAutomationHeartbeat = createLocalAutomationHeartbeat({
+  role: lockResult.role,
+  getSessionId: () => sessionManager.getSessionId(),
+  intervalMs: automationHeartbeatMs,
 });
 
 let unsubscribeSession = subscribeToSessionEvents();
@@ -236,7 +238,7 @@ server.listen(port, host, () => {
     );
   }
   console.log(`Writer role: ${lockResult.role}`);
-  startLocalAutomationHeartbeat();
+  localAutomationHeartbeat.start();
 });
 
 const shutdown = createGracefulShutdown({
@@ -244,10 +246,7 @@ const shutdown = createGracefulShutdown({
   cleanup: async () => {
     clearInterval(heartbeat);
     quotePoller.stop();
-    if (automationHeartbeat) {
-      clearInterval(automationHeartbeat);
-      automationHeartbeat = null;
-    }
+    localAutomationHeartbeat.stop();
     for (const client of clients) client.close();
     clients.clear();
     unsubscribeSession();
@@ -745,35 +744,6 @@ function subscribeToSessionEvents(): () => void {
     broadcast({ type: "session.event", event });
     broadcastState();
   });
-}
-
-function startLocalAutomationHeartbeat(): void {
-  if (lockResult.role !== "writer") return;
-  void runGuiAutomationHeartbeat(true);
-  automationHeartbeat = setInterval(
-    () => void runGuiAutomationHeartbeat(true),
-    automationHeartbeatMs,
-  );
-}
-
-const runGuiAutomationHeartbeat = createAutomationHeartbeatRunner(executeGuiAutomationHeartbeat);
-
-async function executeGuiAutomationHeartbeat(checkAlerts: boolean): Promise<void> {
-  const db = initDefaultDatabase();
-  try {
-    await runLocalAutomationHeartbeat(db, {
-      ownerId: `gui:${sessionManager.getSessionId()}`,
-      ownerKind: "writer",
-      ttlSeconds: Math.max(90, Math.ceil((automationHeartbeatMs * 2) / 1000)),
-      checkAlerts,
-    });
-  } catch (error) {
-    console.warn(
-      `Local automation heartbeat failed: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  } finally {
-    db.close();
-  }
 }
 
 function writeJson(res: ServerResponse, value: unknown, status = 200): void {
