@@ -199,8 +199,9 @@ function projectQuote(
 function parseCredentialRequiredProviders(text: string): string[] {
   const providers: string[] = [];
   const re = /\[OPENCANDLE_CREDENTIAL_REQUIRED[^\]]*provider=([a-z0-9_-]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
+  while (true) {
+    const match = re.exec(text);
+    if (!match) break;
     providers.push(match[1]);
   }
   return providers;
@@ -213,8 +214,9 @@ function parseSkippedProviders(text: string): string[] {
 function parseSoftGapProviders(text: string): string[] {
   const providers: string[] = [];
   const re = /\[OPENCANDLE_(?:SKIPPED|SOFT_DEGRADED)[^\]]*provider=([a-z0-9_-]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
+  while (true) {
+    const match = re.exec(text);
+    if (!match) break;
     providers.push(match[1]);
   }
   return providers;

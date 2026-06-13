@@ -62,7 +62,11 @@ export class MemoryManager {
     if (overriddenSlots) {
       for (const slot of overriddenSlots) {
         const keys = SLOT_TO_PREF_KEYS[slot];
-        if (keys) keys.forEach((k) => suppressedKeys.add(k));
+        if (keys) {
+          for (const key of keys) {
+            suppressedKeys.add(key);
+          }
+        }
       }
     }
 

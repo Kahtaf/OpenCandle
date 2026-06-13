@@ -80,32 +80,32 @@ describe("buildPortfolioWorkflowDefinition", () => {
   it("risk review asks the agent to address metrics that conflict with a holding role", () => {
     const def = buildPortfolioWorkflowDefinition(makeResolution());
     const riskReview = def.steps.find((s) => s.stepType === "risk_review");
-    expect(riskReview).toBeDefined();
-    expect(riskReview!.prompt).toContain("risk metrics undermine its intended role");
-    expect(riskReview!.prompt).toContain("lower its allocation");
-    expect(riskReview!.prompt).toContain("role-equivalent candidate");
+    if (!riskReview) throw new Error("Expected risk review step");
+    expect(riskReview.prompt).toContain("risk metrics undermine its intended role");
+    expect(riskReview.prompt).toContain("lower its allocation");
+    expect(riskReview.prompt).toContain("role-equivalent candidate");
   });
 
   it("synthesis table includes price, shares, role, and concise rationale guidance", () => {
     const def = buildPortfolioWorkflowDefinition(makeResolution());
     const synthesize = def.steps.find((s) => s.stepType === "synthesize");
-    expect(synthesize).toBeDefined();
-    expect(synthesize!.prompt).toContain("current price used");
-    expect(synthesize!.prompt).toContain("estimated shares");
-    expect(synthesize!.prompt).toContain("role");
-    expect(synthesize!.prompt).toContain("do not paste company descriptions");
-    expect(synthesize!.prompt).toContain("Why this fits the horizon");
-    expect(synthesize!.prompt).toContain("rebalance cadence");
-    expect(synthesize!.prompt).toContain("tax/account caveats");
+    if (!synthesize) throw new Error("Expected synthesize step");
+    expect(synthesize.prompt).toContain("current price used");
+    expect(synthesize.prompt).toContain("estimated shares");
+    expect(synthesize.prompt).toContain("role");
+    expect(synthesize.prompt).toContain("do not paste company descriptions");
+    expect(synthesize.prompt).toContain("Why this fits the horizon");
+    expect(synthesize.prompt).toContain("rebalance cadence");
+    expect(synthesize.prompt).toContain("tax/account caveats");
   });
 
   it("synthesis step does not emit disclaimer directive", () => {
     const def = buildPortfolioWorkflowDefinition(makeResolution());
     const synthesize = def.steps.find((s) => s.stepType === "synthesize");
-    expect(synthesize).toBeDefined();
-    expect(synthesize!.prompt).not.toMatch(/standard disclaimer/i);
-    expect(synthesize!.prompt).not.toMatch(/end with the standard/i);
-    expect(synthesize!.prompt).not.toMatch(/\bdisclaimer\b/i);
-    expect(synthesize!.prompt).not.toMatch(/not financial advice/i);
+    if (!synthesize) throw new Error("Expected synthesize step");
+    expect(synthesize.prompt).not.toMatch(/standard disclaimer/i);
+    expect(synthesize.prompt).not.toMatch(/end with the standard/i);
+    expect(synthesize.prompt).not.toMatch(/\bdisclaimer\b/i);
+    expect(synthesize.prompt).not.toMatch(/not financial advice/i);
   });
 });

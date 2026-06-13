@@ -39,8 +39,23 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "a11y": {
+        "noLabelWithoutControl": "warn",
+        "noRedundantRoles": "warn",
+        "noStaticElementInteractions": "warn",
+        "noSvgWithoutTitle": "warn",
+        "useSemanticElements": "warn"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "warn"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "warn"
+      },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noArrayIndexKey": "warn",
+        "noExplicitAny": "warn",
+        "noUnknownAtRules": "warn"
       }
     }
   },

@@ -251,11 +251,17 @@ export function selectToolBundles(
 
   const bundles = new Set<ToolBundleName>();
   const routeBundles = ROUTE_CAPABILITY_MANIFEST[output.routeKind]?.toolBundles ?? [];
-  routeBundles.forEach((bundle) => bundles.add(bundle));
+  for (const bundle of routeBundles) {
+    bundles.add(bundle);
+  }
 
   if (output.workflow) {
     const workflow = WORKFLOW_CAPABILITY_MANIFEST[output.workflow];
-    workflow?.toolBundles.forEach((bundle) => bundles.add(bundle));
+    if (workflow) {
+      for (const bundle of workflow.toolBundles) {
+        bundles.add(bundle);
+      }
+    }
   }
 
   const metrics = output.entities.compareMetrics ?? [];

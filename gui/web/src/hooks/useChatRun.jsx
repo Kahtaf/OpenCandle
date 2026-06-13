@@ -96,8 +96,8 @@ async function drainSse(response, onEvent) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    let index;
-    while ((index = buffer.indexOf("\n\n")) !== -1) {
+    let index = buffer.indexOf("\n\n");
+    while (index !== -1) {
       const block = buffer.slice(0, index);
       buffer = buffer.slice(index + 2);
       const data = block
@@ -111,6 +111,7 @@ async function drainSse(response, onEvent) {
       } catch {
         // Ignore malformed SSE blocks.
       }
+      index = buffer.indexOf("\n\n");
     }
   }
 }

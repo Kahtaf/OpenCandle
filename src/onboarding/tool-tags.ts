@@ -119,8 +119,9 @@ function parseFields(raw: string): Record<string, string> {
   // Split on `key=value` pairs, respecting quoted values.
   const fields: Record<string, string> = {};
   const pattern = /(\w+)=("((?:[^"\\]|\\.)*)"|([^\s\]]+))/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(raw)) !== null) {
+  while (true) {
+    const match = pattern.exec(raw);
+    if (!match) break;
     const key = match[1];
     const value = match[3] !== undefined ? match[3].replace(/\\"/g, '"') : match[4];
     fields[key] = value;

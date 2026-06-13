@@ -446,7 +446,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.addInitScript(() => {
       window.fetch = () => {
         const encoder = new TextEncoder();
-        let releaseRemainder;
+        let releaseRemainder: (() => void) | undefined;
         window.__releaseSseRemainder = () => releaseRemainder?.();
         const stream = new ReadableStream({
           async start(controller) {

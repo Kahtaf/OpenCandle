@@ -27,7 +27,11 @@ export function buildMemoryContext(storage: MemoryStorage, overriddenSlots?: str
   if (overriddenSlots) {
     for (const slot of overriddenSlots) {
       const keys = SLOT_TO_PREF_KEYS[slot];
-      if (keys) keys.forEach((k) => suppressedKeys.add(k));
+      if (keys) {
+        for (const key of keys) {
+          suppressedKeys.add(key);
+        }
+      }
     }
   }
 

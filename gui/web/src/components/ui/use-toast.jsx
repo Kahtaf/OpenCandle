@@ -41,7 +41,9 @@ function reducer(state, action) {
       if (toastId) {
         addToRemoveQueue(toastId);
       } else {
-        state.toasts.forEach((toast) => addToRemoveQueue(toast.id));
+        for (const toast of state.toasts) {
+          addToRemoveQueue(toast.id);
+        }
       }
       return {
         ...state,
@@ -63,7 +65,9 @@ function reducer(state, action) {
 
 function dispatch(action) {
   memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => listener(memoryState));
+  for (const listener of listeners) {
+    listener(memoryState);
+  }
 }
 
 export function toast({ title, description, variant = "default", ...props }) {

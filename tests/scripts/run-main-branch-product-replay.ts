@@ -19,7 +19,7 @@ const productReplayTimeoutMs = numberFromEnv("PRODUCT_REPLAY_TIMEOUT_MS") ?? 1_0
 
 const currentRun = runProductEval(cwd, currentRef);
 const baseWorktree = mkdtempSync(join(tmpdir(), "oc-product-replay-base-"));
-let baseRun;
+let baseRun: ProductEvalReport;
 
 try {
   const added = run("git", ["worktree", "add", "--detach", baseWorktree, baseRef], cwd, "pipe");

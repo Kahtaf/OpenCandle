@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Lint
+        run: npx biome ci .
+
       - name: Validate package contents
         run: |
           PACK_OUTPUT=$(npm pack --dry-run 2>&1)
