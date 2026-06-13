@@ -1,4 +1,4 @@
-import type { WorkflowStep, StepOutput } from "./workflow-types.js";
+import type { StepOutput, WorkflowStep } from "./workflow-types.js";
 
 /**
  * A workflow step definition that carries its prompt text.
@@ -10,7 +10,6 @@ export interface PromptStep extends Omit<WorkflowStep, "status"> {
 
 /**
  * A complete workflow definition: typed step metadata + prompt text for each step.
- * Replaces the old WorkflowPlan { initialPrompt, followUps }.
  */
 export interface WorkflowDefinition {
   workflowType: string;
@@ -58,18 +57,4 @@ export function promptStepOutput(stepIndex: number, stepType: string): StepOutpu
  */
 export function toStepDefinitions(steps: PromptStep[]): Omit<WorkflowStep, "status">[] {
   return steps.map(({ prompt: _prompt, ...step }) => step);
-}
-
-/**
- * Convert a WorkflowDefinition to the old WorkflowPlan format for backward compatibility.
- */
-export function toWorkflowPlan(definition: WorkflowDefinition): {
-  initialPrompt: string;
-  followUps: string[];
-} {
-  const [first, ...rest] = definition.steps;
-  return {
-    initialPrompt: first?.prompt ?? "",
-    followUps: rest.map((s) => s.prompt),
-  };
 }

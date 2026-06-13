@@ -1,30 +1,39 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cache } from "../../../src/infra/cache.js";
+import { httpGet } from "../../../src/infra/http-client.js";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import {
-  recordPrediction,
   checkPredictions,
   type Prediction,
+  predictionsTool,
+  recordPrediction,
 } from "../../../src/tools/portfolio/predictions.js";
-import * as fs from "node:fs";
+import type { StockQuote } from "../../../src/types/market.js";
 
-vi.mock("node:fs", () => ({
-  existsSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
+}));
+vi.mock("../../../src/infra/http-client.js", () => ({
+  httpGet: vi.fn(),
 }));
 
 describe("recordPrediction", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
-  const openCandleHome = "/tmp/opencandle-predictions-test";
+  let openCandleHome: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-predictions-test-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
-    vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
-    vi.mocked(fs.readFileSync).mockReturnValue("[]");
-    vi.mocked(fs.writeFileSync).mockImplementation(() => {});
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol.toUpperCase(), symbol.toUpperCase() === "MSFT" ? 400 : 180),
+    );
+    vi.mocked(httpGet).mockResolvedValue({ quotes: [] });
   });
 
   afterEach(() => {
@@ -33,11 +42,12 @@ describe("recordPrediction", () => {
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
     }
+    rmSync(openCandleHome, { recursive: true, force: true });
     vi.clearAllMocks();
   });
 
-  it("saves a prediction with required fields", () => {
-    recordPrediction({
+  it("saves a prediction with required fields in SQLite", async () => {
+    const prediction = await recordPrediction({
       symbol: "AAPL",
       direction: "bullish",
       conviction: 8,
@@ -45,38 +55,28 @@ describe("recordPrediction", () => {
       timeframeDays: 30,
     });
 
-    expect(fs.writeFileSync).toHaveBeenCalled();
-    expect(vi.mocked(fs.writeFileSync).mock.calls[0][0]).toBe(
-      join(openCandleHome, "predictions.json"),
-    );
-    const written: Prediction[] = JSON.parse(
-      vi.mocked(fs.writeFileSync).mock.calls[0][1] as string,
-    );
-    expect(written).toHaveLength(1);
-    expect(written[0].symbol).toBe("AAPL");
-    expect(written[0].direction).toBe("bullish");
-    expect(written[0].conviction).toBe(8);
-    expect(written[0].entryPrice).toBe(180);
-    expect(written[0]).toHaveProperty("date");
-    expect(written[0]).toHaveProperty("expiresAt");
+    expect(prediction.id).toEqual(expect.any(Number));
+    expect(prediction.instrumentId).toEqual(expect.any(Number));
+    expect(prediction.symbol).toBe("AAPL");
+    expect(prediction.direction).toBe("bullish");
+    expect(prediction.conviction).toBe(8);
+    expect(prediction.entryPrice).toBe(180);
+    expect(prediction).toHaveProperty("date");
+    expect(prediction).toHaveProperty("expiresAt");
+    expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
+    expect(existsSync(join(openCandleHome, "predictions.json"))).toBe(false);
   });
 
-  it("appends to existing predictions", () => {
-    const existing: Prediction[] = [
-      {
-        symbol: "MSFT",
-        direction: "bearish",
-        conviction: 6,
-        entryPrice: 400,
-        date: "2026-03-01",
-        expiresAt: "2026-03-31",
-        timeframeDays: 30,
-      },
-    ];
-    vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(existing));
+  it("appends to existing predictions", async () => {
+    await recordPrediction({
+      symbol: "MSFT",
+      direction: "bearish",
+      conviction: 6,
+      entryPrice: 400,
+      timeframeDays: 30,
+    });
 
-    recordPrediction({
+    const prediction = await recordPrediction({
       symbol: "AAPL",
       direction: "bullish",
       conviction: 8,
@@ -84,10 +84,378 @@ describe("recordPrediction", () => {
       timeframeDays: 30,
     });
 
-    const written: Prediction[] = JSON.parse(
-      vi.mocked(fs.writeFileSync).mock.calls[0][1] as string,
+    expect(prediction.symbol).toBe("AAPL");
+  });
+
+  it("ignores pre-existing predictions.json as a state source", async () => {
+    writeFileSync(join(openCandleHome, "predictions.json"), JSON.stringify([{ symbol: "MSFT" }]));
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("No predictions recorded yet.");
+    expect(result.content[0].text).not.toContain("MSFT");
+  });
+
+  it("returns prediction ids in tool details for GUI state-change metadata", async () => {
+    const result = await predictionsTool.execute("test", {
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 180,
+      timeframe_days: 30,
+    });
+
+    expect(result.details).toMatchObject({
+      id: expect.any(Number),
+      instrumentId: expect.any(Number),
+      symbol: "AAPL",
+      direction: "bullish",
+    });
+  });
+
+  it("rejects zero conviction and entry price as invalid instead of treating them as missing", async () => {
+    await expect(
+      predictionsTool.execute("test", {
+        action: "record",
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 0,
+        entry_price: 180,
+      }),
+    ).rejects.toThrow("conviction must be between 1 and 10");
+
+    await expect(
+      predictionsTool.execute("test", {
+        action: "record",
+        symbol: "AAPL",
+        direction: "bullish",
+        conviction: 5,
+        entry_price: 0,
+      }),
+    ).rejects.toThrow("entry_price must be greater than 0");
+  });
+
+  it("returns candidate matches for an unverified prediction symbol without recording", async () => {
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("APL", 0, { volume: 0, week52High: 0, week52Low: 0 }),
     );
-    expect(written).toHaveLength(2);
+    vi.mocked(httpGet).mockResolvedValue({
+      quotes: [
+        {
+          symbol: "AAPL",
+          longname: "Apple Inc.",
+          quoteType: "EQUITY",
+          exchange: "NMS",
+          score: 101,
+        },
+      ],
+    });
+
+    const result = await predictionsTool.execute("test", {
+      action: "record",
+      symbol: "APL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 180,
+      timeframe_days: 30,
+    });
+
+    expect(result.content[0].text).toContain("Could not verify APL");
+    expect(result.details).toMatchObject({
+      status: "needs_selection",
+      query: "APL",
+      candidates: [expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." })],
+    });
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    expect(service.listPredictions()).toHaveLength(0);
+    db.close();
+  });
+});
+
+describe("predictionsTool check", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    cache.clear();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T12:00:00.000Z"));
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-predictions-check-test-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 200));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    rmSync(openCandleHome, { recursive: true, force: true });
+    cache.clear();
+    vi.clearAllMocks();
+  });
+
+  it("reports target hit on open predictions while keeping them open", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      targetPrice: 195,
+      timeframeDays: 365,
+      now: new Date("2026-02-20T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text.toLowerCase()).toContain("target hit");
+    expect(result.content[0].text).toContain("$195.00");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+    expect(prediction.status).toBe("open");
+  });
+
+  it("persists resolved outcomes when checking expired predictions", async () => {
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("1 predictions (1 resolved, 0 open)");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("resolved");
+    expect(prediction.resolvedAt).toBe("2026-03-01T12:00:00.000Z");
+    expect(prediction.resultJson).toBe(
+      JSON.stringify({
+        currentPrice: 200,
+        pnlPercent: 0.1111111111111111,
+        correct: true,
+      }),
+    );
+
+    vi.mocked(getQuote).mockClear();
+    const history = await predictionsTool.execute("test", { action: "check" });
+
+    expect(history.content[0].text).toContain("1 predictions (1 resolved, 0 open)");
+    expect(history.content[0].text).not.toContain("No open predictions");
+    expect(history.details).toMatchObject({
+      total: 1,
+      correct: 1,
+      wrong: 0,
+      open: 0,
+    });
+    expect(getQuote).not.toHaveBeenCalled();
+  });
+
+  it("keeps predictions with invalid entry prices open without NaN scoring", () => {
+    const result = checkPredictions(
+      [
+        {
+          id: 1,
+          symbol: "AAPL",
+          direction: "bullish",
+          conviction: 8,
+          entryPrice: 0,
+          date: "2026-01-01",
+          expiresAt: "2026-01-31",
+          status: "open",
+        },
+      ],
+      new Map([["AAPL", 200]]),
+      new Date("2026-02-01T12:00:00.000Z"),
+    );
+
+    expect(result.details[0]).toMatchObject({
+      symbol: "AAPL",
+      pnlPercent: null,
+      status: "open",
+      dataGap: "invalid entry price",
+    });
+  });
+
+  it("keeps expired predictions open when quotes are temporarily unavailable", async () => {
+    vi.mocked(getQuote).mockRejectedValueOnce(new Error("temporary outage"));
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("0 resolved, 1 open");
+    expect(result.content[0].text).toContain("quote unavailable");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("open");
+    expect(prediction.resolvedAt).toBeNull();
+    expect(prediction.resultJson).toBeNull();
+  });
+
+  it("keeps expired predictions open when quote data is stale", async () => {
+    cache.set("test-stale-prediction-quote", quote("AAPL", 200), -1);
+    vi.mocked(getQuote).mockImplementation(async () => {
+      cache.getStale("test-stale-prediction-quote", 60_000);
+      return quote("AAPL", 200);
+    });
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("0 resolved, 1 open");
+    expect(result.content[0].text).toContain("quote unavailable");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("open");
+    expect(prediction.resolvedAt).toBeNull();
+    expect(prediction.resultJson).toBeNull();
+  });
+
+  it("keeps expired predictions open when quote data is zero-filled", async () => {
+    vi.mocked(getQuote).mockResolvedValueOnce(
+      quote("AAPL", 0, {
+        volume: 0,
+        week52High: 0,
+        week52Low: 0,
+      }),
+    );
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.recordPrediction({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 180,
+      timeframeDays: 30,
+      now: new Date("2026-01-01T12:00:00.000Z"),
+    });
+    db.close();
+
+    const result = await predictionsTool.execute("test", { action: "check" });
+
+    expect(result.content[0].text).toContain("0 resolved, 1 open");
+    expect(result.content[0].text).toContain("quote unavailable");
+
+    const verifyDb = initDefaultDatabase();
+    const verifyService = new MarketStateService(verifyDb);
+    const [prediction] = verifyService.listPredictions();
+    verifyDb.close();
+
+    expect(prediction.status).toBe("open");
+    expect(prediction.resolvedAt).toBeNull();
+    expect(prediction.resultJson).toBeNull();
+  });
+
+  it("cancels an open prediction without scoring it later", async () => {
+    const recordResult = await predictionsTool.execute("test", {
+      action: "record",
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 8,
+      entry_price: 180,
+      timeframe_days: 30,
+    });
+    const predictionId = (recordResult.details as { id: number }).id;
+
+    const cancelResult = await predictionsTool.execute("test", {
+      action: "cancel",
+      id: predictionId,
+    });
+
+    expect(cancelResult.content[0].text).toContain(`Cancelled prediction #${predictionId}`);
+    expect(cancelResult.details).toMatchObject({
+      id: predictionId,
+      status: "cancelled",
+      resultJson: JSON.stringify({ reason: "user_cancelled" }),
+    });
+
+    const checkResult = await predictionsTool.execute("test", { action: "check" });
+    expect(checkResult.content[0].text).toContain("No open predictions to check.");
   });
 });
 
@@ -210,11 +578,7 @@ describe("checkPredictions", () => {
       },
     ];
 
-    const result = checkPredictions(
-      predictions,
-      new Map([["AAPL", 200]]),
-      new Date("2026-03-29"),
-    );
+    const result = checkPredictions(predictions, new Map([["AAPL", 200]]), new Date("2026-03-29"));
     expect(result.open).toBe(1);
     expect(result.correct).toBe(0);
     expect(result.wrong).toBe(0);
@@ -233,11 +597,7 @@ describe("checkPredictions", () => {
       },
     ];
 
-    const result = checkPredictions(
-      predictions,
-      new Map([["AAPL", 200]]),
-      new Date("2026-03-29"),
-    );
+    const result = checkPredictions(predictions, new Map([["AAPL", 200]]), new Date("2026-03-29"));
     expect(result.open).toBe(0);
     expect(result.correct).toBe(1);
   });
@@ -266,7 +626,10 @@ describe("checkPredictions", () => {
 
     const result = checkPredictions(
       predictions,
-      new Map([["AAPL", 200], ["MSFT", 380]]),
+      new Map([
+        ["AAPL", 200],
+        ["MSFT", 380],
+      ]),
       new Date("2026-03-29"),
     );
     expect(result.open).toBe(1);
@@ -276,3 +639,23 @@ describe("checkPredictions", () => {
     expect(result.hitRate).toBe(1.0);
   });
 });
+
+function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
+  return {
+    symbol,
+    price,
+    change: 0,
+    changePercent: 0,
+    open: price,
+    high: price,
+    low: price,
+    previousClose: price,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: price + 10,
+    week52Low: price - 10,
+    timestamp: Date.now(),
+    ...overrides,
+  };
+}

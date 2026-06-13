@@ -27,10 +27,14 @@ export function renderRichText(markdown) {
       table = [];
       return;
     }
-    const rows = table.filter((line) => !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line));
+    const rows = table.filter(
+      (line) => !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line),
+    );
     const cells = rows.map(splitTableRow);
     const [head, ...body] = cells;
-    html.push(`<div class="rich-table"><table><thead><tr>${head.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+    html.push(
+      `<div class="rich-table"><table><thead><tr>${head.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
+    );
     table = [];
   };
   const flushAll = () => {
@@ -52,11 +56,17 @@ export function renderRichText(markdown) {
       continue;
     }
     flushTable();
-    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (/^([-*_])(?:\s*\1){2,}$/.test(line)) {
+      flushList();
+      flushParagraph();
+      html.push("<hr>");
+      continue;
+    }
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       flushList();
       flushParagraph();
-      const level = Math.min(3, heading[1].length + 2);
+      const level = Math.min(5, Math.max(3, heading[1].length));
       html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
       continue;
     }
@@ -74,7 +84,11 @@ export function renderRichText(markdown) {
 }
 
 function splitTableRow(line) {
-  return line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+  return line
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
 }
 
 function renderInline(value) {
@@ -84,5 +98,8 @@ function renderInline(value) {
 }
 
 function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" }[char]));
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char],
+  );
 }

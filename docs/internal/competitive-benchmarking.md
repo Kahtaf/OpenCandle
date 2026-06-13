@@ -34,6 +34,10 @@ It is fine for `OPENCANDLE_COMPETITIVE_PROMPT_FOCUS` to mention the evaluation t
 
 The competitor answer cache is keyed by exact prompt text. If you change a prompt to make it more natural, the prompt text must change enough to force fresh Claude/Codex/Gemini answers; do not judge a naturalized prompt against cached answers from harness-aware wording.
 
+## Saved-State Prompts
+
+Set `OPENCANDLE_COMPETITIVE_SEED_STATE=1` to benchmark personalization. The runner seeds the disposable eval home with the deterministic `COMPETITIVE_STATE_FIXTURE` (portfolio lots, watchlist theses, one open prediction), asks the prompt generator to make about two prompts reference the user's saved holdings naturally, gives the generic agents the same facts inline (fairness: a real user could paste their holdings into any chat), and tells the judge to verify both sides against the saved state — penalizing ignored or misquoted positions. The report records `seededState: true`. Judge scores are anchored on a 0-10 scale, and judged winners are validated against the allowed winner set so summaries cannot misattribute wins.
+
 ## How It Works
 
 `npm run test:evals:competitive` runs `tests/scripts/run-competitive-finance-eval.ts`.

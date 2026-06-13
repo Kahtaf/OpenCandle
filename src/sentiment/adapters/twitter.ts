@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { SentinelRecord, SentimentAdapter } from "../types.js";
 import type { TwitterSentimentResult } from "../../types/sentiment.js";
+import type { SentimentAdapter, SentinelRecord } from "../types.js";
 
 export class TwitterAdapter implements SentimentAdapter {
   readonly source = "twitter" as const;

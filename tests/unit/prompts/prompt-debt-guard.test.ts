@@ -11,10 +11,7 @@ interface PromptPolicyManifest {
   }>;
 }
 
-const PRODUCTION_PROMPT_FILES = [
-  "src/prompts/context-builder.ts",
-  "src/prompts/policy-cards.ts",
-];
+const PRODUCTION_PROMPT_FILES = ["src/prompts/context-builder.ts", "src/prompts/policy-cards.ts"];
 
 const GENERIC_ACRONYMS = new Set([
   "API",
@@ -40,12 +37,9 @@ describe("prompt debt guard", () => {
       readFileSync("docs/internal/prompt-to-policy-migration-manifest.json", "utf-8"),
     ) as PromptPolicyManifest;
     const literals = benchmarkSpecificLiterals(manifest);
-    const violations = productionPromptText()
-      .flatMap(({ file, text }) =>
-        literals
-          .filter((literal) => text.includes(literal))
-          .map((literal) => `${file}: ${literal}`),
-      );
+    const violations = productionPromptText().flatMap(({ file, text }) =>
+      literals.filter((literal) => text.includes(literal)).map((literal) => `${file}: ${literal}`),
+    );
 
     expect(violations).toEqual([]);
   });

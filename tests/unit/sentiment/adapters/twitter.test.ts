@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { TwitterAdapter } from "../../../../src/sentiment/adapters/twitter.js";
 import type { TwitterSentimentResult } from "../../../../src/types/sentiment.js";
 

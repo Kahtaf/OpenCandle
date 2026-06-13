@@ -1,5 +1,5 @@
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export interface DashboardState {
   watchlist: Array<{
@@ -199,8 +199,9 @@ function projectQuote(
 function parseCredentialRequiredProviders(text: string): string[] {
   const providers: string[] = [];
   const re = /\[OPENCANDLE_CREDENTIAL_REQUIRED[^\]]*provider=([a-z0-9_-]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
+  while (true) {
+    const match = re.exec(text);
+    if (!match) break;
     providers.push(match[1]);
   }
   return providers;
@@ -213,14 +214,18 @@ function parseSkippedProviders(text: string): string[] {
 function parseSoftGapProviders(text: string): string[] {
   const providers: string[] = [];
   const re = /\[OPENCANDLE_(?:SKIPPED|SOFT_DEGRADED)[^\]]*provider=([a-z0-9_-]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
+  while (true) {
+    const match = re.exec(text);
+    if (!match) break;
     providers.push(match[1]);
   }
   return providers;
 }
 
-function inferDirectToolGapProvider(toolName: string | undefined, text: string): string | undefined {
+function inferDirectToolGapProvider(
+  toolName: string | undefined,
+  text: string,
+): string | undefined {
   if (!toolName || !/(?:⚠|unavailable|No .*data found|LOGIN_NEEDED)/i.test(text)) return undefined;
   return DIRECT_TOOL_GAP_PROVIDERS[toolName];
 }
@@ -233,7 +238,7 @@ function inferSymbolFromContent(content: ToolResultMessage["content"]): string |
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 

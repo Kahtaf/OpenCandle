@@ -19,10 +19,7 @@ const SLOT_TO_PREF_KEYS: Record<string, string[]> = {
  *   The corresponding preference keys will be excluded from memory context to avoid
  *   conflicting provenance signals.
  */
-export function buildMemoryContext(
-  storage: MemoryStorage,
-  overriddenSlots?: string[],
-): string {
+export function buildMemoryContext(storage: MemoryStorage, overriddenSlots?: string[]): string {
   const sections: string[] = [];
 
   // Build set of preference keys to suppress
@@ -30,7 +27,11 @@ export function buildMemoryContext(
   if (overriddenSlots) {
     for (const slot of overriddenSlots) {
       const keys = SLOT_TO_PREF_KEYS[slot];
-      if (keys) keys.forEach((k) => suppressedKeys.add(k));
+      if (keys) {
+        for (const key of keys) {
+          suppressedKeys.add(key);
+        }
+      }
     }
   }
 
@@ -43,7 +44,7 @@ export function buildMemoryContext(
         const value = tryParseJson(p.value_json as string);
         return `- ${p.key}: ${value}`;
       });
-      sections.push("User Preferences:\n" + lines.join("\n"));
+      sections.push(`User Preferences:\n${lines.join("\n")}`);
     }
   }
 
@@ -54,7 +55,7 @@ export function buildMemoryContext(
       const summary = r.output_summary ? ` — ${r.output_summary}` : "";
       return `- ${r.workflow_type} (${r.created_at})${summary}`;
     });
-    sections.push("Recent Workflows:\n" + lines.join("\n"));
+    sections.push(`Recent Workflows:\n${lines.join("\n")}`);
   }
 
   return sections.join("\n\n");

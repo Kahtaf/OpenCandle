@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { Cache } from "../../../src/infra/cache.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Cache, runWithStaleMetadata } from "../../../src/infra/cache.js";
 
 describe("Cache", () => {
   let cache: Cache;
@@ -106,44 +106,49 @@ describe("Cache", () => {
     });
   });
 
-  describe("consumeStaleFlag", () => {
-    it("flag is set after getStale hit", () => {
+  describe("runWithStaleMetadata", () => {
+    it("records stale metadata inside the current async scope", async () => {
       vi.useFakeTimers();
       cache.set("key", "data", 100);
       vi.advanceTimersByTime(200);
-      cache.getStale("key", 1000);
 
-      const flag = cache.consumeStaleFlag();
-      expect(flag.stale).toBe(true);
-      expect(flag.cachedAt).toBeGreaterThan(0);
+      const result = await runWithStaleMetadata(async () => {
+        return cache.getStale("key", 1000)?.value;
+      });
+
+      expect(result.value).toBe("data");
+      expect(result.stale?.cachedAt).toBeGreaterThan(0);
       vi.useRealTimers();
     });
 
-    it("flag is cleared after consume", () => {
+    it("does not leak stale metadata between concurrent async scopes", async () => {
       vi.useFakeTimers();
       cache.set("key", "data", 100);
       vi.advanceTimersByTime(200);
-      cache.getStale("key", 1000);
-      cache.consumeStaleFlag(); // consume
 
-      const flag2 = cache.consumeStaleFlag();
-      expect(flag2.stale).toBe(false);
+      const staleCall = runWithStaleMetadata(async () => {
+        const stale = cache.getStale("key", 1000)?.value;
+        await Promise.resolve();
+        return stale;
+      });
+      const freshCall = runWithStaleMetadata(async () => {
+        await Promise.resolve();
+        return "fresh";
+      });
+
+      const [staleResult, freshResult] = await Promise.all([staleCall, freshCall]);
+
+      expect(staleResult.stale).toBeDefined();
+      expect(freshResult.stale).toBeUndefined();
       vi.useRealTimers();
     });
 
-    it("flag is not set on getStale miss", () => {
-      cache.getStale("nonexistent", 60_000);
-      const flag = cache.consumeStaleFlag();
-      expect(flag.stale).toBe(false);
-    });
-
-    it("flag is not set on getStale beyond stale limit", () => {
+    it("does not record stale metadata for getStale misses", async () => {
       vi.useFakeTimers();
       cache.set("key", "data", 100);
       vi.advanceTimersByTime(5000);
-      cache.getStale("key", 500); // beyond stale limit
-      const flag = cache.consumeStaleFlag();
-      expect(flag.stale).toBe(false);
+      const result = await runWithStaleMetadata(async () => cache.getStale("key", 500));
+      expect(result.stale).toBeUndefined();
       vi.useRealTimers();
     });
   });

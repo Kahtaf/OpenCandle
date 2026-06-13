@@ -1,20 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { IpcChannel } from "../../harness/ipc.js";
-import { createTraceCollector } from "../../harness/trace-collector.js";
-import { createIpcAskHandler } from "../../harness/ipc-ask-handler.js";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { IpcChannel } from "../../harness/ipc.js";
+import { createIpcAskHandler } from "../../harness/ipc-ask-handler.js";
+import { createTraceCollector } from "../../harness/trace-collector.js";
 
 function createMockSession() {
   let listener: ((event: AgentSessionEvent) => void) | null = null;
   return {
     subscribe(cb: (event: AgentSessionEvent) => void) {
       listener = cb;
-      return () => { listener = null; };
+      return () => {
+        listener = null;
+      };
     },
-    emit(event: AgentSessionEvent) { listener?.(event); },
+    emit(event: AgentSessionEvent) {
+      listener?.(event);
+    },
   };
 }
 

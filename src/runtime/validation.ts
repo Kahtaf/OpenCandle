@@ -41,10 +41,7 @@ export function checkTimestamps(
 }
 
 /** Check that options expiry dates are in the future. */
-export function checkOptionsExpiries(
-  evidence: EvidenceRecord[],
-  today: string,
-): ValidationEntry[] {
+export function checkOptionsExpiries(evidence: EvidenceRecord[], today: string): ValidationEntry[] {
   const failures: ValidationEntry[] = [];
   for (const record of evidence) {
     if (

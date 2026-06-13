@@ -1,9 +1,9 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getHistory } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import { computeSMA, computeRSI } from "./indicators.js";
+import { getHistory } from "../../providers/yahoo-finance.js";
 import type { OHLCV } from "../../types/market.js";
+import { computeRSI, computeSMA } from "./indicators.js";
 
 export type Strategy = "sma_crossover" | "sma_50_200_crossover" | "rsi_mean_reversion";
 
@@ -61,7 +61,7 @@ function backtestSMACrossover(
     const sLong = longSma[i];
     const price = closes[barIdx];
 
-    if (!position && sShort > sLong) {
+    if (!position && sShort > sLong && price > 0) {
       // Buy signal
       position = true;
       entryPrice = price;
@@ -75,9 +75,7 @@ function backtestSMACrossover(
     }
 
     // Track mark-to-market equity for accurate drawdown
-    const currentEquity = position
-      ? equity * (1 + (price - entryPrice) / entryPrice)
-      : equity;
+    const currentEquity = position ? equity * (1 + (price - entryPrice) / entryPrice) : equity;
     if (currentEquity > peak) peak = currentEquity;
     const dd = (peak - currentEquity) / peak;
     if (dd > maxDd) maxDd = dd;
@@ -115,7 +113,7 @@ function backtestRSIMeanReversion(bars: OHLCV[], closes: number[]): BacktestResu
     const r = rsi[i];
     const price = closes[barIdx];
 
-    if (!position && r < 30) {
+    if (!position && r < 30 && price > 0) {
       // RSI oversold → buy
       position = true;
       entryPrice = price;
@@ -129,9 +127,7 @@ function backtestRSIMeanReversion(bars: OHLCV[], closes: number[]): BacktestResu
     }
 
     // Track mark-to-market equity for accurate drawdown
-    const currentEquity = position
-      ? equity * (1 + (price - entryPrice) / entryPrice)
-      : equity;
+    const currentEquity = position ? equity * (1 + (price - entryPrice) / entryPrice) : equity;
     if (currentEquity > peak) peak = currentEquity;
     const dd = (peak - currentEquity) / peak;
     if (dd > maxDd) maxDd = dd;
@@ -157,9 +153,8 @@ function buildResult(
 ): BacktestResult {
   const sellTrades = tradeLog.filter((t) => t.type === "sell" && t.pnl != null);
   const wins = sellTrades.filter((t) => t.pnl! > 0).length;
-  const buyAndHoldReturn = closes.length > 1
-    ? (closes[closes.length - 1] - closes[0]) / closes[0]
-    : 0;
+  const buyAndHoldReturn =
+    closes.length > 1 && closes[0] > 0 ? (closes[closes.length - 1] - closes[0]) / closes[0] : 0;
 
   return {
     strategy,
@@ -177,9 +172,8 @@ function emptyResult(strategy: string, closes: number[]): BacktestResult {
   return {
     strategy,
     totalReturn: 0,
-    buyAndHoldReturn: closes.length > 1
-      ? (closes[closes.length - 1] - closes[0]) / closes[0]
-      : 0,
+    buyAndHoldReturn:
+      closes.length > 1 && closes[0] > 0 ? (closes[closes.length - 1] - closes[0]) / closes[0] : 0,
     trades: 0,
     wins: 0,
     winRate: 0,
@@ -191,11 +185,20 @@ function emptyResult(strategy: string, closes: number[]): BacktestResult {
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT, SPY)" }),
   strategy: Type.Union(
-    [Type.Literal("sma_crossover"), Type.Literal("sma_50_200_crossover"), Type.Literal("rsi_mean_reversion")],
-    { description: "Strategy: sma_crossover (buy when SMA20 > SMA50, sell on reverse), sma_50_200_crossover (buy when SMA50 > SMA200, sell on reverse), or rsi_mean_reversion (buy when RSI < 30, sell when RSI > 70)" },
+    [
+      Type.Literal("sma_crossover"),
+      Type.Literal("sma_50_200_crossover"),
+      Type.Literal("rsi_mean_reversion"),
+    ],
+    {
+      description:
+        "Strategy: sma_crossover (buy when SMA20 > SMA50, sell on reverse), sma_50_200_crossover (buy when SMA50 > SMA200, sell on reverse), or rsi_mean_reversion (buy when RSI < 30, sell when RSI > 70)",
+    },
   ),
   period: Type.Optional(
-    Type.String({ description: "Historical period to backtest: 1y, 2y, 5y. Default: 2y" }),
+    Type.Union([Type.Literal("1y"), Type.Literal("2y"), Type.Literal("5y")], {
+      description: "Historical period to backtest: 1y, 2y, 5y. Default: 2y",
+    }),
   ),
 });
 
@@ -211,7 +214,9 @@ export const backtestTool: AgentTool<typeof params> = {
     const historyResult = await wrapProvider("yahoo", () => getHistory(symbol, period, "1d"));
     if (historyResult.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Backtest unavailable for ${symbol} (${historyResult.reason}).` }],
+        content: [
+          { type: "text", text: `⚠ Backtest unavailable for ${symbol} (${historyResult.reason}).` },
+        ],
         details: null as any,
       };
     }
@@ -220,7 +225,12 @@ export const backtestTool: AgentTool<typeof params> = {
     const minBars = requiredBarsForStrategy(args.strategy);
     if (bars.length < minBars) {
       return {
-        content: [{ type: "text", text: `Insufficient data for backtesting ${symbol} (need ${minBars}+ days, got ${bars.length})` }],
+        content: [
+          {
+            type: "text",
+            text: `Insufficient data for backtesting ${symbol} (need ${minBars}+ days, got ${bars.length})`,
+          },
+        ],
         details: null,
       };
     }

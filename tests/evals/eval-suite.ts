@@ -1,6 +1,6 @@
 import { afterAll } from "vitest";
-import { describeEval } from "vitest-evals";
 import type { ScoreFn } from "vitest-evals";
+import { describeEval } from "vitest-evals";
 import { buildReport, formatReport, saveRun } from "./baseline.js";
 import { runEvalCase } from "./runner.js";
 import { scoreCase } from "./score-case.js";
@@ -48,7 +48,10 @@ function openCandleScorer(): ScoreFn {
       score: result.score,
       metadata: {
         rationale: Object.entries(result.layers)
-          .map(([name, detail]) => `${name}: ${detail.passed ? "PASS" : "FAIL"} (${detail.score}) ${detail.message ?? ""}`)
+          .map(
+            ([name, detail]) =>
+              `${name}: ${detail.passed ? "PASS" : "FAIL"} (${detail.score}) ${detail.message ?? ""}`,
+          )
           .join("\n"),
         layers: result.layers,
       },

@@ -1,5 +1,5 @@
-import type { EvalCase } from "../types.js";
 import { registerEvalSuite } from "../eval-suite.js";
+import type { EvalCase } from "../types.js";
 
 const faithfulnessCases: EvalCase[] = [
   {
@@ -23,7 +23,8 @@ const faithfulnessCases: EvalCase[] = [
   {
     name: "backtest-metrics",
     tier: "always",
-    prompt: "Backtest a simple moving average crossover on SPY over 1 year. What was the total return and max drawdown?",
+    prompt:
+      "Backtest a simple moving average crossover on SPY over 1 year. What was the total return and max drawdown?",
     assertions: {
       requiredTools: ["backtest_strategy"],
       dataFaithfulness: true,

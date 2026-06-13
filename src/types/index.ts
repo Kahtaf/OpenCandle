@@ -1,10 +1,15 @@
-export type { StockQuote, OHLCV, CryptoPrice } from "./market.js";
 export type { CompanyOverview, EarningsData, FinancialStatement } from "./fundamentals.js";
 export type { FredObservation, FredSeries } from "./macro.js";
 export { FRED_SERIES } from "./macro.js";
+export type { CryptoPrice, OHLCV, StockQuote } from "./market.js";
 export type { Greeks, OptionContract, OptionsChain } from "./options.js";
-export type { Position, PortfolioSummary, RiskMetrics, TechnicalIndicators } from "./portfolio.js";
-export type { FearGreedData, RedditSentimentResult, WebSearchResult, WebSearchEnvelope } from "./sentiment.js";
+export type { PortfolioSummary, Position, RiskMetrics, TechnicalIndicators } from "./portfolio.js";
+export type {
+  FearGreedData,
+  RedditSentimentResult,
+  WebSearchEnvelope,
+  WebSearchResult,
+} from "./sentiment.js";
 
 /**
  * Handler for `ask_user` tool invocations in non-UI contexts (e.g. test harness).

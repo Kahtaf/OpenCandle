@@ -1,0 +1,31 @@
+{
+  "input": "Show CPI vs SPY YTD",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "agent_task",
+    "route": "fallback",
+    "workflow": "general_finance_qa",
+    "entities": {
+      "symbols": [
+        "SPY"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "CPI is a macro metric; SPY is the ticker to compare against."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "macro"
+  ]
+}

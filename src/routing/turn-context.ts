@@ -1,22 +1,19 @@
 import type { MemoryCategory, MemoryEntry } from "../memory/types.js";
 import {
-  activeToolsForBundles,
-  memoryScopesForRoute,
-} from "./route-manifest.js";
+  buildPlanningEnvelope,
+  type PlanningBuildOptions,
+  type PlanningEnvelope,
+} from "./planning.js";
+import { activeToolsForBundles, memoryScopesForRoute } from "./route-manifest.js";
 import type {
+  RouterDiagnostic,
   RouterInputContext,
   RouterOutput,
   RouterRoute,
   RouterRouteKind,
   RouterSlot,
   ToolBundleName,
-  RouterDiagnostic,
 } from "./router-types.js";
-import {
-  buildPlanningEnvelope,
-  type PlanningBuildOptions,
-  type PlanningEnvelope,
-} from "./planning.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
 export interface MemoryQueryPlan {

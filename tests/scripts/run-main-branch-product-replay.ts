@@ -2,7 +2,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { ProductEvalReport } from "../evals/product/types.js";
 import {
   buildProductReplayComparison,
   findLatestProductEvalReport,
@@ -10,6 +9,7 @@ import {
   unsupportedProductReplayRun,
   writeProductReplayComparisonReport,
 } from "../evals/main-branch-replay.js";
+import type { ProductEvalReport } from "../evals/product/types.js";
 import { runSubprocess, type SubprocessResult } from "../evals/subprocess-runner.js";
 
 const cwd = process.cwd();
@@ -19,12 +19,15 @@ const productReplayTimeoutMs = numberFromEnv("PRODUCT_REPLAY_TIMEOUT_MS") ?? 1_0
 
 const currentRun = runProductEval(cwd, currentRef);
 const baseWorktree = mkdtempSync(join(tmpdir(), "oc-product-replay-base-"));
-let baseRun;
+let baseRun: ProductEvalReport;
 
 try {
   const added = run("git", ["worktree", "add", "--detach", baseWorktree, baseRef], cwd, "pipe");
   if (added.status !== 0) {
-    baseRun = unsupportedProductReplayRun(baseRef, outputSummary(added) || "failed to create base-ref worktree");
+    baseRun = unsupportedProductReplayRun(
+      baseRef,
+      outputSummary(added) || "failed to create base-ref worktree",
+    );
   } else {
     linkInstallArtifacts(cwd, baseWorktree);
     baseRun = productEvalSupported(baseWorktree)
@@ -65,7 +68,8 @@ function runProductEval(workdir: string, ref: string) {
   }
   const reportPath = findLatestProductEvalReport(workdir);
   if (!reportPath || reportPath === before) {
-    const reason = outputSummary(result, workdir) || `product eval did not produce a report for ${ref}`;
+    const reason =
+      outputSummary(result, workdir) || `product eval did not produce a report for ${ref}`;
     if (workdir === cwd) throw new Error(reason);
     return unsupportedProductReplayRun(ref, reason);
   }
@@ -124,7 +128,11 @@ function outputSummary(result: SubprocessResult, workdir = process.cwd()): strin
     return `${basename(workdir)} command timed out after ${result.timeoutMs ?? "unknown"}ms`;
   }
   const output = `${result.stderr}\n${result.stdout}`.trim();
-  const lastLine = output.split("\n").map((line) => line.trim()).filter(Boolean).at(-1);
+  const lastLine = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .at(-1);
   if (lastLine) return `${basename(workdir)} command exited ${result.status}: ${lastLine}`;
   return result.status === 0 ? "" : `command exited ${result.status}`;
 }

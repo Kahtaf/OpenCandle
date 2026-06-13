@@ -136,10 +136,11 @@ OpenCandle state defaults to `~/.opencandle/`.
 Common files:
 
 - `config.json` for provider keys and file-backed settings.
-- `watchlist.json`, `portfolio.json`, and `predictions.json` for local finance state.
-- `state.db` for memory and workflow state.
+- `state.db` for memory, workflow state, and durable user market state such as instruments, watchlists, portfolio lots, predictions, alerts, report runs, and import provenance.
 - `sentinel.db` for sentiment trend state.
 - `browser-profile/` for browser-backed sentiment flows such as Twitter/X.
+
+OpenCandle does not treat `watchlist.json`, `portfolio.json`, or `predictions.json` as supported state sources.
 
 Pi owns its own runtime config and session storage separately. OpenCandle should not depend on repo-local `.pi/extensions/` artifacts.
 

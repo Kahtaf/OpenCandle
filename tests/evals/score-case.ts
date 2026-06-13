@@ -1,8 +1,8 @@
-import { scoreWorkflowClassification } from "./scorers/workflow-classification.js";
-import { scoreToolSelection } from "./scorers/tool-selection.js";
-import { scoreToolArguments } from "./scorers/tool-arguments.js";
 import { scoreDataFaithfulness } from "./scorers/data-faithfulness.js";
 import { scoreRiskDisclosure } from "./scorers/risk-disclosure.js";
+import { scoreToolArguments } from "./scorers/tool-arguments.js";
+import { scoreToolSelection } from "./scorers/tool-selection.js";
+import { scoreWorkflowClassification } from "./scorers/workflow-classification.js";
 import type { EvalCase, EvalCaseResult, EvalTrace, LayerDetail } from "./types.js";
 
 /**
@@ -44,10 +44,18 @@ export function scoreCase(evalCase: EvalCase, trace: EvalTrace): EvalCaseResult 
   }
 
   // Layer 5: Risk disclosure
-  if (assertions.responseContains || assertions.responseNotContains || assertions.dataFaithfulness === undefined) {
+  if (
+    assertions.responseContains ||
+    assertions.responseNotContains ||
+    assertions.dataFaithfulness === undefined
+  ) {
     // Only run risk disclosure if explicitly requested via responseContains/responseNotContains
     if (assertions.responseContains || assertions.responseNotContains) {
-      const detail = scoreRiskDisclosure(trace, assertions.responseContains, assertions.responseNotContains);
+      const detail = scoreRiskDisclosure(
+        trace,
+        assertions.responseContains,
+        assertions.responseNotContains,
+      );
       layers["risk_disclosure"] = detail;
       scores.push(detail.score);
     }
@@ -58,8 +66,7 @@ export function scoreCase(evalCase: EvalCase, trace: EvalTrace): EvalCaseResult 
   // Safety-critical: Layer 4 or 5 score of 0 on always-tier
   const safetyCriticalFailure =
     evalCase.tier === "always" &&
-    ((layers["data_faithfulness"]?.score === 0) ||
-     (layers["risk_disclosure"]?.score === 0));
+    (layers["data_faithfulness"]?.score === 0 || layers["risk_disclosure"]?.score === 0);
 
   return {
     name: evalCase.name,

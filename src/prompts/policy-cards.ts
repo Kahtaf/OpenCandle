@@ -27,7 +27,7 @@ export const POLICY_CARD_IDS = [
   "general_fallback",
 ] as const;
 
-export type PromptPolicyCardId = typeof POLICY_CARD_IDS[number];
+export type PromptPolicyCardId = (typeof POLICY_CARD_IDS)[number];
 
 export interface PolicyCard {
   id: PromptPolicyCardId;
@@ -133,7 +133,7 @@ For strategy backtest prompts, use backtest_strategy evidence before judging whe
     status: "implemented",
     capabilityGapIds: [],
     content: `## Stateful Tracking Update Policy
-For watchlist, portfolio tracking, prediction recording, and prediction-check prompts, use the state tool that owns the change or lookup: manage_watchlist, track_prediction, or track_portfolio. Do not confirm a saved change from prose alone. Confirm the persisted state update with the symbol, action, direction, entry price, target, stop, conviction, timeframe, or check result that the tool accepted. If required fields for a state mutation are missing, ask the smallest clarification question instead of inventing values. For check or list operations, summarize the saved state and say clearly when no records exist. Do not turn a state update into a buy/sell recommendation unless the user separately asks for market analysis.`,
+For watchlist, portfolio tracking, alert management, daily-report, prediction recording, and prediction-check prompts, use the state tool that owns the change or lookup: manage_watchlist, track_prediction, track_portfolio, manage_alerts, or daily_watchlist_report. Do not confirm a saved change from prose alone. Confirm the persisted state update with the symbol, action, direction, entry price, target, stop, conviction, timeframe, or check result that the tool accepted. If the user asks to create an alert and check it now in the same request, call manage_alerts with the matching create action and check_after_create=true. If required fields for a state mutation are missing, ask the smallest clarification question instead of inventing values. For check or list operations, summarize the saved state and say clearly when no records exist. Do not turn a state update into a buy/sell recommendation unless the user separately asks for market analysis.`,
   },
   retail_finance_tradeoff: {
     id: "retail_finance_tradeoff",

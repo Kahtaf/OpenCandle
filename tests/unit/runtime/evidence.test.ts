@@ -1,9 +1,6 @@
-import { describe, it, expect } from "vitest";
-import {
-  isProviderOk,
-  toEvidenceRecord,
-} from "../../../src/runtime/evidence.js";
+import { describe, expect, it } from "vitest";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
+import { isProviderOk, toEvidenceRecord } from "../../../src/runtime/evidence.js";
 
 describe("isProviderOk", () => {
   it("returns true for ok results", () => {

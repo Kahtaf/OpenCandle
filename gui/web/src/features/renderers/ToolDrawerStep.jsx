@@ -1,12 +1,12 @@
-import { CheckCircle2, AlertCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
-import { GenericCard, rendererFor } from "./cards/index.jsx";
+import { cn } from "../../lib/utils.js";
+import { textContent } from "../../rendering/text.js";
 import { PlainOutput, RawDetails } from "./cards/_shared.jsx";
 import { extractDetails } from "./cards/card-format.js";
+import { GenericCard, rendererFor } from "./cards/index.jsx";
 import { ToolIcon, toolMeta } from "./tool-icon.jsx";
-import { textContent } from "../../rendering/text.js";
-import { cn } from "../../lib/utils.js";
 
 // One row in the drawer timeline. Left rail is a small dot + a dashed vertical
 // connector down to the next step. Right column shows the tool identity, the
@@ -61,7 +61,9 @@ export function ToolDrawerStep({ step, isLast }) {
         ) : null}
 
         {step.narrationAfter ? (
-          <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed text-muted-foreground">{step.narrationAfter}</p>
+          <p className="mt-2 line-clamp-3 text-[12px] leading-relaxed text-muted-foreground">
+            {step.narrationAfter}
+          </p>
         ) : null}
       </div>
     </li>
@@ -74,9 +76,14 @@ function ArgsRow({ args }) {
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {entries.slice(0, 6).map(([k, v]) => (
-        <span key={k} className="inline-flex max-w-full items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10.5px]">
+        <span
+          key={k}
+          className="inline-flex max-w-full items-center gap-1 rounded-md bg-secondary px-1.5 py-0.5 text-[10.5px]"
+        >
           <span className="text-muted-foreground">{k}</span>
-          <span className="max-w-[140px] truncate font-mono text-foreground">{formatArgValue(v)}</span>
+          <span className="max-w-[140px] truncate font-mono text-foreground">
+            {formatArgValue(v)}
+          </span>
         </span>
       ))}
     </div>
@@ -87,7 +94,10 @@ function formatArgValue(value) {
   if (value === null || value === undefined) return "—";
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return value.length === 0 ? "[]" : `[${value.slice(0, 3).map(formatArgValue).join(", ")}${value.length > 3 ? ", …" : ""}]`;
+  if (Array.isArray(value))
+    return value.length === 0
+      ? "[]"
+      : `[${value.slice(0, 3).map(formatArgValue).join(", ")}${value.length > 3 ? ", …" : ""}]`;
   return JSON.stringify(value);
 }
 
@@ -105,9 +115,16 @@ function StepResultBody({ step }) {
   const empty = null;
 
   return (
-    <div className={cn("grid gap-2", message.isError && "rounded-md border border-destructive/30 bg-destructive/5 p-2")}>
+    <div
+      className={cn(
+        "grid gap-2",
+        message.isError && "rounded-md border border-destructive/30 bg-destructive/5 p-2",
+      )}
+    >
       <Component message={message} header={empty} text={text} variant="step" />
-      {hasAnyDetail(message, details, text) ? <RawDetails message={message} details={details} text={text} /> : null}
+      {hasAnyDetail(message, details, text) ? (
+        <RawDetails message={message} details={details} text={text} />
+      ) : null}
     </div>
   );
 }

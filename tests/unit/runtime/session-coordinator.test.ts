@@ -1,5 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
+import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
+import type { WorkflowDefinition } from "../../../src/runtime/prompt-step.js";
+import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
+import {
+  clearRunContext,
+  getProviderTracker,
+  setRunContext,
+} from "../../../src/runtime/run-context.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
 
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
@@ -126,9 +139,7 @@ function assistantToolOnlyEntry(toolName: string): SessionEntry {
     timestamp: new Date().toISOString(),
     message: {
       role: "assistant",
-      content: [
-        { type: "toolCall", id: "tc-1", name: toolName, arguments: {} },
-      ],
+      content: [{ type: "toolCall", id: "tc-1", name: toolName, arguments: {} }],
       api: "anthropic",
       provider: "anthropic",
       model: "claude-test",
@@ -213,6 +224,90 @@ function branchSummaryEntry(summary: string): SessionEntry {
   } as SessionEntry;
 }
 
+function workflowDefinition(name: string): WorkflowDefinition {
+  return {
+    workflowType: name,
+    steps: [
+      {
+        stepType: "first",
+        description: "first step",
+        prompt: `${name} first prompt`,
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+function fakeQueueContext(isIdle: () => boolean) {
+  return {
+    isIdle,
+    hasPendingMessages: () => false,
+    ui: { notify: vi.fn() },
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  clearRunContext();
+});
+
+describe("SessionCoordinator workflow runtime ownership", () => {
+  it("exposes the active workflow type so workflow turns can carry saved market state", () => {
+    const coord = new SessionCoordinator();
+    const pi = { sendUserMessage: vi.fn(), appendEntry: vi.fn() };
+
+    expect(coord.getActiveWorkflowType()).toBeUndefined();
+
+    coord.transformWorkflowInput(
+      pi as never,
+      workflowDefinition("options_screener"),
+      fakeQueueContext(() => true),
+    );
+
+    expect(coord.getActiveWorkflowType()).toBe("options_screener");
+  });
+
+  it("does not clear an unowned run context when no workflow is active", () => {
+    const coord = new SessionCoordinator();
+    const tracker = new ProviderTracker();
+
+    setRunContext({ providerTracker: tracker });
+
+    coord.cancelActiveWorkflow();
+
+    expect(getProviderTracker()).toBe(tracker);
+  });
+
+  it("does not let a superseded workflow clear the newer workflow context", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const pi = { sendUserMessage: vi.fn() };
+
+    let oldWorkflowIdle = false;
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("old"),
+      fakeQueueContext(() => oldWorkflowIdle),
+    );
+
+    coord.executeWorkflow(
+      pi as never,
+      workflowDefinition("new"),
+      fakeQueueContext(() => false),
+    );
+
+    const newTracker = getProviderTracker();
+    expect(newTracker).toBeDefined();
+
+    oldWorkflowIdle = true;
+    await vi.advanceTimersByTimeAsync(26);
+
+    expect(getProviderTracker()).toBe(newTracker);
+  });
+});
+
 describe("SessionCoordinator.buildPriorTurns", () => {
   it("returns empty array for an empty branch", () => {
     const coord = new SessionCoordinator();
@@ -222,17 +317,13 @@ describe("SessionCoordinator.buildPriorTurns", () => {
 
   it("returns a single user message when the branch has only one", () => {
     const coord = new SessionCoordinator();
-    const turns = coord.buildPriorTurns(
-      fakeSessionManager([userTextEntry("tell me about NVDA")]),
-    );
+    const turns = coord.buildPriorTurns(fakeSessionManager([userTextEntry("tell me about NVDA")]));
     expect(turns).toEqual([{ role: "user", text: "tell me about NVDA" }]);
   });
 
   it("accepts user messages with plain-string content", () => {
     const coord = new SessionCoordinator();
-    const turns = coord.buildPriorTurns(
-      fakeSessionManager([userStringEntry("hello world")]),
-    );
+    const turns = coord.buildPriorTurns(fakeSessionManager([userStringEntry("hello world")]));
     expect(turns).toEqual([{ role: "user", text: "hello world" }]);
   });
 
@@ -254,10 +345,7 @@ describe("SessionCoordinator.buildPriorTurns", () => {
   it("excludes aborted assistant turns with no text content", () => {
     const coord = new SessionCoordinator();
     const turns = coord.buildPriorTurns(
-      fakeSessionManager([
-        userTextEntry("run the analysis"),
-        assistantEmptyEntry(),
-      ]),
+      fakeSessionManager([userTextEntry("run the analysis"), assistantEmptyEntry()]),
     );
     expect(turns).toEqual([{ role: "user", text: "run the analysis" }]);
   });
@@ -351,11 +439,7 @@ describe("SessionCoordinator.buildPriorTurns", () => {
   it("respects a custom max parameter", () => {
     const coord = new SessionCoordinator();
     const turns = coord.buildPriorTurns(
-      fakeSessionManager([
-        userTextEntry("one"),
-        userTextEntry("two"),
-        userTextEntry("three"),
-      ]),
+      fakeSessionManager([userTextEntry("one"), userTextEntry("two"), userTextEntry("three")]),
       2,
     );
     expect(turns.map((t) => t.text)).toEqual(["two", "three"]);
@@ -365,10 +449,7 @@ describe("SessionCoordinator.buildPriorTurns", () => {
 describe("SessionCoordinator.buildRouterContextBase", () => {
   it("includes priorTurns alongside profile + recent runs", () => {
     const coord = new SessionCoordinator();
-    const mgr = fakeSessionManager([
-      userTextEntry("hello"),
-      assistantTextEntry("hi"),
-    ]);
+    const mgr = fakeSessionManager([userTextEntry("hello"), assistantTextEntry("hi")]);
     const ctx = coord.buildRouterContextBase(mgr);
     expect(ctx.priorTurns).toEqual([
       { role: "user", text: "hello" },
@@ -378,3 +459,189 @@ describe("SessionCoordinator.buildRouterContextBase", () => {
     expect(ctx.recentWorkflowRuns).toEqual([]);
   });
 });
+
+describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
+  const originalEnv = process.env.OPENCANDLE_HOME;
+  let openCandleHome: string | null = null;
+
+  afterEach(() => {
+    if (originalEnv == null) {
+      delete process.env.OPENCANDLE_HOME;
+    } else {
+      process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    if (openCandleHome) {
+      rmSync(openCandleHome, { recursive: true, force: true });
+      openCandleHome = null;
+    }
+  });
+
+  it("includes portfolio, watchlist, alerts, reports, and predictions in prompt context", () => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    const asts = {
+      symbol: "ASTS",
+      assetType: "equity",
+      name: "AST SpaceMobile, Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    };
+    const item = service.addWatchlistItem({
+      instrument: asts,
+      targetPrice: 55,
+      stopPrice: 22,
+      thesis: "Space-based broadband satellite network",
+      notes: "Watch launch cadence and carrier partnerships",
+      tags: ["space", "satellite"],
+    });
+    service.addPortfolioLot({
+      instrument: asts,
+      quantity: 40,
+      avgCost: 28,
+      currency: "USD",
+    });
+    service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: item.instrumentId,
+      conditionType: "price_crosses_above",
+      conditionVersion: 1,
+      condition: { threshold: 55, field: "last_price" },
+      timeframe: "quote",
+      cooldownSeconds: 3600,
+    });
+    const template = service.createReportTemplate({
+      name: "Morning watchlist",
+      reportType: "watchlist_daily",
+      cadence: "daily",
+      timezone: "America/Toronto",
+      localTime: "08:00",
+      config: { targets: { default_watchlist: true } },
+      enabled: true,
+    });
+    service.recordReportRun({
+      templateId: template.id,
+      status: "completed",
+      summary: { symbols: ["ASTS"] },
+      errors: [],
+    });
+    service.recordPrediction({
+      instrument: asts,
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 30,
+      targetPrice: 60,
+      timeframeDays: 60,
+    });
+    db.close();
+
+    const coord = new SessionCoordinator();
+    coord.initSession("test-session");
+    const prompt = coord.buildSystemPrompt(
+      "base",
+      undefined,
+      undefined,
+      resolvedTurnContext("agent_task"),
+    );
+
+    expect(prompt).toContain("Saved Market State");
+    expect(prompt).toContain("ASTS");
+    expect(prompt).toContain("40 @ $28.00");
+    expect(prompt).toContain("cost basis $1120.00");
+    expect(prompt).toContain("explicitly mention the saved quantity, average cost, and cost basis");
+    expect(prompt).toContain("target $55.00");
+    expect(prompt).toContain("price_crosses_above");
+    expect(prompt).toContain("Morning watchlist");
+    expect(prompt).toContain("bullish conv 8/10");
+    expect(prompt).toContain("space, satellite");
+  });
+
+  it("does not inject saved market state into unrelated prompts without route context", () => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "ASTS",
+        assetType: "equity",
+        name: "AST SpaceMobile, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 40,
+      avgCost: 28,
+      currency: "USD",
+    });
+    db.close();
+
+    const coord = new SessionCoordinator();
+    coord.initSession("test-session");
+
+    expect(coord.buildSystemPrompt("base")).not.toContain("Saved Market State");
+    expect(
+      coord.buildSystemPrompt("base", undefined, undefined, resolvedTurnContext("pass_through")),
+    ).not.toContain("Saved Market State");
+  });
+
+  it("injects saved market state for rules-mode finance fallback turns carrying a fallback context", () => {
+    openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
+    process.env.OPENCANDLE_HOME = openCandleHome;
+
+    const db = initDefaultDatabase();
+    const service = new MarketStateService(db);
+    service.addPortfolioLot({
+      instrument: {
+        symbol: "RKLB",
+        assetType: "equity",
+        name: "Rocket Lab USA, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 150,
+      avgCost: 18.4,
+      currency: "USD",
+    });
+    db.close();
+
+    const coord = new SessionCoordinator();
+    coord.initSession("test-session");
+    const prompt = coord.buildSystemPrompt("base", undefined, {
+      assumptionsBlock: "",
+      missingRequired: [],
+      extraContext: "General finance question without a dispatched workflow.",
+    });
+
+    expect(prompt).toContain("Saved Market State");
+    expect(prompt).toContain("RKLB");
+  });
+});
+
+function resolvedTurnContext(routeKind: "agent_task" | "pass_through") {
+  return buildResolvedTurnContext(
+    {
+      text: routeKind === "pass_through" ? "write a poem" : "how does space sector news affect me?",
+      priorTurns: [],
+      profileSnapshot: {},
+      recentWorkflowRuns: [],
+    },
+    {
+      routeKind,
+      route: "fallback",
+      workflow: routeKind === "pass_through" ? undefined : "general_finance_qa",
+      entities: { symbols: [] },
+      slots: {},
+      preference_updates: [],
+      missing_required: [],
+      tool_bundles: [],
+      diagnostics: [],
+      reasoning: "test context",
+    },
+  );
+}

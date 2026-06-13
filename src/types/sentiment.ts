@@ -23,7 +23,7 @@ export interface TwitterSentimentResult {
   query: string;
   tweetCount: number;
   tweets: TwitterTweet[];
-  sentimentScore: number;   // -1.0 (fully bearish) to +1.0 (fully bullish)
+  sentimentScore: number; // -1.0 (fully bearish) to +1.0 (fully bullish)
   bullishCount: number;
   bearishCount: number;
   topMentions: string[];
@@ -63,7 +63,7 @@ export interface RedditSentimentResult {
     created: string;
   }>;
   topMentions: string[];
-  sentimentScore: number;   // -1.0 (fully bearish) to +1.0 (fully bullish)
+  sentimentScore: number; // -1.0 (fully bearish) to +1.0 (fully bullish)
   bullishCount: number;
   bearishCount: number;
   fetchedAt: string;

@@ -1,5 +1,5 @@
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { httpGet } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import type { FearGreedData } from "../types/sentiment.js";
 
 // alternative.me provides a free crypto Fear & Greed index

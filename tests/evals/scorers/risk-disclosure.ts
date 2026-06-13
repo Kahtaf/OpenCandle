@@ -26,7 +26,8 @@ export function scoreRiskDisclosure(
 ): LayerDetail {
   const text = getUserVisibleText(trace);
   const issues: string[] = [];
-  const hasCustomPatterns = (responseContains && responseContains.length > 0) ||
+  const hasCustomPatterns =
+    (responseContains && responseContains.length > 0) ||
     (responseNotContains && responseNotContains.length > 0);
 
   // Built-in disclaimer check — skip when custom patterns are provided
@@ -48,9 +49,7 @@ export function scoreRiskDisclosure(
   // Custom responseContains checks
   if (responseContains) {
     for (const pattern of responseContains) {
-      const matches = typeof pattern === "string"
-        ? text.includes(pattern)
-        : pattern.test(text);
+      const matches = typeof pattern === "string" ? text.includes(pattern) : pattern.test(text);
       if (!matches) {
         issues.push(`Missing required: ${pattern}`);
       }
@@ -60,9 +59,7 @@ export function scoreRiskDisclosure(
   // Custom responseNotContains checks
   if (responseNotContains) {
     for (const pattern of responseNotContains) {
-      const matches = typeof pattern === "string"
-        ? text.includes(pattern)
-        : pattern.test(text);
+      const matches = typeof pattern === "string" ? text.includes(pattern) : pattern.test(text);
       if (matches) {
         issues.push(`Contains prohibited: ${pattern}`);
       }

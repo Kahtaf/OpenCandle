@@ -10,22 +10,39 @@
  *
  * Does NOT require a live LLM — exercises all orchestration logic in isolation.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildMemoryContext, initDatabase, MemoryStorage } from "../../src/memory/index.js";
+import { extractPreferences } from "../../src/memory/preference-extractor.js";
+import {
+  buildCompareAssetsPrompt,
+  buildOptionsScreenerPrompt,
+  buildPortfolioPrompt,
+} from "../../src/prompts/workflow-prompts.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
 import { extractEntities } from "../../src/routing/entity-extractor.js";
-import { resolvePortfolioSlots, resolveOptionsScreenerSlots } from "../../src/routing/slot-resolver.js";
-import { buildPortfolioPrompt, buildOptionsScreenerPrompt, buildCompareAssetsPrompt } from "../../src/prompts/workflow-prompts.js";
-import { buildPortfolioWorkflow } from "../../src/workflows/portfolio-builder.js";
-import { buildOptionsScreenerWorkflow } from "../../src/workflows/options-screener.js";
-import { initDatabase, MemoryStorage, buildMemoryContext } from "../../src/memory/index.js";
-import { extractPreferences } from "../../src/memory/preference-extractor.js";
+import {
+  resolveOptionsScreenerSlots,
+  resolvePortfolioSlots,
+} from "../../src/routing/slot-resolver.js";
+import type { CompareAssetsSlots, SlotResolution } from "../../src/routing/types.js";
 import { buildSystemPrompt } from "../../src/system-prompt.js";
-import type Database from "better-sqlite3";
-import type { SlotResolution, CompareAssetsSlots } from "../../src/routing/types.js";
+import { buildOptionsScreenerWorkflowDefinition } from "../../src/workflows/options-screener.js";
+import { buildPortfolioWorkflowDefinition } from "../../src/workflows/portfolio-builder.js";
+
+function workflowPrompts(definition: { steps: { prompt: string }[] }): {
+  initialPrompt: string;
+  followUps: string[];
+} {
+  return {
+    initialPrompt: definition.steps[0]?.prompt ?? "",
+    followUps: definition.steps.slice(1).map((step) => step.prompt),
+  };
+}
 
 describe("E2E integration: full orchestration pipeline", () => {
   let db: Database.Database;
@@ -72,7 +89,7 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(resolution.sources.riskProfile).toBe("default");
       expect(resolution.defaultsUsed).toContain("riskProfile");
 
-      const plan = buildPortfolioWorkflow(resolution);
+      const plan = workflowPrompts(buildPortfolioWorkflowDefinition(resolution));
       expect(plan.initialPrompt).toContain("$10,000");
       expect(plan.initialPrompt).toContain("balanced [DEFAULT]");
       expect(plan.initialPrompt).toContain("get_stock_quote");
@@ -98,7 +115,6 @@ describe("E2E integration: full orchestration pipeline", () => {
       const resolvedSlots = JSON.parse(runs[0].resolved_slots_json as string);
       expect(resolvedSlots.budget).toBe(10_000);
     });
-
   });
 
   // -----------------------------------------------------------------------
@@ -129,7 +145,7 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(resolution.resolved.dteTarget).toBe("25_to_45_days");
       expect(resolution.sources.dteTarget).toBe("user"); // mapped from dteHint
 
-      const plan = buildOptionsScreenerWorkflow(resolution);
+      const plan = workflowPrompts(buildOptionsScreenerWorkflowDefinition(resolution));
       expect(plan.initialPrompt).toContain("MSFT");
       expect(plan.initialPrompt).toContain("get_option_chain");
       expect(plan.followUps.length).toBeGreaterThanOrEqual(1);
@@ -420,7 +436,7 @@ describe("E2E integration: full orchestration pipeline", () => {
         "Sell a covered call on MSFT. Cost basis 123.45. Best return for something 1 or 2 weeks out?",
       );
       const resolution = resolveOptionsScreenerSlots(entities);
-      const plan = buildOptionsScreenerWorkflow(resolution);
+      const plan = workflowPrompts(buildOptionsScreenerWorkflowDefinition(resolution));
 
       expect(resolution.resolved.optionStrategy).toBe("covered_call");
       expect(resolution.resolved.costBasis).toBe(123.45);
@@ -477,7 +493,7 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(resolution.sources.riskProfile).toBe("preference");
 
       // The prompt should reflect the preference, not the default
-      const plan = buildPortfolioWorkflow(resolution);
+      const plan = workflowPrompts(buildPortfolioWorkflowDefinition(resolution));
       expect(plan.initialPrompt).toContain("conservative");
       expect(plan.initialPrompt).not.toContain("balanced [DEFAULT]");
     });
@@ -490,7 +506,7 @@ describe("E2E integration: full orchestration pipeline", () => {
     it("portfolio prompt date matches local date, not UTC", () => {
       const classification = classifyIntent("invest $10k");
       const resolution = resolvePortfolioSlots(classification.entities);
-      const plan = buildPortfolioWorkflow(resolution);
+      const plan = workflowPrompts(buildPortfolioWorkflowDefinition(resolution));
 
       const now = new Date();
       const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -500,7 +516,7 @@ describe("E2E integration: full orchestration pipeline", () => {
     it("options prompt expiration window uses local dates", () => {
       const classification = classifyIntent("MSFT calls a month out");
       const resolution = resolveOptionsScreenerSlots(classification.entities);
-      const plan = buildOptionsScreenerWorkflow(resolution);
+      const plan = workflowPrompts(buildOptionsScreenerWorkflowDefinition(resolution));
 
       // The expiration window should contain dates that are local, not UTC.
       // We verify by checking the window start date is ~25 days from local today.
@@ -528,8 +544,10 @@ describe("E2E integration: full orchestration pipeline", () => {
 
       // Simulate merging into original entities (what index.ts does)
       const entities = extractEntities("What should I invest in?");
-      if (clarificationEntities.budget !== undefined) entities.budget = clarificationEntities.budget;
-      if (clarificationEntities.riskProfile) entities.riskProfile = clarificationEntities.riskProfile;
+      if (clarificationEntities.budget !== undefined)
+        entities.budget = clarificationEntities.budget;
+      if (clarificationEntities.riskProfile)
+        entities.riskProfile = clarificationEntities.riskProfile;
 
       // Now resolve with NO stored preferences — everything should be "user" source
       const resolution = resolvePortfolioSlots(entities);
@@ -551,8 +569,10 @@ describe("E2E integration: full orchestration pipeline", () => {
       // Clarification says aggressive — should win as "user" source
       const entities = extractEntities("What should I invest in?");
       const clarificationEntities = extractEntities("$10k and I'm aggressive");
-      if (clarificationEntities.budget !== undefined) entities.budget = clarificationEntities.budget;
-      if (clarificationEntities.riskProfile) entities.riskProfile = clarificationEntities.riskProfile;
+      if (clarificationEntities.budget !== undefined)
+        entities.budget = clarificationEntities.budget;
+      if (clarificationEntities.riskProfile)
+        entities.riskProfile = clarificationEntities.riskProfile;
 
       const preferences = storage.getWorkflowPreferences("global");
       const resolution = resolvePortfolioSlots(entities, preferences);
@@ -564,11 +584,13 @@ describe("E2E integration: full orchestration pipeline", () => {
     it("prompt labels clarification-extracted values correctly (no SAVED PREFERENCE tag)", () => {
       const entities = extractEntities("What should I invest in?");
       const clarificationEntities = extractEntities("$15k and I'm aggressive");
-      if (clarificationEntities.budget !== undefined) entities.budget = clarificationEntities.budget;
-      if (clarificationEntities.riskProfile) entities.riskProfile = clarificationEntities.riskProfile;
+      if (clarificationEntities.budget !== undefined)
+        entities.budget = clarificationEntities.budget;
+      if (clarificationEntities.riskProfile)
+        entities.riskProfile = clarificationEntities.riskProfile;
 
       const resolution = resolvePortfolioSlots(entities);
-      const plan = buildPortfolioWorkflow(resolution);
+      const plan = workflowPrompts(buildPortfolioWorkflowDefinition(resolution));
 
       expect(plan.initialPrompt).toContain("aggressive");
       expect(plan.initialPrompt).not.toContain("aggressive [SAVED PREFERENCE]");

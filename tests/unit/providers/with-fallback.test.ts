@@ -1,10 +1,7 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { withFallback } from "../../../src/providers/with-fallback.js";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
-import {
-  setRunContext,
-  clearRunContext,
-} from "../../../src/runtime/run-context.js";
+import { clearRunContext, setRunContext } from "../../../src/runtime/run-context.js";
 
 afterEach(() => {
   clearRunContext();
@@ -25,7 +22,12 @@ describe("withFallback", () => {
 
   it("falls back when primary fails", async () => {
     const result = await withFallback([
-      { provider: "yahoo", fn: async () => { throw new Error("503"); } },
+      {
+        provider: "yahoo",
+        fn: async () => {
+          throw new Error("503");
+        },
+      },
       { provider: "alphavantage", fn: async () => ({ price: 184 }) },
     ]);
 
@@ -37,14 +39,47 @@ describe("withFallback", () => {
 
   it("returns unavailable when all providers fail", async () => {
     const result = await withFallback([
-      { provider: "yahoo", fn: async () => { throw new Error("503"); } },
-      { provider: "alphavantage", fn: async () => { throw new Error("429"); } },
+      {
+        provider: "yahoo",
+        fn: async () => {
+          throw new Error("503");
+        },
+      },
+      {
+        provider: "alphavantage",
+        fn: async () => {
+          throw new Error("429");
+        },
+      },
     ]);
 
     expect(result.status).toBe("unavailable");
     if (result.status === "unavailable") {
       expect(result.reason).toContain("yahoo");
       expect(result.reason).toContain("alphavantage");
+    }
+  });
+
+  it("preserves provider failure reasons when all providers fail", async () => {
+    const result = await withFallback([
+      {
+        provider: "yahoo",
+        fn: async () => {
+          throw new Error("Invalid symbol XXFAKEXX for yahoo");
+        },
+      },
+      {
+        provider: "alphavantage",
+        fn: async () => {
+          throw new Error("not found");
+        },
+      },
+    ]);
+
+    expect(result.status).toBe("unavailable");
+    if (result.status === "unavailable") {
+      expect(result.reason).toContain("Invalid symbol XXFAKEXX for yahoo");
+      expect(result.reason).toContain("not found");
     }
   });
 
@@ -55,7 +90,13 @@ describe("withFallback", () => {
 
     let yahooCalled = false;
     const result = await withFallback([
-      { provider: "yahoo", fn: async () => { yahooCalled = true; return { price: 185 }; } },
+      {
+        provider: "yahoo",
+        fn: async () => {
+          yahooCalled = true;
+          return { price: 185 };
+        },
+      },
       { provider: "alphavantage", fn: async () => ({ price: 184 }) },
     ]);
 
@@ -86,7 +127,12 @@ describe("withFallback", () => {
   it("works without run context (no tracker)", async () => {
     // No setRunContext — ad-hoc usage outside a workflow
     const result = await withFallback([
-      { provider: "yahoo", fn: async () => { throw new Error("fail"); } },
+      {
+        provider: "yahoo",
+        fn: async () => {
+          throw new Error("fail");
+        },
+      },
       { provider: "alphavantage", fn: async () => ({ price: 184 }) },
     ]);
 

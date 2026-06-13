@@ -1,4 +1,3 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +8,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createOpenCandleSession } from "../../../src/pi/session.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 
@@ -40,7 +40,9 @@ describe("createOpenCandleSession", () => {
     expect(result.session.getActiveToolNames()).toContain("manage_watchlist");
     expect(result.session.getActiveToolNames()).toContain("ask_user");
     expect(result.session.getActiveToolNames()).toContain("trigger_twitter_login");
-    expect(result.session.getActiveToolNames()).toHaveLength(getOpenCandleToolDefinitions().length + 2);
+    expect(result.session.getActiveToolNames()).toHaveLength(
+      getOpenCandleToolDefinitions().length + 2,
+    );
     if (result.modelFallbackMessage) {
       expect(result.modelFallbackMessage).toContain("No models available");
     }

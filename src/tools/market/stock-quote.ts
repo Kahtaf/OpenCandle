@@ -1,9 +1,9 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getQuote } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
+import { getConfig } from "../../config.js";
 import { getGlobalQuote } from "../../providers/alpha-vantage.js";
 import { withFallback } from "../../providers/with-fallback.js";
-import { getConfig } from "../../config.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
 import type { StockQuote } from "../../types/market.js";
 
 const params = Type.Object({
@@ -30,16 +30,19 @@ export const stockQuoteTool: AgentTool<typeof params, StockQuote> = {
     const result = await withFallback(entries);
     if (result.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Stock quote unavailable for ${symbol} (${result.reason}).` }],
+        content: [
+          { type: "text", text: `⚠ Stock quote unavailable for ${symbol} (${result.reason}).` },
+        ],
         details: null as any,
       };
     }
     const quote = result.data;
     const sign = quote.changePercent >= 0 ? "+" : "";
 
-    const week52 = quote.week52High > 0 && quote.week52Low > 0
-      ? `$${quote.week52Low.toFixed(2)} - $${quote.week52High.toFixed(2)}`
-      : "N/A";
+    const week52 =
+      quote.week52High > 0 && quote.week52Low > 0
+        ? `$${quote.week52Low.toFixed(2)} - $${quote.week52High.toFixed(2)}`
+        : "N/A";
     const marketCapStr = quote.marketCap > 0 ? `$${formatLargeNumber(quote.marketCap)}` : "N/A";
 
     const text = [

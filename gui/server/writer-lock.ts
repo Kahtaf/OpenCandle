@@ -53,7 +53,9 @@ export async function acquireWriterLock(
   const recovered = tryCreate(sessionDir, processKind, pid);
   if (recovered) return { role: "writer", lock: recovered };
 
-  return { role: "follower", lock: readWriterLock(sessionDir) ?? afterGrace ?? existing! };
+  const current = readWriterLock(sessionDir) ?? afterGrace ?? existing;
+  if (!current) throw new Error("Unable to determine active writer lock");
+  return { role: "follower", lock: current };
 }
 
 export function readWriterLock(sessionDir: string): WriterLock | null {
@@ -106,7 +108,9 @@ function isPidAlive(pid: number): boolean {
 
 function isLockCurrent(lock: WriterLock, staleGraceMs: number): boolean {
   const heartbeat = Date.parse(lock.lastHeartbeat);
-  return isPidAlive(lock.pid) && Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs;
+  return (
+    isPidAlive(lock.pid) && Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs
+  );
 }
 
 function lockPath(sessionDir: string): string {

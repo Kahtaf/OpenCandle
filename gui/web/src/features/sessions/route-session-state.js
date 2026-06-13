@@ -6,14 +6,15 @@ export function sessionIdFromPath(pathname) {
 export function routeSessionView({
   pathname,
   currentSessionId,
-  entries,
+  events,
   runState,
-  liveBaseEntryCount,
+  liveBaseEventCount,
   canStartFreshHomeSession = true,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   const pendingSessionSwitch = Boolean(routeSessionId && routeSessionId !== currentSessionId);
-  const pendingFreshHomeSession = canStartFreshHomeSession && pathname === "/" && entries.length > 0;
+  const pendingFreshHomeSession =
+    canStartFreshHomeSession && pathname === "/" && hasSessionContent(events);
   const streaming = runState === "connecting" || runState === "streaming";
 
   return {
@@ -21,12 +22,26 @@ export function routeSessionView({
     pendingSessionSwitch,
     pendingFreshHomeSession,
     activeSessionId: routeSessionId || currentSessionId || "",
-    entries: pendingSessionSwitch || pendingFreshHomeSession
-      ? []
-      : streaming
-        ? entries.slice(0, liveBaseEntryCount)
-        : entries,
+    events:
+      pendingSessionSwitch || pendingFreshHomeSession
+        ? []
+        : streaming
+          ? events.slice(0, liveBaseEventCount)
+          : events,
   };
+}
+
+export function chatRunSessionTarget({ pathname, supportsSessionActions }) {
+  const routeSessionId = sessionIdFromPath(pathname);
+  if (routeSessionId) return { mode: "route", sessionId: routeSessionId };
+  if (supportsSessionActions) return { mode: "fresh" };
+  return { mode: "current" };
+}
+
+export function hasSessionContent(events) {
+  return (events || []).some(
+    (event) => event.type === "message.completed" || event.type === "custom.message",
+  );
 }
 
 export function shouldStartFreshHomeSession({
@@ -37,10 +52,12 @@ export function shouldStartFreshHomeSession({
   lastResetSessionId,
   canStartFreshHomeSession = true,
 }) {
-  return pathname === "/"
-    && role === "writer"
-    && canStartFreshHomeSession
-    && Boolean(currentSessionId)
-    && entryCount > 0
-    && lastResetSessionId === "";
+  return (
+    pathname === "/" &&
+    role === "writer" &&
+    canStartFreshHomeSession &&
+    Boolean(currentSessionId) &&
+    entryCount > 0 &&
+    lastResetSessionId === ""
+  );
 }

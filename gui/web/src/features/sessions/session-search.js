@@ -5,14 +5,13 @@ export function filterSessions(sessions, query) {
 }
 
 function sessionMatches(session, needle) {
-  return [
-    session.name,
-    session.firstMessage,
-    session.allMessagesText,
-    session.id,
-  ].some((value) => normalizeSearch(value).includes(needle));
+  return [session.name, session.firstMessage, session.allMessagesText, session.id].some((value) =>
+    normalizeSearch(value).includes(needle),
+  );
 }
 
 function normalizeSearch(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }

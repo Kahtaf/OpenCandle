@@ -2,19 +2,17 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import {
   buildModelSetupState,
+  createModelSetupController,
   findPreferredModel,
-  modelSetupProviders,
   type ModelSetupRegistry,
+  modelSetupProviders,
 } from "../../../gui/server/model-setup.js";
 
 function model(provider: string, id: string): Model<Api> {
   return { provider, id, name: id } as unknown as Model<Api>;
 }
 
-function registry(
-  available: Model<Api>[],
-  configured = new Set<string>(),
-): ModelSetupRegistry {
+function registry(available: Model<Api>[], configured = new Set<string>()): ModelSetupRegistry {
   return {
     refresh() {},
     getAvailable() {
@@ -72,5 +70,68 @@ describe("GUI model setup", () => {
     const selected = findPreferredModel(registry([fallback, preferred]), google);
 
     expect(selected).toBe(preferred);
+  });
+
+  it("saves a model API key, selects the preferred model, and records setup state", async () => {
+    const preferred = model("google", "gemini-2.5-flash");
+    const entries: unknown[] = [];
+    const selectedModels: Model<Api>[] = [];
+    const auth = new Map<string, unknown>();
+    const session = {
+      modelRegistry: {
+        ...registry([preferred]),
+        authStorage: {
+          set(provider: string, credential: unknown) {
+            auth.set(provider, credential);
+          },
+        },
+        find: () => preferred,
+      },
+      setModel: async (selected: Model<Api>) => {
+        selectedModels.push(selected);
+      },
+      settingsManager: {
+        flush: async () => {},
+      },
+    };
+    const controller = createModelSetupController({
+      role: "writer",
+      getSession: () => session,
+      getSessionManager: () => ({
+        appendCustomMessageEntry: (...args: unknown[]) => {
+          entries.push(args);
+        },
+      }),
+      broadcastState: () => {},
+    });
+
+    await controller.handleSaveModelApiKey("google", " gem-key ");
+
+    expect(auth.get("google")).toEqual({ type: "api_key", key: "gem-key" });
+    expect(selectedModels).toEqual([preferred]);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual([
+      "opencandle-model-setup",
+      "Connected Google Gemini and selected google/gemini-2.5-flash.",
+      true,
+      { source: "gui", provider: "google", model: "google/gemini-2.5-flash" },
+    ]);
+  });
+
+  it("rejects model selection in follower mode", async () => {
+    const controller = createModelSetupController({
+      role: "follower",
+      getSession: () => {
+        throw new Error("should not read session");
+      },
+      getSessionManager: () => {
+        throw new Error("should not read session manager");
+      },
+      broadcastState: () => {},
+    });
+
+    await expect(controller.handleSelectModel("google", "gemini-2.5-flash")).rejects.toThrow(
+      "Read-only follower mode",
+    );
   });
 });

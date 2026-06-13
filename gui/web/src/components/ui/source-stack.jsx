@@ -1,5 +1,5 @@
-import { Favicon } from "./favicon.jsx";
 import { cn } from "../../lib/utils.js";
+import { Favicon } from "./favicon.jsx";
 
 // Compact stacked-favicon pill for "5 sources" summary. Overlapping circles
 // give the stacked-coin effect; the count text trails after.
@@ -15,7 +15,8 @@ export function SourceStack({ sources, className, onClick, label }) {
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1.5 overflow-hidden rounded-full border border-border bg-card pl-1 pr-2 py-0.5 text-[11px]",
-        interactive && "cursor-pointer transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        interactive &&
+          "cursor-pointer transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className,
       )}
     >

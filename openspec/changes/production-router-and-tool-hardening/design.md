@@ -1,16 +1,16 @@
 ## Context
 
-This change builds on `router-context-and-observability` (29/31 complete), which wired `priorTurns` into the LLM router and made `opencandle-*` custom entries visible in `trace.json`. With those two primitives in place, the LLM router can finally be evaluated and operated as a production component. This change is the production-promotion plus the safety nets that keep promotion from regressing observed live failures.
+This change builds on `router-context-and-observability` (29/31 complete), which wired `priorTurns` into the LLM router and made `opencandle-*` custom entries visible in `trace.json`. With those two primitives in place, the LLM router can finally be evaluated as a production candidate. This change ships the deterministic safety nets now and keeps default promotion gated until credentialed acceptance evidence exists.
 
 Three failure classes from one live trace drove the scope:
 - IV-as-Implied-Volatility tagged as a ticker, then run through `compare_companies` against ASTS.
 - `getQuote("IV")` returning a zero-filled `StockQuote` that downstream tools treated as success.
-- LLM router gated off behind an opt-in flag despite being the layer best positioned to disambiguate via prior conversation context.
+- LLM router default needs production proof and deterministic safety nets before a branch can safely ship with `llm` as the default.
 
 ## Goals / Non-Goals
 
 ### Goals
-- Promote the LLM router to default behind a measurable acceptance gate, not vibes.
+- Keep the LLM router as an opt-in mode until a measurable acceptance gate passes.
 - Add a guard at the entity layer so finance acronyms (IV, SEC, FED, CPI, …) require positive ticker signal before being treated as symbols, regardless of router mode.
 - Stop the provider layer from emitting zero-filled "successful" quotes for invalid symbols.
 - Catch invalid symbols at workflow-templating time so failed multi-symbol comparisons get a clarifying turn instead of garbage data.
@@ -18,9 +18,9 @@ Three failure classes from one live trace drove the scope:
 
 ### Non-Goals
 - Removing the rules-router code path. Deferred to `remove-rule-router` after one release with `llm` default green.
-- Rewriting `search-ticker`. We consume it.
+- Rewriting ticker search/autocomplete. We consume the existing resolver/search layer.
 - Adding new providers, new languages, or expanding the workflow taxonomy.
-- `/forget` command. Tracked as a follow-up; flipping LLM-router default does not block on it because priorTurns are not persisted across sessions.
+- `/forget` command. Tracked as a follow-up; LLM-router opt-in does not block on it because priorTurns are not persisted across sessions.
 - Changing the LLM router prompt structure (rendering of priorTurns, slot definitions, etc.). Existing prompt is the contract.
 
 ## Decisions
@@ -35,16 +35,20 @@ Three failure classes from one live trace drove the scope:
 
 **Defense in depth.** We still extend `COMMON_WORDS` in `entity-extractor.ts` with the missing acronyms, because dropping them at the regex stage avoids spurious downstream signal computations. The post-filter is the safety net; the stoplist patch is the cheap baseline.
 
-**Rule structure.** A token in the finance-acronym dictionary survives the post-filter only when at least one of:
+**Rule structure.** A token in the finance-acronym dictionary survives the post-filter only when it has a direct per-token ticker signal:
 - The raw input contains `$<token>` (case-insensitive),
-- The raw input contains the literal word "ticker" or "symbol" within a configurable proximity (initially the whole input string),
-- The token appears in a comma- or "and"-list adjacent to ≥1 other candidate that is **not** in the dictionary (the "[KO, IV]" / "compare AAPL and SEC" case where listing context implies tickers).
+- The raw input contains a local ticker phrase for that token, such as "IV ticker", "ticker IV", "IV stock", "symbol IV", or "stock IV",
+- The token has another explicit per-token ticker marker introduced by a future parser and covered by tests.
+
+Bare comma-list or "and"-list adjacency is **not** a positive signal. "Compare these assets: IV, ASTS" must drop IV when there is no `$IV` or local ticker phrase, even though ASTS is a real ticker in the same list. This trades off some rare legitimate bare-acronym ticker cases in favor of avoiding confident false comparisons. Users can retain the ticker with `$IV` or "IV ticker".
 
 If no positive signal, the token is dropped from `entities.symbols`, with the drop logged as an `opencandle-symbol-dropped` custom entry containing `{ token, reason, signalsChecked }` for observability.
 
+In rules mode, a compare-style prompt can drop from two apparent assets to one real symbol before workflow dispatch. That case must not fall through to the main agent with the original raw prompt, because the main agent can reintroduce the ambiguous acronym as a tool argument. Instead, the extension records `opencandle-workflow-aborted`, injects clarification context, and steers the next agent turn to `ask_user` before any comparison tool is called.
+
 ### Decision 2 — Silent-zero detection is provider-side, not tool-side
 
-**Choice.** Throw a typed `InvalidSymbolError` from `getQuote`/`getOptionsChain` when the response shape matches the zero-result heuristic. Let `withFallback` map it to `unavailable`. Tools see only the existing `unavailable` status; no per-tool change required.
+**Choice.** Throw a typed `InvalidSymbolError` from `getQuote`/`getOptionsChain` when the response shape matches the zero-result heuristic. `wrapProvider` catches the error and returns `unavailable`; `withFallback` propagates the same unavailable shape for fallback-backed tools. Tools see only the existing `unavailable` status; no per-tool change required.
 
 **Heuristic.**
 ```
@@ -63,10 +67,10 @@ The conjunction is intentional. A real low-priced stock can have `price` near ze
 
 ### Decision 3 — Pre-flight ticker validation runs at workflow templating, not per-tool
 
-**Choice.** In `src/prompts/workflow-prompts.ts`, before substituting `${symbolList}` into the workflow template, call `searchTicker` for each candidate. Drop unknown symbols and annotate the templated prompt:
+**Choice.** In `src/prompts/workflow-prompts.ts`, before substituting `${symbolList}` into the workflow template, call a resolver-layer helper for each candidate. The helper should use `searchYahooInstruments` or a thin wrapper around it; it must not import or execute the `search_ticker` AgentTool object. Drop unknown symbols and annotate the templated prompt:
 
 ```
-[Pre-flight: dropped 1 unknown symbol — IV (no matching ticker found via search-ticker)]
+[Pre-flight: dropped 1 unknown symbol — IV (no matching ticker found via resolver search)]
 ```
 
 If `< 2` symbols remain for a comparison workflow, abort templating and instead instruct the main agent to invoke `ask_user` with a clarifying question.
@@ -92,7 +96,7 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 | p95 router latency | ≤ 1500 ms | Adds at most one network round-trip's latency to the user's perceived response time. |
 | Cost per router call | ≤ $0.005 | claude-haiku-4-5 input+output for a typical fixture is well under this. Tracks regressions if we widen the prompt. |
 
-**Process.** Task 1.1 establishes the current baseline with credentials present. Task 1.2 lists which fixtures (if any) fail and decides per-fixture: fix the router, fix the fixture (if recorded answer is wrong), or accept as known-failure with documented reason. The default flip in `src/config.ts` (Task 7.1) does not happen until 1.2 closes with all targets green.
+**Process.** Task 1.1 establishes the current baseline with credentials present. Task 1.2 lists which fixtures (if any) fail and decides per-fixture: fix the router, fix the fixture (if recorded answer is wrong), or accept as known-failure with documented reason. A local run without `ANTHROPIC_API_KEY` is inadmissible, so Task 7 keeps `routerMode` defaulting to `rules` and leaves the LLM default promotion to a later change.
 
 **Concrete starting evidence.** A run on this branch produced `1/18` pass-rate and 0–40ms latencies — but with no `ANTHROPIC_API_KEY` in the shell, so the router fell through to the deterministic minimal-fallback path on every call. That run is documented as inadmissible evidence in Task 1.1.
 
@@ -101,19 +105,20 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 | Risk | Mitigation |
 |---|---|
 | Acronym dictionary incomplete; new finance terms emerge | Dictionary lives in one file; fixture suite catches regressions; observability (`opencandle-symbol-dropped`) lets us discover false negatives in production |
-| LLM router cost spike if prompt grows | Cost target in acceptance gate; cost-per-call measured at flip time; alarm threshold for prod monitoring tracked as follow-up |
-| Pre-flight `search-ticker` adds latency to comparison workflows | Templating-only scope (single round of validation per workflow); cache `search-ticker` results within a turn |
+| LLM router cost spike if prompt grows | Cost target in acceptance gate; cost-per-call measured before keeping the `llm` default; alarm threshold for prod monitoring tracked as follow-up |
+| Pre-flight resolver search adds latency to comparison workflows | Templating-only scope (single round of validation per workflow); cache validation results within a turn |
 | Silent-zero heuristic false-positive on a legitimate near-zero ticker | Heuristic requires all five fields to be zero simultaneously; documented in Decision 2 with explicit confirmation that no observed Yahoo response matches |
 | `IV` is technically a real ticker (InvestView Inc., OTC) — disambiguation might block legitimate use | Post-filter retains the symbol when `$IV` or "the IV ticker" is in the input; the bare-acronym case is the one we want dropped. Documented in fixture 019 |
-| Flip default and prod LLM credentials are misconfigured | Rules path remains the explicit opt-in fallback for one release; `OPENCANDLE_ROUTER_MODE=rules` documented as the rollback knob |
-| Acceptance gate of 90% chosen on intuition, not measured baseline | Task 1.1 measures actual baseline; if 90% is unrealistic, gate is renegotiated in design.md before flip |
+| Rules-mode pass-through can reintroduce a dropped acronym through main-agent tool choice | Compare prompts that drop below two symbols are converted to clarification context before the main agent starts |
+| LLM default ships while prod LLM credentials are misconfigured | Acceptance gate must run with credentials present before promotion; this change keeps `rules` as the default and documents `OPENCANDLE_ROUTER_MODE=llm` as opt-in |
+| Acceptance gate of 90% chosen on intuition, not measured baseline | Task 1.1 measures actual baseline; if 90% is unrealistic, gate is renegotiated in design.md before keeping `llm` as the default |
 
 ## Migration Plan
 
-1. Land all code and tests behind the unchanged `rules` default. No behavioral change for users.
+1. Land acronym/provider/pre-flight/correlation hardening with `rules` as the default and `llm` opt-in.
 2. Run `eval:router-live` with credentials; record baseline. (Task 1.1)
 3. Triage failures, fix or document. (Task 1.2)
-4. When all three numeric targets green for one continuous CI run: merge the `src/config.ts` default flip in a follow-on commit. (Task 7.1)
+4. If all three numeric targets are green for one continuous verification run in a later change, promote `src/config.ts` to default `llm`. Until then, keep the default at `rules`.
 5. Monitor for one release window. Track silent-zero hits, acronym drops, pre-flight aborts via the `opencandle-*` custom entries.
 6. Open `remove-rule-router` once stable.
 
@@ -121,4 +126,4 @@ If `< 2` symbols remain for a comparison workflow, abort templating and instead 
 
 - **Should `opencandle-symbol-dropped` entries surface to the user, or stay observability-only?** Current plan: observability-only, but display in trace.json. If users frequently re-prompt with `$IV` the silent drop is bad UX. Resolve in eval reading.
 - **Do we need a workflow-templating pre-flight cache shared across the workflow's tool calls?** If `compare_companies` validates "AAPL, MSFT, GOOG" up front and `analyze_correlation` re-validates them downstream, that's wasted latency. Resolve when wiring Decision 3 — likely a per-turn `Map<symbol, validation>` in the session coordinator.
-- **`InvalidSymbolError` shape.** Should it carry `provider` and `symbol`, or be a bare class? Current lean: typed class with both fields, so `withFallback` can include them in the `unavailable` reason string for tool output.
+- **`InvalidSymbolError` shape.** It should carry `provider` and `symbol`, so `wrapProvider` and `withFallback` unavailable reasons can preserve the failing symbol/provider for tool output and logs.

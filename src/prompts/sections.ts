@@ -32,7 +32,7 @@ export const SECTION_ORDER = [
   "output-format",
 ] as const;
 
-export type SectionName = typeof SECTION_ORDER[number];
+export type SectionName = (typeof SECTION_ORDER)[number];
 
 /** Default character budgets per section. */
 export const DEFAULT_BUDGETS: Record<SectionName, number> = {

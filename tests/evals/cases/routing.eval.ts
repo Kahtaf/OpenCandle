@@ -1,5 +1,5 @@
-import type { EvalCase } from "../types.js";
 import { registerEvalSuite } from "../eval-suite.js";
+import type { EvalCase } from "../types.js";
 
 /**
  * Routing eval cases — tests that the agent calls the right tools for direct prompts.

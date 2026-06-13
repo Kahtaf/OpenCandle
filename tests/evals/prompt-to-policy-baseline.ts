@@ -167,7 +167,8 @@ export function buildMigrationComparisonReport(input: {
       acceptedImprovements: comparison.acceptedImprovements,
       planning: observed.planning,
       parityStatus: observed.parityStatus ?? "unknown",
-      regressionClassification: observed.regressionClassification ?? (comparison.passed ? "none" : "unreviewed_regression"),
+      regressionClassification:
+        observed.regressionClassification ?? (comparison.passed ? "none" : "unreviewed_regression"),
     };
   });
 
@@ -212,10 +213,7 @@ export function evaluateMultiTurnPlanningAssertions(
       message: "Expected stale evidence to be invalidated for the followup.",
     });
   }
-  if (
-    input.expected.clarificationRequired === true &&
-    input.observed.clarificationAsked !== true
-  ) {
+  if (input.expected.clarificationRequired === true && input.observed.clarificationAsked !== true) {
     failures.push({
       requirement: "ambiguous_followup_clarification",
       message: "Expected an ambiguous followup to ask for clarification.",

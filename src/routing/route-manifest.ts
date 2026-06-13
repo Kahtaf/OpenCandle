@@ -1,14 +1,6 @@
-import type {
-  ExtractedEntities,
-  WorkflowType,
-} from "./types.js";
-import type {
-  RouterOutput,
-  RouterRoute,
-  RouterRouteKind,
-  ToolBundleName,
-} from "./router-types.js";
 import type { MemoryCategory } from "../memory/types.js";
+import type { RouterOutput, RouterRoute, RouterRouteKind, ToolBundleName } from "./router-types.js";
+import type { ExtractedEntities, WorkflowType } from "./types.js";
 
 export const ROUTE_KINDS: readonly RouterRouteKind[] = [
   "workflow_dispatch",
@@ -38,6 +30,9 @@ export const TOOL_BUNDLE_TOOLS: Record<ToolBundleName, readonly string[]> = {
     "track_portfolio",
     "manage_watchlist",
     "track_prediction",
+    "manage_alerts",
+    "daily_watchlist_report",
+    "manage_notifications",
     "search_web",
   ],
   options: ["get_option_chain", "get_stock_quote", "search_ticker", "search_web"],
@@ -217,7 +212,11 @@ export function computeMissingRequiredSlots(
     if (slot === "symbol" && entities.symbols.length === 0 && !slotHasValue(slots.symbol)) {
       missing.add("symbol");
     }
-    if (slot === "symbols" && entities.symbols.length < 2 && !slotHasValue(slots.symbols)) {
+    if (
+      slot === "symbols" &&
+      entities.symbols.length < 2 &&
+      !slotHasSymbolListValue(slots.symbols, 2)
+    ) {
       missing.add("symbols");
     }
     existing.delete(slot);
@@ -234,22 +233,44 @@ function slotHasValue(slot: RouterOutput["slots"][string] | undefined): boolean 
   return slot.value !== undefined && slot.value !== null && slot.value !== "";
 }
 
-export function selectToolBundles(output: Pick<RouterOutput, "routeKind" | "workflow" | "entities">): ToolBundleName[] {
+function slotHasSymbolListValue(
+  slot: RouterOutput["slots"][string] | undefined,
+  minLength: number,
+): boolean {
+  if (!slot) return false;
+  if (Array.isArray(slot.value))
+    return slot.value.filter((value) => typeof value === "string").length >= minLength;
+  return false;
+}
+
+export function selectToolBundles(
+  output: Pick<RouterOutput, "routeKind" | "workflow" | "entities">,
+): ToolBundleName[] {
   if (output.routeKind === "pass_through") return [];
   if (output.routeKind === "clarification") return ["clarification"];
 
   const bundles = new Set<ToolBundleName>();
   const routeBundles = ROUTE_CAPABILITY_MANIFEST[output.routeKind]?.toolBundles ?? [];
-  routeBundles.forEach((bundle) => bundles.add(bundle));
+  for (const bundle of routeBundles) {
+    bundles.add(bundle);
+  }
 
   if (output.workflow) {
     const workflow = WORKFLOW_CAPABILITY_MANIFEST[output.workflow];
-    workflow?.toolBundles.forEach((bundle) => bundles.add(bundle));
+    if (workflow) {
+      for (const bundle of workflow.toolBundles) {
+        bundles.add(bundle);
+      }
+    }
   }
 
   const metrics = output.entities.compareMetrics ?? [];
   const horizon = output.entities.timeHorizon ?? "";
-  if (metrics.includes("macro_hedge") || metrics.includes("interest_rates") || /\b(?:macro|rate|inflation)\b/i.test(horizon)) {
+  if (
+    metrics.includes("macro_hedge") ||
+    metrics.includes("interest_rates") ||
+    /\b(?:macro|rate|inflation)\b/i.test(horizon)
+  ) {
     bundles.add("macro");
   }
 

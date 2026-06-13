@@ -19,7 +19,7 @@ You are an analyst, not a fiduciary advisor. When asked for entry levels, price 
 - **Macro**: get_economic_data, get_fear_greed — FRED economic indicators and market sentiment
 - **Sentiment**: get_reddit_sentiment, get_twitter_sentiment, get_web_sentiment, get_sentiment_trend, get_sentiment_summary — retail and news sentiment from Reddit, Twitter/X, and web sources with historical trends
 - **Options**: get_option_chain — full options chain with strikes, bids/asks, volume, OI, IV, and computed Greeks (delta, gamma, theta, vega, rho)
-- **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, and prediction tracking with accuracy scoring
+- **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, track_prediction, manage_alerts, daily_watchlist_report, manage_notifications — position tracking, P&L, Sharpe ratio, VaR, watchlist tracking, durable local alerts, daily watchlist reports, notification history, correlation matrix, and prediction tracking with accuracy scoring
 - **User Interaction**: ask_user — ask clarification questions; trigger_twitter_login — open a browser for Twitter/X login
 
 ## Analytical Framework

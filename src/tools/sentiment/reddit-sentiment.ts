@@ -1,11 +1,12 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getSubredditPosts, getPostComments } from "../../providers/reddit.js";
+import { Type } from "@sinclair/typebox";
+import { getConfig } from "../../config.js";
+import { getPostComments, getSubredditPosts } from "../../providers/reddit.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import type { RedditSentimentResult } from "../../types/sentiment.js";
 import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
-import { getConfig } from "../../config.js";
+import type { RedditSentimentResult } from "../../types/sentiment.js";
+import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   subreddit: Type.Optional(
@@ -47,7 +48,12 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     } else if (args.subreddit) {
       subreddits = [args.subreddit];
     } else {
-      subreddits = config.sentiment?.defaultSubreddits ?? ["wallstreetbets", "stocks", "investing", "options"];
+      subreddits = config.sentiment?.defaultSubreddits ?? [
+        "wallstreetbets",
+        "stocks",
+        "investing",
+        "options",
+      ];
     }
 
     // Fetch from all subreddits
@@ -64,21 +70,26 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
 
     if (allResults.length === 0) {
       return {
-        content: [{ type: "text", text: `⚠ Reddit sentiment unavailable (${warnings.join("; ")}).` }],
+        content: [
+          { type: "text", text: `⚠ Reddit sentiment unavailable (${warnings.join("; ")}).` },
+        ],
         details: null as any,
       };
     }
 
     // Merge and filter by query if provided
     const adapter = new RedditAdapter();
-    let allRecords = allResults.flatMap((r) => adapter.mapPostsToRecords(r, args.query ?? subreddits.join("+")));
+    let allRecords = allResults.flatMap((r) =>
+      adapter.mapPostsToRecords(r, args.query ?? subreddits.join("+")),
+    );
 
     // Topic filtering
     if (args.query) {
       const queryLower = args.query.toLowerCase();
-      allRecords = allRecords.filter((r) =>
-        r.text.toLowerCase().includes(queryLower) ||
-        (r.title?.toLowerCase().includes(queryLower) ?? false),
+      allRecords = allRecords.filter(
+        (r) =>
+          r.text.toLowerCase().includes(queryLower) ||
+          (r.title?.toLowerCase().includes(queryLower) ?? false),
       );
     }
 
@@ -115,23 +126,33 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
 
     // Process through pipeline
     const pipeline = getSentimentPipeline();
-    const pipelineResult = await pipeline.processRecords(allRecords, args.query ?? subreddits.join("+"));
+    const pipelineResult = await pipeline.processRecords(
+      allRecords,
+      args.query ?? subreddits.join("+"),
+    );
 
     // Build output using first result as base for backward compatibility
     const firstResult = allResults[0];
     const postRecords = pipelineResult.fresh.filter((r) => !r.metadata.isComment);
     const commentRecords = pipelineResult.fresh.filter((r) => r.metadata.isComment);
-    const avgScore = postRecords.length > 0
-      ? postRecords.reduce((s, r) => s + r.sentiment.score, 0) / postRecords.length
-      : 0;
+    const avgScore =
+      postRecords.length > 0
+        ? postRecords.reduce((s, r) => s + r.sentiment.score, 0) / postRecords.length
+        : 0;
 
     const sentimentLabel =
-      avgScore > 0.3 ? "Bullish" :
-      avgScore < -0.3 ? "Bearish" :
-      avgScore > 0 ? "Leaning Bullish" :
-      avgScore < 0 ? "Leaning Bearish" : "Neutral";
+      avgScore > 0.3
+        ? "Bullish"
+        : avgScore < -0.3
+          ? "Bearish"
+          : avgScore > 0
+            ? "Leaning Bullish"
+            : avgScore < 0
+              ? "Leaning Bearish"
+              : "Neutral";
 
-    const subLabel = subreddits.length === 1 ? `r/${subreddits[0]}` : `${subreddits.length} subreddits`;
+    const subLabel =
+      subreddits.length === 1 ? `r/${subreddits[0]}` : `${subreddits.length} subreddits`;
     const lines = [
       `**Reddit: ${args.query ?? subLabel}** — ${postRecords.length} posts, ${commentRecords.length} comments`,
       `Sentiment: ${avgScore.toFixed(2)} (${sentimentLabel})`,
@@ -142,16 +163,21 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     }
 
     lines.push("");
-    lines.push("Top posts:");
+    lines.push(untrustedContentHeader("Reddit posts"));
     for (const post of postRecords.slice(0, 10)) {
-      const scoreIndicator = post.sentiment.score > 0 ? "🟢" : post.sentiment.score < 0 ? "🔴" : "⚪";
-      lines.push(`  ${scoreIndicator} ⬆${post.engagement.score} 💬${post.engagement.replies ?? 0} — ${(post.title ?? post.text).slice(0, 100)}`);
+      const scoreIndicator =
+        post.sentiment.score > 0 ? "🟢" : post.sentiment.score < 0 ? "🔴" : "⚪";
+      lines.push(
+        `  ${scoreIndicator} ⬆${post.engagement.score} 💬${post.engagement.replies ?? 0} — ${renderUntrustedText(post.title ?? post.text, 100)}`,
+      );
     }
 
     if (pipelineResult.trend && pipelineResult.trend.length > 0) {
       const t = pipelineResult.trend[0];
       lines.push("");
-      lines.push(`Trend: ${t.sparkline} ${t.direction} (${t.delta >= 0 ? "+" : ""}${t.delta.toFixed(2)}, ${t.count} records)`);
+      lines.push(
+        `Trend: ${t.sparkline} ${t.direction} (${t.delta >= 0 ? "+" : ""}${t.delta.toFixed(2)}, ${t.count} records)`,
+      );
     }
 
     if (warnings.length > 0) {

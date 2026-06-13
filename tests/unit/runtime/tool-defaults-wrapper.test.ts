@@ -1,6 +1,6 @@
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it, vi } from "vitest";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { wrapWithDefaults } from "../../../src/runtime/tool-defaults-wrapper.js";
 
 const params = Type.Object({
@@ -21,12 +21,7 @@ describe("wrapWithDefaults", () => {
 
     await wrapped.execute("call-1", { symbol: "AMD" });
 
-    expect(execute).toHaveBeenCalledWith(
-      "call-1",
-      { symbol: "AMD" },
-      undefined,
-      undefined,
-    );
+    expect(execute).toHaveBeenCalledWith("call-1", { symbol: "AMD" }, undefined, undefined);
   });
 
   it("deep-merges nested defaults", async () => {

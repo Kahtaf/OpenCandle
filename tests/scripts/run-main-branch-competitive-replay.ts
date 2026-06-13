@@ -17,7 +17,9 @@ interface CliOptions {
 
 const options = parseArgs(process.argv.slice(2));
 if (!options.currentReport) {
-  throw new Error("Usage: run-main-branch-competitive-replay --current-report <path> (--base-report <path> | --unsupported-base-reason <reason>) [--current-ref HEAD] [--base-ref origin/main]");
+  throw new Error(
+    "Usage: run-main-branch-competitive-replay --current-report <path> (--base-report <path> | --unsupported-base-reason <reason>) [--current-ref HEAD] [--base-ref origin/main]",
+  );
 }
 
 const current = summarizeCompetitiveReplayReport({

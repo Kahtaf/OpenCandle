@@ -7,11 +7,7 @@ import { cn } from "../../lib/utils.js";
 export function TextShimmer({ children, active = true, className, as: Tag = "span" }) {
   return (
     <Tag
-      className={cn(
-        "tool-shimmer-base",
-        active && "tool-shimmer",
-        className,
-      )}
+      className={cn("tool-shimmer-base", active && "tool-shimmer", className)}
       data-shimmer={active ? "on" : "off"}
     >
       {children}

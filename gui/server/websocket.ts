@@ -48,15 +48,25 @@ export function acceptWebSocket(req: IncomingMessage, socket: Duplex): WsClient 
       if (frame.opcode !== 1) continue;
       try {
         const parsed = JSON.parse(frame.payload.toString("utf8"));
-        messageHandlers.forEach((handler) => handler(parsed));
+        for (const handler of messageHandlers) {
+          handler(parsed);
+        }
       } catch {
         // Ignore malformed client frames; the GUI reconnects on protocol errors.
       }
     }
   });
 
-  socket.on("close", () => closeHandlers.forEach((handler) => handler()));
-  socket.on("error", () => closeHandlers.forEach((handler) => handler()));
+  socket.on("close", () => {
+    for (const handler of closeHandlers) {
+      handler();
+    }
+  });
+  socket.on("error", () => {
+    for (const handler of closeHandlers) {
+      handler();
+    }
+  });
 
   return {
     send(data) {

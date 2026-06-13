@@ -2,36 +2,73 @@
  * End-to-end test: runs every tool against 10 stocks and 10 crypto tickers.
  * Reports pass/fail for each combination.
  */
-import { cache } from "../../src/infra/cache.js";
+
 import { loadEnv } from "../../src/config.js";
-import { getQuote, getHistory } from "../../src/providers/yahoo-finance.js";
-import { getCryptoPrice, getCryptoHistory } from "../../src/providers/coingecko.js";
-import { getOverview, getEarnings, getFinancials } from "../../src/providers/alpha-vantage.js";
-import { getSeries } from "../../src/providers/fred.js";
+import { cache } from "../../src/infra/cache.js";
+import { getEarnings, getFinancials, getOverview } from "../../src/providers/alpha-vantage.js";
+import { getCryptoHistory, getCryptoPrice } from "../../src/providers/coingecko.js";
 import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
-import { getSubredditPosts, getPostComments } from "../../src/providers/reddit.js";
-import { computeRiskMetrics, computeDailyReturns } from "../../src/tools/portfolio/risk-analysis.js";
-import { computeSMA, computeRSI, computeMACD, computeBollingerBands } from "../../src/tools/technical/indicators.js";
+import { getSeries } from "../../src/providers/fred.js";
+import { getPostComments, getSubredditPosts } from "../../src/providers/reddit.js";
+import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
+import {
+  computeDailyReturns,
+  computeRiskMetrics,
+} from "../../src/tools/portfolio/risk-analysis.js";
+import {
+  computeBollingerBands,
+  computeMACD,
+  computeRSI,
+  computeSMA,
+} from "../../src/tools/technical/indicators.js";
 
 loadEnv();
 
 const STOCKS = [
   // US exchange
-  "AAPL", "MSFT", "GOOGL", "AMZN", "TSLA",
-  "NVDA", "META", "JPM", "V", "SPY",
+  "AAPL",
+  "MSFT",
+  "GOOGL",
+  "AMZN",
+  "TSLA",
+  "NVDA",
+  "META",
+  "JPM",
+  "V",
+  "SPY",
   // Canadian exchange
-  "RY.TO", "TD.TO", "SHOP.TO", "ENB.TO", "BNS.TO",
+  "RY.TO",
+  "TD.TO",
+  "SHOP.TO",
+  "ENB.TO",
+  "BNS.TO",
 ];
 
 const CRYPTO = [
-  "bitcoin", "ethereum", "solana", "dogecoin", "cardano",
-  "ripple", "polkadot", "chainlink", "avalanche-2", "litecoin",
+  "bitcoin",
+  "ethereum",
+  "solana",
+  "dogecoin",
+  "cardano",
+  "ripple",
+  "polkadot",
+  "chainlink",
+  "avalanche-2",
+  "litecoin",
 ];
 
 // Yahoo Finance tickers for crypto (for quote/history/technicals)
 const CRYPTO_YAHOO = [
-  "BTC-USD", "ETH-USD", "SOL-USD", "DOGE-USD", "ADA-USD",
-  "XRP-USD", "DOT-USD", "LINK-USD", "AVAX-USD", "LTC-USD",
+  "BTC-USD",
+  "ETH-USD",
+  "SOL-USD",
+  "DOGE-USD",
+  "ADA-USD",
+  "XRP-USD",
+  "DOT-USD",
+  "LINK-USD",
+  "AVAX-USD",
+  "LTC-USD",
 ];
 
 const avKey = process.env.ALPHA_VANTAGE_API_KEY;
@@ -165,22 +202,33 @@ try {
 
 // Sentiment store e2e
 console.log("\n--- Sentiment Store ---");
-import { SentimentStore } from "../../src/sentiment/store.js";
+
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SentimentStore } from "../../src/sentiment/store.js";
+
 try {
   const tmpDir = mkdtempSync(join(tmpdir(), "oc-store-e2e-"));
   const dbPath = join(tmpDir, "sentinel.db");
   const store = new SentimentStore(dbPath);
-  store.insert([{
-    id: "e2e-1", source: "twitter", sourceId: "tw-1", query: "AAPL",
-    title: null, text: "bullish AAPL", author: "@test", url: "https://x.com/test",
-    publishedAt: new Date().toISOString(), fetchedAt: new Date().toISOString(),
-    engagement: { score: 10, replies: null, shares: null, views: null },
-    sentiment: { score: 0.5, confidence: 0.7, method: "keyword", tickers: ["AAPL"] },
-    metadata: {},
-  }]);
+  store.insert([
+    {
+      id: "e2e-1",
+      source: "twitter",
+      sourceId: "tw-1",
+      query: "AAPL",
+      title: null,
+      text: "bullish AAPL",
+      author: "@test",
+      url: "https://x.com/test",
+      publishedAt: new Date().toISOString(),
+      fetchedAt: new Date().toISOString(),
+      engagement: { score: 10, replies: null, shares: null, views: null },
+      sentiment: { score: 0.5, confidence: 0.7, method: "keyword", tickers: ["AAPL"] },
+      metadata: {},
+    },
+  ]);
   const searchResults = store.search("AAPL");
   console.log(`  ✅ Store: inserted 1, search returned ${searchResults.length}`);
   store.close();

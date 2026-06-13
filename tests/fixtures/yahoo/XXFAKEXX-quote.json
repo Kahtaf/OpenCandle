@@ -1,0 +1,33 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "XXFAKEXX",
+          "regularMarketPrice": 0,
+          "chartPreviousClose": 0,
+          "regularMarketOpen": 0,
+          "regularMarketDayHigh": 0,
+          "regularMarketDayLow": 0,
+          "regularMarketVolume": 0,
+          "marketCap": 0,
+          "fiftyTwoWeekHigh": 0,
+          "fiftyTwoWeekLow": 0
+        },
+        "timestamp": [],
+        "indicators": {
+          "quote": [
+            {
+              "open": [],
+              "high": [],
+              "low": [],
+              "close": [],
+              "volume": []
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}

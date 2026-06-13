@@ -38,9 +38,15 @@
 }
 
 @layer base {
-  * { box-sizing: border-box; }
+  * {
+    box-sizing: border-box;
+  }
 
-  html, body { height: 100dvh; overflow: hidden; }
+  html,
+  body {
+    height: 100dvh;
+    overflow: hidden;
+  }
 
   body {
     margin: 0;
@@ -52,10 +58,22 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  #root { height: 100dvh; }
-  button, input, select, textarea { font: inherit; }
-  button { cursor: pointer; touch-action: manipulation; }
-  button:disabled { cursor: not-allowed; }
+  #root {
+    height: 100dvh;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
 
   :focus-visible {
     outline: 2px solid hsl(var(--tw-foreground));
@@ -86,11 +104,19 @@
 }
 
 @layer components {
-  .rich-text > * + * { margin-top: 0.5rem; }
+  .rich-text > * + * {
+    margin-top: 0.5rem;
+  }
   .rich-text p,
-  .rich-text ul { margin: 0; }
-  .rich-text ul { padding-left: 1.125rem; }
-  .rich-text li + li { margin-top: 0.25rem; }
+  .rich-text ul {
+    margin: 0;
+  }
+  .rich-text ul {
+    padding-left: 1.125rem;
+  }
+  .rich-text li + li {
+    margin-top: 0.25rem;
+  }
   .rich-text h3,
   .rich-text h4,
   .rich-text h5 {
@@ -98,6 +124,10 @@
     font-size: 0.95rem;
     font-weight: 600;
     color: hsl(var(--tw-foreground));
+  }
+  .rich-text hr {
+    border: 0;
+    border-top: 1px solid hsl(var(--tw-border));
   }
   .rich-text .rich-table {
     display: block;
@@ -128,22 +158,37 @@
     font-size: 0.8125rem;
     line-height: 1.375rem;
   }
-  .chat-markdown > * + * { margin-top: 1.25rem; }
+  .chat-markdown > * + * {
+    margin-top: 1.25rem;
+  }
   .chat-markdown p,
-  .chat-markdown ul { margin: 0; }
+  .chat-markdown ul {
+    margin: 0;
+  }
   .chat-markdown ul {
     color: hsl(var(--tw-foreground) / 0.82);
     list-style: disc;
     padding-left: 1.75rem;
   }
-  .chat-markdown p + ul { margin-top: 1.5rem; }
-  .chat-markdown ul + p { margin-top: 2rem; }
-  .chat-markdown .rich-table + p { margin-top: 2.25rem; }
+  .chat-markdown p + ul {
+    margin-top: 1.5rem;
+  }
+  .chat-markdown ul + p {
+    margin-top: 2rem;
+  }
+  .chat-markdown .rich-table + p {
+    margin-top: 2.25rem;
+  }
+  .chat-markdown hr {
+    margin: 2rem 0 1.75rem;
+  }
   .chat-markdown li {
     line-height: 1.375rem;
     padding-left: 0.375rem;
   }
-  .chat-markdown li + li { margin-top: 0.75rem; }
+  .chat-markdown li + li {
+    margin-top: 0.75rem;
+  }
   .chat-markdown li::marker {
     color: hsl(var(--tw-muted-foreground));
   }
@@ -159,9 +204,13 @@
     font-weight: 500;
     line-height: 1.35;
   }
-  .chat-markdown h3 { font-size: 1rem; }
+  .chat-markdown h3 {
+    font-size: 1rem;
+  }
   .chat-markdown h4,
-  .chat-markdown h5 { font-size: 0.875rem; }
+  .chat-markdown h5 {
+    font-size: 0.875rem;
+  }
   .chat-markdown code {
     border-color: hsl(var(--tw-border));
     background: hsl(var(--tw-secondary));
@@ -223,15 +272,21 @@
     animation: tool-shimmer-sweep 1.6s linear infinite;
   }
   @keyframes tool-shimmer-sweep {
-    0% { background-position: 120% 0; }
-    100% { background-position: -120% 0; }
+    0% {
+      background-position: 120% 0;
+    }
+    100% {
+      background-position: -120% 0;
+    }
   }
 
   /* Tooltip transitions for SourcePill hover previews (Radix data-state).
      The `data-state=delayed-open` selector matches when the tooltip just
      opened after its delay; `closed` matches the unmount. */
   .tt-anim {
-    transition: opacity 120ms ease, transform 120ms ease;
+    transition:
+      opacity 120ms ease,
+      transform 120ms ease;
   }
 }
 

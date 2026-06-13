@@ -1,0 +1,31 @@
+{
+  "input": "What did the SEC say about TSLA filings?",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "agent_task",
+    "route": "fallback",
+    "workflow": "general_finance_qa",
+    "entities": {
+      "symbols": [
+        "TSLA"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "SEC is the regulator and TSLA is the filing subject."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "sec"
+  ]
+}

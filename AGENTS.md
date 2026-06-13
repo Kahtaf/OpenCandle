@@ -17,20 +17,26 @@ npm run test:e2e:providers     # e2e provider tests (hits live APIs)
 ## STRUCTURE
 ```
 src/
-├── providers/    # API clients (yahoo-finance, alpha-vantage, fred, coingecko, reddit, sec-edgar, fear-greed)
+├── providers/    # API clients and provider wrappers
 ├── tools/        # Market data tools by domain → see src/tools/AGENTS.md
 ├── infra/        # HTTP client, cache, rate-limiter, browser, opencandle-paths
 ├── types/        # Shared interfaces (market, options, fundamentals, macro, sentiment, portfolio)
 ├── routing/      # Intent classification, entity extraction, slot resolution
-├── workflows/    # Multi-step workflow builders
+├── workflows/    # WorkflowDefinition builders
+├── runtime/      # Session coordinator, workflow runner, runtime context
+├── market-state/ # Durable watchlists, portfolios, predictions, alerts, reports
 ├── memory/       # SQLite-backed session logs, preferences, retrieval
+├── sentiment/    # Cross-source sentiment pipeline, scoring, adapters, trends
 ├── analysts/     # Multi-analyst analysis orchestration
 ├── prompts/      # Workflow prompt templates
 ├── onboarding/   # First-run setup flow
 ├── pi/           # Pi shell extension, session, tool adapter, setup wizard
+├── cli.ts        # CLI entry point
+├── monitor.ts    # Local automation heartbeat command
+├── tool-kit.ts   # Public add-on tool helpers
 ├── config.ts     # Env + file config loading
 ├── system-prompt.ts
-└── index.ts      # Entry point
+└── index.ts      # Public package exports
 gui/
 ├── server/       # local HTTP/WebSocket GUI server, session projector, writer lock
 └── web/          # React + Tailwind browser app served by gui/server
@@ -81,6 +87,9 @@ export const cache = new Cache();
 - Tools fetch + format. Analysts/LLM synthesize. Never analyze within a tool.
 - Use `cache` and `rateLimiter` from `src/infra/` for all external calls.
 - Tests mock `globalThis.fetch` with fixture JSON. No live API calls in unit tests.
+
+## ENV FLAGS
+- `OPENCANDLE_ROUTER_MODE` defaults to `rules`. Set `OPENCANDLE_ROUTER_MODE=llm` to opt into the LLM router while the live router acceptance gate is incomplete.
 
 ## BOUNDARIES
 

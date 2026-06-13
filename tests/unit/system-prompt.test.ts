@@ -71,7 +71,9 @@ describe("system prompt — analyst stance", () => {
   it("forbids fiduciary framing and permits analyst framing", () => {
     const prompt = buildSystemPrompt();
     expect(prompt.toLowerCase()).toMatch(/our read|analyst view|the data suggests/);
-    expect(prompt.toLowerCase()).toMatch(/fiduciary|tailored to your|personal (financial )?situation/);
+    expect(prompt.toLowerCase()).toMatch(
+      /fiduciary|tailored to your|personal (financial )?situation/,
+    );
   });
 
   it("teaches adaptive explanation depth from conversational signals", () => {
@@ -98,17 +100,19 @@ describe("system prompt — analyst stance", () => {
     expect(prompt).toContain("For conceptual education questions");
     expect(prompt).toContain("teach the concept directly");
     expect(prompt).toContain("do not name tool functions");
-    expect(prompt).toContain("do not append analyst-view, confidence-band, or invalidation boilerplate");
+    expect(prompt).toContain(
+      "do not append analyst-view, confidence-band, or invalidation boilerplate",
+    );
     expect(prompt).toContain("For valuation-metric education");
-    expect(prompt).toContain("start with \"Bottom line\"");
-    expect(prompt).toContain("heading exactly named \"Practical workflow\"");
+    expect(prompt).toContain('start with "Bottom line"');
+    expect(prompt).toContain('heading exactly named "Practical workflow"');
     expect(prompt).toContain("numbered question-driven application steps");
     expect(prompt).toContain("cross-check table with why/when");
     expect(prompt).toContain("trailing, forward, normalized, or cyclically adjusted variants");
     expect(prompt).toContain("where the metric misleads");
-    expect(prompt).toContain("heading exactly named \"Quick checklist\"");
+    expect(prompt).toContain('heading exactly named "Quick checklist"');
     expect(prompt).toContain("Conceptual education prompts are not committal responses");
-    expect(prompt).toContain("Do not append \"Analyst View\"");
+    expect(prompt).toContain('Do not append "Analyst View"');
     expect(prompt).toContain("explanation, definition, or learning framework");
   });
 

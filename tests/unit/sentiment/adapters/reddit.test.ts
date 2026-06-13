@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { RedditComment } from "../../../../src/providers/reddit.js";
 import { RedditAdapter } from "../../../../src/sentiment/adapters/reddit.js";
 import type { RedditSentimentResult } from "../../../../src/types/sentiment.js";
-import type { RedditComment } from "../../../../src/providers/reddit.js";
 
 const mockResult: RedditSentimentResult = {
   subreddit: "stocks",
@@ -36,8 +36,20 @@ const mockResult: RedditSentimentResult = {
 };
 
 const mockComments: RedditComment[] = [
-  { id: "c1", body: "Very bullish on AAPL", author: "bull_guy", score: 100, permalink: "https://reddit.com/r/stocks/comments/post-001/c1/" },
-  { id: "c2", body: "Sell the news", author: "bear_guy", score: 50, permalink: "https://reddit.com/r/stocks/comments/post-001/c2/" },
+  {
+    id: "c1",
+    body: "Very bullish on AAPL",
+    author: "bull_guy",
+    score: 100,
+    permalink: "https://reddit.com/r/stocks/comments/post-001/c1/",
+  },
+  {
+    id: "c2",
+    body: "Sell the news",
+    author: "bear_guy",
+    score: 50,
+    permalink: "https://reddit.com/r/stocks/comments/post-001/c2/",
+  },
 ];
 
 describe("RedditAdapter", () => {

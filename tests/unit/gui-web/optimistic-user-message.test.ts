@@ -1,33 +1,38 @@
 import { describe, expect, it } from "vitest";
+import { chatRowsFromEvents } from "../../../gui/web/src/features/chat/chat-rows.js";
 import { createOptimisticUserMessageEvents } from "../../../gui/web/src/features/chat/optimistic-user-message.js";
-import { compactDuplicateUserMessages, eventsToLiveEntries } from "../../../gui/web/src/features/chat/live-entries.js";
 
 describe("optimistic GUI user messages", () => {
   it("renders the submitted user prompt before any server run events arrive", () => {
-    const entries = eventsToLiveEntries(createOptimisticUserMessageEvents("What is AAPL trading at?"));
+    const rows = chatRowsFromEvents(
+      [],
+      createOptimisticUserMessageEvents("What is AAPL trading at?"),
+    );
 
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toMatchObject({
-      type: "message",
-      message: {
-        role: "user",
-        content: [{ type: "text", text: "What is AAPL trading at?" }],
-      },
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      type: "user_message",
+      content: [{ type: "text", text: "What is AAPL trading at?" }],
     });
   });
 
   it("keeps one user bubble when the persisted server message arrives after the optimistic one", () => {
-    const optimistic = eventsToLiveEntries(createOptimisticUserMessageEvents("Compare MSFT and GOOGL"));
-    const persisted = {
-      type: "message",
-      id: "persisted-user",
-      message: {
-        role: "user",
-        content: [{ type: "text", text: "Compare MSFT and GOOGL" }],
-      },
-    };
+    const optimistic = createOptimisticUserMessageEvents("Compare MSFT and GOOGL");
+    const persisted = persistedUserEvents("persisted-user", "Compare MSFT and GOOGL");
 
-    expect(compactDuplicateUserMessages([...optimistic, persisted])).toHaveLength(1);
-    expect(compactDuplicateUserMessages([persisted, ...optimistic])).toHaveLength(1);
+    expect(chatRowsFromEvents(persisted, optimistic)).toHaveLength(1);
+    expect(chatRowsFromEvents(optimistic, persisted)).toHaveLength(1);
   });
 });
+
+function persistedUserEvents(messageId: string, text: string) {
+  return [
+    { type: "message.created" as const, messageId, role: "user" as const, seq: 1 },
+    {
+      type: "message.completed" as const,
+      messageId,
+      content: [{ type: "text" as const, text }],
+      seq: 2,
+    },
+  ];
+}

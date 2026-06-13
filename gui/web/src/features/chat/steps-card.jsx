@@ -1,19 +1,19 @@
-import { useEffect } from "react";
 import { ChevronRight, Loader2 } from "lucide-react";
+import { useEffect } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
+import { SourceStack } from "../../components/ui/source-stack.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
-import { SourceStack } from "../../components/ui/source-stack.jsx";
-import { ToolIcon, summarizeRunTitle, toolMeta } from "../renderers/tool-icon.jsx";
-import { useToolDrawer } from "./tool-drawer-context.jsx";
-import { extractRunSources } from "./run-sources.js";
 import { cn } from "../../lib/utils.js";
+import { summarizeRunTitle, ToolIcon, toolMeta } from "../renderers/tool-icon.jsx";
+import { extractRunSources } from "./run-sources.js";
+import { useToolDrawer } from "./tool-drawer-context.jsx";
 
 // In-thread collapsed view of a tool_run. Clicking opens the drawer with the
 // full timeline. Layout follows llmchat's pattern: small eyebrow ("Working"
 // or "Answer"), then a row of icon + title + step badge + caret. While the
 // run is still pending the title shimmers and the icon spins.
-export function StepsCard({ run }) {
+export function StepsCard({ run, autoOpen = false }) {
   const { open, requestAutoOpen, run: openRun } = useToolDrawer();
   const isOpen = openRun?.id === run.id;
   const stepCount = run.steps.length;
@@ -24,8 +24,9 @@ export function StepsCard({ run }) {
   const sources = extractRunSources(run);
 
   useEffect(() => {
+    if (!autoOpen) return;
     requestAutoOpen(run);
-  }, [run, requestAutoOpen]);
+  }, [autoOpen, run, requestAutoOpen]);
 
   // What's the active step? While pending, show its label as shimmering text
   // beneath the title (e.g. "Fetching get_stock_quote AAPL").
@@ -59,19 +60,24 @@ export function StepsCard({ run }) {
           ) : (
             <div className="truncate text-[11px] text-muted-foreground">
               {completedCount} of {stepCount} {stepCount === 1 ? "step" : "steps"}
-              {sources.length > 0 ? ` · ${sources.length} ${sources.length === 1 ? "source" : "sources"}` : ""}
+              {sources.length > 0
+                ? ` · ${sources.length} ${sources.length === 1 ? "source" : "sources"}`
+                : ""}
             </div>
           )}
         </div>
         {sources.length > 0 && !isPending ? (
-          <span className="hidden sm:inline-flex" onClick={(event) => event.stopPropagation()}>
-            <SourceStack sources={sources} onClick={() => open(run)} />
+          <span className="hidden sm:inline-flex">
+            <SourceStack sources={sources} />
           </span>
         ) : null}
         <Badge variant="outline" size="sm" className="shrink-0 font-mono">
           {stepCount} {stepCount === 1 ? "step" : "steps"}
         </Badge>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+        <ChevronRight
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+          aria-hidden="true"
+        />
       </button>
     </div>
   );
@@ -85,7 +91,9 @@ function RunLeadingIcon({ run }) {
   // yellow icon).
   const first = run.steps[0];
   if (!first) return <StatusDot status="pending" />;
-  return <ToolIcon name={first.name} size="lg" status={run.status === "error" ? "error" : undefined} />;
+  return (
+    <ToolIcon name={first.name} size="lg" status={run.status === "error" ? "error" : undefined} />
+  );
 }
 
 function argSummary(step) {

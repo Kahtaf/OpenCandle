@@ -1,4 +1,15 @@
-import { PanelLeft, Plus, Search, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import {
+  Bell,
+  BriefcaseBusiness,
+  FileText,
+  ListPlus,
+  PanelLeft,
+  Plus,
+  Search,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
 import { HistoryItem } from "../../components/chat/history-item.jsx";
@@ -13,14 +24,24 @@ export function SessionSidebar({ collapsed, onCollapse, ...props }) {
   if (collapsed) return null;
   return (
     <aside className="hidden h-full w-[260px] shrink-0 overflow-hidden border-r border-border bg-secondary md:block">
-      <SidebarBody {...props} onClose={onCollapse} closeLabel="Collapse sidebar" closeIcon={PanelLeft} />
+      <SidebarBody
+        {...props}
+        onClose={onCollapse}
+        closeLabel="Collapse sidebar"
+        closeIcon={PanelLeft}
+      />
     </aside>
   );
 }
 
 export function SessionDrawer({ open, onClose, ...rest }) {
   return (
-    <Sheet open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+    <Sheet
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
+    >
       <SheetContent width="sm" handleLabel="Sessions" className="bg-secondary p-0">
         <div className="flex h-full min-h-0 flex-col">
           <SidebarBody {...rest} showHeader={false} />
@@ -30,7 +51,19 @@ export function SessionDrawer({ open, onClose, ...rest }) {
   );
 }
 
-function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSession, onDeleteSession, onNewSession, onClose, showHeader = true, closeLabel = "Close sidebar", closeIcon: CloseIcon = X }) {
+function SidebarBody({
+  sessions,
+  currentSessionId,
+  currentPath = "",
+  onOpenSession,
+  onRenameSession,
+  onDeleteSession,
+  onNewSession,
+  onClose,
+  showHeader = true,
+  closeLabel = "Close sidebar",
+  closeIcon: CloseIcon = X,
+}) {
   const [query, setQuery] = useState("");
   const filteredSessions = useMemo(() => filterSessions(sessions, query), [sessions, query]);
   const groups = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
@@ -43,11 +76,20 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSessio
           <OpenCandleLogo />
           <span className="text-sm font-semibold tracking-tight text-foreground">OpenCandle</span>
           {onClose ? (
-            <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={closeLabel} onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label={closeLabel}
+              onClick={onClose}
+            >
               <CloseIcon />
             </Button>
           ) : (
-            <PanelLeft className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <PanelLeft
+              className="ml-auto h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
           )}
         </div>
       ) : null}
@@ -59,9 +101,31 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSessio
       <SearchField value={query} onChange={setQuery} />
 
       <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2">
-        <ThreadGroup label="Today" sessions={groups.today} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
-        <ThreadGroup label="Yesterday" sessions={groups.yesterday} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
-        <ThreadGroup label="Earlier" sessions={groups.earlier} currentSessionId={currentSessionId} onOpenSession={onOpenSession} onRenameSession={onRenameSession} onDeleteSession={onDeleteSession} />
+        <MarketStateNav currentPath={currentPath} />
+        <ThreadGroup
+          label="Today"
+          sessions={groups.today}
+          currentSessionId={currentSessionId}
+          onOpenSession={onOpenSession}
+          onRenameSession={onRenameSession}
+          onDeleteSession={onDeleteSession}
+        />
+        <ThreadGroup
+          label="Yesterday"
+          sessions={groups.yesterday}
+          currentSessionId={currentSessionId}
+          onOpenSession={onOpenSession}
+          onRenameSession={onRenameSession}
+          onDeleteSession={onDeleteSession}
+        />
+        <ThreadGroup
+          label="Earlier"
+          sessions={groups.earlier}
+          currentSessionId={currentSessionId}
+          onOpenSession={onOpenSession}
+          onRenameSession={onRenameSession}
+          onDeleteSession={onDeleteSession}
+        />
         {hasQuery && filteredSessions.length === 0 ? (
           <p className="px-3 py-2 text-sm text-muted-foreground">No matching chats</p>
         ) : null}
@@ -73,11 +137,46 @@ function SidebarBody({ sessions, currentSessionId, onOpenSession, onRenameSessio
   );
 }
 
+function MarketStateNav({ currentPath }) {
+  const items = [
+    { to: "/watchlists", label: "Watchlists", icon: ListPlus },
+    { to: "/portfolios", label: "Portfolios", icon: BriefcaseBusiness },
+    { to: "/alerts", label: "Alerts", icon: Bell },
+    { to: "/reports", label: "Reports", icon: FileText },
+    { to: "/predictions", label: "Predictions", icon: TrendingUp },
+  ];
+  return (
+    <div className="flex flex-col gap-0.5 border-b border-border pb-2">
+      <SectionLabel>Market State</SectionLabel>
+      {items.map((item) => {
+        const active = currentPath === item.to;
+        const Icon = item.icon;
+        return (
+          <Button
+            key={item.to}
+            asChild
+            variant={active ? "default" : "ghost"}
+            size="sm"
+            className="w-full justify-start"
+          >
+            <Link to={item.to}>
+              <Icon className="button-icon" aria-hidden="true" />
+              {item.label}
+            </Link>
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 function SearchField({ value, onChange }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 transition-colors focus-within:border-foreground/40">
       <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-      <label className="sr-only" htmlFor="session-search">Search</label>
+      <label className="sr-only" htmlFor="session-search">
+        Search
+      </label>
       <Input
         variant="ghost"
         id="session-search"
@@ -99,7 +198,14 @@ function SectionLabel({ icon: Icon, children }) {
   );
 }
 
-function ThreadGroup({ label, sessions, currentSessionId, onOpenSession, onRenameSession, onDeleteSession }) {
+function ThreadGroup({
+  label,
+  sessions,
+  currentSessionId,
+  onOpenSession,
+  onRenameSession,
+  onDeleteSession,
+}) {
   if (!sessions?.length) return null;
   return (
     <div className="flex flex-col gap-0.5">

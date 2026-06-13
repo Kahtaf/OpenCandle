@@ -4,11 +4,103 @@
 
 ### Added
 
+- LLM-summarized session titles: after the first completed user/assistant exchange, the session is renamed with a short model-written title (GUI sidebar and TUI session list), replacing the raw first-prompt placeholder. Manual renames are left alone, each session is titled at most once per process, and model failures keep the placeholder while recording an `opencandle-title-error` entry.
+- Competitive benchmark saved-state mode: `OPENCANDLE_COMPETITIVE_SEED_STATE=1` seeds a deterministic portfolio/watchlist/prediction fixture into the eval home, steers generated prompts toward "my portfolio" phrasing, shares the same facts with generic baseline agents for fairness, and instructs the judge to verify personalization against the saved state.
+
+- Saved watchlist, portfolio, alert, daily-report, and prediction state is now summarized into agent prompt context, so broad sector or theme prompts can connect back to relevant saved positions such as ASTS.
 - Keyless TradingView scanner provider with the `screen_stocks` tool for breadth/screening prompts and TradingView batch quote support for watchlist checks, including delayed/unofficial-data caveats and Yahoo fallback for unresolved rows.
+- Local market automation runtime pieces for V2: `opencandle monitor`, alert provider-budget backoff, resume/late alert labeling, lost-run maintenance, webhook notification delivery attempts, and TUI-visible alert runner status.
 - Repo-local autoreview skill and `npm run review:pr` helper for OpenCandle-specific PR review, including first-parent diff handling for already-merged PRs.
+- Repo-local autoreview now runs React Doctor for changed GUI React files, includes the structured diagnostics in review evidence, and fails UI reviews on React Doctor errors by default.
+- Repo-local autoreview gate hardening: `npm run review:pr` now auto-detects the PR base branch via `gh` instead of assuming `origin/main`, gates on typecheck and unit tests run in parallel with the review, pins React Doctor to a fixed version, and warns when an oversized diff is truncated from the review bundle.
+- Repo-local autoreview now supports explicit commit-to-commit range reviews with `--mode range --base <commit> --head <commit>`.
+
+### Changed
+
+- GUI market-state pages were redesigned around symbol-centric layouts: the watchlist is a master-detail view with a symbol inspector (quote, stop→target range, thesis, position, alerts, predictions), the portfolio gets a total-value header with today/all-time deltas, an allocation bar, and chevron-expandable per-symbol lot ledgers, alerts render as plain-English sentence rules with a status log, predictions get a scorecard with progress-to-target bars, and reports render the latest report as a document with a history rail.
+- GUI market-state pages are now mobile-first: no document-level horizontal overflow, tables fold secondary columns behind sm/md breakpoints (lot details and actions inline on phones), and create/edit panels present as a bottom sheet with scrim on small screens.
+- GUI market-state forms gained visible labels, bordered text areas, a direction select for predictions, condition-aware alert fields with plain-English copy, a report schedule time picker, and two-step inline confirmation on destructive remove/cancel actions.
+- GUI quote refreshes now happen automatically in the background: the server keeps a stale-while-revalidate quote snapshot that survives page reloads, the client polls it, and the manual Refresh/Refresh prices buttons were removed in favor of an "Updated Xm ago" freshness line.
+- The predictions surface is now consistently named "Predictions" in the GUI (previously "Thesis Tracker" on the page itself).
+- Daily report runs now persist the full report text in the stored run summary so the GUI can render past reports without regenerating them.
+- Docs site and DESIGN.md now follow the GUI's minimal shadcn design language (Inter, zinc neutrals, near-black actions, neutral shadows), replacing the DM Sans/slate docs-only theme; DESIGN.md documents the GUI tokens as the normative source with a DESIGN.json sidecar.
+- Removed deprecated `WorkflowPlan` workflow wrappers (`buildPortfolioWorkflow`, `buildCompareAssetsWorkflow`, and `buildOptionsScreenerWorkflow`) from `opencandle/workflows`; use the `*WorkflowDefinition` builders instead.
 
 ### Fixed
 
+- CI lint/format drift from the market-state, catalog, memory, onboarding, provider, prompt, and test changes is now resolved so Biome passes in GitHub Actions.
+- OpenCandle now creates and repairs `~/.opencandle` with owner-only permissions and writes `config.json` as `0600`, reducing local exposure of saved provider credentials.
+- Alert checks now fetch Yahoo fallback quotes concurrently after TradingView misses, while preserving per-symbol unavailable reasons and provider-budget backoff for later runs.
+- Portfolio lot storage now rejects non-positive or non-finite quantity/cost values, and portfolio, prediction, risk, and backtest math now avoid non-finite results from zero price/cost history.
+- Budget extraction no longer treats position values, dividends, gains/losses, or trading prices as investment budgets.
+- The GUI private market-state API now requires loopback callers by default, exposes an explicit remote opt-in for intentional LAN/Tailscale use, and rejects unsafe notification webhook URL schemes and link-local metadata hosts.
+- Sentiment and web-search tool outputs now escape, delimit, and label third-party text as untrusted data before it enters assistant-visible context.
+- Production dependency audit findings in transitive packages have been cleared with semver-compatible lockfile updates.
+- Biome now provides the repo lint/format baseline, with lint checks wired into CI.
+- Prompt output snapshots now pin workflow prompt builders, policy-card rendering, and representative context-builder assemblies before any future prompt consolidation.
+- GUI server orchestration is split into focused quote-poller, automation-heartbeat, model-setup, tool-invocation, session-action, and WebSocket hub services while preserving writer-lock and broadcast behavior.
+- GUI market-state mutations now invalidate the server quote snapshot and immediately refresh quotes in the browser after the mutation is acknowledged.
+- SEC filing evidence snippets are now labeled and escaped as untrusted external content before reaching assistant-visible tool output.
+- Watchlist edit forms can now clear target, stop, thesis, notes, and tags instead of preserving stale values when fields are blanked.
+- Prediction-only symbols now receive GUI quote snapshots, so open predictions show current price and target progress even when the symbol is not also in a watchlist or portfolio.
+- Rejected notification webhook URLs now record failed delivery attempts so the automation runner keeps delivery history and rotates pending retries fairly.
+- The default SQLite state database now initializes through the hardened OpenCandle home directory path so fresh `~/.opencandle` state starts owner-only.
+- GUI React state synchronization patterns were tightened so React Doctor no longer reports error-level diagnostics for the changed GUI files.
+- The Codex Graphify skill now merges inline worker JSON results instead of looking for Claude-style disk chunk files.
+- Budget extraction now rejects non-budget k-notation amounts such as P&L or position-value phrases instead of treating them as deployable capital.
+- GUI WebSocket upgrades now use the same trusted-session checks as private HTTP APIs, and orphaned tool-result rows no longer crash chat grouping.
+- GUI chat-run POST requests now require the same trusted browser-session checks as other private GUI control surfaces.
+- GUI bootstrap and session APIs now require trusted browser-session checks before returning transcript or session metadata.
+- Codex and Claude Graphify skill snippets now handle code-only runs without semantic extraction files and preserve `--directed` graph builds through report regeneration.
+- GUI chat transcript rendering now uses one event-driven path for both live and reloaded sessions: persisted `SessionEntry[]` is adapted to `ChatEvent[]` on the server, live SSE events are merged at the browser boundary, and `ChatPanel` renders event-derived rows so workflow-dispatched user bubbles keep the user's original typed words after reload instead of exposing internal prompt expansions.
+- GUI home composer sends can no longer append to the previous writer session: home sends now await a fresh session before running, the chat run request carries the expected session id, and the server rejects mismatched runs with a `session_changed` 409 (retried once against another fresh session). GUI server JSON error responses also return their intended HTTP status codes instead of always 200.
+- GUI chat now shows the user's original words for workflow-dispatched turns instead of the internal prompt expansion: the extension records the typed input alongside the transform, the chat transcript and live stream render it, and new sessions are titled by it.
+- Workflow chat turns (options screeners, comparisons, portfolio builds) now carry the saved market-state context, so prompts like a covered-call question about an owned position use the stored lot's cost basis instead of ignoring it.
+- Competitive benchmark judging now validates the winner against the allowed set (case-normalized) so summaries cannot misattribute wins, and anchors judge scores on a defined 0-10 rubric.
+- Prediction checks now flag open calls whose target price was reached before expiry ("target hit … resolve or let it ride") while keeping them open, matching the GUI's target-hit badge.
+- Manual alert check output now states the observed value versus the rule threshold, the condition result, the source provider, and any data-delay caveat instead of a bare "checked"/"seeded" label.
+- The GUI prediction form and displays now use the tool's canonical 1–10 conviction scale (previously labeled 0–1, which skewed conviction-weighted accuracy).
+- The agent test harness (`tests/harness/cli.ts`) now respects a caller-provided `OPENCANDLE_HOME` instead of always redirecting to a disposable temp home and deleting it on exit, so documented manual runs can exercise real local state.
+- Saved portfolio/watchlist context now reaches rules-mode chat turns: finance-shaped prompts that match no workflow (for example sector or IPO theme questions about companies without tickers) record a fallback turn, carry the saved market-state context, and instruct a "Your positions" impact section connecting the answer back to saved holdings; non-finance prompts remain excluded.
+- SQLite schema migrations from v3/v4 no longer crash on startup when `alert_events` exists without the v7 `dedupe_key` column; the column is added before the unique dedupe index is created.
+- Tool/provider guardrails now return clear alert not-found results, validate finite and bounded tool parameters earlier, expose planned percent-move/SMA-cross alert checks, and surface Yahoo/SEC evidence-fetch failures with timeout/rate-limit hygiene, including a configured `sec_edgar` rate-limit bucket so SEC document fetches are actually paced.
+- Indicator alert lookback periods (SMA-cross slow leg, price-SMA, RSI, volume spike) are now bounded to what the alert runner's daily history window can evaluate, so stored alerts cannot remain permanently unavailable.
+- Alpha Vantage `ytd` history fallback now filters bars by calendar date instead of an estimated trading-day count, so year-to-date requests no longer include prior-year bars.
+- Portfolio lot add prompts with cost basis and currency now route to stateful tracking instead of being misread as asset comparisons or portfolio construction.
+- Combined alert prompts such as “create this alert, then check it now” now run the immediate manual check instead of stopping after alert creation.
+- Router symbol extraction now drops bare finance acronyms such as IV, SEC, FED, and CPI unless the user provides a direct ticker signal such as `$IV` or `IV ticker`.
+- Rules-mode compare prompts now clarify instead of passing the raw prompt through when acronym disambiguation leaves fewer than two valid symbols.
+- Portfolio row removal now targets the selected SQLite lot id instead of removing every lot for that symbol.
+- Prediction checks now keep expired predictions open when quotes are temporarily unavailable, so they can be scored on a later successful check.
+- Mastercard's `MA` ticker now survives plain ticker comparisons while moving-average/M&A wording remains filtered as non-ticker usage.
+- Portfolio adds now preserve provider quote currency and require explicit currency when a resolver cannot determine it, avoiding silent USD aggregation for foreign listings.
+- LLM-router acronym drops now also filter router slot symbols so dropped tokens cannot be reintroduced during workflow dispatch.
+- GUI market-state polling now preserves refreshed quote/P&L snapshots until a newer quote snapshot replaces them.
+- Prediction checks now treat stale cached quotes and zero-filled quote payloads as unavailable so expired predictions remain retryable until fresh data is available.
+- GUI instrument autocomplete now returns an empty candidate response on provider search failure instead of leaving the request unresolved.
+- Watchlist row alert shortcuts now require a saved target price and no longer create price-above-zero alerts.
+- Portfolio updates now require a lot id so same-symbol tax lots are not rewritten by a symbol-only update.
+- Portfolio views now avoid row-level value/P&L math when quote currency and lot currency differ without FX conversion.
+- GUI portfolio edits now clear stale quote-derived P&L rows and summary totals until quotes are refreshed.
+- GUI financial number fields now allow decimal values.
+- Instrument-scoped alert creation now resolves symbols without adding them to the default watchlist as a side effect.
+- Manual alert checks now persist trigger events conditionally with the observed rule state, suppressing duplicate events from concurrent checks.
+- Manual alert checks now persist unavailable/stale provider checks as durable alert events without overwriting the last valid observation.
+- Yahoo sparse zero-result quote responses now surface as invalid-symbol unavailable results instead of successful `$0.00` quotes.
+- Compare workflows now preflight candidate tickers through resolver search, drop unknown symbols with trace entries, and abort to clarification when too few valid symbols remain.
+- Rules-mode compare preflight aborts now preserve clarification context instead of falling through to the raw prompt.
+- Saved market-state prompt context is now gated to finance/market-state turns so unrelated pass-through prompts do not receive local portfolio or watchlist data.
+- LLM-router acronym drops now sanitize matching symbol slots before missing-slot checks, preventing dropped tokens from reappearing in fallback context.
+- Routed core-market tool bundles now include alert and daily-report tools under tool-scope enforcement.
+- Yahoo instrument search now uses the shared cache and Yahoo rate limiter for autocomplete and workflow preflight.
+- Workflow symbol preflight now preserves user-provided symbols during resolver outages instead of treating provider failures as unknown tickers.
+- Correlation analysis now computes over the remaining valid symbols when one history fetch fails and reports dropped symbols instead of failing the whole matrix.
+- Router mode remains on the `rules` default because the live LLM-router acceptance gate could not be run with credentials; use `OPENCANDLE_ROUTER_MODE=llm` to opt in.
+- TUI daily report requests now expose exact `daily_watchlist_report` action literals, steering report-history prompts to `history` instead of invalid `list` or `show_history` actions.
+- Manual daily report runs now link to the default watchlist report template and update its latest-run timestamp.
+- TUI alert requests now expose exact `manage_alerts` action literals and natural-language mappings, so the agent can create and enable price, SMA, RSI, and volume alerts instead of trying generic `create` or `add` actions.
+- Prediction checks now keep durable resolved-history scorecards visible after all predictions have been resolved.
+- Watchlist row alert creation no longer clears existing target, stop, thesis, notes, or tags on the saved watchlist item.
 - `screen_stocks` now accepts natural screener prompt aliases such as `gte`, `<`, `market_cap`, `change_percent`, `total_volume`, `10B`, and signed numeric strings, and returns explicit freshness/interpretation guidance for screened candidates.
 - `screen_stocks` now accepts uppercase `ASC`/`DESC` sort directions and uppercase comparison aliases before tool validation, matching common LLM-generated screener calls.
 - `search_ticker` now falls back to the keyless TradingView stock scanner when Yahoo search is rate-limited or empty, while preserving Yahoo-shaped quote results for existing consumers.
@@ -17,6 +109,11 @@
 - Long-horizon ETF/fund comparison prompts now preserve the user's budget, probe holdings overlap when applicable, and call out tax, role/style, and fund-fact verification gaps without inventing unavailable holdings or expense data.
 - Local GUI shutdown now exits cleanly from a single `Ctrl+C` by closing browser connections before waiting on the HTTP server.
 - Local GUI React modules now keep component exports separate from helper exports, clear React Doctor error diagnostics, and preserve catalog builder hook order.
+- GUI market-state pages now share the main app shell sidebar and mobile drawer navigation without pinning the page actions or duplicate top tab strip.
+- GUI market-state mutations now wait for acknowledged tool results, surface toast errors and read-only connection states, and improve ticker search and tool-drawer accessibility.
+- Mobile GUI tool timelines no longer lock or cover the page after refreshing restored provider/tool-run state.
+- Mobile GUI home refreshes no longer leave the empty chat composer disabled while starting a fresh session.
+- GUI rich-text rendering now treats level-four markdown headings and horizontal rules as semantic `<h4>` and `<hr>` elements.
 - Published docs site now exposes AI-readable metadata, structured data, `llms.txt`, markdown mirrors, sitemap dates, and comparison/FAQ content for AI crawlers.
 
 ## [0.5.0] - 2026-05-26
@@ -52,8 +149,8 @@
 
 ### Added
 
-- **Local GUI preview** — `npm run gui` starts a 127.0.0.1 browser workbench with sessions, chat, dashboard projection, tool/workflow/provider catalog, slash palette, UI-driven tool invocation persisted into Pi session history, tool defaults storage, and writer-lock based follower protection. The implementation uses current Pi APIs directly and avoids unsupported `pi-web-ui` assumptions. See `openspec/changes/add-local-gui/`.
-- **Chat-first React GUI revamp** — the local GUI now uses a Tailwind/Vite React app with llmchat-inspired reusable primitives under `gui/web/src/components/ui/`, composable chat pieces under `gui/web/src/components/chat/`, first-class tool result renderers, mobile session history, onboarding for missing model keys, stop/retry/copy controls, and browser smoke coverage. See `openspec/changes/revamp-local-gui/`.
+- **Local GUI preview** — `npm run gui` starts a 127.0.0.1 browser workbench with sessions, chat, dashboard projection, tool/workflow/provider catalog, slash palette, UI-driven tool invocation persisted into Pi session history, tool defaults storage, and writer-lock based follower protection. The implementation uses current Pi APIs directly and avoids unsupported `pi-web-ui` assumptions. See `openspec/changes/archive/2026-06-10-add-local-gui/`.
+- **Chat-first React GUI revamp** — the local GUI now uses a Tailwind/Vite React app with llmchat-inspired reusable primitives under `gui/web/src/components/ui/`, composable chat pieces under `gui/web/src/components/chat/`, first-class tool result renderers, mobile session history, onboarding for missing model keys, stop/retry/copy controls, and browser smoke coverage. See `openspec/changes/archive/2026-06-10-revamp-local-gui/`.
 - **Packaged GUI entrypoint** — installed packages can start the local GUI with `opencandle gui`; release preparation now builds and packages the Vite GUI bundle, GUI server, shared GUI event types, and local logo asset instead of leaving the GUI as checkout-only source.
 - **Multi-turn request context + harness observability** — request understanding now receives the last 5 prior user/assistant turns from the active session branch, enabling coreference resolution on follow-ups like "what about at $500?". Live verified end-to-end: a two-turn session (`tell me about NVDA` -> `what about at $500?`) produces a turn-2 `opencandle-router` entry whose `entities.symbols=["NVDA"]`, carried entirely from turn 1's prior turns. Separately, `tests/harness/manual-run.ts` now captures every `opencandle-*` custom session entry into `trace.json.customEntries` after settle, so request/workflow/disclaimer decisions are inspectable without inferring from main-agent output. Six synthetic multi-turn fixtures added (013-018) covering coreference, carried-context, topic-shift, correction, preference-conflict, and dollar-phrase-preservation classes. Prior-turn-derived entity values land in `entities` not `slots` to preserve the settled `user | preference | default` provenance enum. Compaction and branch-summary entries are skipped during prior-turn extraction. Privacy note: `priorTurns` is not filtered by `NEVER_TRUST_FROM_MEMORY`; a future `/forget` command is the designated scrubbing primitive.
 - **Research-analyst stance** — system and workflow prompts rewritten to commit to specific numbers (entry zones, price targets, stops, allocations) with reasoning chain, confidence band, and invalidation level. Refusal-shaped hedges ("I cannot provide financial advice", "consult a qualified advisor") are explicitly forbidden. Analyst framing ("our read", "the data suggests") replaces fiduciary framing everywhere. Stance is universal — injected on every turn for every workflow and fallback path. See `openspec/changes/honest-analyst-stance/`.

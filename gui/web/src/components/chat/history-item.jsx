@@ -32,16 +32,15 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
   if (renaming) {
     return (
       <form
-        className={cn(
-          "rounded-md px-2 py-1.5",
-          active ? "bg-tertiary" : "bg-background",
-        )}
+        className={cn("rounded-md px-2 py-1.5", active ? "bg-tertiary" : "bg-background")}
         onSubmit={(event) => {
           event.preventDefault();
           submitRename();
         }}
       >
-        <label className="sr-only" htmlFor={`rename-session-${session.id}`}>Rename session</label>
+        <label className="sr-only" htmlFor={`rename-session-${session.id}`}>
+          Rename session
+        </label>
         <input
           ref={inputRef}
           id={`rename-session-${session.id}`}
@@ -65,9 +64,7 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
     <div
       className={cn(
         "group flex items-center rounded-md transition-colors focus-within:bg-tertiary hover:bg-tertiary",
-        active
-          ? "bg-tertiary text-foreground"
-          : "text-muted-foreground hover:text-foreground",
+        active ? "bg-tertiary text-foreground" : "text-muted-foreground hover:text-foreground",
       )}
     >
       <button

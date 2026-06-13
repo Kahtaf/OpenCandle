@@ -1,0 +1,57 @@
+{
+  "input": "Compare these assets: IV, ASTS",
+  "priorTurns": [
+    {
+      "role": "user",
+      "text": "I am looking at implied volatility crush around earnings."
+    },
+    {
+      "role": "assistant",
+      "text": "IV can contract after the event, so position sizing should account for volatility premium."
+    }
+  ],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "clarification",
+    "route": "fallback",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "ASTS"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [
+      "symbols"
+    ],
+    "tool_bundles": [
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "symbol_dropped",
+        "message": "IV dropped: no positive ticker signal",
+        "details": {
+          "token": "IV",
+          "reason": "no positive ticker signal",
+          "signalsChecked": [
+            "cashtag",
+            "local ticker phrase"
+          ],
+          "source": "llm"
+        }
+      },
+      {
+        "code": "route_kind_corrected_to_clarification",
+        "message": "missing required slots: symbols"
+      }
+    ],
+    "reasoning": "IV refers to implied volatility in prior context; only ASTS is a ticker."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "compare_assets",
+    "synthetic-multi-turn"
+  ]
+}

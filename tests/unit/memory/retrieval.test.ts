@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { buildMemoryContext } from "../../../src/memory/retrieval.js";
-import { MemoryStorage } from "../../../src/memory/storage.js";
-import { initDatabase } from "../../../src/memory/sqlite.js";
 import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildMemoryContext } from "../../../src/memory/retrieval.js";
+import { initDatabase } from "../../../src/memory/sqlite.js";
+import { MemoryStorage } from "../../../src/memory/storage.js";
 
 describe("buildMemoryContext", () => {
   let db: Database.Database;

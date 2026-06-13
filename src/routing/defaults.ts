@@ -1,4 +1,4 @@
-import type { PortfolioSlots, OptionsScreenerSlots } from "./types.js";
+import type { OptionsScreenerSlots, PortfolioSlots } from "./types.js";
 
 export const PORTFOLIO_DEFAULTS: Omit<PortfolioSlots, "budget"> = {
   riskProfile: "balanced",

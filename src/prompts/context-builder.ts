@@ -1,7 +1,7 @@
-import type { PromptSection, SectionName } from "./sections.js";
-import { SECTION_ORDER, DEFAULT_BUDGETS, truncateTobudget } from "./sections.js";
-import { renderPolicyCardForPlanning } from "./policy-cards.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
+import { renderPolicyCardForPlanning } from "./policy-cards.js";
+import type { PromptSection, SectionName } from "./sections.js";
+import { DEFAULT_BUDGETS, SECTION_ORDER, truncateTobudget } from "./sections.js";
 
 export interface PromptSectionReport {
   name: SectionName;
@@ -122,10 +122,7 @@ export class PromptContextBuilder {
         policyCard ? `${policyCard}\n\n${routePlaybook}` : routePlaybook,
       );
     } else if (options.fallbackContext) {
-      this.setSection(
-        "workflow-instructions",
-        buildFallbackPlaybook(options.fallbackContext),
-      );
+      this.setSection("workflow-instructions", buildFallbackPlaybook(options.fallbackContext));
     }
     if (options.memoryContext) {
       this.setSection("memory-context", formatMemorySection(options.memoryContext));
@@ -150,12 +147,26 @@ export function buildFallbackPlaybook(ctx: FallbackContext): string {
 
 export function buildRoutePlaybook(ctx: ResolvedTurnContext): string {
   const assumptionsBlock = buildResolvedAssumptionsBlock(ctx);
+  const droppedSymbols = ctx.diagnostics
+    .filter((diagnostic) => diagnostic.code === "symbol_dropped")
+    .map((diagnostic) => diagnostic.details?.token)
+    .filter((token): token is string => typeof token === "string" && token.length > 0);
+  const dropContext =
+    droppedSymbols.length > 0
+      ? `Dropped ambiguous ticker-like tokens: ${droppedSymbols.join(", ")}.`
+      : undefined;
+  const extraContext = [
+    ctx.entities.symbols.length > 0
+      ? `Router-extracted symbols: ${ctx.entities.symbols.join(", ")}. Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`
+      : `Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`,
+    dropContext,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
   const fallbackContext: FallbackContext = {
     assumptionsBlock,
     missingRequired: ctx.missingRequired,
-    extraContext: ctx.entities.symbols.length > 0
-      ? `Router-extracted symbols: ${ctx.entities.symbols.join(", ")}. Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`
-      : `Route kind: ${ctx.routeKind}. Tool bundles: ${ctx.toolBundles.join(", ") || "(none)"}.`,
+    extraContext,
   };
 
   if (ctx.routeKind === "clarification") {
@@ -280,7 +291,7 @@ const TOOL_CATALOG = `## Available Tools
 - **Sentiment**: get_reddit_sentiment, get_twitter_sentiment, get_web_sentiment, get_sentiment_trend, get_sentiment_summary — retail and news sentiment from Reddit, Twitter/X, and web sources with historical trends and cross-source divergence detection
 - **Web Search**: search_web — breaking news, earnings context, company events, regulatory developments. Supported freshness values are hours, day, week, and month; use category general with freshness month for broad industry context; never pass unsupported values such as all, year, 3mo, quarter, or custom date ranges. When a dedicated tool can answer the question (quotes, fundamentals, earnings, macro, SEC filings, sentiment), use that tool instead — do not add search_web as a supplementary source for data available through dedicated tools
 - **Options**: get_option_chain — full options chain with strikes, bids/asks, volume, OI, IV, and computed Greeks (delta, gamma, theta, vega, rho)
-- **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, analyze_holdings_overlap, track_prediction — position tracking, P&L, Sharpe ratio, VaR, watchlist with price alerts, correlation matrix, ETF/fund holdings overlap, and prediction tracking with accuracy scoring
+- **Portfolio**: track_portfolio, analyze_risk, manage_watchlist, analyze_correlation, analyze_holdings_overlap, track_prediction, manage_alerts, daily_watchlist_report, manage_notifications — position tracking, P&L, Sharpe ratio, VaR, watchlist tracking, durable local alerts, daily watchlist reports, notification history, correlation matrix, ETF/fund holdings overlap, and prediction tracking with accuracy scoring
 - **User Interaction**: ask_user — ask the user a clarification question when their request is ambiguous or missing key details`;
 
 function buildToolCatalog(addonDescriptions?: string[]): string {

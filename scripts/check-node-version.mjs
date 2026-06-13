@@ -1,4 +1,7 @@
-import { ensureNativeDependency, getUnsupportedNodeVersionMessage } from "./check-node-version-lib.mjs";
+import {
+  ensureNativeDependency,
+  getUnsupportedNodeVersionMessage,
+} from "./check-node-version-lib.mjs";
 
 const nodeVersionMessage = getUnsupportedNodeVersionMessage();
 if (nodeVersionMessage) {

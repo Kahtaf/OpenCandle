@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import * as openUrlModule from "../../../src/infra/open-url.js";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as configModule from "../../../src/config.js";
-import * as validationModule from "../../../src/onboarding/validation.js";
+import * as openUrlModule from "../../../src/infra/open-url.js";
 import { runProviderConnect } from "../../../src/onboarding/connect.js";
+import * as validationModule from "../../../src/onboarding/validation.js";
 
 function createUi(overrides: Partial<any> = {}) {
   return {

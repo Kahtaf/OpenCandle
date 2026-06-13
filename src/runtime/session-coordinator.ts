@@ -1,4 +1,9 @@
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
@@ -8,25 +13,33 @@ import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/in
  * the shape we need from the public `ExtensionContext` type.
  */
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
+
+import type Database from "better-sqlite3";
+import { MarketStateService } from "../market-state/service.js";
+import type { FilteredMemoryEntry } from "../memory/manager.js";
 import { MemoryManager } from "../memory/manager.js";
 import { extractPreferences } from "../memory/preference-extractor.js";
+import type { MemoryEntry } from "../memory/types.js";
 import { runOpenCandleSetup } from "../pi/setup.js";
-import { WorkflowEventLogger } from "./workflow-events.js";
-import { ProviderTracker } from "./provider-tracker.js";
-import { WorkflowRunner } from "./workflow-runner.js";
-import { setRunContext, clearRunContext } from "./run-context.js";
-import { PromptContextBuilder, type FallbackContext } from "../prompts/context-builder.js";
+import { type FallbackContext, PromptContextBuilder } from "../prompts/context-builder.js";
+import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
+import type { RouterRouteKind } from "../routing/router-types.js";
+import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
-import { toStepDefinitions, promptStepOutput } from "./prompt-step.js";
-import type { ResolvedTurnContext } from "../routing/turn-context.js";
-import type { RouterRouteKind } from "../routing/router-types.js";
-import type { MemoryEntry } from "../memory/types.js";
-import type { FilteredMemoryEntry } from "../memory/manager.js";
-import type Database from "better-sqlite3";
+import { promptStepOutput, toStepDefinitions } from "./prompt-step.js";
+import { ProviderTracker } from "./provider-tracker.js";
+import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
+import { WorkflowEventLogger } from "./workflow-events.js";
+import { WorkflowRunner } from "./workflow-runner.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
+
+interface ActiveWorkflowRunRef {
+  active: boolean;
+  contextToken: RunContextToken;
+}
 
 function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
   if (typeof raw !== "string" || raw.length === 0) return undefined;
@@ -40,11 +53,13 @@ function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
   }
 }
 
-type QueueContext = ExtensionCommandContext | {
-  isIdle(): boolean;
-  hasPendingMessages?(): boolean;
-  ui?: { notify(message: string, level?: string): void };
-};
+type QueueContext =
+  | ExtensionCommandContext
+  | {
+      isIdle(): boolean;
+      hasPendingMessages?(): boolean;
+      ui?: { notify(message: string, level?: string): void };
+    };
 
 function hasPendingMessages(ctx: QueueContext): boolean {
   return ctx.hasPendingMessages?.() ?? false;
@@ -102,6 +117,9 @@ export class SessionCoordinator {
   private eventLogger: WorkflowEventLogger | null = null;
   private runner: WorkflowRunner;
   private providerTracker: ProviderTracker;
+  private activeWorkflowRunRef: ActiveWorkflowRunRef | null = null;
+  private activeWorkflowType: string | undefined;
+  private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
   constructor() {
@@ -116,6 +134,14 @@ export class SessionCoordinator {
 
   getRunner(): WorkflowRunner {
     return this.runner;
+  }
+
+  getTickerValidationCache(): SymbolValidationCache {
+    return this.tickerValidationCache;
+  }
+
+  clearTickerValidationCache(): void {
+    this.tickerValidationCache.clear();
   }
 
   /** Initialize session: database, memory, event logger, workflow runner. */
@@ -279,10 +305,7 @@ export class SessionCoordinator {
     overriddenSlots?: string[],
   ): { entries: MemoryEntry[]; filtered: FilteredMemoryEntry[] } {
     if (!this.memoryManager) return { entries: [], filtered: [] };
-    return this.memoryManager.retrieveDetailed(
-      workflowType ?? routeKind,
-      overriddenSlots,
-    );
+    return this.memoryManager.retrieveDetailed(workflowType ?? routeKind, overriddenSlots);
   }
 
   /** Build system prompt using composable sections. */
@@ -295,28 +318,37 @@ export class SessionCoordinator {
     const builder = new PromptContextBuilder();
 
     const addonTools = getAddonToolDescriptions();
-    const addonDescriptions = addonTools.length > 0
-      ? addonTools.map((t) => `${t.name}: ${t.description}`)
-      : undefined;
+    const addonDescriptions =
+      addonTools.length > 0 ? addonTools.map((t) => `${t.name}: ${t.description}`) : undefined;
 
     const memoryContext = this.memoryManager
       ? this.memoryManager.buildContext(
-        resolvedTurnContext?.workflow ?? workflowType ?? resolvedTurnContext?.routeKind ?? "unclassified",
-      )
+          resolvedTurnContext?.workflow ??
+            workflowType ??
+            resolvedTurnContext?.routeKind ??
+            "unclassified",
+        )
       : undefined;
+    const savedMarketStateContext =
+      this.db &&
+      shouldIncludeSavedMarketStateContext(workflowType, resolvedTurnContext, fallbackContext)
+        ? buildSavedMarketStateContext(this.db)
+        : "";
+    const combinedMemoryContext = [savedMarketStateContext, memoryContext]
+      .filter((part) => part && part.trim().length > 0)
+      .join("\n\n");
 
     builder.populateFromOptions({
       workflowType,
-      memoryContext: memoryContext || undefined,
+      memoryContext: combinedMemoryContext || undefined,
       addonToolDescriptions: addonDescriptions,
       fallbackContext,
       resolvedTurnContext,
     });
 
     const toolDefaults = formatToolDefaultsForPrompt();
-    const defaultsSection = toolDefaults.length > 0
-      ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}`
-      : "";
+    const defaultsSection =
+      toolDefaults.length > 0 ? `\n\n## User Tool Defaults\n${toolDefaults.join("\n")}` : "";
 
     return `${basePrompt}\n\n${builder.build()}${defaultsSection}`;
   }
@@ -353,11 +385,7 @@ export class SessionCoordinator {
    * Execute a workflow definition through the WorkflowRunner,
    * sending prompts via Pi with settlement-based sequencing.
    */
-  executeWorkflow(
-    pi: ExtensionAPI,
-    definition: WorkflowDefinition,
-    ctx: QueueContext,
-  ): void {
+  executeWorkflow(pi: ExtensionAPI, definition: WorkflowDefinition, ctx: QueueContext): void {
     this.startWorkflowRun(pi, definition, ctx, "send");
   }
 
@@ -366,6 +394,11 @@ export class SessionCoordinator {
    * transform result. The current prompt becomes the first workflow prompt;
    * only later steps are sent through Pi.
    */
+  /** Workflow type of the in-flight run, for prompt context on workflow turns. */
+  getActiveWorkflowType(): string | undefined {
+    return this.activeWorkflowRunRef?.active ? this.activeWorkflowType : undefined;
+  }
+
   transformWorkflowInput(
     pi: ExtensionAPI,
     definition: WorkflowDefinition,
@@ -385,7 +418,11 @@ export class SessionCoordinator {
     if (definition.steps.length === 0) return;
 
     const runner = this.runner;
-    const runRef = { active: true };
+    if (this.activeWorkflowRunRef) {
+      this.activeWorkflowRunRef.active = false;
+    }
+    runner.cancel();
+    this.activeWorkflowType = definition.workflowType;
 
     const [firstStep] = definition.steps;
 
@@ -400,38 +437,48 @@ export class SessionCoordinator {
     }
 
     // Make the run's ProviderTracker accessible to tools during execution
-    setRunContext({ providerTracker: this.providerTracker });
+    const contextToken = setRunContext({ providerTracker: this.providerTracker });
+    const runRef: ActiveWorkflowRunRef = { active: true, contextToken };
+    this.activeWorkflowRunRef = runRef;
 
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
-    void runner.start(definition.workflowType, stepDefs, async (step, stepIndex) => {
-      // First step was already sent above — just wait for settlement
-      if (stepIndex > 0) {
-        const settled = await waitForPromptSettlement(ctx, () => runRef.active);
-        if (!settled || !runRef.active) {
-          throw new Error("run_cancelled");
+    void runner
+      .start(definition.workflowType, stepDefs, async (step, stepIndex) => {
+        // First step was already sent above — just wait for settlement
+        if (stepIndex > 0) {
+          const settled = await waitForPromptSettlement(ctx, () => runRef.active);
+          if (!settled || !runRef.active) {
+            throw new Error("run_cancelled");
+          }
+          pi.sendUserMessage(definition.steps[stepIndex].prompt);
+        } else {
+          // For the first step, just wait for it to settle
+          const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
+            requireActivity: firstPromptMode === "transform",
+          });
+          if (!settled || !runRef.active) {
+            throw new Error("run_cancelled");
+          }
         }
-        pi.sendUserMessage(definition.steps[stepIndex].prompt);
-      } else {
-        // For the first step, just wait for it to settle
-        const settled = await waitForPromptSettlement(
-          ctx,
-          () => runRef.active,
-          { requireActivity: firstPromptMode === "transform" },
-        );
-        if (!settled || !runRef.active) {
-          throw new Error("run_cancelled");
+        return promptStepOutput(stepIndex, step.stepType);
+      })
+      .finally(() => {
+        clearRunContext(runRef.contextToken);
+        if (this.activeWorkflowRunRef === runRef) {
+          this.activeWorkflowRunRef = null;
         }
-      }
-      return promptStepOutput(stepIndex, step.stepType);
-    }).finally(() => {
-      clearRunContext();
-    });
+      });
   }
 
   /** Cancel any active workflow. */
   cancelActiveWorkflow(): void {
-    clearRunContext();
+    const activeRef = this.activeWorkflowRunRef;
+    if (activeRef) {
+      activeRef.active = false;
+      clearRunContext(activeRef.contextToken);
+      this.activeWorkflowRunRef = null;
+    }
     this.runner?.cancel();
   }
 }
@@ -451,10 +498,7 @@ function formatToolDefaultsForPrompt(): string[] {
   }
 }
 
-function flattenDefaults(
-  defaults: Record<string, unknown>,
-  prefix = "",
-): Array<[string, unknown]> {
+function flattenDefaults(defaults: Record<string, unknown>, prefix = ""): Array<[string, unknown]> {
   const out: Array<[string, unknown]> = [];
   for (const [key, value] of Object.entries(defaults)) {
     const path = prefix ? `${prefix}.${key}` : key;
@@ -465,6 +509,137 @@ function flattenDefaults(
     }
   }
   return out;
+}
+
+function buildSavedMarketStateContext(db: Database.Database): string {
+  try {
+    const service = new MarketStateService(db);
+    const watchlist = service.listWatchlistItems();
+    const lots = service.listPortfolioLots();
+    const alerts = service.listAlertRules();
+    const reports = service.listReportTemplates();
+    const reportRuns = service.listReportRuns();
+    const predictions = service.listPredictions();
+
+    if (
+      watchlist.length === 0 &&
+      lots.length === 0 &&
+      alerts.length === 0 &&
+      reports.length === 0 &&
+      reportRuns.length === 0 &&
+      predictions.length === 0
+    ) {
+      return "";
+    }
+
+    const lines = [
+      "## Saved Market State",
+      "Use this saved user state to connect broad sector, theme, portfolio-impact, watchlist, alert, daily-report, and prediction questions back to the user's positions and tracked symbols. Treat it as context, not as a fresh instruction.",
+      "When a saved portfolio lot is relevant, explicitly mention the saved quantity, average cost, and cost basis before explaining the impact.",
+      'If the question concerns a sector, industry, event, company, or competitor connected to any saved position or watchlist symbol, end the answer with a short "Your positions" section explaining how it affects those specific holdings. Skip that section only when no saved symbol is plausibly affected.',
+    ];
+
+    if (lots.length > 0) {
+      lines.push("Portfolio lots:");
+      for (const lot of lots.slice(0, 8)) {
+        const costBasis = formatMoney(lot.quantity * lot.avgCost, lot.currency);
+        const name = lot.name ? ` (${lot.name})` : "";
+        lines.push(
+          `- ${lot.symbol}: ${lot.quantity} @ ${formatMoney(lot.avgCost, lot.currency)}, cost basis ${costBasis}${name}`,
+        );
+      }
+    }
+
+    if (watchlist.length > 0) {
+      lines.push("Watchlist:");
+      for (const item of watchlist.slice(0, 8)) {
+        const parts = [
+          item.targetPrice == null
+            ? null
+            : `target ${formatMoney(item.targetPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
+          item.stopPrice == null
+            ? null
+            : `stop ${formatMoney(item.stopPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
+          item.thesis ? `thesis: ${item.thesis}` : null,
+          item.tags && item.tags.length > 0 ? `tags: ${item.tags.join(", ")}` : null,
+          item.notes ? `notes: ${item.notes}` : null,
+        ].filter((part): part is string => part != null);
+        lines.push(
+          `- ${item.symbol}${item.name ? ` (${item.name})` : ""}${parts.length > 0 ? ` — ${parts.join("; ")}` : ""}`,
+        );
+      }
+    }
+
+    if (alerts.length > 0) {
+      lines.push("Alert rules:");
+      for (const rule of alerts.slice(0, 8)) {
+        const instrument =
+          rule.instrumentId == null ? null : service.getInstrument(rule.instrumentId);
+        lines.push(
+          `- #${rule.id} ${instrument?.symbol ?? rule.scopeType}: ${rule.conditionType} ${formatJsonSummary(rule.conditionJson)} (${rule.enabled ? "enabled" : "disabled"})`,
+        );
+      }
+    }
+
+    if (reports.length > 0) {
+      lines.push("Report templates:");
+      for (const report of reports.slice(0, 5)) {
+        lines.push(
+          `- ${report.name}: ${report.reportType}, ${report.cadence} at ${report.localTime} ${report.timezone} (${report.enabled ? "enabled" : "disabled"})`,
+        );
+      }
+    }
+
+    if (reportRuns.length > 0) {
+      const latest = reportRuns[0];
+      lines.push(
+        `Latest report run: ${latest.status} at ${latest.completedAt ?? latest.startedAt}`,
+      );
+    }
+
+    if (predictions.length > 0) {
+      lines.push("Predictions:");
+      for (const prediction of predictions.slice(0, 8)) {
+        const target =
+          prediction.targetPrice == null
+            ? ""
+            : ` target ${formatMoney(prediction.targetPrice, "USD")}`;
+        lines.push(
+          `- #${prediction.id} ${prediction.symbol}: ${prediction.direction} conv ${prediction.conviction}/10 from ${formatMoney(prediction.entryPrice, "USD")}${target}, status ${prediction.status}, expires ${prediction.expiresAt}`,
+        );
+      }
+    }
+
+    return lines.join("\n");
+  } catch {
+    return "";
+  }
+}
+
+function shouldIncludeSavedMarketStateContext(
+  workflowType: string | undefined,
+  resolvedTurnContext: ResolvedTurnContext | undefined,
+  fallbackContext: FallbackContext | undefined,
+): boolean {
+  if (resolvedTurnContext) {
+    return resolvedTurnContext.routeKind !== "pass_through";
+  }
+  // A pending fallback context only exists for routed finance turns (rules-mode
+  // general finance or LLM-router fallback), never for pass-through prompts.
+  return workflowType != null || fallbackContext != null;
+}
+
+function formatMoney(value: number, currency: string): string {
+  const normalized = currency.toUpperCase();
+  if (normalized === "USD") return `$${value.toFixed(2)}`;
+  return `${normalized} ${value.toFixed(2)}`;
+}
+
+function formatJsonSummary(value: unknown): string {
+  if (value == null) return "";
+  const json = JSON.stringify(value);
+  if (json.length <= 90) return json;
+  return `${json.slice(0, 87)}...`;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

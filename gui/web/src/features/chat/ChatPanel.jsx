@@ -1,66 +1,118 @@
-import { CircleHelp, Menu, PanelLeftOpen, Send, X } from "lucide-react";
+import { CircleHelp, Send, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { OpenCandleLogo } from "../../components/brand/opencandle-logo.jsx";
+import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
-import { AssistantMessage, CustomMessage, UserMessage } from "../../components/chat/thread-message.jsx";
+import {
+  AssistantMessage,
+  CustomMessage,
+  UserMessage,
+} from "../../components/chat/thread-message.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
-import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { cn } from "../../lib/utils.js";
-import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
+import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
-import { compactDuplicateUserMessages, eventsToLiveEntries } from "./live-entries.js";
-import { groupToolRuns } from "./tool-run-grouper.js";
+import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
+import { chatRowsFromEvents } from "./chat-rows.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
+import { groupToolRuns } from "./tool-run-grouper.js";
 
-export function ChatPanel({ entries, liveEvents, askUserPrompts = [], modelSetup, role, inputDisabled = false, runState, catalog, send, startChatRun, setToast, draft: draftProp, setDraft: setDraftProp, onOpenCommandPalette, onOpenSidebar, onOpenContext, sidebarCollapsed, onExpandSidebar }) {
+export function ChatPanel({
+  events = [],
+  liveEvents = [],
+  askUserPrompts = [],
+  modelSetup,
+  role,
+  inputDisabled = false,
+  runState,
+  catalog,
+  send,
+  startChatRun,
+  setToast,
+  draft: draftProp,
+  setDraft: setDraftProp,
+  onOpenCommandPalette,
+  onOpenSidebar,
+  onOpenContext,
+  sidebarCollapsed,
+  onExpandSidebar,
+}) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
+  const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
   const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
-  const liveEntries = useMemo(() => eventsToLiveEntries(liveEvents), [liveEvents]);
-  const visibleEntries = useMemo(() => compactDuplicateUserMessages([...entries, ...liveEntries].filter(isVisibleEntry)), [entries, liveEntries]);
-  const groupedEntries = useMemo(() => groupToolRuns(visibleEntries), [visibleEntries]);
+  const visibleRows = useMemo(() => chatRowsFromEvents(events, liveEvents), [events, liveEvents]);
+  const groupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
+  const autoOpenRunId = useMemo(() => {
+    if (!allowToolAutoOpen) return null;
+    const pendingRuns = groupedRows.filter(
+      (row) => row.type === "tool_run" && row.status === "pending",
+    );
+    return pendingRuns[pendingRuns.length - 1]?.id ?? null;
+  }, [allowToolAutoOpen, groupedRows]);
   const drawer = useToolDrawer();
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
     if (!drawer.run) return;
-    const latest = groupedEntries.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
+    const latest = groupedRows.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
     if (latest && latest !== drawer.run) drawer.open(latest);
-  }, [groupedEntries, drawer]);
+  }, [groupedRows, drawer]);
+  if (
+    allowToolAutoOpen &&
+    !autoOpenRunId &&
+    runState !== "connecting" &&
+    runState !== "streaming"
+  ) {
+    setAllowToolAutoOpen(false);
+  }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
   const chatDisabled = role === "follower" || inputDisabled;
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
     if (!prompt || chatDisabled) return;
+    setAllowToolAutoOpen(true);
     setDraft("");
     void startChatRun(prompt);
   };
 
-  const placeholder = role === "follower"
-    ? "Follower mode: take over this session to send"
-    : "Ask anything";
+  const placeholder =
+    role === "follower" ? "Follower mode: take over this session to send" : "Ask anything";
 
   return (
-    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background" data-run-state={runState}>
+    <section
+      className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+      data-run-state={runState}
+    >
       <MobileHeader onOpenSidebar={onOpenSidebar} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
-        ) : visibleEntries.length === 0 && !activity ? (
-          <EmptyThread onPrompt={submit} onOpenCatalog={onOpenCommandPalette} disabled={chatDisabled} />
+        ) : visibleRows.length === 0 && !activity ? (
+          <EmptyThread
+            onPrompt={submit}
+            onOpenCatalog={onOpenCommandPalette}
+            disabled={chatDisabled}
+          />
         ) : (
           <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
-            {groupedEntries.map((entry) => <MessageRow key={entry.id} entry={entry} catalog={catalog} />)}
+            {groupedRows.map((entry) => (
+              <MessageRow
+                key={entry.id}
+                entry={entry}
+                catalog={catalog}
+                autoOpenToolRun={entry.id === autoOpenRunId}
+              />
+            ))}
             {askUserPrompts.map((prompt) => (
               <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
             ))}
@@ -103,7 +155,9 @@ function AskUserPromptCard({ prompt, role, send }) {
     <div className="max-w-[760px]">
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{pending ? "Question" : prompt.status === "answered" ? "Answered" : "Cancelled"}</span>
+        <span>
+          {pending ? "Question" : prompt.status === "answered" ? "Answered" : "Cancelled"}
+        </span>
       </div>
       <div className="rounded-lg border border-border bg-card px-3 py-3 shadow-subtle-xs">
         <div className="flex items-start gap-3">
@@ -114,16 +168,22 @@ function AskUserPromptCard({ prompt, role, send }) {
             <CircleHelp className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium leading-relaxed text-foreground">{prompt.question}</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground">
+              {prompt.question}
+            </div>
             {prompt.reason ? (
-              <div className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{prompt.reason}</div>
+              <div className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                {prompt.reason}
+              </div>
             ) : null}
             {prompt.status === "answered" ? (
               <div className="mt-2 rounded-md bg-secondary px-2 py-1.5 text-[12px] text-foreground">
                 Answer: <span className="font-medium">{prompt.answer}</span>
               </div>
             ) : prompt.status === "cancelled" ? (
-              <div className="mt-2 text-[12px] text-muted-foreground">The question was cancelled.</div>
+              <div className="mt-2 text-[12px] text-muted-foreground">
+                The question was cancelled.
+              </div>
             ) : (
               <AskUserPromptControls
                 prompt={prompt}
@@ -145,9 +205,19 @@ function AskUserPromptControls({ prompt, draft, setDraft, disabled, onSubmit, on
   if (prompt.questionType === "confirm") {
     return (
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" disabled={disabled} onClick={() => onSubmit("Yes")}>Answer yes</Button>
-        <Button size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit("No")}>Answer no</Button>
-        <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
+        <Button size="sm" disabled={disabled} onClick={() => onSubmit("Yes")}>
+          Answer yes
+        </Button>
+        <Button size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit("No")}>
+          Answer no
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={onCancel}
+          aria-label="Cancel question"
+        >
           <X />
         </Button>
       </div>
@@ -159,11 +229,23 @@ function AskUserPromptControls({ prompt, draft, setDraft, disabled, onSubmit, on
     return (
       <div className="mt-3 flex flex-wrap gap-2">
         {options.map((option) => (
-          <Button key={option} size="sm" variant="bordered" disabled={disabled} onClick={() => onSubmit(option)}>
+          <Button
+            key={option}
+            size="sm"
+            variant="bordered"
+            disabled={disabled}
+            onClick={() => onSubmit(option)}
+          >
             {option}
           </Button>
         ))}
-        <Button size="sm" variant="ghost" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={onCancel}
+          aria-label="Cancel question"
+        >
           <X />
         </Button>
       </div>
@@ -185,10 +267,22 @@ function AskUserPromptControls({ prompt, draft, setDraft, disabled, onSubmit, on
         placeholder={prompt.placeholder || "Type an answer"}
         aria-label={prompt.question}
       />
-      <Button type="submit" size="icon" disabled={disabled || !draft.trim()} aria-label="Send answer">
+      <Button
+        type="submit"
+        size="icon"
+        disabled={disabled || !draft.trim()}
+        aria-label="Send answer"
+      >
         <Send />
       </Button>
-      <Button type="button" variant="ghost" size="icon" disabled={disabled} onClick={onCancel} aria-label="Cancel question">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        disabled={disabled}
+        onClick={onCancel}
+        aria-label="Cancel question"
+      >
         <X />
       </Button>
     </form>
@@ -202,7 +296,9 @@ function AgentActivity({ activity }) {
     <div className="max-w-[760px]">
       <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
         <StatusDot status={activity.status} />
-        <TextShimmer active={activity.status === "pending"}>{hasThinking ? "Analyzing" : "Working"}</TextShimmer>
+        <TextShimmer active={activity.status === "pending"}>
+          {hasThinking ? "Analyzing" : "Working"}
+        </TextShimmer>
       </div>
       {hasThinking ? (
         <div className="border-l border-dashed border-border pl-4 text-sm leading-relaxed text-muted-foreground">
@@ -220,59 +316,22 @@ function AgentActivity({ activity }) {
   );
 }
 
-function DesktopSidebarRestore({ onExpandSidebar }) {
-  return (
-    <div className="hidden h-12 shrink-0 items-center border-b border-border bg-background px-3 md:flex">
-      <Button variant="ghost" size="icon-sm" aria-label="Expand sidebar" onClick={onExpandSidebar}>
-        <PanelLeftOpen />
-      </Button>
-    </div>
-  );
-}
-
-function MobileHeader({ onOpenSidebar }) {
-  return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-2 md:hidden">
-      <Button variant="ghost" size="icon-sm" aria-label="Open sidebar" onClick={onOpenSidebar}>
-        <Menu />
-      </Button>
-      <div className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
-        <OpenCandleLogo />
-        OpenCandle
-      </div>
-    </header>
-  );
-}
-
-function MessageRow({ entry, catalog }) {
+function MessageRow({ entry, catalog, autoOpenToolRun = false }) {
   if (entry.type === "tool_run") {
-    return <StepsCard run={entry} />;
+    return <StepsCard run={entry} autoOpen={autoOpenToolRun} />;
   }
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;
   }
-  const message = entry.message;
-  if (!message) return null;
-  if (message.role === "user") return <UserMessage content={message.content} />;
-  if (message.role === "toolResult") return <ToolResultCard message={message} catalog={catalog} />;
-  if (message.role === "assistant") {
-    // After grouping, assistant entries here are pure-text (their tool calls
-    // were absorbed into the surrounding tool_run). Render only the text part.
-    return <AssistantMessage content={message.content} />;
-  }
-  return <div className="rounded-lg border border-border bg-card p-4 text-sm">{JSON.stringify(message)}</div>;
-}
-
-function isVisibleEntry(entry) {
-  if (entry.type === "custom_message") return true;
-  if (entry.type !== "message") return false;
-  return !isBackgroundToolEntry(entry.message);
-}
-
-function isBackgroundToolEntry(message) {
-  if (message?.role === "toolResult") return message.details?.source === "background";
-  if (message?.role !== "assistant") return false;
-  return Boolean(message.content?.some?.((part) => part.type === "toolCall" && String(part.id || "").startsWith("background-")));
+  if (entry.type === "user_message") return <UserMessage content={entry.content} />;
+  if (entry.type === "tool_result")
+    return <ToolResultCard message={entry.message} catalog={catalog} />;
+  if (entry.type === "assistant_message") return <AssistantMessage content={entry.content} />;
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 text-sm">
+      {JSON.stringify(entry)}
+    </div>
+  );
 }
 
 function buildAgentActivity(liveState, runState) {
@@ -283,7 +342,9 @@ function buildAgentActivity(liveState, runState) {
   const activeRun = runs.find((run) => run.status === "running") || runs.at(-1);
   const thinking = activeRun ? liveState.thinking.get(activeRun.id) : undefined;
   const activeTool = [...liveState.tools.values()].some((tool) => tool.status === "running");
-  const assistantText = liveState.messages.some((message) => message.role === "assistant" && message.text.trim());
+  const assistantText = liveState.messages.some(
+    (message) => message.role === "assistant" && message.text.trim(),
+  );
 
   if (!thinking?.text && (activeTool || assistantText)) return null;
   return {
@@ -293,7 +354,9 @@ function buildAgentActivity(liveState, runState) {
 }
 
 function compactThinkingText(text) {
-  const normalized = String(text || "").trim().replace(/\n{3,}/g, "\n\n");
+  const normalized = String(text || "")
+    .trim()
+    .replace(/\n{3,}/g, "\n\n");
   if (normalized.length <= 700) return normalized;
   return `${normalized.slice(0, 700).trimEnd()}...`;
 }

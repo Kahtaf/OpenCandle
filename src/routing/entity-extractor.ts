@@ -1,38 +1,212 @@
 import type { ExtractedEntities } from "./types.js";
 
 const COMMON_WORDS = new Set([
-  "I", "A", "AN", "AM", "AS", "AT", "BE", "BY", "DO", "GO", "IF", "IN", "IS",
-  "IT", "ME", "MY", "NO", "OF", "ON", "OR", "SO", "TO", "UP", "US", "WE",
-  "THE", "AND", "BUT", "FOR", "NOT", "ALL", "ARE", "CAN", "HAD", "HAS", "HER",
-  "HIM", "HIS", "HOW", "ITS", "LET", "MAY", "NEW", "NOW", "OLD", "OUR", "OWN",
-  "SAY", "SHE", "TOO", "USE", "WAY", "WHO", "BOY", "DID", "GET", "HAS", "HIM",
-  "OUT", "PUT", "RUN", "SET", "TOP", "WHY", "BIG", "END", "FAR", "FEW",
-  "GOT", "LOW", "MAN", "OFF", "PAY", "TRY", "TWO", "BUY", "DOES", "ETF", "ETFS",
+  "I",
+  "A",
+  "AN",
+  "AM",
+  "AS",
+  "AT",
+  "BE",
+  "BY",
+  "DO",
+  "GO",
+  "IF",
+  "IN",
+  "IS",
+  "IT",
+  "ME",
+  "MY",
+  "NO",
+  "OF",
+  "ON",
+  "OR",
+  "SO",
+  "TO",
+  "UP",
+  "US",
+  "WE",
+  "THE",
+  "AND",
+  "BUT",
+  "FOR",
+  "NOT",
+  "ALL",
+  "ARE",
+  "CAN",
+  "HAD",
+  "HAS",
+  "HER",
+  "HIM",
+  "HIS",
+  "HOW",
+  "ITS",
+  "LET",
+  "MAY",
+  "NEW",
+  "NOW",
+  "OLD",
+  "OUR",
+  "OWN",
+  "SAY",
+  "SHE",
+  "TOO",
+  "USE",
+  "WAY",
+  "WHO",
+  "BOY",
+  "DID",
+  "GET",
+  "HAS",
+  "HIM",
+  "OUT",
+  "PUT",
+  "RUN",
+  "SET",
+  "TOP",
+  "WHY",
+  "BIG",
+  "END",
+  "FAR",
+  "FEW",
+  "GOT",
+  "LOW",
+  "MAN",
+  "OFF",
+  "PAY",
+  "TRY",
+  "TWO",
+  "BUY",
+  "DOES",
+  "ETF",
+  "ETFS",
   // Technical analysis acronyms
-  "SMA", "EMA", "RSI", "MACD", "OBV", "ATR", "ADX", "VWAP",
+  "SMA",
+  "EMA",
+  "RSI",
+  "MACD",
+  "OBV",
+  "ATR",
+  "ADX",
+  "VWAP",
   // Fundamental analysis acronyms
-  "DCF", "FCF", "ROE", "ROA", "ROI", "EPS", "NAV", "WACC", "EBIT",
-  // Regulatory / source acronyms that are not tickers in natural language
+  "DCF",
+  "FCF",
+  "ROE",
+  "ROA",
+  "ROI",
+  "EPS",
+  "NAV",
+  "WACC",
+  "EBIT",
+  // Regulatory / source / finance acronyms that are not tickers in natural language
+  "IV",
+  "HV",
+  "ITM",
+  "OTM",
+  "ATM",
+  "IPO",
   "SEC",
-  "BEST", "WHAT", "WITH", "THAT", "THIS", "FROM", "HAVE", "BEEN", "SOME",
-  "THEM", "THAN", "LIKE", "JUST", "OVER", "ALSO", "BACK", "MUCH", "MOST",
-  "ONLY", "VERY", "WHEN", "COME", "MAKE", "FIND", "HERE", "KNOW", "TAKE",
-  "WANT", "GIVE", "GOOD", "CALL", "PUTS", "SAFE", "RISK", "LONG", "TERM",
-  "NEXT", "SHOW", "LAST",
+  "FED",
+  "FOMC",
+  "IRS",
+  "ECB",
+  "BOE",
+  "BOJ",
+  "GDP",
+  "CPI",
+  "PPI",
+  "FX",
+  "NDA",
+  "YTD",
+  "BEST",
+  "WHAT",
+  "WITH",
+  "THAT",
+  "THIS",
+  "FROM",
+  "HAVE",
+  "BEEN",
+  "SOME",
+  "THEM",
+  "THAN",
+  "LIKE",
+  "JUST",
+  "OVER",
+  "ALSO",
+  "BACK",
+  "MUCH",
+  "MOST",
+  "ONLY",
+  "VERY",
+  "WHEN",
+  "COME",
+  "MAKE",
+  "FIND",
+  "HERE",
+  "KNOW",
+  "TAKE",
+  "WANT",
+  "GIVE",
+  "GOOD",
+  "CALL",
+  "PUTS",
+  "SAFE",
+  "RISK",
+  "LONG",
+  "TERM",
+  "NEXT",
+  "SHOW",
+  "LAST",
 ]);
 
-const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI"]);
+const AMBIGUOUS_CONCEPT_TICKERS = new Set(["AI", "CPI", "FRED", "GUI", "MA"]);
+const CURRENCY_CODES = new Set(["USD", "CAD", "EUR", "GBP", "AUD", "JPY", "CHF"]);
+const EXPLICIT_FINANCE_ACRONYM_TICKERS = new Set([
+  "IV",
+  "HV",
+  "ITM",
+  "OTM",
+  "ATM",
+  "IPO",
+  "SEC",
+  "FED",
+  "FOMC",
+  "IRS",
+  "ECB",
+  "BOE",
+  "BOJ",
+  "GDP",
+  "CPI",
+  "PPI",
+  "FX",
+  "NDA",
+]);
 const LOWERCASE_FINANCE_TERMS = new Set([
-  "bond", "bonds", "cash", "rate", "rates", "cuts", "gold", "oil", "stock", "stocks",
-  "fund", "funds", "etf", "etfs", "puts", "calls", "option", "options",
+  "bond",
+  "bonds",
+  "cash",
+  "rate",
+  "rates",
+  "cuts",
+  "gold",
+  "oil",
+  "stock",
+  "stocks",
+  "fund",
+  "funds",
+  "etf",
+  "etfs",
+  "puts",
+  "calls",
+  "option",
+  "options",
 ]);
 
 export function extractEntities(input: string): ExtractedEntities {
   const symbols = extractSymbols(input);
   const heldSymbol = extractHeldSymbol(input, symbols);
-  const catalystSymbols = heldSymbol
-    ? symbols.filter((symbol) => symbol !== heldSymbol)
-    : [];
+  const catalystSymbols = heldSymbol ? symbols.filter((symbol) => symbol !== heldSymbol) : [];
   return {
     symbols,
     budget: extractBudget(input),
@@ -72,12 +246,18 @@ export function extractBudget(input: string): number | undefined {
   // Match "10k" or "10K" standalone
   const kNotation = input.match(/\b(\d+(?:\.\d+)?)\s*[kK]\b/);
   if (kNotation) {
+    if (isNonBudgetDollarAmount(input, kNotation.index ?? 0, kNotation[0].length)) {
+      return undefined;
+    }
     return parseFloat(kNotation[1]) * 1000;
   }
 
   // Match "10000 dollars" or "10,000 dollars"
   const dollarWord = input.match(/\b([\d,]+(?:\.\d+)?)\s+dollars?\b/i);
   if (dollarWord) {
+    if (isNonBudgetDollarAmount(input, dollarWord.index ?? 0, dollarWord[0].length)) {
+      return undefined;
+    }
     return parseFloat(dollarWord[1].replace(/,/g, ""));
   }
 
@@ -85,21 +265,40 @@ export function extractBudget(input: string): number | undefined {
 }
 
 function hasBudgetContext(input: string): boolean {
-  return /\b(?:budget|invest|allocate|portfolio|cash|capital|with|have|spend|put\s+to\s+work)\b/i.test(input);
+  return /\b(?:budget|invest|allocate|portfolio|cash|capital|with|have|spend|put\s+to\s+work)\b/i.test(
+    input,
+  );
 }
 
 function isNonBudgetDollarAmount(input: string, start: number, length: number): boolean {
   const before = input.slice(Math.max(0, start - 32), start);
   const after = input.slice(start + length, start + length + 24);
-  return /\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*$/i.test(before) ||
-    /^\s*(?:premium|max\s+premium|cost\s*basis|basis|entry(?:\s*price)?)\b/i.test(after);
+  return (
+    /\b(?:average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?|worth|valued?\s+at|pays?|dividends?\s+of|gained|lost|received|made|profit\s+of|up|down|trading\s+(?:at|around|near))\s*(?:is|at|of|:)?\s*$/i.test(
+      before,
+    ) ||
+    /^\s*(?:premium|max\s+premium|average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?|per\s+share|in\s+dividends?|profit|gain|loss)\b/i.test(
+      after,
+    )
+  );
 }
 
 function extractSymbols(input: string): string[] {
   const symbols: string[] = [];
-  const addSymbol = (raw: string | undefined, options: { lowercaseContext?: boolean } = {}) => {
+  const addSymbol = (
+    raw: string | undefined,
+    options: { lowercaseContext?: boolean; explicitTicker?: boolean } = {},
+  ) => {
     const symbol = raw?.toUpperCase();
     if (options.lowercaseContext && LOWERCASE_FINANCE_TERMS.has(String(raw || "").toLowerCase())) {
+      return;
+    }
+    if (
+      symbol &&
+      !options.explicitTicker &&
+      CURRENCY_CODES.has(symbol) &&
+      isCurrencyCodeUsage(input, symbol)
+    ) {
       return;
     }
     if (
@@ -107,7 +306,8 @@ function extractSymbols(input: string): string[] {
       symbol.length >= 1 &&
       symbol.length <= 5 &&
       /^[A-Z]+$/.test(symbol) &&
-      !COMMON_WORDS.has(symbol) &&
+      (!COMMON_WORDS.has(symbol) ||
+        (options.explicitTicker && EXPLICIT_FINANCE_ACRONYM_TICKERS.has(symbol))) &&
       !isAmbiguousConceptUsage(input, symbol) &&
       !symbols.includes(symbol)
     ) {
@@ -118,21 +318,27 @@ function extractSymbols(input: string): string[] {
   // Match $TICKER patterns
   const dollarTickers = input.matchAll(/\$([A-Za-z]{1,5})\b/g);
   for (const match of dollarTickers) {
-    addSymbol(match[1]);
+    addSymbol(match[1], { explicitTicker: true });
   }
 
   // Match explicit lowercase ticker contexts without treating arbitrary short
   // words as symbols.
-  const lowercaseCompare = input.match(/\bcompare\s+([a-z]{1,5})\s+(?:and|vs\.?|versus)\s+([a-z]{1,5})\b/i);
+  const lowercaseCompare = input.match(
+    /\bcompare\s+([a-z]{1,5})\s+(?:and|vs\.?|versus)\s+([a-z]{1,5})\b/i,
+  );
   if (lowercaseCompare) {
     addSymbol(lowercaseCompare[1], { lowercaseContext: true });
     addSymbol(lowercaseCompare[2], { lowercaseContext: true });
   }
-  const lowercaseTickerContext = input.matchAll(/\b(?:analy[sz]e|quote|ticker)\s+\$?([a-z]{1,5})\b|\b\$?([a-z]{1,5})\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\b/gi);
+  const lowercaseTickerContext = input.matchAll(
+    /\b(?:analy[sz]e|quote|ticker)\s+\$?([a-z]{1,5})\b|\b\$?([a-z]{1,5})\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\b/gi,
+  );
   for (const match of lowercaseTickerContext) {
-    addSymbol(match[1] ?? match[2], { lowercaseContext: true });
+    addSymbol(match[1] ?? match[2], { lowercaseContext: true, explicitTicker: true });
   }
-  const lowercaseHeldPosition = input.matchAll(/\b(?:own|hold|holding|long|protect|hedge|have)\s+\d+(?:,\d{3})*\s+shares?\s+(?:of\s+)?\$?([a-z]{1,5})\b|\b\d+(?:,\d{3})*\s+shares?\s+of\s+\$?([a-z]{1,5})\b/gi);
+  const lowercaseHeldPosition = input.matchAll(
+    /\b(?:own|hold|holding|long|protect|hedge|have)\s+\d+(?:,\d{3})*\s+shares?\s+(?:of\s+)?\$?([a-z]{1,5})\b|\b\d+(?:,\d{3})*\s+shares?\s+of\s+\$?([a-z]{1,5})\b/gi,
+  );
   for (const match of lowercaseHeldPosition) {
     const raw = match[1] ?? match[2];
     if (raw && raw !== raw.toUpperCase()) {
@@ -152,9 +358,20 @@ function extractSymbols(input: string): string[] {
   return symbols;
 }
 
+export function isCurrencyCodeUsage(input: string, symbol: string): boolean {
+  const escaped = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `\\b(?:average\\s+cost|avg\\s+cost|cost\\s+basis|entry\\s+price|currency|denominated|dollars?|per\\s+share|base\\s+currency|cash)\\b[^.?!]{0,80}\\b${escaped}\\b|\\b${escaped}\\b[^.?!]{0,40}\\b(?:currency|dollars?|cash|base\\s+currency)\\b`,
+    "i",
+  ).test(input);
+}
+
 export function isAmbiguousConceptUsage(input: string, symbol: string): boolean {
   if (!AMBIGUOUS_CONCEPT_TICKERS.has(symbol)) return false;
   if (new RegExp(`\\$${symbol}\\b`).test(input)) return false;
+  if (symbol === "MA") {
+    return isMovingAverageUsage(input);
+  }
   if (
     new RegExp(
       `\\b(?:analyze|quote|ticker|stock|shares?|options?|calls?|puts?)\\s+${symbol}\\b|\\b${symbol}\\s+(?:ticker|stock|shares?|quote|options?|calls?|puts?)\\b`,
@@ -166,11 +383,24 @@ export function isAmbiguousConceptUsage(input: string, symbol: string): boolean 
   return true;
 }
 
+function isMovingAverageUsage(input: string): boolean {
+  return (
+    /\bmoving\s+averages?\b/i.test(input) ||
+    /\b(?:simple|exponential|weighted|day|daily|week|weekly|month|monthly|\d+\s*(?:d|day|days|w|week|weeks)?)\s+MA\b/i.test(
+      input,
+    ) ||
+    /\bMA\s+(?:crossover|cross|signal|signals|strategy|trend|trends|line|lines)\b/i.test(input) ||
+    /\bM&A\b/.test(input)
+  );
+}
+
 function extractMaxPremium(input: string): number | undefined {
   const lower = input.toLowerCase();
   if (!/\bpremium\b/.test(lower)) return undefined;
 
-  const under = input.match(/\b(?:under|below|less\s+than|max(?:imum)?|up\s+to)\s+\$?\s*([\d,]+(?:\.\d+)?)\s*([kK])?\b/i);
+  const under = input.match(
+    /\b(?:under|below|less\s+than|max(?:imum)?|up\s+to)\s+\$?\s*([\d,]+(?:\.\d+)?)\s*([kK])?\b/i,
+  );
   if (under) {
     const base = parseFloat(under[1].replace(/,/g, ""));
     if (isNaN(base)) return undefined;
@@ -210,8 +440,10 @@ function extractShareQuantity(input: string): number | undefined {
 }
 
 function extractCostBasis(input: string): number | undefined {
-  const match = input.match(/\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i) ??
-    input.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(?:cost\s*basis|basis|entry(?:\s*price)?)\b/i);
+  const match =
+    input.match(
+      /\b(?:cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*\$?\s*([\d,]+(?:\.\d+)?)\b/i,
+    ) ?? input.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(?:cost\s*basis|basis|entry(?:\s*price)?)\b/i);
   if (!match) return undefined;
   const value = parseFloat(match[1].replace(/,/g, ""));
   return Number.isFinite(value) ? value : undefined;
@@ -226,7 +458,11 @@ function extractDirection(input: string): "bullish" | "bearish" | undefined {
 
 function extractRiskProfile(input: string): string | undefined {
   const lower = input.toLowerCase();
-  if (/\bconservative\b/.test(lower) || /\brisk\s*averse\b/.test(lower) || /\bsafe[r]?\b/.test(lower)) {
+  if (
+    /\bconservative\b/.test(lower) ||
+    /\brisk\s*averse\b/.test(lower) ||
+    /\bsafe[r]?\b/.test(lower)
+  ) {
     return "conservative";
   }
   if (/\baggressive\b/.test(lower) || /\bhigh\s*risk\b/.test(lower)) {
@@ -243,7 +479,12 @@ function extractDteHint(input: string): string | undefined {
   const explicitDays = lower.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:dte|days?)\b/);
   if (explicitDays) return `${explicitDays[1]}-${explicitDays[2]} days`;
   if (/\bmonth\b/.test(lower)) return "month";
-  if (/\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(lower)) return "event_week";
+  if (
+    /\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(
+      lower,
+    )
+  )
+    return "event_week";
   if (/\bleaps?\b/i.test(lower) || /\blong[\s-]*dated\b/.test(lower)) return "leaps";
   if (/\bweek(?:ly|s?)?\b/.test(lower)) return "week";
   return undefined;
@@ -287,7 +528,13 @@ function extractCompareMetrics(input: string): string[] | undefined {
   const metrics: string[] = [];
   if (/\bsentiment\b/.test(lower)) metrics.push("sentiment");
   if (/\b(?:macro\s*)?hedg(?:e|ing)\b/.test(lower)) metrics.push("macro_hedge");
-  if (/\b(?:rates?|rate\s*cuts?|fed|federal\s+funds?|interest\s+rates?)\b/.test(lower)) metrics.push("interest_rates");
-  if (/\b(?:overlap|same\s+stuff|same\s+holdings|concentration|too\s+much\s+of\s+the\s+same)\b/.test(lower)) metrics.push("overlap");
+  if (/\b(?:rates?|rate\s*cuts?|fed|federal\s+funds?|interest\s+rates?)\b/.test(lower))
+    metrics.push("interest_rates");
+  if (
+    /\b(?:overlap|same\s+stuff|same\s+holdings|concentration|too\s+much\s+of\s+the\s+same)\b/.test(
+      lower,
+    )
+  )
+    metrics.push("overlap");
   return metrics.length > 0 ? metrics : undefined;
 }

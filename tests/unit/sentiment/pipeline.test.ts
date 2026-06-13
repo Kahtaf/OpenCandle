@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SentimentPipeline } from "../../../src/sentiment/pipeline.js";
 import { SentimentStore } from "../../../src/sentiment/store.js";
 import type { SentinelRecord } from "../../../src/sentiment/types.js";
@@ -71,13 +71,21 @@ describe("SentimentPipeline", () => {
     // Seed store with prior data across 2 time buckets (within the 7-day trend window)
     const day = 24 * 60 * 60 * 1000;
     const oldRecords = [
-      makeRecord({ text: "bearish AAPL crash", fetchedAt: new Date(Date.now() - 4 * day).toISOString() }),
-      makeRecord({ text: "bullish AAPL moon", fetchedAt: new Date(Date.now() - 3 * day).toISOString() }),
+      makeRecord({
+        text: "bearish AAPL crash",
+        fetchedAt: new Date(Date.now() - 4 * day).toISOString(),
+      }),
+      makeRecord({
+        text: "bullish AAPL moon",
+        fetchedAt: new Date(Date.now() - 3 * day).toISOString(),
+      }),
     ];
-    store.insert(oldRecords.map((r) => ({
-      ...r,
-      sentiment: { score: 0.3, confidence: 0.5, method: "keyword" as const, tickers: ["AAPL"] },
-    })));
+    store.insert(
+      oldRecords.map((r) => ({
+        ...r,
+        sentiment: { score: 0.3, confidence: 0.5, method: "keyword" as const, tickers: ["AAPL"] },
+      })),
+    );
 
     const freshRecords = [makeRecord({ text: "bullish on AAPL" })];
     const result = await pipeline.processRecords(freshRecords, "AAPL");

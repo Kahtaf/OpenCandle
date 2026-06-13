@@ -1,32 +1,34 @@
-import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import { buildOptionsScreenerPrompt } from "../prompts/workflow-prompts.js";
-import type { WorkflowPlan } from "./types.js";
+import type { OptionsScreenerSlots, SlotResolution } from "../routing/types.js";
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
 
-export function buildOptionsScreenerWorkflowDefinition(resolution: SlotResolution<OptionsScreenerSlots>): WorkflowDefinition {
+export function buildOptionsScreenerWorkflowDefinition(
+  resolution: SlotResolution<OptionsScreenerSlots>,
+): WorkflowDefinition {
   const s = resolution.resolved;
   const isProtectivePutContext = s.optionStrategy === "protective_put";
   const contractType = s.direction === "bullish" && !isProtectivePutContext ? "calls" : "puts";
   const horizonPhrase = describeDteTarget(s.dteTarget);
-  const isCoveredCallContext = !isProtectivePutContext && (
-    s.optionStrategy === "covered_call" ||
-    s.costBasis !== undefined ||
-    (s.catalystSymbols?.length ?? 0) > 0
-  );
+  const isCoveredCallContext =
+    !isProtectivePutContext &&
+    (s.optionStrategy === "covered_call" ||
+      s.costBasis !== undefined ||
+      (s.catalystSymbols?.length ?? 0) > 0);
   const rankingInstruction = isProtectivePutContext
     ? "Rank by protection per dollar of premium, expiration fit, moneyness, hedge floor, live liquidity, and premium as a percent of the stock position."
     : isCoveredCallContext
-    ? "Rank by premium collected, strike above cost basis, assignment risk, event risk, live liquidity, and probability of expiring out of the money."
-    : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.`;
-  const maxPremiumInstruction = s.maxPremium !== undefined
-    ? ` Do not rank contracts above the user's max premium of $${s.maxPremium.toLocaleString("en-US")} unless no contracts under that cap are liquid; if so, say the cap could not be met.`
-    : "";
+      ? "Rank by premium collected, strike above cost basis, assignment risk, event risk, live liquidity, and probability of expiring out of the money."
+      : `Rank by ${s.objective}: balance premium cost, delta exposure, and probability of profit. Only include contracts with |delta| >= 0.20.`;
+  const maxPremiumInstruction =
+    s.maxPremium !== undefined
+      ? ` Do not rank contracts above the user's max premium of $${s.maxPremium.toLocaleString("en-US")} unless no contracts under that cap are liquid; if so, say the cap could not be met.`
+      : "";
   const riskInstruction = isProtectivePutContext
     ? "Include protective-put hedge risks: premium decay/cost, imperfect hedge before the strike, liquidity, and opportunity cost. Long protective puts do not have short-option assignment risk."
     : isCoveredCallContext
-    ? "Include covered-call sale risks: assignment risk, upside is capped at the strike plus premium, share-price downside in the owned stock less premium received, IV/event risk, and exit liquidity. Do not say max loss = premium or describe max loss as the option premium paid."
-    : "Include risk caveats: max loss = premium, IV crush risk, time decay (theta).";
+      ? "Include covered-call sale risks: assignment risk, upside is capped at the strike plus premium, share-price downside in the owned stock less premium received, IV/event risk, and exit liquidity. Do not say max loss = premium or describe max loss as the option premium paid."
+      : "Include risk caveats: max loss = premium, IV crush risk, time decay (theta).";
   const coveredCallFallback = isCoveredCallContext
     ? `
 	Covered-call fallback:
@@ -77,7 +79,10 @@ Protective-put requirements:
         requiredInputs: ["symbol"],
         expectedOutputs: ["option_chain"],
       }),
-      promptStep("rank_and_present", "Rank and present top contracts", `Now rank and present the top ${contractType} for ${s.symbol}. You MUST produce a final text response — never end this turn with only tool calls.
+      promptStep(
+        "rank_and_present",
+        "Rank and present top contracts",
+        `Now rank and present the top ${contractType} for ${s.symbol}. You MUST produce a final text response — never end this turn with only tool calls.
 
 1. From the option chain data already fetched, select the top 3-5 contracts matching: ${s.moneynessPreference} strikes, DTE near ${s.dteTarget}, with ${s.liquidityMinimum}.
 2. ${rankingInstruction}${maxPremiumInstruction}
@@ -97,10 +102,12 @@ ${protectivePutFallback}
 Length constraints:
 - Max 1 sentence explaining the #1 pick.
 - Risk section: max 3 bullets.
-- Keep total response under 30 lines.`, {
-        requiredInputs: ["option_chain"],
-        expectedOutputs: ["ranked_contracts"],
-      }),
+- Keep total response under 30 lines.`,
+        {
+          requiredInputs: ["option_chain"],
+          expectedOutputs: ["ranked_contracts"],
+        },
+      ),
     ],
   };
 }
@@ -115,13 +122,4 @@ function describeDteTarget(dteTarget: string): string {
   const plus = dteTarget.match(/^(\d+)_plus_days$/);
   if (plus) return `${plus[1]}+ day horizon`;
   return `${dteTarget} horizon`;
-}
-
-/** @deprecated Use buildOptionsScreenerWorkflowDefinition instead */
-export function buildOptionsScreenerWorkflow(resolution: SlotResolution<OptionsScreenerSlots>): WorkflowPlan {
-  const def = buildOptionsScreenerWorkflowDefinition(resolution);
-  return {
-    initialPrompt: def.steps[0].prompt,
-    followUps: def.steps.slice(1).map((s) => s.prompt),
-  };
 }

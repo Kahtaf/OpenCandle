@@ -1,5 +1,5 @@
-import type { ClassificationResult, WorkflowType, ExtractedEntities } from "./types.js";
 import { extractEntities } from "./entity-extractor.js";
+import type { ClassificationResult, ExtractedEntities, WorkflowType } from "./types.js";
 
 interface Rule {
   workflow: WorkflowType;
@@ -43,7 +43,9 @@ const RULES: Rule[] = [
       return (
         entities.symbols.length >= 1 &&
         (/\bi\s+own\b/.test(lower) || /\bmy\s+holdings\b/.test(lower)) &&
-        (/\bportfolio\s+risk\b/.test(lower) || /\bbiggest\s+risk\b/.test(lower) || /\bconcentration\b/.test(lower))
+        (/\bportfolio\s+risk\b/.test(lower) ||
+          /\bbiggest\s+risk\b/.test(lower) ||
+          /\bconcentration\b/.test(lower))
       );
     },
   },
@@ -91,9 +93,7 @@ const RULES: Rule[] = [
       if (hasCompareKeywords && entities.symbols.length >= 2) return false;
 
       return (
-        /\bbacktest\b/.test(lower) ||
-        /\bsentiment\b/.test(lower) ||
-        /\brate\s+cuts?\b/.test(lower)
+        /\bbacktest\b/.test(lower) || /\bsentiment\b/.test(lower) || /\brate\s+cuts?\b/.test(lower)
       );
     },
   },
@@ -145,6 +145,14 @@ const RULES: Rule[] = [
       return hasOptionKeywords && entities.symbols.length >= 1;
     },
   },
+  // Stateful portfolio/watchlist/alert/prediction mutations must not be
+  // mistaken for compare or portfolio-construction workflows just because a
+  // cost basis, target, or currency token is present.
+  {
+    workflow: "watchlist_or_tracking",
+    confidence: 0.95,
+    test: (input) => isStatefulTrackingRequest(input),
+  },
   // Compare: keyword + 2+ symbols (uppercase)
   {
     workflow: "compare_assets",
@@ -165,8 +173,10 @@ const RULES: Rule[] = [
     confidence: 0.85,
     test: (input, entities) => {
       const lower = input.toLowerCase();
-      return entities.symbols.length >= 2 &&
-        /\bcompare\s+[a-z]{1,5}\b(?:\s*,?\s*(?:and\s+)?[a-z]{1,5}\b)+/.test(lower);
+      return (
+        entities.symbols.length >= 2 &&
+        /\bcompare\s+[a-z]{1,5}\b(?:\s*,?\s*(?:and\s+)?[a-z]{1,5}\b)+/.test(lower)
+      );
     },
   },
   // Compare: 2+ uppercase symbols without explicit keyword
@@ -275,11 +285,92 @@ export function classifyIntent(input: string): ClassificationResult {
 function isPortfolioEvaluationRequest(input: string): boolean {
   const lower = input.toLowerCase();
   const hasEvaluationIntent =
-    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment)\b/.test(lower);
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|opportunities?|mitigat(?:e|ion)|adjustment)\b/.test(
+      lower,
+    );
   const hasPortfolioObject =
-    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(lower);
+    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(
+      lower,
+    );
   const hasConstructionIntent =
     /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
-    (/\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower));
+    /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
   return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
+}
+
+function isStatefulTrackingRequest(input: string): boolean {
+  const lower = input.toLowerCase();
+  const hasPortfolioConstructionIntent =
+    /\b(?:build|create|construct|put\s+together)\b/.test(lower) &&
+    /\bportfolio\b/.test(lower) &&
+    /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
+  const hasStateVerb =
+    /\b(?:add|remove|update|record|track|create|configure|check|show|list|view|cancel)\b/.test(
+      lower,
+    );
+  const hasStateObject =
+    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(
+      lower,
+    );
+  const hasPortfolioLotShape =
+    /\b(?:add|record|track)\b/.test(lower) &&
+    /\b\d+(?:\.\d+)?\s+shares?\b/.test(lower) &&
+    /\b(?:portfolio|holding|holdings|position|positions)\b/.test(lower);
+  if (hasPortfolioConstructionIntent) return false;
+  return (hasStateVerb && hasStateObject) || hasPortfolioLotShape;
+}
+
+const FINANCE_SIGNAL_TERMS = [
+  "stock",
+  "stocks",
+  "shares",
+  "ticker",
+  "tickers",
+  "etf",
+  "etfs",
+  "ipo",
+  "earnings",
+  "dividend",
+  "dividends",
+  "valuation",
+  "stock market",
+  "invest",
+  "investing",
+  "investment",
+  "portfolio",
+  "watchlist",
+  "bond",
+  "bonds",
+  "bond yield",
+  "treasury",
+  "the fed",
+  "inflation",
+  "interest rates",
+  "crypto",
+  "bitcoin",
+  "ethereum",
+  "options chain",
+  "covered call",
+  "puts",
+  "bullish",
+  "bearish",
+  "hedge",
+  "price target",
+  "cost basis",
+  "nasdaq",
+  "s&p",
+];
+
+const FINANCE_SIGNAL_PATTERN = new RegExp(
+  `\\b(?:${FINANCE_SIGNAL_TERMS.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
+  "i",
+);
+
+/**
+ * Deterministic finance-vocabulary check for rules-mode fallback turns whose
+ * intent did not match a workflow and whose entities carry no symbols (for
+ * example theme prompts about private companies or sectors).
+ */
+export function hasFinanceSignals(input: string): boolean {
+  return FINANCE_SIGNAL_PATTERN.test(input);
 }

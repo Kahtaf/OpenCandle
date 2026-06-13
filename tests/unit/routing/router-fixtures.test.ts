@@ -1,15 +1,18 @@
-import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  buildFallbackPlaybook,
+  PromptContextBuilder,
+} from "../../../src/prompts/context-builder.js";
+import { buildAssumptionsBlockFromRouter } from "../../../src/prompts/workflow-prompts.js";
 import { route } from "../../../src/routing/router.js";
-import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 import type {
   RouterInputContext,
   RouterLlmClient,
   RouterOutput,
 } from "../../../src/routing/router-types.js";
-import { buildAssumptionsBlockFromRouter } from "../../../src/prompts/workflow-prompts.js";
-import { PromptContextBuilder, buildFallbackPlaybook } from "../../../src/prompts/context-builder.js";
+import { buildResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
 interface RouterFixture {
   input: string;
@@ -83,7 +86,10 @@ describe("Router deterministic fixtures", () => {
   it("fixtures expose planning expectations without dropping route metadata", async () => {
     const expectedPlanningByFixture = new Map([
       ["005-compare-assets.json", { taskFamily: "asset_compare", policyCardId: "asset_compare" }],
-      ["009-general-qa.json", { taskFamily: "concept_explainer", policyCardId: "concept_explainer" }],
+      [
+        "009-general-qa.json",
+        { taskFamily: "concept_explainer", policyCardId: "concept_explainer" },
+      ],
     ]);
 
     for (const { name, data } of fixtures) {
@@ -98,12 +104,15 @@ describe("Router deterministic fixtures", () => {
         },
         mockClient(data.expectedRouterOutput),
       );
-      const resolved = buildResolvedTurnContext({
-        text: data.input,
-        priorTurns: data.priorTurns,
-        profileSnapshot: data.profileSnapshot,
-        recentWorkflowRuns: [],
-      }, result);
+      const resolved = buildResolvedTurnContext(
+        {
+          text: data.input,
+          priorTurns: data.priorTurns,
+          profileSnapshot: data.profileSnapshot,
+          recentWorkflowRuns: [],
+        },
+        result,
+      );
 
       expect(resolved.routeKind).toBe(data.expectedRouterOutput.routeKind);
       expect(resolved.workflow).toBe(data.expectedRouterOutput.workflow);
@@ -178,7 +187,9 @@ describe("Router fixtures drive prompt assembly correctly", () => {
           expect(playbook).toContain("Keep this fallback generic");
           expect(playbook).toContain("Do not add task-specific instructions here");
           expect(playbook).not.toContain("same-month year-over-year inflation");
-          expect(playbook).not.toContain("instead of searching only for provider-specific series identifiers");
+          expect(playbook).not.toContain(
+            "instead of searching only for provider-specific series identifiers",
+          );
           expect(playbook).not.toContain("Start with the Assumptions block");
           expect(playbook).not.toContain("Reproduce the block in your response exactly");
         }

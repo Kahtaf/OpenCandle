@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  POLICY_CARD_IDS,
   getPolicyCard,
+  POLICY_CARD_IDS,
   renderPolicyCardForPlanning,
   validatePolicyCardRegistry,
 } from "../../../src/prompts/policy-cards.js";
@@ -77,29 +77,35 @@ describe("policy cards", () => {
   });
 
   it("renders only the selected concept education subtype policy card", () => {
-    const rendered = renderPolicyCardForPlanning(planning({
-      taskFamily: "concept_explainer",
-      policyCardId: "concept_options_education",
-      evidencePlanId: "placeholder_concept_explainer",
-      answerContractId: "concept_explainer",
-      structuredCheckIds: ["commitment_mode_respected"],
-      capabilityGapIds: [],
-      behaviorMode: "replacement_active",
-    }));
+    const rendered = renderPolicyCardForPlanning(
+      planning({
+        taskFamily: "concept_explainer",
+        policyCardId: "concept_options_education",
+        evidencePlanId: "placeholder_concept_explainer",
+        answerContractId: "concept_explainer",
+        structuredCheckIds: ["commitment_mode_respected"],
+        capabilityGapIds: [],
+        behaviorMode: "replacement_active",
+      }),
+    );
 
     expect(rendered).toContain("Options Education Policy");
     expect(rendered).toContain("assignment risk");
     expect(rendered).not.toContain("Inflation and Cash Education Policy");
     expect(rendered).not.toContain("Valuation Metric Education Policy");
-    expect(renderPolicyCardForPlanning(planning({
-      taskFamily: "concept_explainer",
-      policyCardId: "concept_options_education",
-      evidencePlanId: "placeholder_concept_explainer",
-      answerContractId: "concept_explainer",
-      structuredCheckIds: ["commitment_mode_respected"],
-      capabilityGapIds: [],
-      behaviorMode: "observe_only",
-    }))).toBe("");
+    expect(
+      renderPolicyCardForPlanning(
+        planning({
+          taskFamily: "concept_explainer",
+          policyCardId: "concept_options_education",
+          evidencePlanId: "placeholder_concept_explainer",
+          answerContractId: "concept_explainer",
+          structuredCheckIds: ["commitment_mode_respected"],
+          capabilityGapIds: [],
+          behaviorMode: "observe_only",
+        }),
+      ),
+    ).toBe("");
   });
 
   it("covers judged education gaps in targeted concept subtype cards", () => {
@@ -139,7 +145,9 @@ describe("policy cards", () => {
 
   it("renders implemented policy only for dual-run or replacement-active planning", () => {
     expect(renderPolicyCardForPlanning(planning())).toContain("Ticker Disambiguation Policy");
-    expect(renderPolicyCardForPlanning(planning({ behaviorMode: "replacement_active" }))).toContain("Ticker Disambiguation Policy");
+    expect(renderPolicyCardForPlanning(planning({ behaviorMode: "replacement_active" }))).toContain(
+      "Ticker Disambiguation Policy",
+    );
     expect(renderPolicyCardForPlanning(planning({ behaviorMode: "observe_only" }))).toBe("");
   });
 
@@ -150,7 +158,11 @@ describe("policy cards", () => {
       policyCardId: "single_asset_decision",
       evidencePlanId: "placeholder_single_asset_decision",
       answerContractId: "single_asset_decision",
-      structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "freshness_disclosed",
+        "data_gap_disclosed",
+      ],
       capabilityGapIds: [],
       behaviorMode: "dual_run",
     });
@@ -164,7 +176,9 @@ describe("policy cards", () => {
     expect(rendered).toContain("If provider financials fail");
     expect(rendered).toContain("business model");
     expect(rendered).toContain("dividend profile");
-    expect(rendered).toContain("financial-health, stability, revenue-trend, or profit-trend prompts");
+    expect(rendered).toContain(
+      "financial-health, stability, revenue-trend, or profit-trend prompts",
+    );
     expect(rendered).toContain("targeted web earnings context or SEC filing evidence");
     expect(rendered).toContain("If the user explicitly asks for a metric");
     expect(rendered).toContain("comparison is incomplete");
@@ -174,29 +188,41 @@ describe("policy cards", () => {
     expect(rendered).toContain("analyst outlook");
     expect(rendered).toContain("12-18 month");
     expect(rendered).toContain("growth drivers");
-    expect(renderPolicyCardForPlanning({
-      ...singleAssetPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...singleAssetPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("allows supplied-but-unverified event-risk prompts to clarify ambiguous tickers", () => {
-    const rendered = renderPolicyCardForPlanning(planning({
-      behaviorMode: "replacement_active",
-    }));
+    const rendered = renderPolicyCardForPlanning(
+      planning({
+        behaviorMode: "replacement_active",
+      }),
+    );
 
-    expect(rendered).toContain("explicitly say whether the supplied symbol is still the current primary ticker");
+    expect(rendered).toContain(
+      "explicitly say whether the supplied symbol is still the current primary ticker",
+    );
     expect(rendered).toContain("it is appropriate to call ask_user to clarify the intended ticker");
-    expect(rendered).toContain("If the supplied ticker cannot be confirmed by lookup, quote, or user clarification evidence");
+    expect(rendered).toContain(
+      "If the supplied ticker cannot be confirmed by lookup, quote, or user clarification evidence",
+    );
     expect(rendered).toContain("risk-first trim/hedge/hold framework");
   });
 
   it("treats company-name and ticker mismatches as a speculative-red-flag framework", () => {
-    const rendered = renderPolicyCardForPlanning(planning({
-      behaviorMode: "replacement_active",
-    }));
+    const rendered = renderPolicyCardForPlanning(
+      planning({
+        behaviorMode: "replacement_active",
+      }),
+    );
 
-    expect(rendered).toContain("If the supplied company name and ticker resolve to different businesses");
+    expect(rendered).toContain(
+      "If the supplied company name and ticker resolve to different businesses",
+    );
     expect(rendered).toContain("red flag");
     expect(rendered).toContain("rumor-driven short-squeeze");
     expect(rendered).toContain("SEC filings");
@@ -210,7 +236,11 @@ describe("policy cards", () => {
       policyCardId: "asset_compare",
       evidencePlanId: "placeholder_asset_compare",
       answerContractId: "asset_compare_tradeoff",
-      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "data_gap_disclosed",
+        "capability_gap_disclosure",
+      ],
       capabilityGapIds: ["etf_holdings_overlap"],
       behaviorMode: "dual_run",
     });
@@ -228,10 +258,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("cannot fully answer the comparison");
     expect(rendered).toContain("do not rank a winner");
     expect(rendered).toContain("If the requested metric is missing for multiple peers");
-    expect(renderPolicyCardForPlanning({
-      ...assetPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...assetPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders portfolio-review policy only after the slice leaves observe-only mode", () => {
@@ -241,7 +273,11 @@ describe("policy cards", () => {
       policyCardId: "portfolio_review",
       evidencePlanId: "placeholder_portfolio_review",
       answerContractId: "portfolio_review",
-      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "data_gap_disclosed",
+        "commitment_mode_respected",
+      ],
       capabilityGapIds: [],
       behaviorMode: "dual_run",
     });
@@ -252,10 +288,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("Do not build a new portfolio");
     expect(rendered).toContain("Structural allocation read");
     expect(rendered).toContain("rebalance");
-    expect(renderPolicyCardForPlanning({
-      ...portfolioPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...portfolioPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders rebalance portfolio-review policy with honest execution caveats", () => {
@@ -265,7 +303,11 @@ describe("policy cards", () => {
       policyCardId: "portfolio_rebalance_review",
       evidencePlanId: "placeholder_portfolio_review",
       answerContractId: "portfolio_review",
-      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "data_gap_disclosed",
+        "commitment_mode_respected",
+      ],
       capabilityGapIds: [],
       behaviorMode: "replacement_active",
     });
@@ -285,10 +327,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("stress test");
     expect(rendered).toContain("explicit assumptions");
     expect(rendered).toContain("ETF-overlap");
-    expect(renderPolicyCardForPlanning({
-      ...rebalancePlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...rebalancePlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders macro allocation policy only after the slice leaves observe-only mode", () => {
@@ -298,7 +342,11 @@ describe("policy cards", () => {
       policyCardId: "macro_allocation_review",
       evidencePlanId: "market_status",
       answerContractId: "macro_allocation_review",
-      structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "freshness_disclosed",
+        "data_gap_disclosed",
+      ],
       capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
       behaviorMode: "dual_run",
     });
@@ -330,10 +378,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("forward_rate_probabilities");
     expect(rendered).toContain("2-year yield is above the 10-year yield");
     expect(rendered).toContain("Do not call a 10Y > 2Y curve inverted");
-    expect(renderPolicyCardForPlanning({
-      ...macroPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...macroPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders options policy only after the slice leaves observe-only mode", () => {
@@ -369,10 +419,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("How it works");
     expect(rendered).toContain("Strike and expiration tradeoff");
     expect(rendered).toContain("Alternatives");
-    expect(renderPolicyCardForPlanning({
-      ...optionsPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...optionsPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders backtest policy only after the slice leaves observe-only mode", () => {
@@ -382,7 +434,11 @@ describe("policy cards", () => {
       policyCardId: "backtest_review",
       evidencePlanId: "placeholder_backtest_review",
       answerContractId: "backtest_review",
-      structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "data_gap_disclosed",
+        "source_coverage_disclosed",
+      ],
       capabilityGapIds: [],
       behaviorMode: "dual_run",
     });
@@ -393,10 +449,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("buy-and-hold return");
     expect(rendered).toContain("win rate");
     expect(rendered).toContain("costs and slippage");
-    expect(renderPolicyCardForPlanning({
-      ...backtestPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...backtestPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders stateful tracking policy only after the slice leaves observe-only mode", () => {
@@ -417,20 +475,24 @@ describe("policy cards", () => {
     expect(rendered).toContain("manage_watchlist");
     expect(rendered).toContain("Confirm the persisted state update");
     expect(rendered).toContain("Do not turn a state update into a buy/sell recommendation");
-    expect(renderPolicyCardForPlanning({
-      ...statefulPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...statefulPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("does not inject unrelated placeholder policy cards", () => {
-    const rendered = renderPolicyCardForPlanning(planning({
-      taskFamily: "portfolio_build",
-      policyCardId: "portfolio_build",
-      evidencePlanId: "placeholder_portfolio_build",
-      answerContractId: "portfolio_build",
-      capabilityGapIds: [],
-    }));
+    const rendered = renderPolicyCardForPlanning(
+      planning({
+        taskFamily: "portfolio_build",
+        policyCardId: "portfolio_build",
+        evidencePlanId: "placeholder_portfolio_build",
+        answerContractId: "portfolio_build",
+        capabilityGapIds: [],
+      }),
+    );
 
     expect(rendered).toBe("");
   });
@@ -448,11 +510,15 @@ describe("policy cards", () => {
 
     const rendered = renderPolicyCardForPlanning(currentEventPlanning);
     expect(rendered).toContain("Current Event Explanation Policy");
-    expect(rendered).toContain("Fetch quote or market-status evidence before searching for news or event catalysts");
-    expect(renderPolicyCardForPlanning({
-      ...currentEventPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(rendered).toContain(
+      "Fetch quote or market-status evidence before searching for news or event catalysts",
+    );
+    expect(
+      renderPolicyCardForPlanning({
+        ...currentEventPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders concept policy only after the slice leaves observe-only mode", () => {
@@ -502,22 +568,26 @@ describe("policy cards", () => {
     expect(rendered).toContain("do not use Practical workflow, Cross-checks, or Quick checklist");
     expect(rendered).toContain("Why the win story is misleading");
     expect(rendered).toContain("If you insist");
-    expect(renderPolicyCardForPlanning({
-      ...conceptPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...conceptPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("keeps portfolio diversification reviews broad and synthesis-consistent", () => {
-    const rendered = renderPolicyCardForPlanning(planning({
-      taskFamily: "portfolio_review",
-      policyCardId: "portfolio_review",
-      evidencePlanId: "placeholder_portfolio_review",
-      answerContractId: "portfolio_review",
-      structuredCheckIds: ["data_gap_disclosed"],
-      capabilityGapIds: [],
-      behaviorMode: "replacement_active",
-    }));
+    const rendered = renderPolicyCardForPlanning(
+      planning({
+        taskFamily: "portfolio_review",
+        policyCardId: "portfolio_review",
+        evidencePlanId: "placeholder_portfolio_review",
+        answerContractId: "portfolio_review",
+        structuredCheckIds: ["data_gap_disclosed"],
+        capabilityGapIds: [],
+        behaviorMode: "replacement_active",
+      }),
+    );
 
     expect(rendered).toContain("For tech-heavy diversification");
     expect(rendered).toContain("healthcare");
@@ -552,7 +622,11 @@ describe("policy cards", () => {
       policyCardId: "sentiment_snapshot",
       evidencePlanId: "placeholder_sentiment_snapshot",
       answerContractId: "sentiment_snapshot",
-      structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+      structuredCheckIds: [
+        "required_evidence_present",
+        "source_coverage_disclosed",
+        "data_gap_disclosed",
+      ],
       capabilityGapIds: ["sentiment_sample_depth"],
       behaviorMode: "dual_run",
     });
@@ -565,10 +639,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("source-coverage risk");
     expect(rendered).toContain("low sample counts");
     expect(rendered).toContain("diverges from price action");
-    expect(renderPolicyCardForPlanning({
-      ...sentimentPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...sentimentPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders filing policy only after the slice leaves observe-only mode", () => {
@@ -589,10 +665,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("filing-section summaries");
     expect(rendered).toContain("market data");
     expect(rendered).toContain("Do not claim");
-    expect(renderPolicyCardForPlanning({
-      ...filingPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...filingPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("renders retail policy only after the slice leaves observe-only mode", () => {
@@ -625,10 +703,12 @@ describe("policy cards", () => {
     expect(rendered).toContain("play-money bucket");
     expect(rendered).toContain("safer alternatives");
     expect(rendered).toContain("Do not use Practical workflow, Cross-checks, or Quick checklist");
-    expect(renderPolicyCardForPlanning({
-      ...retailPlanning,
-      behaviorMode: "observe_only",
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        ...retailPlanning,
+        behaviorMode: "observe_only",
+      }),
+    ).toBe("");
   });
 
   it("asserts policy cards disclose capability gaps instead of claiming them", () => {

@@ -3,7 +3,11 @@ export function hostFrom(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    return String(url).replace(/^www\./, "").split("/")[0] || "";
+    return (
+      String(url)
+        .replace(/^www\./, "")
+        .split("/")[0] || ""
+    );
   }
 }
 

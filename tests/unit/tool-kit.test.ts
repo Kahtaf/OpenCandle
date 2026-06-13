@@ -1,7 +1,7 @@
+import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { describe, expect, it, vi } from "vitest";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { createTool, getAddonToolDescriptions, registerTools } from "../../src/tool-kit.js";
 
 function makeTool(name: string, description = "Test description"): AgentTool<any> {
@@ -29,9 +29,10 @@ describe("registerTools", () => {
     registerTools(pi, [tool]);
 
     expect(pi.registerTool).toHaveBeenCalledTimes(2);
-    expect(getAddonToolDescriptions()).toContainEqual(
-      { name: "example_tool", description: "Example description" },
-    );
+    expect(getAddonToolDescriptions()).toContainEqual({
+      name: "example_tool",
+      description: "Example description",
+    });
   });
 
   it("warns to stderr when registering a duplicate tool name", () => {
@@ -55,9 +56,7 @@ describe("registerTools", () => {
     const tool = makeTool("unique_tool_abc");
     registerTools(pi, [tool]);
 
-    const calls = warnSpy.mock.calls.filter((c) =>
-      String(c[0]).includes("unique_tool_abc"),
-    );
+    const calls = warnSpy.mock.calls.filter((c) => String(c[0]).includes("unique_tool_abc"));
     expect(calls).toHaveLength(0);
     warnSpy.mockRestore();
   });

@@ -1,8 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import {
-  ALPHA_VANTAGE_RATE_LIMIT,
-  RateLimiter,
-} from "../../../src/infra/rate-limiter.js";
+import { describe, expect, it, vi } from "vitest";
+import { ALPHA_VANTAGE_RATE_LIMIT, RateLimiter } from "../../../src/infra/rate-limiter.js";
 
 describe("RateLimiter", () => {
   it("allows requests within limit", async () => {
@@ -78,6 +75,64 @@ describe("RateLimiter", () => {
       await vi.advanceTimersByTimeAsync(1);
       await acquirePromise;
       expect(acquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not let concurrent waiters spend the same refilled token", async () => {
+    vi.useFakeTimers();
+    try {
+      const limiter = new RateLimiter();
+      limiter.configure("test", 1, 10); // 1 token, 10/sec refill
+
+      await limiter.acquire("test");
+
+      let firstAcquired = false;
+      let secondAcquired = false;
+      const first = limiter.acquire("test").then(() => {
+        firstAcquired = true;
+      });
+      const second = limiter.acquire("test").then(() => {
+        secondAcquired = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(100);
+      await first;
+      expect(firstAcquired).toBe(true);
+      expect(secondAcquired).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(100);
+      await second;
+      expect(secondAcquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("configures a sec_edgar bucket on the shared limiter", async () => {
+    vi.useFakeTimers();
+    try {
+      const { rateLimiter } = await import("../../../src/infra/rate-limiter.js");
+
+      // Drain whatever tokens the bucket holds; an unconfigured provider
+      // would never block, so a pending acquire proves the bucket exists.
+      for (let i = 0; i < 20; i++) {
+        const drain = rateLimiter.acquire("sec_edgar");
+        await vi.advanceTimersByTimeAsync(0);
+        let drained = false;
+        void drain.then(() => {
+          drained = true;
+        });
+        await Promise.resolve();
+        if (!drained) {
+          await vi.advanceTimersByTimeAsync(10_000);
+          await drain;
+          return;
+        }
+        await drain;
+      }
+      throw new Error("sec_edgar acquire never blocked; bucket is not configured");
     } finally {
       vi.useRealTimers();
     }

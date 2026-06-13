@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it } from "vitest";
 import { projectDashboard } from "../../../gui/server/projector.js";
 
 describe("projectDashboard", () => {
@@ -69,7 +69,14 @@ describe("projectDashboard", () => {
         api: "openai-responses",
         provider: "openai",
         model: "test",
-        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
         stopReason: "stop",
         timestamp: Date.now(),
       }),
@@ -90,7 +97,9 @@ describe("projectDashboard", () => {
         role: "toolResult",
         toolCallId: "call-1",
         toolName: "get_sentiment_summary",
-        content: [{ type: "text", text: "[OPENCANDLE_CREDENTIAL_REQUIRED provider=alpha_vantage]" }],
+        content: [
+          { type: "text", text: "[OPENCANDLE_CREDENTIAL_REQUIRED provider=alpha_vantage]" },
+        ],
         details: null,
         isError: false,
         timestamp: Date.now(),
@@ -116,20 +125,19 @@ describe("projectDashboard", () => {
         role: "toolResult",
         toolCallId: "call-2",
         toolName: "search_web",
-        content: [{
-          type: "text",
-          text: "[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation=\"run /connect search to enable Brave\"]\n\nWeb results",
-        }],
+        content: [
+          {
+            type: "text",
+            text: '[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation="run /connect search to enable Brave"]\n\nWeb results',
+          },
+        ],
         details: null,
         isError: false,
         timestamp: Date.now(),
       }),
     ]);
 
-    expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual([
-      "fred",
-      "brave",
-    ]);
+    expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual(["fred", "brave"]);
   });
 
   it("does not double count soft gaps that are present in tool results and turn sidecars", () => {
@@ -138,16 +146,19 @@ describe("projectDashboard", () => {
         role: "toolResult",
         toolCallId: "call-1",
         toolName: "search_web",
-        content: [{
-          type: "text",
-          text: "[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation=\"run /connect search to enable Brave\"]\n\nWeb results",
-        }],
+        content: [
+          {
+            type: "text",
+            text: '[OPENCANDLE_SOFT_DEGRADED provider=brave fallback=ddg remediation="run /connect search to enable Brave"]\n\nWeb results',
+          },
+        ],
         details: null,
         isError: false,
         timestamp: Date.now(),
       }),
       customEntry("opencandle-turn-gap", {
-        annotation: "[OPENCANDLE_SKIPPED provider=brave reason=credential_not_provided remediation=\"run /connect brave to unlock\"]",
+        annotation:
+          '[OPENCANDLE_SKIPPED provider=brave reason=credential_not_provided remediation="run /connect brave to unlock"]',
       }),
     ]);
 

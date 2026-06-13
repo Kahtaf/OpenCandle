@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { PromptContextBuilder } from "../../../src/prompts/context-builder.js";
 import type { PromptContextOptions } from "../../../src/prompts/context-builder.js";
+import { PromptContextBuilder } from "../../../src/prompts/context-builder.js";
 import type { ResolvedTurnContext } from "../../../src/routing/turn-context.js";
 
 function context(overrides: Partial<ResolvedTurnContext>): ResolvedTurnContext {

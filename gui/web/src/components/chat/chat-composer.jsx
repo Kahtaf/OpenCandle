@@ -1,7 +1,7 @@
 import { ArrowUp, BarChart3, Plus } from "lucide-react";
+import { ModelSelector } from "../../features/chat/model-selector.jsx";
 import { Button } from "../ui/button.jsx";
 import { Textarea } from "../ui/textarea.jsx";
-import { ModelSelector } from "../../features/chat/model-selector.jsx";
 
 export function ChatComposer({
   draft,
@@ -19,7 +19,9 @@ export function ChatComposer({
   return (
     <div className="bg-background px-3 pb-4 pt-2 sm:px-6 md:px-12">
       <div className="mx-auto w-full max-w-[760px] rounded-2xl border border-border bg-card shadow-subtle-xs">
-        <label className="sr-only" htmlFor="chat-composer">Message OpenCandle</label>
+        <label className="sr-only" htmlFor="chat-composer">
+          Message OpenCandle
+        </label>
         <Textarea
           id="chat-composer"
           value={draft}
@@ -28,7 +30,13 @@ export function ChatComposer({
           className="min-h-[60px] rounded-2xl rounded-b-none px-4 py-3"
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !draft.trim()) {
+            if (
+              event.key === "/" &&
+              !event.metaKey &&
+              !event.ctrlKey &&
+              !event.altKey &&
+              !draft.trim()
+            ) {
               event.preventDefault();
               onOpenCatalog?.();
               return;

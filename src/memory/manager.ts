@@ -1,10 +1,10 @@
 import type { MemoryStorage } from "./storage.js";
 import type { MemoryCategory, MemoryEntry } from "./types.js";
 import {
-  KEY_TO_CATEGORY,
-  WORKFLOW_RELEVANT_CATEGORIES,
-  NEVER_TRUST_FROM_MEMORY,
   isStale,
+  KEY_TO_CATEGORY,
+  NEVER_TRUST_FROM_MEMORY,
+  WORKFLOW_RELEVANT_CATEGORIES,
 } from "./types.js";
 
 export interface FilteredMemoryEntry {
@@ -54,15 +54,19 @@ export class MemoryManager {
     overriddenSlots?: string[],
     now: Date = new Date(),
   ): MemoryRetrievalResult {
-    const relevantCategories = WORKFLOW_RELEVANT_CATEGORIES[workflowType] ??
-      WORKFLOW_RELEVANT_CATEGORIES["unclassified"];
+    const relevantCategories =
+      WORKFLOW_RELEVANT_CATEGORIES[workflowType] ?? WORKFLOW_RELEVANT_CATEGORIES.unclassified;
 
     // Build set of preference keys to suppress
     const suppressedKeys = new Set<string>();
     if (overriddenSlots) {
       for (const slot of overriddenSlots) {
         const keys = SLOT_TO_PREF_KEYS[slot];
-        if (keys) keys.forEach((k) => suppressedKeys.add(k));
+        if (keys) {
+          for (const key of keys) {
+            suppressedKeys.add(key);
+          }
+        }
       }
     }
 
@@ -118,9 +122,7 @@ export class MemoryManager {
         const recordedAt = String(run.created_at ?? now.toISOString());
         const entry: MemoryEntry = {
           key: `workflow_run_${run.id}`,
-          value: run.output_summary
-            ? `${wfType}: ${run.output_summary}`
-            : wfType,
+          value: run.output_summary ? `${wfType}: ${run.output_summary}` : wfType,
           category: "workflow_history",
           recordedAt,
         };
@@ -142,11 +144,7 @@ export class MemoryManager {
   /**
    * Build compact text context from retrieved memory entries.
    */
-  buildContext(
-    workflowType: string,
-    overriddenSlots?: string[],
-    now: Date = new Date(),
-  ): string {
+  buildContext(workflowType: string, overriddenSlots?: string[], now: Date = new Date()): string {
     const entries = this.retrieve(workflowType, overriddenSlots, now);
     if (entries.length === 0) return "";
 
@@ -163,19 +161,19 @@ export class MemoryManager {
     const profileEntries = byCategory.get("investor_profile");
     if (profileEntries && profileEntries.length > 0) {
       const lines = profileEntries.map((e) => `- ${e.key}: ${e.value}`);
-      sections.push("User Preferences:\n" + lines.join("\n"));
+      sections.push(`User Preferences:\n${lines.join("\n")}`);
     }
 
     const historyEntries = byCategory.get("workflow_history");
     if (historyEntries && historyEntries.length > 0) {
       const lines = historyEntries.map((e) => `- ${e.value} (${e.recordedAt})`);
-      sections.push("Recent Workflows:\n" + lines.join("\n"));
+      sections.push(`Recent Workflows:\n${lines.join("\n")}`);
     }
 
     const feedbackEntries = byCategory.get("interaction_feedback");
     if (feedbackEntries && feedbackEntries.length > 0) {
       const lines = feedbackEntries.map((e) => `- ${e.key}: ${e.value}`);
-      sections.push("Feedback:\n" + lines.join("\n"));
+      sections.push(`Feedback:\n${lines.join("\n")}`);
     }
 
     return sections.join("\n\n");

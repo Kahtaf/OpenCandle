@@ -1,16 +1,19 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getEarnings } from "../../providers/alpha-vantage.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
+import { getEarnings } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { EarningsData } from "../../types/fundamentals.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
 });
 
-export const earningsTool: AgentTool<typeof params, EarningsData | { credentialRequired: unknown }> = {
+export const earningsTool: AgentTool<
+  typeof params,
+  EarningsData | { credentialRequired: unknown }
+> = {
   name: "get_earnings",
   label: "Earnings History",
   description:
@@ -19,10 +22,17 @@ export const earningsTool: AgentTool<typeof params, EarningsData | { credentialR
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
       const apiKey = getConfig().alphaVantageApiKey!;
-      const result = await wrapProvider("alphavantage", () => getEarnings(args.symbol.toUpperCase(), apiKey));
+      const result = await wrapProvider("alphavantage", () =>
+        getEarnings(args.symbol.toUpperCase(), apiKey),
+      );
       if (result.status === "unavailable") {
         return {
-          content: [{ type: "text", text: `⚠ Earnings data unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without earnings history.` }],
+          content: [
+            {
+              type: "text",
+              text: `⚠ Earnings data unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without earnings history.`,
+            },
+          ],
           details: null as any,
         };
       }

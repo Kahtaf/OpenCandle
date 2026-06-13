@@ -1,5 +1,5 @@
-import type { EvalCase } from "../types.js";
 import { registerEvalSuite } from "../eval-suite.js";
+import type { EvalCase } from "../types.js";
 
 const multiTurnCases: EvalCase[] = [
   {
@@ -56,4 +56,7 @@ const multiTurnCases: EvalCase[] = [
   },
 ];
 
-registerEvalSuite("Multi-turn Workflow Evals", multiTurnCases, { threshold: 0.7, timeout: 600_000 });
+registerEvalSuite("Multi-turn Workflow Evals", multiTurnCases, {
+  threshold: 0.7,
+  timeout: 600_000,
+});

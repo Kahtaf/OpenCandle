@@ -59,7 +59,7 @@ export function createAskUserBridge({
     const prompt: GuiAskUserPrompt = {
       ...item.prompt,
       status: result.cancelled ? "cancelled" : "answered",
-      answer: result.cancelled ? null : result.answer ?? null,
+      answer: result.cancelled ? null : (result.answer ?? null),
     };
     prompts.set(id, prompt);
     broadcast({ type: "ask_user.resolved", prompt });

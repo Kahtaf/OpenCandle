@@ -1,21 +1,18 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import { getTwitterSentiment } from "../../providers/twitter.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import type { TwitterSentimentResult } from "../../types/sentiment.js";
 import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import type { TwitterSentimentResult } from "../../types/sentiment.js";
+import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   query: Type.String({
     description: "Stock ticker (e.g. AAPL) or search term (e.g. 'AAPL earnings call')",
   }),
-  limit: Type.Optional(
-    Type.Number({ description: "Max tweets to fetch. Default: 50, max: 200" }),
-  ),
-  hours: Type.Optional(
-    Type.Number({ description: "Lookback window in hours. Default: 24" }),
-  ),
+  limit: Type.Optional(Type.Number({ description: "Max tweets to fetch. Default: 50, max: 200" })),
+  hours: Type.Optional(Type.Number({ description: "Lookback window in hours. Default: 24" })),
 });
 
 export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResult> = {
@@ -48,10 +45,15 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
     const result = providerResult.data;
 
     const sentimentLabel =
-      result.sentimentScore > 0.3 ? "Bullish" :
-      result.sentimentScore < -0.3 ? "Bearish" :
-      result.sentimentScore > 0 ? "Leaning Bullish" :
-      result.sentimentScore < 0 ? "Leaning Bearish" : "Neutral";
+      result.sentimentScore > 0.3
+        ? "Bullish"
+        : result.sentimentScore < -0.3
+          ? "Bearish"
+          : result.sentimentScore > 0
+            ? "Leaning Bullish"
+            : result.sentimentScore < 0
+              ? "Leaning Bearish"
+              : "Neutral";
 
     const lines = [
       `**Twitter: ${result.query}** — ${result.tweetCount} tweets (last ${hours}h, ${result.fetchedAt})`,
@@ -63,12 +65,15 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
     }
 
     lines.push("");
+    lines.push(untrustedContentHeader("tweets"));
     lines.push("| Author | Tweet | ❤️ | 🔁 | 💬 |");
     lines.push("|--------|-------|----|----|----|");
     const top = result.tweets.slice(0, 15);
     for (const tweet of top) {
-      const text = tweet.text.replace(/\|/g, "\\|").replace(/\n/g, " ").slice(0, 100);
-      lines.push(`| @${tweet.author} | ${text} | ${tweet.likes} | ${tweet.retweets} | ${tweet.replies} |`);
+      const text = renderUntrustedText(tweet.text, 100);
+      lines.push(
+        `| @${tweet.author} | ${text} | ${tweet.likes} | ${tweet.retweets} | ${tweet.replies} |`,
+      );
     }
 
     if (providerResult.stale) {
@@ -85,7 +90,9 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
       if (pipelineResult.trend && pipelineResult.trend.length > 0) {
         const t = pipelineResult.trend[0];
         lines.push("");
-        lines.push(`Trend: ${t.sparkline} ${t.direction} (${t.delta >= 0 ? "+" : ""}${t.delta.toFixed(2)}, ${t.count} records)`);
+        lines.push(
+          `Trend: ${t.sparkline} ${t.direction} (${t.delta >= 0 ? "+" : ""}${t.delta.toFixed(2)}, ${t.count} records)`,
+        );
       }
     } catch {
       // Sentiment indexing is best-effort — don't fail the tool

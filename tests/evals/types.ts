@@ -1,8 +1,15 @@
+import type {
+  CapabilityGapId,
+  CommitmentMode,
+  StructuredCheckId,
+} from "../../src/routing/planning.js";
 import type { ClassificationResult, WorkflowType } from "../../src/routing/types.js";
-import type { CapabilityGapId, CommitmentMode, StructuredCheckId } from "../../src/routing/planning.js";
-import type { PlanningEvidenceRecord } from "../../src/runtime/planning-evidence.js";
+import type {
+  RetryEligibilityTrace,
+  StructuredCheckResult,
+} from "../../src/runtime/answer-contracts.js";
 import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
-import type { RetryEligibilityTrace, StructuredCheckResult } from "../../src/runtime/answer-contracts.js";
+import type { PlanningEvidenceRecord } from "../../src/runtime/planning-evidence.js";
 import type { CustomEntryTrace } from "../harness/types.js";
 
 /** Shape of tool call data captured in a trace. */

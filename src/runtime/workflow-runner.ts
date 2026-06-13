@@ -1,11 +1,8 @@
-import type { WorkflowRun, StepOutput, WorkflowStep } from "./workflow-types.js";
-import {
-  createWorkflowRun,
-  transitionStepStatus,
-} from "./workflow-types.js";
-import type { WorkflowEventLogger } from "./workflow-events.js";
-import type { ProviderTracker } from "./provider-tracker.js";
 import type { EvidenceRecord } from "./evidence.js";
+import type { ProviderTracker } from "./provider-tracker.js";
+import type { WorkflowEventLogger } from "./workflow-events.js";
+import type { StepOutput, WorkflowRun, WorkflowStep } from "./workflow-types.js";
+import { createWorkflowRun, transitionStepStatus } from "./workflow-types.js";
 
 /** Function that executes a single workflow step. */
 export type StepExecutor = (
@@ -106,10 +103,7 @@ export class WorkflowRunner {
     });
   }
 
-  private async executeSteps(
-    run: WorkflowRun,
-    executor: StepExecutor,
-  ): Promise<void> {
+  private async executeSteps(run: WorkflowRun, executor: StepExecutor): Promise<void> {
     for (let i = 0; i < run.steps.length; i++) {
       // Check if run was cancelled externally
       if (run.status !== "running") return;

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Plus, X } from "lucide-react";
-import { cn } from "../../lib/utils.js";
-import { Input } from "../../components/ui/input.jsx";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
+import { Input } from "../../components/ui/input.jsx";
+import { cn } from "../../lib/utils.js";
 import { useStableId } from "./use-stable-id.js";
 
 // ---------------------------------------------------------------------------
@@ -15,9 +15,16 @@ export function Field({ label, hint, required = false, children, className }) {
       <span className="flex items-baseline justify-between gap-3 text-xs font-medium text-foreground">
         <span>
           {label}
-          {required ? <span className="text-foreground/40" aria-hidden="true"> *</span> : null}
+          {required ? (
+            <span className="text-foreground/40" aria-hidden="true">
+              {" "}
+              *
+            </span>
+          ) : null}
         </span>
-        {hint ? <span className="text-[11px] font-normal text-muted-foreground">{hint}</span> : null}
+        {hint ? (
+          <span className="text-[11px] font-normal text-muted-foreground">{hint}</span>
+        ) : null}
       </span>
       {children}
     </label>
@@ -30,7 +37,11 @@ export function Field({ label, hint, required = false, children, className }) {
 
 export function SegmentedControl({ value, onChange, options, ariaLabel }) {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className="inline-flex h-9 items-center rounded-md border border-border bg-card p-0.5">
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className="inline-flex h-9 items-center rounded-md border border-border bg-card p-0.5"
+    >
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -42,7 +53,9 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
             onClick={() => onChange(option.value)}
             className={cn(
               "inline-flex h-8 min-w-9 items-center justify-center rounded-[4px] px-2.5 text-xs font-medium tabular-nums transition-colors",
-              selected ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+              selected
+                ? "bg-foreground text-background"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             {option.label}
@@ -67,13 +80,20 @@ export function EnumSelect({ value, onChange, options, placeholder, ariaLabel })
         className="h-9 w-full appearance-none rounded-md border border-border bg-card px-3 pr-9 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {placeholder ? (
-          <option value="" disabled hidden>{placeholder}</option>
+          <option value="" disabled hidden>
+            {placeholder}
+          </option>
         ) : null}
         {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
         ))}
       </select>
-      <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <ChevronDown
+        aria-hidden="true"
+        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+      />
     </div>
   );
 }
@@ -83,7 +103,16 @@ export function EnumSelect({ value, onChange, options, placeholder, ariaLabel })
 // expressed as days/hours/years where common values dominate.
 // ---------------------------------------------------------------------------
 
-export function NumberWithChips({ value, onChange, presets, suffix, min, max, step = 1, placeholder }) {
+export function NumberWithChips({
+  value,
+  onChange,
+  presets,
+  suffix,
+  min,
+  max,
+  step = 1,
+  placeholder,
+}) {
   const isPreset = presets.some((preset) => preset.value === value);
   return (
     <div className="grid gap-2">
@@ -111,7 +140,7 @@ export function NumberWithChips({ value, onChange, presets, suffix, min, max, st
         <Input
           type="number"
           inputMode="numeric"
-          value={isPreset ? "" : value ?? ""}
+          value={isPreset ? "" : (value ?? "")}
           min={min}
           max={max}
           step={step}
@@ -123,7 +152,9 @@ export function NumberWithChips({ value, onChange, presets, suffix, min, max, st
           className="h-8 pr-8 text-xs tabular-nums"
         />
         {suffix ? (
-          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">{suffix}</span>
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+            {suffix}
+          </span>
         ) : null}
       </div>
     </div>
@@ -137,33 +168,34 @@ export function NumberWithChips({ value, onChange, presets, suffix, min, max, st
 
 export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ariaLabel }) {
   const [open, setOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const [pending, setPending] = useState(false);
+  const [suggestions, setSuggestions] = useState({ query: "", items: [] });
+  const [pendingQuery, setPendingQuery] = useState("");
   const debounce = useRef(null);
+  const query = String(value || "").trim();
+  const visibleSuggestions = suggestions.query === query ? suggestions.items : [];
+  const pending = pendingQuery === query && query.length > 0;
 
   useEffect(() => {
     if (!lookup) return undefined;
-    const query = String(value || "").trim();
     if (query.length < 1) {
-      setSuggestions([]);
       return undefined;
     }
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
-      setPending(true);
+      setPendingQuery(query);
       try {
         const results = await lookup(query);
-        setSuggestions(results.slice(0, 6));
+        setSuggestions({ query, items: results.slice(0, 6) });
       } catch {
-        setSuggestions([]);
+        setSuggestions({ query, items: [] });
       } finally {
-        setPending(false);
+        setPendingQuery((current) => (current === query ? "" : current));
       }
     }, 180);
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [value, lookup]);
+  }, [query, lookup]);
 
   return (
     <div className="relative">
@@ -177,14 +209,17 @@ export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ari
         className="h-9 tabular-nums"
         autoCapitalize="characters"
       />
-      {open && suggestions.length > 0 ? (
+      {open && visibleSuggestions.length > 0 ? (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-md border border-border bg-card shadow-subtle-sm">
-          {suggestions.map((s) => (
+          {visibleSuggestions.map((s) => (
             <button
               key={s.symbol}
               type="button"
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => { onChange(s.symbol); setOpen(false); }}
+              onClick={() => {
+                onChange(s.symbol);
+                setOpen(false);
+              }}
               className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-secondary"
             >
               <span className="font-medium tabular-nums text-foreground">{s.symbol}</span>
@@ -194,7 +229,9 @@ export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ari
         </div>
       ) : null}
       {pending ? (
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-muted-foreground">…</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] uppercase tracking-wider text-muted-foreground">
+          …
+        </span>
       ) : null}
     </div>
   );
@@ -204,14 +241,24 @@ export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ari
 // SymbolChips — multi-ticker chip input with per-chip remove and inline add
 // ---------------------------------------------------------------------------
 
-export function SymbolChips({ value = [], onChange, placeholder = "Add ticker", min, max, ariaLabel = "Ticker symbols" }) {
+export function SymbolChips({
+  value = [],
+  onChange,
+  placeholder = "Add ticker",
+  min,
+  max,
+  ariaLabel = "Ticker symbols",
+}) {
   const [draft, setDraft] = useState("");
   const limitReached = max != null && value.length >= max;
 
   const add = () => {
     const next = draft.trim().toUpperCase();
     if (!next) return;
-    if (value.includes(next)) { setDraft(""); return; }
+    if (value.includes(next)) {
+      setDraft("");
+      return;
+    }
     if (limitReached) return;
     onChange([...value, next]);
     setDraft("");
@@ -233,7 +280,10 @@ export function SymbolChips({ value = [], onChange, placeholder = "Add ticker", 
     <div>
       <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1.5 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
         {value.map((symbol) => (
-          <span key={symbol} className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-1.5 py-0.5 text-xs font-medium tabular-nums text-foreground">
+          <span
+            key={symbol}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-secondary px-1.5 py-0.5 text-xs font-medium tabular-nums text-foreground"
+          >
             {symbol}
             <button
               type="button"
@@ -256,16 +306,26 @@ export function SymbolChips({ value = [], onChange, placeholder = "Add ticker", 
           autoCapitalize="characters"
         />
         {draft.trim() ? (
-          <Button type="button" variant="ghost" size="icon-xs" aria-label="Add ticker" onClick={add}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Add ticker"
+            onClick={add}
+          >
             <Plus />
           </Button>
         ) : null}
       </div>
       {min != null && value.length < min ? (
-        <p className="mt-1 text-[11px] text-muted-foreground">Add at least {min} symbol{min === 1 ? "" : "s"}.</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Add at least {min} symbol{min === 1 ? "" : "s"}.
+        </p>
       ) : null}
       {max != null ? (
-        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">{value.length}/{max}</p>
+        <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          {value.length}/{max}
+        </p>
       ) : null}
     </div>
   );
@@ -327,7 +387,14 @@ export function DateInput({ value, onChange, min, max, placeholder = "YYYY-MM-DD
 // FreeText — long-form input for goals/objectives/queries with character hint
 // ---------------------------------------------------------------------------
 
-export function FreeText({ value, onChange, placeholder, rows = 3, maxLength, ariaLabel = "Text input" }) {
+export function FreeText({
+  value,
+  onChange,
+  placeholder,
+  rows = 3,
+  maxLength,
+  ariaLabel = "Text input",
+}) {
   return (
     <div>
       <textarea
@@ -365,7 +432,11 @@ export function MoneyInput({ value, onChange, currency = "USD", min = 0, placeho
 
   const commit = (raw) => {
     setFocused(false);
-    if (!raw || !raw.replace(/[^0-9.]/g, "")) { onChange(undefined); setDraft(""); return; }
+    if (!raw || !raw.replace(/[^0-9.]/g, "")) {
+      onChange(undefined);
+      setDraft("");
+      return;
+    }
     const cleaned = Number(raw.replace(/[^0-9.]/g, ""));
     if (Number.isFinite(cleaned)) {
       onChange(cleaned);
@@ -375,13 +446,18 @@ export function MoneyInput({ value, onChange, currency = "USD", min = 0, placeho
 
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{symbol}</span>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+        {symbol}
+      </span>
       <Input
         value={focused ? draft : formatMoneyDraft(value, false)}
         inputMode="decimal"
         placeholder={placeholder}
         onChange={(event) => setDraft(event.target.value.replace(/[^0-9.]/g, ""))}
-        onFocus={() => { setFocused(true); setDraft(value != null ? String(value) : ""); }}
+        onFocus={() => {
+          setFocused(true);
+          setDraft(value != null ? String(value) : "");
+        }}
         onBlur={(event) => commit(event.target.value)}
         min={min}
         className="h-9 pl-7 tabular-nums"
@@ -412,7 +488,8 @@ function currencySymbol(currency) {
 // ---------------------------------------------------------------------------
 
 export function PercentInput({ value, onChange, min, max, step = 0.5, placeholder }) {
-  const display = value == null || value === "" ? "" : String(Number((Number(value) * 100).toFixed(4)));
+  const display =
+    value == null || value === "" ? "" : String(Number((Number(value) * 100).toFixed(4)));
   return (
     <div className="relative">
       <Input
@@ -425,13 +502,18 @@ export function PercentInput({ value, onChange, min, max, step = 0.5, placeholde
         step={step}
         onChange={(event) => {
           const raw = event.target.value;
-          if (raw === "") { onChange(undefined); return; }
+          if (raw === "") {
+            onChange(undefined);
+            return;
+          }
           const parsed = Number(raw);
           if (Number.isFinite(parsed)) onChange(parsed / 100);
         }}
         className="h-9 pr-7 tabular-nums"
       />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+        %
+      </span>
     </div>
   );
 }
@@ -444,7 +526,9 @@ export function SuggestionCloud({ suggestions, onPick, label = "Suggestions" }) 
   if (!suggestions?.length) return null;
   return (
     <div className="grid gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
       <div className="flex flex-wrap gap-1.5">
         {suggestions.map((suggestion) => (
           <button

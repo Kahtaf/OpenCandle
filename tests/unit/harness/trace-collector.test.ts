@@ -1,16 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTraceCollector } from "../../harness/trace-collector.js";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createTraceCollector } from "../../harness/trace-collector.js";
 
 function createMockSession() {
   let listener: ((event: AgentSessionEvent) => void) | null = null;
   return {
     subscribe(cb: (event: AgentSessionEvent) => void) {
       listener = cb;
-      return () => { listener = null; };
+      return () => {
+        listener = null;
+      };
     },
     emit(event: AgentSessionEvent) {
       listener?.(event);
@@ -33,8 +35,19 @@ describe("createTraceCollector", () => {
     const session = createMockSession();
     const collector = createTraceCollector(session, "test prompt");
 
-    session.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "get_stock_quote", args: { symbol: "AAPL" } });
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "get_stock_quote", result: { price: 150 }, isError: false });
+    session.emit({
+      type: "tool_execution_start",
+      toolCallId: "t1",
+      toolName: "get_stock_quote",
+      args: { symbol: "AAPL" },
+    });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "get_stock_quote",
+      result: { price: 150 },
+      isError: false,
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 
@@ -55,8 +68,16 @@ describe("createTraceCollector", () => {
     const session = createMockSession();
     const collector = createTraceCollector(session, "test");
 
-    session.emit({ type: "message_update", message: {} as any, assistantMessageEvent: { type: "text_delta", delta: "Hello " } });
-    session.emit({ type: "message_update", message: {} as any, assistantMessageEvent: { type: "text_delta", delta: "world" } });
+    session.emit({
+      type: "message_update",
+      message: {} as any,
+      assistantMessageEvent: { type: "text_delta", delta: "Hello " },
+    });
+    session.emit({
+      type: "message_update",
+      message: {} as any,
+      assistantMessageEvent: { type: "text_delta", delta: "world" },
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 
@@ -71,12 +92,28 @@ describe("createTraceCollector", () => {
     const collector = createTraceCollector(session, "multi-turn");
 
     session.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "tool_a", args: {} });
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "tool_a", result: "ok", isError: false });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "tool_a",
+      result: "ok",
+      isError: false,
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
 
     session.emit({ type: "tool_execution_start", toolCallId: "t2", toolName: "tool_b", args: {} });
-    session.emit({ type: "tool_execution_end", toolCallId: "t2", toolName: "tool_b", result: "ok", isError: false });
-    session.emit({ type: "message_update", message: {} as any, assistantMessageEvent: { type: "text_delta", delta: "done" } });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t2",
+      toolName: "tool_b",
+      result: "ok",
+      isError: false,
+    });
+    session.emit({
+      type: "message_update",
+      message: {} as any,
+      assistantMessageEvent: { type: "text_delta", delta: "done" },
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 
@@ -91,12 +128,22 @@ describe("createTraceCollector", () => {
     const session = createMockSession();
     const collector = createTraceCollector(session, "interactive");
 
-    collector.addInteraction({ question: "Risk?", method: "select", options: ["Low", "High"], answer: "Low" });
+    collector.addInteraction({
+      question: "Risk?",
+      method: "select",
+      options: ["Low", "High"],
+      answer: "Low",
+    });
     session.emit({ type: "agent_end", messages: [] });
 
     const trace = collector.getTrace();
     expect(trace.interactions).toHaveLength(1);
-    expect(trace.interactions[0]).toEqual({ question: "Risk?", method: "select", options: ["Low", "High"], answer: "Low" });
+    expect(trace.interactions[0]).toEqual({
+      question: "Risk?",
+      method: "select",
+      options: ["Low", "High"],
+      answer: "Low",
+    });
     collector.dispose();
   });
 
@@ -104,8 +151,19 @@ describe("createTraceCollector", () => {
     const session = createMockSession();
     const collector = createTraceCollector(session, "error test");
 
-    session.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "bad_tool", args: {} });
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "bad_tool", result: "fail", isError: true });
+    session.emit({
+      type: "tool_execution_start",
+      toolCallId: "t1",
+      toolName: "bad_tool",
+      args: {},
+    });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "bad_tool",
+      result: "fail",
+      isError: true,
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 
@@ -119,8 +177,19 @@ describe("createTraceCollector", () => {
     const jsonlPath = join(tmpDir, "events.jsonl");
     const collector = createTraceCollector(session, "jsonl test", { jsonlPath });
 
-    session.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "my_tool", args: { x: 1 } });
-    session.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "my_tool", result: "ok", isError: false });
+    session.emit({
+      type: "tool_execution_start",
+      toolCallId: "t1",
+      toolName: "my_tool",
+      args: { x: 1 },
+    });
+    session.emit({
+      type: "tool_execution_end",
+      toolCallId: "t1",
+      toolName: "my_tool",
+      result: "ok",
+      isError: false,
+    });
     session.emit({ type: "turn_end", message: {} as any, toolResults: [] });
     session.emit({ type: "agent_end", messages: [] });
 

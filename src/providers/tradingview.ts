@@ -3,7 +3,8 @@ import { httpPost } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 
 const BASE_URL = "https://scanner.tradingview.com";
-const DATA_CAVEAT = "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.";
+const DATA_CAVEAT =
+  "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.";
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
@@ -146,7 +147,9 @@ export async function screenStocks(opts: ScreenStocksOpts = {}): Promise<Screene
 export async function getQuotes(symbols: string[]): Promise<TradingViewQuote[]> {
   const requested = symbols.map(normalizeRequestedSymbol).filter(Boolean);
   const qualified = requested.filter(isTradingViewQualified);
-  const bare = requested.filter((symbol) => !isTradingViewQualified(symbol) && !shouldSkipTradingView(symbol));
+  const bare = requested.filter(
+    (symbol) => !isTradingViewQualified(symbol) && !shouldSkipTradingView(symbol),
+  );
 
   const resolved = new Map<string, TradingViewQuote>();
 
@@ -178,7 +181,10 @@ export async function getQuotes(symbols: string[]): Promise<TradingViewQuote[]> 
   });
 }
 
-function buildScannerBody(opts: Required<Pick<ScreenStocksOpts, "market" | "columns">> & Pick<ScreenStocksOpts, "filter" | "sort" | "limit">): ScannerBody {
+function buildScannerBody(
+  opts: Required<Pick<ScreenStocksOpts, "market" | "columns">> &
+    Pick<ScreenStocksOpts, "filter" | "sort" | "limit">,
+): ScannerBody {
   const limit = clampLimit(opts.limit);
   return {
     markets: [opts.market],
@@ -219,7 +225,11 @@ function buildBareQuoteBody(symbols: string[]): ScannerBody {
   };
 }
 
-function mapFilterClause(clause: ScreenFilterClause): { left: string; operation: string; right?: unknown } {
+function mapFilterClause(clause: ScreenFilterClause): {
+  left: string;
+  operation: string;
+  right?: unknown;
+} {
   return {
     left: clause.field,
     operation: clause.op,
@@ -251,13 +261,16 @@ async function scannerFetch(market: string, body: ScannerBody): Promise<TradingV
   }
 }
 
-function decodeScannerRows(response: TradingViewResponse, requestedColumns: readonly string[]): DecodedRow[] {
+function decodeScannerRows(
+  response: TradingViewResponse,
+  requestedColumns: readonly string[],
+): DecodedRow[] {
   const fields = response.fields ?? [];
   return (response.symbols ?? []).map((row) => {
     const values: Record<string, unknown | null> = {};
     for (const column of requestedColumns) {
       const index = fields.indexOf(column);
-      values[column] = index >= 0 ? row.f[index] ?? null : null;
+      values[column] = index >= 0 ? (row.f[index] ?? null) : null;
     }
     return {
       tvSymbol: row.s,
@@ -343,12 +356,20 @@ function normalizeRequestedSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
 
-function isTradingViewQualified(symbol: string): boolean {
+export function isTradingViewQualified(symbol: string): boolean {
   return /^[A-Z0-9_]+:[A-Z0-9._-]+$/.test(symbol);
 }
 
-function shouldSkipTradingView(symbol: string): boolean {
+export function shouldSkipTradingView(symbol: string): boolean {
   return /(?:-USD|\.(?:TO|DE|T|L|HK))$/i.test(symbol);
+}
+
+export function canUseTradingViewQuote(symbol: string): boolean {
+  const normalized = normalizeRequestedSymbol(symbol);
+  return (
+    normalized.length > 0 &&
+    (isTradingViewQualified(normalized) || !shouldSkipTradingView(normalized))
+  );
 }
 
 function symbolFromTvSymbol(tvSymbol: string): string {

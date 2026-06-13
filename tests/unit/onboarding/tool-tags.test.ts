@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildCredentialRequiredTag,
-  buildSoftDegradedTag,
-  buildSkippedTag,
   buildConnectedTag,
+  buildCredentialRequiredTag,
+  buildSkippedTag,
+  buildSoftDegradedTag,
   parseToolTag,
 } from "../../../src/onboarding/tool-tags.js";
 

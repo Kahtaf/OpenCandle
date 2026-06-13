@@ -1,10 +1,9 @@
-import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
 import { buildCompareAssetsPrompt } from "../prompts/workflow-prompts.js";
-import type { WorkflowPlan } from "./types.js";
-import type { WorkflowDefinition } from "../runtime/prompt-step.js";
-import { promptStep } from "../runtime/prompt-step.js";
 import { areLikelyFundOrIndexSymbols, isFundOrIndexAssetScope } from "../routing/fund-symbols.js";
 import { isLongInvestmentHorizon } from "../routing/horizon.js";
+import type { CompareAssetsSlots, SlotResolution } from "../routing/types.js";
+import type { WorkflowDefinition } from "../runtime/prompt-step.js";
+import { promptStep } from "../runtime/prompt-step.js";
 
 export function buildCompareAssetsWorkflowDefinition(
   resolution: SlotResolution<CompareAssetsSlots>,
@@ -17,14 +16,15 @@ export function buildCompareAssetsWorkflowDefinition(
   const hasFundContext =
     isFundOrIndexAssetScope(resolution.resolved.assetScope) ||
     areLikelyFundOrIndexSymbols(resolution.resolved.symbols);
-  const shouldProbeFundOverlap = !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
+  const shouldProbeFundOverlap =
+    !isOverlapComparison && isLongInvestmentHorizon(timeHorizon) && hasFundContext;
   const evidenceList = resolution.resolved.metrics?.includes("sentiment")
     ? "price, technical, risk, and sentiment data"
     : isOverlapComparison
       ? "quote, holdings-overlap, and correlation data"
       : shouldProbeFundOverlap
         ? "price, technical, risk, correlation, and holdings-overlap data when applicable"
-    : "price, technical, and risk data";
+        : "price, technical, and risk data";
   const horizonGuidance = timeHorizon
     ? `
 - Start by directly answering whether these assets are reasonable to compare for a ${timeHorizon} horizon.
@@ -54,14 +54,14 @@ export function buildCompareAssetsWorkflowDefinition(
 - Compare fund role, broad style or sector tilt, dividend/income versus growth tradeoffs, taxable-account dividend drag, and any fetched expense ratio, yield, or AUM evidence.
 - If expense ratio, yield, AUM, or constituent detail is unavailable, name that verification gap instead of filling it with approximate fund facts.
 - If provider holdings coverage was partial or unavailable, say that before giving the practical next step.`
-    : "";
+      : "";
   const verdictInstruction = isOverlapComparison
     ? "End with a concise verdict on whether the added fund improves diversification or mostly duplicates existing exposure."
     : shouldProbeFundOverlap
       ? "End with a concise verdict tied to the user's horizon, fund roles, and diversification needs rather than short-term timing."
       : timeHorizon
         ? `End with a concise verdict on which asset best fits the ${timeHorizon} horizon and why.`
-    : "End with a concise verdict on which asset looks strongest right now and why.";
+        : "End with a concise verdict on which asset looks strongest right now and why.";
 
   return {
     workflowType: "compare_assets",
@@ -70,24 +70,18 @@ export function buildCompareAssetsWorkflowDefinition(
         requiredInputs: ["symbols"],
         expectedOutputs: ["asset_data"],
       }),
-      promptStep("compare_and_present", "Present side-by-side comparison", `Now present the side-by-side comparison for ${symbols}:
+      promptStep(
+        "compare_and_present",
+        "Present side-by-side comparison",
+        `Now present the side-by-side comparison for ${symbols}:
 - Keep any unavailable fundamentals marked as unavailable instead of retrying the same failed provider calls.
 - Use the ${evidenceList} you already fetched to finish the comparison even if some fundamentals are missing.
-- ${verdictInstruction}${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}${overlapGuidance}`, {
-        requiredInputs: ["asset_data"],
-        expectedOutputs: ["comparison_summary"],
-      }),
+- ${verdictInstruction}${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}${overlapGuidance}`,
+        {
+          requiredInputs: ["asset_data"],
+          expectedOutputs: ["comparison_summary"],
+        },
+      ),
     ],
-  };
-}
-
-/** @deprecated Use buildCompareAssetsWorkflowDefinition instead */
-export function buildCompareAssetsWorkflow(
-  resolution: SlotResolution<CompareAssetsSlots>,
-): WorkflowPlan {
-  const def = buildCompareAssetsWorkflowDefinition(resolution);
-  return {
-    initialPrompt: def.steps[0].prompt,
-    followUps: def.steps.slice(1).map((s) => s.prompt),
   };
 }

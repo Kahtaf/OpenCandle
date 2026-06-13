@@ -1,5 +1,12 @@
 import { Input } from "../../components/ui/input.jsx";
 import {
+  DAYS_PRESETS,
+  FRESHNESS_OPTIONS,
+  HOURS_PRESETS,
+  PERIOD_OPTIONS,
+  RANGE_OPTIONS,
+} from "./form-presets.js";
+import {
   DateInput,
   EnumSelect,
   Field,
@@ -13,7 +20,6 @@ import {
   SymbolChips,
   SymbolInput,
 } from "./form-primitives.jsx";
-import { DAYS_PRESETS, FRESHNESS_OPTIONS, HOURS_PRESETS, PERIOD_OPTIONS, RANGE_OPTIONS } from "./form-presets.js";
 
 const PRESET_REGISTRY = {
   DAYS_PRESETS,
@@ -34,9 +40,16 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
     <span className="flex items-baseline justify-between gap-3 text-xs font-medium text-foreground">
       <span>
         {field.label}
-        {field.required ? <span className="text-foreground/40" aria-hidden="true"> *</span> : null}
+        {field.required ? (
+          <span className="text-foreground/40" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        ) : null}
       </span>
-      {field.helper ? <span className="text-[11px] font-normal text-muted-foreground">{field.helper}</span> : null}
+      {field.helper ? (
+        <span className="text-[11px] font-normal text-muted-foreground">{field.helper}</span>
+      ) : null}
     </span>
   );
 
@@ -44,42 +57,79 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
     case "symbol":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <SymbolInput value={value} onChange={setValue} lookup={lookupSymbol} placeholder={field.placeholder} ariaLabel={field.label} />
+          <SymbolInput
+            value={value}
+            onChange={setValue}
+            lookup={lookupSymbol}
+            placeholder={field.placeholder}
+            ariaLabel={field.label}
+          />
         </Field>
       );
 
     case "symbols":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <SymbolChips value={value || []} onChange={setValue} min={field.min} max={field.max} placeholder={field.placeholder} ariaLabel={field.label} />
+          <SymbolChips
+            value={value || []}
+            onChange={setValue}
+            min={field.min}
+            max={field.max}
+            placeholder={field.placeholder}
+            ariaLabel={field.label}
+          />
         </Field>
       );
 
     case "segmented":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <SegmentedControl value={value} onChange={setValue} options={resolveCollection(field.options)} ariaLabel={field.label} />
+          <SegmentedControl
+            value={value}
+            onChange={setValue}
+            options={resolveCollection(field.options)}
+            ariaLabel={field.label}
+          />
         </Field>
       );
 
     case "select":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <EnumSelect value={value} onChange={setValue} options={resolveCollection(field.options)} placeholder={field.placeholder} ariaLabel={field.label} />
+          <EnumSelect
+            value={value}
+            onChange={setValue}
+            options={resolveCollection(field.options)}
+            placeholder={field.placeholder}
+            ariaLabel={field.label}
+          />
         </Field>
       );
 
     case "number-chips":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <NumberWithChips value={value} onChange={setValue} presets={resolveCollection(field.presets)} suffix={field.suffix} min={field.min} max={field.max} step={field.step} placeholder={field.placeholder} />
+          <NumberWithChips
+            value={value}
+            onChange={setValue}
+            presets={resolveCollection(field.presets)}
+            suffix={field.suffix}
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            placeholder={field.placeholder}
+          />
         </Field>
       );
 
     case "multi-chips":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <MultiSelectChips value={value || []} onChange={setValue} options={resolveCollection(field.options)} />
+          <MultiSelectChips
+            value={value || []}
+            onChange={setValue}
+            options={resolveCollection(field.options)}
+          />
         </Field>
       );
 
@@ -93,25 +143,43 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
     case "freetext":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <FreeText value={value} onChange={setValue} placeholder={field.placeholder} maxLength={field.maxLength} rows={field.rows} ariaLabel={field.label} />
+          <FreeText
+            value={value}
+            onChange={setValue}
+            placeholder={field.placeholder}
+            maxLength={field.maxLength}
+            rows={field.rows}
+            ariaLabel={field.label}
+          />
         </Field>
       );
 
     case "money":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <MoneyInput value={value} onChange={setValue} currency={field.currency} placeholder={field.placeholder} />
+          <MoneyInput
+            value={value}
+            onChange={setValue}
+            currency={field.currency}
+            placeholder={field.placeholder}
+          />
         </Field>
       );
 
     case "percent":
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>
-          <PercentInput value={value} onChange={setValue} min={field.min} max={field.max} step={field.step} placeholder={field.placeholder} />
+          <PercentInput
+            value={value}
+            onChange={setValue}
+            min={field.min}
+            max={field.max}
+            step={field.step}
+            placeholder={field.placeholder}
+          />
         </Field>
       );
 
-    case "text":
     default:
       return (
         <Field label={field.label} hint={field.helper} required={field.required}>

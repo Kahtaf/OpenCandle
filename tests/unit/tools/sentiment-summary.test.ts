@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
-import type { RedditSentimentResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
+import type { RedditSentimentResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
 
 const originalFetch = globalThis.fetch;
@@ -61,12 +61,12 @@ vi.mock("../../../src/sentiment/index.js", async (importOriginal) => {
   };
 });
 
-import { searchWeb } from "../../../src/providers/web-search.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { getTwitterSentiment } from "../../../src/providers/twitter.js";
-import { getCompanyNews } from "../../../src/providers/finnhub.js";
-import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 import { getConfig } from "../../../src/config.js";
+import { getCompanyNews } from "../../../src/providers/finnhub.js";
+import { getTwitterSentiment } from "../../../src/providers/twitter.js";
+import { searchWeb } from "../../../src/providers/web-search.js";
+import { wrapProvider } from "../../../src/providers/wrap-provider.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import { sentimentSummaryTool } from "../../../src/tools/sentiment/sentiment-summary.js";
 
 const mockedGetTwitterSentiment = vi.mocked(getTwitterSentiment);
@@ -127,14 +127,16 @@ describe("get_sentiment_summary tool", () => {
     // Mock web search
     const webEnvelope: WebSearchEnvelope = {
       query: "AAPL news",
-      results: [{
-        title: "AAPL bullish breakout",
-        url: "https://reuters.com/aapl",
-        snippet: "Apple stock bullish after earnings beat.",
-        source: "reuters.com",
-        published: "2026-04-11T10:00:00Z",
-        category: "news",
-      }],
+      results: [
+        {
+          title: "AAPL bullish breakout",
+          url: "https://reuters.com/aapl",
+          snippet: "Apple stock bullish after earnings beat.",
+          source: "reuters.com",
+          published: "2026-04-11T10:00:00Z",
+          category: "news",
+        },
+      ],
       resultCount: 1,
       fetchedAt: "2026-04-11T12:00:00Z",
       provider: "ddg",
@@ -160,14 +162,16 @@ describe("get_sentiment_summary tool", () => {
       status: "ok",
       data: {
         query: "XYZ",
-        results: [{
-          title: "XYZ bullish",
-          url: "https://example.com/xyz",
-          snippet: "XYZ stock bullish after strong demand.",
-          source: "example.com",
-          published: null,
-          category: "news",
-        }],
+        results: [
+          {
+            title: "XYZ bullish",
+            url: "https://example.com/xyz",
+            snippet: "XYZ stock bullish after strong demand.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
         resultCount: 1,
         fetchedAt: "2026-05-21T12:00:00Z",
         provider: "exa",
@@ -205,14 +209,16 @@ describe("get_sentiment_summary tool", () => {
       status: "ok",
       data: {
         query: "GME",
-        results: [{
-          title: "GME update",
-          url: "https://example.com/gme",
-          snippet: "GME shares were quiet after recent news.",
-          source: "example.com",
-          published: null,
-          category: "news",
-        }],
+        results: [
+          {
+            title: "GME update",
+            url: "https://example.com/gme",
+            snippet: "GME shares were quiet after recent news.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
         resultCount: 1,
         fetchedAt: "2026-05-23T12:00:00Z",
         provider: "exa",
@@ -250,14 +256,16 @@ describe("get_sentiment_summary tool", () => {
       status: "ok",
       data: {
         query: "GME",
-        results: [{
-          title: "GME update",
-          url: "https://example.com/gme",
-          snippet: "GME shares were quiet after recent news.",
-          source: "example.com",
-          published: null,
-          category: "news",
-        }],
+        results: [
+          {
+            title: "GME update",
+            url: "https://example.com/gme",
+            snippet: "GME shares were quiet after recent news.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
         resultCount: 1,
         fetchedAt: "2026-05-23T12:00:00Z",
         provider: "exa",
@@ -293,21 +301,25 @@ describe("get_sentiment_summary tool", () => {
       status: "ok",
       data: {
         query: "semiconductor sector sentiment",
-        results: [{
-          title: "Semiconductor demand improves",
-          url: "https://example.com/semis",
-          snippet: "Semiconductor sector sentiment is improving after stronger orders.",
-          source: "example.com",
-          published: null,
-          category: "news",
-        }],
+        results: [
+          {
+            title: "Semiconductor demand improves",
+            url: "https://example.com/semis",
+            snippet: "Semiconductor sector sentiment is improving after stronger orders.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
         resultCount: 1,
         fetchedAt: "2026-05-21T12:00:00Z",
         provider: "exa",
       },
     } as any);
 
-    const result = await sentimentSummaryTool.execute("call-topic", { query: "semiconductor sector sentiment" });
+    const result = await sentimentSummaryTool.execute("call-topic", {
+      query: "semiconductor sector sentiment",
+    });
     const text = result.content[0].text;
 
     expect(mockedGetQuote).not.toHaveBeenCalled();
@@ -365,7 +377,16 @@ describe("get_sentiment_summary tool", () => {
     mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
     const webEnvelope: WebSearchEnvelope = {
       query: "AAPL",
-      results: [{ title: "Test", url: "https://test.com", snippet: "bullish AAPL", source: "test.com", published: null, category: "news" as const }],
+      results: [
+        {
+          title: "Test",
+          url: "https://test.com",
+          snippet: "bullish AAPL",
+          source: "test.com",
+          published: null,
+          category: "news" as const,
+        },
+      ],
       resultCount: 1,
       fetchedAt: new Date().toISOString(),
       provider: "exa",
@@ -390,7 +411,16 @@ describe("get_sentiment_summary tool", () => {
     mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
     const webEnvelope: WebSearchEnvelope = {
       query: "market sentiment",
-      results: [{ title: "Test", url: "https://test.com", snippet: "markets up today", source: "test.com", published: null, category: "news" as const }],
+      results: [
+        {
+          title: "Test",
+          url: "https://test.com",
+          snippet: "markets up today",
+          source: "test.com",
+          published: null,
+          category: "news" as const,
+        },
+      ],
       resultCount: 1,
       fetchedAt: new Date().toISOString(),
       provider: "exa",

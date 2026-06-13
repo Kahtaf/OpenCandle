@@ -1,7 +1,7 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getFundHoldings } from "../../providers/yahoo-finance.js";
+import { Type } from "@sinclair/typebox";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getFundHoldings } from "../../providers/yahoo-finance.js";
 import type {
   FundHolding,
   FundHoldings,
@@ -12,7 +12,8 @@ import type {
 
 const params = Type.Object({
   symbols: Type.Array(Type.String(), {
-    description: "Array of 2+ ETF or fund ticker symbols to compare holdings overlap, e.g. ['VOO','QQQ']",
+    description:
+      "Array of 2+ ETF or fund ticker symbols to compare holdings overlap, e.g. ['VOO','QQQ']",
     minItems: 2,
   }),
 });
@@ -29,24 +30,33 @@ export const holdingsOverlapTool: AgentTool<typeof params, FundHoldingsOverlap |
       throw new Error("Need at least 2 symbols for holdings overlap analysis.");
     }
 
-    const results = await Promise.all(symbols.map(async (symbol) => ({
-      symbol,
-      result: await wrapProvider("yahoo", () => getFundHoldings(symbol)),
-    })));
+    const results = await Promise.all(
+      symbols.map(async (symbol) => ({
+        symbol,
+        result: await wrapProvider("yahoo", () => getFundHoldings(symbol)),
+      })),
+    );
     const unavailable = results.flatMap((entry) =>
       entry.result.status === "unavailable"
         ? [{ symbol: entry.symbol, reason: entry.result.reason }]
-        : []
+        : [],
     );
     if (unavailable.length > 0) {
       const missing = unavailable.map((entry) => `${entry.symbol}: ${entry.reason}`).join("; ");
       return {
-        content: [{ type: "text", text: `⚠ Holdings overlap unavailable for one or more funds (${missing}).` }],
+        content: [
+          {
+            type: "text",
+            text: `⚠ Holdings overlap unavailable for one or more funds (${missing}).`,
+          },
+        ],
         details: null,
       };
     }
 
-    const funds = results.flatMap((entry) => entry.result.status === "ok" ? [entry.result.data] : []);
+    const funds = results.flatMap((entry) =>
+      entry.result.status === "ok" ? [entry.result.data] : [],
+    );
     const overlap = computeHoldingsOverlap(funds);
     return {
       content: [{ type: "text", text: formatOverlap(overlap) }],
@@ -85,7 +95,9 @@ function computePairOverlap(a: FundHoldings, b: FundHoldings): FundOverlapPair {
   sharedHoldings.sort((left, right) => right.overlapWeight - left.overlapWeight);
   return {
     symbols: [a.symbol, b.symbol],
-    overlapWeight: roundWeight(sharedHoldings.reduce((sum, holding) => sum + holding.overlapWeight, 0)),
+    overlapWeight: roundWeight(
+      sharedHoldings.reduce((sum, holding) => sum + holding.overlapWeight, 0),
+    ),
     sharedHoldings,
   };
 }
@@ -96,15 +108,19 @@ function formatOverlap(overlap: FundHoldingsOverlap): string {
     lines.push(`${pair.symbols.join("/")} holdings overlap: ${formatPercent(pair.overlapWeight)}`);
     const topShared = pair.sharedHoldings.slice(0, 5);
     if (topShared.length > 0) {
-      lines.push(`Top shared holdings: ${topShared.map((holding) =>
-        `${holding.symbol} (${formatPercent(holding.overlapWeight)} overlap)`
-      ).join(", ")}`);
+      lines.push(
+        `Top shared holdings: ${topShared
+          .map((holding) => `${holding.symbol} (${formatPercent(holding.overlapWeight)} overlap)`)
+          .join(", ")}`,
+      );
     } else {
       lines.push("No shared top holdings found in provider coverage.");
     }
     lines.push("");
   }
-  lines.push("Provider note: overlap uses provider top-holdings coverage, not full portfolio look-through unless the provider returns all holdings.");
+  lines.push(
+    "Provider note: overlap uses provider top-holdings coverage, not full portfolio look-through unless the provider returns all holdings.",
+  );
   return lines.join("\n").trimEnd();
 }
 

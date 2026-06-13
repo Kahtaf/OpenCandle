@@ -1,8 +1,8 @@
-import { Type, type Static } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { type Static, Type } from "@sinclair/typebox";
+import type { ScreenerRow, ScreenFilterOp } from "../../providers/tradingview.js";
 import { screenStocks } from "../../providers/tradingview.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import type { ScreenFilterOp, ScreenerRow } from "../../providers/tradingview.js";
 
 const filterOps = [
   "greater",
@@ -66,45 +66,71 @@ const filterOps = [
 const filterOp = Type.String({ enum: [...filterOps] });
 
 const params = Type.Object({
-  market: Type.Optional(Type.String({ description: "TradingView market path segment. Default: america" })),
-  columns: Type.Optional(Type.Array(Type.String({ description: "TradingView scanner field, optionally timeframe-qualified (for example RSI|60)" }))),
-  filter: Type.Optional(Type.Array(Type.Object({
-    field: Type.String({ description: "TradingView scanner field, optionally timeframe-qualified" }),
-    op: filterOp,
-    value: Type.Optional(Type.Unknown({ description: "Filter value for operations that require one" })),
-  }), { description: "Flat AND filter clauses; nested OR trees are not supported" })),
-  sort: Type.Optional(Type.Object({
-    field: Type.String({ description: "TradingView scanner field to sort by" }),
-    direction: Type.Optional(Type.String({ enum: ["asc", "ASC", "desc", "DESC"] })),
-  })),
-  limit: Type.Optional(Type.Number({ description: "Maximum rows to return. Default 50; maximum 500" })),
+  market: Type.Optional(
+    Type.String({ description: "TradingView market path segment. Default: america" }),
+  ),
+  columns: Type.Optional(
+    Type.Array(
+      Type.String({
+        description:
+          "TradingView scanner field, optionally timeframe-qualified (for example RSI|60)",
+      }),
+    ),
+  ),
+  filter: Type.Optional(
+    Type.Array(
+      Type.Object({
+        field: Type.String({
+          description: "TradingView scanner field, optionally timeframe-qualified",
+        }),
+        op: filterOp,
+        value: Type.Optional(
+          Type.Unknown({ description: "Filter value for operations that require one" }),
+        ),
+      }),
+      { description: "Flat AND filter clauses; nested OR trees are not supported" },
+    ),
+  ),
+  sort: Type.Optional(
+    Type.Object({
+      field: Type.String({ description: "TradingView scanner field to sort by" }),
+      direction: Type.Optional(Type.String({ enum: ["asc", "ASC", "desc", "DESC"] })),
+    }),
+  ),
+  limit: Type.Optional(
+    Type.Number({ description: "Maximum rows to return. Default 50; maximum 500" }),
+  ),
 });
 
 export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
   name: "screen_stocks",
   label: "Stock Screener",
   description:
-    "Screen stocks across a market using TradingView scanner filters, columns, sorting, and row limits. Use for breadth queries like finding large caps, oversold stocks, movers, or filtered market lists; use quote/history tools for single-security quote or history requests. Common aliases are accepted: gt/gte/lt/lte for comparisons, market_cap for market_cap_basic, change_percent for change, and RSI|14D for RSI. For sector screens, use the sector field; technology usually means sector in_range [\"Electronic Technology\", \"Technology Services\"]. Use description for company names because name is the ticker.",
+    'Screen stocks across a market using TradingView scanner filters, columns, sorting, and row limits. Use for breadth queries like finding large caps, oversold stocks, movers, or filtered market lists; use quote/history tools for single-security quote or history requests. Common aliases are accepted: gt/gte/lt/lte for comparisons, market_cap for market_cap_basic, change_percent for change, and RSI|14D for RSI. For sector screens, use the sector field; technology usually means sector in_range ["Electronic Technology", "Technology Services"]. Use description for company names because name is the ticker.',
   parameters: params,
   async execute(_toolCallId, args) {
     const normalized = normalizeArgs(args);
-    const result = await wrapProvider("tradingview", () => screenStocks({
-      market: normalized.market,
-      columns: normalized.columns,
-      filter: normalized.filter,
-      sort: normalized.sort,
-      limit: normalized.limit,
-    }));
+    const result = await wrapProvider("tradingview", () =>
+      screenStocks({
+        market: normalized.market,
+        columns: normalized.columns,
+        filter: normalized.filter,
+        sort: normalized.sort,
+        limit: normalized.limit,
+      }),
+    );
 
     if (result.status === "unavailable") {
       return {
-        content: [{
-          type: "text",
-          text: [
-            `Stock screening unavailable (${result.reason}).`,
-            "Manual fallback: run the same screen in TradingView or another screener with the requested filters and sort. Treat matches as candidates, not recommendations, and verify live quotes/news before acting.",
-          ].join("\n"),
-        }],
+        content: [
+          {
+            type: "text",
+            text: [
+              `Stock screening unavailable (${result.reason}).`,
+              "Manual fallback: run the same screen in TradingView or another screener with the requested filters and sort. Treat matches as candidates, not recommendations, and verify live quotes/news before acting.",
+            ].join("\n"),
+          },
+        ],
         details: [],
       };
     }
@@ -112,7 +138,12 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
     const rows = result.data;
     if (rows.length === 0) {
       return {
-        content: [{ type: "text", text: "No stocks matched the screen. TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint." }],
+        content: [
+          {
+            type: "text",
+            text: "No stocks matched the screen. TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+          },
+        ],
         details: rows,
       };
     }
@@ -136,7 +167,9 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
 function normalizeArgs(args: Static<typeof params>) {
   return {
     ...args,
-    columns: args.columns?.map(normalizeField).filter((field, index, fields) => fields.indexOf(field) === index),
+    columns: args.columns
+      ?.map(normalizeField)
+      .filter((field, index, fields) => fields.indexOf(field) === index),
     filter: args.filter?.map((clause) => ({
       ...clause,
       field: normalizeField(clause.field),
@@ -172,15 +205,18 @@ function normalizeField(field: string): string {
   const trimmed = field.trim();
   const lower = trimmed.toLowerCase();
   if (lower === "market_cap" || lower === "marketcap") return "market_cap_basic";
-  if (lower === "total_volume" || lower === "share_volume" || lower === "shares_traded") return "volume";
+  if (lower === "total_volume" || lower === "share_volume" || lower === "shares_traded")
+    return "volume";
   if (
     lower === "change_percent" ||
     lower === "percent_change" ||
     lower === "daily_change_percent" ||
     lower === "day_change_percent" ||
     lower === "price_change_percent"
-  ) return "change";
-  if (lower === "company_name" || lower === "company" || lower === "security_name") return "description";
+  )
+    return "change";
+  if (lower === "company_name" || lower === "company" || lower === "security_name")
+    return "description";
   if (/^rsi(?:\|(?:14|14d|14d\|close|1d|d|daily))?$/i.test(trimmed)) return "RSI";
   return trimmed;
 }
@@ -193,9 +229,16 @@ function formatInterpretationNote(args: ReturnType<typeof normalizeArgs>): strin
   ].filter(Boolean);
   const hasField = (field: string) => fields.includes(field);
   const notes = ["Treat screen results as candidates, not recommendations."];
-  if (hasField("RSI")) notes.push("RSI below 30 can mark oversold momentum, but it is not a buy signal by itself.");
-  if (args.sort?.field === "volume") notes.push("Volume sorting shows the most actively traded matches rather than unusual volume by itself.");
-  if (hasField("change")) notes.push("Daily percent change depends on the current market session; confirm market status and live quotes before acting.");
+  if (hasField("RSI"))
+    notes.push("RSI below 30 can mark oversold momentum, but it is not a buy signal by itself.");
+  if (args.sort?.field === "volume")
+    notes.push(
+      "Volume sorting shows the most actively traded matches rather than unusual volume by itself.",
+    );
+  if (hasField("change"))
+    notes.push(
+      "Daily percent change depends on the current market session; confirm market status and live quotes before acting.",
+    );
   return `Interpretation note: ${notes.join(" ")}`;
 }
 
@@ -228,7 +271,8 @@ function formatRow(row: ScreenerRow): string {
 }
 
 function formatValue(value: unknown): string {
-  if (typeof value === "number") return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+  if (typeof value === "number")
+    return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
   if (value === null || value === undefined) return "N/A";
   if (Array.isArray(value)) return value.join(", ");
   return String(value);

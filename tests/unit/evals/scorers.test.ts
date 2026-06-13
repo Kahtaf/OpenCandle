@@ -1,14 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { scoreWorkflowClassification } from "../../evals/scorers/workflow-classification.js";
-import { scoreToolSelection } from "../../evals/scorers/tool-selection.js";
-import { scoreToolArguments } from "../../evals/scorers/tool-arguments.js";
+import { describe, expect, it } from "vitest";
+import { DISCLAIMER_TEXT } from "../../../src/prompts/disclaimer.js";
 import {
-  scoreDataFaithfulness,
   extractFinancialNumbers,
   extractNumbersFromObject,
+  scoreDataFaithfulness,
 } from "../../evals/scorers/data-faithfulness.js";
 import { scoreRiskDisclosure } from "../../evals/scorers/risk-disclosure.js";
-import { DISCLAIMER_TEXT } from "../../../src/prompts/disclaimer.js";
+import { scoreToolArguments } from "../../evals/scorers/tool-arguments.js";
+import { scoreToolSelection } from "../../evals/scorers/tool-selection.js";
+import { scoreWorkflowClassification } from "../../evals/scorers/workflow-classification.js";
 import type { EvalTrace } from "../../evals/types.js";
 
 function makeTrace(overrides: Partial<EvalTrace> = {}): EvalTrace {
@@ -164,7 +164,7 @@ describe("extractNumbersFromObject", () => {
 
   it("extracts numbers from strings", () => {
     const nums = extractNumbersFromObject({ formatted: "$185.50" });
-    expect(nums).toContain(185.50);
+    expect(nums).toContain(185.5);
   });
 });
 
@@ -172,9 +172,7 @@ describe("scoreDataFaithfulness", () => {
   it("scores 1.0 when all numbers grounded", () => {
     const trace = makeTrace({
       text: "AAPL is trading at $185.50",
-      toolCalls: [
-        { name: "get_stock_quote", args: {}, result: { price: 185.5 } },
-      ],
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { price: 185.5 } }],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);
@@ -184,9 +182,7 @@ describe("scoreDataFaithfulness", () => {
   it("flags ungrounded numbers", () => {
     const trace = makeTrace({
       text: "AAPL P/E of 28.5",
-      toolCalls: [
-        { name: "get_stock_quote", args: {}, result: { price: 185.5 } },
-      ],
+      toolCalls: [{ name: "get_stock_quote", args: {}, result: { price: 185.5 } }],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(false);
@@ -196,9 +192,7 @@ describe("scoreDataFaithfulness", () => {
   it("allows values within 1% tolerance", () => {
     const trace = makeTrace({
       text: "Return of 12.1%",
-      toolCalls: [
-        { name: "run_backtest", args: {}, result: { totalReturn: 12.0 } },
-      ],
+      toolCalls: [{ name: "run_backtest", args: {}, result: { totalReturn: 12.0 } }],
     });
     const result = scoreDataFaithfulness(trace);
     expect(result.passed).toBe(true);

@@ -6,21 +6,30 @@ import { cn } from "../../lib/utils.js";
 export function StatusDot({ status = "pending", className }) {
   if (status === "completed") {
     return (
-      <span className={cn("relative inline-flex size-3 items-center justify-center", className)} aria-hidden="true">
+      <span
+        className={cn("relative inline-flex size-3 items-center justify-center", className)}
+        aria-hidden="true"
+      >
         <span className="size-1.5 rounded-full bg-foreground" />
       </span>
     );
   }
   if (status === "error") {
     return (
-      <span className={cn("relative inline-flex size-3 items-center justify-center", className)} aria-hidden="true">
+      <span
+        className={cn("relative inline-flex size-3 items-center justify-center", className)}
+        aria-hidden="true"
+      >
         <span className="size-1.5 rounded-full bg-destructive" />
       </span>
     );
   }
   // pending — radar ping around a small foreground dot
   return (
-    <span className={cn("relative inline-flex size-3 items-center justify-center", className)} aria-hidden="true">
+    <span
+      className={cn("relative inline-flex size-3 items-center justify-center", className)}
+      aria-hidden="true"
+    >
       <span className="absolute inline-flex size-3 animate-ping rounded-full bg-foreground/30" />
       <span className="relative inline-flex size-1.5 rounded-full bg-foreground" />
     </span>

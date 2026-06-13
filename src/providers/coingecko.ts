@@ -1,5 +1,5 @@
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { httpGet } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import type { CryptoPrice, OHLCV } from "../types/market.js";
 
@@ -63,10 +63,7 @@ export async function getCryptoPrice(id: string): Promise<CryptoPrice> {
   }
 }
 
-export async function getCryptoHistory(
-  id: string,
-  days: number = 180,
-): Promise<OHLCV[]> {
+export async function getCryptoHistory(id: string, days: number = 180): Promise<OHLCV[]> {
   const cacheKey = `coingecko:history:${id}:${days}`;
   const cached = cache.get<OHLCV[]>(cacheKey);
   if (cached) return cached;

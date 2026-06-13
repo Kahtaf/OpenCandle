@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 
@@ -9,19 +9,19 @@ vi.mock("../../../src/config.js", () => ({
 }));
 
 import { getConfig } from "../../../src/config.js";
+import type { ParsedResult } from "../../../src/providers/exa-search.js";
 import {
-  exaSearch,
-  parseMcpResultBlocks,
-  extractJsonRpcPayload,
   enrichQueryForMcp,
+  exaSearch,
+  extractJsonRpcPayload,
   filterByFreshness,
   mapApiResults,
+  parseMcpResultBlocks,
 } from "../../../src/providers/exa-search.js";
-import type { ParsedResult } from "../../../src/providers/exa-search.js";
 import apiResponseFixture from "../../fixtures/exa/api-response.json";
-import mcpJsonFixture from "../../fixtures/exa/mcp-json-response.json";
-import mcpErrorFixture from "../../fixtures/exa/mcp-error-response.json";
 import mcpEmptyFixture from "../../fixtures/exa/mcp-empty-response.json";
+import mcpErrorFixture from "../../fixtures/exa/mcp-error-response.json";
+import mcpJsonFixture from "../../fixtures/exa/mcp-json-response.json";
 
 const mockedGetConfig = vi.mocked(getConfig);
 
@@ -31,9 +31,16 @@ const sseFixture = readFileSync(
 );
 
 // Extract the data line payload from SSE fixture for Content-Type branching tests
-const sseDataPayload = sseFixture.split("\n").find((l) => l.startsWith("data:"))!.slice(5).trim();
+const sseDataPayload = sseFixture
+  .split("\n")
+  .find((l) => l.startsWith("data:"))!
+  .slice(5)
+  .trim();
 
-function mockFetchResponse(body: string, opts?: { contentType?: string; status?: number; headers?: Record<string, string> }) {
+function mockFetchResponse(
+  body: string,
+  opts?: { contentType?: string; status?: number; headers?: Record<string, string> },
+) {
   const status = opts?.status ?? 200;
   const contentType = opts?.contentType ?? "text/event-stream";
   const extraHeaders = opts?.headers ?? {};
@@ -55,13 +62,16 @@ describe("parseMcpResultBlocks", () => {
 
     expect(results).toHaveLength(3);
     expect(results[0].title).toBe("Apple Set to Deliver Slight Earnings Miss for March Quarter");
-    expect(results[0].url).toBe("https://www.proactiveinvestors.com/companies/news/1090365/apple-earnings-march-quarter.html");
+    expect(results[0].url).toBe(
+      "https://www.proactiveinvestors.com/companies/news/1090365/apple-earnings-march-quarter.html",
+    );
     expect(results[0].published).toBe("2026-04-10T15:46:00.000Z");
     expect(results[0].snippet.length).toBeLessThanOrEqual(300);
   });
 
   it("handles missing Published field", () => {
-    const text = "Title: No Date Article\nURL: https://example.com/article\nHighlights:\nSome content here.";
+    const text =
+      "Title: No Date Article\nURL: https://example.com/article\nHighlights:\nSome content here.";
     const results = parseMcpResultBlocks(text);
 
     expect(results).toHaveLength(1);
@@ -69,7 +79,8 @@ describe("parseMcpResultBlocks", () => {
   });
 
   it("skips blocks without valid URL", () => {
-    const text = "Title: Bad Block\nSome random text\n---\nTitle: Good Block\nURL: https://example.com\nHighlights:\nContent.";
+    const text =
+      "Title: Bad Block\nSome random text\n---\nTitle: Good Block\nURL: https://example.com\nHighlights:\nContent.";
     const results = parseMcpResultBlocks(text);
 
     expect(results).toHaveLength(1);
@@ -92,10 +103,7 @@ describe("parseMcpResultBlocks", () => {
 
 describe("extractJsonRpcPayload", () => {
   it("parses plain JSON when Content-Type is application/json", () => {
-    const payload = extractJsonRpcPayload(
-      JSON.stringify(mcpJsonFixture),
-      "application/json",
-    );
+    const payload = extractJsonRpcPayload(JSON.stringify(mcpJsonFixture), "application/json");
     expect(payload.result?.content).toHaveLength(1);
   });
 
@@ -105,10 +113,7 @@ describe("extractJsonRpcPayload", () => {
   });
 
   it("falls back to parsing entire body as JSON", () => {
-    const payload = extractJsonRpcPayload(
-      JSON.stringify(mcpJsonFixture),
-      "unknown/type",
-    );
+    const payload = extractJsonRpcPayload(JSON.stringify(mcpJsonFixture), "unknown/type");
     expect(payload.result?.content).toHaveLength(1);
   });
 
@@ -119,10 +124,7 @@ describe("extractJsonRpcPayload", () => {
   });
 
   it("extracts error from JSON-RPC error response", () => {
-    const payload = extractJsonRpcPayload(
-      JSON.stringify(mcpErrorFixture),
-      "application/json",
-    );
+    const payload = extractJsonRpcPayload(JSON.stringify(mcpErrorFixture), "application/json");
     expect(payload.error?.message).toBe("Rate limit exceeded. Please try again later.");
   });
 });
@@ -149,8 +151,18 @@ describe("filterByFreshness", () => {
   const now = Date.now();
 
   const results: ParsedResult[] = [
-    { title: "Fresh", url: "https://a.com", published: new Date(now - 1000).toISOString(), snippet: "fresh" },
-    { title: "Old", url: "https://b.com", published: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(), snippet: "old" },
+    {
+      title: "Fresh",
+      url: "https://a.com",
+      published: new Date(now - 1000).toISOString(),
+      snippet: "fresh",
+    },
+    {
+      title: "Old",
+      url: "https://b.com",
+      published: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      snippet: "old",
+    },
     { title: "No Date", url: "https://c.com", published: null, snippet: "no date" },
   ];
 
@@ -165,7 +177,9 @@ describe("filterByFreshness", () => {
   });
 
   it("keeps results with no published date (benefit of the doubt)", () => {
-    const noDates: ParsedResult[] = [{ title: "X", url: "https://x.com", published: null, snippet: "" }];
+    const noDates: ParsedResult[] = [
+      { title: "X", url: "https://x.com", published: null, snippet: "" },
+    ];
     expect(filterByFreshness(noDates, "hours")).toHaveLength(1);
   });
 });
@@ -183,18 +197,23 @@ describe("mapApiResults", () => {
 
   it("uses highlights joined for snippet, falls back to text", () => {
     const results = mapApiResults([
-      { url: "https://a.com", text: "fallback text", highlights: ["highlight one", "highlight two"] },
+      {
+        url: "https://a.com",
+        text: "fallback text",
+        highlights: ["highlight one", "highlight two"],
+      },
     ]);
     expect(results[0].snippet).toBe("highlight one highlight two");
 
-    const results2 = mapApiResults([
-      { url: "https://b.com", text: "fallback text" },
-    ]);
+    const results2 = mapApiResults([{ url: "https://b.com", text: "fallback text" }]);
     expect(results2[0].snippet).toBe("fallback text");
   });
 
   it("skips results without URL", () => {
-    const results = mapApiResults([{ title: "No URL" }, { url: "https://a.com", title: "Has URL" }]);
+    const results = mapApiResults([
+      { title: "No URL" },
+      { url: "https://a.com", title: "Has URL" },
+    ]);
     expect(results).toHaveLength(1);
     expect(results[0].title).toBe("Has URL");
   });
@@ -217,12 +236,18 @@ describe("exaSearch (MCP path)", () => {
   });
 
   it("calls MCP endpoint and parses SSE response", async () => {
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-04-15T00:00:00Z").getTime());
+    const nowSpy = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date("2026-04-15T00:00:00Z").getTime());
     rateLimiter.configure("exa", 100, 100);
     try {
       globalThis.fetch = mockFetchResponse(sseFixture, { contentType: "text/event-stream" });
 
-      const result = await exaSearch("AAPL stock news", { category: "news", freshness: "month", limit: 10 });
+      const result = await exaSearch("AAPL stock news", {
+        category: "news",
+        freshness: "month",
+        limit: 10,
+      });
 
       expect(result.provider).toBe("exa");
       expect(result.resultCount).toBe(3);
@@ -265,7 +290,11 @@ describe("exaSearch (MCP path)", () => {
       contentType: "application/json",
     });
 
-    const result = await exaSearch("xyznonexistent", { category: "general", freshness: "day", limit: 5 });
+    const result = await exaSearch("xyznonexistent", {
+      category: "general",
+      freshness: "day",
+      limit: 5,
+    });
 
     expect(result.resultCount).toBe(0);
     expect(result.results).toEqual([]);
@@ -350,7 +379,13 @@ describe("exaSearch (MCP path)", () => {
     // Expire cache, set as stale
     cache.clear();
     (cache as any).store.set("web:exa:AAPL:news:month:5", {
-      value: { query: "AAPL", results: [], resultCount: 0, fetchedAt: "2026-04-11T00:00:00Z", provider: "exa" },
+      value: {
+        query: "AAPL",
+        results: [],
+        resultCount: 0,
+        fetchedAt: "2026-04-11T00:00:00Z",
+        provider: "exa",
+      },
       expiresAt: Date.now() - 1000,
       cachedAt: Date.now() - 60_000,
     });
@@ -379,7 +414,9 @@ describe("exaSearch (API path)", () => {
   });
 
   it("calls direct API when EXA_API_KEY is set", async () => {
-    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-04-15T00:00:00Z").getTime());
+    const nowSpy = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(new Date("2026-04-15T00:00:00Z").getTime());
     rateLimiter.configure("exa", 100, 100);
     try {
       globalThis.fetch = mockFetchResponse(JSON.stringify(apiResponseFixture), {

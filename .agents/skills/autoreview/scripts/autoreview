@@ -243,6 +243,10 @@ def choose_target(repo: Path, mode: str, base_ref: str | None) -> tuple[str, str
         return "local", None
     if mode == "commit":
         return "commit", None
+    if mode == "range":
+        if not base_ref:
+            raise SystemExit("--mode range requires --base <commit>")
+        return "range", base_ref
     if mode == "branch" and is_dirty(repo):
         raise SystemExit(
             "branch review requires a clean worktree; commit/stash changes first or run --mode local"
@@ -271,6 +275,11 @@ def shutil_which(name: str) -> str | None:
 def bounded(text: str, limit: int = 180_000) -> str:
     if len(text) <= limit:
         return text
+    print(
+        f"autoreview warning: review bundle section truncated at {limit} of {len(text)} characters; review coverage is partial",
+        file=sys.stderr,
+        flush=True,
+    )
     return text[:limit] + f"\n\n[truncated at {limit} characters]\n"
 
 
@@ -324,6 +333,18 @@ def branch_bundle(repo: Path, base_ref: str) -> str:
     )
 
 
+def range_bundle(repo: Path, base_ref: str, head_ref: str) -> str:
+    return "\n\n".join(
+        [
+            "# Range Diff",
+            f"base: {base_ref}",
+            f"head: {head_ref}",
+            git(repo, "diff", "--stat", base_ref, head_ref),
+            bounded(git(repo, "diff", "--patch", "--find-renames", base_ref, head_ref)),
+        ]
+    )
+
+
 def commit_parents(repo: Path, commit_ref: str) -> list[str]:
     line = git(repo, "rev-list", "--parents", "-n", "1", commit_ref)
     parts = line.split()
@@ -354,7 +375,13 @@ def commit_bundle(repo: Path, commit_ref: str) -> str:
     )
 
 
-def review_paths(repo: Path, target: str, target_ref: str | None, commit_ref: str) -> set[str]:
+def review_paths(
+    repo: Path,
+    target: str,
+    target_ref: str | None,
+    commit_ref: str,
+    head_ref: str,
+) -> set[str]:
     names: set[str] = set()
     if target == "local":
         sources = [
@@ -365,6 +392,9 @@ def review_paths(repo: Path, target: str, target_ref: str | None, commit_ref: st
     elif target == "branch":
         assert target_ref
         sources = [git(repo, "diff", "--name-only", f"{target_ref}...HEAD")]
+    elif target == "range":
+        assert target_ref
+        sources = [git(repo, "diff", "--name-only", target_ref, head_ref)]
     else:
         parents = commit_parents(repo, commit_ref)
         if len(parents) > 1:
@@ -396,6 +426,139 @@ def load_datasets(args: argparse.Namespace) -> str:
             raise SystemExit(f"--dataset must be a file, got directory: {path}")
         chunks.append(f"# Dataset: {path}\n{read_text(path)}")
     return "\n\n".join(chunks)
+
+
+def changed_gui_react_paths(changed_paths: set[str]) -> list[str]:
+    result: list[str] = []
+    for path in sorted(changed_paths):
+        if not path.startswith("gui/web/src/"):
+            continue
+        if not path.endswith((".js", ".jsx", ".ts", ".tsx")):
+            continue
+        result.append(path)
+    return result
+
+
+def react_doctor_evidence(repo: Path, changed_paths: set[str], args: argparse.Namespace) -> tuple[str, int]:
+    if args.react_doctor == "off":
+        return "", 0
+    gui_paths = changed_gui_react_paths(changed_paths)
+    if not gui_paths:
+        return "", 0
+
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as handle:
+        changed_file_list = Path(handle.name)
+        for path in gui_paths:
+            handle.write(path.removeprefix("gui/web/") + "\n")
+
+    cmd = [
+        "npx",
+        "--yes",
+        "react-doctor@0.5.1",
+        "gui/web",
+        "--json",
+        "--no-telemetry",
+        "--fail-on",
+        "none",
+        "--no-color",
+        "--changed-files-from",
+        str(changed_file_list),
+    ]
+    try:
+        result = run_with_heartbeat(cmd, repo, label="react-doctor", heartbeat_seconds=60)
+    finally:
+        changed_file_list.unlink(missing_ok=True)
+
+    if result.returncode != 0:
+        evidence = "\n".join(
+            [
+                "# React Doctor",
+                f"command: {' '.join(cmd)}",
+                f"status: failed to run ({result.returncode})",
+                bounded_field(result.stderr or result.stdout, 8000),
+            ]
+        )
+        return evidence, 1
+
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        evidence = "\n".join(
+            [
+                "# React Doctor",
+                f"command: {' '.join(cmd)}",
+                "status: failed to parse JSON output",
+                bounded_field(result.stdout, 8000),
+            ]
+        )
+        return evidence, 1
+
+    diagnostics: list[dict[str, Any]] = []
+    for project in report.get("projects", []):
+        if not isinstance(project, dict):
+            continue
+        for diagnostic in project.get("diagnostics", []):
+            if isinstance(diagnostic, dict):
+                diagnostics.append(diagnostic)
+
+    summaries = [project.get("summary", {}) for project in report.get("projects", []) if isinstance(project, dict)]
+    summary_error_count = sum(int(summary.get("errorCount") or 0) for summary in summaries)
+    summary_warning_count = sum(int(summary.get("warningCount") or 0) for summary in summaries)
+    summary_diagnostic_count = sum(int(summary.get("totalDiagnosticCount") or 0) for summary in summaries)
+    summary_affected_count = sum(int(summary.get("affectedFileCount") or 0) for summary in summaries)
+    diagnostic_error_count = sum(1 for diagnostic in diagnostics if diagnostic.get("severity") == "error")
+    diagnostic_warning_count = sum(1 for diagnostic in diagnostics if diagnostic.get("severity") == "warning")
+    error_count = max(summary_error_count, diagnostic_error_count)
+    warning_count = max(summary_warning_count, diagnostic_warning_count)
+    diagnostic_count = max(summary_diagnostic_count, len(diagnostics))
+    affected_count = max(
+        summary_affected_count,
+        len({str(diagnostic.get("filePath")) for diagnostic in diagnostics if diagnostic.get("filePath")}),
+    )
+
+    sorted_diagnostics = sorted(
+        diagnostics,
+        key=lambda item: (
+            0 if item.get("severity") == "error" else 1,
+            str(item.get("filePath", "")),
+            int(item.get("line") or 0),
+        ),
+    )
+    top = []
+    for diagnostic in sorted_diagnostics[:20]:
+        top.append(
+            {
+                "severity": diagnostic.get("severity"),
+                "rule": diagnostic.get("rule"),
+                "title": diagnostic.get("title") or diagnostic.get("message"),
+                "filePath": diagnostic.get("filePath"),
+                "line": diagnostic.get("line"),
+                "category": diagnostic.get("category"),
+            }
+        )
+
+    status = 0
+    if args.react_doctor_fail_on == "error" and error_count > 0:
+        status = 1
+    elif args.react_doctor_fail_on == "warning" and (error_count > 0 or warning_count > 0):
+        status = 1
+
+    evidence_payload = {
+        "command": " ".join(cmd),
+        "changedFiles": gui_paths,
+        "ok": report.get("ok"),
+        "mode": report.get("mode"),
+        "failOn": args.react_doctor_fail_on,
+        "status": "failed" if status else "passed",
+        "summary": {
+            "errorCount": error_count,
+            "warningCount": warning_count,
+            "affectedFileCount": affected_count,
+            "totalDiagnosticCount": diagnostic_count,
+        },
+        "topDiagnostics": top,
+    }
+    return "# React Doctor\n" + json.dumps(evidence_payload, indent=2), status
 
 
 def build_prompt(repo: Path, target: str, target_ref: str | None, bundle: str, extra_prompt: str, datasets: str) -> str:
@@ -916,8 +1079,9 @@ def finish_parallel_tests(proc: subprocess.Popen, started: float) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Bundle-driven AI code review.")
-    parser.add_argument("--mode", choices=["auto", "local", "branch", "commit"], default="auto")
+    parser.add_argument("--mode", choices=["auto", "local", "branch", "commit", "range"], default="auto")
     parser.add_argument("--base")
+    parser.add_argument("--head", default="HEAD")
     parser.add_argument("--commit", default="HEAD")
     parser.add_argument("--engine", choices=ENGINES, default=os.environ.get("AUTOREVIEW_ENGINE", "codex"))
     parser.add_argument("--reviewers", help="Comma-separated review panel, e.g. codex,claude or codex:gpt-5:high.")
@@ -950,6 +1114,18 @@ def parse_args() -> argparse.Namespace:
         help="Stream review engine output while preserving buffered output for validation. Codex output is filtered to hide tool/file chatter.",
     )
     parser.add_argument("--parallel-tests", help="Run a test command concurrently with review; failure fails the helper.")
+    parser.add_argument(
+        "--react-doctor",
+        choices=["auto", "off"],
+        default=os.environ.get("AUTOREVIEW_REACT_DOCTOR", "auto"),
+        help="Run React Doctor automatically when changed files include gui/web/src React code.",
+    )
+    parser.add_argument(
+        "--react-doctor-fail-on",
+        choices=["none", "error", "warning"],
+        default=os.environ.get("AUTOREVIEW_REACT_DOCTOR_FAIL_ON", "error"),
+        help="Fail autoreview when automatic React Doctor reports this diagnostic level.",
+    )
     parser.add_argument("--require-finding", action="append", default=[], help="Require finding text to contain this substring.")
     parser.add_argument("--expect-findings", action="store_true", help="Treat findings as success; for harness acceptance tests.")
     parser.add_argument("--dry-run", action="store_true")
@@ -1135,7 +1311,12 @@ def main() -> int:
         print(f"reviewers: {', '.join(reviewer_label(reviewer) for reviewer in reviewers)}")
     print(f"tools: {'on' if args.tools else 'off'}")
     print(f"web_search: {'on' if args.web_search else 'off'}")
-    display_ref = args.commit if target == "commit" else target_ref
+    if target == "commit":
+        display_ref = args.commit
+    elif target == "range":
+        display_ref = f"{target_ref}..{args.head}"
+    else:
+        display_ref = target_ref
     if display_ref:
         print(f"ref: {display_ref}")
     if args.dry_run:
@@ -1146,11 +1327,16 @@ def main() -> int:
     elif target == "branch":
         assert target_ref
         bundle = branch_bundle(repo, target_ref)
+    elif target == "range":
+        assert target_ref
+        bundle = range_bundle(repo, target_ref, args.head)
     else:
         bundle = commit_bundle(repo, args.commit)
         target_ref = args.commit
-    prompt = build_prompt(repo, target, target_ref, bundle, load_extra_prompt(args), load_datasets(args))
-    changed_paths = review_paths(repo, target, target_ref, args.commit)
+    changed_paths = review_paths(repo, target, target_ref, args.commit, args.head)
+    react_doctor, react_doctor_status = react_doctor_evidence(repo, changed_paths, args)
+    datasets = "\n\n".join(chunk for chunk in [load_datasets(args), react_doctor] if chunk)
+    prompt = build_prompt(repo, target, target_ref, bundle, load_extra_prompt(args), datasets)
     print(f"bundle: {len(prompt)} chars")
 
     tests_proc: tuple[subprocess.Popen, float] | None = None
@@ -1180,6 +1366,8 @@ def main() -> int:
     has_findings = bool(report["findings"])
     overall_incorrect = report["overall_correctness"] == "patch is incorrect"
     if tests_status != 0:
+        return 1
+    if react_doctor_status != 0:
         return 1
     if args.expect_findings:
         return 0 if has_findings else 1

@@ -8,7 +8,8 @@ const inputVariants = cva(
     variants: {
       variant: {
         default: "text-sm",
-        ghost: "border-transparent bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
+        ghost:
+          "border-transparent bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0",
       },
       size: {
         default: "h-11 px-4 text-sm md:h-9",
@@ -28,6 +29,17 @@ const inputVariants = cva(
   },
 );
 
-export const Input = forwardRef(function Input({ className, type = "text", variant, size, rounded, ...props }, ref) {
-  return <input ref={ref} type={type} className={cn(inputVariants({ variant, size, rounded }), className)} autoComplete="off" {...props} />;
+export const Input = forwardRef(function Input(
+  { className, type = "text", variant, size, rounded, ...props },
+  ref,
+) {
+  return (
+    <input
+      ref={ref}
+      type={type}
+      className={cn(inputVariants({ variant, size, rounded }), className)}
+      autoComplete="off"
+      {...props}
+    />
+  );
 });

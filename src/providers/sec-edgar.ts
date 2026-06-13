@@ -1,9 +1,11 @@
-import { httpGet } from "../infra/http-client.js";
 import { cache, TTL } from "../infra/cache.js";
+import { httpGet } from "../infra/http-client.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
 
 const EFTS_BASE = "https://efts.sec.gov/LATEST/search-index";
 const COMPANY_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
+const SEC_DOCUMENT_FETCH_TIMEOUT_MS = 10_000;
 
 export interface SECFiling {
   formType: string;
@@ -15,6 +17,7 @@ export interface SECFiling {
   primaryDocumentUrl?: string;
   items?: string[];
   evidenceSnippets?: string[];
+  evidenceWarning?: string;
 }
 
 export interface SearchFilingsOptions {
@@ -71,7 +74,9 @@ export async function searchFilings(
   if (cached) return cached;
 
   if (options.includeSnippets) {
-    const submissions = await searchFilingsFromCompanySubmissions(ticker, formTypes, limit).catch(() => []);
+    const submissions = await searchFilingsFromCompanySubmissions(ticker, formTypes, limit).catch(
+      () => [],
+    );
     if (submissions.length > 0) {
       await enrichWithEvidenceSnippets(submissions, options.snippetLimitPerFiling ?? 3);
       cache.set(cacheKey, submissions, TTL.FUNDAMENTALS);
@@ -186,7 +191,10 @@ async function resolveCompanyTicker(ticker: string): Promise<CompanyTickerEntry 
 
 function splitFilingItems(raw: string | undefined): string[] {
   return raw
-    ? raw.split(",").map((item) => item.trim()).filter(Boolean)
+    ? raw
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
     : [];
 }
 
@@ -222,23 +230,29 @@ function getDateYearsAgo(years: number): string {
   return d.toISOString().split("T")[0];
 }
 
-async function enrichWithEvidenceSnippets(filings: SECFiling[], limitPerFiling: number): Promise<void> {
+async function enrichWithEvidenceSnippets(
+  filings: SECFiling[],
+  limitPerFiling: number,
+): Promise<void> {
   await Promise.all(
     filings.map(async (filing) => {
       if (!filing.primaryDocumentUrl) return;
       try {
         const raw = await fetchText(filing.primaryDocumentUrl);
         filing.evidenceSnippets = extractEvidenceSnippets(raw, limitPerFiling);
-      } catch {
+      } catch (error) {
         filing.evidenceSnippets = [];
+        filing.evidenceWarning = `Evidence fetch failed for primary document: ${error instanceof Error ? error.message : String(error)}`;
       }
     }),
   );
 }
 
 async function fetchText(url: string): Promise<string> {
+  await rateLimiter.acquire("sec_edgar");
   const response = await fetch(url, {
     headers: { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" },
+    signal: AbortSignal.timeout(SEC_DOCUMENT_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
   return response.text();
@@ -300,7 +314,7 @@ function stripFilingMarkup(raw: string): string {
     .replace(/&amp;/gi, "&")
     .replace(/&#160;/g, " ")
     .replace(/&#8217;/g, "'")
-    .replace(/&#8220;|&#8221;/g, "\"")
+    .replace(/&#8220;|&#8221;/g, '"')
     .replace(/\s+/g, " ")
     .trim();
 }

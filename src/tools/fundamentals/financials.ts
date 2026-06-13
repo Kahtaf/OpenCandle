@@ -1,16 +1,19 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getFinancials } from "../../providers/alpha-vantage.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
+import { getFinancials } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
 });
 
-export const financialsTool: AgentTool<typeof params, FinancialStatement[] | { credentialRequired: unknown }> = {
+export const financialsTool: AgentTool<
+  typeof params,
+  FinancialStatement[] | { credentialRequired: unknown }
+> = {
   name: "get_financials",
   label: "Financial Statements",
   description:
@@ -24,7 +27,12 @@ export const financialsTool: AgentTool<typeof params, FinancialStatement[] | { c
       );
       if (result.status === "unavailable") {
         return {
-          content: [{ type: "text", text: `⚠ Financial statements unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without financials.` }],
+          content: [
+            {
+              type: "text",
+              text: `⚠ Financial statements unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without financials.`,
+            },
+          ],
           details: [],
         };
       }
@@ -37,8 +45,9 @@ export const financialsTool: AgentTool<typeof params, FinancialStatement[] | { c
       }
 
       const header = `${args.symbol.toUpperCase()} — Annual Income Statement (${statements.length} years)`;
-      const rows = statements.map((s) =>
-        `${s.fiscalDate} | Rev: $${fmt(s.revenue)} | GP: $${fmt(s.grossProfit)} | OpInc: $${fmt(s.operatingIncome)} | Net: $${fmt(s.netIncome)}`,
+      const rows = statements.map(
+        (s) =>
+          `${s.fiscalDate} | Rev: $${fmt(s.revenue)} | GP: $${fmt(s.grossProfit)} | OpInc: $${fmt(s.operatingIncome)} | Net: $${fmt(s.netIncome)}`,
       );
 
       const text = [header, ...rows].join("\n");

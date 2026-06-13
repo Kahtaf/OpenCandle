@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { MemoryManager } from "../../../src/memory/manager.js";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import { MemoryStorage } from "../../../src/memory/storage.js";
-import { MemoryManager } from "../../../src/memory/manager.js";
-import { isStale } from "../../../src/memory/types.js";
 import type { MemoryEntry } from "../../../src/memory/types.js";
-import type Database from "better-sqlite3";
+import { isStale } from "../../../src/memory/types.js";
 
 describe("MemoryManager", () => {
   let db: Database.Database;

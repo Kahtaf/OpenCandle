@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { computeGreeks } from "../../../src/tools/options/greeks.js";
 
 describe("computeGreeks (Black-Scholes)", () => {
   // Standard test case: ATM call, 30 days to expiry, 30% IV, 5% risk-free
-  const atm = { spot: 100, strike: 100, timeYears: 30 / 365, iv: 0.30, riskFreeRate: 0.05 };
+  const atm = { spot: 100, strike: 100, timeYears: 30 / 365, iv: 0.3, riskFreeRate: 0.05 };
 
   describe("call options", () => {
     it("ATM call delta is approximately 0.5", () => {

@@ -1,9 +1,9 @@
-import { httpGet, HttpError } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
-import { ProviderCredentialError } from "./provider-credential-error.js";
 import type { CompanyOverview, EarningsData, FinancialStatement } from "../types/fundamentals.js";
-import type { StockQuote, OHLCV } from "../types/market.js";
+import type { OHLCV, StockQuote } from "../types/market.js";
+import { ProviderCredentialError } from "./provider-credential-error.js";
 
 const BASE_URL = "https://www.alphavantage.co/query";
 const MISSING_OVERVIEW_TTL = 15 * 60_000;
@@ -44,10 +44,7 @@ function throwIfApiMessage(data: unknown): void {
   throw new Error(`Alpha Vantage error: ${message}`);
 }
 
-export async function getOverview(
-  symbol: string,
-  apiKey: string,
-): Promise<CompanyOverview> {
+export async function getOverview(symbol: string, apiKey: string): Promise<CompanyOverview> {
   const cacheKey = `av:overview:${symbol}`;
   const missingCacheKey = `${cacheKey}:missing`;
   const cached = cache.get<CompanyOverview>(cacheKey);
@@ -98,10 +95,7 @@ export async function getOverview(
   }
 }
 
-export async function getEarnings(
-  symbol: string,
-  apiKey: string,
-): Promise<EarningsData> {
+export async function getEarnings(symbol: string, apiKey: string): Promise<EarningsData> {
   const cacheKey = `av:earnings:${symbol}`;
   const cached = cache.get<EarningsData>(cacheKey);
   if (cached) return cached;
@@ -132,31 +126,36 @@ export async function getEarnings(
   }
 }
 
-export async function getFinancials(
-  symbol: string,
-  apiKey: string,
-): Promise<FinancialStatement[]> {
+export async function getFinancials(symbol: string, apiKey: string): Promise<FinancialStatement[]> {
   const cacheKey = `av:financials:${symbol}`;
   const cached = cache.get<FinancialStatement[]>(cacheKey);
   if (cached) return cached;
 
   try {
     // Fetch sequentially to respect Alpha Vantage rate limits (5 req/min free tier)
-    const incomeData = await fetchStatement<{ annualReports: any[] }>("INCOME_STATEMENT", symbol, apiKey);
-    const balanceData = await fetchStatement<{ annualReports: any[] }>("BALANCE_SHEET", symbol, apiKey);
-    const cashFlowData = await fetchStatement<{ annualReports: any[] }>("CASH_FLOW", symbol, apiKey);
+    const incomeData = await fetchStatement<{ annualReports: any[] }>(
+      "INCOME_STATEMENT",
+      symbol,
+      apiKey,
+    );
+    const balanceData = await fetchStatement<{ annualReports: any[] }>(
+      "BALANCE_SHEET",
+      symbol,
+      apiKey,
+    );
+    const cashFlowData = await fetchStatement<{ annualReports: any[] }>(
+      "CASH_FLOW",
+      symbol,
+      apiKey,
+    );
 
     const incomeReports = incomeData.annualReports ?? [];
     const balanceReports = balanceData.annualReports ?? [];
     const cashFlowReports = cashFlowData.annualReports ?? [];
 
     // Index balance sheet and cash flow by fiscal date for merging
-    const balanceByDate = new Map(
-      balanceReports.map((r: any) => [r.fiscalDateEnding, r]),
-    );
-    const cashFlowByDate = new Map(
-      cashFlowReports.map((r: any) => [r.fiscalDateEnding, r]),
-    );
+    const balanceByDate = new Map(balanceReports.map((r: any) => [r.fiscalDateEnding, r]));
+    const cashFlowByDate = new Map(cashFlowReports.map((r: any) => [r.fiscalDateEnding, r]));
 
     const statements = incomeReports.slice(0, 4).map((r: any) => {
       const balance = balanceByDate.get(r.fiscalDateEnding) ?? {};
@@ -202,10 +201,7 @@ async function fetchStatement<T>(fn: string, symbol: string, apiKey: string): Pr
   return data;
 }
 
-export async function getGlobalQuote(
-  symbol: string,
-  apiKey: string,
-): Promise<StockQuote> {
+export async function getGlobalQuote(symbol: string, apiKey: string): Promise<StockQuote> {
   const cacheKey = `av:globalquote:${symbol}`;
   const cached = cache.get<StockQuote>(cacheKey);
   if (cached) return cached;
@@ -233,10 +229,10 @@ export async function getGlobalQuote(
       low: parseFloat(gq["04. low"]) || 0,
       previousClose: parseFloat(gq["08. previous close"]) || 0,
       volume: parseInt(gq["06. volume"], 10) || 0,
-      marketCap: 0,      // Not available from GLOBAL_QUOTE
-      pe: null,           // Not available from GLOBAL_QUOTE
-      week52High: 0,      // Not available from GLOBAL_QUOTE
-      week52Low: 0,       // Not available from GLOBAL_QUOTE
+      marketCap: 0, // Not available from GLOBAL_QUOTE
+      pe: null, // Not available from GLOBAL_QUOTE
+      week52High: 0, // Not available from GLOBAL_QUOTE
+      week52Low: 0, // Not available from GLOBAL_QUOTE
       timestamp: Date.now(),
     };
 
@@ -266,7 +262,9 @@ export async function getDailyHistory(
     const daysNeeded = rangeToDays(range);
     const outputsize = daysNeeded > 100 ? "full" : "compact";
     const url = buildUrl("TIME_SERIES_DAILY", { symbol, outputsize }, apiKey);
-    const data = await httpGet<{ "Time Series (Daily)": Record<string, Record<string, string>> }>(url);
+    const data = await httpGet<{ "Time Series (Daily)": Record<string, Record<string, string>> }>(
+      url,
+    );
     throwIfApiMessage(data);
 
     const timeSeries = data["Time Series (Daily)"];
@@ -274,7 +272,7 @@ export async function getDailyHistory(
       throw new Error(`Alpha Vantage: No daily history for ${symbol}`);
     }
 
-    const ohlcv: OHLCV[] = Object.entries(timeSeries)
+    const sorted = Object.entries(timeSeries)
       .map(([date, bar]) => ({
         date,
         open: parseFloat(bar["1. open"]) || 0,
@@ -283,8 +281,14 @@ export async function getDailyHistory(
         close: parseFloat(bar["4. close"]) || 0,
         volume: parseInt(bar["5. volume"], 10) || 0,
       }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-daysNeeded);
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Count-based slicing for ytd is only an estimate (ignores holidays and
+    // the starting weekday) and can leak prior-year bars; filter by date.
+    const ohlcv: OHLCV[] =
+      range === "ytd"
+        ? sorted.filter((bar) => bar.date >= `${new Date().getFullYear()}-01-01`)
+        : sorted.slice(-daysNeeded);
 
     cache.set(cacheKey, ohlcv, TTL.HISTORY);
     return ohlcv;
@@ -298,10 +302,25 @@ export async function getDailyHistory(
 
 function rangeToDays(range: string): number {
   const map: Record<string, number> = {
-    "1d": 1, "5d": 5, "1mo": 22, "3mo": 66, "6mo": 130,
-    "1y": 252, "2y": 504, "5y": 1260, "max": 5000,
+    "1d": 1,
+    "5d": 5,
+    "1mo": 22,
+    "3mo": 66,
+    "6mo": 130,
+    "1y": 252,
+    "2y": 504,
+    "5y": 1260,
+    "10y": 2520,
+    max: 5000,
   };
+  if (range === "ytd") return tradingDaysSinceStartOfYear();
   return map[range] ?? 130;
+}
+
+function tradingDaysSinceStartOfYear(date = new Date()): number {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const calendarDays = Math.max(1, Math.ceil((date.getTime() - start.getTime()) / 86_400_000) + 1);
+  return Math.max(1, Math.ceil((calendarDays / 7) * 5));
 }
 
 function parseNum(s: string | undefined): number {

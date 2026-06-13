@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Value } from "@sinclair/typebox/value";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../src/providers/tradingview.js", () => ({
   screenStocks: vi.fn(),
@@ -9,8 +9,8 @@ vi.mock("../../../src/providers/wrap-provider.js", () => ({
   wrapProvider: vi.fn(),
 }));
 
-import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 import { screenStocks } from "../../../src/providers/tradingview.js";
+import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 import { screenStocksTool } from "../../../src/tools/market/screen-stocks.js";
 
 describe("screen_stocks tool", () => {
@@ -37,7 +37,8 @@ describe("screen_stocks tool", () => {
         symbol: "AAPL",
         values: { close: 190.5, volume: 123456789, "RSI|60": 29.4 },
         sourceProvider: "tradingview",
-        dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        dataCaveat:
+          "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       },
     ]);
 
@@ -164,7 +165,8 @@ describe("screen_stocks tool", () => {
           symbol: "AAPL",
           values: { close: 190.5 },
           sourceProvider: "tradingview",
-          dataCaveat: "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+          dataCaveat:
+            "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
         },
       ],
       timestamp: "2026-06-01T00:00:00.000Z",
@@ -173,7 +175,9 @@ describe("screen_stocks tool", () => {
 
     const result = await screenStocksTool.execute("call-stale", { market: "america" });
 
-    expect((result.content[0] as any).text).toContain("cached TradingView screen from 2026-06-01T00:00:00.000Z");
+    expect((result.content[0] as any).text).toContain(
+      "cached TradingView screen from 2026-06-01T00:00:00.000Z",
+    );
   });
 
   it("returns structured unavailable text without fabricating rows", async () => {

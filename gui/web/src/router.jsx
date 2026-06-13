@@ -1,4 +1,4 @@
-import { createRoute, createRootRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { AppShell } from "./App.jsx";
 
 const rootRoute = createRootRoute({
@@ -29,7 +29,47 @@ const settingsRoute = createRoute({
   validateSearch: validateGuiSearch,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, sessionRoute, historyRoute, settingsRoute]);
+const watchlistsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/watchlists",
+  validateSearch: validateGuiSearch,
+});
+
+const portfoliosRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/portfolios",
+  validateSearch: validateGuiSearch,
+});
+
+const alertsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/alerts",
+  validateSearch: validateGuiSearch,
+});
+
+const reportsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reports",
+  validateSearch: validateGuiSearch,
+});
+
+const predictionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/predictions",
+  validateSearch: validateGuiSearch,
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  sessionRoute,
+  historyRoute,
+  settingsRoute,
+  watchlistsRoute,
+  portfoliosRoute,
+  alertsRoute,
+  reportsRoute,
+  predictionsRoute,
+]);
 
 export const router = createRouter({
   routeTree,
@@ -40,7 +80,10 @@ const VALID_DRAWERS = new Set(["history", "context", "catalog", "tools", "provid
 
 function validateGuiSearch(search) {
   return {
-    drawer: typeof search.drawer === "string" && VALID_DRAWERS.has(search.drawer) ? search.drawer : undefined,
+    drawer:
+      typeof search.drawer === "string" && VALID_DRAWERS.has(search.drawer)
+        ? search.drawer
+        : undefined,
     prompt: typeof search.prompt === "string" ? search.prompt : undefined,
   };
 }

@@ -55,13 +55,13 @@ export class WorkflowEventLogger {
         "SELECT id, run_id, step_index, event_type, payload_json, timestamp FROM workflow_events WHERE run_id = ? ORDER BY id",
       )
       .all(runId) as Array<{
-        id: number;
-        run_id: string;
-        step_index: number;
-        event_type: string;
-        payload_json: string | null;
-        timestamp: string;
-      }>;
+      id: number;
+      run_id: string;
+      step_index: number;
+      event_type: string;
+      payload_json: string | null;
+      timestamp: string;
+    }>;
 
     return rows.map((r) => ({
       id: r.id,

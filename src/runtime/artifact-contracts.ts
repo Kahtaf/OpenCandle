@@ -69,7 +69,8 @@ export function validateArtifactContractRegistry(): string[] {
   for (const [id, contract] of Object.entries(ARTIFACT_CONTRACT_REGISTRY)) {
     if (contract.id !== id) errors.push(`${id} key must match contract id`);
     if (contract.status !== "trace_only") errors.push(`${id} must remain trace-only in V1`);
-    if (contract.taskFamilies.length === 0) errors.push(`${id} must declare at least one task family`);
+    if (contract.taskFamilies.length === 0)
+      errors.push(`${id} must declare at least one task family`);
     if (!contract.description.trim()) errors.push(`${id} must include a description`);
   }
   return errors;

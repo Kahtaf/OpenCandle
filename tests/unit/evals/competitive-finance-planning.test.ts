@@ -15,16 +15,23 @@ describe("competitive finance planning metadata", () => {
         evaluationFocus: "temporal grounding",
       },
       asOfDate: "2026-05-24",
-      competitorAnswers: [{
-        id: "claude",
-        label: "Claude",
-        provider: "anthropic",
-        model: "claude",
-        answer: "No live tools.",
-      }],
+      competitorAnswers: [
+        {
+          id: "claude",
+          label: "Claude",
+          provider: "anthropic",
+          model: "claude",
+          answer: "No live tools.",
+        },
+      ],
       openCandleTrace: {
         prompt: "Why did BA move today?",
-        classification: { workflow: "general_finance_qa", confidence: 0.9, tier: "llm", entities: { symbols: ["BA"] } },
+        classification: {
+          workflow: "general_finance_qa",
+          confidence: 0.9,
+          tier: "llm",
+          entities: { symbols: ["BA"] },
+        },
         toolCalls: [],
         askUserTranscript: [],
         text: "answer",
@@ -54,44 +61,49 @@ describe("competitive finance planning metadata", () => {
   it("classifies competitive improvement ideas by prompt-to-policy layer", () => {
     const analysis = analyzeCompetitiveReport({
       generatedAt: "2026-05-24T00:00:00.000Z",
-      results: [{
-        prompt: {
-          id: "case-1",
-          prompt: "Compare these ETFs",
-          topic: "ETF comparison",
-          complexity: "moderate",
-          evaluationFocus: "overlap and tradeoffs",
-        },
-        openCandleTrace: {
-          toolCalls: [{ name: "compare_assets", args: {} }],
-          planning: {
-            taskFamily: "asset_compare",
-            evidencePlanId: "placeholder_asset_compare",
-            structuredCheckFailures: [{ checkId: "capability_gap_disclosure" }],
-            retryEligibility: { eligible: true, activeRetryAllowed: false, reasons: ["capability gap"] },
+      results: [
+        {
+          prompt: {
+            id: "case-1",
+            prompt: "Compare these ETFs",
+            topic: "ETF comparison",
+            complexity: "moderate",
+            evaluationFocus: "overlap and tradeoffs",
+          },
+          openCandleTrace: {
+            toolCalls: [{ name: "compare_assets", args: {} }],
+            planning: {
+              taskFamily: "asset_compare",
+              evidencePlanId: "placeholder_asset_compare",
+              structuredCheckFailures: [{ checkId: "capability_gap_disclosure" }],
+              retryEligibility: {
+                eligible: true,
+                activeRetryAllowed: false,
+                reasons: ["capability gap"],
+              },
+            },
+          },
+          competitorAnswers: [],
+          judgment: {
+            winner: "claude",
+            openCandleScore: 3,
+            competitorScores: { claude: 5 },
+            reason: "OpenCandle missed holdings overlap.",
+            openCandleDidBetter: [],
+            competitorsDidBetter: { claude: ["better synthesis"] },
+            openCandleImprovementIdeas: [
+              "Add ETF holdings overlap data",
+              "Improve answer contract for tradeoff framing",
+            ],
           },
         },
-        competitorAnswers: [],
-        judgment: {
-          winner: "claude",
-          openCandleScore: 3,
-          competitorScores: { claude: 5 },
-          reason: "OpenCandle missed holdings overlap.",
-          openCandleDidBetter: [],
-          competitorsDidBetter: { claude: ["better synthesis"] },
-          openCandleImprovementIdeas: [
-            "Add ETF holdings overlap data",
-            "Improve answer contract for tradeoff framing",
-          ],
-        },
-      }],
+      ],
     });
 
     expect(analysis.cases[0]?.planning?.taskFamily).toBe("asset_compare");
-    expect(analysis.cases[0]?.failureClassifications).toEqual(expect.arrayContaining([
-      "tool-capability",
-      "answer-contract",
-    ]));
+    expect(analysis.cases[0]?.failureClassifications).toEqual(
+      expect.arrayContaining(["tool-capability", "answer-contract"]),
+    );
     expect(analysis.themeSummary.map((theme) => theme.theme)).toContain("tool-capability");
   });
 });

@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { BackgroundQuoteRefreshes } from "../../../gui/server/background-quotes.js";
+import type { SessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+import {
+  BACKGROUND_QUOTE_POLL_INTERVAL_MS,
+  BackgroundQuoteRefreshes,
+  createBackgroundQuotePoller,
+} from "../../../gui/server/background-quotes.js";
+import type { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 
 describe("BackgroundQuoteRefreshes", () => {
   it("adds synthetic quote refreshes without mutating persisted session entries", () => {
@@ -59,4 +64,109 @@ describe("BackgroundQuoteRefreshes", () => {
       },
     });
   });
+
+  it("starts polling when clients connect and stops when all clients disconnect", () => {
+    let clients = 0;
+    const intervalHandle = {} as ReturnType<typeof setInterval>;
+    const setIntervalFn = vi.fn(() => intervalHandle);
+    const clearIntervalFn = vi.fn();
+    const poller = createBackgroundQuotePoller({
+      getClientCount: () => clients,
+      getSessionManager: () => sessionManagerWithEntries([]),
+      refreshes: new BackgroundQuoteRefreshes(),
+      broadcastState: vi.fn(),
+      setIntervalFn,
+      clearIntervalFn,
+    });
+
+    poller.updatePoller();
+    expect(setIntervalFn).not.toHaveBeenCalled();
+
+    clients = 1;
+    poller.updatePoller();
+    poller.updatePoller();
+
+    expect(setIntervalFn).toHaveBeenCalledTimes(1);
+    expect(setIntervalFn).toHaveBeenCalledWith(
+      expect.any(Function),
+      BACKGROUND_QUOTE_POLL_INTERVAL_MS,
+    );
+
+    clients = 0;
+    poller.updatePoller();
+
+    expect(clearIntervalFn).toHaveBeenCalledWith(intervalHandle);
+  });
+
+  it("skips overlapping quote refreshes and clears the in-flight guard", async () => {
+    let releaseRefresh: (() => void) | null = null;
+    let resolveStarted: (() => void) | null = null;
+    let invocationCount = 0;
+    const refreshStarted = new Promise<void>((resolve) => {
+      resolveStarted = resolve;
+    });
+    const invokeTool = vi.fn(async () => {
+      invocationCount += 1;
+      if (invocationCount === 1) {
+        resolveStarted?.();
+        await new Promise<void>((resolve) => {
+          releaseRefresh = resolve;
+        });
+      }
+      return {
+        toolCallId: "background-quote",
+        result: {
+          details: { symbol: "NVDA", price: 217 },
+          content: [{ type: "text", text: "NVDA quote" }],
+        },
+        isError: false,
+      };
+    }) as unknown as typeof invokeToolFromUi;
+    const broadcastState = vi.fn();
+    const poller = createBackgroundQuotePoller({
+      getClientCount: () => 1,
+      getSessionManager: () => sessionManagerWithEntries([quoteRefreshEntry("NVDA")]),
+      refreshes: new BackgroundQuoteRefreshes(),
+      broadcastState,
+      getTools: () => getFakeTools(),
+      invokeTool,
+    });
+
+    const first = poller.pollVisibleQuotes();
+    await refreshStarted;
+    await poller.pollVisibleQuotes();
+    expect(invokeTool).toHaveBeenCalledTimes(1);
+    releaseRefresh?.();
+    await first;
+    await poller.pollVisibleQuotes();
+
+    expect(invokeTool).toHaveBeenCalledTimes(2);
+    expect(broadcastState).toHaveBeenCalledTimes(2);
+  });
 });
+
+function sessionManagerWithEntries(entries: SessionEntry[]): SessionManager {
+  return {
+    getEntries: () => entries,
+    getSessionId: () => "session-1",
+  } as unknown as SessionManager;
+}
+
+function quoteRefreshEntry(symbol: string): SessionEntry {
+  return {
+    type: "custom",
+    id: `quote-${symbol}`,
+    parentId: null,
+    timestamp: "2026-06-13T00:00:00.000Z",
+    customType: "opencandle-quote-refresh",
+    data: {
+      symbol,
+      value: { symbol, price: 216 },
+      content: [{ type: "text", text: `${symbol} quote` }],
+    },
+  } as SessionEntry;
+}
+
+function getFakeTools() {
+  return [{ name: "get_stock_quote" }];
+}

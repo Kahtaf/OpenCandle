@@ -13,6 +13,91 @@ export interface PromptGenerationOptions {
   count: number;
   seed?: string;
   asOfDate: string;
+  savedStateSummary?: string;
+}
+
+export interface SeededMarketStateFixture {
+  lots: Array<{
+    symbol: string;
+    name: string;
+    assetType: "equity" | "etf";
+    quantity: number;
+    avgCost: number;
+  }>;
+  watchlist: Array<{ symbol: string; name: string; targetPrice?: number; thesis?: string }>;
+  predictions: Array<{
+    symbol: string;
+    direction: "bullish" | "bearish";
+    conviction: number;
+    entryPrice: number;
+    targetPrice: number;
+    timeframeDays: number;
+  }>;
+}
+
+/**
+ * Deterministic user state for saved-state competitive prompts. Sector-diverse
+ * and generic on purpose; benchmark literals stay here, never in production
+ * prompts (see prompt-debt-guard).
+ */
+export const COMPETITIVE_STATE_FIXTURE: SeededMarketStateFixture = {
+  lots: [
+    { symbol: "SPY", name: "SPDR S&P 500 ETF Trust", assetType: "etf", quantity: 60, avgCost: 480 },
+    { symbol: "AAPL", name: "Apple Inc.", assetType: "equity", quantity: 40, avgCost: 175 },
+    {
+      symbol: "XLE",
+      name: "Energy Select Sector SPDR Fund",
+      assetType: "etf",
+      quantity: 100,
+      avgCost: 85,
+    },
+  ],
+  watchlist: [
+    {
+      symbol: "MSFT",
+      name: "Microsoft Corporation",
+      targetPrice: 420,
+      thesis: "cloud margin expansion",
+    },
+    { symbol: "JPM", name: "JPMorgan Chase & Co.", thesis: "rate-cycle beneficiary" },
+  ],
+  predictions: [
+    {
+      symbol: "AAPL",
+      direction: "bullish",
+      conviction: 7,
+      entryPrice: 180,
+      targetPrice: 210,
+      timeframeDays: 120,
+    },
+  ],
+};
+
+export function buildSavedStateSummary(fixture: SeededMarketStateFixture): string {
+  const lines = ["The user's saved OpenCandle state:"];
+  lines.push("Portfolio lots:");
+  for (const lot of fixture.lots) {
+    lines.push(
+      `- ${lot.symbol} (${lot.name}): ${lot.quantity} shares @ $${lot.avgCost.toFixed(2)}`,
+    );
+  }
+  lines.push("Watchlist:");
+  for (const item of fixture.watchlist) {
+    const parts = [
+      item.targetPrice != null ? `target $${item.targetPrice.toFixed(2)}` : null,
+      item.thesis ? `thesis: ${item.thesis}` : null,
+    ]
+      .filter(Boolean)
+      .join("; ");
+    lines.push(`- ${item.symbol} (${item.name})${parts ? ` — ${parts}` : ""}`);
+  }
+  lines.push("Open predictions:");
+  for (const prediction of fixture.predictions) {
+    lines.push(
+      `- ${prediction.symbol} ${prediction.direction} to $${prediction.targetPrice.toFixed(2)} (conviction ${prediction.conviction}/10, entry $${prediction.entryPrice.toFixed(2)}, ${prediction.timeframeDays}d)`,
+    );
+  }
+  return lines.join("\n");
 }
 
 export interface CompetitorAnswer {
@@ -30,6 +115,7 @@ export interface ComparisonJudgeInput {
   asOfDate: string;
   openCandleTrace: EvalTrace;
   competitorAnswers: CompetitorAnswer[];
+  savedStateSummary?: string;
 }
 
 export interface ComparisonJudgment {
@@ -98,7 +184,9 @@ export interface CompetitiveReportCacheEntry {
 const PREFERRED_CONTEXT_WINDOW = 128_000;
 
 export function buildPromptGenerationPrompt(options: PromptGenerationOptions): string {
-  const seedLine = options.seed ? `Use this run seed to vary the prompt set: ${options.seed}` : "Invent a fresh prompt set.";
+  const seedLine = options.seed
+    ? `Use this run seed to vary the prompt set: ${options.seed}`
+    : "Invent a fresh prompt set.";
   return `Generate ${options.count} realistic finance prompts for comparing OpenCandle against generic no-tool finance agents such as Claude, Codex, and Gemini.
 
 Current date for this benchmark run: ${options.asOfDate}
@@ -114,7 +202,15 @@ Prompt wording rules:
 - Do not ask the user to compare tool coverage, source availability, or evidence categories unless a normal user would ask that explicitly.
 - Prefer realistic constraints users actually give, such as budget, holdings, cost basis, time horizon, worry, target, stop, or "today/right now".
 
-Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
+${
+  options.savedStateSummary
+    ? `${options.savedStateSummary}
+
+The user has saved this state in their assistant. Make about two of the prompts naturally reference it the way a returning user would ("my portfolio", "my watchlist", "the stocks I'm watching") without enumerating the saved rows verbatim. The remaining prompts should not depend on saved state.
+
+`
+    : ""
+}Do not bias toward prompts where OpenCandle obviously has a tool advantage. Include prompts where:
 - OpenCandle may be better because it can gather evidence or run tools.
 - A generic agent may be better because the prompt mainly needs synthesis, explanation, or judgment.
 - The winner is ambiguous and the comparison should reveal what OpenCandle needs to improve.
@@ -135,14 +231,21 @@ Return JSON only:
 
 export function buildGenericAgentPrompt(
   prompt: string,
-  options: { agentName: string; asOfDate: string },
+  options: { agentName: string; asOfDate: string; savedStateSummary?: string },
 ): string {
   return `You are ${options.agentName}, acting as a general finance assistant without live tools, browsing, private data, or market-data APIs.
 
 Current date: ${options.asOfDate}
 
 Answer the user's prompt as well as you can. Be explicit when current data would be needed and you cannot verify it. Do not pretend to have live prices, filings, options chains, sentiment, or macro probabilities.
-
+${
+  options.savedStateSummary
+    ? `
+Context the user previously shared with you:
+${options.savedStateSummary}
+`
+    : ""
+}
 User prompt:
 ${prompt}`;
 }
@@ -153,29 +256,43 @@ export function buildComparisonJudgePrompt(input: ComparisonJudgeInput): string 
     args: call.args,
   }));
   const competitorAnswers = input.competitorAnswers
-    .map((competitor) => `Agent: ${competitor.label} (${competitor.id}, ${competitor.provider}/${competitor.model})
+    .map(
+      (
+        competitor,
+      ) => `Agent: ${competitor.label} (${competitor.id}, ${competitor.provider}/${competitor.model})
 Answer:
-${competitor.answer}`)
+${competitor.answer}`,
+    )
     .join("\n\n---\n\n");
   const planningMetadata = input.openCandleTrace.planning
     ? {
-      taskFamily: input.openCandleTrace.planning.taskFamily,
-      commitmentMode: input.openCandleTrace.planning.commitmentMode,
-      policyCardId: input.openCandleTrace.planning.policyCardId,
-      evidencePlanId: input.openCandleTrace.planning.evidencePlanId,
-      answerContractId: input.openCandleTrace.planning.answerContractId,
-      structuredCheckIds: input.openCandleTrace.planning.structuredCheckIds,
-      capabilityGapIds: input.openCandleTrace.planning.capabilityGapIds,
-      structuredCheckFailures: input.openCandleTrace.planning.structuredCheckFailures.map((failure) => ({
-        checkId: failure.checkId,
-        failureReason: failure.failureReason,
-      })),
-      retryEligibility: input.openCandleTrace.planning.retryEligibility,
-    }
+        taskFamily: input.openCandleTrace.planning.taskFamily,
+        commitmentMode: input.openCandleTrace.planning.commitmentMode,
+        policyCardId: input.openCandleTrace.planning.policyCardId,
+        evidencePlanId: input.openCandleTrace.planning.evidencePlanId,
+        answerContractId: input.openCandleTrace.planning.answerContractId,
+        structuredCheckIds: input.openCandleTrace.planning.structuredCheckIds,
+        capabilityGapIds: input.openCandleTrace.planning.capabilityGapIds,
+        structuredCheckFailures: input.openCandleTrace.planning.structuredCheckFailures.map(
+          (failure) => ({
+            checkId: failure.checkId,
+            failureReason: failure.failureReason,
+          }),
+        ),
+        retryEligibility: input.openCandleTrace.planning.retryEligibility,
+      }
     : null;
-  const winnerOptions = ["opencandle", ...input.competitorAnswers.map((competitor) => competitor.id), "tie"].join("|");
-  const scoreShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, 0]));
-  const didBetterShape = Object.fromEntries(input.competitorAnswers.map((competitor) => [competitor.id, ["..."]]));
+  const winnerOptions = [
+    "opencandle",
+    ...input.competitorAnswers.map((competitor) => competitor.id),
+    "tie",
+  ].join("|");
+  const scoreShape = Object.fromEntries(
+    input.competitorAnswers.map((competitor) => [competitor.id, 0]),
+  );
+  const didBetterShape = Object.fromEntries(
+    input.competitorAnswers.map((competitor) => [competitor.id, ["..."]]),
+  );
   return `Compare OpenCandle against generic no-tool finance agents for the same user prompt.
 
 Current date: ${input.asOfDate}
@@ -201,9 +318,18 @@ ${input.openCandleTrace.text}
 Generic no-tool agent answers:
 ${competitorAnswers}
 
-Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
+Judge the answers on usefulness, correctness, evidence, clarity, and honesty about uncertainty. Score each answer on a 0-10 scale anchored as: 10 = excellent on all five criteria with no material flaws; 7 = good with minor gaps; 5 = mixed, useful but with a significant gap (missing evidence, vagueness, or an unsupported claim); 3 = weak, mostly unhelpful or partly wrong; 0 = harmful or fabricated. Use the full scale; do not cluster at 7-8 by default. It is acceptable for any generic agent to win. When one does, explain why and what OpenCandle should improve. Treat dates on or before the current date as current or historical, not future-dated.
 
-Do not reward fabricated current facts. A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized for correctness and honesty even if the answer sounds specific. For prompts about current filings or live market data, prefer a sourced OpenCandle answer or an honest generic limitation over an unsourced no-tool answer that invents details.
+${
+  input.savedStateSummary
+    ? `Saved state for this user (both agents had access to these facts):
+${input.savedStateSummary}
+
+When the prompt concerns the user's own portfolio, watchlist, or predictions, verify each answer against this saved state: penalize answers that ignore it, misquote quantities or cost basis, or invent holdings. Reward answers that connect the question to the specific saved positions.
+
+`
+    : ""
+}Do not reward fabricated current facts. A no-tool agent that presents unverified live prices, filings, options chains, sentiment, macro probabilities, or filing changes as factual should be penalized for correctness and honesty even if the answer sounds specific. For prompts about current filings or live market data, prefer a sourced OpenCandle answer or an honest generic limitation over an unsourced no-tool answer that invents details.
 
 When suggesting OpenCandle improvements, make them layer-specific where possible: routing, planning, evidence-plan, tool-capability, evidence-normalization, answer-contract, structured-check, retry-eligibility, synthesis, or judge/harness.
 
@@ -280,12 +406,24 @@ export function findCachedCompetitorAnswer(
   return null;
 }
 
-export function parseComparisonJudgment(raw: string): ComparisonJudgment {
+export function parseComparisonJudgment(
+  raw: string,
+  options?: { allowedWinners?: string[] },
+): ComparisonJudgment {
   const value = parseJsonPayload(raw);
   if (!isRecord(value)) throw new Error("Comparison judgment must be a JSON object");
 
-  const winner = stringValue(value.winner);
+  let winner = stringValue(value.winner).trim().toLowerCase();
   if (!winner) throw new Error("Comparison judgment winner is required");
+  if (options?.allowedWinners) {
+    const allowed = options.allowedWinners.map((candidate) => candidate.toLowerCase());
+    if (!allowed.includes(winner)) {
+      throw new Error(
+        `Comparison judgment winner "${winner}" is not one of: ${options.allowedWinners.join(", ")}`,
+      );
+    }
+    winner = options.allowedWinners[allowed.indexOf(winner)];
+  }
 
   return {
     winner,
@@ -307,30 +445,31 @@ export function analyzeCompetitiveReport(
     const judgment = judgmentFromResult(result);
     if (!prompt || !judgment) return [];
     const bestCompetitor = bestCompetitorScore(judgment.competitorScores);
-    const lostTo = judgment.winner !== "opencandle" && judgment.winner !== "tie"
-      ? judgment.winner
-      : undefined;
+    const lostTo =
+      judgment.winner !== "opencandle" && judgment.winner !== "tie" ? judgment.winner : undefined;
     const ideas = judgment.openCandleImprovementIdeas;
-    return [{
-      id: prompt.id,
-      prompt: prompt.prompt,
-      winner: judgment.winner,
-      openCandleScore: judgment.openCandleScore,
-      competitorScores: judgment.competitorScores,
-      scoreGap: bestCompetitor ? bestCompetitor.score - judgment.openCandleScore : 0,
-      lostTo,
-      judgeReason: judgment.reason,
-      openCandleDidBetter: judgment.openCandleDidBetter,
-      competitorsDidBetter: judgment.competitorsDidBetter,
-      openCandleImprovementIdeas: ideas,
-      improvementThemes: unique(ideas.flatMap(classifyImprovementIdea)),
-      failureClassifications: unique(ideas.flatMap(classifyFailureLayer)),
-      planning: planningFromResult(result),
-      toolCalls: toolCallsFromResult(result),
-      cachedCompetitors: competitorAnswersFromResult(result)
-        .filter((answer) => answer.cachedFromReport)
-        .map((answer) => answer.id),
-    }];
+    return [
+      {
+        id: prompt.id,
+        prompt: prompt.prompt,
+        winner: judgment.winner,
+        openCandleScore: judgment.openCandleScore,
+        competitorScores: judgment.competitorScores,
+        scoreGap: bestCompetitor ? bestCompetitor.score - judgment.openCandleScore : 0,
+        lostTo,
+        judgeReason: judgment.reason,
+        openCandleDidBetter: judgment.openCandleDidBetter,
+        competitorsDidBetter: judgment.competitorsDidBetter,
+        openCandleImprovementIdeas: ideas,
+        improvementThemes: unique(ideas.flatMap(classifyImprovementIdea)),
+        failureClassifications: unique(ideas.flatMap(classifyFailureLayer)),
+        planning: planningFromResult(result),
+        toolCalls: toolCallsFromResult(result),
+        cachedCompetitors: competitorAnswersFromResult(result)
+          .filter((answer) => answer.cachedFromReport)
+          .map((answer) => answer.id),
+      },
+    ];
   });
 
   return {
@@ -353,7 +492,9 @@ export function formatCompetitiveReportAnalysisMarkdown(
   if (analysis.reportPath) lines.push(`Report: ${analysis.reportPath}`);
   if (analysis.generatedAt) lines.push(`Generated: ${analysis.generatedAt}`);
   lines.push("");
-  lines.push(`Summary: OC wins ${analysis.openCandleWins}, losses ${analysis.losses}, ties ${analysis.ties}, cases ${analysis.promptCount}.`);
+  lines.push(
+    `Summary: OC wins ${analysis.openCandleWins}, losses ${analysis.losses}, ties ${analysis.ties}, cases ${analysis.promptCount}.`,
+  );
 
   if (analysis.themeSummary.length > 0) {
     lines.push("");
@@ -370,7 +511,9 @@ export function formatCompetitiveReportAnalysisMarkdown(
       .map(([id, score]) => `${id} ${score}`)
       .join(", ");
     lines.push(`### ${c.id}`);
-    lines.push(`Winner: ${c.winner}. Scores: OC ${c.openCandleScore}${scores ? `, ${scores}` : ""}.`);
+    lines.push(
+      `Winner: ${c.winner}. Scores: OC ${c.openCandleScore}${scores ? `, ${scores}` : ""}.`,
+    );
     if (c.lostTo) lines.push(`Loss gap: ${c.lostTo} beat OC by ${c.scoreGap}.`);
     lines.push(`Prompt: ${c.prompt}`);
     lines.push("");
@@ -394,7 +537,9 @@ export function formatCompetitiveReportAnalysisMarkdown(
       lines.push(`Failure layers: ${failureClassifications.join(", ")}`);
     }
     if (c.planning) {
-      lines.push(`Planning: ${c.planning.taskFamily ?? "(unknown)"} / ${c.planning.evidencePlanId ?? "(unknown evidence plan)"}.`);
+      lines.push(
+        `Planning: ${c.planning.taskFamily ?? "(unknown)"} / ${c.planning.evidencePlanId ?? "(unknown evidence plan)"}.`,
+      );
     }
     if (c.toolCalls.length > 0) {
       lines.push("");
@@ -418,7 +563,9 @@ export function competitiveReportAnalysisPath(reportPath: string): string {
   return `${reportPath}-competitive-finance-analysis.md`;
 }
 
-export function fixedPromptFromEnv(env: Record<string, string | undefined>): GeneratedFinancePrompt | null {
+export function fixedPromptFromEnv(
+  env: Record<string, string | undefined>,
+): GeneratedFinancePrompt | null {
   const prompt = env.OPENCANDLE_COMPETITIVE_PROMPT?.trim();
   if (!prompt) return null;
 
@@ -428,7 +575,8 @@ export function fixedPromptFromEnv(env: Record<string, string | undefined>): Gen
     prompt,
     topic: env.OPENCANDLE_COMPETITIVE_PROMPT_TOPIC?.trim() || "fixed prompt",
     complexity: complexity === "simple" || complexity === "complex" ? complexity : "moderate",
-    evaluationFocus: env.OPENCANDLE_COMPETITIVE_PROMPT_FOCUS?.trim() ||
+    evaluationFocus:
+      env.OPENCANDLE_COMPETITIVE_PROMPT_FOCUS?.trim() ||
       "Compare OpenCandle against generic agents on the same fixed prompt and identify concrete OpenCandle improvements.",
   };
 }
@@ -437,10 +585,16 @@ export function extractUsableAnswerFromCliFailure(message: string): string | nul
   const match = /\bfailed:\s*/i.exec(message);
   const candidate = (match ? message.slice(match.index + match[0].length) : message).trim();
   if (!candidate) return null;
-  if (/^(Internal error|Error handling request|Gemini CLI ACP startup timed out|exit status)\b/i.test(candidate)) {
+  if (
+    /^(Internal error|Error handling request|Gemini CLI ACP startup timed out|exit status)\b/i.test(
+      candidate,
+    )
+  ) {
     return null;
   }
-  if (/Failed to authenticate|Invalid authentication credentials|Permission denied/i.test(candidate)) {
+  if (
+    /Failed to authenticate|Invalid authentication credentials|Permission denied/i.test(candidate)
+  ) {
     return null;
   }
   return candidate;
@@ -481,8 +635,10 @@ export function selectDefaultCompetitiveModel<T extends CompetitiveModelCandidat
   available: T[];
 }): T | undefined {
   if (options.googleAuthConfigured) return options.googleModel;
-  return options.available.find((model) => (model.contextWindow ?? 0) >= PREFERRED_CONTEXT_WINDOW) ??
-    options.available[0];
+  return (
+    options.available.find((model) => (model.contextWindow ?? 0) >= PREFERRED_CONTEXT_WINDOW) ??
+    options.available[0]
+  );
 }
 
 export function competitiveBenchmarkExitCode(): number {
@@ -498,9 +654,15 @@ export function selectCompetitiveCodexModel(env: Record<string, string | undefin
   return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark[medium]";
 }
 
-export function shouldRetryCompetitiveModelCall(message: string, attempt: number, maxAttempts: number): boolean {
+export function shouldRetryCompetitiveModelCall(
+  message: string,
+  attempt: number,
+  maxAttempts: number,
+): boolean {
   if (attempt >= maxAttempts) return false;
-  return /\b(fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|rate limit|429|500|502|503|504)\b/i.test(message);
+  return /\b(fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|rate limit|429|500|502|503|504)\b/i.test(
+    message,
+  );
 }
 
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {
@@ -545,15 +707,19 @@ function competitorAnswersFromResult(result: unknown): CompetitorAnswer[] {
     const id = stringValue(item.id);
     const answer = stringValue(item.answer);
     if (!id || !answer) return [];
-    return [{
-      id,
-      label: stringValue(item.label) || id,
-      provider: stringValue(item.provider),
-      model: stringValue(item.model),
-      answer,
-      ...(typeof item.error === "string" ? { error: item.error } : {}),
-      ...(typeof item.cachedFromReport === "string" ? { cachedFromReport: item.cachedFromReport } : {}),
-    }];
+    return [
+      {
+        id,
+        label: stringValue(item.label) || id,
+        provider: stringValue(item.provider),
+        model: stringValue(item.model),
+        answer,
+        ...(typeof item.error === "string" ? { error: item.error } : {}),
+        ...(typeof item.cachedFromReport === "string"
+          ? { cachedFromReport: item.cachedFromReport }
+          : {}),
+      },
+    ];
   });
 }
 
@@ -574,14 +740,20 @@ function judgmentFromResult(result: unknown): ComparisonJudgment | null {
 }
 
 function toolCallsFromResult(result: unknown): string[] {
-  if (!isRecord(result) || !isRecord(result.openCandleTrace) || !Array.isArray(result.openCandleTrace.toolCalls)) {
+  if (
+    !isRecord(result) ||
+    !isRecord(result.openCandleTrace) ||
+    !Array.isArray(result.openCandleTrace.toolCalls)
+  ) {
     return [];
   }
-  return unique(result.openCandleTrace.toolCalls.flatMap((call): string[] => {
-    if (!isRecord(call)) return [];
-    const name = stringValue(call.name);
-    return name ? [name] : [];
-  }));
+  return unique(
+    result.openCandleTrace.toolCalls.flatMap((call): string[] => {
+      if (!isRecord(call)) return [];
+      const name = stringValue(call.name);
+      return name ? [name] : [];
+    }),
+  );
 }
 
 function bestCompetitorScore(scores: Record<string, number>): { id: string; score: number } | null {
@@ -605,24 +777,31 @@ function summarizeImprovementThemes(cases: CompetitiveCaseAnalysis[]): Competiti
       }
     }
   }
-  return Array.from(byTheme.values()).sort((a, b) => b.count - a.count || a.theme.localeCompare(b.theme));
+  return Array.from(byTheme.values()).sort(
+    (a, b) => b.count - a.count || a.theme.localeCompare(b.theme),
+  );
 }
 
 function planningFromResult(result: unknown): CompetitiveCaseAnalysis["planning"] | undefined {
-  if (!isRecord(result) || !isRecord(result.openCandleTrace) || !isRecord(result.openCandleTrace.planning)) {
+  if (
+    !isRecord(result) ||
+    !isRecord(result.openCandleTrace) ||
+    !isRecord(result.openCandleTrace.planning)
+  ) {
     return undefined;
   }
   const planning = result.openCandleTrace.planning;
-  const retryEligibility = isRecord(planning.retryEligibility) ? planning.retryEligibility : undefined;
+  const retryEligibility = isRecord(planning.retryEligibility)
+    ? planning.retryEligibility
+    : undefined;
   return {
     taskFamily: stringValue(planning.taskFamily) || undefined,
     evidencePlanId: stringValue(planning.evidencePlanId) || undefined,
     structuredCheckFailures: Array.isArray(planning.structuredCheckFailures)
       ? planning.structuredCheckFailures
       : undefined,
-    retryEligible: typeof retryEligibility?.eligible === "boolean"
-      ? retryEligibility.eligible
-      : undefined,
+    retryEligible:
+      typeof retryEligibility?.eligible === "boolean" ? retryEligibility.eligible : undefined,
   };
 }
 
@@ -636,7 +815,11 @@ function classifyImprovementIdea(idea: string): string[] {
   if (/\b(synthesis|connect|integrat|context|explain|why|implication)\b/.test(lower)) {
     themes.push("synthesis and reasoning");
   }
-  if (/\b(portfolio|sleeve|allocation|component|concentration|duration|credit|tips|emerging|tech)\b/.test(lower)) {
+  if (
+    /\b(portfolio|sleeve|allocation|component|concentration|duration|credit|tips|emerging|tech)\b/.test(
+      lower,
+    )
+  ) {
     themes.push("portfolio-specific nuance");
   }
   if (/\b(action|adjust|rebalance|trim|specific|percentage|condition|mitigat)\b/.test(lower)) {
@@ -656,11 +839,20 @@ function classifyFailureLayer(idea: string): string[] {
   const layers: string[] = [];
   if (/\b(route|router|classification|workflow)\b/.test(lower)) layers.push("routing");
   if (/\b(plan|planning|task family|task-family)\b/.test(lower)) layers.push("planning");
-  if (/\b(evidence plan|market status|temporal|freshness|source coverage)\b/.test(lower)) layers.push("evidence-plan");
-  if (/\b(tool|provider|data|holdings overlap|cash yield|brokerage|calendar|earnings|live)\b/.test(lower)) layers.push("tool-capability");
-  if (/\b(normaliz|provider gap|degradation|connect|credential)\b/.test(lower)) layers.push("evidence-normalization");
-  if (/\b(answer contract|contract|tradeoff framing|framework|commitment)\b/.test(lower)) layers.push("answer-contract");
-  if (/\b(structured check|check|validator|disclosure)\b/.test(lower)) layers.push("structured-check");
+  if (/\b(evidence plan|market status|temporal|freshness|source coverage)\b/.test(lower))
+    layers.push("evidence-plan");
+  if (
+    /\b(tool|provider|data|holdings overlap|cash yield|brokerage|calendar|earnings|live)\b/.test(
+      lower,
+    )
+  )
+    layers.push("tool-capability");
+  if (/\b(normaliz|provider gap|degradation|connect|credential)\b/.test(lower))
+    layers.push("evidence-normalization");
+  if (/\b(answer contract|contract|tradeoff framing|framework|commitment)\b/.test(lower))
+    layers.push("answer-contract");
+  if (/\b(structured check|check|validator|disclosure)\b/.test(lower))
+    layers.push("structured-check");
   if (/\b(retry|repair)\b/.test(lower)) layers.push("retry-eligibility");
   if (/\b(synthesis|reasoning|explain|connect)\b/.test(lower)) layers.push("synthesis");
   if (/\b(judge|harness|eval|benchmark|parser)\b/.test(lower)) layers.push("judge/harness");
@@ -686,10 +878,12 @@ function parseJsonPayload(raw: string): unknown {
   try {
     return parseCandidate(trimmed);
   } catch {
-    const start = Math.min(...["{", "["].map((char) => {
-      const index = trimmed.indexOf(char);
-      return index === -1 ? Number.POSITIVE_INFINITY : index;
-    }));
+    const start = Math.min(
+      ...["{", "["].map((char) => {
+        const index = trimmed.indexOf(char);
+        return index === -1 ? Number.POSITIVE_INFINITY : index;
+      }),
+    );
     const end = Math.max(trimmed.lastIndexOf("}"), trimmed.lastIndexOf("]"));
     if (!Number.isFinite(start) || end <= start) throw new Error("No JSON payload found");
     return parseCandidate(trimmed.slice(start, end + 1));
@@ -701,19 +895,19 @@ function repairMalformedJson(payload: string): string {
 }
 
 function repairCommonMissingCommas(payload: string): string {
-  const jsonValueEnd = /("(?:[^"\\]|\\.)*"|\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)|\]|\})/g;
-  return payload
-    .replace(jsonValueEnd, (match, value: string, offset: number, full: string) => {
-      const rest = full.slice(offset + match.length);
-      const whitespace = rest.match(/^\s*/)?.[0] ?? "";
-      const next = rest.slice(whitespace.length, whitespace.length + 1);
-      if (!whitespace.includes("\n")) return match;
-      if (!next || next === "," || next === "]" || next === "}" || next === ":") return match;
-      if (next === "\"" || next === "{" || next === "[" || next === "-" || /\d|t|f|n/.test(next)) {
-        return `${value},`;
-      }
-      return match;
-    });
+  const jsonValueEnd =
+    /("(?:[^"\\]|\\.)*"|\b(?:-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)|\]|\})/g;
+  return payload.replace(jsonValueEnd, (match, value: string, offset: number, full: string) => {
+    const rest = full.slice(offset + match.length);
+    const whitespace = rest.match(/^\s*/)?.[0] ?? "";
+    const next = rest.slice(whitespace.length, whitespace.length + 1);
+    if (!whitespace.includes("\n")) return match;
+    if (!next || next === "," || next === "]" || next === "}" || next === ":") return match;
+    if (next === '"' || next === "{" || next === "[" || next === "-" || /\d|t|f|n/.test(next)) {
+      return `${value},`;
+    }
+    return match;
+  });
 }
 
 function balanceJsonDelimiters(payload: string): string {
@@ -732,7 +926,7 @@ function balanceJsonDelimiters(payload: string): string {
       escaped = inString;
       continue;
     }
-    if (char === "\"") {
+    if (char === '"') {
       inString = !inString;
       continue;
     }
@@ -781,7 +975,7 @@ function trimAfterFirstCompleteJson(payload: string): string {
       escaped = inString;
       continue;
     }
-    if (char === "\"") {
+    if (char === '"') {
       inString = !inString;
       continue;
     }
@@ -821,14 +1015,18 @@ function numberValue(value: unknown): number {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function numberRecord(value: unknown): Record<string, number> {
   if (!isRecord(value)) return {};
   return Object.fromEntries(
-    Object.entries(value)
-      .filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])),
+    Object.entries(value).filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isFinite(entry[1]),
+    ),
   );
 }
 

@@ -5,8 +5,8 @@ import {
   holdingsOverlapTool,
 } from "../../../../src/tools/portfolio/holdings-overlap.js";
 import type { FundHoldings } from "../../../../src/types/portfolio.js";
-import vooFixture from "../../../fixtures/yahoo/VOO-holdings.json";
 import qqqFixture from "../../../fixtures/yahoo/QQQ-holdings.json";
+import vooFixture from "../../../fixtures/yahoo/VOO-holdings.json";
 
 describe("holdings overlap", () => {
   const originalFetch = globalThis.fetch;
@@ -34,19 +34,37 @@ describe("holdings overlap", () => {
       ]),
     ]);
 
-    expect(overlap.pairs).toEqual([{
-      symbols: ["VOO", "QQQ"],
-      overlapWeight: 0.198,
-      sharedHoldings: [
-        { symbol: "AAPL", name: "AAPL", weights: { VOO: 0.072, QQQ: 0.085 }, overlapWeight: 0.072 },
-        { symbol: "MSFT", name: "MSFT", weights: { VOO: 0.065, QQQ: 0.083 }, overlapWeight: 0.065 },
-        { symbol: "NVDA", name: "NVDA", weights: { VOO: 0.061, QQQ: 0.075 }, overlapWeight: 0.061 },
-      ],
-    }]);
+    expect(overlap.pairs).toEqual([
+      {
+        symbols: ["VOO", "QQQ"],
+        overlapWeight: 0.198,
+        sharedHoldings: [
+          {
+            symbol: "AAPL",
+            name: "AAPL",
+            weights: { VOO: 0.072, QQQ: 0.085 },
+            overlapWeight: 0.072,
+          },
+          {
+            symbol: "MSFT",
+            name: "MSFT",
+            weights: { VOO: 0.065, QQQ: 0.083 },
+            overlapWeight: 0.065,
+          },
+          {
+            symbol: "NVDA",
+            name: "NVDA",
+            weights: { VOO: 0.061, QQQ: 0.075 },
+            overlapWeight: 0.061,
+          },
+        ],
+      },
+    ]);
   });
 
   it("fetches fund holdings and returns structured tool details", async () => {
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(vooFixture) })
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(qqqFixture) });
 

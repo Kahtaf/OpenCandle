@@ -14,10 +14,7 @@
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import { ProviderCredentialError } from "../providers/provider-credential-error.js";
 import { getProvider, hasCredential, type ProviderId } from "./providers.js";
-import {
-  buildCredentialRequiredTag,
-  type CredentialRequiredReason,
-} from "./tool-tags.js";
+import { buildCredentialRequiredTag, type CredentialRequiredReason } from "./tool-tags.js";
 
 // Metadata carried on `details` for UI / test assertion. This is NOT the
 // LLM-facing contract — that lives in `content` as the tagged line. Pi
@@ -100,11 +97,7 @@ export async function withCredentialCheck<T>(
     return await fn();
   } catch (error) {
     if (error instanceof ProviderCredentialError) {
-      return buildCredentialRequiredResult(
-        error.provider,
-        error.reason,
-        error.httpStatus,
-      );
+      return buildCredentialRequiredResult(error.provider, error.reason, error.httpStatus);
     }
     throw error;
   }

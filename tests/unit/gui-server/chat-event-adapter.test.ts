@@ -1,32 +1,50 @@
-import { describe, expect, it } from "vitest";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it } from "vitest";
 import { sessionEntriesToChatEvents } from "../../../gui/server/chat-event-adapter.js";
 
 describe("sessionEntriesToChatEvents", () => {
   it("converts messages and paired tool calls into canonical events", () => {
-    const events = sessionEntriesToChatEvents([
-      messageEntry("u1", { role: "user", content: "quote NVDA", timestamp: Date.now() } as Message),
-      messageEntry("a1", {
-        role: "assistant",
-        content: [{ type: "toolCall", id: "call-1", name: "get_stock_quote", arguments: { symbol: "NVDA" } }],
-        api: "openai-responses",
-        provider: "openai",
-        model: "test",
-        usage: usage(),
-        stopReason: "tool_calls",
-        timestamp: Date.now(),
-      } as Message),
-      messageEntry("t1", {
-        role: "toolResult",
-        toolCallId: "call-1",
-        toolName: "get_stock_quote",
-        content: [{ type: "text", text: "NVDA quote" }],
-        details: { source: "ui", args: { symbol: "NVDA" }, value: { symbol: "NVDA", price: 185 } },
-        isError: false,
-        timestamp: Date.now(),
-      } as Message),
-    ], { sessionId: "s1", startSeq: 1 });
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content: "quote NVDA",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "get_stock_quote",
+              arguments: { symbol: "NVDA" },
+            },
+          ],
+          api: "openai-responses",
+          provider: "openai",
+          model: "test",
+          usage: usage(),
+          stopReason: "tool_calls",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("t1", {
+          role: "toolResult",
+          toolCallId: "call-1",
+          toolName: "get_stock_quote",
+          content: [{ type: "text", text: "NVDA quote" }],
+          details: {
+            source: "ui",
+            args: { symbol: "NVDA" },
+            value: { symbol: "NVDA", price: 185 },
+          },
+          isError: false,
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
 
     expect(events.map((event) => event.type)).toEqual([
       "session.updated",
@@ -44,44 +62,116 @@ describe("sessionEntriesToChatEvents", () => {
     });
   });
 
+  it("renders the original user text for workflow-transformed turns", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        {
+          type: "custom",
+          id: "c1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          customType: "opencandle-user-input",
+          data: { original: "I own 200 ASTS shares. Worth selling covered calls?" },
+        } as unknown as SessionEntry,
+        messageEntry("u1", {
+          role: "user",
+          content: "Current date: 2026-06-12 Screen and rank options contracts for ASTS: ...",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const completed = events.find((event) => event.type === "message.completed");
+    expect(completed).toMatchObject({
+      content: [{ type: "text", text: "I own 200 ASTS shares. Worth selling covered calls?" }],
+    });
+    // The marker entry itself must not render as a separate message.
+    expect(events.filter((event) => event.type === "message.created")).toHaveLength(1);
+  });
+
+  it("preserves visible custom messages as custom chat events", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        {
+          type: "custom_message",
+          id: "setup-1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          customType: "opencandle-model-setup",
+          content: "Connect a model before chat can run.",
+        } as unknown as SessionEntry,
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events).toContainEqual({
+      type: "custom.message",
+      messageId: "setup-1",
+      customType: "opencandle-model-setup",
+      content: [{ type: "text", text: "Connect a model before chat can run." }],
+      seq: 2,
+    });
+    expect(events.some((event) => event.type === "message.created")).toBe(false);
+  });
+
   it("preserves final assistant prose after a normal Pi tool turn", () => {
-    const events = sessionEntriesToChatEvents([
-      messageEntry("u1", { role: "user", content: "Show options chain for AAPL", timestamp: Date.now() } as Message),
-      messageEntry("a1", {
-        role: "assistant",
-        content: [{ type: "toolCall", id: "call-1", name: "get_option_chain", arguments: { symbol: "AAPL" } }],
-        api: "google-generative-ai",
-        provider: "google",
-        model: "test",
-        usage: usage(),
-        stopReason: "toolUse",
-        timestamp: Date.now(),
-      } as Message),
-      messageEntry("t1", {
-        role: "toolResult",
-        toolCallId: "call-1",
-        toolName: "get_option_chain",
-        content: [{ type: "text", text: "AAPL options chain" }],
-        details: {
-          symbol: "AAPL",
-          underlyingPrice: 293.32,
-          calls: [],
-          puts: [],
-        },
-        isError: false,
-        timestamp: Date.now(),
-      } as Message),
-      messageEntry("a2", {
-        role: "assistant",
-        content: [{ type: "text", text: "AAPL has near-dated options available around the current spot price." }],
-        api: "google-generative-ai",
-        provider: "google",
-        model: "test",
-        usage: usage(),
-        stopReason: "stop",
-        timestamp: Date.now(),
-      } as Message),
-    ], { sessionId: "s1", startSeq: 1 });
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content: "Show options chain for AAPL",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "get_option_chain",
+              arguments: { symbol: "AAPL" },
+            },
+          ],
+          api: "google-generative-ai",
+          provider: "google",
+          model: "test",
+          usage: usage(),
+          stopReason: "toolUse",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("t1", {
+          role: "toolResult",
+          toolCallId: "call-1",
+          toolName: "get_option_chain",
+          content: [{ type: "text", text: "AAPL options chain" }],
+          details: {
+            symbol: "AAPL",
+            underlyingPrice: 293.32,
+            calls: [],
+            puts: [],
+          },
+          isError: false,
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a2", {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "AAPL has near-dated options available around the current spot price.",
+            },
+          ],
+          api: "google-generative-ai",
+          provider: "google",
+          model: "test",
+          usage: usage(),
+          stopReason: "stop",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
 
     expect(events.map((event) => event.type)).toEqual([
       "session.updated",
@@ -105,22 +195,30 @@ describe("sessionEntriesToChatEvents", () => {
     });
     expect(events.at(-1)).toMatchObject({
       type: "message.completed",
-      content: [{ type: "text", text: "AAPL has near-dated options available around the current spot price." }],
+      content: [
+        {
+          type: "text",
+          text: "AAPL has near-dated options available around the current spot price.",
+        },
+      ],
     });
   });
 
   it("creates synthetic tool start events for orphan UI tool results", () => {
-    const events = sessionEntriesToChatEvents([
-      messageEntry("t1", {
-        role: "toolResult",
-        toolCallId: "ui-call-1",
-        toolName: "get_option_chain",
-        content: [{ type: "text", text: "chain" }],
-        details: { source: "ui", args: { symbol: "NVDA" } },
-        isError: false,
-        timestamp: Date.now(),
-      } as Message),
-    ], { sessionId: "s1" });
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("t1", {
+          role: "toolResult",
+          toolCallId: "ui-call-1",
+          toolName: "get_option_chain",
+          content: [{ type: "text", text: "chain" }],
+          details: { source: "ui", args: { symbol: "NVDA" } },
+          isError: false,
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1" },
+    );
 
     expect(events.map((event) => event.type)).toEqual([
       "session.updated",

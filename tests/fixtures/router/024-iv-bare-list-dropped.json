@@ -1,0 +1,45 @@
+{
+  "input": "compare KO, IV, PEP",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "KO",
+        "PEP"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "symbol_dropped",
+        "message": "IV dropped: no positive ticker signal",
+        "details": {
+          "token": "IV",
+          "reason": "no positive ticker signal",
+          "signalsChecked": [
+            "cashtag",
+            "local ticker phrase"
+          ],
+          "source": "llm"
+        }
+      }
+    ],
+    "reasoning": "KO and PEP are tickers; bare IV is ambiguous finance shorthand."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "compare_assets"
+  ]
+}

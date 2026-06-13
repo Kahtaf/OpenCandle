@@ -1,5 +1,5 @@
-import { httpGet, HttpError } from "../infra/http-client.js";
-import { cache, TTL, STALE_LIMIT } from "../infra/cache.js";
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
@@ -36,7 +36,10 @@ const TICKER_NAMES: Record<string, string> = {
   ORCL: "oracle",
 };
 
-export function finnhubDateRange(freshness: "hours" | "day" | "week" | "month"): { from: string; to: string } {
+export function finnhubDateRange(freshness: "hours" | "day" | "week" | "month"): {
+  from: string;
+  to: string;
+} {
   const now = new Date();
   const to = formatDate(now);
 
@@ -86,9 +89,7 @@ export function filterByRelevance(
   });
 
   // Most recent first, capped
-  return filtered
-    .sort((a, b) => b.datetime - a.datetime)
-    .slice(0, limit);
+  return filtered.sort((a, b) => b.datetime - a.datetime).slice(0, limit);
 }
 
 export async function getCompanyNews(

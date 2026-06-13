@@ -31,15 +31,31 @@ function collectFromTool(name, details) {
   if (Array.isArray(details.results)) {
     return details.results
       .filter((r) => r && (r.url || r.title))
-      .map((r) => ({ url: r.url, title: r.title, snippet: r.snippet, source: r.source, published: r.published }));
+      .map((r) => ({
+        url: r.url,
+        title: r.title,
+        snippet: r.snippet,
+        source: r.source,
+        published: r.published,
+      }));
   }
 
   // web_sentiment → { fresh: [{ url, title, ... }], records: [...] }
-  const records = Array.isArray(details.fresh) ? details.fresh : Array.isArray(details.records) ? details.records : null;
+  const records = Array.isArray(details.fresh)
+    ? details.fresh
+    : Array.isArray(details.records)
+      ? details.records
+      : null;
   if (records) {
     return records
       .filter((r) => r && (r.url || r.title))
-      .map((r) => ({ url: r.url, title: r.title, snippet: r.snippet ?? r.summary, source: r.source ?? r.publisher, published: r.published }));
+      .map((r) => ({
+        url: r.url,
+        title: r.title,
+        snippet: r.snippet ?? r.summary,
+        source: r.source ?? r.publisher,
+        published: r.published,
+      }));
   }
 
   // sec_filings → { filings: [{ url, formType, periodOfReport, ... }] }
@@ -57,7 +73,11 @@ function collectFromTool(name, details) {
   }
 
   // social sentiment → { tweets / posts: [{ url, ... }] }
-  const social = Array.isArray(details.tweets) ? details.tweets : Array.isArray(details.posts) ? details.posts : null;
+  const social = Array.isArray(details.tweets)
+    ? details.tweets
+    : Array.isArray(details.posts)
+      ? details.posts
+      : null;
   if (social) {
     return social
       .filter((p) => p && (p.url || p.permalink))

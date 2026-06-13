@@ -81,12 +81,12 @@ export function buildCredentialRequiredTag(fields: CredentialRequiredTagFields):
 }
 
 export function buildSoftDegradedTag(fields: SoftDegradedTagFields): string {
-  return [
+  return `${[
     "[OPENCANDLE_SOFT_DEGRADED",
     formatField("provider", fields.provider),
     formatField("fallback", fields.fallback),
     `remediation=${quote(fields.remediation)}`,
-  ].join(" ") + "]";
+  ].join(" ")}]`;
 }
 
 export function buildSkippedTag(fields: SkippedTagFields): string {
@@ -117,8 +117,9 @@ function parseFields(raw: string): Record<string, string> {
   // Split on `key=value` pairs, respecting quoted values.
   const fields: Record<string, string> = {};
   const pattern = /(\w+)=("((?:[^"\\]|\\.)*)"|([^\s\]]+))/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(raw)) !== null) {
+  while (true) {
+    const match = pattern.exec(raw);
+    if (!match) break;
     const key = match[1];
     const value = match[3] !== undefined ? match[3].replace(/\\"/g, '"') : match[4];
     fields[key] = value;
@@ -147,8 +148,7 @@ export function parseToolTag(text: string): ParsedTag | undefined {
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
-      const fallback =
-        fallbackRaw === undefined || fallbackRaw === "none" ? null : fallbackRaw;
+      const fallback = fallbackRaw === undefined || fallbackRaw === "none" ? null : fallbackRaw;
       const parsed: ParsedTag = {
         kind: "credential_required",
         provider: provider as ProviderId,

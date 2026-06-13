@@ -7,15 +7,17 @@
  *   npx tsx tests/harness/cli.ts answer --ipc <dir> --value "..."
  *   npx tsx tests/harness/cli.ts trace  --ipc <dir>
  */
-import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 import { IpcChannel } from "./ipc.js";
 import { createIpcAskHandler } from "./ipc-ask-handler.js";
 import { createTraceCollector } from "./trace-collector.js";
+import type { CustomEntryTrace } from "./types.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
   const args: Record<string, string> = {};
@@ -64,8 +66,15 @@ async function cmdRun() {
   ipc.writePid();
   ipc.setStatus("running");
 
-  const openCandleHome = mkdtempSync(join(tmpdir(), "oc-harness-home-"));
+  // Respect a caller-provided OPENCANDLE_HOME (for example dogfooding against
+  // real local state); otherwise isolate the run in a disposable temp home.
+  // Only a temp home we created ourselves is ever deleted.
+  const presetHome = process.env.OPENCANDLE_HOME;
+  const openCandleHome = presetHome ?? mkdtempSync(join(tmpdir(), "oc-harness-home-"));
   process.env.OPENCANDLE_HOME = openCandleHome;
+  const cleanupHome = () => {
+    if (!presetHome) rmSync(openCandleHome, { recursive: true, force: true });
+  };
 
   let collector: ReturnType<typeof createTraceCollector> | null = null;
 
@@ -73,7 +82,9 @@ async function cmdRun() {
     // Deferred collector proxy — the handler captures this ref; the real collector
     // is wired up after createOpenCandleSession returns.
     const collectorProxy = {
-      addInteraction: (...a: Parameters<ReturnType<typeof createTraceCollector>["addInteraction"]>) => {
+      addInteraction: (
+        ...a: Parameters<ReturnType<typeof createTraceCollector>["addInteraction"]>
+      ) => {
         collector?.addInteraction(...a);
       },
     } as ReturnType<typeof createTraceCollector>;
@@ -102,10 +113,13 @@ async function cmdRun() {
       shutdownRequested = true;
       console.error("Shutdown requested, writing partial trace...");
       if (collector) {
-        ipc.writeTrace(collector.getTrace());
+        ipc.writeTrace({
+          ...collector.getTrace(),
+          customEntries: drainOpenCandleCustomEntries(session.sessionManager),
+        });
       }
       session.dispose();
-      rmSync(openCandleHome, { recursive: true, force: true });
+      cleanupHome();
       process.exit(0);
     };
     process.on("SIGINT", onShutdown);
@@ -123,22 +137,43 @@ async function cmdRun() {
       void session.prompt(prompt);
     });
 
-    ipc.writeTrace(collector.getTrace());
+    ipc.writeTrace({
+      ...collector.getTrace(),
+      customEntries: drainOpenCandleCustomEntries(session.sessionManager),
+    });
     console.log(`IPC dir: ${ipcDir}`);
     console.log("Session complete. Trace written.");
 
     collector.dispose();
     session.dispose();
-    rmSync(openCandleHome, { recursive: true, force: true });
+    cleanupHome();
     process.exit(0);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     ipc.writeError(message);
     console.error("Harness error:", message);
     if (collector) collector.dispose();
-    rmSync(openCandleHome, { recursive: true, force: true });
+    cleanupHome();
     process.exit(1);
   }
+}
+
+function drainOpenCandleCustomEntries(sessionManager: {
+  getEntries(): Array<Record<string, unknown>>;
+}): CustomEntryTrace[] {
+  return sessionManager
+    .getEntries()
+    .filter(
+      (entry) =>
+        entry.type === "custom" &&
+        typeof entry.customType === "string" &&
+        entry.customType.startsWith("opencandle-"),
+    )
+    .map((entry) => ({
+      customType: String(entry.customType),
+      data: entry.data,
+      timestamp: String(entry.timestamp),
+    }));
 }
 
 async function cmdWait() {

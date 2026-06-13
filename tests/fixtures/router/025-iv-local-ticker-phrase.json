@@ -1,0 +1,33 @@
+{
+  "input": "compare KO, the IV ticker, and PEP",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "KO",
+        "IV",
+        "PEP"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "The local phrase 'IV ticker' marks IV as an explicit ticker."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "compare_assets",
+    "positive-signal"
+  ]
+}

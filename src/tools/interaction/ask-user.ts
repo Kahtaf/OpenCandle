@@ -1,5 +1,5 @@
-import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
 import { promptUser } from "../../onboarding/prompt-user.js";
 import type { AskUserHandler } from "../../types/index.js";
 
@@ -14,14 +14,15 @@ const AskUserParams = Type.Object({
   question: Type.String({ description: "The question to ask the user" }),
   question_type: Type.Union(
     [Type.Literal("select"), Type.Literal("text"), Type.Literal("confirm")],
-    { description: "Type of answer expected: select (pick from options), text (free input), or confirm (yes/no)" },
+    {
+      description:
+        "Type of answer expected: select (pick from options), text (free input), or confirm (yes/no)",
+    },
   ),
   options: Type.Optional(
     Type.Array(Type.String(), { description: "Choices for select-type questions" }),
   ),
-  placeholder: Type.Optional(
-    Type.String({ description: "Hint text for text input" }),
-  ),
+  placeholder: Type.Optional(Type.String({ description: "Hint text for text input" })),
   reason: Type.Optional(
     Type.String({ description: "Brief context for why this clarification is needed" }),
   ),
@@ -45,7 +46,12 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
       // model/caller bug, not a cancellation.
       if (questionType === "select" && (!params.options || params.options.length === 0)) {
         return {
-          content: [{ type: "text", text: "Error: No options provided for select question. Provide options or use text type instead." }],
+          content: [
+            {
+              type: "text",
+              text: "Error: No options provided for select question. Provide options or use text type instead.",
+            },
+          ],
           details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
         };
       }
@@ -63,9 +69,10 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
       );
 
       if (result.cancelled) {
-        const text = !askUserHandler && !ctx?.hasUI
-          ? "UI not available (non-interactive mode). Proceed with your best judgment and clearly disclose your assumption."
-          : "User cancelled the selection. Proceed with your best judgment and disclose your assumption.";
+        const text =
+          !askUserHandler && !ctx?.hasUI
+            ? "UI not available (non-interactive mode). Proceed with your best judgment and clearly disclose your assumption."
+            : "User cancelled the selection. Proceed with your best judgment and disclose your assumption.";
         return {
           content: [{ type: "text", text }],
           details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
@@ -74,7 +81,12 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
 
       return {
         content: [{ type: "text", text: `User answered: ${result.answer}` }],
-        details: { question, questionType, answer: result.answer, cancelled: false } as AskUserDetails,
+        details: {
+          question,
+          questionType,
+          answer: result.answer,
+          cancelled: false,
+        } as AskUserDetails,
       };
     },
   });

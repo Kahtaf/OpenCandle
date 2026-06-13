@@ -2,7 +2,7 @@
 
 ### Requirement: Quote and Options Providers Surface Unavailable for Zero-Result Responses
 
-`getQuote` and `getOptionsChain` SHALL detect zero-result responses from upstream providers and throw a typed `InvalidSymbolError` rather than returning a successful zero-filled payload. `withFallback` SHALL map `InvalidSymbolError` to `unavailable` so consumers see "⚠ … unavailable" instead of "$0.00".
+`getQuote` and `getOptionsChain` SHALL detect zero-result responses from upstream providers and throw a typed `InvalidSymbolError` rather than returning a successful zero-filled payload. `wrapProvider` SHALL map `InvalidSymbolError` to `unavailable`, and `withFallback` SHALL preserve unavailable status/reason for fallback-backed consumers so all callers see "⚠ … unavailable" instead of "$0.00".
 
 A zero-result quote response is defined as one where ALL of the following fields are simultaneously zero (or absent and therefore defaulted to zero by the provider parser):
 
@@ -18,8 +18,15 @@ A zero-result options-chain response is defined as one where the upstream `resul
 
 - **WHEN** `getQuote("XXFAKEXX")` is invoked and Yahoo returns a sparse-meta response with all five fields defaulting to zero
 - **THEN** `getQuote` throws `InvalidSymbolError("XXFAKEXX", "yahoo")`
-- **AND** `withFallback` returns `{ status: "unavailable", reason: <error message> }`
+- **AND** `wrapProvider("yahoo", () => getQuote("XXFAKEXX"))` returns `{ status: "unavailable", reason: <error message> }`
+- **AND** `withFallback` callers preserve an unavailable result rather than returning zero-filled details
 - **AND** the `get_stock_quote` tool emits "⚠ Stock quote unavailable for XXFAKEXX (…)" with no zero-filled `details` payload
+
+#### Scenario: Direct Yahoo tool callers surface unavailable
+
+- **WHEN** a watchlist check, portfolio view, alert check, daily report run, or prediction check calls Yahoo through `wrapProvider` for an invalid zero-result symbol
+- **THEN** the tool output includes an unavailable/data-gap status for that symbol
+- **AND** no tool result uses zero-filled quote values as valid market data
 
 #### Scenario: Real low-priced stock with non-zero volume is preserved
 

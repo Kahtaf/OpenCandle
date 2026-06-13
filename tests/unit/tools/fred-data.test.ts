@@ -2,18 +2,20 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cache } from "../../../src/infra/cache.js";
 import { resetConfigCache } from "../../../src/config.js";
+import { cache } from "../../../src/infra/cache.js";
 import { fredDataTool } from "../../../src/tools/macro/fred-data.js";
 
 const metaFixture = {
-  seriess: [{
-    id: "CPIAUCSL",
-    title: "Consumer Price Index for All Urban Consumers: All Items in U.S. City Average",
-    units: "Index 1982-1984=100",
-    frequency: "Monthly",
-    last_updated: "2026-05-12 08:03:57-05",
-  }],
+  seriess: [
+    {
+      id: "CPIAUCSL",
+      title: "Consumer Price Index for All Urban Consumers: All Items in U.S. City Average",
+      units: "Index 1982-1984=100",
+      frequency: "Monthly",
+      last_updated: "2026-05-12 08:03:57-05",
+    },
+  ],
 };
 
 const obsFixture = {

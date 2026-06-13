@@ -1,0 +1,34 @@
+{
+  "input": "How does FED policy affect TLT?",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "agent_task",
+    "route": "fallback",
+    "workflow": "general_finance_qa",
+    "entities": {
+      "symbols": [
+        "TLT"
+      ],
+      "compareMetrics": [
+        "interest_rates"
+      ]
+    },
+    "slots": {},
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "FED is macro policy context and TLT is the market instrument."
+  },
+  "tags": [
+    "acronym-disambiguation",
+    "macro"
+  ]
+}

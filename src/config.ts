@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
 import type { PlanningBehaviorMode, TaskFamily } from "./routing/planning.js";
 
@@ -22,9 +22,9 @@ export interface Config {
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
   /**
-   * Intent-router mode. `"llm"` (default) runs the LLM router ahead of prompt
-   * assembly. `"rules"` is the explicit legacy rule-router rollback path
-   * (`classifyIntent` + `extractPreferences`). Controlled by
+   * Intent-router mode. `"rules"` (default) uses the deterministic rule
+   * router (`classifyIntent` + `extractPreferences`). `"llm"` opts into the
+   * LLM router ahead of prompt assembly. Controlled by
    * `OPENCANDLE_ROUTER_MODE`.
    */
   routerMode: RouterMode;
@@ -126,10 +126,10 @@ const PLANNING_BEHAVIOR_MODES = [
 
 function resolveRouterMode(): RouterMode {
   const raw = process.env.OPENCANDLE_ROUTER_MODE;
-  if (raw === undefined || raw === "") return "llm";
+  if (raw === undefined || raw === "") return "rules";
   if (raw === "rules" || raw === "llm") return raw;
   throw new Error(
-    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "llm" (default) or "rules".`,
+    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "rules" (default) or "llm".`,
   );
 }
 
@@ -185,7 +185,10 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
-    debate: debateEnv !== undefined ? debateEnv !== "false" && debateEnv !== "0" : fileConfig.debate ?? true,
+    debate:
+      debateEnv !== undefined
+        ? debateEnv !== "false" && debateEnv !== "0"
+        : (fileConfig.debate ?? true),
     routerMode: resolveRouterMode(),
     toolScopeMode: resolveToolScopeMode(),
     planningMigrationStatuses: resolvePlanningMigrationStatuses(),
@@ -193,7 +196,8 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
       retentionDays: fileSentiment?.retentionDays ?? SENTIMENT_DEFAULTS.retentionDays,
       defaultSubreddits: fileSentiment?.defaultSubreddits ?? SENTIMENT_DEFAULTS.defaultSubreddits,
       commentsPerPost: fileSentiment?.commentsPerPost ?? SENTIMENT_DEFAULTS.commentsPerPost,
-      divergenceThreshold: fileSentiment?.divergenceThreshold ?? SENTIMENT_DEFAULTS.divergenceThreshold,
+      divergenceThreshold:
+        fileSentiment?.divergenceThreshold ?? SENTIMENT_DEFAULTS.divergenceThreshold,
     },
   };
 }
@@ -222,7 +226,11 @@ export function loadFileConfig(path = getConfigPath()): OpenCandleFileConfig {
 
 export function saveFileConfig(config: OpenCandleFileConfig, path = getConfigPath()): void {
   ensureParentDir(path);
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+  if (process.platform !== "win32") chmodSync(path, 0o600);
 }
 
 export function loadConfig(): Config {

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { searchFilings, type SECFiling } from "../../../src/providers/sec-edgar.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
+import { type SECFiling, searchFilings } from "../../../src/providers/sec-edgar.js";
 
 const mockSearchResponse = {
   hits: {
@@ -89,37 +90,46 @@ describe("sec-edgar provider", () => {
   });
 
   it("optionally fetches short filing evidence snippets from primary documents", async () => {
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          "0": { cik_str: 320193, ticker: "AAPL", title: "APPLE INC" },
-        }),
+        json: () =>
+          Promise.resolve({
+            "0": { cik_str: 320193, ticker: "AAPL", title: "APPLE INC" },
+          }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          name: "APPLE INC",
-          tickers: ["AAPL"],
-          filings: {
-            recent: {
-              accessionNumber: ["0000320193-24-000123", "0000320193-24-000089"],
-              filingDate: ["2024-10-31", "2024-08-02"],
-              reportDate: ["2024-09-28", "2024-06-29"],
-              form: ["10-K", "10-Q"],
-              primaryDocument: ["aapl-20240928.htm", "aapl-20240629.htm"],
-              items: ["", ""],
+        json: () =>
+          Promise.resolve({
+            name: "APPLE INC",
+            tickers: ["AAPL"],
+            filings: {
+              recent: {
+                accessionNumber: ["0000320193-24-000123", "0000320193-24-000089"],
+                filingDate: ["2024-10-31", "2024-08-02"],
+                reportDate: ["2024-09-28", "2024-06-29"],
+                form: ["10-K", "10-Q"],
+                primaryDocument: ["aapl-20240928.htm", "aapl-20240629.htm"],
+                items: ["", ""],
+              },
             },
-          },
-        }),
+          }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        text: () => Promise.resolve(`<html><body>Table of Contents Page Item 1A. Risk Factors 43 Item 7. Management's Discussion 89 ${"filler ".repeat(80)} Later section: Risk Factors include regulatory uncertainty and litigation exposure from platform rules.</body></html>`),
+        text: () =>
+          Promise.resolve(
+            `<html><body>Table of Contents Page Item 1A. Risk Factors 43 Item 7. Management's Discussion 89 ${"filler ".repeat(80)} Later section: Risk Factors include regulatory uncertainty and litigation exposure from platform rules.</body></html>`,
+          ),
       })
       .mockResolvedValueOnce({
         ok: true,
-        text: () => Promise.resolve("<html><body>Management's Discussion notes revenue concentration and liquidity trends.</body></html>"),
+        text: () =>
+          Promise.resolve(
+            "<html><body>Management's Discussion notes revenue concentration and liquidity trends.</body></html>",
+          ),
       });
 
     const filings = await searchFilings("AAPL", ["10-K", "10-Q"], 2, { includeSnippets: true });
@@ -128,6 +138,50 @@ describe("sec-edgar provider", () => {
     expect(filings[0].evidenceSnippets?.[0]).not.toContain("Table of Contents");
     expect(filings[1].evidenceSnippets?.[0]).toContain("Management's Discussion");
     expect(filings[0].primaryDocumentUrl).toContain("aapl-20240928.htm");
+  });
+
+  it("rate limits document fetches and records visible evidence warnings", async () => {
+    const acquire = vi.spyOn(rateLimiter, "acquire").mockResolvedValue(undefined);
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            "0": { cik_str: 320193, ticker: "AAPL", title: "APPLE INC" },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            name: "APPLE INC",
+            filings: {
+              recent: {
+                accessionNumber: ["0000320193-24-000123"],
+                filingDate: ["2024-10-31"],
+                reportDate: ["2024-09-28"],
+                form: ["10-K"],
+                primaryDocument: ["aapl-20240928.htm"],
+                items: [""],
+              },
+            },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+        text: () => Promise.resolve("rate limited"),
+      });
+
+    const filings = await searchFilings("AAPL", ["10-K"], 1, { includeSnippets: true });
+
+    expect(acquire).toHaveBeenCalledWith("sec_edgar");
+    expect((fetch as any).mock.calls[2][1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(filings[0].evidenceSnippets).toEqual([]);
+    expect(filings[0].evidenceWarning).toContain("Evidence fetch failed");
+    expect(filings[0].evidenceWarning).toContain("HTTP 429");
   });
 
   it("caches results", async () => {
@@ -158,8 +212,28 @@ describe("sec-edgar provider", () => {
     const dupeResponse = {
       hits: {
         hits: [
-          { _id: "a:1", _source: { file_date: "2024-01-01", form: "10-K", adsh: "SAME-ACCESSION", display_names: ["TEST CO  (TEST)  (CIK 0000000123)"], period_ending: "2024-01-01", ciks: ["123"] } },
-          { _id: "a:2", _source: { file_date: "2024-01-01", form: "10-K", adsh: "SAME-ACCESSION", display_names: ["TEST CO  (TEST)  (CIK 0000000123)"], period_ending: "2024-01-01", ciks: ["123"] } },
+          {
+            _id: "a:1",
+            _source: {
+              file_date: "2024-01-01",
+              form: "10-K",
+              adsh: "SAME-ACCESSION",
+              display_names: ["TEST CO  (TEST)  (CIK 0000000123)"],
+              period_ending: "2024-01-01",
+              ciks: ["123"],
+            },
+          },
+          {
+            _id: "a:2",
+            _source: {
+              file_date: "2024-01-01",
+              form: "10-K",
+              adsh: "SAME-ACCESSION",
+              display_names: ["TEST CO  (TEST)  (CIK 0000000123)"],
+              period_ending: "2024-01-01",
+              ciks: ["123"],
+            },
+          },
         ],
       },
     };

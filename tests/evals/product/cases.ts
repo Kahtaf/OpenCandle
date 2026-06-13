@@ -12,19 +12,25 @@ const directAnswer: ProductEvalDimension = {
 const evidenceUse: ProductEvalDimension = {
   id: "evidence_use",
   description: "Uses concrete evidence rather than generic market commentary.",
-  requiredPatterns: [/\b(price|valuation|risk|volatility|technical|fundamental|sentiment|yield|premium|delta|earnings)\b/i],
+  requiredPatterns: [
+    /\b(price|valuation|risk|volatility|technical|fundamental|sentiment|yield|premium|delta|earnings)\b/i,
+  ],
 };
 
 const missingDataHonesty: ProductEvalDimension = {
   id: "missing_data_honesty",
   description: "Marks unavailable or missing evidence instead of hiding gaps.",
-  requiredPatterns: [/\b(unavailable|missing|not available|data gap|cannot verify|no live|not enough|unable to fetch)\b/i],
+  requiredPatterns: [
+    /\b(unavailable|missing|not available|data gap|cannot verify|no live|not enough|unable to fetch)\b/i,
+  ],
 };
 
 const riskFraming: ProductEvalDimension = {
   id: "risk_framing",
   description: "Names downside, uncertainty, invalidation, or tradeoffs.",
-  requiredPatterns: [/\b(risks?|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss)\b/i],
+  requiredPatterns: [
+    /\b(risks?|downside|uncertain|invalidation|caveat|trade[- ]?off|drawdown|loss)\b/i,
+  ],
   mandatory: true,
 };
 
@@ -49,7 +55,14 @@ export const PRODUCT_SCENARIO_TEMPLATES: ScenarioTemplate[] = [
     id: "compare_assets_with_horizon",
     family: "compare_assets",
     description: "Compares two or more assets while adapting evidence to a stated horizon.",
-    dimensions: [directAnswer, horizonFit, toolBacked, evidenceUse, missingDataHonesty, riskFraming],
+    dimensions: [
+      directAnswer,
+      horizonFit,
+      toolBacked,
+      evidenceUse,
+      missingDataHonesty,
+      riskFraming,
+    ],
   },
   {
     id: "single_asset_recommendation_with_risk",
@@ -60,7 +73,8 @@ export const PRODUCT_SCENARIO_TEMPLATES: ScenarioTemplate[] = [
   {
     id: "portfolio_goal_with_constraints",
     family: "portfolio",
-    description: "Builds a portfolio that respects budget, risk, horizon, and allocation constraints.",
+    description:
+      "Builds a portfolio that respects budget, risk, horizon, and allocation constraints.",
     dimensions: [directAnswer, horizonFit, evidenceUse, riskFraming],
   },
   {
@@ -84,17 +98,24 @@ export const PRODUCT_SCENARIO_TEMPLATES: ScenarioTemplate[] = [
   {
     id: "education_without_fake_current_data",
     family: "education",
-    description: "Answers educational finance questions clearly without pretending to have current data.",
+    description:
+      "Answers educational finance questions clearly without pretending to have current data.",
     dimensions: [directAnswer, evidenceUse, riskFraming],
   },
 ];
 
 export const PRODUCT_EVAL_CASES: ProductEvalCase[] = [
   makeCase("compare-assets-aapl-msft-6mo", "compare_assets_with_horizon", {
-    prompt: "Should I compare AAPL and MSFT for a 6 month investment horizon, and what evidence should matter most?",
+    prompt:
+      "Should I compare AAPL and MSFT for a 6 month investment horizon, and what evidence should matter most?",
     assertions: {
       expectedWorkflow: "compare_assets",
-      requiredTools: ["get_stock_quote", "compare_companies", "get_technical_indicators", "analyze_risk"],
+      requiredTools: [
+        "get_stock_quote",
+        "compare_companies",
+        "get_technical_indicators",
+        "analyze_risk",
+      ],
     },
   }),
   makeCase("compare-assets-spy-qqq-12mo", "compare_assets_with_horizon", {
@@ -164,7 +185,8 @@ export const PRODUCT_EVAL_CASES: ProductEvalCase[] = [
 function makeCase(
   id: string,
   templateId: string,
-  overrides: Pick<ProductEvalCase, "prompt"> & Partial<Omit<ProductEvalCase, "id" | "templateId" | "family" | "dimensions" | "prompt">>,
+  overrides: Pick<ProductEvalCase, "prompt"> &
+    Partial<Omit<ProductEvalCase, "id" | "templateId" | "family" | "dimensions" | "prompt">>,
 ): ProductEvalCase {
   const template = PRODUCT_SCENARIO_TEMPLATES.find((candidate) => candidate.id === templateId);
   if (!template) throw new Error(`Unknown product eval template: ${templateId}`);

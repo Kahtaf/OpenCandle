@@ -1,15 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { loadConfig, loadEnv, loadFileConfig, saveFileConfig } from "../../../src/config.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadConfig, loadEnv, loadFileConfig, saveFileConfig } from "../../../src/config.js";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
+  chmodSync: vi.fn(),
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
 }));
 
+const mockedChmodSync = vi.mocked(chmodSync);
 const mockedExistsSync = vi.mocked(existsSync);
 const mockedMkdirSync = vi.mocked(mkdirSync);
 const mockedReadFileSync = vi.mocked(readFileSync);
@@ -207,8 +209,11 @@ describe("loadConfig", () => {
         null,
         2,
       )}\n`,
-      "utf-8",
+      { encoding: "utf-8", mode: 0o600 },
     );
+    if (process.platform !== "win32") {
+      expect(mockedChmodSync).toHaveBeenCalledWith(configPath, 0o600);
+    }
   });
 
   it("loads config.json through the exported file reader", () => {
@@ -234,7 +239,9 @@ describe("loadConfig", () => {
   it("debate defaults to true when not set", () => {
     delete process.env.OPENCANDLE_DEBATE;
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.debate).toBe(true);
   });
@@ -242,7 +249,9 @@ describe("loadConfig", () => {
   it("debate reads from OPENCANDLE_DEBATE env var", () => {
     process.env.OPENCANDLE_DEBATE = "false";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.debate).toBe(false);
     delete process.env.OPENCANDLE_DEBATE;
@@ -259,26 +268,32 @@ describe("loadConfig", () => {
     expect(config.debate).toBe(false);
   });
 
-  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is unset", () => {
+  it("routerMode defaults to rules when OPENCANDLE_ROUTER_MODE is unset", () => {
     delete process.env.OPENCANDLE_ROUTER_MODE;
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
-    expect(config.routerMode).toBe("llm");
+    expect(config.routerMode).toBe("rules");
   });
 
-  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is blank", () => {
+  it("routerMode defaults to rules when OPENCANDLE_ROUTER_MODE is blank", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
-    expect(config.routerMode).toBe("llm");
+    expect(config.routerMode).toBe("rules");
   });
 
   it("routerMode can use rules when OPENCANDLE_ROUTER_MODE is rules", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "rules";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.routerMode).toBe("rules");
   });
@@ -286,16 +301,21 @@ describe("loadConfig", () => {
   it("routerMode rejects invalid OPENCANDLE_ROUTER_MODE values", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "regex";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     expect(() => loadConfig()).toThrowError(
-      'Invalid OPENCANDLE_ROUTER_MODE="regex". Allowed values: "llm" (default) or "rules".',
+      'Invalid OPENCANDLE_ROUTER_MODE="regex". Allowed values: "rules" (default) or "llm".',
     );
   });
 
   it("loads planning migration status overrides from OPENCANDLE_PLANNING_MIGRATION_STATUSES", () => {
-    process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES = "single_asset_decision=dual_run,asset_compare=observe_only";
+    process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES =
+      "single_asset_decision=dual_run,asset_compare=observe_only";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.planningMigrationStatuses).toEqual({
       single_asset_decision: "dual_run",
@@ -306,7 +326,9 @@ describe("loadConfig", () => {
   it("rejects invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES values", () => {
     process.env.OPENCANDLE_PLANNING_MIGRATION_STATUSES = "single_asset_decision=regex";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     expect(() => loadConfig()).toThrowError(
       'Invalid OPENCANDLE_PLANNING_MIGRATION_STATUSES entry "single_asset_decision=regex".',
     );
@@ -315,7 +337,9 @@ describe("loadConfig", () => {
   it("loads braveApiKey from BRAVE_API_KEY env var", () => {
     process.env.BRAVE_API_KEY = "brave-env-key";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.braveApiKey).toBe("brave-env-key");
     delete process.env.BRAVE_API_KEY;
@@ -355,7 +379,9 @@ describe("loadConfig", () => {
   it("braveApiKey is undefined when not configured", () => {
     delete process.env.BRAVE_API_KEY;
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.braveApiKey).toBeUndefined();
   });
@@ -363,7 +389,9 @@ describe("loadConfig", () => {
   it("loads finnhubApiKey from FINNHUB_API_KEY env var", () => {
     process.env.FINNHUB_API_KEY = "finnhub-env-key";
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.finnhubApiKey).toBe("finnhub-env-key");
     delete process.env.FINNHUB_API_KEY;
@@ -403,7 +431,9 @@ describe("loadConfig", () => {
   it("finnhubApiKey is undefined when not configured", () => {
     delete process.env.FINNHUB_API_KEY;
     mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+    mockedReadFileSync.mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
     const config = loadConfig();
     expect(config.finnhubApiKey).toBeUndefined();
   });
@@ -412,7 +442,9 @@ describe("loadConfig", () => {
     it("sentiment defaults when not set", () => {
       delete process.env.OPENCANDLE_DEBATE;
       mockedExistsSync.mockReturnValue(false);
-      mockedReadFileSync.mockImplementation(() => { throw new Error("ENOENT"); });
+      mockedReadFileSync.mockImplementation(() => {
+        throw new Error("ENOENT");
+      });
       const config = loadConfig();
       expect(config.sentiment).toEqual({
         retentionDays: 30,
@@ -456,7 +488,12 @@ describe("loadConfig", () => {
       });
       const config = loadConfig();
       expect(config.sentiment!.retentionDays).toBe(7);
-      expect(config.sentiment!.defaultSubreddits).toEqual(["wallstreetbets", "stocks", "investing", "options"]);
+      expect(config.sentiment!.defaultSubreddits).toEqual([
+        "wallstreetbets",
+        "stocks",
+        "investing",
+        "options",
+      ]);
       expect(config.sentiment!.commentsPerPost).toBe(5);
       expect(config.sentiment!.divergenceThreshold).toBe(0.4);
     });

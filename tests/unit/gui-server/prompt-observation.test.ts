@@ -17,8 +17,9 @@ describe("prompt observation replay selection", () => {
       },
     } as any);
 
-    expect(selectReplayPrompt(observation, "What protective put should I buy?"))
-      .toBe("Screen and rank options contracts for AMD");
+    expect(selectReplayPrompt(observation, "What protective put should I buy?")).toBe(
+      "Screen and rank options contracts for AMD",
+    );
   });
 
   it("does not replay when an assistant turn starts", () => {

@@ -17,10 +17,10 @@ export interface MemoryEntry {
 
 /** Staleness thresholds in milliseconds per category. */
 export const STALENESS_THRESHOLDS: Record<MemoryCategory, number> = {
-  investor_profile: 90 * 24 * 60 * 60 * 1000,    // 90 days
+  investor_profile: 90 * 24 * 60 * 60 * 1000, // 90 days
   interaction_feedback: 14 * 24 * 60 * 60 * 1000, // 14 days
-  workflow_history: 7 * 24 * 60 * 60 * 1000,      // 7 days
-  references: 30 * 24 * 60 * 60 * 1000,           // 30 days
+  workflow_history: 7 * 24 * 60 * 60 * 1000, // 7 days
+  references: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 
 /** Map preference keys to memory categories. */

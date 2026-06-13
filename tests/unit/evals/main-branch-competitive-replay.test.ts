@@ -12,15 +12,20 @@ describe("main branch competitive replay", () => {
       reportPath: "runs/base_competitive-finance.json",
       report: competitiveReport({
         generatedAt: "2026-05-25T10:00:00.000Z",
-        cases: [{
-          id: "inflation-impact-3",
-          prompt: "How does inflation affect cash?",
-          winner: "claude",
-          openCandleScore: 4,
-          competitorScores: { claude: 5, codex: 3 },
-          planning: { taskFamily: "general_fallback", evidencePlanId: "placeholder_general_fallback" },
-          cachedCompetitors: ["claude", "codex"],
-        }],
+        cases: [
+          {
+            id: "inflation-impact-3",
+            prompt: "How does inflation affect cash?",
+            winner: "claude",
+            openCandleScore: 4,
+            competitorScores: { claude: 5, codex: 3 },
+            planning: {
+              taskFamily: "general_fallback",
+              evidencePlanId: "placeholder_general_fallback",
+            },
+            cachedCompetitors: ["claude", "codex"],
+          },
+        ],
       }),
     });
     const current = summarizeCompetitiveReplayReport({
@@ -28,15 +33,20 @@ describe("main branch competitive replay", () => {
       reportPath: "runs/current_competitive-finance.json",
       report: competitiveReport({
         generatedAt: "2026-05-25T11:00:00.000Z",
-        cases: [{
-          id: "inflation-impact-3",
-          prompt: "How does inflation affect cash?",
-          winner: "opencandle",
-          openCandleScore: 5,
-          competitorScores: { claude: 4, codex: 3 },
-          planning: { taskFamily: "concept_explainer", evidencePlanId: "placeholder_concept_explainer" },
-          cachedCompetitors: ["claude", "codex"],
-        }],
+        cases: [
+          {
+            id: "inflation-impact-3",
+            prompt: "How does inflation affect cash?",
+            winner: "opencandle",
+            openCandleScore: 5,
+            competitorScores: { claude: 4, codex: 3 },
+            planning: {
+              taskFamily: "concept_explainer",
+              evidencePlanId: "placeholder_concept_explainer",
+            },
+            cachedCompetitors: ["claude", "codex"],
+          },
+        ],
       }),
     });
 
@@ -49,18 +59,20 @@ describe("main branch competitive replay", () => {
     expect(comparison.status).toBe("compared");
     expect(comparison.openCandleWinDelta).toBe(1);
     expect(comparison.lossDelta).toBe(-1);
-    expect(comparison.caseChanges).toEqual([expect.objectContaining({
-      id: "inflation-impact-3",
-      status: "improved",
-      baseOpenCandleScore: 4,
-      currentOpenCandleScore: 5,
-      scoreDelta: 1,
-      baseWinner: "claude",
-      currentWinner: "opencandle",
-      cachedCompetitors: ["claude", "codex"],
-      basePlanning: expect.objectContaining({ taskFamily: "general_fallback" }),
-      currentPlanning: expect.objectContaining({ taskFamily: "concept_explainer" }),
-    })]);
+    expect(comparison.caseChanges).toEqual([
+      expect.objectContaining({
+        id: "inflation-impact-3",
+        status: "improved",
+        baseOpenCandleScore: 4,
+        currentOpenCandleScore: 5,
+        scoreDelta: 1,
+        baseWinner: "claude",
+        currentWinner: "opencandle",
+        cachedCompetitors: ["claude", "codex"],
+        basePlanning: expect.objectContaining({ taskFamily: "general_fallback" }),
+        currentPlanning: expect.objectContaining({ taskFamily: "concept_explainer" }),
+      }),
+    ]);
   });
 
   it("records unsupported competitive replay without counting it as a win", () => {
@@ -69,21 +81,29 @@ describe("main branch competitive replay", () => {
       reportPath: "runs/current_competitive-finance.json",
       report: competitiveReport({
         generatedAt: "2026-05-25T11:00:00.000Z",
-        cases: [{
-          id: "portfolio-rebalance-2",
-          prompt: "Should I rebalance this portfolio?",
-          winner: "opencandle",
-          openCandleScore: 5,
-          competitorScores: { claude: 4 },
-          planning: { taskFamily: "portfolio_review", evidencePlanId: "placeholder_portfolio_review" },
-          cachedCompetitors: ["claude"],
-        }],
+        cases: [
+          {
+            id: "portfolio-rebalance-2",
+            prompt: "Should I rebalance this portfolio?",
+            winner: "opencandle",
+            openCandleScore: 5,
+            competitorScores: { claude: 4 },
+            planning: {
+              taskFamily: "portfolio_review",
+              evidencePlanId: "placeholder_portfolio_review",
+            },
+            cachedCompetitors: ["claude"],
+          },
+        ],
       }),
     });
 
     const comparison = buildCompetitiveReplayComparison({
       current,
-      base: unsupportedCompetitiveReplayRun("origin/main", "base ref cannot run competitive reports"),
+      base: unsupportedCompetitiveReplayRun(
+        "origin/main",
+        "base ref cannot run competitive reports",
+      ),
       generatedAt: "2026-05-25T12:00:00.000Z",
     });
 

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { RuntimeValidator } from "../../../src/runtime/validation.js";
+import { describe, expect, it } from "vitest";
 import type { EvidenceRecord } from "../../../src/runtime/evidence.js";
+import { RuntimeValidator } from "../../../src/runtime/validation.js";
 
 describe("RuntimeValidator", () => {
   it("passes when all checks succeed", () => {

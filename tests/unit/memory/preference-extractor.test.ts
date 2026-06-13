@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { extractPreferences } from "../../../src/memory/preference-extractor.js";
 
 describe("extractPreferences", () => {
@@ -56,9 +56,7 @@ describe("extractPreferences", () => {
   });
 
   it("extracts multiple preferences from compound statement", () => {
-    const prefs = extractPreferences(
-      "I'm conservative and prefer ETFs",
-    );
+    const prefs = extractPreferences("I'm conservative and prefer ETFs");
     expect(prefs.length).toBeGreaterThanOrEqual(2);
     const keys = prefs.map((p) => p.key);
     expect(keys).toContain("risk_profile");

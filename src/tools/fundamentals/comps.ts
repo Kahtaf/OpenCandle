@@ -1,9 +1,9 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getOverview } from "../../providers/alpha-vantage.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
+import { getOverview } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
 export interface CompsMetric {
@@ -55,8 +55,12 @@ export function computeComps(companies: CompanyOverview[]): CompsResult {
     const p25 = computePercentile(sortedVals, 0.25);
     const p75 = computePercentile(sortedVals, 0.75);
 
-    const best = def.lowerIsBetter ? sorted[0]?.sym ?? "" : sorted[sorted.length - 1]?.sym ?? "";
-    const worst = def.lowerIsBetter ? sorted[sorted.length - 1]?.sym ?? "" : sorted[0]?.sym ?? "";
+    const best = def.lowerIsBetter
+      ? (sorted[0]?.sym ?? "")
+      : (sorted[sorted.length - 1]?.sym ?? "");
+    const worst = def.lowerIsBetter
+      ? (sorted[sorted.length - 1]?.sym ?? "")
+      : (sorted[0]?.sym ?? "");
 
     return { metric: def.name, values, median, p25, p75, best, worst };
   });
@@ -67,9 +71,7 @@ export function computeComps(companies: CompanyOverview[]): CompsResult {
 function computeMedian(sorted: number[]): number | null {
   if (sorted.length === 0) return null;
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1] + sorted[mid]) / 2
-    : sorted[mid];
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 function computePercentile(sorted: number[], p: number): number | null {
@@ -98,59 +100,70 @@ export const compsTool: AgentTool<typeof params> = {
   parameters: params,
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
-    const config = getConfig();
-    const symbols = args.symbols.map((s) => s.toUpperCase());
+      const config = getConfig();
+      const symbols = args.symbols.map((s) => s.toUpperCase());
 
-    const results = await Promise.all(
-      symbols.map(async (s) => ({
-        symbol: s,
-        result: await wrapProvider("alphavantage", () => getOverview(s, config.alphaVantageApiKey!)),
-      })),
-    );
+      const results = await Promise.all(
+        symbols.map(async (s) => ({
+          symbol: s,
+          result: await wrapProvider("alphavantage", () =>
+            getOverview(s, config.alphaVantageApiKey!),
+          ),
+        })),
+      );
 
-    const companies: CompanyOverview[] = [];
-    const unavailableSymbols: string[] = [];
+      const companies: CompanyOverview[] = [];
+      const unavailableSymbols: string[] = [];
 
-    for (const { symbol: sym, result: r } of results) {
-      if (r.status === "ok") {
-        companies.push(r.data);
-      } else {
-        unavailableSymbols.push(sym);
+      for (const { symbol: sym, result: r } of results) {
+        if (r.status === "ok") {
+          companies.push(r.data);
+        } else {
+          unavailableSymbols.push(sym);
+        }
       }
-    }
 
-    if (companies.length === 0) {
-      return {
-        content: [{ type: "text", text: `⚠ Company fundamentals unavailable for all symbols: ${symbols.join(", ")}. Alpha Vantage may be rate limited.` }],
-        details: null as any,
-      };
-    }
+      if (companies.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ Company fundamentals unavailable for all symbols: ${symbols.join(", ")}. Alpha Vantage may be rate limited.`,
+            },
+          ],
+          details: null as any,
+        };
+      }
 
-    const result = computeComps(companies);
-    result.unavailableSymbols = unavailableSymbols;
+      const result = computeComps(companies);
+      result.unavailableSymbols = unavailableSymbols;
 
-    const availableSymbols = companies.map((company) => company.symbol);
-    const header = `**Comparable Company Analysis**: ${availableSymbols.join(" vs ")}`;
-    const rows = result.metrics.map((m) => {
-      const vals = availableSymbols.map((s) => {
-        const v = m.values[s];
-        if (v == null) return "N/A".padStart(10);
-        if (Math.abs(v) < 1) return `${(v * 100).toFixed(1)}%`.padStart(10);
-        return v.toFixed(2).padStart(10);
+      const availableSymbols = companies.map((company) => company.symbol);
+      const header = `**Comparable Company Analysis**: ${availableSymbols.join(" vs ")}`;
+      const rows = result.metrics.map((m) => {
+        const vals = availableSymbols.map((s) => {
+          const v = m.values[s];
+          if (v == null) return "N/A".padStart(10);
+          if (Math.abs(v) < 1) return `${(v * 100).toFixed(1)}%`.padStart(10);
+          return v.toFixed(2).padStart(10);
+        });
+        const medStr =
+          m.median != null
+            ? Math.abs(m.median) < 1
+              ? `${(m.median * 100).toFixed(1)}%`
+              : m.median.toFixed(2)
+            : "N/A";
+        return `  ${m.metric.padEnd(16)} ${vals.join("")}  Med: ${medStr}  Best: ${m.best}`;
       });
-      const medStr = m.median != null
-        ? (Math.abs(m.median) < 1 ? `${(m.median * 100).toFixed(1)}%` : m.median.toFixed(2))
-        : "N/A";
-      return `  ${m.metric.padEnd(16)} ${vals.join("")}  Med: ${medStr}  Best: ${m.best}`;
-    });
 
-    const symHeader = `  ${"Metric".padEnd(16)} ${availableSymbols.map((s) => s.padStart(10)).join("")}`;
-    const noteLines = unavailableSymbols.length > 0
-      ? ["", `Unavailable fundamentals: ${unavailableSymbols.join(", ")}`]
-      : [];
-    const text = [header, "", symHeader, ...rows, ...noteLines].join("\n");
+      const symHeader = `  ${"Metric".padEnd(16)} ${availableSymbols.map((s) => s.padStart(10)).join("")}`;
+      const noteLines =
+        unavailableSymbols.length > 0
+          ? ["", `Unavailable fundamentals: ${unavailableSymbols.join(", ")}`]
+          : [];
+      const text = [header, "", symHeader, ...rows, ...noteLines].join("\n");
 
-    return { content: [{ type: "text", text }], details: result };
+      return { content: [{ type: "text", text }], details: result };
     });
   },
 };

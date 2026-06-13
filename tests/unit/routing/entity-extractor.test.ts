@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { extractEntities, extractBudget } from "../../../src/routing/entity-extractor.js";
+import { describe, expect, it } from "vitest";
+import { extractBudget, extractEntities } from "../../../src/routing/entity-extractor.js";
 
 describe("extractEntities", () => {
   describe("budget extraction", () => {
@@ -45,9 +45,27 @@ describe("extractEntities", () => {
     });
 
     it("does not treat cost basis as an investment budget", () => {
-      const result = extractEntities("I own AAPL with a $175 cost basis. What covered call should I sell?");
+      const result = extractEntities(
+        "I own AAPL with a $175 cost basis. What covered call should I sell?",
+      );
       expect(result.costBasis).toBe(175);
       expect(result.budget).toBeUndefined();
+    });
+
+    it("does not treat non-budget dollar amounts as investment budgets", () => {
+      expect(extractBudget("I own 100 shares of AAPL now worth $6,000")).toBeUndefined();
+      expect(extractBudget("my position is valued at $12,500")).toBeUndefined();
+      expect(extractBudget("it pays $2 per share in dividends")).toBeUndefined();
+      expect(extractBudget("the stock is trading around $150")).toBeUndefined();
+      expect(extractBudget("I am up $10k on NVDA")).toBeUndefined();
+      expect(extractBudget("my position is worth $25k")).toBeUndefined();
+      expect(extractBudget("I am up 10k on NVDA")).toBeUndefined();
+      expect(extractBudget("my position is worth 25k")).toBeUndefined();
+    });
+
+    it("preserves explicit budget dollar amount extraction", () => {
+      expect(extractBudget("I have $10,000 to invest")).toBe(10_000);
+      expect(extractBudget("invest $5k in ETFs")).toBe(5_000);
     });
   });
 
@@ -82,6 +100,13 @@ describe("extractEntities", () => {
       expect(result.symbols).toEqual(["AAPL", "MSFT", "GOOGL"]);
     });
 
+    it("does not treat currency codes as tickers in cost-basis portfolio mutations", () => {
+      const result = extractEntities(
+        "Add 40 shares of ASTS to my portfolio at an average cost of 28 dollars USD.",
+      );
+      expect(result.symbols).toEqual(["ASTS"]);
+    });
+
     it("extracts ticker with $ prefix and strips $", () => {
       const result = extractEntities("analyze $NVDA");
       expect(result.symbols).toEqual(["NVDA"]);
@@ -104,9 +129,20 @@ describe("extractEntities", () => {
     });
 
     it("does not treat macro/source/UI acronyms as tickers unless explicit", () => {
-      expect(extractEntities("Use get_economic_data to show FRED CPI inflation data").symbols).toEqual([]);
-      expect(extractEntities("render the options widget if the GUI supports it").symbols).toEqual([]);
+      expect(
+        extractEntities("Use get_economic_data to show FRED CPI inflation data").symbols,
+      ).toEqual([]);
+      expect(extractEntities("render the options widget if the GUI supports it").symbols).toEqual(
+        [],
+      );
       expect(extractEntities("analyze $CPI as a stock").symbols).toEqual(["CPI"]);
+    });
+
+    it("does not extract finance acronym concepts as bare uppercase symbols", () => {
+      expect(extractEntities("Compare these assets: IV, ASTS").symbols).toEqual(["ASTS"]);
+      expect(extractEntities("What did the SEC say about TSLA filings?").symbols).toEqual(["TSLA"]);
+      expect(extractEntities("How does FED policy affect TLT?").symbols).toEqual(["TLT"]);
+      expect(extractEntities("Show CPI vs SPY YTD").symbols).toEqual(["SPY"]);
     });
 
     it("identifies the owned underlying and cost basis in catalyst-driven covered-call prompts", () => {
@@ -274,7 +310,9 @@ describe("extractEntities", () => {
     });
 
     it("detects explicit multi-year horizon", () => {
-      const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      const result = extractEntities(
+        "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
+      );
       expect(result.timeHorizon).toBe("3_years");
     });
 
@@ -286,7 +324,9 @@ describe("extractEntities", () => {
 
   describe("asset scope extraction", () => {
     it("detects ETF-only scope", () => {
-      const result = extractEntities("Build a $25000 ETF portfolio for a conservative investor over 3 years.");
+      const result = extractEntities(
+        "Build a $25000 ETF portfolio for a conservative investor over 3 years.",
+      );
       expect(result.assetScope).toBe("etf_focused");
     });
   });
@@ -298,12 +338,16 @@ describe("extractEntities", () => {
     });
 
     it("detects macro hedge focus", () => {
-      const result = extractEntities("For the next 6 months, should I use BTC or GLD as a macro hedge?");
+      const result = extractEntities(
+        "For the next 6 months, should I use BTC or GLD as a macro hedge?",
+      );
       expect(result.compareMetrics).toEqual(["macro_hedge"]);
     });
 
     it("detects interest-rate comparison focus", () => {
-      const result = extractEntities("For the next 12 months, should I overweight SPY or QQQ if rates start falling?");
+      const result = extractEntities(
+        "For the next 12 months, should I overweight SPY or QQQ if rates start falling?",
+      );
       expect(result.compareMetrics).toEqual(["interest_rates"]);
     });
 

@@ -1,9 +1,7 @@
-export type AnalystRole =
-  | "valuation"
-  | "momentum"
-  | "options"
-  | "contrarian"
-  | "risk";
+import type { WorkflowDefinition } from "../runtime/prompt-step.js";
+import { promptStep } from "../runtime/prompt-step.js";
+
+export type AnalystRole = "valuation" | "momentum" | "options" | "contrarian" | "risk";
 
 const SYMBOL_CAPTURE = "(\\$?[A-Za-z]{1,5}(?:[./-][A-Za-z]{1,2})?)";
 const NORMALIZED_SYMBOL_PATTERN = /^[A-Z]{1,5}(?:[./-][A-Z]{1,2})?$/;
@@ -173,33 +171,10 @@ export interface ComprehensiveAnalysisOptions {
   debate?: boolean;
 }
 
-export function getComprehensiveAnalysisPrompts(symbol: string, options?: ComprehensiveAnalysisOptions): string[] {
-  const debate = options?.debate ?? true;
-  const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
-  const prompts = [getInitialAnalysisPrompt(symbol)];
-
-  for (const role of roles) {
-    prompts.push(ANALYST_PROMPTS[role](symbol));
-  }
-
-  if (debate) {
-    prompts.push(buildBullPrompt(symbol));
-    prompts.push(buildBearPrompt(symbol));
-    prompts.push(buildRebuttalPrompt(symbol));
-    prompts.push(buildSynthesisPrompt(symbol));
-    prompts.push(VALIDATION_PROMPT_DEBATE(symbol));
-  } else {
-    prompts.push(SYNTHESIS_PROMPT_NO_DEBATE(symbol));
-    prompts.push(VALIDATION_PROMPT_NO_DEBATE(symbol));
-  }
-
-  return prompts;
-}
-
-import type { WorkflowDefinition } from "../runtime/prompt-step.js";
-import { promptStep } from "../runtime/prompt-step.js";
-
-export function buildComprehensiveAnalysisDefinition(symbol: string, options?: ComprehensiveAnalysisOptions): WorkflowDefinition {
+export function buildComprehensiveAnalysisDefinition(
+  symbol: string,
+  options?: ComprehensiveAnalysisOptions,
+): WorkflowDefinition {
   const debate = options?.debate ?? true;
   const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
 
@@ -263,16 +238,6 @@ export function buildComprehensiveAnalysisDefinition(symbol: string, options?: C
       }),
     ],
   };
-}
-
-export function runComprehensiveAnalysis(
-  enqueueFollowUp: (prompt: string) => void,
-  symbol: string,
-  options?: ComprehensiveAnalysisOptions,
-): void {
-  for (const prompt of getComprehensiveAnalysisPrompts(symbol, options).slice(1)) {
-    enqueueFollowUp(prompt);
-  }
 }
 
 export function isAnalysisRequest(input: string): { match: boolean; symbol?: string } {

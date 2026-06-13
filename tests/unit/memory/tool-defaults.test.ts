@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { initDatabase } from "../../../src/memory/sqlite.js";
 import {
   clearDefault,
@@ -28,5 +28,34 @@ describe("tool defaults storage", () => {
     expect(getDefaults("get_option_chain", db)).toEqual({
       filters: { min_iv: 0.25 },
     });
+  });
+
+  it("closes internally opened databases after each operation", async () => {
+    vi.resetModules();
+    const close = vi.fn();
+    const run = vi.fn();
+    const all = vi.fn().mockReturnValue([]);
+    const prepare = vi.fn().mockReturnValue({ all, run });
+
+    vi.doMock("../../../src/memory/sqlite.js", () => ({
+      initDefaultDatabase: () => ({ prepare, close }),
+    }));
+
+    const {
+      clearDefault: dynamicClearDefault,
+      getAllDefaults: dynamicGetAllDefaults,
+      getDefaults: dynamicGetDefaults,
+      setDefault: dynamicSetDefault,
+    } = await import("../../../src/memory/tool-defaults.js");
+
+    expect(dynamicGetDefaults("get_option_chain")).toEqual({});
+    expect(dynamicGetAllDefaults()).toEqual(new Map());
+    dynamicSetDefault("get_option_chain", "expiration", "next_monthly");
+    dynamicClearDefault("get_option_chain", "expiration");
+
+    expect(close).toHaveBeenCalledTimes(4);
+
+    vi.doUnmock("../../../src/memory/sqlite.js");
+    vi.resetModules();
   });
 });

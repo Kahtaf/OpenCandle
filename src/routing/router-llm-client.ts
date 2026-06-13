@@ -9,7 +9,9 @@ import type { RouterLlmClient } from "./router-types.js";
  * Zero tools are passed — the router operates on text alone. Temperature
  * is pinned low for structured-output stability.
  */
-export function createPiAiRouterClient(model: Model<"anthropic-messages"> | Model<any>): RouterLlmClient {
+export function createPiAiRouterClient(
+  model: Model<"anthropic-messages"> | Model<any>,
+): RouterLlmClient {
   return {
     async complete(prompt: string): Promise<string> {
       const response = await completeSimple(
@@ -33,9 +35,7 @@ export function createPiAiRouterClient(model: Model<"anthropic-messages"> | Mode
       );
 
       if (response.stopReason === "error" || response.stopReason === "aborted") {
-        throw new Error(
-          `router LLM call failed: ${response.errorMessage ?? response.stopReason}`,
-        );
+        throw new Error(`router LLM call failed: ${response.errorMessage ?? response.stopReason}`);
       }
 
       const text = response.content

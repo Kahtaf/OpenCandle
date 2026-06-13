@@ -1,6 +1,11 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readTwitterCookies, scoreTwitterSentiment, normalizeQuery, getTwitterSentiment } from "../../../src/providers/twitter.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import {
+  getTwitterSentiment,
+  normalizeQuery,
+  readTwitterCookies,
+  scoreTwitterSentiment,
+} from "../../../src/providers/twitter.js";
 import cookieFixture from "../../fixtures/twitter/cookies.json";
 import tweetFixture from "../../fixtures/twitter/search-tweets.json";
 
@@ -72,9 +77,7 @@ describe("normalizeQuery", () => {
 
 describe("scoreTwitterSentiment", () => {
   it("returns positive score weighted by engagement for bullish tweets", () => {
-    const tweets = [
-      { text: "So bullish on this breakout! Moon!", likes: 100, retweets: 50 },
-    ];
+    const tweets = [{ text: "So bullish on this breakout! Moon!", likes: 100, retweets: 50 }];
     const result = scoreTwitterSentiment(tweets);
     expect(result.score).toBeGreaterThan(0);
     expect(result.score).toBeLessThanOrEqual(1);
@@ -83,9 +86,7 @@ describe("scoreTwitterSentiment", () => {
   });
 
   it("returns negative score weighted by engagement for bearish tweets", () => {
-    const tweets = [
-      { text: "Going to crash, time to sell", likes: 200, retweets: 80 },
-    ];
+    const tweets = [{ text: "Going to crash, time to sell", likes: 200, retweets: 80 }];
     const result = scoreTwitterSentiment(tweets);
     expect(result.score).toBeLessThan(0);
     expect(result.score).toBeGreaterThanOrEqual(-1);
@@ -94,7 +95,7 @@ describe("scoreTwitterSentiment", () => {
 
   it("engagement weighting skews toward high-engagement tweets", () => {
     const tweets = [
-      { text: "bullish", likes: 1, retweets: 0 },       // low engagement bullish
+      { text: "bullish", likes: 1, retweets: 0 }, // low engagement bullish
       { text: "bearish crash", likes: 500, retweets: 200 }, // high engagement bearish
     ];
     const result = scoreTwitterSentiment(tweets);
@@ -103,9 +104,7 @@ describe("scoreTwitterSentiment", () => {
   });
 
   it("returns 0 for tweets with no sentiment terms", () => {
-    const tweets = [
-      { text: "Fed decision tomorrow", likes: 10, retweets: 2 },
-    ];
+    const tweets = [{ text: "Fed decision tomorrow", likes: 10, retweets: 2 }];
     const result = scoreTwitterSentiment(tweets);
     expect(result.score).toBe(0);
     expect(result.bullish).toBe(0);
@@ -133,9 +132,7 @@ describe("getTwitterSentiment", () => {
 
   it("throws when no auth cookies exist", async () => {
     // readTwitterCookies will return [] because /fake/profile/cookies.sqlite doesn't exist
-    await expect(getTwitterSentiment("AAPL")).rejects.toThrow(
-      "No Twitter session found",
-    );
+    await expect(getTwitterSentiment("AAPL")).rejects.toThrow("No Twitter session found");
   });
 
   it("includes tweet id in results", async () => {
@@ -218,8 +215,6 @@ describe("getTwitterSentiment", () => {
       return createMockCookieDatabase();
     } as any);
 
-    await expect(getTwitterSentiment("TSLA")).rejects.toThrow(
-      "session expired",
-    );
+    await expect(getTwitterSentiment("TSLA")).rejects.toThrow("session expired");
   });
 });

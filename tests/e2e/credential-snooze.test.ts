@@ -55,15 +55,12 @@ if (!llmChoice) {
 // -----------------------------------------------------------------------------
 // STEP 2: Dynamic imports — env sandboxing above must be fully applied first.
 // -----------------------------------------------------------------------------
-const [
-  { SessionManager, SettingsManager },
-  { createOpenCandleSession },
-  { cache },
-] = await Promise.all([
-  import("@earendil-works/pi-coding-agent"),
-  import("../../src/index.js"),
-  import("../../src/infra/cache.js"),
-]);
+const [{ SessionManager, SettingsManager }, { createOpenCandleSession }, { cache }] =
+  await Promise.all([
+    import("@earendil-works/pi-coding-agent"),
+    import("../../src/index.js"),
+    import("../../src/infra/cache.js"),
+  ]);
 type AgentSessionEvent = import("@earendil-works/pi-coding-agent").AgentSessionEvent;
 type AgentSession = import("@earendil-works/pi-coding-agent").AgentSession;
 type AskUserHandler = import("../../src/types/index.js").AskUserHandler;
@@ -208,7 +205,7 @@ const { session: sessionA } = await createOpenCandleSession({
 
 cache.clear();
 
-console.log("\nSession A — first prompt: \"analyze NVDA\" (expect Snooze choice)");
+console.log('\nSession A — first prompt: "analyze NVDA" (expect Snooze choice)');
 console.log("(this will hit the live LLM; expect 1–3 minutes)\n");
 const captureA1 = await driveAnalyzeNvda(sessionA);
 
@@ -217,7 +214,9 @@ console.log(
 );
 console.log(`askUserHandler was called ${askUserTranscriptA.length} time(s) in turn A1`);
 for (const [i, call] of askUserTranscriptA.entries()) {
-  console.log(`  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`);
+  console.log(
+    `  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`,
+  );
   console.log(`       A: ${call.answer ?? "(cancelled)"}`);
 }
 
@@ -292,7 +291,7 @@ record("session A: onboarding.json records alpha_vantage status=snoozed", () => 
 // STEP 7: Same session, second "analyze NVDA" — must NOT re-prompt for AV.
 // -----------------------------------------------------------------------------
 const preA2Count = askUserTranscriptA.length;
-console.log("\nSession A — second prompt: \"analyze NVDA\" (expect NO new AV prompt)\n");
+console.log('\nSession A — second prompt: "analyze NVDA" (expect NO new AV prompt)\n');
 const captureA2 = await driveAnalyzeNvda(sessionA);
 
 const newCallsA2 = askUserTranscriptA.slice(preA2Count);
@@ -301,7 +300,9 @@ console.log(
 );
 console.log(`askUserHandler saw ${newCallsA2.length} NEW call(s) in turn A2`);
 for (const [i, call] of newCallsA2.entries()) {
-  console.log(`  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`);
+  console.log(
+    `  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`,
+  );
   console.log(`       A: ${call.answer ?? "(cancelled)"}`);
 }
 
@@ -368,7 +369,7 @@ const { session: sessionB } = await createOpenCandleSession({
   askUserHandler: askUserHandlerB,
 });
 
-console.log("\nSession B (fresh) — prompt: \"analyze NVDA\" (expect AV prompt to return)\n");
+console.log('\nSession B (fresh) — prompt: "analyze NVDA" (expect AV prompt to return)\n');
 const captureB = await driveAnalyzeNvda(sessionB);
 
 console.log(
@@ -376,7 +377,9 @@ console.log(
 );
 console.log(`askUserHandler was called ${askUserTranscriptB.length} time(s) in session B`);
 for (const [i, call] of askUserTranscriptB.entries()) {
-  console.log(`  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`);
+  console.log(
+    `  [${i}] Q: ${call.question.slice(0, 120)}${call.question.length > 120 ? "..." : ""}`,
+  );
   console.log(`       A: ${call.answer ?? "(cancelled)"}`);
 }
 

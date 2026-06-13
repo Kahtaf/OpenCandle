@@ -57,19 +57,15 @@ interface Trace {
 function runHarness(prompt: string): Trace {
   const ipcDir = mkdtempSync(join(tmpdir(), "oc-harness-customentries-"));
   try {
-    const result = spawnSync(
-      "npx",
-      ["tsx", "tests/harness/manual-run.ts", ipcDir, prompt],
-      {
-        cwd: process.cwd(),
-        encoding: "utf-8",
-        // Manual-run waits on askUser via IPC if scripted answers aren't supplied.
-        // For portfolio_builder prompts, pre-script a few reasonable answers so
-        // the run doesn't hang. The harness consumes them in order.
-        // Passing via argv[4] as JSON array per manual-run.ts convention.
-        timeout: 10 * 60 * 1000,
-      },
-    );
+    const result = spawnSync("npx", ["tsx", "tests/harness/manual-run.ts", ipcDir, prompt], {
+      cwd: process.cwd(),
+      encoding: "utf-8",
+      // Manual-run waits on askUser via IPC if scripted answers aren't supplied.
+      // For portfolio_builder prompts, pre-script a few reasonable answers so
+      // the run doesn't hang. The harness consumes them in order.
+      // Passing via argv[4] as JSON array per manual-run.ts convention.
+      timeout: 10 * 60 * 1000,
+    });
     if (result.status !== 0) {
       throw new Error(
         `manual-run failed (exit ${result.status}):\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
@@ -150,16 +146,16 @@ if (process.env.OPENCANDLE_ROUTER_MODE !== "rules") {
     );
   });
 } else {
-  console.log(
-    "  (skipping opencandle-router assertion — OPENCANDLE_ROUTER_MODE is 'rules')",
-  );
+  console.log("  (skipping opencandle-router assertion — OPENCANDLE_ROUTER_MODE is 'rules')");
 }
 
 // -----------------------------------------------------------------------------
 // Summary
 // -----------------------------------------------------------------------------
 console.log(`\n${"=".repeat(50)}`);
-console.log(`harness-custom-entries e2e: ${passed} passed, ${failed} failed out of ${passed + failed}`);
+console.log(
+  `harness-custom-entries e2e: ${passed} passed, ${failed} failed out of ${passed + failed}`,
+);
 if (failures.length > 0) {
   console.log("\nFailures:");
   for (const f of failures) console.log(`  ✗ ${f}`);

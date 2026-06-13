@@ -1,13 +1,25 @@
 import { Badge } from "../../../components/ui/badge.jsx";
 import { Favicon } from "../../../components/ui/favicon.jsx";
 import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard } from "./_shared.jsx";
-import { extractDetails, formatDateShort, formatLargeNumber, formatPercent, formatPrice, relativeTime } from "./card-format.js";
+import {
+  extractDetails,
+  formatDateShort,
+  formatLargeNumber,
+  formatPercent,
+  formatPrice,
+  relativeTime,
+} from "./card-format.js";
 
 export function PortfolioCard({ message, header, text }) {
   const d = extractDetails(message);
   const positions = Array.isArray(d?.positions) ? d.positions : null;
   if (!positions || positions.length === 0) {
-    return <ToolCard>{header}<PlainOutput text={text} /></ToolCard>;
+    return (
+      <ToolCard>
+        {header}
+        <PlainOutput text={text} />
+      </ToolCard>
+    );
   }
   const pnlTone = (d.totalPnl ?? 0) >= 0 ? "success" : "destructive";
   return (
@@ -15,11 +27,14 @@ export function PortfolioCard({ message, header, text }) {
       {header}
       <div>
         <div className="flex flex-wrap items-baseline gap-3">
-          <span className="text-[2rem] font-semibold leading-none tabular-nums tracking-tight text-foreground">${formatLargeNumber(d.totalValue)}</span>
+          <span className="text-[2rem] font-semibold leading-none tabular-nums tracking-tight text-foreground">
+            ${formatLargeNumber(d.totalValue)}
+          </span>
           <DeltaChip value={d.totalPnl} percent={d.totalPnlPercent} size="lg" />
         </div>
         <div className="mt-1.5 text-xs text-muted-foreground">
-          {positions.length} position{positions.length === 1 ? "" : "s"} · cost basis ${formatLargeNumber(d.totalCost)}
+          {positions.length} position{positions.length === 1 ? "" : "s"} · cost basis $
+          {formatLargeNumber(d.totalCost)}
         </div>
       </div>
       <div className="rounded-md border border-border">
@@ -33,13 +48,22 @@ export function PortfolioCard({ message, header, text }) {
           {positions.map((p) => {
             const weight = d.totalValue ? (p.marketValue / d.totalValue) * 100 : 0;
             return (
-              <li key={p.symbol} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-border px-3 py-2 last:border-b-0">
+              <li
+                key={p.symbol}
+                className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 border-b border-border px-3 py-2 last:border-b-0"
+              >
                 <div className="grid">
                   <span className="font-mono text-sm font-medium text-foreground">{p.symbol}</span>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">{p.shares} @ {formatPrice(p.avgCost)}</span>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {p.shares} @ {formatPrice(p.avgCost)}
+                  </span>
                 </div>
-                <span className="text-right text-sm tabular-nums text-foreground">${formatLargeNumber(p.marketValue)}</span>
-                <span className="text-right text-xs tabular-nums text-muted-foreground">{weight.toFixed(1)}%</span>
+                <span className="text-right text-sm tabular-nums text-foreground">
+                  ${formatLargeNumber(p.marketValue)}
+                </span>
+                <span className="text-right text-xs tabular-nums text-muted-foreground">
+                  {weight.toFixed(1)}%
+                </span>
                 <span className="text-right">
                   <DeltaChip percent={p.pnlPercent} prefix="" />
                 </span>
@@ -55,23 +79,39 @@ export function PortfolioCard({ message, header, text }) {
 export function RiskCard({ message, header, text }) {
   const d = extractDetails(message);
   if (!d?.symbol && !Number.isFinite(d?.sharpeRatio) && !Number.isFinite(d?.annualizedVolatility)) {
-    return <ToolCard>{header}<PlainOutput text={text} /></ToolCard>;
+    return (
+      <ToolCard>
+        {header}
+        <PlainOutput text={text} />
+      </ToolCard>
+    );
   }
   const sharpeTone = d.sharpeRatio > 1 ? "success" : d.sharpeRatio < 0 ? "destructive" : "default";
-  const ddTone = d.maxDrawdown <= -0.3 ? "destructive" : d.maxDrawdown <= -0.1 ? "default" : "success";
+  const ddTone =
+    d.maxDrawdown <= -0.3 ? "destructive" : d.maxDrawdown <= -0.1 ? "default" : "success";
   return (
     <ToolCard>
       {header}
-      {d.symbol ? <div className="font-mono text-sm font-medium text-foreground">{d.symbol}</div> : null}
+      {d.symbol ? (
+        <div className="font-mono text-sm font-medium text-foreground">{d.symbol}</div>
+      ) : null}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <MoneyTile
           label="Annualized return"
-          value={Number.isFinite(d.annualizedReturn) ? formatPercent(d.annualizedReturn * 100) : "—"}
-          tone={d.annualizedReturn > 0 ? "success" : d.annualizedReturn < 0 ? "destructive" : "default"}
+          value={
+            Number.isFinite(d.annualizedReturn) ? formatPercent(d.annualizedReturn * 100) : "—"
+          }
+          tone={
+            d.annualizedReturn > 0 ? "success" : d.annualizedReturn < 0 ? "destructive" : "default"
+          }
         />
         <MoneyTile
           label="Volatility (annl.)"
-          value={Number.isFinite(d.annualizedVolatility) ? formatPercent(d.annualizedVolatility * 100) : "—"}
+          value={
+            Number.isFinite(d.annualizedVolatility)
+              ? formatPercent(d.annualizedVolatility * 100)
+              : "—"
+          }
         />
         <MoneyTile
           label="Sharpe ratio"
@@ -96,13 +136,19 @@ export function RiskCard({ message, header, text }) {
 export function CorrelationCard({ message, header, text }) {
   const d = extractDetails(message);
   const matrix = d?.matrix || d?.correlations || null;
-  const symbols = Array.isArray(d?.symbols) && d.symbols.length > 0
-    ? d.symbols
-    : matrix && typeof matrix === "object"
-      ? Object.keys(matrix)
-      : null;
+  const symbols =
+    Array.isArray(d?.symbols) && d.symbols.length > 0
+      ? d.symbols
+      : matrix && typeof matrix === "object"
+        ? Object.keys(matrix)
+        : null;
   if (!matrix || !symbols || symbols.length === 0) {
-    return <ToolCard>{header}<PlainOutput text={text} /></ToolCard>;
+    return (
+      <ToolCard>
+        {header}
+        <PlainOutput text={text} />
+      </ToolCard>
+    );
   }
   const warnings = Array.isArray(d?.warnings) ? d.warnings : [];
   return (
@@ -112,16 +158,25 @@ export function CorrelationCard({ message, header, text }) {
         <table className="w-full border-collapse text-xs tabular-nums">
           <thead>
             <tr className="bg-secondary">
-              <th className="border-b border-border px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground"> </th>
+              <th className="border-b border-border px-2 py-1.5 text-left text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                {" "}
+              </th>
               {symbols.map((s) => (
-                <th key={s} className="border-b border-border px-2 py-1.5 text-right font-mono text-[11px] font-medium text-foreground">{s}</th>
+                <th
+                  key={s}
+                  className="border-b border-border px-2 py-1.5 text-right font-mono text-[11px] font-medium text-foreground"
+                >
+                  {s}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {symbols.map((rowSym) => (
               <tr key={rowSym}>
-                <th className="border-b border-border px-2 py-1.5 text-left font-mono text-[11px] font-medium text-foreground">{rowSym}</th>
+                <th className="border-b border-border px-2 py-1.5 text-left font-mono text-[11px] font-medium text-foreground">
+                  {rowSym}
+                </th>
                 {symbols.map((colSym) => {
                   const val = matrix[rowSym]?.[colSym] ?? matrix[colSym]?.[rowSym];
                   return (
@@ -144,7 +199,9 @@ export function CorrelationCard({ message, header, text }) {
       </p>
       {warnings.length > 0 ? (
         <ul className="grid gap-1 text-[11px] text-muted-foreground">
-          {warnings.map((w, index) => <li key={`${w}-${index}`}>· {w}</li>)}
+          {warnings.map((w, index) => (
+            <li key={`${w}-${index}`}>· {w}</li>
+          ))}
         </ul>
       ) : null}
     </ToolCard>
@@ -159,14 +216,27 @@ function corrColor(v) {
 
 export function WatchlistCard({ message, header, text }) {
   const d = extractDetails(message);
-  const symbols = Array.isArray(d?.symbols) ? d.symbols : Array.isArray(d?.watchlist) ? d.watchlist : Array.isArray(d) ? d : null;
+  const symbols = Array.isArray(d?.symbols)
+    ? d.symbols
+    : Array.isArray(d?.watchlist)
+      ? d.watchlist
+      : Array.isArray(d)
+        ? d
+        : null;
   if (!symbols || symbols.length === 0) {
-    return <ToolCard>{header}<PlainOutput text={text} /></ToolCard>;
+    return (
+      <ToolCard>
+        {header}
+        <PlainOutput text={text} />
+      </ToolCard>
+    );
   }
   return (
     <ToolCard>
       {header}
-      <div className="text-xs text-muted-foreground">{symbols.length} symbol{symbols.length === 1 ? "" : "s"}</div>
+      <div className="text-xs text-muted-foreground">
+        {symbols.length} symbol{symbols.length === 1 ? "" : "s"}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {symbols.map((s) => (
           <Badge variant="outline" key={typeof s === "string" ? s : s.symbol} className="font-mono">
@@ -182,7 +252,12 @@ export function PredictionCard({ message, header, text }) {
   const d = extractDetails(message);
   const predictions = Array.isArray(d?.predictions) ? d.predictions : Array.isArray(d) ? d : null;
   if (!predictions || predictions.length === 0) {
-    return <ToolCard>{header}<PlainOutput text={text} /></ToolCard>;
+    return (
+      <ToolCard>
+        {header}
+        <PlainOutput text={text} />
+      </ToolCard>
+    );
   }
   return (
     <ToolCard>
@@ -191,9 +266,27 @@ export function PredictionCard({ message, header, text }) {
         {predictions.slice(0, 6).map((p, i) => (
           <li key={p.id || i} className="rounded-md border border-border px-3 py-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-mono text-sm font-medium text-foreground">{p.symbol || p.ticker || `#${i + 1}`}</span>
-              {p.targetPrice ? <span className="text-sm tabular-nums text-foreground">target {formatPrice(p.targetPrice)}</span> : null}
-              {p.outcome ? <Badge variant={p.outcome === "hit" ? "success" : p.outcome === "miss" ? "destructive" : "outline"}>{p.outcome}</Badge> : null}
+              <span className="font-mono text-sm font-medium text-foreground">
+                {p.symbol || p.ticker || `#${i + 1}`}
+              </span>
+              {p.targetPrice ? (
+                <span className="text-sm tabular-nums text-foreground">
+                  target {formatPrice(p.targetPrice)}
+                </span>
+              ) : null}
+              {p.outcome ? (
+                <Badge
+                  variant={
+                    p.outcome === "hit"
+                      ? "success"
+                      : p.outcome === "miss"
+                        ? "destructive"
+                        : "outline"
+                  }
+                >
+                  {p.outcome}
+                </Badge>
+              ) : null}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
               {p.thesis ? <span className="line-clamp-1">{p.thesis}</span> : null}
@@ -208,9 +301,20 @@ export function PredictionCard({ message, header, text }) {
 
 export function SECFilingsCard({ message, header, text }) {
   const d = extractDetails(message);
-  const filings = Array.isArray(d?.filings) ? d.filings : Array.isArray(d?.results) ? d.results : Array.isArray(d) ? d : null;
+  const filings = Array.isArray(d?.filings)
+    ? d.filings
+    : Array.isArray(d?.results)
+      ? d.results
+      : Array.isArray(d)
+        ? d
+        : null;
   if (!filings || filings.length === 0) {
-    return <ToolCard>{header}<PlainOutput text={text} /></ToolCard>;
+    return (
+      <ToolCard>
+        {header}
+        <PlainOutput text={text} />
+      </ToolCard>
+    );
   }
   const symbol = d?.symbol;
   const entity = filings[0]?.entityName;
@@ -220,7 +324,10 @@ export function SECFilingsCard({ message, header, text }) {
       <div className="text-xs text-muted-foreground">
         {symbol ? <span className="font-mono text-foreground">{symbol}</span> : null}
         {entity ? <span> · {entity}</span> : null}
-        <span> · {filings.length} filing{filings.length === 1 ? "" : "s"}</span>
+        <span>
+          {" "}
+          · {filings.length} filing{filings.length === 1 ? "" : "s"}
+        </span>
       </div>
       <ul className="grid gap-0.5">
         {filings.slice(0, 10).map((f, i) => {
@@ -239,10 +346,20 @@ export function SECFilingsCard({ message, header, text }) {
                 className="grid grid-cols-[20px_auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
               >
                 <Favicon url="https://www.sec.gov" size="sm" />
-                <Badge variant="outline" size="sm" className="font-mono">{form || "—"}</Badge>
+                <Badge variant="outline" size="sm" className="font-mono">
+                  {form || "—"}
+                </Badge>
                 <div className="min-w-0">
-                  <div className="truncate text-[12.5px] text-foreground">{period ? `Period ${period}` : (f.title || f.description || f.primaryDocument || "Filing")}</div>
-                  {accession ? <div className="truncate font-mono text-[10.5px] text-muted-foreground">{accession}</div> : null}
+                  <div className="truncate text-[12.5px] text-foreground">
+                    {period
+                      ? `Period ${period}`
+                      : f.title || f.description || f.primaryDocument || "Filing"}
+                  </div>
+                  {accession ? (
+                    <div className="truncate font-mono text-[10.5px] text-muted-foreground">
+                      {accession}
+                    </div>
+                  ) : null}
                 </div>
                 <span className="whitespace-nowrap text-[10.5px] tabular-nums text-muted-foreground">
                   {filed ? relativeTime(filed) : "—"}

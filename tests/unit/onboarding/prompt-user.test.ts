@@ -29,11 +29,7 @@ describe("promptUser — select branch", () => {
       options: ["Option A", "Option B", "Option C"],
     });
 
-    expect(ui.select).toHaveBeenCalledWith("Pick one", [
-      "Option A",
-      "Option B",
-      "Option C",
-    ]);
+    expect(ui.select).toHaveBeenCalledWith("Pick one", ["Option A", "Option B", "Option C"]);
     expect(result).toEqual({ answer: "Option B", cancelled: false });
   });
 
@@ -192,11 +188,7 @@ describe("promptUser — injected askUserHandler", () => {
     }));
     const ctx = { hasUI: false, ui: {} } as any;
 
-    const result = await promptUser(
-      ctx,
-      { question: "Q", questionType: "text" },
-      handler,
-    );
+    const result = await promptUser(ctx, { question: "Q", questionType: "text" }, handler);
 
     expect(result).toEqual({ answer: null, cancelled: true });
   });

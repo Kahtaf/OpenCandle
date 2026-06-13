@@ -1,4 +1,4 @@
-import { BULLISH_TERMS, BEARISH_TERMS } from "./keywords.js";
+import { BEARISH_TERMS, BULLISH_TERMS } from "./keywords.js";
 import type { SentinelRecord } from "./types.js";
 
 const TICKER_REGEX = /\$([A-Z]{1,5})\b/g;

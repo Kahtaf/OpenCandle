@@ -34,8 +34,12 @@ describe("GUI and TUI session resume", () => {
       const events = sessionEntriesToChatEvents(gui.getEntries(), {
         sessionId: gui.getSessionId(),
       });
-      expect(events.some((event) => event.type === "message.created" && event.role === "user")).toBe(true);
-      expect(events.some((event) => event.type === "message.created" && event.role === "assistant")).toBe(true);
+      expect(
+        events.some((event) => event.type === "message.created" && event.role === "user"),
+      ).toBe(true);
+      expect(
+        events.some((event) => event.type === "message.created" && event.role === "assistant"),
+      ).toBe(true);
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });

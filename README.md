@@ -47,7 +47,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 | Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
 | Finance routing | Quote lookup, comparison, portfolio review, options strategy, filing checks, macro questions, sentiment reads, and educational prompts route differently. |
 | Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
-| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set. |
+| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set; durable market state is stored in SQLite at `state.db`. |
 | Extensible tools | TypeScript tool APIs, provider boundaries, workflow builders, and package exports for add-on tools. |
 | Eval harness | Unit tests, live provider checks, CLI e2e, GUI browser smoke tests, and competitive finance evals. |
 
@@ -125,6 +125,7 @@ Model access comes from Pi. Market data provider keys can be set in the environm
 | `OPENCANDLE_HOME` | Override OpenCandle state directory |
 | `OPENCANDLE_GUI_HOST` | GUI bind host, default `127.0.0.1` |
 | `OPENCANDLE_GUI_PORT` | GUI port, default `14567` |
+| `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | Optional local webhook target for alert/report notification delivery attempts |
 
 Environment variables override `~/.opencandle/config.json`. See [docs/configuration.md](./docs/configuration.md) for the full reference, including advanced routing and diagnostic switches.
 
@@ -165,11 +166,17 @@ src/
 |-- tools/        Tool implementations by domain
 |-- infra/        Cache, rate limiter, HTTP, browser, paths
 |-- routing/      Request understanding, entity extraction, slot resolution
-|-- workflows/    Multi-step workflow builders
+|-- workflows/    WorkflowDefinition builders
+|-- runtime/      Session coordinator, workflow runner, runtime context
+|-- market-state/ Durable watchlists, portfolios, predictions, alerts, reports
 |-- memory/       SQLite-backed state and retrieval
+|-- sentiment/    Cross-source sentiment pipeline, scoring, adapters, trends
 |-- analysts/     Multi-analyst orchestration
 |-- pi/           Pi integration and session wiring
-`-- index.ts      Public exports
+|-- cli.ts        CLI entry point
+|-- monitor.ts    Local automation heartbeat command
+|-- tool-kit.ts   Public add-on tool helpers
+`-- index.ts      Public package exports
 ```
 
 Package exports:

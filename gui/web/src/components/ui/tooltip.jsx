@@ -4,7 +4,10 @@ import { cn } from "../../lib/utils.js";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
 
-const TooltipContent = forwardRef(function TooltipContent({ className, sideOffset = 6, ...props }, ref) {
+const TooltipContent = forwardRef(function TooltipContent(
+  { className, sideOffset = 6, ...props },
+  ref,
+) {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -25,7 +28,9 @@ export function Tooltip({ children, content, side = "top", sideOffset }) {
   return (
     <TooltipPrimitive.Root delayDuration={120}>
       <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
-      <TooltipContent side={side} sideOffset={sideOffset}>{content}</TooltipContent>
+      <TooltipContent side={side} sideOffset={sideOffset}>
+        {content}
+      </TooltipContent>
     </TooltipPrimitive.Root>
   );
 }

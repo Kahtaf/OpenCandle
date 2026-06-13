@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-12T14:31:44Z",
+  "title": "Design System: OpenCandle",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "primary", "displayName": "Research Ink", "canonical": "hsl(240 6% 10%)", "tonalRamp": ["#0b0b0d", "#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8"] },
+      "graphite": { "role": "neutral", "displayName": "Graphite", "canonical": "hsl(240 4% 46%)", "tonalRamp": ["#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#f4f4f5"] },
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "hsl(0 0% 100%)", "tonalRamp": ["#d4d4d8", "#e4e4e7", "#eaeaec", "#f4f4f5", "#fafafa", "#fcfcfc", "#fefefe", "#ffffff"] },
+      "zinc-mist": { "role": "neutral", "displayName": "Zinc Mist", "canonical": "hsl(240 5% 96%)", "tonalRamp": ["#a1a1aa", "#d4d4d8", "#e4e4e7", "#eaeaec", "#f0f0f1", "#f4f4f5", "#fafafa", "#ffffff"] },
+      "zinc-sunk": { "role": "neutral", "displayName": "Zinc Sunk", "canonical": "hsl(240 5% 92%)", "tonalRamp": ["#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#eaeaec", "#f4f4f5", "#fafafa", "#ffffff"] },
+      "hairline": { "role": "neutral", "displayName": "Hairline", "canonical": "hsl(240 6% 90%)", "tonalRamp": ["#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#eaeaec", "#f4f4f5", "#ffffff"] },
+      "hairline-strong": { "role": "neutral", "displayName": "Strong Hairline", "canonical": "hsl(240 5% 84%)", "tonalRamp": ["#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7", "#f4f4f5", "#ffffff"] },
+      "brand": { "role": "primary", "displayName": "Research Ink (action)", "canonical": "hsl(240 6% 10%)", "tonalRamp": ["#0b0b0d", "#18181b", "#27272a", "#3f3f46", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8"] },
+      "success": { "role": "semantic", "displayName": "Signal Green", "canonical": "hsl(142 71% 35%)", "tonalRamp": ["#052e16", "#14532d", "#166534", "#1a9948", "#22c55e", "#4ade80", "#bbf7d0", "#f0fdf4"] },
+      "warning": { "role": "semantic", "displayName": "Amber Caveat", "canonical": "hsl(35 92% 45%)", "tonalRamp": ["#451a03", "#92400e", "#b45309", "#dc8409", "#f59e0b", "#fbbf24", "#fde68a", "#fffbeb"] },
+      "danger": { "role": "semantic", "displayName": "Signal Red", "canonical": "hsl(0 84% 60%)", "tonalRamp": ["#450a0a", "#991b1b", "#dc2626", "#ef4343", "#f87171", "#fca5a5", "#fecaca", "#fef2f2"] },
+      "info": { "role": "semantic", "displayName": "Info Blue", "canonical": "hsl(217 91% 60%)", "tonalRamp": ["#172554", "#1e40af", "#2563eb", "#3c83f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#eff6ff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Homepage hero headline only." },
+      "headline": { "displayName": "Headline", "purpose": "Homepage and docs section headings." },
+      "title": { "displayName": "Title", "purpose": "Page titles and panel headings in the GUI shell." },
+      "body": { "displayName": "Body", "purpose": "GUI default copy; docs prose at 1rem with 65-75ch measure." },
+      "label": { "displayName": "Label", "purpose": "Column headers, badges, kickers, inspector section labels." },
+      "code": { "displayName": "Code", "purpose": "Code blocks, lot ledgers, tickers in dense tables; tabular numerals." }
+    },
+    "shadows": [
+      { "name": "subtle-xs", "value": "0 1px 2px rgba(15, 15, 15, 0.04)", "purpose": "Cards and panels at rest." },
+      { "name": "subtle-sm", "value": "0 4px 12px rgba(15, 15, 15, 0.06)", "purpose": "Popovers, dropdowns, toasts." },
+      { "name": "subtle-md", "value": "0 16px 32px rgba(15, 15, 15, 0.08)", "purpose": "Dialogs, sheets, homepage screenshot frame." }
+    ],
+    "motion": [
+      { "name": "transition-colors", "value": "color 150ms, background-color 150ms, border-color 150ms", "purpose": "Default state transitions on buttons, links, rows." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Brand Button",
+      "kind": "button",
+      "refersTo": "button-brand",
+      "description": "The single committed action per region; pill-shaped near-black CTA.",
+      "html": "<button class=\"ds-btn-brand\">Add symbol</button>",
+      "css": ".ds-btn-brand { background: #18181b; color: #ffffff; height: 36px; padding: 0 16px; border: none; border-radius: 9999px; font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; transition: opacity 150ms; } .ds-btn-brand:hover { opacity: 0.9; } .ds-btn-brand:focus-visible { outline: 2px solid #18181b; outline-offset: 2px; }"
+    },
+    {
+      "name": "Bordered Button",
+      "kind": "button",
+      "refersTo": "button-bordered",
+      "description": "Secondary action; quiet bordered rectangle.",
+      "html": "<button class=\"ds-btn-bordered\">Edit schedule</button>",
+      "css": ".ds-btn-bordered { background: #ffffff; color: #18181b; height: 32px; padding: 0 12px; border: 1px solid #e4e4e7; border-radius: 8px; font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; transition: background-color 150ms; } .ds-btn-bordered:hover { background: #f4f4f5; } .ds-btn-bordered:focus-visible { outline: 2px solid #18181b; outline-offset: 2px; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "State communication: neutral zinc or semantic color/10 tint with full-strength text.",
+      "html": "<span class=\"ds-badge\">recurring</span> <span class=\"ds-badge ds-badge-warn\">Quote 26m old</span> <span class=\"ds-badge ds-badge-ok\">Target hit</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: #f4f4f5; color: #71717a; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 500; } .ds-badge-warn { background: rgba(220, 132, 9, 0.1); border-color: rgba(220, 132, 9, 0.3); color: #dc8409; } .ds-badge-ok { background: rgba(26, 153, 72, 0.1); border-color: rgba(26, 153, 72, 0.3); color: #1a9948; }"
+    },
+    {
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Default container: flat paper, hairline border, subtle shadow, header band.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-head\">Holdings</div><div class=\"ds-panel-body\">5 symbols · 6 lots</div></div>",
+      "css": ".ds-panel { background: #ffffff; border: 1px solid #e4e4e7; border-radius: 12px; box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04); overflow: hidden; font-family: Inter, system-ui, sans-serif; color: #18181b; } .ds-panel-head { padding: 12px 16px; border-bottom: 1px solid #e4e4e7; font-size: 14px; font-weight: 600; } .ds-panel-body { padding: 16px; font-size: 13.5px; color: #71717a; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Quiet bordered field; focus shifts the border to ink, no glow.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search saved symbols\" />",
+      "css": ".ds-input { background: #ffffff; color: #18181b; height: 36px; padding: 0 12px; border: 1px solid #e4e4e7; border-radius: 8px; font-family: Inter, system-ui, sans-serif; font-size: 13.5px; transition: border-color 150ms; } .ds-input::placeholder { color: #71717a; } .ds-input:focus-visible { outline: 2px solid #18181b; outline-offset: 1px; border-color: #18181b; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "button-ghost",
+      "description": "Sidebar navigation row with count pill; active state is zinc fill, not color.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-active\" href=\"#\">Watchlist <span class=\"ds-nav-pill\">5</span></a><a class=\"ds-nav-item\" href=\"#\">Portfolio</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 200px; font-family: Inter, system-ui, sans-serif; } .ds-nav-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 8px; color: #71717a; text-decoration: none; font-size: 13.5px; transition: background-color 150ms, color 150ms; } .ds-nav-item:hover { background: #f4f4f5; color: #18181b; } .ds-nav-active { background: #f4f4f5; color: #18181b; font-weight: 500; } .ds-nav-pill { font-size: 11px; color: #71717a; background: #eaeaec; border-radius: 9999px; padding: 0 7px; font-variant-numeric: tabular-nums; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Research Desk",
+    "overview": "OpenCandle is a quiet, exacting workbench for financial research. The design language is the GUI's: minimal, professional, shadcn-component construction in the spirit of llmchat — white paper, zinc neutrals, one near-black action color, Inter for everything, JetBrains Mono only where data demands alignment. The docs site and homepage follow the GUI, not the other way around. The system rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, gamified trading-app energy, and terminal cosplay. Color exists to carry meaning — market direction, provider state, data freshness — never decoration.",
+    "keyCharacteristics": [
+      "White surfaces layered with zinc tints before any shadow.",
+      "One action color: near-black ink. Semantic green/amber/red/blue communicate state only.",
+      "Inter at every scale; hierarchy from size and weight, never a second display face.",
+      "Hairline borders, 6-12px radii, pill-shaped primary CTAs.",
+      "Tabular numerals on all financial figures; signed values accompany every direction color."
+    ],
+    "rules": [
+      { "name": "The One Ink Rule", "body": "Research Ink is the only action color. If a control is interactive and committed, it is near-black; if a color is not Research Ink, it is communicating market or system state.", "section": "colors" },
+      { "name": "The Signed Color Rule", "body": "Direction colors never appear without a sign, label, or icon. +2.41% in green; never a green number alone.", "section": "colors" },
+      { "name": "The One Face Rule", "body": "No second display family, ever. Hierarchy comes from Inter's weight and size, and from spacing.", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "Every financial figure — price, P&L, percentage, quantity — renders with font-variant-numeric: tabular-nums.", "section": "typography" },
+      { "name": "The Neutral Shadow Rule", "body": "Shadow color is neutral near-black at single-digit opacity. Tinted, colored, or glowing shadows are prohibited.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do treat gui/web/src/styles.css and gui/web/src/components/ui/ as the normative token and component source.",
+      "Do keep one primary (pill, Research Ink) action per region; everything else bordered or ghost.",
+      "Do show data freshness in plain language (\"Updated 2m ago\", \"Quote 26m old\") with Amber Caveat when stale.",
+      "Do use relative, human timestamps in UI surfaces; raw ISO strings belong in tool output only.",
+      "Do layer Paper → Zinc Mist → Zinc Sunk before reaching for shadow."
+    ],
+    "donts": [
+      "Don't reintroduce the retired docs-site theme: DM Sans, Candle Slate #34474E, sage #87A188, cream code blocks, or green-tinted shadows.",
+      "Don't use purple AI gradients, navy-and-gold finance cliches, glassmorphism, stock-photo gloss, or gamified trading-app styling.",
+      "Don't communicate market direction through color alone; every red/green value carries its sign.",
+      "Don't add a second display font, gradient text, side-stripe borders, or decorative card shadows.",
+      "Don't leak internal vocabulary (price_crosses_above, \"Instrument #1\", \"SQLite-backed\") into user-facing copy.",
+      "Don't ship manual refresh buttons; data updates in the background and announces its own age."
+    ]
+  }
+}

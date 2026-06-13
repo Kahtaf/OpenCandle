@@ -2,8 +2,9 @@
  * Subscribes to session events and builds an AgentTrace.
  * Optionally streams events to a JSONL file.
  */
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+
 import { appendFileSync, writeFileSync } from "node:fs";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentTrace, InteractionTrace, ToolCallTrace, TurnTrace } from "./types.js";
 
 interface PendingToolCall {
@@ -52,7 +53,12 @@ export function createTraceCollector(
           startTime: Date.now(),
         };
         pendingTools.set(event.toolCallId, pending);
-        appendToJsonl({ type: event.type, toolName: event.toolName, args: event.args, timestamp: Date.now() });
+        appendToJsonl({
+          type: event.type,
+          toolName: event.toolName,
+          args: event.args,
+          timestamp: Date.now(),
+        });
         break;
       }
       case "tool_execution_end": {
@@ -68,7 +74,13 @@ export function createTraceCollector(
           currentTurn.toolCalls.push(trace);
           pendingTools.delete(event.toolCallId);
         }
-        appendToJsonl({ type: event.type, toolName: event.toolName, result: event.result, isError: event.isError, timestamp: Date.now() });
+        appendToJsonl({
+          type: event.type,
+          toolName: event.toolName,
+          result: event.result,
+          isError: event.isError,
+          timestamp: Date.now(),
+        });
         break;
       }
       case "message_update": {

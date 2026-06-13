@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { MemoryStorage } from "../../../src/memory/storage.js";
-import { initDatabase } from "../../../src/memory/sqlite.js";
 import type Database from "better-sqlite3";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { initDatabase } from "../../../src/memory/sqlite.js";
+import { MemoryStorage } from "../../../src/memory/storage.js";
 
 describe("MemoryStorage", () => {
   let db: Database.Database;
@@ -149,9 +149,14 @@ describe("MemoryStorage", () => {
         defaultsUsedJson: "[]",
       });
 
-      storage.updateWorkflowRunOutputSummary(runId, "Balanced 4-position portfolio centered on VOO and MSFT.");
+      storage.updateWorkflowRunOutputSummary(
+        runId,
+        "Balanced 4-position portfolio centered on VOO and MSFT.",
+      );
 
-      const row = db.prepare("SELECT output_summary FROM workflow_runs WHERE id = ?").get(runId) as {
+      const row = db
+        .prepare("SELECT output_summary FROM workflow_runs WHERE id = ?")
+        .get(runId) as {
         output_summary: string;
       };
       expect(row.output_summary).toBe("Balanced 4-position portfolio centered on VOO and MSFT.");

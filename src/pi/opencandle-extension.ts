@@ -1,23 +1,39 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  buildComprehensiveAnalysisDefinition,
   isAnalysisRequest,
   normalizeSymbol,
 } from "../analysts/orchestrator.js";
-import { buildComprehensiveAnalysisDefinition } from "../analysts/orchestrator.js";
 import { getConfig } from "../config.js";
+import type { InstrumentCandidate } from "../market-state/resolve.js";
+import { runProviderConnect } from "../onboarding/connect.js";
+import { resolveCredentialRequired } from "../onboarding/credential-interceptor.js";
+import { createDegradationAccumulator } from "../onboarding/degradation-accumulator.js";
+import { promptUser } from "../onboarding/prompt-user.js";
+import { getProvider, type ProviderId } from "../onboarding/providers.js";
 import {
+  loadOnboardingState,
+  markProviderNeverAsk,
+  markProviderSnoozed,
+  markWelcomeShown,
+  saveOnboardingState,
+  shouldShowWelcome,
+} from "../onboarding/state.js";
+import { buildConnectedTag, buildSkippedTag, parseToolTag } from "../onboarding/tool-tags.js";
+import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
+import { formatPreflightDropAnnotation, preflightSymbols } from "../prompts/symbol-preflight.js";
+import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
+import {
+  buildResolvedTurnContext,
   classifyWithLegacyRules,
   createPiAiRouterClient,
+  hasFinanceSignals,
   resolveOptionsScreenerSlots,
   resolvePortfolioSlots,
   route as routeLlm,
-  buildResolvedTurnContext,
 } from "../routing/index.js";
-import type {
-  RouterInputContext,
-  RouterLlmClient,
-  RouterOutput,
-} from "../routing/router-types.js";
+import type { RouterInputContext, RouterLlmClient, RouterOutput } from "../routing/router-types.js";
+import { disambiguateSymbols } from "../routing/symbol-disambiguator.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type {
   CompareAssetsSlots,
@@ -25,35 +41,17 @@ import type {
   SlotResolution,
   SlotSource,
 } from "../routing/types.js";
-import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
-import {
-  buildPortfolioWorkflowDefinition,
-  buildOptionsScreenerWorkflowDefinition,
-  buildCompareAssetsWorkflowDefinition,
-} from "../workflows/index.js";
-import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
+import { SessionCoordinator } from "../runtime/session-coordinator.js";
+import { generateSessionTitle } from "../runtime/session-title.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
 import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
-import { SessionCoordinator } from "../runtime/session-coordinator.js";
-import {
-  getProvider,
-  type ProviderId,
-} from "../onboarding/providers.js";
-import {
-  loadOnboardingState,
-  saveOnboardingState,
-  markProviderSnoozed,
-  markProviderNeverAsk,
-  markWelcomeShown,
-  shouldShowWelcome,
-} from "../onboarding/state.js";
-import { parseToolTag, buildSkippedTag, buildConnectedTag } from "../onboarding/tool-tags.js";
-import { resolveCredentialRequired } from "../onboarding/credential-interceptor.js";
-import { createDegradationAccumulator } from "../onboarding/degradation-accumulator.js";
-import { promptUser } from "../onboarding/prompt-user.js";
-import { runProviderConnect } from "../onboarding/connect.js";
 import type { AskUserHandler } from "../types/index.js";
-import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
+import {
+  buildCompareAssetsWorkflowDefinition,
+  buildOptionsScreenerWorkflowDefinition,
+  buildPortfolioWorkflowDefinition,
+} from "../workflows/index.js";
+import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 
 export interface OpenCandleExtensionOptions {
   askUserHandler?: AskUserHandler;
@@ -62,10 +60,26 @@ export interface OpenCandleExtensionOptions {
    * of the pi-ai-backed default. Intended for tests + offline eval runners.
    */
   routerLlmClient?: RouterLlmClient;
+  symbolSearch?: (query: string) => Promise<InstrumentCandidate[]>;
+  /**
+   * Optional completion function for LLM session titles. When omitted, the
+   * extension resolves a pi-ai client from the session's current model.
+   * Intended for tests + offline runners.
+   */
+  titleCompletion?: (prompt: string) => Promise<string>;
 }
 
-export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
+export default function openCandleExtension(
+  pi: ExtensionAPI,
+  options?: OpenCandleExtensionOptions,
+): void {
   const coordinator = new SessionCoordinator();
+
+  // Workflow transforms replace the user's turn with the expanded prompt; this
+  // marker lets the GUI render the user's original words instead.
+  const markOriginalInput = (original: string): void => {
+    pi.appendEntry("opencandle-user-input", { original });
+  };
 
   // Credential-interception state. Lifetime:
   //   `sessionPromptedSet` — cleared on session_start, persists across turns
@@ -85,6 +99,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   const degradationAccumulator = createDegradationAccumulator();
   let activeToolSnapshot: string[] | null = null;
   let currentRouteToolContext: ResolvedTurnContext | null = null;
+  // LLM session-title state: one title attempt per session per process.
+  // Reset on session_start; set before the (async) title call fires so
+  // overlapping turn_end events cannot double-title.
+  let sessionTitleAttempted = false;
 
   // Register tools
   for (const tool of getOpenCandleToolDefinitions()) {
@@ -102,7 +120,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         ctx.ui.notify("Usage: /analyze <ticker>", "warning");
         return;
       }
-      const definition = buildComprehensiveAnalysisDefinition(symbol, { debate: getConfig().debate });
+      const definition = buildComprehensiveAnalysisDefinition(symbol, {
+        debate: getConfig().debate,
+      });
       coordinator.executeWorkflow(pi, definition, ctx);
     },
   });
@@ -165,10 +185,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           const all = listAllProviders()
             .map((p) => `  ${p.displayName} (${p.aliases.join(", ")})`)
             .join("\n");
-          ctx.ui.notify(
-            `Unknown provider: "${trimmed}". Available:\n${all}`,
-            "warning",
-          );
+          ctx.ui.notify(`Unknown provider: "${trimmed}". Available:\n${all}`, "warning");
           return;
         }
         if (Array.isArray(resolved)) {
@@ -199,6 +216,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     coordinator.initSession(ctx.sessionManager.getSessionId());
     sessionPromptedSet.clear();
     hardPromptFiredInWorkflow = false;
+    sessionTitleAttempted = false;
 
     if (!ctx.hasUI) return;
     // Pin the user-facing disclaimer in the UI footer for the entire session.
@@ -266,8 +284,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   // footer status pinned at session_start is the primary user-visible channel.
   pi.on("turn_end", async (event) => {
     const msg = event.message;
-    const isFinalAssistantTurn =
-      msg.role === "assistant" && msg.stopReason === "stop";
+    const isFinalAssistantTurn = msg.role === "assistant" && msg.stopReason === "stop";
     if (isFinalAssistantTurn) {
       pi.appendEntry("opencandle-disclaimer", { text: DISCLAIMER_TEXT });
       restoreRouteToolScope();
@@ -280,6 +297,82 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       pi.appendEntry("opencandle-turn-gap", { annotation });
     }
     degradationAccumulator.reset();
+  });
+
+  // LLM session titles. After the first completed user↔assistant exchange,
+  // replace the placeholder session name (the raw first prompt, set by the
+  // GUI server / Pi's firstMessage fallback) with a short model-written
+  // summary. Manual renames are left alone, and each session is attempted at
+  // most once per process. Model failures are swallowed (placeholder stays)
+  // but recorded as an `opencandle-title-error` entry for observability.
+  pi.on("turn_end", async (event, ctx) => {
+    if (sessionTitleAttempted) return;
+    const msg = event.message as { role?: unknown; stopReason?: unknown };
+    if (msg?.role !== "assistant" || msg?.stopReason !== "stop") return;
+    const sessionManager = ctx?.sessionManager;
+    if (typeof sessionManager?.getBranch !== "function") return;
+
+    const branch = sessionManager.getBranch();
+    let firstUserText: string | null = null;
+    let firstAssistantText: string | null = null;
+    let originalInput: string | null = null;
+    for (const entry of branch) {
+      if (
+        originalInput === null &&
+        entry.type === "custom" &&
+        (entry as { customType?: unknown }).customType === "opencandle-user-input"
+      ) {
+        const original = (entry as { data?: { original?: unknown } }).data?.original;
+        if (typeof original === "string" && original.trim().length > 0) {
+          originalInput = original;
+        }
+        continue;
+      }
+      if (entry.type !== "message") continue;
+      const message = (entry as { message?: { role?: unknown; content?: unknown } }).message;
+      const text = extractMessageText(message?.content);
+      if (text.trim().length === 0) continue;
+      if (firstUserText === null && message?.role === "user") firstUserText = text;
+      if (firstAssistantText === null && message?.role === "assistant") {
+        firstAssistantText = text;
+      }
+      if (firstUserText !== null && firstAssistantText !== null) break;
+    }
+    // Fall back to the just-finished assistant message when the branch has
+    // not surfaced it yet at turn_end time.
+    if (firstAssistantText === null) {
+      const eventText = extractMessageText((msg as { content?: unknown }).content);
+      if (eventText.trim().length > 0) firstAssistantText = eventText;
+    }
+    if (firstUserText === null || firstAssistantText === null) return;
+
+    const userText = originalInput ?? firstUserText;
+    // A manual rename must be left alone — only replace the placeholder
+    // (unset, the raw first prompt, or the GUI's "first 77 chars + ..." form).
+    if (!isPlaceholderSessionName(pi.getSessionName(), [userText, firstUserText])) return;
+
+    const completion =
+      options?.titleCompletion ??
+      (() => {
+        const client = options?.routerLlmClient ?? resolveRouterLlmClient(ctx);
+        return client ? (prompt: string) => client.complete(prompt) : null;
+      })();
+    if (!completion) return;
+
+    sessionTitleAttempted = true;
+    try {
+      const title = await generateSessionTitle(
+        { userText, assistantText: firstAssistantText.slice(0, 500) },
+        completion,
+      );
+      if (title !== null) {
+        pi.setSessionName(title);
+      }
+    } catch (err) {
+      pi.appendEntry("opencandle-title-error", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // Intercept tool results for credential-required and soft-degraded tags.
@@ -346,10 +439,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       // action === "prompt": pause and ask the user via promptUser.
       const descriptor = getProvider(parsed.provider);
       const connectLabel = `Connect now — ${descriptor.instructionsHint}`;
-      const continueLabel =
-        descriptor.fallbackDescription
-          ? `Continue with ${descriptor.fallbackDescription} for this run`
-          : `Continue without ${descriptor.displayName} for this run`;
+      const continueLabel = descriptor.fallbackDescription
+        ? `Continue with ${descriptor.fallbackDescription} for this run`
+        : `Continue without ${descriptor.displayName} for this run`;
       const snoozeLabel = `Snooze ${descriptor.snoozeDurationDays} days`;
       const neverLabel = `Never ask again`;
       const questionBody =
@@ -378,12 +470,11 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           content: [
             {
               type: "text",
-              text:
-                `${buildSkippedTag({
-                  provider: parsed.provider,
-                  reason: "credential_not_provided",
-                  remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
-                })}\n\nPrompt was cancelled.`,
+              text: `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
+              })}\n\nPrompt was cancelled.`,
             },
           ],
         };
@@ -421,12 +512,11 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           content: [
             {
               type: "text",
-              text:
-                `${buildSkippedTag({
-                  provider: parsed.provider,
-                  reason: "credential_not_provided",
-                  remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
-                })}\n\n${descriptor.displayName} connect was ${connectOutcomeDescription}.`,
+              text: `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation: `run /connect ${descriptor.aliases[0] ?? descriptor.id} to unlock`,
+              })}\n\n${descriptor.displayName} connect was ${connectOutcomeDescription}.`,
             },
           ],
         };
@@ -448,13 +538,12 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         content: [
           {
             type: "text",
-            text:
-              `${buildSkippedTag({
-                provider: parsed.provider,
-                reason: "credential_not_provided",
-                remediation,
-                silenced,
-              })}\n\n${descriptor.displayName} data was omitted per your choice.`,
+            text: `${buildSkippedTag({
+              provider: parsed.provider,
+              reason: "credential_not_provided",
+              remediation,
+              silenced,
+            })}\n\n${descriptor.displayName} data was omitted per your choice.`,
           },
         ],
       };
@@ -490,12 +579,16 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   // Input handling — branches on OPENCANDLE_ROUTER_MODE.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
+    coordinator.clearTickerValidationCache();
 
     // Check for comprehensive analysis pattern — same in both modes.
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
-      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, { debate: getConfig().debate });
+      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, {
+        debate: getConfig().debate,
+      });
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
@@ -516,29 +609,130 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
 
     // Classify intent
-    const classification = classifyWithLegacyRules(event.text);
+    let classification = classifyWithLegacyRules(event.text);
+    const ruleModeDisambiguation = disambiguateRulesModeSymbols(
+      event.text,
+      classification.entities.symbols,
+    );
+    appendSymbolDropEntries(ruleModeDisambiguation.dropped, "rules");
+    classification = {
+      ...classification,
+      entities: {
+        ...classification.entities,
+        symbols: ruleModeDisambiguation.kept,
+      },
+    };
+    if (
+      isComparePrompt(event.text) &&
+      ruleModeDisambiguation.dropped.length > 0 &&
+      classification.entities.symbols.length < 2
+    ) {
+      pi.appendEntry("opencandle-workflow-aborted", {
+        reason: "symbol-disambiguation-insufficient-symbols",
+        dropped: ruleModeDisambiguation.dropped,
+        validSymbols: classification.entities.symbols,
+      });
+      const base = coordinator.buildRouterContextBase(ctx.sessionManager);
+      const output: RouterOutput = {
+        routeKind: "clarification",
+        route: "fallback",
+        workflow: "compare_assets",
+        entities: classification.entities,
+        slots: {},
+        preference_updates: [],
+        missing_required: ["symbols"],
+        tool_bundles: ["clarification"],
+        diagnostics: ruleModeDisambiguation.dropped.map((drop) => ({
+          code: "symbol_dropped",
+          message: `${drop.token} dropped: ${drop.reason}`,
+          details: {
+            token: drop.token,
+            reason: drop.reason,
+            signalsChecked: drop.signalsChecked,
+            source: "rules",
+          },
+        })),
+        reasoning: "rules-mode acronym disambiguation left fewer than two symbols for comparison",
+      };
+      const resolvedTurnContext = buildResolvedTurnContext({ text: event.text, ...base }, output, {
+        availableToolNames: safeGetAllToolNames(),
+        planning: {
+          migrationStatuses: getConfig().planningMigrationStatuses,
+        },
+      });
+      coordinator.setPendingResolvedTurnContext({
+        ...resolvedTurnContext,
+        diagnostics: [
+          ...resolvedTurnContext.diagnostics,
+          {
+            code: "compare_workflow_aborted",
+            message:
+              "compare workflow needs at least two validated symbols after acronym disambiguation",
+          },
+        ],
+      });
+      coordinator.setPendingFallbackContext({
+        assumptionsBlock: [
+          "Assumptions Context:",
+          classification.entities.symbols.length > 0
+            ? `  valid symbols: ${classification.entities.symbols.join(", ")} (user)`
+            : "  valid symbols: (none)",
+          `  dropped ambiguous ticker-like tokens: ${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")} (no positive ticker signal)`,
+        ].join("\n"),
+        missingRequired: ["symbols"],
+        extraContext:
+          "Dropped ambiguous ticker-like tokens: " +
+          `${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")}. ` +
+          "Ask the user which ticker symbols they want compared before calling comparison tools.",
+      });
+      applyRouteToolScope(resolvedTurnContext);
+      return undefined;
+    }
 
     if (classification.workflow === "portfolio_builder") {
       const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);
-      coordinator.recordWorkflowRun("portfolio_builder", classification.entities, resolution.resolved, resolution.defaultsUsed);
-      pi.appendEntry("opencandle-workflow", { workflow: "portfolio_builder", entities: classification.entities, resolved: resolution.resolved });
+      coordinator.recordWorkflowRun(
+        "portfolio_builder",
+        classification.entities,
+        resolution.resolved,
+        resolution.defaultsUsed,
+      );
+      pi.appendEntry("opencandle-workflow", {
+        workflow: "portfolio_builder",
+        entities: classification.entities,
+        resolved: resolution.resolved,
+      });
       const definition = buildPortfolioWorkflowDefinition(resolution);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
     if (classification.workflow === "options_screener") {
       const resolution = resolveOptionsScreenerSlots(classification.entities, workflowPrefs);
       if (resolution.missingRequired.length === 0) {
-        coordinator.recordWorkflowRun("options_screener", classification.entities, resolution.resolved, resolution.defaultsUsed);
-        pi.appendEntry("opencandle-workflow", { workflow: "options_screener", entities: classification.entities, resolved: resolution.resolved });
+        coordinator.recordWorkflowRun(
+          "options_screener",
+          classification.entities,
+          resolution.resolved,
+          resolution.defaultsUsed,
+        );
+        pi.appendEntry("opencandle-workflow", {
+          workflow: "options_screener",
+          entities: classification.entities,
+          resolved: resolution.resolved,
+        });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+        if (prompt) markOriginalInput(event.text);
         return prompt ? { action: "transform", text: prompt } : { action: "handled" };
       }
     }
 
-    if (classification.workflow === "compare_assets" && classification.entities.symbols.length >= 2) {
+    if (
+      classification.workflow === "compare_assets" &&
+      classification.entities.symbols.length >= 2
+    ) {
       const resolution: SlotResolution<CompareAssetsSlots> = {
         resolved: {
           symbols: classification.entities.symbols,
@@ -557,12 +751,69 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         defaultsUsed: [],
         missingRequired: [],
       };
-      coordinator.recordWorkflowRun("compare_assets", classification.entities, resolution.resolved, resolution.defaultsUsed);
-      pi.appendEntry("opencandle-workflow", { workflow: "compare_assets", symbols: classification.entities.symbols });
-      const definition = buildCompareAssetsWorkflowDefinition(resolution);
+      coordinator.recordWorkflowRun(
+        "compare_assets",
+        classification.entities,
+        resolution.resolved,
+        resolution.defaultsUsed,
+      );
+      pi.appendEntry("opencandle-workflow", {
+        workflow: "compare_assets",
+        symbols: classification.entities.symbols,
+      });
+      const preflight = await preflightCompareResolution(resolution);
+      if (!preflight) {
+        coordinator.recordWorkflowRun(
+          "fallback",
+          classification.entities,
+          resolution.resolved,
+          [],
+          "clarification",
+        );
+        coordinator.setPendingFallbackContext({
+          assumptionsBlock: [
+            "Assumptions Context:",
+            `  original symbols: ${classification.entities.symbols.join(", ")} (user)`,
+          ].join("\n"),
+          missingRequired: ["symbols"],
+          extraContext:
+            "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers before calling comparison tools.",
+        });
+        return undefined;
+      }
+      const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
+      applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
+
+    // Rules-mode finance fallback: no workflow dispatched, but the turn is
+    // finance-shaped (classified finance intent, extracted symbols, or finance
+    // vocabulary). Record the fallback turn and stash a fallback context so
+    // the system prompt carries saved market state for this turn; non-finance
+    // prompts stay untouched.
+    const isFinanceFallback =
+      classification.workflow !== "unclassified" ||
+      classification.entities.symbols.length > 0 ||
+      hasFinanceSignals(event.text);
+    if (isFinanceFallback) {
+      coordinator.recordWorkflowRun("fallback", classification.entities, {}, [], "agent_task");
+      coordinator.setPendingFallbackContext({
+        assumptionsBlock: "",
+        missingRequired: [],
+        extraContext:
+          classification.entities.symbols.length > 0
+            ? `Rules-router extracted symbols: ${classification.entities.symbols.join(", ")}.`
+            : undefined,
+      });
+      pi.appendEntry("opencandle-fallback-context", {
+        mode: "rules",
+        classifiedWorkflow: classification.workflow,
+        symbols: classification.entities.symbols,
+      });
+    }
+    return undefined;
   });
 
   /**
@@ -577,8 +828,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
   ): Promise<{ action: "transform"; text: string } | false> {
     const storage = coordinator.getStorage();
-    const { profileSnapshot, recentWorkflowRuns, priorTurns } =
-      coordinator.buildRouterContextBase(ctx.sessionManager);
+    const { profileSnapshot, recentWorkflowRuns, priorTurns } = coordinator.buildRouterContextBase(
+      ctx.sessionManager,
+    );
     // priorTurns is not scrubbed for /forget — tracked in proposal.md follow-ups.
     const input: RouterInputContext = {
       text,
@@ -632,6 +884,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     });
 
     pi.appendEntry("opencandle-router", { output });
+    appendRouterSymbolDropEntries(output);
     pi.appendEntry("opencandle-route-context", resolvedTurnContext);
     coordinator.setPendingResolvedTurnContext(resolvedTurnContext);
     applyRouteToolScope(resolvedTurnContext);
@@ -657,7 +910,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
 
     // Workflow dispatch for recognised workflows.
     if (output.routeKind === "workflow_dispatch" && output.workflow) {
-      return dispatchRouterWorkflow(output, ctx);
+      return dispatchRouterWorkflow(output, ctx, text);
     }
 
     if (output.routeKind === "pass_through") {
@@ -678,18 +931,20 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     coordinator.setPendingFallbackContext({
       assumptionsBlock,
       missingRequired: output.missing_required,
-      extraContext: output.entities.symbols.length > 0
-        ? `Router-extracted symbols: ${output.entities.symbols.join(", ")}.`
-          + ` Route kind: ${output.routeKind}. Tool bundles: ${output.tool_bundles.join(", ") || "(none)"}.`
-        : undefined,
+      extraContext:
+        output.entities.symbols.length > 0
+          ? `Router-extracted symbols: ${output.entities.symbols.join(", ")}.` +
+            ` Route kind: ${output.routeKind}. Tool bundles: ${output.tool_bundles.join(", ") || "(none)"}.`
+          : undefined,
     });
     return false;
   }
 
-  function dispatchRouterWorkflow(
+  async function dispatchRouterWorkflow(
     output: RouterOutput,
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
-  ): { action: "transform"; text: string } | false {
+    originalText: string,
+  ): Promise<{ action: "transform"; text: string } | false> {
     const workflow = output.workflow!;
     const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
@@ -714,6 +969,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       });
       const definition = buildPortfolioWorkflowDefinition(resolution);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(originalText);
       return prompt ? { action: "transform", text: prompt } : false;
     }
     if (workflow === "options_screener") {
@@ -738,6 +994,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+        if (prompt) markOriginalInput(originalText);
         return prompt ? { action: "transform", text: prompt } : false;
       }
       // Missing required symbol — treat as fallback with ask_user directive.
@@ -755,7 +1012,9 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
           symbols: sourceForRouterSlot(output, "symbols", "user"),
           ...(entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
           ...(entities.compareMetrics ? { metrics: "user" as const } : {}),
-          ...(entities.budget !== undefined ? { budget: sourceForRouterSlot(output, "budget", "user") } : {}),
+          ...(entities.budget !== undefined
+            ? { budget: sourceForRouterSlot(output, "budget", "user") }
+            : {}),
           ...(entities.assetScope ? { assetScope: "user" as const } : {}),
         },
         defaultsUsed: [],
@@ -772,8 +1031,28 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
         workflow: "compare_assets",
         symbols: entities.symbols,
       });
-      const definition = buildCompareAssetsWorkflowDefinition(resolution);
+      const preflight = await preflightCompareResolution(resolution);
+      if (!preflight) {
+        coordinator.recordWorkflowRun(
+          "fallback",
+          output.entities,
+          Object.fromEntries(Object.entries(output.slots).map(([k, v]) => [k, v.value])),
+          [],
+          output.routeKind,
+        );
+        coordinator.setPendingResolvedTurnContext(null);
+        coordinator.setPendingFallbackContext({
+          assumptionsBlock: buildAssumptionsBlockFromRouter(output.slots),
+          missingRequired: ["symbols"],
+          extraContext:
+            "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers.",
+        });
+        return false;
+      }
+      const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
+      applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
+      if (prompt) markOriginalInput(originalText);
       return prompt ? { action: "transform", text: prompt } : false;
     }
 
@@ -796,6 +1075,112 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     return false;
   }
 
+  function appendRouterSymbolDropEntries(output: RouterOutput): void {
+    for (const diagnostic of output.diagnostics) {
+      if (diagnostic.code !== "symbol_dropped") continue;
+      const details = diagnostic.details ?? {};
+      appendSymbolDropEntries(
+        [
+          {
+            token: String(details.token ?? ""),
+            reason: String(details.reason ?? ""),
+            signalsChecked: Array.isArray(details.signalsChecked)
+              ? details.signalsChecked.map(String)
+              : [],
+          },
+        ],
+        String(details.source ?? "llm"),
+      );
+    }
+  }
+
+  function appendSymbolDropEntries(
+    dropped: Array<{ token: string; reason: string; signalsChecked: string[] }>,
+    source: string,
+  ): void {
+    for (const drop of dropped) {
+      pi.appendEntry("opencandle-symbol-dropped", {
+        token: drop.token,
+        reason: drop.reason,
+        signalsChecked: drop.signalsChecked,
+        source,
+      });
+    }
+  }
+
+  function disambiguateRulesModeSymbols(
+    text: string,
+    extractedSymbols: string[],
+  ): {
+    kept: string[];
+    dropped: Array<{ token: string; reason: string; signalsChecked: string[] }>;
+  } {
+    const candidates = mergeSymbols(extractedSymbols, rawTickerLikeTokens(text));
+    const disambiguated = disambiguateSymbols(candidates, text);
+    return {
+      kept: disambiguated.kept.filter((symbol) => extractedSymbols.includes(symbol)),
+      dropped: disambiguated.dropped,
+    };
+  }
+
+  function rawTickerLikeTokens(text: string): string[] {
+    const tokens: string[] = [];
+    for (const match of text.matchAll(/\$?([A-Za-z]{1,5})\b/g)) {
+      const raw = match[1];
+      if (raw !== raw.toUpperCase()) continue;
+      const token = raw.toUpperCase();
+      if (!tokens.includes(token)) tokens.push(token);
+    }
+    return tokens;
+  }
+
+  function isComparePrompt(text: string): boolean {
+    return /\b(?:compare|vs\.?|versus|which\s+is\s+better)\b/i.test(text);
+  }
+
+  async function preflightCompareResolution(
+    resolution: SlotResolution<CompareAssetsSlots>,
+  ): Promise<{
+    resolution: SlotResolution<CompareAssetsSlots>;
+    dropped: Array<{ symbol: string; reason: string }>;
+  } | null> {
+    const result = await preflightSymbols(resolution.resolved.symbols, {
+      cache: coordinator.getTickerValidationCache(),
+      search: options?.symbolSearch,
+    });
+    for (const drop of result.dropped) {
+      pi.appendEntry("opencandle-symbol-preflight-dropped", drop);
+    }
+    if (result.valid.length < 2) {
+      pi.appendEntry("opencandle-workflow-aborted", {
+        reason: "preflight-insufficient-symbols",
+        dropped: result.dropped,
+      });
+      return null;
+    }
+    return {
+      resolution: {
+        ...resolution,
+        resolved: {
+          ...resolution.resolved,
+          symbols: result.valid,
+        },
+      },
+      dropped: result.dropped,
+    };
+  }
+
+  function applyPreflightAnnotation(
+    definition: ReturnType<typeof buildCompareAssetsWorkflowDefinition>,
+    dropped: Array<{ symbol: string; reason: string }>,
+  ): void {
+    if (dropped.length === 0 || definition.steps.length === 0) return;
+    definition.steps[0] = {
+      ...definition.steps[0],
+      prompt: `${formatPreflightDropAnnotation(dropped)}\n\n${definition.steps[0].prompt}`,
+    };
+  }
+
   function mergeRouterSlotsIntoEntities(output: RouterOutput): ExtractedEntities {
     const entities: ExtractedEntities = {
       ...output.entities,
@@ -806,12 +1191,27 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       entities.budget = output.slots.budget.value;
     }
 
-    const slotSymbols = symbolsFromRouterSlots(output);
+    const droppedSymbols = droppedSymbolsFromDiagnostics(output);
+    const slotSymbols = symbolsFromRouterSlots(output).filter(
+      (symbol) => !droppedSymbols.has(symbol),
+    );
     if (slotSymbols.length > 0 && slotSymbols.length > entities.symbols.length) {
       entities.symbols = mergeSymbols(slotSymbols, entities.symbols);
     }
 
     return entities;
+  }
+
+  function droppedSymbolsFromDiagnostics(output: RouterOutput): Set<string> {
+    const dropped = new Set<string>();
+    for (const diagnostic of output.diagnostics) {
+      if (diagnostic.code !== "symbol_dropped") continue;
+      const token = diagnostic.details?.token;
+      if (typeof token === "string" && token.trim() !== "") {
+        dropped.add(token.toUpperCase());
+      }
+    }
+    return dropped;
   }
 
   function withRouterSlotSources<T extends object>(
@@ -954,10 +1354,46 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     return {
       systemPrompt: coordinator.buildSystemPrompt(
         event.systemPrompt,
-        undefined,
+        coordinator.getActiveWorkflowType(),
         fallbackContext,
         resolvedTurnContext,
       ),
     };
   });
+}
+
+/** Concatenate text from a Pi message `content` (plain string or block array). */
+function extractMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  let text = "";
+  for (const block of content) {
+    if (
+      block &&
+      typeof block === "object" &&
+      (block as { type?: unknown }).type === "text" &&
+      typeof (block as { text?: unknown }).text === "string"
+    ) {
+      text += (block as { text: string }).text;
+    }
+  }
+  return text;
+}
+
+/**
+ * True when the session name is still an auto-set placeholder that the LLM
+ * title may replace: unset, exactly one of the candidate user texts, or the
+ * GUI server's truncated "first 77 chars + ..." form of one of them.
+ */
+function isPlaceholderSessionName(name: string | undefined, candidates: string[]): boolean {
+  if (name === undefined || name.trim().length === 0) return true;
+  const trimmed = name.trim();
+  for (const candidate of candidates) {
+    const candidateTrimmed = candidate.trim();
+    if (trimmed === candidateTrimmed) return true;
+    if (trimmed.endsWith("...") && candidateTrimmed.startsWith(trimmed.slice(0, -3))) {
+      return true;
+    }
+  }
+  return false;
 }

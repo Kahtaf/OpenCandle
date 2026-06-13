@@ -2,23 +2,33 @@ export interface Position {
   symbol: string;
   shares: number;
   avgCost: number;
+  currency: string;
   addedAt: string;
 }
 
 export interface PortfolioSummary {
   positions: Array<
     Position & {
-      currentPrice: number;
-      marketValue: number;
+      currentPrice: number | null;
+      marketValue: number | null;
       totalCost: number;
-      pnl: number;
-      pnlPercent: number;
+      pnl: number | null;
+      pnlPercent: number | null;
+      includedInTotals: boolean;
+      quoteStatus?: "ok" | "unavailable";
+      exclusionReason?: string;
     }
   >;
+  baseCurrency: string;
   totalValue: number;
   totalCost: number;
   totalPnl: number;
   totalPnlPercent: number;
+  excludedFromTotals: Array<{
+    symbol: string;
+    currency: string;
+    reason: string;
+  }>;
 }
 
 export interface RiskMetrics {

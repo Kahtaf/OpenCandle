@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SentinelRecord, SentimentAdapter } from "../types.js";
-import type { RedditSentimentResult } from "../../types/sentiment.js";
 import type { RedditComment } from "../../providers/reddit.js";
+import type { RedditSentimentResult } from "../../types/sentiment.js";
+import type { SentimentAdapter, SentinelRecord } from "../types.js";
 
 export class RedditAdapter implements SentimentAdapter {
   readonly source = "reddit" as const;

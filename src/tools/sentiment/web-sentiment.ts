@@ -1,8 +1,9 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import { searchWeb } from "../../providers/web-search.js";
 import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic to search for web/news sentiment" }),
@@ -11,9 +12,7 @@ const params = Type.Object({
       description: "Time window for results. Default: day",
     }),
   ),
-  limit: Type.Optional(
-    Type.Number({ description: "Max results. Default: 10, max: 20" }),
-  ),
+  limit: Type.Optional(Type.Number({ description: "Max results. Default: 10, max: 20" })),
 });
 
 export const webSentimentTool: AgentTool<typeof params> = {
@@ -30,7 +29,12 @@ export const webSentimentTool: AgentTool<typeof params> = {
 
     if (providerResult.status === "unavailable") {
       return {
-        content: [{ type: "text", text: `⚠ Web sentiment unavailable for "${args.query}" (${providerResult.reason}).` }],
+        content: [
+          {
+            type: "text",
+            text: `⚠ Web sentiment unavailable for "${args.query}" (${providerResult.reason}).`,
+          },
+        ],
         details: null as any,
       };
     }
@@ -44,16 +48,24 @@ export const webSentimentTool: AgentTool<typeof params> = {
     if (result.fresh.length === 0) {
       lines.push(`No web results found for "${args.query}".`);
     } else {
-      const avgScore = result.fresh.reduce((s, r) => s + r.sentiment.score, 0) / result.fresh.length;
+      const avgScore =
+        result.fresh.reduce((s, r) => s + r.sentiment.score, 0) / result.fresh.length;
       const label = sentimentLabel(avgScore);
-      lines.push(`**Web sentiment for "${args.query}"** — ${result.fresh.length} results (${label}, ${avgScore.toFixed(2)})`);
+      lines.push(
+        `**Web sentiment for "${args.query}"** — ${result.fresh.length} results (${label}, ${avgScore.toFixed(2)})`,
+      );
       lines.push("");
+      lines.push(untrustedContentHeader("web sentiment results"));
 
       for (const rec of result.fresh.slice(0, limit)) {
         const indicator = rec.sentiment.score > 0 ? "🟢" : rec.sentiment.score < 0 ? "🔴" : "⚪";
-        lines.push(`${indicator} [${rec.title}](${rec.url}) — *${rec.author}*`);
-        lines.push(`  ${rec.text.slice(0, 150)}`);
-        lines.push(`  Score: ${rec.sentiment.score.toFixed(2)} | Confidence: ${rec.sentiment.confidence.toFixed(2)}`);
+        const title = renderUntrustedText(rec.title ?? rec.text, 150);
+        const titleText = isHttpUrl(rec.url) ? `[${title}](${rec.url})` : title;
+        lines.push(`${indicator} ${titleText} — *${rec.author}*`);
+        lines.push(`  ${renderUntrustedText(rec.text, 150)}`);
+        lines.push(
+          `  Score: ${rec.sentiment.score.toFixed(2)} | Confidence: ${rec.sentiment.confidence.toFixed(2)}`,
+        );
       }
 
       if (result.trend) {
@@ -73,4 +85,8 @@ function sentimentLabel(score: number): string {
   if (score > 0) return "Leaning Bullish";
   if (score < 0) return "Leaning Bearish";
   return "Neutral";
+}
+
+function isHttpUrl(url: string | null): url is string {
+  return typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://"));
 }

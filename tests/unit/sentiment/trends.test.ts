@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { renderSparkline, computeTrend, computeDivergence } from "../../../src/sentiment/trends.js";
+import { describe, expect, it } from "vitest";
+import { computeDivergence, computeTrend, renderSparkline } from "../../../src/sentiment/trends.js";
 import type { TrendBucket } from "../../../src/sentiment/types.js";
 
 describe("renderSparkline", () => {
@@ -70,9 +70,7 @@ describe("computeTrend", () => {
   });
 
   it("includes sample count", () => {
-    const buckets: TrendBucket[] = [
-      { timestamp: "2026-04-05", avgScore: 0.3, count: 42 },
-    ];
+    const buckets: TrendBucket[] = [{ timestamp: "2026-04-05", avgScore: 0.3, count: 42 }];
     const trend = computeTrend(buckets, "twitter");
     expect(trend.count).toBe(42);
   });

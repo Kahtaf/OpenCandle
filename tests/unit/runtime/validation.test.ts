@@ -1,12 +1,12 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { EvidenceRecord } from "../../../src/runtime/evidence.js";
 import {
-  checkTimestamps,
+  checkNumberMatch,
   checkOptionsExpiries,
   checkRequiredFields,
-  checkNumberMatch,
+  checkTimestamps,
   emptyValidationResult,
 } from "../../../src/runtime/validation.js";
-import type { EvidenceRecord } from "../../../src/runtime/evidence.js";
 
 describe("emptyValidationResult", () => {
   it("returns empty arrays", () => {

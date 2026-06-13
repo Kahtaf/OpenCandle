@@ -3,21 +3,23 @@
  * Writes questions to ipc/question.json, polls for ipc/answer.json.
  * An external agent reads questions, writes answers, and drives the session.
  */
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 
 const ipcDir = process.argv[2] || join(tmpdir(), "oc-ipc-" + Date.now());
-const prompt = process.argv[3] || "Help me build a diversified stock portfolio for long-term growth";
+const prompt =
+  process.argv[3] || "Help me build a diversified stock portfolio for long-term growth";
 
 // Optional: pre-scripted answers as JSON array in argv[4]
-const scriptedAnswers: string[] = process.argv[4] ? JSON.parse(process.argv[4]) as string[] : [];
+const scriptedAnswers: string[] = process.argv[4] ? (JSON.parse(process.argv[4]) as string[]) : [];
 let scriptedIndex = 0;
 
 mkdirSync(ipcDir, { recursive: true });
@@ -96,17 +98,15 @@ const pendingTools = new Map<string, { name: string; args: unknown }>();
 // SessionCoordinator.executeWorkflow with multiple prompt steps), use a
 // longer settle grace so between-step gaps don't truncate the trace.
 import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
-const MULTI_STEP_WORKFLOWS = new Set([
-  "options_screener",
-  "portfolio_builder",
-  "compare_assets",
-]);
+
+const MULTI_STEP_WORKFLOWS = new Set(["options_screener", "portfolio_builder", "compare_assets"]);
 const isMultiTurn =
-  isAnalysisRequest(prompt).match ||
-  MULTI_STEP_WORKFLOWS.has(classifyIntent(prompt).workflow);
+  isAnalysisRequest(prompt).match || MULTI_STEP_WORKFLOWS.has(classifyIntent(prompt).workflow);
 const SETTLE_GRACE_MS = process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS
   ? Number(process.env.OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS)
-  : isMultiTurn ? 30_000 : 3_000;
+  : isMultiTurn
+    ? 30_000
+    : 3_000;
 
 await new Promise<void>((resolve) => {
   let settleTimer: ReturnType<typeof setTimeout> | null = null;

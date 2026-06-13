@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
-import type { BrowserContext } from "playwright-core";
-import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
+import type { BrowserContext } from "playwright-core";
 
 interface TwitterLoginResult {
   success: boolean;
@@ -47,7 +47,10 @@ export async function runTwitterLogin(notify: (msg: string) => void): Promise<Tw
         if (found.length >= 2) {
           await page.waitForTimeout(3000);
           await context.close();
-          return { success: true, message: `Twitter login successful! (${found.map((c) => c.name).join(", ")})` };
+          return {
+            success: true,
+            message: `Twitter login successful! (${found.map((c) => c.name).join(", ")})`,
+          };
         }
       } catch {
         return { success: false, message: "Twitter login cancelled (browser closed)." };
@@ -58,7 +61,11 @@ export async function runTwitterLogin(notify: (msg: string) => void): Promise<Tw
     await context.close();
     return { success: false, message: "Twitter login timed out after 5 minutes." };
   } catch (error) {
-    try { await context.close(); } catch { /* already closed */ }
+    try {
+      await context.close();
+    } catch {
+      /* already closed */
+    }
     const msg = error instanceof Error ? error.message : String(error);
     return { success: false, message: `Twitter login failed: ${msg}` };
   }
@@ -77,7 +84,12 @@ export function registerTwitterLoginTool(pi: ExtensionAPI): void {
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       if (!ctx?.hasUI) {
         return {
-          content: [{ type: "text", text: "Cannot open browser in non-interactive mode. Twitter login requires a terminal session with UI." }],
+          content: [
+            {
+              type: "text",
+              text: "Cannot open browser in non-interactive mode. Twitter login requires a terminal session with UI.",
+            },
+          ],
           details: { success: false },
         };
       }

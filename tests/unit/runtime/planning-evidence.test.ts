@@ -1,24 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { buildSkippedTag, buildSoftDegradedTag } from "../../../src/onboarding/tool-tags.js";
 import {
-  EVIDENCE_PLAN_REGISTRY,
-  buildPortfolioExposureMapEvidence,
   buildMarketStatusEvidence,
+  buildPortfolioExposureMapEvidence,
   buildTickerDisambiguationEvidence,
   captureEvidenceFromToolCall,
+  EVIDENCE_PLAN_REGISTRY,
   normalizeProviderGapFromToolText,
   providerResultToPlanningEvidence,
 } from "../../../src/runtime/planning-evidence.js";
-import {
-  buildSkippedTag,
-  buildSoftDegradedTag,
-} from "../../../src/onboarding/tool-tags.js";
 
 describe("planning evidence plans", () => {
   it("implements only market_status and ticker_disambiguation evidence plans", () => {
     expect(EVIDENCE_PLAN_REGISTRY.market_status.implemented).toBe(true);
     expect(EVIDENCE_PLAN_REGISTRY.ticker_disambiguation.implemented).toBe(true);
     expect(EVIDENCE_PLAN_REGISTRY.placeholder_asset_compare.implemented).toBe(false);
-    expect(EVIDENCE_PLAN_REGISTRY.placeholder_asset_compare.capabilityGapIds).toContain("etf_holdings_overlap");
+    expect(EVIDENCE_PLAN_REGISTRY.placeholder_asset_compare.capabilityGapIds).toContain(
+      "etf_holdings_overlap",
+    );
   });
 
   it("captures deterministic market status for today-style prompts during market hours", () => {
@@ -65,24 +64,30 @@ describe("planning evidence plans", () => {
 
   it("uses market-status plus tool-result evidence for current-event explanations", () => {
     const plan = EVIDENCE_PLAN_REGISTRY.market_status;
-    const quote = captureEvidenceFromToolCall({
-      name: "get_stock_quote",
-      args: { symbol: "BA" },
-      result: { symbol: "BA", price: 180 },
-      isError: false,
-    }, {
-      traceId: "trace-current-event",
-      toolCallIndex: 0,
-    });
-    const news = captureEvidenceFromToolCall({
-      name: "search_web",
-      args: { query: "Boeing stock catalyst today", category: "news" },
-      result: { results: [{ title: "Boeing headline" }] },
-      isError: false,
-    }, {
-      traceId: "trace-current-event",
-      toolCallIndex: 1,
-    });
+    const quote = captureEvidenceFromToolCall(
+      {
+        name: "get_stock_quote",
+        args: { symbol: "BA" },
+        result: { symbol: "BA", price: 180 },
+        isError: false,
+      },
+      {
+        traceId: "trace-current-event",
+        toolCallIndex: 0,
+      },
+    );
+    const news = captureEvidenceFromToolCall(
+      {
+        name: "search_web",
+        args: { query: "Boeing stock catalyst today", category: "news" },
+        result: { results: [{ title: "Boeing headline" }] },
+        isError: false,
+      },
+      {
+        traceId: "trace-current-event",
+        toolCallIndex: 1,
+      },
+    );
 
     expect(plan.taskFamilies).toContain("current_event_explanation");
     expect(plan.requiredEvidence).toEqual(["market_status"]);
@@ -90,16 +95,20 @@ describe("planning evidence plans", () => {
     expect(plan.capabilityGapIds).toContain("market_calendar");
     expect(quote.evidenceType).toBe("tool_result");
     expect(news.evidenceType).toBe("tool_result");
-    expect(quote.rawTracePointer).toEqual(expect.objectContaining({
-      traceId: "trace-current-event",
-      toolName: "get_stock_quote",
-      toolCallIndex: 0,
-    }));
-    expect(news.rawTracePointer).toEqual(expect.objectContaining({
-      traceId: "trace-current-event",
-      toolName: "search_web",
-      toolCallIndex: 1,
-    }));
+    expect(quote.rawTracePointer).toEqual(
+      expect.objectContaining({
+        traceId: "trace-current-event",
+        toolName: "get_stock_quote",
+        toolCallIndex: 0,
+      }),
+    );
+    expect(news.rawTracePointer).toEqual(
+      expect.objectContaining({
+        traceId: "trace-current-event",
+        toolName: "search_web",
+        toolCallIndex: 1,
+      }),
+    );
   });
 
   it("builds the selected ticker-disambiguation slice without invoking unrelated plans", () => {
@@ -112,9 +121,11 @@ describe("planning evidence plans", () => {
     expect(record.evidenceType).toBe("ticker_disambiguation");
     expect(record.normalizedFacts.selectedMigrationSlice).toBe("ticker_disambiguation");
     expect(record.normalizedFacts.requestedSymbols).toEqual(["META"]);
-    expect(record.gaps).toContainEqual(expect.objectContaining({
-      capabilityGapId: "earnings_event_risk",
-    }));
+    expect(record.gaps).toContainEqual(
+      expect.objectContaining({
+        capabilityGapId: "earnings_event_risk",
+      }),
+    );
   });
 
   it("builds deterministic portfolio exposure-map evidence from user-stated allocations", () => {
@@ -124,10 +135,12 @@ describe("planning evidence plans", () => {
     });
 
     expect(record.evidenceType).toBe("portfolio_exposure_map");
-    expect(record.rawTracePointer).toEqual(expect.objectContaining({
-      traceId: "trace-portfolio",
-      toolName: "deterministic_portfolio_exposure_map",
-    }));
+    expect(record.rawTracePointer).toEqual(
+      expect.objectContaining({
+        traceId: "trace-portfolio",
+        toolName: "deterministic_portfolio_exposure_map",
+      }),
+    );
     expect(record.normalizedFacts.directSleeves).toEqual([
       { label: "tech", normalizedSleeve: "technology_sector", percent: 45 },
       { label: "S&P 500 index", normalizedSleeve: "broad_us_index", percent: 25 },
@@ -137,9 +150,11 @@ describe("planning evidence plans", () => {
     expect(record.normalizedFacts.directExposureTotalPercent).toBe(100);
     expect(record.normalizedFacts.broadIndexOverlapCaveat).toBe(true);
     expect(record.normalizedFacts.targetBandGuidanceNeeded).toBe(true);
-    expect(record.gaps).toContainEqual(expect.objectContaining({
-      capabilityGapId: "etf_holdings_overlap",
-    }));
+    expect(record.gaps).toContainEqual(
+      expect.objectContaining({
+        capabilityGapId: "etf_holdings_overlap",
+      }),
+    );
     expect(record.caveats.join(" ")).toMatch(/exact ETF\/index holdings overlap/i);
   });
 });
@@ -172,29 +187,37 @@ describe("planning evidence normalization", () => {
   });
 
   it("normalizes soft-degraded and skipped tool tags without dropping /connect remediation", () => {
-    const soft = normalizeProviderGapFromToolText(buildSoftDegradedTag({
-      provider: "brave",
-      fallback: "ddg",
-      remediation: "run /connect search",
-    }));
-    const skipped = normalizeProviderGapFromToolText(buildSkippedTag({
-      provider: "fred",
-      reason: "credential_not_provided",
-      remediation: "run /connect economy",
-      silenced: true,
-    }));
+    const soft = normalizeProviderGapFromToolText(
+      buildSoftDegradedTag({
+        provider: "brave",
+        fallback: "ddg",
+        remediation: "run /connect search",
+      }),
+    );
+    const skipped = normalizeProviderGapFromToolText(
+      buildSkippedTag({
+        provider: "fred",
+        reason: "credential_not_provided",
+        remediation: "run /connect economy",
+        silenced: true,
+      }),
+    );
 
-    expect(soft).toEqual(expect.objectContaining({
-      providerStatus: "soft_degraded",
-      provider: "brave",
-      remediation: "run /connect search",
-    }));
-    expect(skipped).toEqual(expect.objectContaining({
-      providerStatus: "skipped",
-      provider: "fred",
-      remediation: "run /connect economy",
-      silenced: true,
-    }));
+    expect(soft).toEqual(
+      expect.objectContaining({
+        providerStatus: "soft_degraded",
+        provider: "brave",
+        remediation: "run /connect search",
+      }),
+    );
+    expect(skipped).toEqual(
+      expect.objectContaining({
+        providerStatus: "skipped",
+        provider: "fred",
+        remediation: "run /connect economy",
+        silenced: true,
+      }),
+    );
   });
 
   it("converts unavailable provider results into structured evidence gaps", () => {
@@ -205,9 +228,11 @@ describe("planning evidence normalization", () => {
     });
 
     expect(record.providerStatus).toBe("unavailable");
-    expect(record.gaps).toContainEqual(expect.objectContaining({
-      provider: "fred",
-      reason: "missing API key",
-    }));
+    expect(record.gaps).toContainEqual(
+      expect.objectContaining({
+        provider: "fred",
+        reason: "missing API key",
+      }),
+    );
   });
 });

@@ -4,11 +4,12 @@
  *
  * Usage: npx tsx tests/e2e/cli.test.ts
  */
-import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
+import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getConfig } from "../../src/config.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
@@ -72,14 +73,20 @@ async function queryAgent(prompt: string): Promise<{ text: string; toolCalls: st
   }
 }
 
-async function test(name: string, prompt: string, validate: (text: string, tools: string[]) => void) {
+async function test(
+  name: string,
+  prompt: string,
+  validate: (text: string, tools: string[]) => void,
+) {
   try {
     cache.clear();
     console.log(`\n  Testing: ${name}`);
     console.log(`  Prompt: "${prompt}"`);
     const { text, toolCalls } = await queryAgent(prompt);
     console.log(`  Tools called: ${toolCalls.join(", ") || "(none)"}`);
-    console.log(`  Response: ${text.slice(0, 200).replace(/\n/g, " ")}${text.length > 200 ? "..." : ""}`);
+    console.log(
+      `  Response: ${text.slice(0, 200).replace(/\n/g, " ")}${text.length > 200 ? "..." : ""}`,
+    );
     validate(text, toolCalls);
     console.log(`  ✓ PASS`);
     passed++;
@@ -99,23 +106,25 @@ async function run() {
   console.log(`Testing through the Pi-based OpenCandle session\n`);
 
   // --- 1. Stock Quote (sanity) ---
-  await test(
-    "Stock quote via agent",
-    "What is the current price of MSFT?",
-    (text, tools) => {
-      assert(tools.includes("get_stock_quote"), `expected get_stock_quote, got: ${tools}`);
-      assert(text.includes("MSFT") || text.includes("Microsoft"), "response should mention MSFT");
-      assert(/\$\d+/.test(text), "response should include a dollar amount");
-    },
-  );
+  await test("Stock quote via agent", "What is the current price of MSFT?", (text, tools) => {
+    assert(tools.includes("get_stock_quote"), `expected get_stock_quote, got: ${tools}`);
+    assert(text.includes("MSFT") || text.includes("Microsoft"), "response should mention MSFT");
+    assert(/\$\d+/.test(text), "response should include a dollar amount");
+  });
 
   // --- 2. Technical indicators with OBV/VWAP ---
   await test(
     "Technical analysis includes OBV and VWAP",
     "Run technical analysis on SPY",
     (text, tools) => {
-      assert(tools.includes("get_technical_indicators"), `expected get_technical_indicators, got: ${tools}`);
-      assert(text.includes("OBV") || text.includes("volume"), "response should mention OBV or volume");
+      assert(
+        tools.includes("get_technical_indicators"),
+        `expected get_technical_indicators, got: ${tools}`,
+      );
+      assert(
+        text.includes("OBV") || text.includes("volume"),
+        "response should mention OBV or volume",
+      );
       assert(text.includes("VWAP") || text.includes("vwap"), "response should mention VWAP");
     },
   );
@@ -127,19 +136,24 @@ async function run() {
     (text, tools) => {
       assert(tools.includes("backtest_strategy"), `expected backtest_strategy, got: ${tools}`);
       assert(text.toLowerCase().includes("return") || text.includes("%"), "should mention returns");
-      assert(text.toLowerCase().includes("trade") || text.toLowerCase().includes("win"), "should mention trades");
+      assert(
+        text.toLowerCase().includes("trade") || text.toLowerCase().includes("win"),
+        "should mention trades",
+      );
     },
   );
 
   // --- 4. SEC EDGAR filings ---
-  await test(
-    "SEC filings for AAPL",
-    "Show me recent SEC filings for Apple",
-    (text, tools) => {
-      assert(tools.includes("get_sec_filings"), `expected get_sec_filings, got: ${tools}`);
-      assert(text.includes("10-K") || text.includes("10-Q") || text.includes("8-K") || text.toLowerCase().includes("filing"), "should mention filing types");
-    },
-  );
+  await test("SEC filings for AAPL", "Show me recent SEC filings for Apple", (text, tools) => {
+    assert(tools.includes("get_sec_filings"), `expected get_sec_filings, got: ${tools}`);
+    assert(
+      text.includes("10-K") ||
+        text.includes("10-Q") ||
+        text.includes("8-K") ||
+        text.toLowerCase().includes("filing"),
+      "should mention filing types",
+    );
+  });
 
   // --- 5. Watchlist ---
   await test(
@@ -151,14 +165,10 @@ async function run() {
     },
   );
 
-  await test(
-    "Check watchlist",
-    "Check my watchlist",
-    (text, tools) => {
-      assert(tools.includes("manage_watchlist"), `expected manage_watchlist, got: ${tools}`);
-      assert(text.includes("NVDA"), "should show NVDA in watchlist");
-    },
-  );
+  await test("Check watchlist", "Check my watchlist", (text, tools) => {
+    assert(tools.includes("manage_watchlist"), `expected manage_watchlist, got: ${tools}`);
+    assert(text.includes("NVDA"), "should show NVDA in watchlist");
+  });
 
   // --- 6. Correlation ---
   await test(
@@ -176,30 +186,33 @@ async function run() {
     "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days",
     (text, tools) => {
       assert(tools.includes("track_prediction"), `expected track_prediction, got: ${tools}`);
-      assert(text.includes("AAPL") || text.includes("bullish") || text.includes("Recorded"), "should confirm prediction recorded");
+      assert(
+        text.includes("AAPL") || text.includes("bullish") || text.includes("Recorded"),
+        "should confirm prediction recorded",
+      );
     },
   );
 
-  await test(
-    "Check predictions",
-    "Check my prediction scorecard",
-    (text, tools) => {
-      assert(tools.includes("track_prediction"), `expected track_prediction, got: ${tools}`);
-      assert(text.toLowerCase().includes("hit rate") || text.toLowerCase().includes("scorecard") || text.includes("prediction"), "should show hit rate");
-    },
-  );
+  await test("Check predictions", "Check my prediction scorecard", (text, tools) => {
+    assert(tools.includes("track_prediction"), `expected track_prediction, got: ${tools}`);
+    assert(
+      text.toLowerCase().includes("hit rate") ||
+        text.toLowerCase().includes("scorecard") ||
+        text.includes("prediction"),
+      "should show hit rate",
+    );
+  });
 
   // --- 8. DCF (if Alpha Vantage key available) ---
   if (config.alphaVantageApiKey) {
-    await test(
-      "DCF valuation",
-      "Run a DCF valuation on AAPL",
-      (text, tools) => {
-        assert(tools.includes("compute_dcf") || tools.includes("get_financials"), `expected DCF tools, got: ${tools}`);
-        // May get "negative FCF" or actual valuation — both are valid
-        assert(text.length > 50, "response too short");
-      },
-    );
+    await test("DCF valuation", "Run a DCF valuation on AAPL", (text, tools) => {
+      assert(
+        tools.includes("compute_dcf") || tools.includes("get_financials"),
+        `expected DCF tools, got: ${tools}`,
+      );
+      // May get "negative FCF" or actual valuation — both are valid
+      assert(text.length > 50, "response too short");
+    });
   }
 
   // --- 9. Comprehensive analysis (named personas + voting + validation) ---
@@ -213,9 +226,7 @@ async function run() {
     const allTools: string[] = [];
     let turnCount = 0;
 
-    const { text, toolCalls } = await queryAgent(
-      "analyze NVDA"
-    );
+    const { text, toolCalls } = await queryAgent("analyze NVDA");
     allText += text;
     allTools.push(...toolCalls);
     turnCount++;
@@ -223,7 +234,10 @@ async function run() {
     console.log(`  Tools called: ${allTools.join(", ")}`);
     console.log(`  Response length: ${allText.length} chars, ${turnCount} turn(s)`);
 
-    assert(allTools.length >= 2, `expected multiple tool calls, got ${allTools.length}: ${allTools}`);
+    assert(
+      allTools.length >= 2,
+      `expected multiple tool calls, got ${allTools.length}: ${allTools}`,
+    );
     assert(allText.length > 100, `response too short: ${allText.length} chars`);
     console.log(`  ✓ PASS`);
     passed++;

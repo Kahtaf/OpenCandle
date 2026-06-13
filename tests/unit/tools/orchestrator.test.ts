@@ -1,13 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  isAnalysisRequest,
-  normalizeSymbol,
-  runComprehensiveAnalysis,
-  buildBullPrompt,
   buildBearPrompt,
+  buildBullPrompt,
+  buildComprehensiveAnalysisDefinition,
   buildRebuttalPrompt,
   buildSynthesisPrompt,
-  buildComprehensiveAnalysisDefinition,
+  isAnalysisRequest,
+  normalizeSymbol,
 } from "../../../src/analysts/orchestrator.js";
 
 describe("isAnalysisRequest", () => {
@@ -70,21 +69,19 @@ describe("normalizeSymbol", () => {
   });
 });
 
-describe("runComprehensiveAnalysis", () => {
-  function runAndCapture(symbol: string) {
-    const followUpCalls: string[] = [];
-    const enqueueFollowUp = vi.fn((prompt: string) => followUpCalls.push(prompt));
-    runComprehensiveAnalysis(enqueueFollowUp, symbol);
-    return { enqueueFollowUp, texts: followUpCalls };
+describe("comprehensive analysis follow-up prompts", () => {
+  function followUpPrompts(symbol: string) {
+    return buildComprehensiveAnalysisDefinition(symbol)
+      .steps.slice(1)
+      .map((step) => step.prompt);
   }
 
   it("queues 10 follow-up messages (5 analysts + 3 debate + synthesis + validation)", () => {
-    const { enqueueFollowUp } = runAndCapture("AAPL");
-    expect(enqueueFollowUp).toHaveBeenCalledTimes(10);
+    expect(followUpPrompts("AAPL")).toHaveLength(10);
   });
 
   it("uses named investment persona labels", () => {
-    const { texts } = runAndCapture("AAPL");
+    const texts = followUpPrompts("AAPL");
     expect(texts[0]).toContain("[Valuation Analyst]");
     expect(texts[1]).toContain("[Momentum Analyst]");
     expect(texts[2]).toContain("[Options Analyst]");
@@ -93,14 +90,14 @@ describe("runComprehensiveAnalysis", () => {
   });
 
   it("includes symbol in every analyst prompt", () => {
-    const { texts } = runAndCapture("TSLA");
+    const texts = followUpPrompts("TSLA");
     for (const text of texts) {
       expect(text).toContain("TSLA");
     }
   });
 
   it("requires structured SIGNAL/CONVICTION/THESIS from each analyst", () => {
-    const { texts } = runAndCapture("AAPL");
+    const texts = followUpPrompts("AAPL");
     // Each of the 5 analyst prompts (indices 0-4) should require the voting format
     for (let i = 0; i < 5; i++) {
       expect(texts[i]).toContain("SIGNAL:");
@@ -110,14 +107,14 @@ describe("runComprehensiveAnalysis", () => {
   });
 
   it("includes debate prompts (bull, bear, rebuttal) after analysts", () => {
-    const { texts } = runAndCapture("AAPL");
+    const texts = followUpPrompts("AAPL");
     expect(texts[5]).toContain("[Bull Researcher]");
     expect(texts[6]).toContain("[Bear Researcher]");
     expect(texts[7]).toContain("[Bull Rebuttal]");
   });
 
   it("has synthesis prompt that resolves the debate", () => {
-    const { texts } = runAndCapture("AAPL");
+    const texts = followUpPrompts("AAPL");
     const synthesis = texts[8];
     expect(synthesis).toContain("[Synthesis]");
     expect(synthesis).toContain("RESOLVE THE DEBATE");
@@ -126,7 +123,7 @@ describe("runComprehensiveAnalysis", () => {
   });
 
   it("ends with a validation check as the final follow-up", () => {
-    const { texts } = runAndCapture("AAPL");
+    const texts = followUpPrompts("AAPL");
     const validation = texts[9];
     expect(validation).toContain("[Validation");
     expect(validation.toLowerCase()).toMatch(/verify|check|validated/);
@@ -256,10 +253,11 @@ describe("buildComprehensiveAnalysisDefinition", () => {
   });
 });
 
-describe("runComprehensiveAnalysis with debate toggle", () => {
+describe("comprehensive analysis follow-up prompts with debate toggle", () => {
   it("queues 7 follow-ups with debate off (5 analysts + synthesis + validation)", () => {
-    const calls: string[] = [];
-    runComprehensiveAnalysis((p) => calls.push(p), "AAPL", { debate: false });
+    const calls = buildComprehensiveAnalysisDefinition("AAPL", { debate: false })
+      .steps.slice(1)
+      .map((step) => step.prompt);
     expect(calls).toHaveLength(7);
     expect(calls[5]).toContain("[Synthesis]");
     expect(calls[5]).not.toContain("RESOLVE THE DEBATE");

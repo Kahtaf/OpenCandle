@@ -1,3 +1,4 @@
+import type { EvalTrace } from "../types.js";
 import type {
   ProductDimensionResult,
   ProductEvalCase,
@@ -8,7 +9,6 @@ import type {
   ProductEvalSummaryBucket,
   PromptFamily,
 } from "./types.js";
-import type { EvalTrace } from "../types.js";
 
 const PASS_THRESHOLD = 0.8;
 
@@ -20,9 +20,10 @@ export function scoreProductEvalCase(
   const dimensions = [...assertionDimensions, ...evalCase.dimensions];
   const results = dimensions.map((dimension) => scoreDimension(dimension, trace, evalCase));
   const totalWeight = results.reduce((sum, result) => sum + result.weight, 0);
-  const weightedScore = totalWeight > 0
-    ? results.reduce((sum, result) => sum + result.score * result.weight, 0) / totalWeight
-    : 1;
+  const weightedScore =
+    totalWeight > 0
+      ? results.reduce((sum, result) => sum + result.score * result.weight, 0) / totalWeight
+      : 1;
   const mandatoryFailure = results.some((result) => result.mandatory && !result.passed);
 
   return {
@@ -119,7 +120,9 @@ function scoreDimension(
   const issues: string[] = [];
 
   if (dimension.expectedWorkflow && trace.classification.workflow !== dimension.expectedWorkflow) {
-    issues.push(`expected workflow ${dimension.expectedWorkflow}, got ${trace.classification.workflow}`);
+    issues.push(
+      `expected workflow ${dimension.expectedWorkflow}, got ${trace.classification.workflow}`,
+    );
   }
 
   for (const toolName of dimension.requiredToolNames ?? []) {
@@ -164,20 +167,30 @@ function passesFamilyAwareDimension(
   text: string,
 ): boolean {
   if (dimensionId === "direct_answer" && evalCase.family === "portfolio") {
-    return trace.classification.workflow === "portfolio_builder" &&
+    return (
+      trace.classification.workflow === "portfolio_builder" &&
       /\|\s*symbol\s*\|/i.test(text) &&
-      /\|\s*[^|\n]+\s*\|\s*\d+(?:\.\d+)?\s*%\s*\|\s*\$\s?\d/i.test(text);
+      /\|\s*[^|\n]+\s*\|\s*\d+(?:\.\d+)?\s*%\s*\|\s*\$\s?\d/i.test(text)
+    );
   }
   if (dimensionId === "horizon_fit" && evalCase.family === "portfolio") {
-    return /why this fits the horizon|time horizon|horizon/i.test(text) &&
-      /\b(?:asset class|fixed income|equity|stability|growth|downside|drawdown|inflation|shorter timeframes?)\b/i.test(text);
+    return (
+      /why this fits the horizon|time horizon|horizon/i.test(text) &&
+      /\b(?:asset class|fixed income|equity|stability|growth|downside|drawdown|inflation|shorter timeframes?)\b/i.test(
+        text,
+      )
+    );
   }
   if (dimensionId === "horizon_fit" && evalCase.family === "options") {
-    return /\b(?:\d+\s*DTE|\d+\s*days?[\s),-]+to\s+(?:expiry|expiration)|expir(?:y|ation).{0,40}\d+\s*days?|25\s*[-–]\s*45\s*days?|roughly\s+one\s+month)\b/i.test(text);
+    return /\b(?:\d+\s*DTE|\d+\s*days?[\s),-]+to\s+(?:expiry|expiration)|expir(?:y|ation).{0,40}\d+\s*days?|25\s*[-–]\s*45\s*days?|roughly\s+one\s+month)\b/i.test(
+      text,
+    );
   }
   if (dimensionId === "risk_framing" && evalCase.family === "sentiment") {
-    return /\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
-      /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text);
+    return (
+      /\b(?:missing sources?|source coverage|no sources returned|unavailable)\b/i.test(text) &&
+      /\b(?:confidence|downgrade|limited|comprehensive|reliable)\b/i.test(text)
+    );
   }
   return false;
 }

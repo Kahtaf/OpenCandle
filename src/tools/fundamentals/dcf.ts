@@ -1,10 +1,10 @@
-import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { getOverview, getFinancials } from "../../providers/alpha-vantage.js";
-import { getQuote } from "../../providers/yahoo-finance.js";
-import { wrapProvider } from "../../providers/wrap-provider.js";
+import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
+import { getFinancials, getOverview } from "../../providers/alpha-vantage.js";
+import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getQuote } from "../../providers/yahoo-finance.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 export interface DCFResult {
@@ -35,7 +35,15 @@ export interface DCFParams {
 }
 
 export function computeDCF(params: DCFParams): DCFResult {
-  const { freeCashFlow, growthRate, discountRate, terminalGrowth, years, netDebt, sharesOutstanding } = params;
+  const {
+    freeCashFlow,
+    growthRate,
+    discountRate,
+    terminalGrowth,
+    years,
+    netDebt,
+    sharesOutstanding,
+  } = params;
 
   // Project future cash flows (mid-year convention: discount at year-0.5)
   const projectedCashFlows: Array<{ year: number; fcf: number; presentValue: number }> = [];
@@ -59,13 +67,25 @@ export function computeDCF(params: DCFParams): DCFResult {
   const intrinsicValue = equityValue / sharesOutstanding;
 
   // Sensitivity table: vary growth ±2% and discount ±2%
-  const sensitivityTable: Array<{ growthRate: number; discountRate: number; intrinsicValue: number }> = [];
+  const sensitivityTable: Array<{
+    growthRate: number;
+    discountRate: number;
+    intrinsicValue: number;
+  }> = [];
   for (let gDelta = -0.02; gDelta <= 0.02; gDelta += 0.01) {
     for (let dDelta = -0.02; dDelta <= 0.02; dDelta += 0.01) {
       const g = growthRate + gDelta;
       const d = discountRate + dDelta;
       if (d <= terminalGrowth || d <= 0 || g < 0) continue;
-      const sensResult = computeDCFSimple(freeCashFlow, g, d, terminalGrowth, years, netDebt, sharesOutstanding);
+      const sensResult = computeDCFSimple(
+        freeCashFlow,
+        g,
+        d,
+        terminalGrowth,
+        years,
+        netDebt,
+        sharesOutstanding,
+      );
       sensitivityTable.push({ growthRate: g, discountRate: d, intrinsicValue: sensResult });
     }
   }
@@ -74,17 +94,25 @@ export function computeDCF(params: DCFParams): DCFResult {
   const warnings: string[] = [];
   const tvPctOfEV = pvTerminal / enterpriseValue;
   if (tvPctOfEV > 0.85) {
-    warnings.push(`Terminal value is ${(tvPctOfEV * 100).toFixed(0)}% of enterprise value (typical: 40-80%). The valuation is heavily dependent on terminal assumptions.`);
+    warnings.push(
+      `Terminal value is ${(tvPctOfEV * 100).toFixed(0)}% of enterprise value (typical: 40-80%). The valuation is heavily dependent on terminal assumptions.`,
+    );
   }
   const spreadPct = discountRate - terminalGrowth;
   if (spreadPct < 0.02) {
-    warnings.push(`Terminal growth (${(terminalGrowth * 100).toFixed(1)}%) is very close to discount rate (${(discountRate * 100).toFixed(1)}%). Small changes in assumptions will produce large swings in value.`);
+    warnings.push(
+      `Terminal growth (${(terminalGrowth * 100).toFixed(1)}%) is very close to discount rate (${(discountRate * 100).toFixed(1)}%). Small changes in assumptions will produce large swings in value.`,
+    );
   }
-  if (discountRate < 0.05 || discountRate > 0.20) {
-    warnings.push(`Discount rate of ${(discountRate * 100).toFixed(1)}% is outside typical WACC range (5-20%).`);
+  if (discountRate < 0.05 || discountRate > 0.2) {
+    warnings.push(
+      `Discount rate of ${(discountRate * 100).toFixed(1)}% is outside typical WACC range (5-20%).`,
+    );
   }
-  if (growthRate > 0.20) {
-    warnings.push(`Growth rate of ${(growthRate * 100).toFixed(1)}% exceeds 20%. High growth is difficult to sustain — consider a multi-stage model.`);
+  if (growthRate > 0.2) {
+    warnings.push(
+      `Growth rate of ${(growthRate * 100).toFixed(1)}% exceeds 20%. High growth is difficult to sustain — consider a multi-stage model.`,
+    );
   }
 
   return {
@@ -106,7 +134,13 @@ export function computeDCF(params: DCFParams): DCFResult {
 }
 
 function computeDCFSimple(
-  fcf: number, g: number, d: number, tg: number, years: number, debt: number, shares: number,
+  fcf: number,
+  g: number,
+  d: number,
+  tg: number,
+  years: number,
+  debt: number,
+  shares: number,
 ): number {
   let sumPV = 0;
   for (let y = 1; y <= years; y++) {
@@ -129,7 +163,10 @@ export function computeNetDebt(f: FinancialStatement): number {
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   growth_rate: Type.Optional(
-    Type.Number({ description: "Annual FCF growth rate as decimal (e.g. 0.10 for 10%). If omitted, estimated from historical data." }),
+    Type.Number({
+      description:
+        "Annual FCF growth rate as decimal (e.g. 0.10 for 10%). If omitted, estimated from historical data.",
+    }),
   ),
   discount_rate: Type.Optional(
     Type.Number({ description: "Discount rate / WACC as decimal (default: 0.10 for 10%)" }),
@@ -150,98 +187,111 @@ export const dcfTool: AgentTool<typeof params> = {
   parameters: params,
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
-    const symbol = args.symbol.toUpperCase();
-    const config = getConfig();
+      const symbol = args.symbol.toUpperCase();
+      const config = getConfig();
 
-    const [overviewResult, financialsResult, quoteResult] = await Promise.all([
-      wrapProvider("alphavantage", () => getOverview(symbol, config.alphaVantageApiKey!)),
-      wrapProvider("alphavantage", () => getFinancials(symbol, config.alphaVantageApiKey!)),
-      wrapProvider("yahoo", () => getQuote(symbol)),
-    ]);
+      const [overviewResult, financialsResult, quoteResult] = await Promise.all([
+        wrapProvider("alphavantage", () => getOverview(symbol, config.alphaVantageApiKey!)),
+        wrapProvider("alphavantage", () => getFinancials(symbol, config.alphaVantageApiKey!)),
+        wrapProvider("yahoo", () => getQuote(symbol)),
+      ]);
 
-    const missing: string[] = [];
-    if (overviewResult.status === "unavailable") missing.push(`company overview (${overviewResult.reason})`);
-    if (financialsResult.status === "unavailable") missing.push(`financial statements (${financialsResult.reason})`);
-    if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
+      const missing: string[] = [];
+      if (overviewResult.status === "unavailable")
+        missing.push(`company overview (${overviewResult.reason})`);
+      if (financialsResult.status === "unavailable")
+        missing.push(`financial statements (${financialsResult.reason})`);
+      if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
 
-    if (financialsResult.status === "unavailable" || quoteResult.status === "unavailable") {
-      return {
-        content: [{ type: "text", text: `⚠ DCF valuation unavailable for ${symbol}. Missing: ${missing.join(", ")}. Both financials and current price are required.` }],
-        details: null,
-      };
-    }
-
-    const overview = overviewResult.status === "ok" ? overviewResult.data : null;
-    const financials = financialsResult.data;
-    const quote = quoteResult.data;
-
-    const latestFCF = financials[0]?.freeCashFlow ?? 0;
-    if (latestFCF <= 0) {
-      return {
-        content: [{ type: "text", text: `${symbol} has negative or zero free cash flow ($${latestFCF.toLocaleString()}). DCF is not meaningful for companies without positive FCF.` }],
-        details: null,
-      };
-    }
-
-    // Estimate growth from historical FCF if not provided
-    let growthRate = args.growth_rate ?? 0.10;
-    if (!args.growth_rate && financials.length >= 2) {
-      const olderFCF = financials[1]?.freeCashFlow;
-      if (olderFCF && olderFCF > 0) {
-        growthRate = Math.max(0.02, Math.min(0.25, (latestFCF - olderFCF) / olderFCF));
+      if (financialsResult.status === "unavailable" || quoteResult.status === "unavailable") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ DCF valuation unavailable for ${symbol}. Missing: ${missing.join(", ")}. Both financials and current price are required.`,
+            },
+          ],
+          details: null,
+        };
       }
-    }
 
-    const discountRate = args.discount_rate ?? 0.10;
-    const terminalGrowth = args.terminal_growth ?? 0.03;
-    const years = args.projection_years ?? 5;
-    const marketCap = overview?.marketCap ?? 0;
-    const sharesOutstanding = quote.price > 0 && marketCap > 0 ? marketCap / quote.price : 1;
-    const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
+      const overview = overviewResult.status === "ok" ? overviewResult.data : null;
+      const financials = financialsResult.data;
+      const quote = quoteResult.data;
 
-    const result = computeDCF({
-      freeCashFlow: latestFCF,
-      growthRate,
-      discountRate,
-      terminalGrowth,
-      years,
-      netDebt: Math.max(0, netDebt),
-      sharesOutstanding,
-    });
+      const latestFCF = financials[0]?.freeCashFlow ?? 0;
+      if (latestFCF <= 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${symbol} has negative or zero free cash flow ($${latestFCF.toLocaleString()}). DCF is not meaningful for companies without positive FCF.`,
+            },
+          ],
+          details: null,
+        };
+      }
 
-    const marginOfSafety = (result.intrinsicValue - quote.price) / result.intrinsicValue;
-    const upside = (result.intrinsicValue - quote.price) / quote.price;
+      // Estimate growth from historical FCF if not provided
+      let growthRate = args.growth_rate ?? 0.1;
+      if (!args.growth_rate && financials.length >= 2) {
+        const olderFCF = financials[1]?.freeCashFlow;
+        if (olderFCF && olderFCF > 0) {
+          growthRate = Math.max(0.02, Math.min(0.25, (latestFCF - olderFCF) / olderFCF));
+        }
+      }
 
-    const lines = [
-      `**${symbol} DCF Valuation**`,
-      ``,
-      `Current Price: $${quote.price.toFixed(2)}`,
-      `Intrinsic Value: $${result.intrinsicValue.toFixed(2)}`,
-      `Margin of Safety: ${(marginOfSafety * 100).toFixed(1)}%`,
-      `Upside/Downside: ${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(1)}%`,
-      ``,
-      `**Assumptions**`,
-      `Free Cash Flow: $${(latestFCF / 1e9).toFixed(2)}B`,
-      `Growth Rate: ${(growthRate * 100).toFixed(1)}%`,
-      `Discount Rate (WACC): ${(discountRate * 100).toFixed(1)}%`,
-      `Terminal Growth: ${(terminalGrowth * 100).toFixed(1)}%`,
-      `Projection: ${years} years`,
-      ``,
-      `**Projected Cash Flows**`,
-      ...result.projectedCashFlows.map((cf) =>
-        `  Year ${cf.year}: FCF $${(cf.fcf / 1e9).toFixed(2)}B → PV $${(cf.presentValue / 1e9).toFixed(2)}B`
-      ),
-      `  Terminal Value: $${(result.terminalValue / 1e9).toFixed(2)}B`,
-      `  Enterprise Value: $${(result.enterpriseValue / 1e9).toFixed(2)}B`,
-      ``,
-      `**Sensitivity Table** (Intrinsic Value at different Growth/Discount rates)`,
-      ...formatSensitivityTable(result.sensitivityTable),
-    ];
+      const discountRate = args.discount_rate ?? 0.1;
+      const terminalGrowth = args.terminal_growth ?? 0.03;
+      const years = args.projection_years ?? 5;
+      const marketCap = overview?.marketCap ?? 0;
+      const sharesOutstanding = quote.price > 0 && marketCap > 0 ? marketCap / quote.price : 1;
+      const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
 
-    return {
-      content: [{ type: "text", text: lines.join("\n") }],
-      details: { ...result, currentPrice: quote.price, marginOfSafety, upside },
-    };
+      const result = computeDCF({
+        freeCashFlow: latestFCF,
+        growthRate,
+        discountRate,
+        terminalGrowth,
+        years,
+        netDebt: Math.max(0, netDebt),
+        sharesOutstanding,
+      });
+
+      const marginOfSafety = (result.intrinsicValue - quote.price) / result.intrinsicValue;
+      const upside = (result.intrinsicValue - quote.price) / quote.price;
+
+      const lines = [
+        `**${symbol} DCF Valuation**`,
+        ``,
+        `Current Price: $${quote.price.toFixed(2)}`,
+        `Intrinsic Value: $${result.intrinsicValue.toFixed(2)}`,
+        `Margin of Safety: ${(marginOfSafety * 100).toFixed(1)}%`,
+        `Upside/Downside: ${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(1)}%`,
+        ``,
+        `**Assumptions**`,
+        `Free Cash Flow: $${(latestFCF / 1e9).toFixed(2)}B`,
+        `Growth Rate: ${(growthRate * 100).toFixed(1)}%`,
+        `Discount Rate (WACC): ${(discountRate * 100).toFixed(1)}%`,
+        `Terminal Growth: ${(terminalGrowth * 100).toFixed(1)}%`,
+        `Projection: ${years} years`,
+        ``,
+        `**Projected Cash Flows**`,
+        ...result.projectedCashFlows.map(
+          (cf) =>
+            `  Year ${cf.year}: FCF $${(cf.fcf / 1e9).toFixed(2)}B → PV $${(cf.presentValue / 1e9).toFixed(2)}B`,
+        ),
+        `  Terminal Value: $${(result.terminalValue / 1e9).toFixed(2)}B`,
+        `  Enterprise Value: $${(result.enterpriseValue / 1e9).toFixed(2)}B`,
+        ``,
+        `**Sensitivity Table** (Intrinsic Value at different Growth/Discount rates)`,
+        ...formatSensitivityTable(result.sensitivityTable),
+      ];
+
+      return {
+        content: [{ type: "text", text: lines.join("\n") }],
+        details: { ...result, currentPrice: quote.price, marginOfSafety, upside },
+      };
     });
   },
 };

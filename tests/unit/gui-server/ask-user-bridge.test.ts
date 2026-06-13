@@ -26,7 +26,11 @@ describe("GUI ask_user bridge", () => {
 
     expect(bridge.answer(prompt.id, "AAPL")).toBe(true);
     await expect(pending).resolves.toEqual({ answer: "AAPL", cancelled: false });
-    expect(bridge.getPrompts()[0]).toMatchObject({ id: prompt.id, status: "answered", answer: "AAPL" });
+    expect(bridge.getPrompts()[0]).toMatchObject({
+      id: prompt.id,
+      status: "answered",
+      answer: "AAPL",
+    });
     expect(broadcast).toHaveBeenLastCalledWith({
       type: "ask_user.resolved",
       prompt: expect.objectContaining({ id: prompt.id, status: "answered", answer: "AAPL" }),
@@ -41,7 +45,11 @@ describe("GUI ask_user bridge", () => {
     expect(bridge.cancel(prompt.id)).toBe(true);
 
     await expect(pending).resolves.toEqual({ answer: null, cancelled: true });
-    expect(bridge.getPrompts()[0]).toMatchObject({ id: prompt.id, status: "cancelled", answer: null });
+    expect(bridge.getPrompts()[0]).toMatchObject({
+      id: prompt.id,
+      status: "cancelled",
+      answer: null,
+    });
   });
 
   it("captures the active session for each prompt", () => {
@@ -55,6 +63,9 @@ describe("GUI ask_user bridge", () => {
     sessionId = "session-2";
     void bridge.ask({ question: "Second?", questionType: "text" });
 
-    expect(bridge.getPrompts().map((prompt) => prompt.sessionId)).toEqual(["session-1", "session-2"]);
+    expect(bridge.getPrompts().map((prompt) => prompt.sessionId)).toEqual([
+      "session-1",
+      "session-2",
+    ]);
   });
 });

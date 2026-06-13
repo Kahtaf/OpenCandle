@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  PromptContextBuilder,
   buildFallbackPlaybook,
   buildRoutePlaybook,
+  PromptContextBuilder,
 } from "../../../src/prompts/context-builder.js";
 import { getPolicyCard, renderPolicyCardForPlanning } from "../../../src/prompts/policy-cards.js";
 import { truncateTobudget } from "../../../src/prompts/sections.js";
@@ -266,7 +266,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "asset_compare",
           evidencePlanId: "placeholder_asset_compare",
           answerContractId: "asset_compare_tradeoff",
-          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "data_gap_disclosed",
+            "capability_gap_disclosure",
+          ],
           capabilityGapIds: ["etf_holdings_overlap"],
           behaviorMode: "dual_run",
           workspacePlaceholderIds: [],
@@ -315,7 +319,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "asset_compare",
           evidencePlanId: "placeholder_asset_compare",
           answerContractId: "asset_compare_tradeoff",
-          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "capability_gap_disclosure"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "data_gap_disclosed",
+            "capability_gap_disclosure",
+          ],
           capabilityGapIds: ["etf_holdings_overlap"],
           behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
@@ -337,7 +345,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "I own 100 shares of NVDA at a $500 cost basis. Should I sell covered calls around earnings?",
+        userInput:
+          "I own 100 shares of NVDA at a $500 cost basis. Should I sell covered calls around earnings?",
         priorTurns: [],
         routeKind: "workflow_dispatch",
         legacyRoute: "workflow",
@@ -511,7 +520,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "single_asset_decision",
           evidencePlanId: "placeholder_single_asset_decision",
           answerContractId: "single_asset_decision",
-          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "freshness_disclosed",
+            "data_gap_disclosed",
+          ],
           capabilityGapIds: [],
           behaviorMode: "dual_run",
           workspacePlaceholderIds: [],
@@ -523,7 +536,9 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Single Asset Decision Policy");
-    expect(result).toContain("For single-security buy, sell, wait, avoid, trim, add, size, or entry prompts");
+    expect(result).toContain(
+      "For single-security buy, sell, wait, avoid, trim, add, size, or entry prompts",
+    );
     expect(result).toContain("state the quote or tool-output date");
   });
 
@@ -558,7 +573,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "single_asset_decision",
           evidencePlanId: "placeholder_single_asset_decision",
           answerContractId: "single_asset_decision",
-          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "freshness_disclosed",
+            "data_gap_disclosed",
+          ],
           capabilityGapIds: [],
           behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
@@ -580,7 +599,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
+        userInput:
+          "Use current inflation, Fed funds, and market sentiment data to explain what matters most for a balanced U.S. portfolio right now.",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -607,8 +627,16 @@ describe("PromptContextBuilder", () => {
           policyCardId: "macro_allocation_review",
           evidencePlanId: "market_status",
           answerContractId: "macro_allocation_review",
-          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
-          capabilityGapIds: ["market_calendar", "forward_rate_probabilities", "sentiment_sample_depth"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "freshness_disclosed",
+            "data_gap_disclosed",
+          ],
+          capabilityGapIds: [
+            "market_calendar",
+            "forward_rate_probabilities",
+            "sentiment_sample_depth",
+          ],
           behaviorMode: "dual_run",
           workspacePlaceholderIds: [],
           artifactPlaceholderIds: [],
@@ -619,9 +647,13 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Macro Allocation Review Policy");
-    expect(result).toContain("For macro outlook, inflation, Fed, rates, recession, or balanced-portfolio prompts");
+    expect(result).toContain(
+      "For macro outlook, inflation, Fed, rates, recession, or balanced-portfolio prompts",
+    );
     expect(result).toContain("Explain the mechanism from policy shift");
-    expect(result).toContain("Preserve the portfolio review shape when the user asks about allocation");
+    expect(result).toContain(
+      "Preserve the portfolio review shape when the user asks about allocation",
+    );
     expect(result).toContain("If web search returns no results");
     expect(result).not.toContain("For macro-risk prompts");
   });
@@ -630,7 +662,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Given the current macro outlook for 2026, critically evaluate a balanced portfolio with 60% equity and 40% fixed income.",
+        userInput:
+          "Given the current macro outlook for 2026, critically evaluate a balanced portfolio with 60% equity and 40% fixed income.",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -657,7 +690,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "macro_allocation_review",
           evidencePlanId: "market_status",
           answerContractId: "macro_allocation_review",
-          structuredCheckIds: ["required_evidence_present", "freshness_disclosed", "data_gap_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "freshness_disclosed",
+            "data_gap_disclosed",
+          ],
           capabilityGapIds: ["market_calendar", "forward_rate_probabilities"],
           behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
@@ -669,11 +706,15 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Macro Allocation Review Policy");
-    expect(result).not.toContain("For macro, rates, inflation, sector, or portfolio-allocation prompts");
+    expect(result).not.toContain(
+      "For macro, rates, inflation, sector, or portfolio-allocation prompts",
+    );
     expect(result).not.toContain("For macro-policy impact prompts");
     expect(result).not.toContain("For U.S. macro or U.S.-heavy portfolio prompts");
     expect(result).not.toContain("For non-US macro data");
-    expect(result).not.toContain("For prompts that ask to critically evaluate an existing portfolio or allocation");
+    expect(result).not.toContain(
+      "For prompts that ask to critically evaluate an existing portfolio or allocation",
+    );
     expect(result).toContain("If web search returns no results");
     expect(result).toContain("Current macro evidence");
     expect(result).toContain("Sleeve-by-sleeve implications");
@@ -684,7 +725,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+        userInput:
+          "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -711,7 +753,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "portfolio_review",
           evidencePlanId: "placeholder_portfolio_review",
           answerContractId: "portfolio_review",
-          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "data_gap_disclosed",
+            "commitment_mode_respected",
+          ],
           capabilityGapIds: [],
           behaviorMode: "dual_run",
           workspacePlaceholderIds: [],
@@ -732,7 +778,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+        userInput:
+          "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -759,7 +806,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "portfolio_review",
           evidencePlanId: "placeholder_portfolio_review",
           answerContractId: "portfolio_review",
-          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "commitment_mode_respected"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "data_gap_disclosed",
+            "commitment_mode_respected",
+          ],
           capabilityGapIds: [],
           behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
@@ -774,27 +825,30 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Do not build a new portfolio");
     expect(result).toContain("rebalance");
 
-    expect(renderPolicyCardForPlanning({
-      version: "planning-v1",
-      taskFamily: "portfolio_build",
-      commitmentMode: "construct",
-      policyCardId: "portfolio_build",
-      evidencePlanId: "placeholder_portfolio_build",
-      answerContractId: "portfolio_build",
-      structuredCheckIds: ["required_evidence_present", "commitment_mode_respected"],
-      capabilityGapIds: [],
-      behaviorMode: "replacement_active",
-      workspacePlaceholderIds: [],
-      artifactPlaceholderIds: [],
-      diagnostics: [],
-    })).toBe("");
+    expect(
+      renderPolicyCardForPlanning({
+        version: "planning-v1",
+        taskFamily: "portfolio_build",
+        commitmentMode: "construct",
+        policyCardId: "portfolio_build",
+        evidencePlanId: "placeholder_portfolio_build",
+        answerContractId: "portfolio_build",
+        structuredCheckIds: ["required_evidence_present", "commitment_mode_respected"],
+        capabilityGapIds: [],
+        behaviorMode: "replacement_active",
+        workspacePlaceholderIds: [],
+        artifactPlaceholderIds: [],
+        diagnostics: [],
+      }),
+    ).toBe("");
   });
 
   it("uses the backtest policy alongside agent-task context during dual run", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
+        userInput:
+          "Backtest a simple moving average crossover on SPY over 1 year. What was the total return, max drawdown, and is the edge practical after costs?",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -821,7 +875,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "backtest_review",
           evidencePlanId: "placeholder_backtest_review",
           answerContractId: "backtest_review",
-          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "data_gap_disclosed",
+            "source_coverage_disclosed",
+          ],
           capabilityGapIds: [],
           behaviorMode: "dual_run",
           workspacePlaceholderIds: [],
@@ -869,7 +927,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "backtest_review",
           evidencePlanId: "placeholder_backtest_review",
           answerContractId: "backtest_review",
-          structuredCheckIds: ["required_evidence_present", "data_gap_disclosed", "source_coverage_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "data_gap_disclosed",
+            "source_coverage_disclosed",
+          ],
           capabilityGapIds: [],
           behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
@@ -941,10 +1003,12 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("ticker could not be verified");
     expect(result).toContain("avoid conceptual education section order");
     expect(result).toContain("trim/hedge/hold");
-    expect(buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    })).not.toContain("ticker lookup fails");
+    expect(
+      buildFallbackPlaybook({
+        assumptionsBlock: "No assumptions.",
+        missingRequired: [],
+      }),
+    ).not.toContain("ticker lookup fails");
   });
 
   it("keeps crypto sizing obligations in the universal safety rules", () => {
@@ -963,7 +1027,7 @@ describe("PromptContextBuilder", () => {
   it("keeps today-move obligations in the current-event policy card", () => {
     const result = getPolicyCard("current_event_explanation").content;
 
-    expect(result).toContain("\"today\"");
+    expect(result).toContain('"today"');
     expect(result).toContain("market-status evidence");
     expect(result).toContain("weekend");
     expect(result).toContain("holiday");
@@ -982,10 +1046,12 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("company overview evidence is unavailable");
     expect(result).toContain("business-model");
     expect(result).toContain("licensing");
-    expect(buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    })).not.toContain("ticker-alias or alternate-symbol prompts");
+    expect(
+      buildFallbackPlaybook({
+        assumptionsBlock: "No assumptions.",
+        missingRequired: [],
+      }),
+    ).not.toContain("ticker-alias or alternate-symbol prompts");
   });
 
   it("uses the current-event policy without retaining the legacy today-move clause after replacement activation", () => {
@@ -1031,7 +1097,7 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Current Event Explanation Policy");
-    expect(result).not.toContain("For \"today\" or \"why did it move today\" prompts");
+    expect(result).not.toContain('For "today" or "why did it move today" prompts');
     expect(result).toContain("market-status evidence");
   });
 
@@ -1078,7 +1144,9 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Concept Explainer Policy");
-    expect(result).not.toContain("For conceptual or educational finance prompts: use a decision-framework shape");
+    expect(result).not.toContain(
+      "For conceptual or educational finance prompts: use a decision-framework shape",
+    );
     expect(result).toContain("Bottom line");
     expect(result).toContain("Core mental model");
   });
@@ -1087,7 +1155,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
+        userInput:
+          "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -1114,7 +1183,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "sentiment_snapshot",
           evidencePlanId: "placeholder_sentiment_snapshot",
           answerContractId: "sentiment_snapshot",
-          structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "source_coverage_disclosed",
+            "data_gap_disclosed",
+          ],
           capabilityGapIds: ["sentiment_sample_depth"],
           behaviorMode: "dual_run",
           workspacePlaceholderIds: [],
@@ -1129,17 +1202,20 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("For sentiment-only prompts, include");
     expect(result).toContain("source-coverage risk");
     expect(result).toContain("whether sentiment diverges from price action");
-    expect(buildFallbackPlaybook({
-      assumptionsBlock: "No assumptions.",
-      missingRequired: [],
-    })).not.toContain("For ticker-specific sentiment prompts, call get_stock_quote");
+    expect(
+      buildFallbackPlaybook({
+        assumptionsBlock: "No assumptions.",
+        missingRequired: [],
+      }),
+    ).not.toContain("For ticker-specific sentiment prompts, call get_stock_quote");
   });
 
   it("uses the sentiment policy without retaining the legacy sentiment clause after replacement activation", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
+        userInput:
+          "What’s the retail mood around GME right now across Reddit, X/Twitter, and recent news, and is it diverging from price action?",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -1166,7 +1242,11 @@ describe("PromptContextBuilder", () => {
           policyCardId: "sentiment_snapshot",
           evidencePlanId: "placeholder_sentiment_snapshot",
           answerContractId: "sentiment_snapshot",
-          structuredCheckIds: ["required_evidence_present", "source_coverage_disclosed", "data_gap_disclosed"],
+          structuredCheckIds: [
+            "required_evidence_present",
+            "source_coverage_disclosed",
+            "data_gap_disclosed",
+          ],
           capabilityGapIds: ["sentiment_sample_depth"],
           behaviorMode: "replacement_active",
           workspacePlaceholderIds: [],
@@ -1273,7 +1353,9 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Filing Thesis Review Policy");
-    expect(result).not.toContain("targeted search_web queries for the requested filing sections or themes");
+    expect(result).not.toContain(
+      "targeted search_web queries for the requested filing sections or themes",
+    );
     expect(result).toContain("filing metadata");
     expect(result).toContain("filing-section summaries");
   });
@@ -1282,7 +1364,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "I’m opening a taxable account and want simple recurring ETF investing. Which brokerage would you pick?",
+        userInput:
+          "I’m opening a taxable account and want simple recurring ETF investing. Which brokerage would you pick?",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -1321,7 +1404,9 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Retail Finance Tradeoff Policy");
-    expect(result).toContain("brokerage, account, cash-parking, mortgage-vs-investing, robo-advisor");
+    expect(result).toContain(
+      "brokerage, account, cash-parking, mortgage-vs-investing, robo-advisor",
+    );
     expect(result).toContain("Do not punt just because no dedicated live-data provider exists");
   });
 
@@ -1329,7 +1414,8 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
+        userInput:
+          "Where should I keep cash I might need in 6-12 months: HYSA, money-market fund, T-bills, CDs, or a bond ETF?",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -1368,7 +1454,9 @@ describe("PromptContextBuilder", () => {
 
     const result = builder.build();
     expect(result).toContain("Retail Finance Tradeoff Policy");
-    expect(result).not.toContain("For brokerage, account, fund-platform, or financial-product selection prompts");
+    expect(result).not.toContain(
+      "For brokerage, account, fund-platform, or financial-product selection prompts",
+    );
     expect(result).toContain("current yield facts");
     expect(result).toContain("FDIC/SIPC/Treasury");
   });
@@ -1494,25 +1582,33 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("For conceptual education questions");
     expect(result).toContain("teach the concept directly");
     expect(result).toContain("do not name tool functions");
-    expect(result).toContain("do not append analyst-view, confidence-band, or invalidation boilerplate");
+    expect(result).toContain(
+      "do not append analyst-view, confidence-band, or invalidation boilerplate",
+    );
     expect(result).toContain("For valuation-metric education");
-    expect(result).toContain("start with \"Bottom line\"");
-    expect(result).toContain("one-sentence paragraph beginning \"Core mental model:\"");
-    expect(result).toContain("heading exactly named \"Practical workflow\"");
+    expect(result).toContain('start with "Bottom line"');
+    expect(result).toContain('one-sentence paragraph beginning "Core mental model:"');
+    expect(result).toContain('heading exactly named "Practical workflow"');
     expect(result).toContain("numbered question-driven application steps");
     expect(result).toContain("common traps to avoid");
     expect(result).toContain("cross-check table with why/when");
     expect(result).toContain("trailing, forward, normalized, or cyclically adjusted variants");
     expect(result).toContain("where the metric misleads");
-    expect(result).toContain("heading exactly named \"Quick checklist\"");
+    expect(result).toContain('heading exactly named "Quick checklist"');
   });
 
   it("stance is present on every workflow type and the unclassified path", () => {
-    for (const workflowType of ["portfolio_builder", "options_screener", "compare_assets", "unclassified"]) {
+    for (const workflowType of [
+      "portfolio_builder",
+      "options_screener",
+      "compare_assets",
+      "unclassified",
+    ]) {
       const builder = new PromptContextBuilder();
       builder.populateFromOptions({
         workflowType,
-        workflowInstructions: workflowType === "unclassified" ? undefined : `Workflow: ${workflowType}`,
+        workflowInstructions:
+          workflowType === "unclassified" ? undefined : `Workflow: ${workflowType}`,
       });
       const result = builder.build();
       expect(result.toLowerCase()).toContain("analyst");
