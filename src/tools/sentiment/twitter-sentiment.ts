@@ -5,6 +5,7 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { TwitterSentimentResult } from "../../types/sentiment.js";
 import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   query: Type.String({
@@ -63,11 +64,12 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
     }
 
     lines.push("");
+    lines.push(untrustedContentHeader("tweets"));
     lines.push("| Author | Tweet | ❤️ | 🔁 | 💬 |");
     lines.push("|--------|-------|----|----|----|");
     const top = result.tweets.slice(0, 15);
     for (const tweet of top) {
-      const text = tweet.text.replace(/\|/g, "\\|").replace(/\n/g, " ").slice(0, 100);
+      const text = renderUntrustedText(tweet.text, 100);
       lines.push(`| @${tweet.author} | ${text} | ${tweet.likes} | ${tweet.retweets} | ${tweet.replies} |`);
     }
 

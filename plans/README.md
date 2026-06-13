@@ -17,7 +17,7 @@ Verification gates for every plan: `npx tsc --noEmit` and `npx vitest run`
 | 003  | Financial-math zero guards + service-layer lot validation | P1 | S | — | DONE |
 | 004  | Private-API loopback enforcement + webhook URL validation | P2 | S | — | DONE |
 | 005  | Clear 4 moderate npm audit findings | P2 | S | — | TODO |
-| 006  | Escape/delimit untrusted external text in sentiment tools | P2 | M | — | TODO |
+| 006  | Escape/delimit untrusted external text in sentiment tools | P2 | M | — | DONE |
 | 007  | Tighten non-budget dollar-amount detection | P2 | S | — | DONE |
 | 008  | Lint/format baseline (Biome) gated in CI | P3 | M | 001–007 (ordering, not hard) | TODO |
 | 009  | Decompose gui/server/server.ts into services | P3 | M | — | TODO |

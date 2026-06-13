@@ -6,6 +6,7 @@ import type { RedditSentimentResult } from "../../types/sentiment.js";
 import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import { getConfig } from "../../config.js";
+import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   subreddit: Type.Optional(
@@ -142,10 +143,10 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     }
 
     lines.push("");
-    lines.push("Top posts:");
+    lines.push(untrustedContentHeader("Reddit posts"));
     for (const post of postRecords.slice(0, 10)) {
       const scoreIndicator = post.sentiment.score > 0 ? "🟢" : post.sentiment.score < 0 ? "🔴" : "⚪";
-      lines.push(`  ${scoreIndicator} ⬆${post.engagement.score} 💬${post.engagement.replies ?? 0} — ${(post.title ?? post.text).slice(0, 100)}`);
+      lines.push(`  ${scoreIndicator} ⬆${post.engagement.score} 💬${post.engagement.replies ?? 0} — ${renderUntrustedText(post.title ?? post.text, 100)}`);
     }
 
     if (pipelineResult.trend && pipelineResult.trend.length > 0) {

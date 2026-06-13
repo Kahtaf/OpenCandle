@@ -4,6 +4,7 @@ import { searchWeb } from "../../providers/web-search.js";
 import type { WebSearchEnvelope } from "../../types/sentiment.js";
 import { hasCredential } from "../../onboarding/providers.js";
 import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
+import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Search query — ticker, topic, or question" }),
@@ -27,10 +28,6 @@ const params = Type.Object({
     }),
   ),
 });
-
-function escapeMd(text: string): string {
-  return text.replace(/([[\]|])/g, "\\$1");
-}
 
 function safeUrl(url: string): string {
   if (url.startsWith("https://") || url.startsWith("http://")) return url;
@@ -163,15 +160,15 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
 
     const header = `**Web Search** — ${data.resultCount} results for "${query}" (${category}, past ${freshness}, via ${data.provider})`;
     const items = data.results.map((r) => {
-      const title = escapeMd(r.title);
-      const snippet = escapeMd(r.snippet);
+      const title = renderUntrustedText(r.title);
+      const snippet = renderUntrustedText(r.snippet);
       const url = safeUrl(r.url);
       const pub = r.published ? `Published: ${r.published}` : "Published: unknown";
       return `• [${title}](${url}) — ${r.source}\n  ${snippet}\n  ${pub}`;
     });
     const body = shouldOmitResults
       ? "Non-official results were omitted from assistant-visible evidence for this Fed/FOMC announcement query. Verify against an official Federal Reserve or FOMC source before naming announcements or personnel changes."
-      : items.join("\n\n");
+      : `${untrustedContentHeader("web search results")}\n\n${items.join("\n\n")}`;
 
     const text = `${softDegradedPrefix}${sourceGapPrefix}${stalePrefix}${header}\n\n${body}`;
 
