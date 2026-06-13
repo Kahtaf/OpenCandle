@@ -41,6 +41,7 @@
 - GUI market-state mutations now invalidate the server quote snapshot and immediately refresh quotes in the browser after the mutation is acknowledged.
 - SEC filing evidence snippets are now labeled and escaped as untrusted external content before reaching assistant-visible tool output.
 - Watchlist edit forms can now clear target, stop, thesis, notes, and tags instead of preserving stale values when fields are blanked.
+- Prediction-only symbols now receive GUI quote snapshots, so open predictions show current price and target progress even when the symbol is not also in a watchlist or portfolio.
 - Rejected notification webhook URLs now record failed delivery attempts so the automation runner keeps delivery history and rotates pending retries fairly.
 - GUI chat transcript rendering now uses one event-driven path for both live and reloaded sessions: persisted `SessionEntry[]` is adapted to `ChatEvent[]` on the server, live SSE events are merged at the browser boundary, and `ChatPanel` renders event-derived rows so workflow-dispatched user bubbles keep the user's original typed words after reload instead of exposing internal prompt expansions.
 - GUI home composer sends can no longer append to the previous writer session: home sends now await a fresh session before running, the chat run request carries the expected session id, and the server rejects mismatched runs with a `session_changed` 409 (retried once against another fresh session). GUI server JSON error responses also return their intended HTTP status codes instead of always 200.

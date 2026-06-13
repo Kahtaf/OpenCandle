@@ -13,6 +13,7 @@ import {
   SymbolActionPanel,
   SymbolSearchInput,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
+import { PredictionsPage } from "../../../gui/web/src/features/market-state/PredictionsPage.jsx";
 
 describe("MarketStatePage rendering", () => {
   it("offers a skip-for-now path on the empty portfolio page", () => {
@@ -109,6 +110,40 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Predictions");
     expect(html).toContain("Record prediction");
     expect(html).not.toContain("Thesis Tracker");
+  });
+
+  it("renders prediction-only current prices from prediction quote snapshots", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PredictionsPage, {
+        filter: "",
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+        state: {
+          predictions: [
+            {
+              id: 1,
+              symbol: "NVDA",
+              direction: "bullish",
+              conviction: 8,
+              entryPrice: 900,
+              targetPrice: 1_000,
+              openedAt: "2026-06-01T12:00:00.000Z",
+              expiresAt: "2026-07-01T12:00:00.000Z",
+              status: "open",
+            },
+          ],
+          quoteSnapshot: {
+            watchlistQuotes: [],
+            portfolioQuotes: [],
+            predictionQuotes: [{ predictionId: 1, symbol: "NVDA", status: "ok", currentPrice: 950 }],
+          },
+        },
+      }),
+    );
+
+    expect(html).toContain("$900.00");
+    expect(html).toContain("$950.00");
   });
 
   it("keeps follower mode readable while disabling mutation actions", () => {

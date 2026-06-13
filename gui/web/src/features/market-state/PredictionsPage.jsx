@@ -25,8 +25,11 @@ export function PredictionsPage({ state, filter, readOnly, openPanel, invokeTool
   );
   const quotesBySymbol = useMemo(() => {
     const map = new Map();
+    for (const quote of state.quoteSnapshot?.predictionQuotes ?? []) {
+      if (quote.status === "ok") map.set(quote.symbol, quote.currentPrice);
+    }
     for (const quote of state.quoteSnapshot?.watchlistQuotes ?? []) {
-      if (quote.status === "ok") map.set(quote.symbol, quote.price);
+      if (quote.status === "ok" && !map.has(quote.symbol)) map.set(quote.symbol, quote.price);
     }
     for (const quote of state.quoteSnapshot?.portfolioQuotes ?? []) {
       if (quote.status === "ok" && !map.has(quote.symbol))

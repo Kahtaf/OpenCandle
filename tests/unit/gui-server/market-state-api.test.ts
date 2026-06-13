@@ -240,6 +240,40 @@ describe("market-state API helpers", () => {
     db.close();
   });
 
+  it("builds quote snapshots for prediction-only symbols", async () => {
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    const prediction = service.recordPrediction({
+      instrument: {
+        symbol: "NVDA",
+        assetType: "equity",
+        name: "NVIDIA Corporation",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      direction: "bullish",
+      conviction: 8,
+      entryPrice: 900,
+      targetPrice: 1_000,
+      timeframeDays: 30,
+    });
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) => quote(symbol, 950));
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.predictionQuotes).toEqual([
+      expect.objectContaining({
+        predictionId: prediction.id,
+        symbol: "NVDA",
+        status: "ok",
+        currentPrice: 950,
+      }),
+    ]);
+    expect(getQuote).toHaveBeenCalledWith("NVDA");
+    db.close();
+  });
+
   it("marks stale quote snapshot rows unavailable and excludes them from portfolio totals", async () => {
     const db = initDatabase(":memory:");
     const service = new MarketStateService(db);
