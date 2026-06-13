@@ -6,6 +6,7 @@ dist/
 tests/evals/runs/*
 !tests/evals/runs/.gitkeep
 .codex/hooks.json
+.claude/worktrees/
 graphify-out/
 tests/screenshots/out/
 website/dist/
