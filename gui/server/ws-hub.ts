@@ -52,6 +52,7 @@ export interface WsHubOptions {
   toolInvokeController: ToolInvokeController;
   sessionActionsController: SessionActionsController;
   onClientCountChanged: () => void;
+  isTrustedRequest?: (req: IncomingMessage) => boolean;
   acceptWebSocketFn?: typeof acceptWebSocket;
 }
 
@@ -68,12 +69,17 @@ export function createWsHub({
   toolInvokeController,
   sessionActionsController,
   onClientCountChanged,
+  isTrustedRequest = () => true,
   acceptWebSocketFn = acceptWebSocket,
 }: WsHubOptions): WsHub {
   const clients = new Set<WsClient>();
 
   function handleUpgrade(req: IncomingMessage, socket: Duplex): void {
     if (req.url !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    if (!isTrustedRequest(req)) {
       socket.destroy();
       return;
     }

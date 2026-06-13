@@ -144,6 +144,10 @@ wsHub = createWsHub({
   toolInvokeController,
   sessionActionsController,
   onClientCountChanged: () => quotePoller.updatePoller(),
+  isTrustedRequest: (req) =>
+    isTrustedPrivateApiRequest(req.headers, privateApiSessionToken, req.socket.remoteAddress, {
+      allowRemote: allowRemotePrivateApi,
+    }),
 });
 
 let unsubscribeSession = wsHub.subscribeToSessionEvents();

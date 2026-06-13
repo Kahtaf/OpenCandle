@@ -61,6 +61,22 @@ describe("GUI WS hub", () => {
     expect(onClientCountChanged).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects untrusted websocket upgrades before accepting the client", () => {
+    const acceptWebSocketFn = vi.fn(() => createFakeClient());
+    const socket = { destroy: vi.fn() } as unknown as Duplex;
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      isTrustedRequest: () => false,
+      acceptWebSocketFn,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, socket);
+
+    expect(acceptWebSocketFn).not.toHaveBeenCalled();
+    expect(socket.destroy).toHaveBeenCalledOnce();
+    expect(hub.getClientCount()).toBe(0);
+  });
+
   it("sends dispatch errors back to the client", async () => {
     const client = createFakeClient();
     const hub = createWsHub({

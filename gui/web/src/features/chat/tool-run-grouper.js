@@ -109,7 +109,7 @@ export function groupToolRuns(rows) {
         // to it so the user still sees the data.
         run = {
           type: "tool_run",
-          id: `run-${message.toolCallId || entry.id}`,
+          id: `run-${message.toolCallId || row.id}`,
           steps: [],
           status: "pending",
           narrationBefore: "",
