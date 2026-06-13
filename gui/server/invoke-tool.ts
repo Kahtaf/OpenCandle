@@ -27,6 +27,7 @@ export interface ToolInvokeControllerOptions {
   role: string;
   getSessionManager: () => SessionManager;
   broadcastState: () => void;
+  onMarketStateChanged?: () => void;
   getTools?: typeof getAllTools;
   invokeTool?: typeof invokeToolFromUi;
 }
@@ -35,6 +36,7 @@ export function createToolInvokeController({
   role,
   getSessionManager,
   broadcastState,
+  onMarketStateChanged,
   getTools = getAllTools,
   invokeTool = invokeToolFromUi,
 }: ToolInvokeControllerOptions): ToolInvokeController {
@@ -46,6 +48,9 @@ export function createToolInvokeController({
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
     const result = await invokeTool(getSessionManager(), tool, args, "ui");
+    if (!result.isError && marketStateToolMapping(toolName) != null) {
+      onMarketStateChanged?.();
+    }
     broadcastState();
     return result;
   }

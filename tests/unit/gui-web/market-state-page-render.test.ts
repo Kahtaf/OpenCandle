@@ -1,6 +1,6 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   AlertCreateForm,
   buildWatchlistRowActions,
@@ -250,6 +250,24 @@ describe("MarketStatePage rendering", () => {
           "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.",
       }),
     ]);
+  });
+
+  it("refreshes quotes immediately after acknowledged market-state mutations", async () => {
+    const refresh = vi.fn();
+    const refreshQuotes = vi.fn();
+
+    const saved = await invokeMarketStateMutation({
+      readOnly: false,
+      toolName: "manage_watchlist",
+      args: { action: "add", symbol: "AAPL" },
+      invokeToolRequest: async () => undefined,
+      refresh,
+      refreshQuotes,
+    });
+
+    expect(saved).toBe(true);
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
   it("names market-state form controls for assistive technology", () => {

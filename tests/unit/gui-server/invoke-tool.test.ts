@@ -176,6 +176,50 @@ describe("invokeToolFromUi", () => {
     });
   });
 
+  it("notifies callers after successful market-state mutations", async () => {
+    const messages: Message[] = [];
+    const sentMessages: unknown[] = [];
+    const broadcastState = vi.fn();
+    const onMarketStateChanged = vi.fn();
+    const sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      action: Type.String(),
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "manage_watchlist",
+      label: "Watchlist",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "Added AAPL" }],
+          details: { id: 7, instrumentId: 3, symbol: "AAPL" },
+        };
+      },
+    };
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => sessionManager,
+      broadcastState,
+      onMarketStateChanged,
+      getTools: () => [tool],
+    });
+
+    await controller.handleToolInvokeMessage(
+      { send: (message: unknown) => sentMessages.push(message) },
+      { requestId: "req-3", toolName: "manage_watchlist", args: { action: "add", symbol: "AAPL" } },
+    );
+
+    expect(onMarketStateChanged).toHaveBeenCalledOnce();
+    expect(broadcastState).toHaveBeenCalledOnce();
+    expect(sentMessages[0]).toMatchObject({ ok: true, toolName: "manage_watchlist" });
+  });
+
   it("sends request-scoped tool invocation errors without throwing", async () => {
     const sentMessages: unknown[] = [];
     const controller = createToolInvokeController({

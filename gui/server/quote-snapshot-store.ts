@@ -4,6 +4,7 @@ export class QuoteSnapshotStore {
   private snapshot: MarketStateQuoteSnapshot | null = null;
   private fetchedAtMs = 0;
   private inFlight: Promise<MarketStateQuoteSnapshot> | null = null;
+  private invalidationVersion = 0;
 
   constructor(
     private readonly build: () => Promise<MarketStateQuoteSnapshot>,
@@ -20,16 +21,30 @@ export class QuoteSnapshotStore {
     return this.snapshot;
   }
 
+  invalidate(): void {
+    this.invalidationVersion += 1;
+    this.snapshot = null;
+    this.fetchedAtMs = 0;
+    this.inFlight = null;
+  }
+
   private refresh(): Promise<MarketStateQuoteSnapshot> {
-    this.inFlight ??= this.build()
+    if (this.inFlight) return this.inFlight;
+    const version = this.invalidationVersion;
+    const inFlight = this.build()
       .then((snapshot) => {
-        this.snapshot = snapshot;
-        this.fetchedAtMs = this.now();
+        if (version === this.invalidationVersion) {
+          this.snapshot = snapshot;
+          this.fetchedAtMs = this.now();
+        }
         return snapshot;
       })
       .finally(() => {
-        this.inFlight = null;
+        if (this.inFlight === inFlight) {
+          this.inFlight = null;
+        }
       });
+    this.inFlight = inFlight;
     return this.inFlight;
   }
 }

@@ -116,6 +116,7 @@ const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
+  onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
 });
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,

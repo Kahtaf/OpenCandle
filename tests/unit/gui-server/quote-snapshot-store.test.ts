@@ -85,6 +85,46 @@ describe("QuoteSnapshotStore", () => {
     expect(builds).toBe(1);
   });
 
+  it("rebuilds the next snapshot after invalidation", async () => {
+    let builds = 0;
+    const store = new QuoteSnapshotStore(async () => {
+      builds += 1;
+      return snapshot(`build-${builds}`);
+    });
+
+    await store.get();
+    store.invalidate();
+    const refreshed = await store.get();
+
+    expect(refreshed.generatedAt).toBe("build-2");
+    expect(builds).toBe(2);
+  });
+
+  it("does not let invalidated in-flight builds overwrite newer snapshots", async () => {
+    let builds = 0;
+    let releaseFirstBuild: () => void = () => {};
+    const store = new QuoteSnapshotStore(async () => {
+      builds += 1;
+      const build = builds;
+      if (build === 1) {
+        await new Promise<void>((resolvePromise) => {
+          releaseFirstBuild = resolvePromise;
+        });
+      }
+      return snapshot(`build-${build}`);
+    });
+
+    const staleBuild = store.get();
+    store.invalidate();
+    const refreshed = await store.get();
+    releaseFirstBuild();
+    await staleBuild;
+
+    const current = await store.get();
+    expect(refreshed.generatedAt).toBe("build-2");
+    expect(current.generatedAt).toBe("build-2");
+  });
+
   it("returns the stale snapshot immediately and revalidates in the background", async () => {
     let builds = 0;
     let nowMs = 0;

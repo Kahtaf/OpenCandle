@@ -52,6 +52,7 @@ export async function invokeMarketStateMutation({
   invokeToolRequest,
   setToast,
   refresh,
+  refreshQuotes,
   setPendingMutation,
 }) {
   if (readOnly) {
@@ -67,6 +68,7 @@ export async function invokeMarketStateMutation({
     }
     await invokeToolRequest(toolName, args);
     await refresh();
+    await refreshQuotes?.();
     return true;
   } catch (mutationError) {
     const message = mutationError instanceof Error ? mutationError.message : String(mutationError);
@@ -92,7 +94,7 @@ export function MarketStatePage({
   sidebarCollapsed = false,
   onExpandSidebar,
 }) {
-  const { state, loading, error, refresh } = useMarketState();
+  const { state, loading, error, refresh, refreshQuotes } = useMarketState();
   const readOnly = role !== "writer";
   const active = PAGE_META[domain] ?? PAGE_META.watchlists;
   const activeId = PAGE_META[domain] ? domain : "watchlists";
@@ -110,6 +112,7 @@ export function MarketStatePage({
       invokeToolRequest,
       setToast,
       refresh,
+      refreshQuotes,
       setPendingMutation,
     });
   };
