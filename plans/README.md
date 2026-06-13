@@ -12,7 +12,7 @@ Verification gates for every plan: `npx tsc --noEmit` and `npx vitest run`
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001  | Owner-only permissions for ~/.opencandle config | P1 | S | — | TODO |
+| 001  | Owner-only permissions for ~/.opencandle config | P1 | S | — | DONE |
 | 002  | Concurrent Yahoo fallback quotes in alert runner | P1 | S | — | TODO |
 | 003  | Financial-math zero guards + service-layer lot validation | P1 | S | — | TODO |
 | 004  | Private-API loopback enforcement + webhook URL validation | P2 | S | — | TODO |

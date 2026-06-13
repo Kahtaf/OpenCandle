@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -6,7 +6,7 @@ const OPENCANDLE_HOME_ENV = "OPENCANDLE_HOME";
 
 function ensureDir(path: string): void {
   if (!existsSync(path)) {
-    mkdirSync(path, { recursive: true });
+    mkdirSync(path, { recursive: true, mode: 0o700 });
   }
 }
 
@@ -18,6 +18,7 @@ export function getOpenCandleHomeDir(): string {
 export function ensureOpenCandleHomeDir(): string {
   const home = getOpenCandleHomeDir();
   ensureDir(home);
+  if (process.platform !== "win32") chmodSync(home, 0o700);
   return home;
 }
 

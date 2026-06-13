@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ensureParentDir, getConfigPath } from "./infra/opencandle-paths.js";
 import type { PlanningBehaviorMode, TaskFamily } from "./routing/planning.js";
 
@@ -222,7 +222,11 @@ export function loadFileConfig(path = getConfigPath()): OpenCandleFileConfig {
 
 export function saveFileConfig(config: OpenCandleFileConfig, path = getConfigPath()): void {
   ensureParentDir(path);
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`, {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+  if (process.platform !== "win32") chmodSync(path, 0o600);
 }
 
 export function loadConfig(): Config {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  ensureOpenCandleHomeDir,
   getConfigPath,
   getLogsDir,
   getOnboardingPath,
@@ -9,15 +10,21 @@ import {
   getOpenCandleHomeDir,
   resolveOpenCandlePath,
 } from "../../../src/infra/opencandle-paths.js";
+import { chmodSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 describe("opencandle paths", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
+  const tempDirs: string[] = [];
 
   afterEach(() => {
     if (originalEnv == null) {
       delete process.env.OPENCANDLE_HOME;
     } else {
       process.env.OPENCANDLE_HOME = originalEnv;
+    }
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
@@ -38,5 +45,16 @@ describe("opencandle paths", () => {
     expect(resolveOpenCandlePath("state.db")).toBe(
       resolve("./tmp/custom-opencandle-home", "state.db"),
     );
+  });
+
+  it.skipIf(process.platform === "win32")("repairs existing home directory permissions", () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-home-perms-"));
+    tempDirs.push(home);
+    chmodSync(home, 0o755);
+    process.env.OPENCANDLE_HOME = home;
+
+    ensureOpenCandleHomeDir();
+
+    expect(statSync(home).mode & 0o777).toBe(0o700);
   });
 });

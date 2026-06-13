@@ -1,15 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfig, loadEnv, loadFileConfig, saveFileConfig } from "../../../src/config.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
+  chmodSync: vi.fn(),
   mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
 }));
 
+const mockedChmodSync = vi.mocked(chmodSync);
 const mockedExistsSync = vi.mocked(existsSync);
 const mockedMkdirSync = vi.mocked(mkdirSync);
 const mockedReadFileSync = vi.mocked(readFileSync);
@@ -207,8 +209,11 @@ describe("loadConfig", () => {
         null,
         2,
       )}\n`,
-      "utf-8",
+      { encoding: "utf-8", mode: 0o600 },
     );
+    if (process.platform !== "win32") {
+      expect(mockedChmodSync).toHaveBeenCalledWith(configPath, 0o600);
+    }
   });
 
   it("loads config.json through the exported file reader", () => {
