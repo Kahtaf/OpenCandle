@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import { getStateDbPath } from "../infra/opencandle-paths.js";
+import { ensureOpenCandleHomeDir, getStateDbPath } from "../infra/opencandle-paths.js";
 
 const CURRENT_SCHEMA_VERSION = 7;
 
@@ -366,6 +366,7 @@ export function initDatabase(path: string): Database.Database {
 }
 
 export function initDefaultDatabase(): Database.Database {
+  ensureOpenCandleHomeDir();
   return initDatabase(getStateDbPath());
 }
 

@@ -1,9 +1,14 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getSchemaVersion, getTableNames, initDatabase } from "../../../src/memory/sqlite.js";
+import {
+  getSchemaVersion,
+  getTableNames,
+  initDatabase,
+  initDefaultDatabase,
+} from "../../../src/memory/sqlite.js";
 import { MemoryStorage } from "../../../src/memory/storage.js";
 
 function rowCount(db: Database.Database, tableName: string): number {
@@ -99,6 +104,51 @@ describe("initDatabase", () => {
     fileDb.close();
     rmSync(base, { recursive: true, force: true });
   });
+
+  it.skipIf(process.platform === "win32")("creates the default state DB under owner-only home", () => {
+    const originalHome = process.env.OPENCANDLE_HOME;
+    const base = mkdtempSync(join(tmpdir(), "opencandle-default-db-perms-"));
+    const home = join(base, "home");
+    process.env.OPENCANDLE_HOME = home;
+
+    try {
+      const defaultDb = initDefaultDatabase();
+      defaultDb.close();
+
+      expect(existsSync(join(home, "state.db"))).toBe(true);
+      expect(statSync(home).mode & 0o777).toBe(0o700);
+    } finally {
+      if (originalHome == null) {
+        delete process.env.OPENCANDLE_HOME;
+      } else {
+        process.env.OPENCANDLE_HOME = originalHome;
+      }
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")(
+    "repairs the default state DB home directory permissions",
+    () => {
+      const originalHome = process.env.OPENCANDLE_HOME;
+      const home = mkdtempSync(join(tmpdir(), "opencandle-default-db-existing-"));
+      process.env.OPENCANDLE_HOME = home;
+
+      try {
+        const defaultDb = initDefaultDatabase();
+        defaultDb.close();
+
+        expect(statSync(home).mode & 0o777).toBe(0o700);
+      } finally {
+        if (originalHome == null) {
+          delete process.env.OPENCANDLE_HOME;
+        } else {
+          process.env.OPENCANDLE_HOME = originalHome;
+        }
+        rmSync(home, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("resets stale pre-release schemas to the current layout", () => {
     const base = mkdtempSync(join(tmpdir(), "vantage-sqlite-reset-"));
