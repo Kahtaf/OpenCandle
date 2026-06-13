@@ -571,11 +571,11 @@ export class MarketStateService {
   addWatchlistItem(params: {
     instrument: InstrumentInput;
     watchlistId?: number;
-    targetPrice?: number;
-    stopPrice?: number;
-    priceCurrency?: string;
-    thesis?: string;
-    notes?: string;
+    targetPrice?: number | null;
+    stopPrice?: number | null;
+    priceCurrency?: string | null;
+    thesis?: string | null;
+    notes?: string | null;
     tags?: string[];
     source?: string;
     sourceRowId?: string;
@@ -602,11 +602,11 @@ export class MarketStateService {
              WHERE id = ?`,
           )
           .run(
-            params.targetPrice ?? existing.target_price,
-            params.stopPrice ?? existing.stop_price,
-            params.priceCurrency ?? existing.price_currency,
-            params.thesis ?? existing.thesis,
-            params.notes ?? existing.notes,
+            params.targetPrice === undefined ? existing.target_price : params.targetPrice,
+            params.stopPrice === undefined ? existing.stop_price : params.stopPrice,
+            params.priceCurrency === undefined ? existing.price_currency : params.priceCurrency,
+            params.thesis === undefined ? existing.thesis : params.thesis,
+            params.notes === undefined ? existing.notes : params.notes,
             params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
             params.source === undefined ? existing.source : normalizeNullable(params.source),
             params.sourceRowId === undefined
@@ -684,11 +684,11 @@ export class MarketStateService {
     symbol: string,
     params: {
       watchlistId?: number;
-      targetPrice?: number;
-      stopPrice?: number;
-      priceCurrency?: string;
-      thesis?: string;
-      notes?: string;
+      targetPrice?: number | null;
+      stopPrice?: number | null;
+      priceCurrency?: string | null;
+      thesis?: string | null;
+      notes?: string | null;
       tags?: string[];
     },
   ): WatchlistItemRecord | null {
@@ -713,11 +713,11 @@ export class MarketStateService {
          WHERE id = ?`,
       )
       .run(
-        params.targetPrice ?? existing.target_price,
-        params.stopPrice ?? existing.stop_price,
-        params.priceCurrency ?? existing.price_currency,
-        params.thesis ?? existing.thesis,
-        params.notes ?? existing.notes,
+        params.targetPrice === undefined ? existing.target_price : params.targetPrice,
+        params.stopPrice === undefined ? existing.stop_price : params.stopPrice,
+        params.priceCurrency === undefined ? existing.price_currency : params.priceCurrency,
+        params.thesis === undefined ? existing.thesis : params.thesis,
+        params.notes === undefined ? existing.notes : params.notes,
         params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
         now,
         existing.id,

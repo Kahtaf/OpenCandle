@@ -150,6 +150,41 @@ describe("MarketStateService", () => {
     });
   });
 
+  it("clears watchlist metadata when update fields are explicitly null or empty", () => {
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      targetPrice: 250,
+      stopPrice: 180,
+      thesis: "Initial thesis",
+      notes: "Initial note",
+      tags: ["quality"],
+    });
+
+    const updated = service.updateWatchlistItemBySymbol("AAPL", {
+      targetPrice: null,
+      stopPrice: null,
+      thesis: null,
+      notes: null,
+      tags: [],
+    });
+
+    expect(updated).toMatchObject({
+      symbol: "AAPL",
+      targetPrice: null,
+      stopPrice: null,
+      thesis: null,
+      notes: null,
+      tags: [],
+    });
+  });
+
   it("stores portfolio lots under the default portfolio", () => {
     const lot = service.addPortfolioLot({
       instrument: {

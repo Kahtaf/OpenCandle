@@ -134,6 +134,37 @@ describe("watchlistTool", () => {
     });
   });
 
+  it("clears watchlist metadata through explicit null and empty tags", async () => {
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "AAPL",
+      target_price: 200,
+      stop_price: 150,
+      thesis: "Initial thesis",
+      notes: "Initial note",
+      tags: ["quality"],
+    });
+
+    const result = await watchlistTool.execute("test", {
+      action: "update",
+      symbol: "AAPL",
+      target_price: null,
+      stop_price: null,
+      thesis: null,
+      notes: null,
+      tags: [],
+    });
+
+    expect(result.details).toMatchObject({
+      symbol: "AAPL",
+      targetPrice: null,
+      stopPrice: null,
+      thesis: null,
+      notes: null,
+      tags: [],
+    });
+  });
+
   it("removes a symbol from the SQLite watchlist", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
 

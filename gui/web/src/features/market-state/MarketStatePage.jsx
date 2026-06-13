@@ -284,15 +284,10 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
           { name: "tags", label: "Tags", defaultValue: item?.tags?.join(", ") },
         ]}
         onSubmit={async (values) => {
-          const saved = await invokeTool("manage_watchlist", {
-            action: panel.type === "watchlist-add" ? "add" : "update",
-            symbol: values.symbol,
-            target_price: numberOrUndefined(values.target_price),
-            stop_price: numberOrUndefined(values.stop_price),
-            thesis: values.thesis || undefined,
-            notes: values.notes || undefined,
-            tags: parseTags(values.tags),
-          });
+          const saved = await invokeTool(
+            "manage_watchlist",
+            buildWatchlistMutationArgs(panel.type, values),
+          );
           if (saved) closePanel();
           return saved;
         }}
@@ -541,6 +536,19 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
       </Button>
     </form>
   );
+}
+
+export function buildWatchlistMutationArgs(panelType, values) {
+  const isEdit = panelType === "watchlist-edit";
+  return {
+    action: isEdit ? "update" : "add",
+    symbol: values.symbol,
+    target_price: isEdit ? numberOrNull(values.target_price) : numberOrUndefined(values.target_price),
+    stop_price: isEdit ? numberOrNull(values.stop_price) : numberOrUndefined(values.stop_price),
+    thesis: isEdit ? blankToNull(values.thesis) : values.thesis || undefined,
+    notes: isEdit ? blankToNull(values.notes) : values.notes || undefined,
+    tags: isEdit ? parseTags(values.tags) ?? [] : parseTags(values.tags),
+  };
 }
 
 export function HoldingForm({ disabled, lot, onSubmit }) {
@@ -934,6 +942,17 @@ function numberOrUndefined(value) {
   if (value === "" || value == null) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function numberOrNull(value) {
+  if (value === "" || value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function blankToNull(value) {
+  const text = String(value ?? "").trim();
+  return text ? value : null;
 }
 
 function parseTags(value) {

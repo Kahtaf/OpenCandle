@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
   AlertCreateForm,
+  buildWatchlistMutationArgs,
   buildWatchlistRowActions,
   clampComboboxActiveIndex,
   HoldingForm,
@@ -268,6 +269,44 @@ describe("MarketStatePage rendering", () => {
     expect(saved).toBe(true);
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshQuotes).toHaveBeenCalledOnce();
+  });
+
+  it("sends explicit clear values for blank watchlist edit fields", () => {
+    const addArgs = buildWatchlistMutationArgs("watchlist-add", {
+      symbol: "AAPL",
+      target_price: "",
+      stop_price: "",
+      thesis: "",
+      notes: "",
+      tags: "",
+    });
+    const editArgs = buildWatchlistMutationArgs("watchlist-edit", {
+      symbol: "AAPL",
+      target_price: "",
+      stop_price: "",
+      thesis: "",
+      notes: "",
+      tags: "",
+    });
+
+    expect(addArgs).toMatchObject({
+      action: "add",
+      symbol: "AAPL",
+      target_price: undefined,
+      stop_price: undefined,
+      thesis: undefined,
+      notes: undefined,
+      tags: undefined,
+    });
+    expect(editArgs).toEqual({
+      action: "update",
+      symbol: "AAPL",
+      target_price: null,
+      stop_price: null,
+      thesis: null,
+      notes: null,
+      tags: [],
+    });
   });
 
   it("names market-state form controls for assistive technology", () => {

@@ -23,14 +23,28 @@ const params = Type.Object({
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
   target_price: Type.Optional(
-    Type.Number({ description: "Alert when price rises above this level" }),
+    Type.Union([
+      Type.Number({ description: "Alert when price rises above this level" }),
+      Type.Null({ description: "Clear the existing target price during update" }),
+    ]),
   ),
   stop_price: Type.Optional(
-    Type.Number({ description: "Alert when price falls below this level" }),
+    Type.Union([
+      Type.Number({ description: "Alert when price falls below this level" }),
+      Type.Null({ description: "Clear the existing stop price during update" }),
+    ]),
   ),
-  notes: Type.Optional(Type.String({ description: "Optional notes for why you're watching this" })),
+  notes: Type.Optional(
+    Type.Union([
+      Type.String({ description: "Optional notes for why you're watching this" }),
+      Type.Null({ description: "Clear existing notes during update" }),
+    ]),
+  ),
   thesis: Type.Optional(
-    Type.String({ description: "Optional thesis for why you're watching this" }),
+    Type.Union([
+      Type.String({ description: "Optional thesis for why you're watching this" }),
+      Type.Null({ description: "Clear the existing thesis during update" }),
+    ]),
   ),
   tags: Type.Optional(
     Type.Array(Type.String(), { description: "Optional tags for organizing the watchlist item" }),
