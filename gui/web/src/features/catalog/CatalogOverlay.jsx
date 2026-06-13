@@ -40,7 +40,10 @@ export function CatalogOverlay({
   startChatRun,
   fillComposer,
 }) {
-  const [tab, setTab] = useState(initialTab ?? INITIAL_TAB);
+  const activeInitialTab = initialTab ?? INITIAL_TAB;
+  const openStateKey = open ? `open:${activeInitialTab}` : "closed";
+  const [lastOpenStateKey, setLastOpenStateKey] = useState(openStateKey);
+  const [tab, setTab] = useState(activeInitialTab);
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState(null); // { kind: 'tool'|'workflow'|'provider', id }
   // Body container ref so we can rewind scrollTop when the user pushes/pops
@@ -48,12 +51,14 @@ export function CatalogOverlay({
   // over and hides the builder header on mobile.
   const bodyRef = useRef(null);
 
-  useEffect(() => {
-    if (!open) return;
-    setTab(initialTab ?? INITIAL_TAB);
-    setQuery("");
-    setSelection(null);
-  }, [open, initialTab]);
+  if (lastOpenStateKey !== openStateKey) {
+    setLastOpenStateKey(openStateKey);
+    if (open) {
+      setTab(activeInitialTab);
+      setQuery("");
+      setSelection(null);
+    }
+  }
 
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
@@ -634,6 +639,8 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
 }
 
 function ProviderBuilder({ provider, send, setToast }) {
+  const providerStateKey = `${provider.id}:${provider.apiKey || ""}`;
+  const [lastProviderStateKey, setLastProviderStateKey] = useState(providerStateKey);
   const [apiKey, setApiKey] = useState(provider.apiKey || "");
   const [showApiKey, setShowApiKey] = useState(false);
   const status = providerStatus(provider);
@@ -641,10 +648,11 @@ function ProviderBuilder({ provider, send, setToast }) {
   const trimmed = apiKey.trim();
   const canSave = !envBlocked && trimmed.length > 0;
 
-  useEffect(() => {
+  if (lastProviderStateKey !== providerStateKey) {
+    setLastProviderStateKey(providerStateKey);
     setApiKey(provider.apiKey || "");
     setShowApiKey(false);
-  }, [provider.id, provider.apiKey]);
+  }
 
   const save = () => {
     if (envBlocked) {

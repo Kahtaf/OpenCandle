@@ -65,11 +65,14 @@ export function ChatPanel({
     const latest = groupedRows.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
     if (latest && latest !== drawer.run) drawer.open(latest);
   }, [groupedRows, drawer]);
-  useEffect(() => {
-    if (!allowToolAutoOpen) return;
-    if (autoOpenRunId || runState === "connecting" || runState === "streaming") return;
+  if (
+    allowToolAutoOpen &&
+    !autoOpenRunId &&
+    runState !== "connecting" &&
+    runState !== "streaming"
+  ) {
     setAllowToolAutoOpen(false);
-  }, [allowToolAutoOpen, autoOpenRunId, runState]);
+  }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
   const chatDisabled = role === "follower" || inputDisabled;
 

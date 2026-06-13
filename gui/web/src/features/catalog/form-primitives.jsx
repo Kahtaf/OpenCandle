@@ -168,33 +168,34 @@ export function NumberWithChips({
 
 export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ariaLabel }) {
   const [open, setOpen] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const [pending, setPending] = useState(false);
+  const [suggestions, setSuggestions] = useState({ query: "", items: [] });
+  const [pendingQuery, setPendingQuery] = useState("");
   const debounce = useRef(null);
+  const query = String(value || "").trim();
+  const visibleSuggestions = suggestions.query === query ? suggestions.items : [];
+  const pending = pendingQuery === query && query.length > 0;
 
   useEffect(() => {
     if (!lookup) return undefined;
-    const query = String(value || "").trim();
     if (query.length < 1) {
-      setSuggestions([]);
       return undefined;
     }
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(async () => {
-      setPending(true);
+      setPendingQuery(query);
       try {
         const results = await lookup(query);
-        setSuggestions(results.slice(0, 6));
+        setSuggestions({ query, items: results.slice(0, 6) });
       } catch {
-        setSuggestions([]);
+        setSuggestions({ query, items: [] });
       } finally {
-        setPending(false);
+        setPendingQuery((current) => (current === query ? "" : current));
       }
     }, 180);
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [value, lookup]);
+  }, [query, lookup]);
 
   return (
     <div className="relative">
@@ -208,9 +209,9 @@ export function SymbolInput({ value, onChange, lookup, placeholder = "AAPL", ari
         className="h-9 tabular-nums"
         autoCapitalize="characters"
       />
-      {open && suggestions.length > 0 ? (
+      {open && visibleSuggestions.length > 0 ? (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-md border border-border bg-card shadow-subtle-sm">
-          {suggestions.map((s) => (
+          {visibleSuggestions.map((s) => (
             <button
               key={s.symbol}
               type="button"
