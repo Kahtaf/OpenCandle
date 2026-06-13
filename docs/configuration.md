@@ -43,6 +43,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config, local state, and browser profile data. |
 | `OPENCANDLE_DEBATE` | `true` | Enables adversarial bull/bear debate for comprehensive analysis. Set `false` or `0` to disable. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
+| `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API` | unset | Allow the GUI's private market-state API to accept cookie-authenticated requests from non-loopback peers. Set `1` only together with an intentional `OPENCANDLE_GUI_HOST` network bind. |
 | `OPENCANDLE_GUI_PORT` | `14567` | GUI HTTP/WebSocket port. |
 | `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | unset | Optional local webhook target for alert/report notification delivery attempts. In-app notifications are still recorded first. |
 

@@ -21,10 +21,10 @@ export async function deliverPendingNotifications(
   const webhookUrl = options.webhookUrl ?? process.env.OPENCANDLE_NOTIFICATION_WEBHOOK_URL ?? null;
   if (!webhookUrl) return { attempted: 0, succeeded: 0, failed: 0 };
 
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   const now = options.now ?? new Date().toISOString();
   const timeoutMs = options.timeoutMs ?? 10_000;
   const maxAttempts = options.maxAttempts ?? 5;
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   let attempted = 0;
   let succeeded = 0;
   let failed = 0;
@@ -57,6 +57,13 @@ export async function deliverPendingNotifications(
       if (left.createdAt !== right.createdAt) return left.createdAt.localeCompare(right.createdAt);
       return left.id - right.id;
     });
+
+  if (!isAllowedWebhookUrl(webhookUrl)) {
+    const rejectedHost = webhookUrlHost(webhookUrl);
+    console.warn(`Rejected notification webhook URL host: ${rejectedHost}`);
+    const rejected = Math.min(pendingNotifications.length, maxAttempts);
+    return { attempted: rejected, succeeded: 0, failed: rejected };
+  }
 
   for (const notification of pendingNotifications) {
     if (attempted >= maxAttempts) break;
@@ -109,4 +116,25 @@ export async function deliverPendingNotifications(
   }
 
   return { attempted, succeeded, failed };
+}
+
+function isAllowedWebhookUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+  const host = url.hostname;
+  if (host === "169.254.169.254" || host.startsWith("169.254.")) return false;
+  return true;
+}
+
+function webhookUrlHost(raw: string): string {
+  try {
+    return new URL(raw).hostname || "(empty)";
+  } catch {
+    return "(invalid URL)";
+  }
 }

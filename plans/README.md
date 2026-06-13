@@ -15,7 +15,7 @@ Verification gates for every plan: `npx tsc --noEmit` and `npx vitest run`
 | 001  | Owner-only permissions for ~/.opencandle config | P1 | S | — | DONE |
 | 002  | Concurrent Yahoo fallback quotes in alert runner | P1 | S | — | DONE |
 | 003  | Financial-math zero guards + service-layer lot validation | P1 | S | — | TODO |
-| 004  | Private-API loopback enforcement + webhook URL validation | P2 | S | — | TODO |
+| 004  | Private-API loopback enforcement + webhook URL validation | P2 | S | — | DONE |
 | 005  | Clear 4 moderate npm audit findings | P2 | S | — | TODO |
 | 006  | Escape/delimit untrusted external text in sentiment tools | P2 | M | — | TODO |
 | 007  | Tighten non-budget dollar-amount detection | P2 | S | — | DONE |

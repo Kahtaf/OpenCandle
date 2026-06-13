@@ -14,6 +14,7 @@ describe("notification delivery", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     db.close();
   });
 
@@ -100,6 +101,68 @@ describe("notification delivery", () => {
       }),
     ]);
     expect(service.getNotificationEvent(notification.id).status).toBe("unread");
+  });
+
+  it("rejects non-http webhook URLs before fetching", async () => {
+    const notification = service.recordNotificationEvent({
+      sourceType: "alert_event",
+      severity: "warning",
+      title: "AAPL alert triggered",
+      body: "AAPL crossed 250.",
+    });
+    const fetchImpl = vi.fn(async () => new Response("ok", { status: 200 }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await deliverPendingNotifications(service, {
+      webhookUrl: "ftp://example.com/hook",
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({ attempted: 1, succeeded: 0, failed: 1 });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(service.listNotificationDeliveryAttempts(notification.id)).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith("Rejected notification webhook URL host: example.com");
+  });
+
+  it("rejects link-local metadata webhook URLs before fetching", async () => {
+    const notification = service.recordNotificationEvent({
+      sourceType: "alert_event",
+      severity: "warning",
+      title: "AAPL alert triggered",
+      body: "AAPL crossed 250.",
+    });
+    const fetchImpl = vi.fn(async () => new Response("ok", { status: 200 }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const result = await deliverPendingNotifications(service, {
+      webhookUrl: "http://169.254.169.254/hook",
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({ attempted: 1, succeeded: 0, failed: 1 });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(service.listNotificationDeliveryAttempts(notification.id)).toHaveLength(0);
+    expect(warn).toHaveBeenCalledWith("Rejected notification webhook URL host: 169.254.169.254");
+  });
+
+  it("allows localhost webhook receivers", async () => {
+    service.recordNotificationEvent({
+      sourceType: "alert_event",
+      severity: "warning",
+      title: "AAPL alert triggered",
+      body: "AAPL crossed 250.",
+    });
+    const fetchImpl = vi.fn(async () => new Response("ok", { status: 200 }));
+
+    const result = await deliverPendingNotifications(service, {
+      webhookUrl: "http://127.0.0.1:9999/hook",
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({ attempted: 1, succeeded: 1, failed: 0 });
+    expect(fetchImpl).toHaveBeenCalledWith("http://127.0.0.1:9999/hook", expect.objectContaining({
+      method: "POST",
+    }));
   });
 
   it("times out hanging webhook deliveries and records a failed attempt", async () => {

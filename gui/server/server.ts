@@ -56,6 +56,7 @@ const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
 const port = Number(process.env.OPENCANDLE_GUI_PORT ?? 14567);
 const automationHeartbeatMs = normalizeAutomationHeartbeatMs(process.env.OPENCANDLE_AUTOMATION_HEARTBEAT_MS);
+const allowRemotePrivateApi = process.env.OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API === "1";
 const privateApiSessionToken = randomBytes(32).toString("base64url");
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
@@ -219,6 +220,9 @@ server.listen(port, host, () => {
   console.log(`OpenCandle GUI listening on http://${host}:${port}`);
   if (host === "0.0.0.0") {
     console.log(`OpenCandle GUI is accepting LAN/Tailscale connections on port ${port}`);
+  }
+  if (allowRemotePrivateApi) {
+    console.log("OpenCandle GUI private market-state API accepts cookie-authenticated remote requests.");
   }
   console.log(`Writer role: ${lockResult.role}`);
   startLocalAutomationHeartbeat();
@@ -792,7 +796,12 @@ function writeJson(res: ServerResponse, value: unknown, status = 200): void {
 }
 
 function allowPrivateMarketStateApi(req: IncomingMessage, res: ServerResponse): boolean {
-  if (isTrustedPrivateApiRequest(req.headers, privateApiSessionToken)) return true;
+  if (isTrustedPrivateApiRequest(
+    req.headers,
+    privateApiSessionToken,
+    req.socket.remoteAddress,
+    { allowRemote: allowRemotePrivateApi },
+  )) return true;
   res.writeHead(403, { "content-type": "application/json" });
   res.end(JSON.stringify({ error: "Market-state API is only available to trusted GUI browser sessions." }));
   return false;

@@ -15,7 +15,10 @@ export function isLoopbackAddress(remoteAddress: string | undefined): boolean {
 export function isTrustedPrivateApiRequest(
   headers: IncomingHttpHeaders,
   sessionToken: string,
+  remoteAddress: string | undefined,
+  options: { allowRemote?: boolean } = {},
 ): boolean {
+  if (!options.allowRemote && !isLoopbackAddress(remoteAddress)) return false;
   if (cookieValue(headers.cookie, PRIVATE_API_COOKIE) !== sessionToken) return false;
 
   const fetchSite = headerValue(headers["sec-fetch-site"]);

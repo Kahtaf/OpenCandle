@@ -25,32 +25,51 @@ describe("private GUI API access", () => {
     expect(isTrustedPrivateApiRequest({
       cookie,
       host: "127.0.0.1:14567",
-    }, "secret-token")).toBe(true);
+    }, "secret-token", "127.0.0.1")).toBe(true);
+    expect(isTrustedPrivateApiRequest({
+      cookie,
+      host: "127.0.0.1:14567",
+    }, "secret-token", "::ffff:127.0.0.1")).toBe(true);
     expect(isTrustedPrivateApiRequest({
       host: "127.0.0.1:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "127.0.0.1")).toBe(false);
   });
 
-  it("allows remote requests carrying the server-issued GUI cookie", () => {
+  it("requires loopback callers by default even with the server-issued GUI cookie", () => {
     const cookie = privateApiCookieHeader("secret-token");
     expect(isTrustedPrivateApiRequest({
       cookie,
       host: "oc-tailnet:14567",
-    }, "secret-token")).toBe(true);
+    }, "secret-token", "192.168.1.50")).toBe(false);
+    expect(isTrustedPrivateApiRequest({
+      cookie,
+      host: "oc-tailnet:14567",
+    }, "secret-token", undefined)).toBe(false);
+  });
+
+  it("allows remote callers only with the explicit remote private API opt-in", () => {
+    const cookie = privateApiCookieHeader("secret-token");
+    expect(isTrustedPrivateApiRequest({
+      cookie,
+      host: "oc-tailnet:14567",
+    }, "secret-token", "192.168.1.50", { allowRemote: true })).toBe(true);
+    expect(isTrustedPrivateApiRequest({
+      host: "oc-tailnet:14567",
+    }, "secret-token", "192.168.1.50", { allowRemote: true })).toBe(false);
   });
 
   it("rejects remote spoofed headers and raw private API reads without the GUI cookie", () => {
     expect(isTrustedPrivateApiRequest({
       "sec-fetch-site": "same-origin",
       host: "oc-tailnet:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "192.168.1.50", { allowRemote: true })).toBe(false);
     expect(isTrustedPrivateApiRequest({
       origin: "http://oc-tailnet:14567",
       host: "oc-tailnet:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "192.168.1.50", { allowRemote: true })).toBe(false);
     expect(isTrustedPrivateApiRequest({
       host: "oc-tailnet:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "192.168.1.50", { allowRemote: true })).toBe(false);
   });
 
   it("rejects cookie-bearing cross-site browser requests", () => {
@@ -59,18 +78,18 @@ describe("private GUI API access", () => {
       cookie,
       "sec-fetch-site": "cross-site",
       host: "127.0.0.1:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "127.0.0.1")).toBe(false);
     expect(isTrustedPrivateApiRequest({
       cookie,
       origin: "http://evil.example",
       host: "127.0.0.1:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "127.0.0.1")).toBe(false);
   });
 
   it("treats malformed private API cookies as absent", () => {
     expect(isTrustedPrivateApiRequest({
       cookie: "opencandle_gui_session=%",
       host: "oc-tailnet:14567",
-    }, "secret-token")).toBe(false);
+    }, "secret-token", "192.168.1.50", { allowRemote: true })).toBe(false);
   });
 });
