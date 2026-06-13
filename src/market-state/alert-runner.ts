@@ -358,39 +358,48 @@ async function loadPriceObservations(
     if (!observations.has(quoteObservationKey(symbol, true))) yahooSymbols.add(symbol);
   }
 
-  for (const symbol of yahooSymbols) {
-    const budgetReason = providerBudget.unavailableReason("yahoo", now);
-    if (budgetReason) {
+  const yahooSymbolList = [...yahooSymbols];
+  const yahooBudgetReason = providerBudget.unavailableReason("yahoo", now);
+  if (yahooBudgetReason) {
+    for (const symbol of yahooSymbolList) {
       const prior = unavailableReasons.get(symbol);
-      unavailableReasons.set(symbol, prior ? `${prior}; ${budgetReason}` : budgetReason);
-      unavailableReasons.set(quoteObservationKey(symbol, false), budgetReason);
-      continue;
+      unavailableReasons.set(symbol, prior ? `${prior}; ${yahooBudgetReason}` : yahooBudgetReason);
+      unavailableReasons.set(quoteObservationKey(symbol, false), yahooBudgetReason);
     }
-    try {
-      const quote = await providers.getYahooQuote(symbol);
-      const normalized = normalizeObservation(quote, now);
-      observations.set(quoteObservationKey(symbol, false), normalized);
-      if (!observations.has(quoteObservationKey(symbol, true))) {
-        observations.set(quoteObservationKey(symbol, true), normalized);
-      }
-      unavailableReasons.delete(symbol);
-      unavailableReasons.delete(quoteObservationKey(symbol, false));
-      unavailableReasons.delete(quoteObservationKey(symbol, true));
-      providerBudget.recordSuccess("yahoo");
-    } catch (error) {
-      const prior = unavailableReasons.get(symbol);
-      const reason = error instanceof Error ? error.message : "Yahoo unavailable";
-      if (isProviderWideFailure(reason)) providerBudget.recordFailure("yahoo", reason, now);
-      const mergedReason = prior ? `${prior}; Yahoo fallback unavailable: ${reason}` : reason;
-      unavailableReasons.set(symbol, mergedReason);
-      unavailableReasons.set(quoteObservationKey(symbol, false), reason);
-      if (!observations.has(quoteObservationKey(symbol, true))) {
-        const delayedKey = quoteObservationKey(symbol, true);
-        const delayedPrior = unavailableReasons.get(delayedKey);
-        unavailableReasons.set(
-          delayedKey,
-          delayedPrior ? `${delayedPrior}; Yahoo fallback unavailable: ${reason}` : mergedReason,
-        );
+  } else {
+    const yahooResults = await Promise.allSettled(
+      yahooSymbolList.map((symbol) => providers.getYahooQuote(symbol)),
+    );
+
+    for (const [index, result] of yahooResults.entries()) {
+      const symbol = yahooSymbolList[index];
+      if (symbol == null) continue;
+
+      if (result.status === "fulfilled") {
+        const normalized = normalizeObservation(result.value, now);
+        observations.set(quoteObservationKey(symbol, false), normalized);
+        if (!observations.has(quoteObservationKey(symbol, true))) {
+          observations.set(quoteObservationKey(symbol, true), normalized);
+        }
+        unavailableReasons.delete(symbol);
+        unavailableReasons.delete(quoteObservationKey(symbol, false));
+        unavailableReasons.delete(quoteObservationKey(symbol, true));
+        providerBudget.recordSuccess("yahoo");
+      } else {
+        const prior = unavailableReasons.get(symbol);
+        const reason = result.reason instanceof Error ? result.reason.message : "Yahoo unavailable";
+        if (isProviderWideFailure(reason)) providerBudget.recordFailure("yahoo", reason, now);
+        const mergedReason = prior ? `${prior}; Yahoo fallback unavailable: ${reason}` : reason;
+        unavailableReasons.set(symbol, mergedReason);
+        unavailableReasons.set(quoteObservationKey(symbol, false), reason);
+        if (!observations.has(quoteObservationKey(symbol, true))) {
+          const delayedKey = quoteObservationKey(symbol, true);
+          const delayedPrior = unavailableReasons.get(delayedKey);
+          unavailableReasons.set(
+            delayedKey,
+            delayedPrior ? `${delayedPrior}; Yahoo fallback unavailable: ${reason}` : mergedReason,
+          );
+        }
       }
     }
   }

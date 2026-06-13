@@ -119,6 +119,140 @@ describe("alert runner", () => {
     });
   });
 
+  it("fetches Yahoo fallback quotes concurrently while preserving mixed-result bookkeeping", async () => {
+    const symbols = ["AAPL", "MSFT", "NVDA"];
+    for (const symbol of symbols) {
+      const instrument = service.upsertInstrumentRecord({
+        symbol,
+        assetType: "equity",
+        name: `${symbol} Inc.`,
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      });
+      service.createAlertRule({
+        scopeType: "instrument",
+        instrumentId: instrument.id,
+        conditionType: "price_crosses_above",
+        conditionVersion: ALERT_CONDITION_VERSION,
+        condition: priceCrossesAbove(500),
+        timeframe: "quote",
+        cooldownSeconds: 0,
+      });
+    }
+
+    let inFlight = 0;
+    let maxConcurrent = 0;
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(async () => {
+        throw new Error("TradingView unavailable");
+      }),
+      getYahooQuote: vi.fn(async (symbol) => {
+        inFlight++;
+        maxConcurrent = Math.max(maxConcurrent, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        inFlight--;
+        if (symbol === "NVDA") throw new Error("Yahoo no quote");
+        return {
+          symbol,
+          value: symbol === "AAPL" ? 240 : 410,
+          sourceProvider: "yahoo",
+          observedAt: "2026-06-01T12:00:00.000Z",
+          providerDataAt: "2026-06-01T12:00:00.000Z",
+          cacheStatus: "live",
+        };
+      }),
+      getHistory: vi.fn(),
+    };
+
+    const result = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+      providerBudget: new AlertProviderBudget(),
+    });
+
+    expect(result).toMatchObject({ checked: 3, triggered: 0, unavailable: 1 });
+    expect(providers.getYahooQuote).toHaveBeenCalledTimes(3);
+    expect(maxConcurrent).toBeGreaterThan(1);
+    expect(service.getAlertRule(1).lastObservedJson).toMatchObject({
+      sourceProvider: "yahoo",
+      value: 240,
+    });
+    expect(service.getAlertRule(2).lastObservedJson).toMatchObject({
+      sourceProvider: "yahoo",
+      value: 410,
+    });
+    expect(service.getAlertRule(3).lastObservedJson).toBeNull();
+    expect(service.listAlertCheckRuns()[0].providerStatusJson).toMatchObject({
+      unavailableReasons: {
+        NVDA: "TradingView unavailable; Yahoo fallback unavailable: Yahoo no quote",
+      },
+    });
+  });
+
+  it("opens the Yahoo circuit for the next run without short-circuiting same-cycle fallback calls", async () => {
+    const symbols = ["BTC-USD", "ETH-USD", "SOL-USD"];
+    for (const symbol of symbols) {
+      const instrument = service.upsertInstrumentRecord({
+        symbol,
+        assetType: "crypto",
+        name: symbol,
+        exchange: null,
+        currency: "USD",
+        provider: "yahoo",
+      });
+      service.createAlertRule({
+        scopeType: "instrument",
+        instrumentId: instrument.id,
+        conditionType: "price_crosses_above",
+        conditionVersion: ALERT_CONDITION_VERSION,
+        condition: priceCrossesAbove(70_000),
+        timeframe: "quote",
+        cooldownSeconds: 0,
+      });
+    }
+
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(async () => {
+        throw new Error("Yahoo HTTP 429");
+      }),
+      getHistory: vi.fn(),
+    };
+    const providerBudget = new AlertProviderBudget({ failureThreshold: 1, backoffMs: 300_000 });
+
+    const first = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:00:00.000Z",
+      providers,
+      providerBudget,
+    });
+    const second = await runAlertChecks(service, {
+      ownerId: "runner-1",
+      triggerType: "heartbeat",
+      now: "2026-06-01T12:01:00.000Z",
+      providers,
+      providerBudget,
+    });
+
+    expect(first).toMatchObject({ checked: 3, triggered: 0, unavailable: 3 });
+    expect(second).toMatchObject({ checked: 3, triggered: 0, unavailable: 3 });
+    expect(providers.getYahooQuote).toHaveBeenCalledTimes(3);
+    expect(service.listAlertCheckRuns()[0].providerStatusJson).toMatchObject({
+      unavailableReasons: {
+        "BTC-USD": expect.stringContaining("provider_budget_exhausted"),
+        "ETH-USD": expect.stringContaining("provider_budget_exhausted"),
+        "SOL-USD": expect.stringContaining("provider_budget_exhausted"),
+      },
+      providerBudget: {
+        yahoo: expect.objectContaining({ state: "open" }),
+      },
+    });
+  });
+
   it("skips Yahoo network calls while the alert provider circuit is open after repeated rate limits", async () => {
     const btc = service.upsertInstrumentRecord({
       symbol: "BTC-USD",
