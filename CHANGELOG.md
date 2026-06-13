@@ -4,6 +4,7 @@
 
 ### Added
 
+- LLM-summarized session titles: after the first completed user/assistant exchange, the session is renamed with a short model-written title (GUI sidebar and TUI session list), replacing the raw first-prompt placeholder. Manual renames are left alone, each session is titled at most once per process, and model failures keep the placeholder while recording an `opencandle-title-error` entry.
 - Competitive benchmark saved-state mode: `OPENCANDLE_COMPETITIVE_SEED_STATE=1` seeds a deterministic portfolio/watchlist/prediction fixture into the eval home, steers generated prompts toward "my portfolio" phrasing, shares the same facts with generic baseline agents for fairness, and instructs the judge to verify personalization against the saved state.
 
 - Saved watchlist, portfolio, alert, daily-report, and prediction state is now summarized into agent prompt context, so broad sector or theme prompts can connect back to relevant saved positions such as ASTS.

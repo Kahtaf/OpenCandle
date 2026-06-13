@@ -1272,4 +1272,158 @@ describe("opencandle extension", () => {
       ).toHaveLength(0);
     });
   });
+
+  describe("llm session titles", () => {
+    function chatBranch(userText = "what does a covered call actually do") {
+      return [
+        { type: "message", message: { role: "user", content: userText } },
+        {
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "A covered call sells upside above the strike..." }],
+            stopReason: "stop",
+          },
+        },
+      ];
+    }
+
+    function titleCtx(branch: unknown[]) {
+      return {
+        hasUI: false,
+        ui: { notify: vi.fn() },
+        sessionManager: {
+          getSessionId: () => "title-session",
+          getBranch: () => branch,
+        },
+      };
+    }
+
+    const finalAssistantTurnEnd = {
+      type: "turn_end",
+      turnIndex: 0,
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "A covered call sells upside above the strike..." }],
+        stopReason: "stop",
+      },
+      toolResults: [],
+    };
+
+    async function fireTurnEnd(fake: ReturnType<typeof createFakeApi>, ctx: unknown) {
+      for (const handler of fake.handlers.get("turn_end") ?? []) {
+        await handler(finalAssistantTurnEnd, ctx);
+      }
+    }
+
+    it("sets a summarized session name after the first completed exchange", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => "Covered Call Mechanics Explained");
+      openCandleExtension(fake.api, { titleCompletion });
+
+      const ctx = titleCtx(chatBranch());
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+      await fireTurnEnd(fake, ctx);
+
+      expect(titleCompletion).toHaveBeenCalledTimes(1);
+      expect(titleCompletion.mock.calls[0]![0]).toContain(
+        "what does a covered call actually do",
+      );
+      expect(fake.api.setSessionName).toHaveBeenCalledWith("Covered Call Mechanics Explained");
+    });
+
+    it("prefers the opencandle-user-input original over the expanded first user message", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => "Nvidia Deep Dive Session");
+      openCandleExtension(fake.api, { titleCompletion });
+
+      const branch = [
+        {
+          type: "custom",
+          customType: "opencandle-user-input",
+          data: { original: "analyze NVDA" },
+        },
+        { type: "message", message: { role: "user", content: "Expanded workflow prompt..." } },
+        {
+          type: "message",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "NVDA analysis..." }],
+            stopReason: "stop",
+          },
+        },
+      ];
+      const ctx = titleCtx(branch);
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+      await fireTurnEnd(fake, ctx);
+
+      expect(titleCompletion.mock.calls[0]![0]).toContain("analyze NVDA");
+      expect(titleCompletion.mock.calls[0]![0]).not.toContain("Expanded workflow prompt");
+      expect(fake.api.setSessionName).toHaveBeenCalledWith("Nvidia Deep Dive Session");
+    });
+
+    it("titles a session at most once per process", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => "Covered Call Mechanics Explained");
+      openCandleExtension(fake.api, { titleCompletion });
+
+      const ctx = titleCtx(chatBranch());
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+      await fireTurnEnd(fake, ctx);
+      await fireTurnEnd(fake, ctx);
+
+      expect(titleCompletion).toHaveBeenCalledTimes(1);
+      expect(fake.api.setSessionName).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves manually renamed sessions alone", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => "Covered Call Mechanics Explained");
+      (fake.api.getSessionName as ReturnType<typeof vi.fn>).mockReturnValue(
+        "My research notes",
+      );
+      openCandleExtension(fake.api, { titleCompletion });
+
+      const ctx = titleCtx(chatBranch());
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+      await fireTurnEnd(fake, ctx);
+
+      expect(titleCompletion).not.toHaveBeenCalled();
+      expect(fake.api.setSessionName).not.toHaveBeenCalled();
+    });
+
+    it("still titles when the current name is the raw first-prompt placeholder", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => "Covered Call Mechanics Explained");
+      (fake.api.getSessionName as ReturnType<typeof vi.fn>).mockReturnValue(
+        "what does a covered call actually do",
+      );
+      openCandleExtension(fake.api, { titleCompletion });
+
+      const ctx = titleCtx(chatBranch());
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+      await fireTurnEnd(fake, ctx);
+
+      expect(fake.api.setSessionName).toHaveBeenCalledWith("Covered Call Mechanics Explained");
+    });
+
+    it("records an observability entry and keeps the placeholder on model failure", async () => {
+      const fake = createFakeApi();
+      const titleCompletion = vi.fn(async () => {
+        throw new Error("model unavailable");
+      });
+      openCandleExtension(fake.api, { titleCompletion });
+
+      const ctx = titleCtx(chatBranch());
+      await fake.handlers.get("session_start")![0]!({ type: "session_start" }, ctx);
+      await fireTurnEnd(fake, ctx);
+
+      expect(fake.api.setSessionName).not.toHaveBeenCalled();
+      const errorEntry = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === "opencandle-title-error",
+      );
+      expect(errorEntry).toBeDefined();
+      expect((errorEntry![1] as { message: string }).message).toContain("model unavailable");
+    });
+  });
 });

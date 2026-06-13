@@ -42,6 +42,7 @@ import { getOpenCandleToolDefinitions } from "./tool-adapter.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
 import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
+import { generateSessionTitle } from "../runtime/session-title.js";
 import {
   getProvider,
   type ProviderId,
@@ -70,6 +71,12 @@ export interface OpenCandleExtensionOptions {
    */
   routerLlmClient?: RouterLlmClient;
   symbolSearch?: (query: string) => Promise<InstrumentCandidate[]>;
+  /**
+   * Optional completion function for LLM session titles. When omitted, the
+   * extension resolves a pi-ai client from the session's current model.
+   * Intended for tests + offline runners.
+   */
+  titleCompletion?: (prompt: string) => Promise<string>;
 }
 
 export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCandleExtensionOptions): void {
@@ -99,6 +106,10 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
   const degradationAccumulator = createDegradationAccumulator();
   let activeToolSnapshot: string[] | null = null;
   let currentRouteToolContext: ResolvedTurnContext | null = null;
+  // LLM session-title state: one title attempt per session per process.
+  // Reset on session_start; set before the (async) title call fires so
+  // overlapping turn_end events cannot double-title.
+  let sessionTitleAttempted = false;
 
   // Register tools
   for (const tool of getOpenCandleToolDefinitions()) {
@@ -213,6 +224,7 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
     coordinator.initSession(ctx.sessionManager.getSessionId());
     sessionPromptedSet.clear();
     hardPromptFiredInWorkflow = false;
+    sessionTitleAttempted = false;
 
     if (!ctx.hasUI) return;
     // Pin the user-facing disclaimer in the UI footer for the entire session.
@@ -294,6 +306,82 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       pi.appendEntry("opencandle-turn-gap", { annotation });
     }
     degradationAccumulator.reset();
+  });
+
+  // LLM session titles. After the first completed user↔assistant exchange,
+  // replace the placeholder session name (the raw first prompt, set by the
+  // GUI server / Pi's firstMessage fallback) with a short model-written
+  // summary. Manual renames are left alone, and each session is attempted at
+  // most once per process. Model failures are swallowed (placeholder stays)
+  // but recorded as an `opencandle-title-error` entry for observability.
+  pi.on("turn_end", async (event, ctx) => {
+    if (sessionTitleAttempted) return;
+    const msg = event.message as { role?: unknown; stopReason?: unknown };
+    if (msg?.role !== "assistant" || msg?.stopReason !== "stop") return;
+    const sessionManager = ctx?.sessionManager;
+    if (typeof sessionManager?.getBranch !== "function") return;
+
+    const branch = sessionManager.getBranch();
+    let firstUserText: string | null = null;
+    let firstAssistantText: string | null = null;
+    let originalInput: string | null = null;
+    for (const entry of branch) {
+      if (
+        originalInput === null &&
+        entry.type === "custom" &&
+        (entry as { customType?: unknown }).customType === "opencandle-user-input"
+      ) {
+        const original = (entry as { data?: { original?: unknown } }).data?.original;
+        if (typeof original === "string" && original.trim().length > 0) {
+          originalInput = original;
+        }
+        continue;
+      }
+      if (entry.type !== "message") continue;
+      const message = (entry as { message?: { role?: unknown; content?: unknown } }).message;
+      const text = extractMessageText(message?.content);
+      if (text.trim().length === 0) continue;
+      if (firstUserText === null && message?.role === "user") firstUserText = text;
+      if (firstAssistantText === null && message?.role === "assistant") {
+        firstAssistantText = text;
+      }
+      if (firstUserText !== null && firstAssistantText !== null) break;
+    }
+    // Fall back to the just-finished assistant message when the branch has
+    // not surfaced it yet at turn_end time.
+    if (firstAssistantText === null) {
+      const eventText = extractMessageText((msg as { content?: unknown }).content);
+      if (eventText.trim().length > 0) firstAssistantText = eventText;
+    }
+    if (firstUserText === null || firstAssistantText === null) return;
+
+    const userText = originalInput ?? firstUserText;
+    // A manual rename must be left alone — only replace the placeholder
+    // (unset, the raw first prompt, or the GUI's "first 77 chars + ..." form).
+    if (!isPlaceholderSessionName(pi.getSessionName(), [userText, firstUserText])) return;
+
+    const completion =
+      options?.titleCompletion ??
+      (() => {
+        const client = options?.routerLlmClient ?? resolveRouterLlmClient(ctx);
+        return client ? (prompt: string) => client.complete(prompt) : null;
+      })();
+    if (!completion) return;
+
+    sessionTitleAttempted = true;
+    try {
+      const title = await generateSessionTitle(
+        { userText, assistantText: firstAssistantText.slice(0, 500) },
+        completion,
+      );
+      if (title !== null) {
+        pi.setSessionName(title);
+      }
+    } catch (err) {
+      pi.appendEntry("opencandle-title-error", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   });
 
   // Intercept tool results for credential-required and soft-degraded tags.
@@ -1237,4 +1325,43 @@ export default function openCandleExtension(pi: ExtensionAPI, options?: OpenCand
       ),
     };
   });
+}
+
+/** Concatenate text from a Pi message `content` (plain string or block array). */
+function extractMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  let text = "";
+  for (const block of content) {
+    if (
+      block &&
+      typeof block === "object" &&
+      (block as { type?: unknown }).type === "text" &&
+      typeof (block as { text?: unknown }).text === "string"
+    ) {
+      text += (block as { text: string }).text;
+    }
+  }
+  return text;
+}
+
+/**
+ * True when the session name is still an auto-set placeholder that the LLM
+ * title may replace: unset, exactly one of the candidate user texts, or the
+ * GUI server's truncated "first 77 chars + ..." form of one of them.
+ */
+function isPlaceholderSessionName(
+  name: string | undefined,
+  candidates: string[],
+): boolean {
+  if (name === undefined || name.trim().length === 0) return true;
+  const trimmed = name.trim();
+  for (const candidate of candidates) {
+    const candidateTrimmed = candidate.trim();
+    if (trimmed === candidateTrimmed) return true;
+    if (trimmed.endsWith("...") && candidateTrimmed.startsWith(trimmed.slice(0, -3))) {
+      return true;
+    }
+  }
+  return false;
 }
