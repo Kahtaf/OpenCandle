@@ -101,8 +101,8 @@ function hasBudgetContext(input: string): boolean {
 function isNonBudgetDollarAmount(input: string, start: number, length: number): boolean {
   const before = input.slice(Math.max(0, start - 32), start);
   const after = input.slice(start + length, start + length + 24);
-  return /\b(?:average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?)\s*(?:is|at|of|:)?\s*$/i.test(before) ||
-    /^\s*(?:premium|max\s+premium|average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?)\b/i.test(after);
+  return /\b(?:average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?|worth|valued?\s+at|pays?|dividends?\s+of|gained|lost|received|made|profit\s+of|up|down|trading\s+(?:at|around|near))\s*(?:is|at|of|:)?\s*$/i.test(before) ||
+    /^\s*(?:premium|max\s+premium|average\s+cost|avg\s+cost|cost\s*basis|basis|entry(?:\s*price)?|per\s+share|in\s+dividends?|profit|gain|loss)\b/i.test(after);
 }
 
 function extractSymbols(input: string): string[] {

@@ -49,6 +49,18 @@ describe("extractEntities", () => {
       expect(result.costBasis).toBe(175);
       expect(result.budget).toBeUndefined();
     });
+
+    it("does not treat non-budget dollar amounts as investment budgets", () => {
+      expect(extractBudget("I own 100 shares of AAPL now worth $6,000")).toBeUndefined();
+      expect(extractBudget("my position is valued at $12,500")).toBeUndefined();
+      expect(extractBudget("it pays $2 per share in dividends")).toBeUndefined();
+      expect(extractBudget("the stock is trading around $150")).toBeUndefined();
+    });
+
+    it("preserves explicit budget dollar amount extraction", () => {
+      expect(extractBudget("I have $10,000 to invest")).toBe(10_000);
+      expect(extractBudget("invest $5k in ETFs")).toBe(5_000);
+    });
   });
 
   describe("symbol extraction", () => {
