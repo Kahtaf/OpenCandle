@@ -5,9 +5,9 @@ import {
   type SessionEntry,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { ChatEvent } from "../shared/chat-events.js";
-import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
+import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
+import type { ChatEvent } from "../shared/chat-events.js";
 import type { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
