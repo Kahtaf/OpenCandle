@@ -795,7 +795,9 @@ function ExternalToolProviderBuilder({ provider, send, setToast }) {
     send?.("provider.status.check", { providerId: provider.id, mode: "install" });
   };
   const checkSession = () => {
-    setToast?.("Checking X session. This may read browser cookies and trigger a Keychain prompt.");
+    setToast?.(
+      `Checking ${provider.displayName} session. This may read browser cookies and trigger a Keychain prompt.`,
+    );
     send?.("provider.status.check", { providerId: provider.id, mode: "session" });
   };
   const copyInstall = () => {
@@ -847,7 +849,7 @@ function ExternalToolProviderBuilder({ provider, send, setToast }) {
           Session source
         </span>
         <p className="text-sm leading-5 text-muted-foreground">
-          Uses your normal x.com browser session. Supported browsers:{" "}
+          Uses your normal browser session. Supported browsers:{" "}
           {(provider.supportedBrowsers || []).join(", ") || "Chrome, Arc, Edge, Firefox, Brave"}.
         </p>
         {detail?.message ? (
@@ -862,7 +864,7 @@ function ExternalToolProviderBuilder({ provider, send, setToast }) {
           Check install
         </Button>
         <Button variant="brand" size="sm" onClick={checkSession}>
-          Check X session
+          Check session
         </Button>
       </div>
     </div>
@@ -1093,6 +1095,7 @@ function statusLabel(status) {
   if (status === "session_ok") return "Session ready";
   if (status === "session_missing") return "Login needed";
   if (status === "session_stale") return "Session stale";
+  if (status === "skipped") return "Skipped";
   if (status === "reachable") return "Reachable";
   if (status === "unreachable") return "Unreachable";
   if (status === "error") return "Needs attention";
@@ -1108,7 +1111,7 @@ function statusColor(status) {
 }
 
 const successStatuses = new Set(["configured", "file", "installed", "session_ok", "reachable"]);
-const infoStatuses = new Set(["env"]);
+const infoStatuses = new Set(["env", "skipped"]);
 const dangerStatuses = new Set(["error", "unreachable"]);
 
 function formatRelativeTime(value) {

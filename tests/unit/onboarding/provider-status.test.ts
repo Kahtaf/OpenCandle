@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as configModule from "../../../src/config.js";
 import {
@@ -5,6 +8,7 @@ import {
   clearProviderStatusCache,
   probeProviderStatus,
 } from "../../../src/onboarding/provider-status.js";
+import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
 const DEFAULT_EMPTY_CONFIG = {
   alphaVantageApiKey: undefined,
@@ -97,6 +101,85 @@ describe("provider status probes", () => {
       state: "session_ok",
     });
     expect(calls).toEqual([["feed", "--max", "0", "--json"]]);
+  });
+
+  it("checks Reddit passive status with --version only", async () => {
+    const calls: Array<{ command: string; args: readonly string[] }> = [];
+    const runner: CommandRunner = async (command, args) => {
+      calls.push({ command, args });
+      return { code: 0, stdout: "rdt, version 0.4.1\n", stderr: "" };
+    };
+
+    const status = await probeProviderStatus("reddit", { mode: "install", commandRunner: runner });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "install",
+      state: "installed",
+    });
+    expect(calls).toEqual([{ command: "rdt", args: ["--version"] }]);
+  });
+
+  it("runs Reddit session status only when explicitly requested", async () => {
+    const calls: Array<readonly string[]> = [];
+    const runner: CommandRunner = async (_command, args) => {
+      calls.push(args);
+      return {
+        code: 0,
+        stdout: '{"ok":true,"schema_version":"1","data":{"authenticated":true}}',
+        stderr: "",
+      };
+    };
+
+    const status = await probeProviderStatus("reddit", { mode: "session", commandRunner: runner });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "session",
+      state: "session_ok",
+    });
+    expect(calls).toEqual([["status"]]);
+  });
+
+  it("classifies Reddit missing-cookie session errors", async () => {
+    const runner: CommandRunner = async () => ({
+      code: 0,
+      stdout:
+        '{"ok":false,"schema_version":"1","error":{"code":"not_authenticated","message":"No Reddit cookies found. Run rdt login."}}',
+      stderr: "",
+    });
+
+    const status = await probeProviderStatus("reddit", { mode: "session", commandRunner: runner });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "session",
+      state: "session_missing",
+    });
+    expect(status.message).toContain("No Reddit cookies found");
+  });
+
+  it("reports skipped external tools from onboarding preferences without probing", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-provider-status-"));
+    vi.stubEnv("OPENCANDLE_HOME", home);
+    saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
+    const runner = vi.fn<CommandRunner>();
+
+    const status = await probeProviderStatus("reddit", { commandRunner: runner });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "install",
+      state: "skipped",
+    });
+    expect(status.message).toContain("opencandle doctor --enable reddit");
+    expect(runner).not.toHaveBeenCalled();
+
+    rmSync(home, { recursive: true, force: true });
   });
 
   it("classifies Twitter missing-cookie session errors", async () => {

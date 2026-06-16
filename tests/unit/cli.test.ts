@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const piMocks = vi.hoisted(() => ({
@@ -88,6 +91,7 @@ describe("opencandle package commands", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     process.argv = originalArgv;
     process.exitCode = originalExitCode;
@@ -128,5 +132,22 @@ describe("opencandle package commands", () => {
 
     expect(log).toHaveBeenCalledWith("OpenCandle provider status");
     expect(log).toHaveBeenCalledWith("  twitter: ok");
+  });
+
+  it("clears a skipped provider preference from doctor", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-cli-"));
+    vi.stubEnv("OPENCANDLE_HOME", home);
+    const { loadOnboardingState, markProviderNeverAsk, saveOnboardingState } = await import(
+      "../../src/onboarding/state.js"
+    );
+    saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await runCli(["doctor", "--enable", "reddit"]);
+
+    expect(log).toHaveBeenCalledWith("Re-enabled reddit.");
+    expect(loadOnboardingState().providers.reddit).toBeUndefined();
+
+    rmSync(home, { recursive: true, force: true });
   });
 });

@@ -1,6 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
+import { buildExternalToolRequiredTag } from "../../onboarding/tool-tags.js";
 import { getPostComments, getSubredditPosts } from "../../providers/reddit.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
@@ -72,6 +73,24 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     }
 
     if (allResults.length === 0) {
+      const setupIssue = classifyRedditSetupIssue(warnings);
+      if (setupIssue) {
+        const tag = buildExternalToolRequiredTag({
+          provider: "reddit",
+          reason: setupIssue,
+          installCmd: "uv tool install rdt-cli",
+          loginCmd: "rdt login",
+          fallback: "twitter-web-news",
+        });
+        const guidance =
+          setupIssue === "not_installed"
+            ? "Reddit sentiment requires the local rdt-cli tool. Install it with `uv tool install rdt-cli`, then run `rdt login` if needed."
+            : "Reddit sentiment requires an active Reddit browser session for rdt-cli. Run `rdt login` or refresh your Reddit browser login.";
+        return {
+          content: [{ type: "text", text: `${tag}\n\n${guidance}` }],
+          details: null as any,
+        };
+      }
       return {
         content: [
           { type: "text", text: `⚠ Reddit sentiment unavailable (${warnings.join("; ")}).` },
@@ -204,3 +223,23 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     return { content: [{ type: "text", text: lines.join("\n") }], details };
   },
 };
+
+function classifyRedditSetupIssue(
+  warnings: readonly string[],
+): "not_installed" | "session_missing" | "session_stale" | null {
+  const combined = warnings.join("\n").toLowerCase();
+  if (combined.includes("not installed") || combined.includes("enoent")) {
+    return "not_installed";
+  }
+  if (
+    combined.includes("no reddit cookies") ||
+    combined.includes("not authenticated") ||
+    combined.includes("rdt login")
+  ) {
+    return "session_missing";
+  }
+  if (combined.includes("401") || combined.includes("unauthorized") || combined.includes("expired")) {
+    return "session_stale";
+  }
+  return null;
+}

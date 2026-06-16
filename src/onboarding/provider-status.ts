@@ -7,6 +7,7 @@ import {
   isExternalToolProvider,
   isPublicHttpProvider,
 } from "./providers.js";
+import { loadOnboardingState } from "./state.js";
 
 const STATUS_TTL_MS = 60_000;
 const COMMAND_TIMEOUT_MS = 5_000;
@@ -49,6 +50,7 @@ export interface ExternalToolProviderStatus extends ProviderStatusBase {
     | "session_ok"
     | "session_missing"
     | "session_stale"
+    | "skipped"
     | "error";
   readonly installCmd?: string;
 }
@@ -111,10 +113,23 @@ export async function probeProviderStatus(
       cacheHit: false,
     };
   } else if (isExternalToolProvider(provider)) {
-    status = await probeExternalTool(providerId, mode as "install" | "session", {
-      now,
-      commandRunner: options.commandRunner ?? runCommand,
-    });
+    if (loadOnboardingState().providers[providerId]?.status === "never_ask") {
+      status = {
+        providerId,
+        kind: "external-tool",
+        mode: mode as "install" | "session",
+        state: "skipped",
+        installCmd: provider.installCmd,
+        message: `Skipped by user preference; run opencandle doctor --enable ${providerId} to re-enable.`,
+        checkedAt: now.toISOString(),
+        cacheHit: false,
+      };
+    } else {
+      status = await probeExternalTool(providerId, mode as "install" | "session", {
+        now,
+        commandRunner: options.commandRunner ?? runCommand,
+      });
+    }
   } else if (isPublicHttpProvider(provider)) {
     status = await probePublicHttp(providerId, {
       now,
@@ -164,7 +179,10 @@ async function probeExternalTool(
     throw new Error(`Provider ${providerId} is not an external tool`);
   }
 
-  const args = mode === "install" ? ["--version"] : ["feed", "--max", "0", "--json"];
+  const args =
+    mode === "install"
+      ? ["--version"]
+      : (provider.sessionProbeArgs ?? ["feed", "--max", "0", "--json"]);
   try {
     const result = await options.commandRunner(provider.binary, args, {
       timeoutMs: COMMAND_TIMEOUT_MS,
@@ -185,7 +203,7 @@ async function probeExternalTool(
     }
 
     if (result.code === 0) {
-      const parsed = parseCliEnvelope(result.stdout);
+      const parsed = parseCliEnvelope(result.stdout, provider.binary);
       return {
         providerId,
         kind: "external-tool",
@@ -268,7 +286,7 @@ async function probePublicHttp(
   }
 }
 
-function parseCliEnvelope(stdout: string): { ok: boolean; message?: string } {
+function parseCliEnvelope(stdout: string, binary: string): { ok: boolean; message?: string } {
   try {
     const parsed = JSON.parse(stdout) as {
       ok?: unknown;
@@ -282,13 +300,18 @@ function parseCliEnvelope(stdout: string): { ok: boolean; message?: string } {
           : undefined,
     };
   } catch {
-    return { ok: false, message: "twitter-cli returned non-JSON output" };
+    return { ok: false, message: `${binary} returned non-JSON output` };
   }
 }
 
 function classifySessionFailure(message: string | undefined): ExternalToolProviderStatus["state"] {
   const lower = (message ?? "").toLowerCase();
-  if (lower.includes("no twitter cookies") || lower.includes("no cookies")) {
+  if (
+    lower.includes("no twitter cookies") ||
+    lower.includes("no reddit cookies") ||
+    lower.includes("not authenticated") ||
+    lower.includes("no cookies")
+  ) {
     return "session_missing";
   }
   if (lower.includes("401") || lower.includes("unauthorized") || lower.includes("expired")) {
@@ -301,7 +324,16 @@ export function redactSensitiveOutput(input: string): string {
   return input
     .slice(0, MAX_OUTPUT_CHARS)
     .replace(/\b(auth_token|ct0)\b\s*[:=]\s*[^;\s,)]+/gi, "$1=[redacted]")
-    .replace(/\b(auth_token|ct0)=([^;\s,)]+)/gi, "$1=[redacted]");
+    .replace(/\b(auth_token|ct0)=([^;\s,)]+)/gi, "$1=[redacted]")
+    .replace(
+      /\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)\b\s*[:=]\s*[^;\s,)]+/gi,
+      "$1=[redacted]",
+    )
+    .replace(/\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)=([^;\s,)]+)/gi, "$1=[redacted]")
+    .replace(
+      /(?:~|\/Users\/[^/\s]+|\/home\/[^/\s]+)?\/\.config\/rdt-cli\/credential\.json/g,
+      "[redacted-credential-path]",
+    );
 }
 
 export const runCommand: CommandRunner = (command, args, options) =>

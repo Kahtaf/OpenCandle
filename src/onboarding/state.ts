@@ -155,6 +155,15 @@ export function markProviderNeverAsk(state: OnboardingState, id: ProviderId): On
   };
 }
 
+export function clearProviderOnboardingEntry(
+  state: OnboardingState,
+  id: ProviderId,
+): OnboardingState {
+  const providers = { ...state.providers };
+  delete providers[id];
+  return { ...state, providers };
+}
+
 export function markWelcomeShown(state: OnboardingState): OnboardingState {
   return { ...state, welcomeShownAt: nowIso() };
 }

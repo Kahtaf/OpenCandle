@@ -1,7 +1,11 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
 import { resetConfigCache } from "../../../src/config.js";
+import { loadOnboardingState } from "../../../src/onboarding/state.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
@@ -1311,6 +1315,40 @@ describe("opencandle extension", () => {
           (c: any[]) => c[0] === "opencandle-turn-gap",
         ),
       ).toHaveLength(0);
+    });
+
+    it("prompts for external-tool setup and persists always-skip choices", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi.fn().mockResolvedValue({ answer: "Always skip Reddit" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      expect(toolResultHandler).toBeDefined();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit reason=not_installed installCmd="uv tool install rdt-cli" fallback=twitter-web-news loginCmd="rdt login"]',
+        ),
+        { ui: { notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          question: expect.stringContaining("Install command: uv tool install rdt-cli."),
+          options: [
+            "Continue after installing Reddit",
+            "Skip Reddit once",
+            "Always skip Reddit",
+          ],
+        }),
+      );
+      expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
+      expect(result?.content[0]?.text).toContain("silenced=true");
+      expect(loadOnboardingState().providers.reddit?.status).toBe("never_ask");
+
+      rmSync(home, { recursive: true, force: true });
     });
   });
 

@@ -19,7 +19,11 @@ import {
   saveOnboardingState,
   shouldShowWelcome,
 } from "../onboarding/state.js";
-import { buildConnectedTag, buildSkippedTag, parseToolTag } from "../onboarding/tool-tags.js";
+import {
+  buildConnectedTag,
+  buildSkippedTag,
+  parseToolTag,
+} from "../onboarding/tool-tags.js";
 import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
 import { formatPreflightDropAnnotation, preflightSymbols } from "../prompts/symbol-preflight.js";
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
@@ -402,15 +406,83 @@ export default function openCandleExtension(
       }
     }
 
-    // Second pass: look for a credential-required tag; on match, run the
-    // interception decision and either replace the tool result or prompt
-    // the user. Only the first credential_required tag in the content list
-    // is acted on — subsequent hard-tier prompts are silenced by the
-    // per-workflow cap at the decision-function level.
+    // Second pass: look for setup-required tags; on match, run the interception
+    // decision and either replace the tool result or prompt the user. Only the
+    // first setup tag in the content list is acted on.
     for (const block of event.content) {
       if (block.type !== "text") continue;
       const parsed = parseToolTag(block.text);
-      if (!parsed || parsed.kind !== "credential_required") continue;
+      if (
+        !parsed ||
+        (parsed.kind !== "credential_required" && parsed.kind !== "external_tool_required")
+      ) {
+        continue;
+      }
+
+      if (parsed.kind === "external_tool_required") {
+        const state = loadOnboardingState();
+        const descriptor = getProvider(parsed.provider);
+        const setupLabel =
+          parsed.reason === "not_installed"
+            ? `Continue after installing ${descriptor.displayName}`
+            : `Continue after logging in to ${descriptor.displayName}`;
+        const skipLabel = `Skip ${descriptor.displayName} once`;
+        const neverLabel = `Always skip ${descriptor.displayName}`;
+        const installOrLogin =
+          parsed.reason === "not_installed"
+            ? `Install command: ${parsed.installCmd}.`
+            : `Login command: ${parsed.loginCmd ?? "rdt login"}.`;
+        const questionBody =
+          `${descriptor.displayName} requires a local external tool before this data can be fetched. ` +
+          `${installOrLogin} How would you like to proceed?`;
+
+        sessionPromptedSet.add(parsed.provider);
+        const promptResult = await promptUser(
+          ctx,
+          {
+            question: questionBody,
+            questionType: "select",
+            options: [setupLabel, skipLabel, neverLabel],
+          },
+          options?.askUserHandler,
+        );
+
+        const answer = promptResult.cancelled ? skipLabel : (promptResult.answer ?? skipLabel);
+        if (answer.startsWith("Always")) {
+          saveOnboardingState(markProviderNeverAsk(state, parsed.provider));
+        }
+
+        if (answer.startsWith("Continue")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `${buildConnectedTag({ provider: parsed.provider })}\n\n` +
+                  `${descriptor.displayName} setup was acknowledged. Re-run the Reddit sentiment request now; if setup is still unavailable, continue without Reddit and disclose the source gap.`,
+              },
+            ],
+          };
+        }
+
+        const silenced = answer.startsWith("Always");
+        const remediation = silenced
+          ? `run ${parsed.installCmd} and ${parsed.loginCmd ?? "rdt login"} to enable ${descriptor.displayName} (silenced)`
+          : `run ${parsed.installCmd} and ${parsed.loginCmd ?? "rdt login"} to enable ${descriptor.displayName}`;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation,
+                silenced,
+              })}\n\n${descriptor.displayName} data was omitted per your choice.`,
+            },
+          ],
+        };
+      }
 
       const state = loadOnboardingState();
       const action = resolveCredentialRequired({

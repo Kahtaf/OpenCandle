@@ -236,6 +236,14 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
     return;
   }
 
+  if (url.pathname === "/api/diagnostics/reddit-cli" && req.method === "GET") {
+    if (!allowTrustedGuiRequest(req, res, "Diagnostics API")) return;
+    const mode = url.searchParams.get("mode") === "session" ? "session" : "install";
+    const force = url.searchParams.get("force") === "1";
+    writeJson(res, await probeProviderStatus("reddit", { mode, force }));
+    return;
+  }
+
   if (url.pathname === "/api/chat/run" && req.method === "POST") {
     if (!allowTrustedGuiRequest(req, res, "Chat run API")) return;
     await handleSseChatRun(req, res);

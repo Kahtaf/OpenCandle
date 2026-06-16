@@ -11,8 +11,8 @@
 import { getConfig, loadFileConfig } from "../config.js";
 
 export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa";
-export type ExternalToolProviderId = "twitter";
-export type PublicHttpProviderId = "yahoo" | "reddit";
+export type ExternalToolProviderId = "twitter" | "reddit";
+export type PublicHttpProviderId = "yahoo";
 export type ProviderId = ApiKeyProviderId | ExternalToolProviderId | PublicHttpProviderId;
 
 export type ProviderCategory =
@@ -67,6 +67,7 @@ export interface ExternalToolProviderDescriptor extends BaseProviderDescriptor {
   readonly installCmd: string;
   readonly sessionSource: "browser-cookies";
   readonly supportedBrowsers?: readonly string[];
+  readonly sessionProbeArgs?: readonly string[];
 }
 
 export interface PublicHttpProviderDescriptor extends BaseProviderDescriptor {
@@ -219,17 +220,21 @@ export const PROVIDERS = [
   },
   {
     id: "reddit",
-    kind: "public-http",
+    kind: "external-tool",
     displayName: "Reddit",
     category: "sentiment",
     tier: "soft",
     aliases: ["reddit", "reddit-sentiment", "subreddit"],
-    probeUrl: "https://www.reddit.com/r/stocks/about.json",
+    binary: "rdt",
+    installCmd: "uv tool install rdt-cli",
+    sessionSource: "browser-cookies",
+    supportedBrowsers: ["Chrome", "Arc", "Edge", "Firefox", "Brave"],
+    sessionProbeArgs: ["status"],
     unlocks: ["Reddit sentiment", "ticker discussion context", "retail investor discussion"],
     fallbackDescription:
       "Sentiment summaries continue with X/Twitter, web search, and news when Reddit is unavailable",
     snoozeDurationDays: 7,
-    instructionsHint: "No account needed; OpenCandle checks public Reddit reachability",
+    instructionsHint: "Install rdt-cli and stay logged into reddit.com in a supported browser",
   },
 ] as const satisfies readonly ProviderDescriptor[];
 

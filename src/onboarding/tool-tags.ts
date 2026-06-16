@@ -22,6 +22,7 @@ import type { ProviderId } from "./providers.js";
 // -----------------------------------------------------------------------------
 
 export type CredentialRequiredReason = "missing" | "stale";
+export type ExternalToolRequiredReason = "not_installed" | "session_missing" | "session_stale";
 
 export interface CredentialRequiredTagFields {
   provider: ProviderId;
@@ -48,11 +49,20 @@ export interface ConnectedTagFields {
   provider: ProviderId;
 }
 
+export interface ExternalToolRequiredTagFields {
+  provider: ProviderId;
+  reason: ExternalToolRequiredReason;
+  installCmd: string;
+  loginCmd?: string;
+  fallback: string | null;
+}
+
 export type ParsedTag =
   | ({ kind: "credential_required" } & CredentialRequiredTagFields)
   | ({ kind: "soft_degraded" } & SoftDegradedTagFields)
   | ({ kind: "skipped" } & SkippedTagFields)
-  | ({ kind: "connected" } & ConnectedTagFields);
+  | ({ kind: "connected" } & ConnectedTagFields)
+  | ({ kind: "external_tool_required" } & ExternalToolRequiredTagFields);
 
 // -----------------------------------------------------------------------------
 // Builders
@@ -106,12 +116,24 @@ export function buildConnectedTag(fields: ConnectedTagFields): string {
   return `[OPENCANDLE_CONNECTED provider=${fields.provider}]`;
 }
 
+export function buildExternalToolRequiredTag(fields: ExternalToolRequiredTagFields): string {
+  const parts: string[] = [
+    "[OPENCANDLE_EXTERNAL_TOOL_REQUIRED",
+    formatField("provider", fields.provider),
+    formatField("reason", fields.reason),
+    `installCmd=${quote(fields.installCmd)}`,
+    formatField("fallback", fields.fallback ?? "none"),
+  ];
+  if (fields.loginCmd) parts.push(`loginCmd=${quote(fields.loginCmd)}`);
+  return `${parts.join(" ")}]`;
+}
+
 // -----------------------------------------------------------------------------
 // Parser
 // -----------------------------------------------------------------------------
 
 const TAG_LINE_REGEX =
-  /\[OPENCANDLE_(CREDENTIAL_REQUIRED|SOFT_DEGRADED|SKIPPED|CONNECTED)([^\]]*)\]/;
+  /\[OPENCANDLE_(CREDENTIAL_REQUIRED|SOFT_DEGRADED|SKIPPED|CONNECTED|EXTERNAL_TOOL_REQUIRED)([^\]]*)\]/;
 
 function parseFields(raw: string): Record<string, string> {
   // Split on `key=value` pairs, respecting quoted values.
@@ -193,6 +215,27 @@ export function parseToolTag(text: string): ParsedTag | undefined {
       const { provider } = fields;
       if (!provider) return undefined;
       return { kind: "connected", provider: provider as ProviderId };
+    }
+
+    case "EXTERNAL_TOOL_REQUIRED": {
+      const { provider, reason, installCmd, loginCmd, fallback } = fields;
+      if (
+        !provider ||
+        (reason !== "not_installed" &&
+          reason !== "session_missing" &&
+          reason !== "session_stale") ||
+        !installCmd
+      ) {
+        return undefined;
+      }
+      return {
+        kind: "external_tool_required",
+        provider: provider as ProviderId,
+        reason,
+        installCmd,
+        loginCmd,
+        fallback: fallback === undefined || fallback === "none" ? null : fallback,
+      };
     }
 
     default:

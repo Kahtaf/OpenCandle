@@ -17,6 +17,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "./config.js";
 import { formatProviderStatus, probeAllProviderStatuses } from "./onboarding/provider-status.js";
+import { getProvider, type ProviderId } from "./onboarding/providers.js";
+import {
+  clearProviderOnboardingEntry,
+  loadOnboardingState,
+  saveOnboardingState,
+} from "./onboarding/state.js";
 import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
 
@@ -164,6 +170,24 @@ async function handleDoctorCommand(args: string[]): Promise<boolean> {
   if (args[0] !== "doctor") return false;
 
   loadEnv();
+  const enableFlag = args.findIndex((arg) => arg === "--enable" || arg === "--reenable");
+  if (enableFlag >= 0) {
+    const providerId = args[enableFlag + 1] as ProviderId | undefined;
+    if (!providerId) {
+      console.error("Usage: opencandle doctor --enable <provider>");
+      process.exitCode = 1;
+      return true;
+    }
+    try {
+      getProvider(providerId);
+    } catch {
+      console.error(`Unknown provider: ${providerId}`);
+      process.exitCode = 1;
+      return true;
+    }
+    saveOnboardingState(clearProviderOnboardingEntry(loadOnboardingState(), providerId));
+    console.log(`Re-enabled ${providerId}.`);
+  }
   const statuses = await probeAllProviderStatuses({ force: args.includes("--no-cache") });
   console.log("OpenCandle provider status");
   for (const status of statuses) {

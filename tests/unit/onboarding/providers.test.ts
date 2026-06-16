@@ -145,17 +145,31 @@ describe("provider registry — shape", () => {
     expect("signupUrl" in twitter).toBe(false);
   });
 
-  it("yahoo and reddit are public HTTP descriptors with probe URLs", () => {
-    for (const providerId of ["yahoo", "reddit"] as const) {
-      const descriptor = getProvider(providerId);
-      expect(descriptor.kind).toBe("public-http");
-      expect(isPublicHttpProvider(descriptor)).toBe(true);
-      if (isPublicHttpProvider(descriptor)) {
-        expect(descriptor.probeUrl).toMatch(/^https:\/\//);
-      }
-      expect("envVar" in descriptor).toBe(false);
-      expect("configPath" in descriptor).toBe(false);
+  it("reddit is an external-tool descriptor without API-key fields", () => {
+    const reddit = getProvider("reddit");
+
+    expect(reddit).toMatchObject({
+      kind: "external-tool",
+      id: "reddit",
+      binary: "rdt",
+      installCmd: "uv tool install rdt-cli",
+      sessionSource: "browser-cookies",
+    });
+    expect(isExternalToolProvider(reddit)).toBe(true);
+    expect("envVar" in reddit).toBe(false);
+    expect("configPath" in reddit).toBe(false);
+    expect("signupUrl" in reddit).toBe(false);
+  });
+
+  it("yahoo is a public HTTP descriptor with a probe URL", () => {
+    const descriptor = getProvider("yahoo");
+    expect(descriptor.kind).toBe("public-http");
+    expect(isPublicHttpProvider(descriptor)).toBe(true);
+    if (isPublicHttpProvider(descriptor)) {
+      expect(descriptor.probeUrl).toMatch(/^https:\/\//);
     }
+    expect("envVar" in descriptor).toBe(false);
+    expect("configPath" in descriptor).toBe(false);
   });
 
   it("every alias is lowercase kebab-case-friendly", () => {
