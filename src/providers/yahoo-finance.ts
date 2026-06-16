@@ -632,7 +632,21 @@ async function fetchOptionsViaYahooFinance2(
 function normalizeYahooFinance2OptionsResponse(
   data: YahooFinance2OptionsResult | YahooOptionsResponse,
 ): YahooOptionsResponse {
-  if ("optionChain" in data) return data;
+  if ("optionChain" in data) return data as YahooOptionsResponse;
+
+  const options = data.options.map((option) => ({
+    expirationDate: toYahooUnixSeconds(option.expirationDate),
+    calls: option.calls,
+    puts: option.puts,
+  }));
+  const strikes = [
+    ...new Set(
+      options
+        .flatMap((option) => [...option.calls, ...option.puts])
+        .map((contract) => Number((contract as { strike?: unknown }).strike))
+        .filter((strike) => Number.isFinite(strike)),
+    ),
+  ].sort((a, b) => a - b);
 
   return {
     optionChain: {
@@ -640,12 +654,9 @@ function normalizeYahooFinance2OptionsResponse(
         {
           underlyingSymbol: data.underlyingSymbol,
           expirationDates: data.expirationDates.map(toYahooUnixSeconds),
+          strikes,
           quote: data.quote as Record<string, any>,
-          options: data.options.map((option) => ({
-            expirationDate: toYahooUnixSeconds(option.expirationDate),
-            calls: option.calls,
-            puts: option.puts,
-          })),
+          options,
         },
       ],
     },
