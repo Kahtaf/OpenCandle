@@ -5,7 +5,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
 import { resetConfigCache } from "../../../src/config.js";
-import { loadOnboardingState } from "../../../src/onboarding/state.js";
+import {
+  loadOnboardingState,
+  markProviderNeverAsk,
+  saveOnboardingState,
+} from "../../../src/onboarding/state.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
@@ -1347,6 +1351,32 @@ describe("opencandle extension", () => {
       expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
       expect(result?.content[0]?.text).toContain("silenced=true");
       expect(loadOnboardingState().providers.reddit?.status).toBe("never_ask");
+
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("honors saved always-skip choices before prompting for external tools", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
+      const askUserHandler = vi.fn();
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      expect(toolResultHandler).toBeDefined();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit reason=not_installed installCmd="uv tool install rdt-cli" fallback=twitter-web-news loginCmd="rdt login"]',
+        ),
+        { ui: { notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).not.toHaveBeenCalled();
+      expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
+      expect(result?.content[0]?.text).toContain("silenced=true");
+      expect(result?.content[0]?.text).toContain("previously asked not to be reminded");
 
       rmSync(home, { recursive: true, force: true });
     });

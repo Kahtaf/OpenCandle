@@ -422,6 +422,23 @@ export default function openCandleExtension(
       if (parsed.kind === "external_tool_required") {
         const state = loadOnboardingState();
         const descriptor = getProvider(parsed.provider);
+        if (state.providers[parsed.provider]?.status === "never_ask") {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `${buildSkippedTag({
+                    provider: parsed.provider,
+                    reason: "credential_not_provided",
+                    remediation: `run ${parsed.installCmd} and ${parsed.loginCmd ?? "rdt login"} to enable ${descriptor.displayName} (silenced)`,
+                    silenced: true,
+                  })}\n\n` +
+                  `${descriptor.displayName} data was not fetched because you previously asked not to be reminded about this provider.`,
+              },
+            ],
+          };
+        }
         const setupLabel =
           parsed.reason === "not_installed"
             ? `Continue after installing ${descriptor.displayName}`
