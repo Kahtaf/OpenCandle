@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
-import { getCredentialSource } from "./providers.js";
+import type { ProviderId } from "./providers.js";
 import {
+  getCredentialSource,
   getProvider,
   isApiKeyProvider,
   isExternalToolProvider,
   isPublicHttpProvider,
 } from "./providers.js";
-import type { ProviderId } from "./providers.js";
 
 const STATUS_TTL_MS = 60_000;
 const COMMAND_TIMEOUT_MS = 5_000;

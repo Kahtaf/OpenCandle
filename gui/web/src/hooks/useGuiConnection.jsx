@@ -148,7 +148,9 @@ export function useGuiConnection() {
           startTransition(() => setCatalog(message.catalog));
         } else if (message.type === "provider.status") {
           startTransition(() =>
-            setCatalog((current) => mergeProviderStatus(current, message.providerId, message.status)),
+            setCatalog((current) =>
+              mergeProviderStatus(current, message.providerId, message.status),
+            ),
           );
         } else if (message.type === "model.setup") {
           startTransition(() =>

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as configModule from "../../../src/config.js";
 import {
+  type CommandRunner,
   clearProviderStatusCache,
   probeProviderStatus,
-  type CommandRunner,
 } from "../../../src/onboarding/provider-status.js";
 
 const DEFAULT_EMPTY_CONFIG = {
@@ -85,7 +85,7 @@ describe("provider status probes", () => {
     const calls: Array<readonly string[]> = [];
     const runner: CommandRunner = async (_command, args) => {
       calls.push(args);
-      return { code: 0, stdout: "{\"ok\":true,\"schema_version\":\"1\",\"data\":[]}", stderr: "" };
+      return { code: 0, stdout: '{"ok":true,"schema_version":"1","data":[]}', stderr: "" };
     };
 
     const status = await probeProviderStatus("twitter", { mode: "session", commandRunner: runner });

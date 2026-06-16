@@ -817,9 +817,7 @@ function ExternalToolProviderBuilder({ provider, send, setToast }) {
             </span>
           ) : null}
         </div>
-        <p className="text-sm leading-5 text-muted-foreground">
-          {provider.fallbackDescription}
-        </p>
+        <p className="text-sm leading-5 text-muted-foreground">{provider.fallbackDescription}</p>
       </div>
 
       <div className="grid gap-2">

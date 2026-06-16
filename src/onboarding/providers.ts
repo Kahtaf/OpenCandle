@@ -234,7 +234,8 @@ export const PROVIDERS = [
 ] as const satisfies readonly ProviderDescriptor[];
 
 const _providerIdExhaustivenessCheck: Record<
-  Exclude<ProviderId, (typeof PROVIDERS)[number]["id"]> | Exclude<(typeof PROVIDERS)[number]["id"], ProviderId>,
+  | Exclude<ProviderId, (typeof PROVIDERS)[number]["id"]>
+  | Exclude<(typeof PROVIDERS)[number]["id"], ProviderId>,
   never
 > = {};
 void _providerIdExhaustivenessCheck;

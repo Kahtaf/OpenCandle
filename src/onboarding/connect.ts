@@ -26,10 +26,10 @@ import {
 } from "../config.js";
 import { openInBrowser } from "../infra/open-url.js";
 import {
+  type ApiKeyProviderId,
   getCredentialSource,
   getProvider,
   isApiKeyProvider,
-  type ApiKeyProviderId,
   type ProviderId,
 } from "./providers.js";
 import { loadOnboardingState, markProviderCompleted, saveOnboardingState } from "./state.js";
