@@ -118,6 +118,7 @@ const toolInvokeController = createToolInvokeController({
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
   onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
+  askUserHandler: askUserBridge.ask,
 });
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,

@@ -104,7 +104,7 @@ export default function openCandleExtension(
   let sessionTitleAttempted = false;
 
   // Register tools
-  for (const tool of getOpenCandleToolDefinitions()) {
+  for (const tool of getOpenCandleToolDefinitions({ askUserHandler: options?.askUserHandler })) {
     pi.registerTool(tool);
   }
   registerAskUserTool(pi, options?.askUserHandler);

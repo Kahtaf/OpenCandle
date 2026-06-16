@@ -6,6 +6,7 @@ import { Value } from "@sinclair/typebox/value";
 import { getDefaults } from "../../src/memory/tool-defaults.js";
 import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
+import type { AskUserHandler } from "../../src/types/index.js";
 import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 
 export interface InvokeToolResult {
@@ -30,6 +31,7 @@ export interface ToolInvokeControllerOptions {
   onMarketStateChanged?: () => void;
   getTools?: typeof getAllTools;
   invokeTool?: typeof invokeToolFromUi;
+  askUserHandler?: AskUserHandler;
 }
 
 export function createToolInvokeController({
@@ -39,6 +41,7 @@ export function createToolInvokeController({
   onMarketStateChanged,
   getTools = getAllTools,
   invokeTool = invokeToolFromUi,
+  askUserHandler,
 }: ToolInvokeControllerOptions): ToolInvokeController {
   async function handleToolInvoke(
     toolName: string,
@@ -47,7 +50,7 @@ export function createToolInvokeController({
     if (role !== "writer") throw new Error("Read-only follower mode");
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
-    const result = await invokeTool(getSessionManager(), tool, args, "ui");
+    const result = await invokeTool(getSessionManager(), tool, args, "ui", { askUserHandler });
     if (!result.isError && marketStateToolMapping(toolName) != null) {
       onMarketStateChanged?.();
     }
@@ -94,7 +97,7 @@ export async function invokeToolFromUi(
   tool: AgentTool<TSchema, unknown>,
   args: Record<string, unknown>,
   source: "ui" | "background" = "ui",
-  options: { recordTranscript?: boolean } = {},
+  options: { askUserHandler?: AskUserHandler; recordTranscript?: boolean } = {},
 ): Promise<InvokeToolResult> {
   if (!Value.Check(tool.parameters, args)) {
     const errors = [...Value.Errors(tool.parameters, args)]
@@ -130,7 +133,18 @@ export async function invokeToolFromUi(
   let result: AgentToolResult<unknown>;
   let isError = false;
   try {
-    result = await wrapped.execute(toolCallId, args as never);
+    result = await (
+      wrapped.execute as (
+        id: string,
+        params: never,
+        signal: AbortSignal | undefined,
+        onUpdate: undefined,
+        ctx: { askUserHandler?: AskUserHandler; hasUI: false },
+      ) => ReturnType<typeof wrapped.execute>
+    )(toolCallId, args as never, undefined, undefined, {
+      askUserHandler: options.askUserHandler,
+      hasUI: false,
+    });
   } catch (error) {
     isError = true;
     result = {

@@ -1,4 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AskUserHandler } from "../types/index.js";
 import { companyOverviewTool } from "./fundamentals/company-overview.js";
 import { compsTool } from "./fundamentals/comps.js";
 import { dcfTool } from "./fundamentals/dcf.js";
@@ -26,7 +27,7 @@ import { watchlistTool } from "./portfolio/watchlist.js";
 import { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
 import { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 import { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
-import { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
+import { createTwitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 import { webSearchTool } from "./sentiment/web-search.js";
 import { webSentimentTool } from "./sentiment/web-sentiment.js";
 import { backtestTool } from "./technical/backtest.js";
@@ -65,7 +66,7 @@ export { webSentimentTool } from "./sentiment/web-sentiment.js";
 export { backtestTool } from "./technical/backtest.js";
 export { technicalIndicatorsTool } from "./technical/indicators.js";
 
-export function getAllTools(): AgentTool<any>[] {
+export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): AgentTool<any>[] {
   return [
     searchTickerTool,
     stockQuoteTool,
@@ -82,7 +83,7 @@ export function getAllTools(): AgentTool<any>[] {
     fredDataTool,
     fearGreedTool,
     redditSentimentTool,
-    twitterSentimentTool,
+    createTwitterSentimentTool({ askUserHandler: options.askUserHandler }),
     technicalIndicatorsTool,
     backtestTool,
     portfolioTrackerTool,

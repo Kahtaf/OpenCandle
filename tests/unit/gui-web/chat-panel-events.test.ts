@@ -7,6 +7,33 @@ import { ChatPanel } from "../../../gui/web/src/features/chat/ChatPanel.jsx";
 import { ToolDrawerProvider } from "../../../gui/web/src/features/chat/tool-drawer-context.jsx";
 
 describe("ChatPanel event transcript rendering", () => {
+  function renderChatPanelHtml(props: Partial<React.ComponentProps<typeof ChatPanel>> = {}) {
+    return renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(
+          ToolDrawerProvider,
+          null,
+          React.createElement(ChatPanel, {
+            events: [],
+            liveEvents: [],
+            askUserPrompts: [],
+            modelSetup: { requirement: "ready" },
+            role: "writer",
+            runState: "ready",
+            catalog: { tools: [], workflows: [], providers: [] },
+            send: vi.fn(),
+            startChatRun: vi.fn(),
+            setToast: vi.fn(),
+            onOpenCommandPalette: vi.fn(),
+            ...props,
+          }),
+        ),
+      ),
+    );
+  }
+
   it("renders the server-adapted user text for persisted workflow turns", () => {
     const events: ChatEvent[] = [
       {
@@ -31,31 +58,36 @@ describe("ChatPanel event transcript rendering", () => {
       },
     ];
 
-    const html = renderToStaticMarkup(
-      React.createElement(
-        TooltipProvider,
-        null,
-        React.createElement(
-          ToolDrawerProvider,
-          null,
-          React.createElement(ChatPanel, {
-            events,
-            liveEvents: [],
-            askUserPrompts: [],
-            modelSetup: { requirement: "ready" },
-            role: "writer",
-            runState: "ready",
-            catalog: { tools: [], workflows: [], providers: [] },
-            send: vi.fn(),
-            startChatRun: vi.fn(),
-            setToast: vi.fn(),
-            onOpenCommandPalette: vi.fn(),
-          }),
-        ),
-      ),
-    );
+    const html = renderChatPanelHtml({ events });
 
     expect(html).toContain("quickly compare AAPL and MSFT");
     expect(html).not.toContain("Current date: 2026-06-12 Compare these assets");
+  });
+
+  it("renders pending ask_user prompts on an otherwise empty thread", () => {
+    const html = renderChatPanelHtml({
+      askUserPrompts: [
+        {
+          id: "ask-user-1",
+          sessionId: "session-1",
+          question:
+            "X/Twitter sentiment requires twitter-cli. Install it with `uv tool install twitter-cli`?",
+          questionType: "select",
+          options: [
+            "Continue after installing twitter-cli",
+            "Skip X/Twitter once",
+            "Always skip X/Twitter",
+          ],
+          reason: "X/Twitter sentiment needs the twitter-cli command before it can fetch tweets.",
+          status: "pending",
+          answer: null,
+        },
+      ],
+    });
+
+    expect(html).toContain("X/Twitter sentiment requires twitter-cli");
+    expect(html).toContain("Continue after installing twitter-cli");
+    expect(html).toContain("Skip X/Twitter once");
+    expect(html).not.toContain("Browse tools");
   });
 });

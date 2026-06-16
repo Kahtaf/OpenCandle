@@ -176,6 +176,67 @@ describe("invokeToolFromUi", () => {
     });
   });
 
+  it("passes the GUI ask handler through direct UI tool invocation", async () => {
+    const messages: Message[] = [];
+    const broadcastState = vi.fn();
+    const askUserHandler = vi.fn(async () => ({
+      answer: "Skip X/Twitter once",
+      cancelled: false,
+    }));
+    const sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      query: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "get_twitter_sentiment",
+      label: "Twitter Sentiment",
+      description: "test",
+      parameters: params,
+      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+        const result = await ctx.askUserHandler({
+          question: "Install twitter-cli?",
+          questionType: "select",
+          options: ["Skip X/Twitter once"],
+        });
+        return {
+          content: [{ type: "text", text: result.answer ?? "cancelled" }],
+          details: null,
+        };
+      },
+    } as AgentTool<typeof params> & {
+      execute(
+        toolCallId: string,
+        params: { query: string },
+        signal: AbortSignal | undefined,
+        onUpdate: undefined,
+        ctx: { askUserHandler: typeof askUserHandler },
+      ): ReturnType<AgentTool<typeof params>["execute"]>;
+    };
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => sessionManager,
+      broadcastState,
+      getTools: () => [tool],
+      askUserHandler,
+    });
+
+    const result = await controller.handleToolInvoke("get_twitter_sentiment", { query: "AAPL" });
+
+    expect(askUserHandler).toHaveBeenCalledOnce();
+    expect(result.result.content[0]).toMatchObject({
+      type: "text",
+      text: "Skip X/Twitter once",
+    });
+    expect(messages[1]).toMatchObject({
+      role: "toolResult",
+      toolName: "get_twitter_sentiment",
+    });
+  });
+
   it("notifies callers after successful market-state mutations", async () => {
     const messages: Message[] = [];
     const sentMessages: unknown[] = [];

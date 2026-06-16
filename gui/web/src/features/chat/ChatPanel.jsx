@@ -51,6 +51,7 @@ export function ChatPanel({
   const visibleRows = useMemo(() => chatRowsFromEvents(events, liveEvents), [events, liveEvents]);
   const groupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
+  const hasAskUserPrompts = askUserPrompts.length > 0;
   const autoOpenRunId = useMemo(() => {
     if (!allowToolAutoOpen) return null;
     const pendingRuns = groupedRows.filter(
@@ -97,7 +98,7 @@ export function ChatPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
-        ) : visibleRows.length === 0 && !activity ? (
+        ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
           <EmptyThread
             onPrompt={submit}
             onOpenCatalog={onOpenCommandPalette}
