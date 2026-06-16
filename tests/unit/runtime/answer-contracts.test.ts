@@ -115,7 +115,12 @@ describe("answer contracts", () => {
 
     expect(contract.implemented).toBe(true);
     expect(contract.requiredEvidenceTypes).toEqual([]);
-    expect(contract.requiredFinalFields).toEqual(["source_coverage", "data_gap_disclosure"]);
+    expect(contract.requiredFinalFields).toEqual([
+      "source_coverage",
+      "sentiment_rationale",
+      "confidence_or_caveats",
+      "data_gap_disclosure",
+    ]);
     expect(contract.requiresFreshness).toBe(false);
     expect(contract.requiresDataGapDisclosure).toBe(true);
     expect(contract.requiresSourceCoverage).toBe(true);

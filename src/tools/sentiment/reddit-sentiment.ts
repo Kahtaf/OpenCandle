@@ -6,6 +6,7 @@ import { wrapProvider } from "../../providers/wrap-provider.js";
 import { RedditAdapter } from "../../sentiment/adapters/reddit.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { RedditSentimentResult } from "../../types/sentiment.js";
+import { formatInsightSection } from "./insight-format.js";
 import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
@@ -158,6 +159,18 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
       `Sentiment: ${avgScore.toFixed(2)} (${sentimentLabel})`,
     ];
 
+    const details: RedditSentimentResult = {
+      ...firstResult,
+      postCount: postRecords.length,
+      posts: firstResult.posts,
+      sentimentScore: avgScore,
+      insight: pipelineResult.insight,
+    };
+
+    if (pipelineResult.insight) {
+      lines.push(...formatInsightSection(pipelineResult.insight));
+    }
+
     if (firstResult.topMentions.length > 0) {
       lines.push(`Tickers: ${firstResult.topMentions.map((t) => `$${t}`).join(", ")}`);
     }
@@ -185,6 +198,6 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
       lines.push(`⚠ ${warnings.join("; ")}`);
     }
 
-    return { content: [{ type: "text", text: lines.join("\n") }], details: firstResult };
+    return { content: [{ type: "text", text: lines.join("\n") }], details };
   },
 };

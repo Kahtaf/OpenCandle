@@ -15,6 +15,7 @@ import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { AskUserHandler } from "../../types/index.js";
 import type { TwitterSentimentResult } from "../../types/sentiment.js";
+import { formatInsightSection } from "./insight-format.js";
 import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
@@ -223,12 +224,27 @@ async function formatTwitterSentimentResult(
     lines.push(`⚠ Stale data (cached at ${metadata.timestamp})`);
   }
 
+  let details: TwitterSentimentResult = result;
+
   // Index in sentiment store and append trend context
   try {
     const adapter = new TwitterAdapter();
     const records = adapter.mapToRecords(result, query);
     const pipeline = getSentimentPipeline();
     const pipelineResult = await pipeline.processRecords(records, query);
+    if (pipelineResult.insight) {
+      const insight = metadata.stale
+        ? {
+            ...pipelineResult.insight,
+            caveats: [
+              ...pipelineResult.insight.caveats,
+              `Stale data cached at ${metadata.timestamp}.`,
+            ],
+          }
+        : pipelineResult.insight;
+      details = { ...result, insight };
+      lines.push(...formatInsightSection(insight));
+    }
     if (pipelineResult.trend && pipelineResult.trend.length > 0) {
       const t = pipelineResult.trend[0];
       lines.push("");
@@ -240,5 +256,5 @@ async function formatTwitterSentimentResult(
     // Sentiment indexing is best-effort — don't fail the tool
   }
 
-  return { content: [{ type: "text" as const, text: lines.join("\n") }], details: result };
+  return { content: [{ type: "text" as const, text: lines.join("\n") }], details };
 }

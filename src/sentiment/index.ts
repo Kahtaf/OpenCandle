@@ -1,6 +1,7 @@
 export { RedditAdapter } from "./adapters/reddit.js";
 export { TwitterAdapter } from "./adapters/twitter.js";
 export { WebAdapter } from "./adapters/web.js";
+export { buildSentimentInsight, labelForScore } from "./insights.js";
 export { BEARISH_TERMS, BULLISH_TERMS } from "./keywords.js";
 export { SentimentPipeline } from "./pipeline.js";
 export { keywordScore, scoreRecords } from "./scorer.js";

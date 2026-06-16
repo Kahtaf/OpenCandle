@@ -635,6 +635,8 @@ describe("policy cards", () => {
     expect(rendered).toContain("Sentiment Snapshot Policy");
     expect(rendered).toContain("direction and strength");
     expect(rendered).toContain("score scale");
+    expect(rendered).toContain("key positive and negative drivers");
+    expect(rendered).toContain("representative source evidence");
     expect(rendered).toContain("missing sources");
     expect(rendered).toContain("source-coverage risk");
     expect(rendered).toContain("low sample counts");

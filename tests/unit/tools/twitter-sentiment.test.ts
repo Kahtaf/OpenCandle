@@ -107,6 +107,10 @@ describe("get_twitter_sentiment tool", () => {
     expect(text).toContain("$NVDA");
     expect(text).toContain("@trader_joe");
     expect(text).toContain("| Author |");
+    expect(text).toContain("Findings:");
+    expect(text).toContain("Positive drivers");
+    expect(result.details?.insight?.sampleSize).toBe(2);
+    expect(result.details?.insight?.representativeItems.length).toBeGreaterThan(0);
   });
 
   it("returns external-tool session guidance when browser login is required", async () => {

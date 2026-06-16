@@ -152,8 +152,12 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Aggregate");
     expect(text).toContain("Source");
     expect(text).toContain("Score");
+    expect(text).toContain("Findings:");
+    expect(text).toContain("Price context: unavailable for AAPL");
     expect(text).toMatch(/\bsource-coverage risk\b/i);
     expect(text).toMatch(/\bsentiment can be noisy\b/i);
+    expect(result.details.insight.sampleSize).toBeGreaterThan(0);
+    expect(result.details.insight.caveats.join(" ")).toContain("Source warning: Twitter");
   });
 
   it("adds price context for ticker-specific sentiment summaries", async () => {

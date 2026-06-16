@@ -1,3 +1,5 @@
+import type { SentimentInsight } from "../types/sentiment.js";
+
 export const SENTIMENT_SOURCES = ["twitter", "reddit", "web", "finnhub"] as const;
 export type SentimentSource = (typeof SENTIMENT_SOURCES)[number];
 
@@ -106,4 +108,5 @@ export interface SentimentSummary {
   trend: TrendResult[] | null;
   divergence: DivergenceResult | null;
   warnings: string[];
+  insight?: SentimentInsight;
 }

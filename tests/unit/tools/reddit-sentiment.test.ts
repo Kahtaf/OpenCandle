@@ -64,6 +64,54 @@ describe("get_reddit_sentiment tool", () => {
     expect(result.content[0].text).toContain("AAPL");
   });
 
+  it("returns explainable insight fields for source rationale", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          data: {
+            children: [
+              {
+                data: {
+                  id: "bull1",
+                  title: "AAPL bullish breakout setup",
+                  selftext: "I am long AAPL after the breakout.",
+                  author: "retail_bull",
+                  score: 120,
+                  num_comments: 0,
+                  permalink: "/r/stocks/comments/bull1/aapl/",
+                  created_utc: 1744300800,
+                },
+              },
+              {
+                data: {
+                  id: "bear1",
+                  title: "AAPL overvalued after rally",
+                  selftext: "Valuation looks like a bubble to me.",
+                  author: "retail_bear",
+                  score: 80,
+                  num_comments: 0,
+                  permalink: "/r/stocks/comments/bear1/aapl/",
+                  created_utc: 1744300900,
+                },
+              },
+            ],
+          },
+        }),
+    });
+
+    const result = await redditSentimentTool.execute("call-insight", {
+      subreddit: "stocks",
+      query: "AAPL",
+    });
+    const text = result.content[0].text;
+
+    expect(text).toContain("Findings:");
+    expect(text).toMatch(/Positive drivers|Negative drivers/);
+    expect(result.details?.insight?.sampleSize).toBe(2);
+    expect(result.details?.insight?.caveats.join(" ")).toContain("Low sample size");
+  });
+
   it("marks and escapes untrusted post titles in output", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

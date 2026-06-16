@@ -18,7 +18,9 @@ export type FinalAnswerField =
   | "freshness_disclosure"
   | "data_gap_disclosure"
   | "risk_downside"
-  | "source_coverage";
+  | "source_coverage"
+  | "sentiment_rationale"
+  | "confidence_or_caveats";
 
 export type FrameworkFallbackMode =
   | "not_allowed"
@@ -342,7 +344,12 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     commitmentMode: "framework",
     implemented: true,
     requiredEvidenceTypes: [],
-    requiredFinalFields: ["source_coverage", "data_gap_disclosure"],
+    requiredFinalFields: [
+      "source_coverage",
+      "sentiment_rationale",
+      "confidence_or_caveats",
+      "data_gap_disclosure",
+    ],
     requiresFreshness: false,
     requiresDataGapDisclosure: true,
     requiresRiskDownside: false,

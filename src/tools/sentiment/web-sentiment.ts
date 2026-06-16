@@ -3,6 +3,7 @@ import { Type } from "@sinclair/typebox";
 import { searchWeb } from "../../providers/web-search.js";
 import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
+import { formatInsightSection } from "./insight-format.js";
 import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
@@ -54,6 +55,9 @@ export const webSentimentTool: AgentTool<typeof params> = {
       lines.push(
         `**Web sentiment for "${args.query}"** — ${result.fresh.length} results (${label}, ${avgScore.toFixed(2)})`,
       );
+      if (result.insight) {
+        lines.push(...formatInsightSection(result.insight));
+      }
       lines.push("");
       lines.push(untrustedContentHeader("web sentiment results"));
 

@@ -7,6 +7,11 @@ export interface SentimentConfig {
   defaultSubreddits: string[];
   commentsPerPost: number;
   divergenceThreshold: number;
+  minUsefulSampleSize?: number;
+  maxInsightDriversPerPolarity?: number;
+  maxRepresentativeItemsPerSource?: number;
+  maxAggregateRepresentativeItems?: number;
+  maxNotableClaims?: number;
 }
 
 export type RouterMode = "rules" | "llm";
@@ -68,6 +73,11 @@ export interface OpenCandleFileConfig {
     defaultSubreddits?: string[];
     commentsPerPost?: number;
     divergenceThreshold?: number;
+    minUsefulSampleSize?: number;
+    maxInsightDriversPerPolarity?: number;
+    maxRepresentativeItemsPerSource?: number;
+    maxAggregateRepresentativeItems?: number;
+    maxNotableClaims?: number;
   };
 }
 
@@ -98,6 +108,11 @@ const SENTIMENT_DEFAULTS: SentimentConfig = {
   defaultSubreddits: ["wallstreetbets", "stocks", "investing", "options"],
   commentsPerPost: 5,
   divergenceThreshold: 0.4,
+  minUsefulSampleSize: 10,
+  maxInsightDriversPerPolarity: 3,
+  maxRepresentativeItemsPerSource: 5,
+  maxAggregateRepresentativeItems: 8,
+  maxNotableClaims: 5,
 };
 
 const PLANNING_TASK_FAMILIES = [
@@ -198,6 +213,18 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
       commentsPerPost: fileSentiment?.commentsPerPost ?? SENTIMENT_DEFAULTS.commentsPerPost,
       divergenceThreshold:
         fileSentiment?.divergenceThreshold ?? SENTIMENT_DEFAULTS.divergenceThreshold,
+      minUsefulSampleSize:
+        fileSentiment?.minUsefulSampleSize ?? SENTIMENT_DEFAULTS.minUsefulSampleSize,
+      maxInsightDriversPerPolarity:
+        fileSentiment?.maxInsightDriversPerPolarity ??
+        SENTIMENT_DEFAULTS.maxInsightDriversPerPolarity,
+      maxRepresentativeItemsPerSource:
+        fileSentiment?.maxRepresentativeItemsPerSource ??
+        SENTIMENT_DEFAULTS.maxRepresentativeItemsPerSource,
+      maxAggregateRepresentativeItems:
+        fileSentiment?.maxAggregateRepresentativeItems ??
+        SENTIMENT_DEFAULTS.maxAggregateRepresentativeItems,
+      maxNotableClaims: fileSentiment?.maxNotableClaims ?? SENTIMENT_DEFAULTS.maxNotableClaims,
     },
   };
 }

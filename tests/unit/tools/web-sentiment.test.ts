@@ -71,6 +71,10 @@ describe("get_web_sentiment tool", () => {
     const result = await webSentimentTool.execute("call-1", { query: "AAPL" });
     expect(result.content[0].type).toBe("text");
     expect(result.content[0].text).toContain("Web sentiment");
+    expect(result.content[0].text).toContain("Findings:");
+    expect(result.content[0].text).toContain("Positive drivers");
+    expect(result.details.insight.sampleSize).toBe(1);
+    expect(result.details.insight.notableClaims[0]).toContain("Apple Earnings Beat");
   });
 
   it("handles unavailable provider", async () => {

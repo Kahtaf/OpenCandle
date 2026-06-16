@@ -15,6 +15,7 @@ import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
 import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { SentinelRecord } from "../../sentiment/types.js";
+import { formatInsightSection } from "./insight-format.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic for cross-source sentiment summary" }),
@@ -145,6 +146,16 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     // Score and index through pipeline
     const pipeline = getSentimentPipeline();
     const result = await pipeline.processRecords(allRecords, args.query);
+    const insight =
+      result.insight && warnings.length > 0
+        ? {
+            ...result.insight,
+            caveats: [
+              ...result.insight.caveats,
+              ...warnings.map((warning) => `Source warning: ${warning}`),
+            ],
+          }
+        : result.insight;
 
     // Group by source (exclude comments from per-source averages)
     const bySource: Record<string, { total: number; count: number }> = {};
@@ -181,10 +192,19 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
       `**Aggregate:** ${aggregate >= 0 ? "+" : ""}${aggregate.toFixed(2)} (${sentimentLabel(aggregate)})`,
     );
 
+    if (insight) {
+      lines.push(...formatInsightSection(insight));
+    }
+
     const priceContext = await buildPriceContext(candidateTickers[0], aggregate);
     if (priceContext) {
       lines.push("");
       lines.push(priceContext);
+    } else if (candidateTickers[0]) {
+      lines.push("");
+      lines.push(
+        `Price context: unavailable for ${candidateTickers[0]}; sentiment/price divergence could not be evaluated.`,
+      );
     }
 
     lines.push("");
@@ -214,7 +234,7 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     }
 
     const output = softDegradedPrefix + lines.join("\n");
-    return { content: [{ type: "text", text: output }], details: result };
+    return { content: [{ type: "text", text: output }], details: { ...result, insight } };
   },
 };
 
