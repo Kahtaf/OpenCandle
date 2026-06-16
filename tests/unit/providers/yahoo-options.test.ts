@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StealthBrowser } from "../../../src/infra/browser.js";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import {
@@ -9,6 +8,16 @@ import {
   getYahooCrumb,
 } from "../../../src/providers/yahoo-finance.js";
 import optionsFixture from "../../fixtures/yahoo/options-AAPL.json";
+
+const yahooFinanceMock = vi.hoisted(() => ({
+  options: vi.fn(),
+}));
+
+vi.mock("yahoo-finance2", () => ({
+  default: vi.fn(function YahooFinance() {
+    return { options: yahooFinanceMock.options };
+  }),
+}));
 
 describe("computeTimeToExpiry", () => {
   // Expiration: 2026-03-30 00:00 UTC (midnight) = 1774828800
@@ -57,6 +66,7 @@ describe("yahoo-finance options provider", () => {
   beforeEach(() => {
     cache.clear();
     clearCrumbCache();
+    yahooFinanceMock.options.mockReset();
   });
 
   afterEach(() => {
@@ -279,8 +289,8 @@ describe("yahoo-finance options provider", () => {
       expect(optionsCalls.length).toBe(1);
     });
 
-    it("falls back to the stealth browser when direct options fetch fails", async () => {
-      vi.spyOn(StealthBrowser, "run").mockResolvedValue(optionsFixture as any);
+    it("falls back to yahoo-finance2 when direct options fetch fails", async () => {
+      yahooFinanceMock.options.mockResolvedValue(optionsFixture.optionChain.result[0]);
 
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === "string" && url.includes("fc.yahoo.com")) {
@@ -301,13 +311,13 @@ describe("yahoo-finance options provider", () => {
 
       const chain = await getOptionsChain("AAPL");
 
-      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(yahooFinanceMock.options).toHaveBeenCalledWith("AAPL", undefined);
       expect(chain.symbol).toBe("AAPL");
       expect(chain.calls.length).toBeGreaterThan(0);
     });
 
-    it("falls back to the stealth browser when initial crumb acquisition fails", async () => {
-      vi.spyOn(StealthBrowser, "run").mockResolvedValue(optionsFixture as any);
+    it("falls back to yahoo-finance2 when initial crumb acquisition fails", async () => {
+      yahooFinanceMock.options.mockResolvedValue(optionsFixture.optionChain.result[0]);
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
@@ -318,12 +328,12 @@ describe("yahoo-finance options provider", () => {
 
       const chain = await getOptionsChain("AAPL");
 
-      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(yahooFinanceMock.options).toHaveBeenCalledWith("AAPL", undefined);
       expect(chain.symbol).toBe("AAPL");
       expect(chain.calls.length).toBeGreaterThan(0);
     });
 
-    it("returns stale cached options when crumb acquisition and browser fallback fail", async () => {
+    it("returns stale cached options when crumb acquisition and yahoo-finance2 fallback fail", async () => {
       const staleChain = {
         symbol: "AAPL",
         underlyingPrice: 100,
@@ -343,7 +353,7 @@ describe("yahoo-finance options provider", () => {
         fetchedAt: "2026-06-01T00:00:00.000Z",
       } as const;
       cache.set("yahoo:options:AAPL:nearest", staleChain, -1);
-      vi.spyOn(StealthBrowser, "run").mockRejectedValue(new Error("browser unavailable"));
+      yahooFinanceMock.options.mockRejectedValue(new Error("yahoo-finance2 unavailable"));
       globalThis.fetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
@@ -354,12 +364,12 @@ describe("yahoo-finance options provider", () => {
 
       const chain = await getOptionsChain("AAPL");
 
-      expect(StealthBrowser.run).toHaveBeenCalled();
+      expect(yahooFinanceMock.options).toHaveBeenCalledWith("AAPL", undefined);
       expect(chain).toEqual(staleChain);
     });
 
-    it("includes the stealth browser failure when every options fetch path fails", async () => {
-      vi.spyOn(StealthBrowser, "run").mockRejectedValue(new Error("browser launch failed"));
+    it("includes the yahoo-finance2 failure when every options fetch path fails", async () => {
+      yahooFinanceMock.options.mockRejectedValue(new Error("yahoo-finance2 failed"));
 
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === "string" && url.includes("fc.yahoo.com")) {
@@ -379,7 +389,7 @@ describe("yahoo-finance options provider", () => {
       });
 
       await expect(getOptionsChain("AAPL")).rejects.toThrow(
-        "Yahoo Finance options: HTTP 429; browser fallback failed: browser launch failed",
+        "Yahoo Finance options: HTTP 429; yahoo-finance2 fallback failed: yahoo-finance2 failed",
       );
     });
   });

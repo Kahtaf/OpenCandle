@@ -132,7 +132,8 @@
     "camoufox-js": "^0.10.2",
     "duck-duck-scrape": "^2.2.7",
     "playwright-core": "^1.60.0",
-    "tsx": "^4.22.3"
+    "tsx": "^4.22.3",
+    "yahoo-finance2": "^3.15.3"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"
