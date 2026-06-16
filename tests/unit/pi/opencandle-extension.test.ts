@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
 import { resetConfigCache } from "../../../src/config.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
+import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
@@ -122,7 +123,7 @@ describe("opencandle extension", () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);
 
-    expect(fake.tools).toHaveLength(34);
+    expect(fake.tools).toHaveLength(getOpenCandleToolDefinitions().length + 1);
     expect(fake.tools.map((tool) => tool.name)).toContain("screen_stocks");
     expect(fake.tools.map((tool) => tool.name)).toContain("analyze_holdings_overlap");
     expect(fake.tools.map((tool) => tool.name)).toContain("manage_alerts");
