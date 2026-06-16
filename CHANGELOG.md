@@ -5,6 +5,7 @@
 ### Changed
 
 - Twitter/X sentiment now uses the external `twitter-cli` command with the user's normal browser session, and Yahoo options fallback now uses `yahoo-finance2`; Camoufox and the old Twitter scraper are no longer runtime dependencies. `opencandle doctor` and the GUI provider panel now report API-key, public HTTP, and external-tool provider readiness.
+- Reddit sentiment now uses the external `rdt-cli` command with the user's normal Reddit browser session instead of unauthenticated public `.json` endpoints, with TUI/GUI setup prompts for install, login, skip, and re-enable flows.
 - Twitter, Reddit, web/news, and aggregate sentiment outputs now include explainable source coverage, confidence, bullish/bearish drivers, caveats, and representative source evidence in both TUI text and GUI cards.
 
 ### Fixed
