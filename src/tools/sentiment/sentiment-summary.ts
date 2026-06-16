@@ -306,7 +306,7 @@ async function fetchRedditCrossSubreddit(
   const commentsPerPost = config.sentiment?.commentsPerPost ?? 5;
 
   for (const sub of subreddits) {
-    const result = await wrapProvider("reddit", () => getSubredditPosts(sub, 25));
+    const result = await wrapProvider("reddit", () => getSubredditPosts(sub, 25, query));
     if (result.status === "unavailable") {
       warnings.push(`Reddit r/${sub}: ${result.reason}`);
       continue;

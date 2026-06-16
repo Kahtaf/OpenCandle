@@ -1,0 +1,19 @@
+{
+  "ok": true,
+  "schema_version": "1",
+  "data": [
+    {
+      "id": "abc123",
+      "name": "t3_abc123",
+      "title": "$AAPL earnings beat expectations, bullish breakout setup",
+      "subreddit": "stocks",
+      "author": "stock_guru",
+      "score": 542,
+      "num_comments": 89,
+      "created_utc": 1744300800,
+      "permalink": "/r/stocks/comments/abc123/aapl_earnings_beat/",
+      "url": "https://reddit.com/r/stocks/comments/abc123/aapl_earnings_beat/",
+      "selftext": "Apple just reported massive earnings beat. Revenue up 15% YoY."
+    }
+  ]
+}

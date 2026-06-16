@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "schema_version": "1",
+  "data": [
+    {
+      "id": "1u1jsys",
+      "name": "t3_1u1jsys",
+      "title": "SPCX momentum looks bullish after the latest space deal",
+      "subreddit": "stocks",
+      "author": "orbital_trader",
+      "score": 212,
+      "num_comments": 14,
+      "created_utc": 1781596800,
+      "permalink": "/r/stocks/comments/1u1jsys/spcx_momentum_space_deal/",
+      "url": "https://www.reddit.com/r/stocks/comments/1u1jsys/spcx_momentum_space_deal/",
+      "selftext": "Watching SPCX for a breakout if volume holds.",
+      "is_self": true,
+      "over_18": false,
+      "is_video": false,
+      "stickied": false
+    },
+    {
+      "id": "1u1k9aa",
+      "name": "t3_1u1k9aa",
+      "title": "SPCX bears point to dilution risk",
+      "subreddit": "investing",
+      "author": "risk_first",
+      "score": 88,
+      "num_comments": 7,
+      "created_utc": 1781593200,
+      "permalink": "/r/investing/comments/1u1k9aa/spcx_bears_dilution_risk/",
+      "url": "https://www.reddit.com/r/investing/comments/1u1k9aa/spcx_bears_dilution_risk/",
+      "selftext": "Bullish hype is up, but financing risk can still crash the setup.",
+      "is_self": true,
+      "over_18": false,
+      "is_video": false,
+      "stickied": false
+    }
+  ]
+}

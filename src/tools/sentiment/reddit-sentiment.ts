@@ -61,7 +61,9 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
     const allResults: RedditSentimentResult[] = [];
     const warnings: string[] = [];
     for (const sub of subreddits) {
-      const providerResult = await wrapProvider("reddit", () => getSubredditPosts(sub, limit));
+      const providerResult = await wrapProvider("reddit", () =>
+        getSubredditPosts(sub, limit, args.query),
+      );
       if (providerResult.status === "unavailable") {
         warnings.push(`r/${sub}: ${providerResult.reason}`);
         continue;
@@ -78,7 +80,8 @@ export const redditSentimentTool: AgentTool<typeof params, RedditSentimentResult
       };
     }
 
-    // Merge and filter by query if provided
+    // Merge records returned by the provider. rdt-cli handles query-bearing
+    // requests server-side; the local filter remains a defensive post-filter.
     const adapter = new RedditAdapter();
     let allRecords = allResults.flatMap((r) =>
       adapter.mapPostsToRecords(r, args.query ?? subreddits.join("+")),

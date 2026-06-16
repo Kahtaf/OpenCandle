@@ -1,53 +1,23 @@
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
-import { httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { BEARISH_TERMS, BULLISH_TERMS } from "../sentiment/keywords.js";
 import type { RedditSentimentResult } from "../types/sentiment.js";
-
-interface RedditListingResponse {
-  data: {
-    children: Array<{
-      data: {
-        id: string;
-        title: string;
-        selftext: string;
-        author: string;
-        score: number;
-        num_comments: number;
-        permalink: string;
-        created_utc: number;
-      };
-    }>;
-  };
-}
-
-const REDDIT_HEADERS = { "User-Agent": "OpenCandle/1.0 (financial analysis agent)" };
+import { listSubredditPosts, readRedditPost, searchRedditPosts } from "./reddit-cli.js";
 
 export async function getSubredditPosts(
   subreddit: string,
   limit: number = 25,
+  query?: string,
 ): Promise<RedditSentimentResult> {
-  const cacheKey = `reddit:${subreddit}:${limit}`;
+  const cacheKey = `reddit:${subreddit}:${query ?? "hot"}:${limit}`;
   const cached = cache.get<RedditSentimentResult>(cacheKey);
   if (cached) return cached;
 
   try {
     await rateLimiter.acquire("reddit");
-    const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/hot.json?limit=${limit}`;
-    const data = await httpGet<RedditListingResponse>(url, {
-      headers: REDDIT_HEADERS,
-    });
-
-    const posts = data.data.children.map((child) => ({
-      id: child.data.id,
-      title: child.data.title,
-      selftext: child.data.selftext ?? "",
-      author: child.data.author ?? "unknown",
-      score: child.data.score,
-      comments: child.data.num_comments,
-      url: `https://reddit.com${child.data.permalink}`,
-      created: new Date(child.data.created_utc * 1000).toISOString(),
-    }));
+    const posts = query
+      ? await searchRedditPosts(query, { subreddit, limit })
+      : await listSubredditPosts(subreddit, { limit });
 
     // Extract ticker-like mentions ($AAPL, $TSLA, etc.)
     const tickerRegex = /\$([A-Z]{1,5})\b/g;
@@ -107,33 +77,7 @@ export async function getPostComments(
   if (cached) return cached;
 
   await rateLimiter.acquire("reddit_comments");
-  const url = `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/comments/${postId}.json`;
-  const data = await httpGet<
-    Array<{
-      data: {
-        children: Array<{
-          kind: string;
-          data: { id: string; body?: string; author?: string; score?: number; permalink?: string };
-        }>;
-      };
-    }>
-  >(url, {
-    headers: REDDIT_HEADERS,
-  });
-
-  // Comments are in the second listing element
-  const commentListing = data[1]?.data?.children ?? [];
-  const comments: RedditComment[] = commentListing
-    .filter((c) => c.kind === "t1" && c.data.body)
-    .sort((a, b) => (b.data.score ?? 0) - (a.data.score ?? 0))
-    .slice(0, limit)
-    .map((c) => ({
-      id: c.data.id,
-      body: c.data.body!,
-      author: c.data.author ?? "unknown",
-      score: c.data.score ?? 0,
-      permalink: `https://reddit.com${c.data.permalink ?? ""}`,
-    }));
+  const { comments } = await readRedditPost(postId, { limit });
 
   cache.set(cacheKey, comments, COMMENT_TTL);
   return comments;
