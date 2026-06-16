@@ -44,7 +44,6 @@ import type {
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
 import { generateSessionTitle } from "../runtime/session-title.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
-import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import type { AskUserHandler } from "../types/index.js";
 import {
   buildCompareAssetsWorkflowDefinition,
@@ -109,7 +108,6 @@ export default function openCandleExtension(
     pi.registerTool(tool);
   }
   registerAskUserTool(pi, options?.askUserHandler);
-  registerTwitterLoginTool(pi);
 
   // /analyze command
   pi.registerCommand("analyze", {

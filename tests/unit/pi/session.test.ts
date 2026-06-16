@@ -39,9 +39,9 @@ describe("createOpenCandleSession", () => {
     expect(result.session.getActiveToolNames()).toContain("get_stock_quote");
     expect(result.session.getActiveToolNames()).toContain("manage_watchlist");
     expect(result.session.getActiveToolNames()).toContain("ask_user");
-    expect(result.session.getActiveToolNames()).toContain("trigger_twitter_login");
+    expect(result.session.getActiveToolNames()).not.toContain("trigger_twitter_login");
     expect(result.session.getActiveToolNames()).toHaveLength(
-      getOpenCandleToolDefinitions().length + 2,
+      getOpenCandleToolDefinitions().length + 1,
     );
     if (result.modelFallbackMessage) {
       expect(result.modelFallbackMessage).toContain("No models available");

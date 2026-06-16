@@ -1,4 +1,3 @@
-export { StealthBrowser } from "./browser.js";
 export { Cache, cache, TTL } from "./cache.js";
 export { type HttpClientOptions, HttpError, httpGet } from "./http-client.js";
 export {

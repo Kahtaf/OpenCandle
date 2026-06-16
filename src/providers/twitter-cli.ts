@@ -1,0 +1,198 @@
+import { spawn } from "node:child_process";
+import type { TwitterTweet } from "../types/sentiment.js";
+import { ExternalToolError, ExternalToolNotInstalled } from "./external-tool-error.js";
+
+const TWITTER_CLI_BINARY = "twitter";
+const TWITTER_CLI_TOOL_NAME = "twitter-cli";
+const TWITTER_CLI_INSTALL_CMD = "uv tool install twitter-cli";
+const COMMAND_TIMEOUT_MS = 20_000;
+const MAX_OUTPUT_CHARS = 2_000_000;
+
+export interface RawTweet {
+  readonly id?: string;
+  readonly text?: string;
+  readonly author?: {
+    readonly username?: string;
+    readonly screenName?: string;
+    readonly name?: string;
+  };
+  readonly username?: string;
+  readonly url?: string;
+  readonly permanentUrl?: string;
+  readonly createdAt?: string | number;
+  readonly created_at?: string | number;
+  readonly likeCount?: number;
+  readonly likes?: number;
+  readonly retweetCount?: number;
+  readonly retweets?: number;
+  readonly replyCount?: number;
+  readonly replies?: number;
+  readonly viewCount?: number | null;
+  readonly views?: number | null;
+}
+
+interface TwitterCliEnvelope<T> {
+  readonly ok: boolean;
+  readonly schema_version: string;
+  readonly data: T;
+  readonly error?: {
+    readonly code?: string;
+    readonly message?: string;
+  };
+}
+
+interface CommandResult {
+  readonly code: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}
+
+type TwitterCliCommandRunner = (command: string, args: readonly string[]) => Promise<CommandResult>;
+
+let commandRunner: TwitterCliCommandRunner = runCommand;
+
+export function setTwitterCliCommandRunnerForTests(runner: TwitterCliCommandRunner): void {
+  commandRunner = runner;
+}
+
+export function resetTwitterCliCommandRunnerForTests(): void {
+  commandRunner = runCommand;
+}
+
+export async function searchTweets(query: string, max = 20): Promise<TwitterTweet[]> {
+  const envelope = await runTwitterCli<TwitterCliEnvelope<RawTweet[]>>([
+    "search",
+    query,
+    "--max",
+    String(max),
+    "--json",
+  ]);
+
+  if (!envelope.ok) {
+    throw new ExternalToolError(
+      TWITTER_CLI_TOOL_NAME,
+      redactSensitiveOutput(envelope.error?.message ?? "twitter-cli returned an error"),
+      envelope.error?.code,
+    );
+  }
+  if (!Array.isArray(envelope.data)) {
+    throw new ExternalToolError(TWITTER_CLI_TOOL_NAME, "twitter-cli returned invalid tweet data");
+  }
+  return envelope.data.map(adaptRawTweet);
+}
+
+async function runTwitterCli<T>(args: readonly string[]): Promise<T> {
+  let result: CommandResult;
+  try {
+    result = await commandRunner(TWITTER_CLI_BINARY, args);
+  } catch (err) {
+    const nodeError = err as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") {
+      throw new ExternalToolNotInstalled(TWITTER_CLI_TOOL_NAME, TWITTER_CLI_INSTALL_CMD);
+    }
+    throw new ExternalToolError(
+      TWITTER_CLI_TOOL_NAME,
+      redactSensitiveOutput(err instanceof Error ? err.message : String(err)),
+    );
+  }
+
+  if (result.code !== 0) {
+    throw new ExternalToolError(
+      TWITTER_CLI_TOOL_NAME,
+      redactSensitiveOutput(result.stderr.trim() || `twitter-cli exited with code ${result.code}`),
+    );
+  }
+
+  try {
+    return JSON.parse(result.stdout) as T;
+  } catch {
+    throw new ExternalToolError(
+      TWITTER_CLI_TOOL_NAME,
+      `twitter-cli returned non-JSON output: ${redactSensitiveOutput(result.stdout.slice(0, 200))}`,
+    );
+  }
+}
+
+function adaptRawTweet(raw: RawTweet): TwitterTweet {
+  return {
+    id: stringValue(raw.id),
+    text: stringValue(raw.text).slice(0, 280),
+    author:
+      stringValue(raw.author?.username) ||
+      stringValue(raw.author?.screenName) ||
+      stringValue(raw.username) ||
+      "unknown",
+    likes: numberValue(raw.likeCount ?? raw.likes),
+    retweets: numberValue(raw.retweetCount ?? raw.retweets),
+    replies: numberValue(raw.replyCount ?? raw.replies),
+    views: nullableNumberValue(raw.viewCount ?? raw.views),
+    url: stringValue(raw.url ?? raw.permanentUrl),
+    created: normalizeCreatedAt(raw.createdAt ?? raw.created_at),
+  };
+}
+
+function normalizeCreatedAt(value: string | number | undefined): string {
+  if (typeof value === "number") {
+    const millis = value > 1_000_000_000_000 ? value : value * 1000;
+    return new Date(millis).toISOString();
+  }
+  if (typeof value === "string" && value.length > 0) {
+    const millis = Date.parse(value);
+    if (!Number.isNaN(millis)) return new Date(millis).toISOString();
+  }
+  return new Date(0).toISOString();
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function nullableNumberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+export function redactSensitiveOutput(input: string): string {
+  return input
+    .slice(0, MAX_OUTPUT_CHARS)
+    .replace(/\b(auth_token|ct0)\b\s*[:=]\s*[^;\s,)]+/gi, "$1=[redacted]")
+    .replace(/\b(auth_token|ct0)=([^;\s,)]+)/gi, "$1=[redacted]");
+}
+
+function runCommand(command: string, args: readonly string[]): Promise<CommandResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGTERM");
+      reject(new Error(`${command} timed out after ${COMMAND_TIMEOUT_MS}ms`));
+    }, COMMAND_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout = (stdout + chunk.toString("utf8")).slice(0, MAX_OUTPUT_CHARS);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(0, MAX_OUTPUT_CHARS);
+    });
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve({ code, stdout, stderr });
+    });
+  });
+}

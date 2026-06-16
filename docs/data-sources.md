@@ -17,7 +17,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage |
 | Macro | `get_economic_data`, `get_fear_greed` | FRED, alternative.me crypto Fear & Greed |
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
-| Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | Reddit JSON API, Twitter/X local browser session, Finnhub, DuckDuckGo, Brave, Exa |
+| Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | Reddit JSON API, `twitter-cli` using your normal browser session, Finnhub, DuckDuckGo, Brave, Exa |
 | Filings | `get_sec_filings` | SEC EDGAR |
 | Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `track_prediction` | Local state plus market providers |
 
@@ -33,6 +33,10 @@ Keyless by default:
 - DuckDuckGo search
 - alternative.me crypto Fear & Greed
 
+External local tools:
+
+- Twitter/X sentiment uses `twitter-cli` and the user's normal x.com browser session. Install with `uv tool install twitter-cli`, then run `opencandle doctor` or use the GUI provider panel to check install and session status.
+
 Optional keys:
 
 - `ALPHA_VANTAGE_API_KEY` expands fundamentals, earnings, financial statements, DCF, and company comparison coverage.
@@ -40,7 +44,7 @@ Optional keys:
 - `BRAVE_API_KEY` enables Brave as a web search fallback.
 - `EXA_API_KEY` enables Exa web search.
 - `FINNHUB_API_KEY` enables Finnhub company news in sentiment summaries.
-- Search and social providers can degrade based on available credentials, local browser login state, and provider health. Twitter/X sentiment requires a local browser session.
+- Search and social providers can degrade based on available credentials, external-tool availability, local browser login state, and provider health. Twitter/X sentiment requires `twitter-cli` plus a usable x.com browser session.
 
 ## Caching and Degradation
 

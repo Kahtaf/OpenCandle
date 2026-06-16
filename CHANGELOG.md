@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Twitter/X sentiment now uses the external `twitter-cli` command with the user's normal browser session, and Yahoo options fallback now uses `yahoo-finance2`; Camoufox and the old Twitter scraper are no longer runtime dependencies. `opencandle doctor` and the GUI provider panel now report API-key, public HTTP, and external-tool provider readiness.
+
 ### Fixed
 
 - GitHub Actions workflows now use Node 24-compatible first-party action majors, clearing the hosted-runner Node 20 deprecation warning.

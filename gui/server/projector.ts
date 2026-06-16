@@ -226,7 +226,9 @@ function inferDirectToolGapProvider(
   toolName: string | undefined,
   text: string,
 ): string | undefined {
-  if (!toolName || !/(?:⚠|unavailable|No .*data found|LOGIN_NEEDED)/i.test(text)) return undefined;
+  if (!toolName || !/(?:⚠|unavailable|No .*data found|EXTERNAL_TOOL_SETUP)/i.test(text)) {
+    return undefined;
+  }
   return DIRECT_TOOL_GAP_PROVIDERS[toolName];
 }
 

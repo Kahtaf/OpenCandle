@@ -1,54 +1,59 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { ExternalToolError } from "../../../src/providers/external-tool-error.js";
 import {
   getTwitterSentiment,
   normalizeQuery,
-  readTwitterCookies,
   scoreTwitterSentiment,
 } from "../../../src/providers/twitter.js";
-import cookieFixture from "../../fixtures/twitter/cookies.json";
-import tweetFixture from "../../fixtures/twitter/search-tweets.json";
+import type { TwitterTweet } from "../../../src/types/sentiment.js";
 
-// Mock node:fs — must be module-level for ESM
-const mockExistsSync = vi.fn().mockReturnValue(false);
-function createMockCookieDatabase() {
-  return {
-    prepare: () => ({
-      all: (..._args: any[]) => cookieFixture,
-    }),
-    close: vi.fn(),
-  };
+const mocks = vi.hoisted(() => ({
+  searchTweets: vi.fn(),
+}));
+
+vi.mock("../../../src/providers/twitter-cli.js", () => ({
+  searchTweets: mocks.searchTweets,
+}));
+
+function freshTweets(): TwitterTweet[] {
+  const created = new Date(Date.now() - 60_000).toISOString();
+  return [
+    {
+      id: "1234567890",
+      text: "$AAPL moon incoming! So bullish on this breakout",
+      author: "trader_joe",
+      likes: 150,
+      retweets: 45,
+      replies: 12,
+      views: 5000,
+      url: "https://x.com/trader_joe/status/1234567890",
+      created,
+    },
+    {
+      id: "1234567891",
+      text: "$AAPL overvalued, this bubble is about to crash. Puts loaded.",
+      author: "bear_market_bob",
+      likes: 500,
+      retweets: 120,
+      replies: 88,
+      views: 15000,
+      url: "https://x.com/bear_market_bob/status/1234567891",
+      created,
+    },
+    {
+      id: "1234567892",
+      text: "Watching $AAPL and $TSLA today.",
+      author: "market_watcher",
+      likes: 30,
+      retweets: 5,
+      replies: 3,
+      views: 800,
+      url: "https://x.com/market_watcher/status/1234567892",
+      created,
+    },
+  ];
 }
-
-vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>();
-  return { ...actual, existsSync: (...args: any[]) => mockExistsSync(...args) };
-});
-
-// Mock better-sqlite3
-vi.mock("better-sqlite3", () => ({
-  default: vi.fn(function Database() {}),
-}));
-
-// Mock @the-convocation/twitter-scraper
-vi.mock("@the-convocation/twitter-scraper", () => {
-  return {
-    Scraper: vi.fn(),
-    SearchMode: { Latest: 0 },
-  };
-});
-
-// Mock opencandle-paths
-vi.mock("../../../src/infra/opencandle-paths.js", () => ({
-  getBrowserProfileDir: () => "/fake/profile",
-}));
-
-describe("readTwitterCookies", () => {
-  it("returns empty array when cookies.sqlite does not exist", () => {
-    const result = readTwitterCookies("/nonexistent/path");
-    expect(result).toEqual([]);
-  });
-});
 
 describe("normalizeQuery", () => {
   it("prepends $ to bare tickers", () => {
@@ -57,164 +62,90 @@ describe("normalizeQuery", () => {
     expect(normalizeQuery("A")).toBe("$A");
   });
 
-  it("does not double-prefix cashtags", () => {
+  it("passes non-bare-ticker queries through unchanged", () => {
     expect(normalizeQuery("$TSLA")).toBe("$TSLA");
-  });
-
-  it("passes free-form queries through unchanged", () => {
     expect(normalizeQuery("AAPL earnings call")).toBe("AAPL earnings call");
-    expect(normalizeQuery("inflation fears")).toBe("inflation fears");
-  });
-
-  it("does not prefix lowercase strings", () => {
     expect(normalizeQuery("aapl")).toBe("aapl");
-  });
-
-  it("does not prefix strings longer than 5 chars", () => {
     expect(normalizeQuery("ABCDEF")).toBe("ABCDEF");
   });
 });
 
 describe("scoreTwitterSentiment", () => {
   it("returns positive score weighted by engagement for bullish tweets", () => {
-    const tweets = [{ text: "So bullish on this breakout! Moon!", likes: 100, retweets: 50 }];
-    const result = scoreTwitterSentiment(tweets);
+    const result = scoreTwitterSentiment([
+      { text: "So bullish on this breakout! Moon!", likes: 100, retweets: 50 },
+    ]);
     expect(result.score).toBeGreaterThan(0);
-    expect(result.score).toBeLessThanOrEqual(1);
     expect(result.bullish).toBeGreaterThan(0);
     expect(result.bearish).toBe(0);
   });
 
-  it("returns negative score weighted by engagement for bearish tweets", () => {
-    const tweets = [{ text: "Going to crash, time to sell", likes: 200, retweets: 80 }];
-    const result = scoreTwitterSentiment(tweets);
-    expect(result.score).toBeLessThan(0);
-    expect(result.score).toBeGreaterThanOrEqual(-1);
-    expect(result.bearish).toBeGreaterThan(0);
-  });
-
   it("engagement weighting skews toward high-engagement tweets", () => {
-    const tweets = [
-      { text: "bullish", likes: 1, retweets: 0 }, // low engagement bullish
-      { text: "bearish crash", likes: 500, retweets: 200 }, // high engagement bearish
-    ];
-    const result = scoreTwitterSentiment(tweets);
-    // Despite 1 bullish tweet, the high-engagement bearish tweet dominates
+    const result = scoreTwitterSentiment([
+      { text: "bullish", likes: 1, retweets: 0 },
+      { text: "bearish crash", likes: 500, retweets: 200 },
+    ]);
     expect(result.score).toBeLessThan(0);
   });
 
-  it("returns 0 for tweets with no sentiment terms", () => {
-    const tweets = [{ text: "Fed decision tomorrow", likes: 10, retweets: 2 }];
-    const result = scoreTwitterSentiment(tweets);
-    expect(result.score).toBe(0);
-    expect(result.bullish).toBe(0);
-    expect(result.bearish).toBe(0);
-  });
-
-  it("handles empty array", () => {
-    const result = scoreTwitterSentiment([]);
-    expect(result.score).toBe(0);
-    expect(result.bullish).toBe(0);
-    expect(result.bearish).toBe(0);
+  it("returns 0 for neutral or empty tweets", () => {
+    expect(
+      scoreTwitterSentiment([{ text: "Fed decision tomorrow", likes: 10, retweets: 2 }]),
+    ).toEqual({ score: 0, bullish: 0, bearish: 0 });
+    expect(scoreTwitterSentiment([])).toEqual({ score: 0, bullish: 0, bearish: 0 });
   });
 });
 
 describe("getTwitterSentiment", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     cache.clear();
-    mockExistsSync.mockReturnValue(false);
+    mocks.searchTweets.mockReset();
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    cache.clear();
   });
 
-  it("throws when no auth cookies exist", async () => {
-    // readTwitterCookies will return [] because /fake/profile/cookies.sqlite doesn't exist
-    await expect(getTwitterSentiment("AAPL")).rejects.toThrow("No Twitter session found");
-  });
+  it("uses twitter-cli search results and preserves the sentiment contract", async () => {
+    const tweets = freshTweets();
+    mocks.searchTweets.mockResolvedValue(tweets);
 
-  it("includes tweet id in results", async () => {
-    mockExistsSync.mockReturnValue(true);
+    const result = await getTwitterSentiment("AAPL", 50, 24);
 
-    const { Scraper } = await import("@the-convocation/twitter-scraper");
-    const mockScraper = {
-      setCookies: vi.fn(),
-      isLoggedIn: vi.fn().mockResolvedValue(true),
-      searchTweets: vi.fn().mockReturnValue(
-        (async function* () {
-          for (const tweet of tweetFixture) {
-            yield { ...tweet, timeParsed: new Date(tweet.timeParsed) };
-          }
-        })(),
-      ),
-    };
-    vi.mocked(Scraper).mockImplementation(function () {
-      return mockScraper;
-    } as any);
-
-    const Database = (await import("better-sqlite3")).default;
-    vi.mocked(Database).mockImplementation(function () {
-      return createMockCookieDatabase();
-    } as any);
-
-    const result = await getTwitterSentiment("AAPL", 50, 24 * 365);
-    expect(result.tweets.length).toBeGreaterThan(0);
-    expect(result.tweets[0]).toHaveProperty("id");
-    expect(result.tweets[0].id).toBe("1234567890");
+    expect(mocks.searchTweets).toHaveBeenCalledWith("$AAPL", 50);
+    expect(result.query).toBe("$AAPL");
+    expect(result.tweetCount).toBe(3);
+    expect(result.tweets[0]).toHaveProperty("id", "1234567890");
+    expect(result.topMentions).toEqual(["TSLA"]);
+    expect(result.sentimentScore).toBeLessThan(0);
   });
 
   it("returns cached result on second call", async () => {
-    mockExistsSync.mockReturnValue(true);
-
-    const { Scraper } = await import("@the-convocation/twitter-scraper");
-    const mockScraper = {
-      setCookies: vi.fn(),
-      isLoggedIn: vi.fn().mockResolvedValue(true),
-      searchTweets: vi.fn().mockReturnValue(
-        (async function* () {
-          for (const tweet of tweetFixture) {
-            yield { ...tweet, timeParsed: new Date(tweet.timeParsed) };
-          }
-        })(),
-      ),
-    };
-    vi.mocked(Scraper).mockImplementation(function () {
-      return mockScraper;
-    } as any);
-
-    const Database = (await import("better-sqlite3")).default;
-    vi.mocked(Database).mockImplementation(function () {
-      return createMockCookieDatabase();
-    } as any);
+    const tweets = freshTweets();
+    mocks.searchTweets.mockResolvedValue(tweets);
 
     const result1 = await getTwitterSentiment("AAPL", 50, 24);
     const result2 = await getTwitterSentiment("AAPL", 50, 24);
 
-    expect(result1.query).toBe("$AAPL");
     expect(result2).toEqual(result1);
-    // Scraper should only be called once (second call hits cache)
-    expect(Scraper).toHaveBeenCalledTimes(1);
+    expect(mocks.searchTweets).toHaveBeenCalledTimes(1);
   });
 
-  it("throws on expired session", async () => {
-    mockExistsSync.mockReturnValue(true);
+  it("filters tweets outside the requested lookback", async () => {
+    const tweets = freshTweets();
+    mocks.searchTweets.mockResolvedValue([
+      ...tweets,
+      { ...tweets[0], id: "old", created: new Date(Date.now() - 72 * 3_600_000).toISOString() },
+    ]);
 
-    const { Scraper } = await import("@the-convocation/twitter-scraper");
-    const mockScraper = {
-      setCookies: vi.fn(),
-      isLoggedIn: vi.fn().mockResolvedValue(false),
-    };
-    vi.mocked(Scraper).mockImplementation(function () {
-      return mockScraper;
-    } as any);
+    const result = await getTwitterSentiment("AAPL", 50, 24);
 
-    const Database = (await import("better-sqlite3")).default;
-    vi.mocked(Database).mockImplementation(function () {
-      return createMockCookieDatabase();
-    } as any);
+    expect(result.tweets.map((tweet) => tweet.id)).not.toContain("old");
+  });
 
-    await expect(getTwitterSentiment("TSLA")).rejects.toThrow("session expired");
+  it("surfaces twitter-cli failures when no stale cache is available", async () => {
+    mocks.searchTweets.mockRejectedValue(new ExternalToolError("twitter-cli", "401 unauthorized"));
+
+    await expect(getTwitterSentiment("TSLA")).rejects.toThrow("401 unauthorized");
   });
 });

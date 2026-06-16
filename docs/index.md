@@ -45,7 +45,7 @@ Pi provides the bundled local agent runtime, model setup, sessions, and terminal
 | Options | Option chains, open interest, implied volatility, locally computed Greeks |
 | Fundamentals | Company overview, financial statements, earnings, DCF, comparable companies |
 | Macro | FRED series, rates, inflation, GDP, unemployment, crypto Fear & Greed |
-| Sentiment | Reddit, Twitter/X local browser session, web search, cross-source sentiment summaries |
+| Sentiment | Reddit, Twitter/X via `twitter-cli` and your normal browser session, web search, cross-source sentiment summaries |
 | Filings | SEC EDGAR filing search |
 | Portfolio | Watchlists, holdings, correlation, prediction tracking, risk analysis |
 

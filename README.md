@@ -90,6 +90,7 @@ Useful slash commands:
 /login
 /model
 /connect
+/doctor
 /analyze AAPL
 ```
 
@@ -102,11 +103,11 @@ Useful slash commands:
 | Fundamentals | Overview, financials, earnings, DCF, comparable companies | Alpha Vantage |
 | Macro | Rates, CPI, GDP, unemployment, crypto Fear & Greed | FRED, alternative.me |
 | Technical | Indicators and strategy backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | Reddit JSON API, Twitter/X local browser session, Finnhub, Exa, Brave, DuckDuckGo |
+| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | Reddit JSON API, `twitter-cli` using your normal browser session, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | Watchlists, holdings, prediction tracking, correlation, risk | Local state plus market data |
 
-Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
+Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
 
 ## Configuration
 

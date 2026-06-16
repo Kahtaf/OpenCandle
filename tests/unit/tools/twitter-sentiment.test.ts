@@ -35,6 +35,7 @@ describe("get_twitter_sentiment tool", () => {
       tweetCount: 2,
       tweets: [
         {
+          id: "123",
           text: "AAPL to the moon!",
           author: "trader_joe",
           likes: 100,
@@ -45,6 +46,7 @@ describe("get_twitter_sentiment tool", () => {
           created: "2026-04-04T10:00:00.000Z",
         },
         {
+          id: "124",
           text: "Bearish on AAPL",
           author: "bear_bob",
           likes: 50,
@@ -81,7 +83,7 @@ describe("get_twitter_sentiment tool", () => {
     expect(text).toContain("| Author |");
   });
 
-  it("returns LOGIN_NEEDED directive when login is required", async () => {
+  it("returns external-tool session guidance when browser login is required", async () => {
     const { wrapProvider } = await import("../../../src/providers/wrap-provider.js");
     vi.mocked(wrapProvider).mockResolvedValue({
       status: "unavailable",
@@ -93,7 +95,24 @@ describe("get_twitter_sentiment tool", () => {
     const text = (result.content[0] as any).text;
 
     expect(text).toContain("⚠ Twitter sentiment unavailable");
-    expect(text).toContain("[LOGIN_NEEDED]");
+    expect(text).toContain("[EXTERNAL_TOOL_SETUP provider=twitter action=session]");
+    expect(text).toContain("x.com");
+    expect(result.details).toBeNull();
+  });
+
+  it("returns external-tool install guidance when twitter-cli is missing", async () => {
+    const { wrapProvider } = await import("../../../src/providers/wrap-provider.js");
+    vi.mocked(wrapProvider).mockResolvedValue({
+      status: "unavailable",
+      reason: "twitter-cli is not installed. Install it with: uv tool install twitter-cli",
+      provider: "twitter",
+    });
+
+    const result = await twitterSentimentTool.execute("call-2a", { query: "AAPL" });
+    const text = (result.content[0] as any).text;
+
+    expect(text).toContain("[EXTERNAL_TOOL_SETUP provider=twitter action=install");
+    expect(text).toContain("uv tool install twitter-cli");
     expect(result.details).toBeNull();
   });
 
@@ -109,7 +128,7 @@ describe("get_twitter_sentiment tool", () => {
     const text = (result.content[0] as any).text;
 
     expect(text).toContain("⚠ Twitter sentiment unavailable");
-    expect(text).not.toContain("[LOGIN_NEEDED]");
+    expect(text).not.toContain("[EXTERNAL_TOOL_SETUP");
     expect(result.details).toBeNull();
   });
 

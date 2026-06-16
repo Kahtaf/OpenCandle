@@ -19,7 +19,7 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
   name: "get_twitter_sentiment",
   label: "Twitter Sentiment",
   description:
-    "Fetch recent tweets for a stock ticker or search query and compute engagement-weighted sentiment. Returns tweet data, sentiment score, and co-mentioned tickers. Requires a Twitter session via trigger_twitter_login.",
+    "Fetch recent tweets for a stock ticker or search query and compute engagement-weighted sentiment. Returns tweet data, sentiment score, and co-mentioned tickers. Requires twitter-cli and a browser X/Twitter session.",
   parameters: params,
   async execute(_toolCallId, args) {
     const limit = Math.min(args.limit ?? 50, 200);
@@ -30,12 +30,16 @@ export const twitterSentimentTool: AgentTool<typeof params, TwitterSentimentResu
     );
 
     if (providerResult.status === "unavailable") {
-      const isLoginIssue =
-        providerResult.reason.includes("No Twitter session") ||
-        providerResult.reason.includes("session expired");
-      const text = isLoginIssue
-        ? `⚠ Twitter sentiment unavailable: ${providerResult.reason}\n[LOGIN_NEEDED] Use ask_user to confirm, then call trigger_twitter_login. After success, retry this tool.`
-        : `⚠ Twitter sentiment unavailable (${providerResult.reason}).`;
+      const reason = providerResult.reason;
+      const isMissingCli = reason.includes("not installed") || reason.includes("uv tool install");
+      const isSessionIssue = /no twitter cookies|no cookies|401|unauthorized|expired|session/i.test(
+        reason,
+      );
+      const text = isMissingCli
+        ? `⚠ Twitter sentiment unavailable: ${reason}\n[EXTERNAL_TOOL_SETUP provider=twitter action=install command="uv tool install twitter-cli"] Ask whether to continue after install, skip X once, or always skip X.`
+        : isSessionIssue
+          ? `⚠ Twitter sentiment unavailable: ${reason}\n[EXTERNAL_TOOL_SETUP provider=twitter action=session] Ask the user to log into or refresh x.com in a supported browser, then retry after confirmation.`
+          : `⚠ Twitter sentiment unavailable (${reason}).`;
       return {
         content: [{ type: "text", text }],
         details: null as any,
