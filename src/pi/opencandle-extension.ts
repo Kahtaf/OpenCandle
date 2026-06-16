@@ -144,11 +144,10 @@ export default function openCandleExtension(
   // `/connect <alias|id|category>` routes to a specific provider (or a
   // sub-picker for multi-provider categories like "search").
   pi.registerCommand("connect", {
-    description: "Connect a data provider (Alpha Vantage, FRED, Finnhub, Brave, Exa)",
+    description: "Connect an API-key data provider (Alpha Vantage, FRED, Finnhub, Brave, Exa)",
     handler: async (args, ctx) => {
-      const { listAllProviders, resolveProviderFromArgument, hasCredential } = await import(
-        "../onboarding/providers.js"
-      );
+      const { listApiKeyProviders, resolveProviderFromArgument, hasCredential, isApiKeyProvider } =
+        await import("../onboarding/providers.js");
 
       const formatState = (id: ProviderId): string => {
         const state = loadOnboardingState().providers[id];
@@ -178,11 +177,11 @@ export default function openCandleExtension(
 
       if (trimmed === "") {
         // Bare /connect → full picker.
-        targetId = await pickProvider(listAllProviders());
+        targetId = await pickProvider(listApiKeyProviders());
       } else {
         const resolved = resolveProviderFromArgument(trimmed);
         if (!resolved) {
-          const all = listAllProviders()
+          const all = listApiKeyProviders()
             .map((p) => `  ${p.displayName} (${p.aliases.join(", ")})`)
             .join("\n");
           ctx.ui.notify(`Unknown provider: "${trimmed}". Available:\n${all}`, "warning");
@@ -190,9 +189,25 @@ export default function openCandleExtension(
         }
         if (Array.isArray(resolved)) {
           // Multi-provider category — show a sub-picker.
-          targetId = await pickProvider(resolved as readonly ReturnType<typeof getProvider>[]);
+          const apiKeyProviders = resolved.filter(isApiKeyProvider);
+          if (apiKeyProviders.length === 0) {
+            ctx.ui.notify(
+              `"${trimmed}" does not use API-key setup. Run opencandle doctor for setup status.`,
+              "warning",
+            );
+            return;
+          }
+          targetId = await pickProvider(apiKeyProviders);
         } else {
-          targetId = (resolved as ReturnType<typeof getProvider>).id;
+          const descriptor = resolved as ReturnType<typeof getProvider>;
+          if (!isApiKeyProvider(descriptor)) {
+            ctx.ui.notify(
+              `${descriptor.displayName} does not use API-key setup. Run opencandle doctor for setup status.`,
+              "warning",
+            );
+            return;
+          }
+          targetId = descriptor.id;
         }
       }
 

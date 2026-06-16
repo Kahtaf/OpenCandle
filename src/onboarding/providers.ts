@@ -1,23 +1,33 @@
-// Provider registry — single source of truth for OpenCandle's credentialed
-// third-party data providers. Every setup pathway iterates this registry:
+// Provider registry — single source of truth for OpenCandle's third-party
+// data providers. Every setup/status pathway iterates this registry:
 // first-run startup, the `/connect` command, the `tool_result` credential
-// interception handler, and the gap-note generator all read from here.
+// interception handler, GUI provider rows, doctor checks, and gap-note
+// generation all read from here.
 //
-// Adding a new credentialed provider is a two-step change: add its `ProviderId`
-// to the literal union below, and add its descriptor to the `PROVIDERS` array.
-// The `satisfies` check ensures TypeScript fails the build if the union and
-// the array ever disagree.
+// Adding a new provider is a two-step change: add its id to the relevant
+// literal union below, and add its descriptor to the `PROVIDERS` array. The
+// `satisfies` and exhaustiveness checks keep the registry and id unions aligned.
 
 import { getConfig, loadFileConfig } from "../config.js";
 
-export type ProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa";
+export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa";
+export type ExternalToolProviderId = "twitter";
+export type PublicHttpProviderId = "yahoo" | "reddit";
+export type ProviderId = ApiKeyProviderId | ExternalToolProviderId | PublicHttpProviderId;
 
-export type ProviderCategory = "fundamentals" | "macro" | "news" | "web_search";
+export type ProviderCategory =
+  | "fundamentals"
+  | "macro"
+  | "news"
+  | "web_search"
+  | "sentiment"
+  | "market";
 
 export type ProviderTier = "hard" | "soft";
 
-export interface ProviderDescriptor {
+interface BaseProviderDescriptor {
   readonly id: ProviderId;
+  readonly kind: "api-key" | "external-tool" | "public-http";
   readonly displayName: string;
   readonly category: ProviderCategory;
   /**
@@ -30,11 +40,6 @@ export interface ProviderDescriptor {
   readonly tier: ProviderTier;
   /** Lowercase friendly aliases accepted by `/connect` in addition to the id. */
   readonly aliases: readonly string[];
-  readonly signupUrl: string;
-  readonly freeTier: boolean;
-  readonly envVar: string;
-  /** Nested key path into `OpenCandleFileConfig` where the key is persisted. */
-  readonly configPath: readonly string[];
   readonly unlocks: readonly string[];
   /**
    * Human copy describing the degraded experience when missing, or `null`
@@ -45,11 +50,42 @@ export interface ProviderDescriptor {
   readonly instructionsHint: string;
 }
 
+export interface ApiKeyProviderDescriptor extends BaseProviderDescriptor {
+  readonly id: ApiKeyProviderId;
+  readonly kind: "api-key";
+  readonly signupUrl: string;
+  readonly freeTier: boolean;
+  readonly envVar: string;
+  /** Nested key path into `OpenCandleFileConfig` where the key is persisted. */
+  readonly configPath: readonly string[];
+}
+
+export interface ExternalToolProviderDescriptor extends BaseProviderDescriptor {
+  readonly id: ExternalToolProviderId;
+  readonly kind: "external-tool";
+  readonly binary: string;
+  readonly installCmd: string;
+  readonly sessionSource: "browser-cookies";
+  readonly supportedBrowsers?: readonly string[];
+}
+
+export interface PublicHttpProviderDescriptor extends BaseProviderDescriptor {
+  readonly id: PublicHttpProviderId;
+  readonly kind: "public-http";
+  readonly probeUrl: string;
+}
+
+export type ProviderDescriptor =
+  | ApiKeyProviderDescriptor
+  | ExternalToolProviderDescriptor
+  | PublicHttpProviderDescriptor;
+
 // Declaration order matters: picker display order, per-workflow prompt priority,
 // getProvidersByCategory/getProvidersByTier iteration order.
 export const PROVIDERS = [
   {
     id: "alpha_vantage",
+    kind: "api-key",
     displayName: "Alpha Vantage",
     category: "fundamentals",
     tier: "hard",
@@ -70,6 +106,7 @@ export const PROVIDERS = [
   },
   {
     id: "fred",
+    kind: "api-key",
     displayName: "FRED",
     category: "macro",
     tier: "hard",
@@ -85,6 +122,7 @@ export const PROVIDERS = [
   },
   {
     id: "finnhub",
+    kind: "api-key",
     displayName: "Finnhub",
     category: "news",
     tier: "soft",
@@ -104,6 +142,7 @@ export const PROVIDERS = [
   },
   {
     id: "brave",
+    kind: "api-key",
     displayName: "Brave Search",
     category: "web_search",
     tier: "soft",
@@ -123,6 +162,7 @@ export const PROVIDERS = [
   },
   {
     id: "exa",
+    kind: "api-key",
     displayName: "Exa",
     category: "web_search",
     tier: "soft",
@@ -147,7 +187,57 @@ export const PROVIDERS = [
     snoozeDurationDays: 7,
     instructionsHint: "Paid with free tier, signup opens in your browser",
   },
+  {
+    id: "yahoo",
+    kind: "public-http",
+    displayName: "Yahoo Finance",
+    category: "market",
+    tier: "hard",
+    aliases: ["yahoo", "yahoo-finance", "market-data", "options"],
+    probeUrl: "https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1d",
+    unlocks: ["quotes", "historical prices", "option chains", "market data"],
+    fallbackDescription: null,
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle checks public Yahoo Finance reachability",
+  },
+  {
+    id: "twitter",
+    kind: "external-tool",
+    displayName: "X / Twitter",
+    category: "sentiment",
+    tier: "soft",
+    aliases: ["twitter", "x", "x-sentiment", "twitter-sentiment"],
+    binary: "twitter",
+    installCmd: "uv tool install twitter-cli",
+    sessionSource: "browser-cookies",
+    supportedBrowsers: ["Chrome", "Arc", "Edge", "Firefox", "Brave"],
+    unlocks: ["X/Twitter sentiment", "recent ticker mentions", "social engagement context"],
+    fallbackDescription:
+      "Sentiment summaries continue with Reddit, web search, and news when X is unavailable",
+    snoozeDurationDays: 7,
+    instructionsHint: "Install twitter-cli and stay logged into x.com in a supported browser",
+  },
+  {
+    id: "reddit",
+    kind: "public-http",
+    displayName: "Reddit",
+    category: "sentiment",
+    tier: "soft",
+    aliases: ["reddit", "reddit-sentiment", "subreddit"],
+    probeUrl: "https://www.reddit.com/r/stocks/about.json",
+    unlocks: ["Reddit sentiment", "ticker discussion context", "retail investor discussion"],
+    fallbackDescription:
+      "Sentiment summaries continue with X/Twitter, web search, and news when Reddit is unavailable",
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle checks public Reddit reachability",
+  },
 ] as const satisfies readonly ProviderDescriptor[];
+
+const _providerIdExhaustivenessCheck: Record<
+  Exclude<ProviderId, (typeof PROVIDERS)[number]["id"]> | Exclude<(typeof PROVIDERS)[number]["id"], ProviderId>,
+  never
+> = {};
+void _providerIdExhaustivenessCheck;
 
 // -----------------------------------------------------------------------------
 // Lookup helpers
@@ -167,6 +257,28 @@ function byId(): Map<ProviderId, ProviderDescriptor> {
 
 export function listAllProviders(): readonly ProviderDescriptor[] {
   return PROVIDERS;
+}
+
+export function isApiKeyProvider(
+  provider: ProviderDescriptor,
+): provider is ApiKeyProviderDescriptor {
+  return provider.kind === "api-key";
+}
+
+export function isExternalToolProvider(
+  provider: ProviderDescriptor,
+): provider is ExternalToolProviderDescriptor {
+  return provider.kind === "external-tool";
+}
+
+export function isPublicHttpProvider(
+  provider: ProviderDescriptor,
+): provider is PublicHttpProviderDescriptor {
+  return provider.kind === "public-http";
+}
+
+export function listApiKeyProviders(): readonly ApiKeyProviderDescriptor[] {
+  return (PROVIDERS as readonly ProviderDescriptor[]).filter(isApiKeyProvider);
 }
 
 export function getProvider(id: ProviderId): ProviderDescriptor {
@@ -209,7 +321,7 @@ function readConfigValueByPath(
 // `hasCredential` reads from `getConfig()` so that tests mocking `getConfig`
 // see a consistent view; `getCredentialSource` reads `process.env` +
 // `loadFileConfig` directly because it needs to distinguish env from file.
-const CONFIG_FIELD_BY_ID: Record<ProviderId, keyof ReturnType<typeof getConfig>> = {
+const CONFIG_FIELD_BY_ID: Record<ApiKeyProviderId, keyof ReturnType<typeof getConfig>> = {
   alpha_vantage: "alphaVantageApiKey",
   fred: "fredApiKey",
   finnhub: "finnhubApiKey",
@@ -218,7 +330,9 @@ const CONFIG_FIELD_BY_ID: Record<ProviderId, keyof ReturnType<typeof getConfig>>
 };
 
 export function hasCredential(id: ProviderId): boolean {
-  const field = CONFIG_FIELD_BY_ID[id];
+  const descriptor = getProvider(id);
+  if (!isApiKeyProvider(descriptor)) return false;
+  const field = CONFIG_FIELD_BY_ID[descriptor.id];
   const value = getConfig()[field];
   return typeof value === "string" && value.length > 0;
 }
@@ -231,6 +345,8 @@ export function getCredential(
   id: ProviderId,
 ): { source: "env" | "file"; value: string } | { source: "absent"; value?: undefined } {
   const descriptor = getProvider(id);
+  if (!isApiKeyProvider(descriptor)) return { source: "absent" };
+
   const envValue = process.env[descriptor.envVar];
   if (envValue && envValue.length > 0) return { source: "env", value: envValue };
 
@@ -265,7 +381,14 @@ export function resolveProviderFromArgument(
   // 3. Category match: if the needle matches a category name, return the
   //    providers in that category. One match → single descriptor. Multiple
   //    matches → array (triggers the sub-picker in the /connect handler).
-  const categories: readonly ProviderCategory[] = ["fundamentals", "macro", "news", "web_search"];
+  const categories: readonly ProviderCategory[] = [
+    "fundamentals",
+    "macro",
+    "news",
+    "web_search",
+    "sentiment",
+    "market",
+  ];
   const normalizedCategory = needle.replace("-", "_");
   if ((categories as readonly string[]).includes(normalizedCategory)) {
     const group = getProvidersByCategory(normalizedCategory as ProviderCategory);

@@ -25,7 +25,13 @@ import {
   saveFileConfig,
 } from "../config.js";
 import { openInBrowser } from "../infra/open-url.js";
-import { getCredentialSource, getProvider, type ProviderId } from "./providers.js";
+import {
+  getCredentialSource,
+  getProvider,
+  isApiKeyProvider,
+  type ApiKeyProviderId,
+  type ProviderId,
+} from "./providers.js";
 import { loadOnboardingState, markProviderCompleted, saveOnboardingState } from "./state.js";
 import { validateCredential } from "./validation.js";
 
@@ -64,8 +70,11 @@ function writeNested(
  * provider-setup form. Validation is the caller's responsibility — both
  * call sites run `validateCredential` before invoking this helper.
  */
-export function persistProviderCredential(providerId: ProviderId, key: string): void {
+export function persistProviderCredential(providerId: ApiKeyProviderId, key: string): void {
   const descriptor = getProvider(providerId);
+  if (!isApiKeyProvider(descriptor)) {
+    throw new Error(`Provider ${providerId} does not accept API keys`);
+  }
   const existing = loadFileConfig() as unknown as Record<string, unknown>;
   const updated = writeNested(existing, descriptor.configPath, key) as OpenCandleFileConfig;
   saveFileConfig(updated);
@@ -88,6 +97,13 @@ export async function runProviderConnect(
   providerId: ProviderId,
 ): Promise<ConnectResult> {
   const descriptor = getProvider(providerId);
+  if (!isApiKeyProvider(descriptor)) {
+    ctx.ui.notify(
+      `${descriptor.displayName} is not configured with an API key. Run opencandle doctor for setup status.`,
+      "warning",
+    );
+    return { status: "cancelled" };
+  }
 
   // Env-precedence check.
   if (getCredentialSource(providerId) === "env") {
@@ -124,7 +140,7 @@ export async function runProviderConnect(
   // short-circuit here without writing anything; transient failures warn
   // but proceed to persist so users don't get stuck on a provider outage.
   ctx.ui.notify(`Verifying your ${descriptor.displayName} key...`, "info");
-  const validation = await validateCredential(providerId, trimmed);
+  const validation = await validateCredential(descriptor.id, trimmed);
 
   if (validation.status === "invalid") {
     const statusHint =
@@ -153,7 +169,7 @@ export async function runProviderConnect(
     // Fall through to persist.
   }
 
-  persistProviderCredential(providerId, trimmed);
+  persistProviderCredential(descriptor.id, trimmed);
 
   ctx.ui.notify(`${descriptor.displayName} connected. Your key has been saved.`, "info");
 

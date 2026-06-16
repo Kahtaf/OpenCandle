@@ -7,6 +7,9 @@ import {
   getProvidersByCategory,
   getProvidersByTier,
   hasCredential,
+  isApiKeyProvider,
+  isExternalToolProvider,
+  isPublicHttpProvider,
   listAllProviders,
   PROVIDERS,
   type ProviderId,
@@ -51,23 +54,24 @@ afterEach(() => {
 });
 
 describe("provider registry — shape", () => {
-  it("contains exactly five credentialed providers with stable ids", () => {
+  it("contains API-key, external-tool, and public HTTP providers with stable ids", () => {
     const ids = PROVIDERS.map((p) => p.id).sort();
-    expect(ids).toEqual(["alpha_vantage", "brave", "exa", "finnhub", "fred"].sort());
+    expect(ids).toEqual(
+      ["alpha_vantage", "brave", "exa", "finnhub", "fred", "reddit", "twitter", "yahoo"].sort(),
+    );
   });
 
   it("every descriptor has all required fields", () => {
     for (const p of PROVIDERS) {
+      expect(["api-key", "external-tool", "public-http"]).toContain(p.kind);
       expect(p.id).toBeTruthy();
       expect(p.displayName).toBeTruthy();
-      expect(["fundamentals", "macro", "news", "web_search"]).toContain(p.category);
+      expect(["fundamentals", "macro", "news", "web_search", "sentiment", "market"]).toContain(
+        p.category,
+      );
       expect(["hard", "soft"]).toContain(p.tier);
       expect(Array.isArray(p.aliases)).toBe(true);
       expect(p.aliases.length).toBeGreaterThan(0);
-      expect(p.signupUrl).toMatch(/^https:\/\//);
-      expect(typeof p.freeTier).toBe("boolean");
-      expect(p.envVar).toMatch(/^[A-Z][A-Z0-9_]*$/);
-      expect(p.configPath.length).toBeGreaterThan(0);
       expect(Array.isArray(p.unlocks)).toBe(true);
       expect(p.unlocks.length).toBeGreaterThan(0);
       expect(p.snoozeDurationDays).toBeGreaterThan(0);
@@ -76,20 +80,39 @@ describe("provider registry — shape", () => {
       expect(p.fallbackDescription === null || typeof p.fallbackDescription === "string").toBe(
         true,
       );
+
+      if (isApiKeyProvider(p)) {
+        expect(p.signupUrl).toMatch(/^https:\/\//);
+        expect(typeof p.freeTier).toBe("boolean");
+        expect(p.envVar).toMatch(/^[A-Z][A-Z0-9_]*$/);
+        expect(p.configPath.length).toBeGreaterThan(0);
+      } else if (isExternalToolProvider(p)) {
+        expect(p.binary).toBeTruthy();
+        expect(p.installCmd).toContain(p.binary);
+        expect(p.sessionSource).toBeTruthy();
+        expect("envVar" in p).toBe(false);
+        expect("signupUrl" in p).toBe(false);
+      } else if (isPublicHttpProvider(p)) {
+        expect(p.probeUrl).toMatch(/^https:\/\//);
+        expect("envVar" in p).toBe(false);
+        expect("signupUrl" in p).toBe(false);
+      }
     }
   });
 
-  it("hard-tier providers are alpha_vantage and fred, both with null fallback", () => {
+  it("hard-tier providers have null fallback descriptions", () => {
     const hard = PROVIDERS.filter((p) => p.tier === "hard");
-    expect(hard.map((p) => p.id).sort()).toEqual(["alpha_vantage", "fred"]);
+    expect(hard.map((p) => p.id).sort()).toEqual(["alpha_vantage", "fred", "yahoo"]);
     for (const p of hard) {
       expect(p.fallbackDescription).toBeNull();
     }
   });
 
-  it("soft-tier providers are finnhub, brave, exa, all with non-null fallback description", () => {
+  it("soft-tier providers all have non-null fallback descriptions", () => {
     const soft = PROVIDERS.filter((p) => p.tier === "soft");
-    expect(soft.map((p) => p.id).sort()).toEqual(["brave", "exa", "finnhub"]);
+    expect(soft.map((p) => p.id).sort()).toEqual(
+      ["brave", "exa", "finnhub", "reddit", "twitter"].sort(),
+    );
     for (const p of soft) {
       expect(p.fallbackDescription).not.toBeNull();
       expect(typeof p.fallbackDescription).toBe("string");
@@ -105,6 +128,34 @@ describe("provider registry — shape", () => {
     const exa = PROVIDERS.find((p) => p.id === "exa")!;
     expect(exa.fallbackDescription?.toLowerCase()).toContain("mcp");
     expect(exa.fallbackDescription?.toLowerCase()).not.toContain("duckduckgo");
+  });
+
+  it("twitter is an external-tool descriptor without API-key fields", () => {
+    const twitter = getProvider("twitter");
+
+    expect(twitter).toMatchObject({
+      kind: "external-tool",
+      id: "twitter",
+      binary: "twitter",
+      installCmd: "uv tool install twitter-cli",
+      sessionSource: "browser-cookies",
+    });
+    expect("envVar" in twitter).toBe(false);
+    expect("configPath" in twitter).toBe(false);
+    expect("signupUrl" in twitter).toBe(false);
+  });
+
+  it("yahoo and reddit are public HTTP descriptors with probe URLs", () => {
+    for (const providerId of ["yahoo", "reddit"] as const) {
+      const descriptor = getProvider(providerId);
+      expect(descriptor.kind).toBe("public-http");
+      expect(isPublicHttpProvider(descriptor)).toBe(true);
+      if (isPublicHttpProvider(descriptor)) {
+        expect(descriptor.probeUrl).toMatch(/^https:\/\//);
+      }
+      expect("envVar" in descriptor).toBe(false);
+      expect("configPath" in descriptor).toBe(false);
+    }
   });
 
   it("every alias is lowercase kebab-case-friendly", () => {
@@ -150,18 +201,23 @@ describe("provider registry — lookup helpers", () => {
     expect(ids).toContain("brave");
   });
 
-  it("getProvidersByTier('hard') returns alpha_vantage and fred", () => {
+  it("getProvidersByTier('hard') returns hard providers", () => {
     const ids = getProvidersByTier("hard")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["alpha_vantage", "fred"]);
+    expect(ids).toEqual(["alpha_vantage", "fred", "yahoo"]);
   });
 
-  it("getProvidersByTier('soft') returns finnhub, brave, exa", () => {
+  it("getProvidersByTier('soft') returns soft enrichment providers", () => {
     const ids = getProvidersByTier("soft")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["brave", "exa", "finnhub"]);
+    expect(ids).toEqual(["brave", "exa", "finnhub", "reddit", "twitter"]);
+  });
+
+  it("getProvidersByCategory returns sentiment providers", () => {
+    const ids = getProvidersByCategory("sentiment").map((p) => p.id);
+    expect(ids).toEqual(["twitter", "reddit"]);
   });
 });
 
@@ -212,6 +268,16 @@ describe("provider registry — credential helpers", () => {
       value: "fred-env-key",
     });
   });
+
+  it("credential helpers intentionally treat non-API-key providers as absent", () => {
+    vi.spyOn(configModule, "loadFileConfig").mockReturnValue({
+      providers: { twitter: { apiKey: "not-a-real-shape" } },
+    });
+
+    expect(hasCredential("twitter")).toBe(false);
+    expect(getCredentialSource("twitter")).toBe("absent");
+    expect(getCredential("twitter")).toEqual({ source: "absent" });
+  });
 });
 
 describe("provider registry — resolveProviderFromArgument", () => {
@@ -261,7 +327,7 @@ describe("provider registry — import safety", () => {
     const loadFileConfigMock = configModule.loadFileConfig as ReturnType<typeof vi.fn>;
     // Freshly import the registry after the mock is in place.
     const providersModule = await import("../../../src/onboarding/providers.js");
-    expect(providersModule.PROVIDERS.length).toBe(5);
+    expect(providersModule.PROVIDERS.length).toBe(8);
     // Module evaluation must not trigger loadFileConfig.
     expect(loadFileConfigMock).not.toHaveBeenCalled();
     // Calling a credential helper SHOULD invoke loadFileConfig (lazy, on demand).

@@ -37,4 +37,29 @@ describe("GUI tool metadata catalog", () => {
       apiKey: "fred-file-key",
     });
   });
+
+  it("serializes non-key providers without API-key setup fields", () => {
+    const catalog = buildCatalog();
+
+    expect(catalog.providers.find((provider) => provider.id === "twitter")).toMatchObject({
+      id: "twitter",
+      kind: "external-tool",
+      binary: "twitter",
+      installCmd: "uv tool install twitter-cli",
+      status: "unknown",
+    });
+    expect(catalog.providers.find((provider) => provider.id === "twitter")).not.toHaveProperty(
+      "envVar",
+    );
+    expect(catalog.providers.find((provider) => provider.id === "twitter")).not.toHaveProperty(
+      "apiKey",
+    );
+
+    expect(catalog.providers.find((provider) => provider.id === "yahoo")).toMatchObject({
+      id: "yahoo",
+      kind: "public-http",
+      status: "unknown",
+      probeUrl: expect.stringMatching(/^https:\/\//),
+    });
+  });
 });

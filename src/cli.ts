@@ -16,6 +16,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "./config.js";
+import { formatProviderStatus, probeAllProviderStatuses } from "./onboarding/provider-status.js";
 import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
 
@@ -159,6 +160,18 @@ async function handleMonitorCommand(args: string[], cwd: string): Promise<boolea
   return true;
 }
 
+async function handleDoctorCommand(args: string[]): Promise<boolean> {
+  if (args[0] !== "doctor") return false;
+
+  loadEnv();
+  const statuses = await probeAllProviderStatuses({ force: args.includes("--no-cache") });
+  console.log("OpenCandle provider status");
+  for (const status of statuses) {
+    console.log(`  ${formatProviderStatus(status)}`);
+  }
+  return true;
+}
+
 async function main(): Promise<void> {
   const rawArgs = process.argv.slice(2);
   const cwd = process.cwd();
@@ -169,6 +182,10 @@ async function main(): Promise<void> {
   }
 
   if (await handleMonitorCommand(rawArgs, cwd)) {
+    return;
+  }
+
+  if (await handleDoctorCommand(rawArgs)) {
     return;
   }
 

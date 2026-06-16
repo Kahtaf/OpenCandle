@@ -1,6 +1,13 @@
 import { getOpenCandleToolDefinitions } from "../../src/index.js";
 import { getAllDefaults, setDefault } from "../../src/memory/tool-defaults.js";
-import { getCredential, PROVIDERS } from "../../src/onboarding/providers.js";
+import {
+  getCredential,
+  isApiKeyProvider,
+  isExternalToolProvider,
+  isPublicHttpProvider,
+  PROVIDERS,
+  type ProviderDescriptor,
+} from "../../src/onboarding/providers.js";
 
 const WORKFLOWS = [
   {
@@ -48,23 +55,58 @@ export function buildCatalog() {
   return {
     tools,
     workflows: WORKFLOWS,
-    providers: PROVIDERS.map((provider) => {
-      const credential = getCredential(provider.id);
-      const source = credential.source;
-      return {
-        id: provider.id,
-        displayName: provider.displayName,
-        source,
-        apiKey: credential.value,
-        status: source === "env" ? "From env" : source === "file" ? "Configured" : "Not configured",
-        unlocks: provider.unlocks,
-        fallbackDescription: provider.fallbackDescription,
-        signupUrl: provider.signupUrl,
-        envVar: provider.envVar,
-        instructionsHint: provider.instructionsHint,
-      };
-    }),
+    providers: PROVIDERS.map(serializeProvider),
   };
+}
+
+function serializeProvider(provider: ProviderDescriptor) {
+  const common = {
+    id: provider.id,
+    kind: provider.kind,
+    displayName: provider.displayName,
+    category: provider.category,
+    tier: provider.tier,
+    aliases: provider.aliases,
+    unlocks: provider.unlocks,
+    fallbackDescription: provider.fallbackDescription,
+    instructionsHint: provider.instructionsHint,
+  };
+
+  if (isApiKeyProvider(provider)) {
+    const credential = getCredential(provider.id);
+    const source = credential.source;
+    return {
+      ...common,
+      source,
+      apiKey: credential.value,
+      status: source,
+      signupUrl: provider.signupUrl,
+      freeTier: provider.freeTier,
+      envVar: provider.envVar,
+    };
+  }
+
+  if (isExternalToolProvider(provider)) {
+    return {
+      ...common,
+      status: "unknown",
+      binary: provider.binary,
+      installCmd: provider.installCmd,
+      sessionSource: provider.sessionSource,
+      supportedBrowsers: provider.supportedBrowsers,
+    };
+  }
+
+  if (isPublicHttpProvider(provider)) {
+    return {
+      ...common,
+      status: "unknown",
+      probeUrl: provider.probeUrl,
+    };
+  }
+
+  const exhaustive: never = provider;
+  return exhaustive;
 }
 
 export function setToolEnabled(toolName: string, enabled: boolean): void {

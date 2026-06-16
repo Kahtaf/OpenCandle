@@ -146,6 +146,10 @@ export function useGuiConnection() {
           });
         } else if (message.type === "catalog") {
           startTransition(() => setCatalog(message.catalog));
+        } else if (message.type === "provider.status") {
+          startTransition(() =>
+            setCatalog((current) => mergeProviderStatus(current, message.providerId, message.status)),
+          );
         } else if (message.type === "model.setup") {
           startTransition(() =>
             setModelSetup(
@@ -292,4 +296,20 @@ function upsertPrompt(current, prompt) {
   const next = current.filter((item) => item.id !== prompt.id);
   next.push(prompt);
   return next;
+}
+
+function mergeProviderStatus(catalog, providerId, status) {
+  if (!providerId || !status) return catalog;
+  return {
+    ...catalog,
+    providers: (catalog.providers || []).map((provider) =>
+      provider.id === providerId
+        ? {
+            ...provider,
+            status: status.state || provider.status,
+            statusDetail: status,
+          }
+        : provider,
+    ),
+  };
 }

@@ -61,6 +61,11 @@ vi.mock("../../src/pi/session-storage.js", () => ({
   continueOpenCandleSession: vi.fn(),
 }));
 
+vi.mock("../../src/onboarding/provider-status.js", () => ({
+  formatProviderStatus: vi.fn((status: { providerId: string }) => `${status.providerId}: ok`),
+  probeAllProviderStatuses: vi.fn(() => Promise.resolve([{ providerId: "twitter" }])),
+}));
+
 const originalArgv = process.argv;
 const originalExitCode = process.exitCode;
 
@@ -114,5 +119,14 @@ describe("opencandle package commands", () => {
       }),
     );
     expect(process.exitCode).toBe(0);
+  });
+
+  it("prints provider status for doctor without starting the TUI", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await runCli(["doctor"]);
+
+    expect(log).toHaveBeenCalledWith("OpenCandle provider status");
+    expect(log).toHaveBeenCalledWith("  twitter: ok");
   });
 });

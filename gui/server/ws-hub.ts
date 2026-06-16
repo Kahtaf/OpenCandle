@@ -6,6 +6,8 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ChatEvent } from "../shared/chat-events.js";
+import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
+import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import type { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
@@ -144,6 +146,14 @@ export function createWsHub({
           );
           broadcast({ type: "catalog", catalog: buildCatalog() });
           break;
+        case "provider.status.check": {
+          const providerId = String(data.providerId ?? "") as ProviderId;
+          getProvider(providerId);
+          const mode = data.mode === "session" ? "session" : "install";
+          const status = await probeProviderStatus(providerId, { mode, force: true });
+          client.send({ type: "provider.status", providerId, status });
+          break;
+        }
         case "session.new":
           await sessionActionsController.handleNewSession();
           sendBoot(client);
