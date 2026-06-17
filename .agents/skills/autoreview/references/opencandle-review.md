@@ -14,6 +14,7 @@ Focus on concrete regressions, missing validation, and OpenCandle-specific risks
 - GUI changes: check server/shared/web contracts together. UI changes need browser verification and the relevant GUI tests/builds.
 - GUI React quality: for changes under `gui/web/src`, require React Doctor evidence. Treat React Doctor errors as blockers by default, and treat new warnings as actionable unless the change documents why they are pre-existing or consciously deferred. Maintain a high React Doctor score for UI work rather than accepting regressions in state/effects, performance, architecture, security, or accessibility.
 - Package/release changes: require package dry-run proof that shipped files match the intended install behavior.
+- Docs freshness: user-facing behavior, setup flow, commands, provider contracts, configuration, API/tool schemas, or architectural changes should update the relevant docs, OpenSpec artifacts, examples, or README sections. Flag stale or missing documentation when the diff changes how users or future agents should operate the system.
 - Changelog: atomic features and bug fixes should update `CHANGELOG.md` under `[Unreleased]`.
 
 ## Expected Evidence By Change Type
