@@ -191,16 +191,18 @@ export function createSentimentSummaryTool(
         };
       }
 
+      const summaryWarnings = warnings.map(stripOpenCandleControlLines);
+
       // Score and index through pipeline
       const pipeline = getSentimentPipeline();
       const result = await pipeline.processRecords(allRecords, args.query);
       const insight =
-        result.insight && warnings.length > 0
+        result.insight && summaryWarnings.length > 0
           ? {
               ...result.insight,
               caveats: [
                 ...result.insight.caveats,
-                ...warnings.map((warning) => `Source warning: ${warning}`),
+                ...summaryWarnings.map((warning) => `Source warning: ${warning}`),
               ],
             }
           : result.insight;
@@ -276,9 +278,9 @@ export function createSentimentSummaryTool(
         lines.push(`Trend: ${t.sparkline} ${t.direction} (${t.count} records)`);
       }
 
-      if (warnings.length > 0) {
+      if (summaryWarnings.length > 0) {
         lines.push("");
-        lines.push(warnings.map((w) => `⚠ ${w}`).join("\n"));
+        lines.push(summaryWarnings.map((w) => `⚠ ${w}`).join("\n"));
       }
 
       const output = softDegradedPrefix + lines.join("\n");
@@ -369,4 +371,13 @@ function sourceToolWarning(source: string, text: string): string {
   const tag = lines.find((line) => line.includes("[OPENCANDLE_"));
   const summary = lines.find((line) => !line.includes("[OPENCANDLE_")) ?? "unavailable";
   return tag ? `${source}: ${summary}\n${tag}` : `${source}: ${summary}`;
+}
+
+function stripOpenCandleControlLines(text: string): string {
+  const stripped = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("[OPENCANDLE_"))
+    .join("\n");
+  return stripped || "unavailable";
 }

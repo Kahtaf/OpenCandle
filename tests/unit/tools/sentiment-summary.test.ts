@@ -171,8 +171,12 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Price context: unavailable for AAPL");
     expect(text).toMatch(/\bsource-coverage risk\b/i);
     expect(text).toMatch(/\bsentiment can be noisy\b/i);
+    expect(text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
     expect(result.details.insight.sampleSize).toBeGreaterThan(0);
     expect(result.details.insight.caveats.join(" ")).toContain("Source warning: Twitter");
+    expect(result.details.insight.caveats.join(" ")).not.toContain(
+      "[OPENCANDLE_EXTERNAL_TOOL_REQUIRED",
+    );
   });
 
   it("honors saved external-tool skip preferences before fetching aggregate sources", async () => {

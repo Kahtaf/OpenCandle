@@ -5,7 +5,12 @@ import {
   sentimentQueryTerms,
 } from "../../../src/tools/sentiment/query-match.js";
 
-function record(title: string, text = "", tickers: string[] = []): SentinelRecord {
+function record(
+  title: string,
+  text = "",
+  tickers: string[] = [],
+  metadata: Record<string, unknown> = {},
+): SentinelRecord {
   return {
     id: title,
     source: "reddit",
@@ -19,7 +24,7 @@ function record(title: string, text = "", tickers: string[] = []): SentinelRecor
     fetchedAt: "2026-05-21T12:00:00.000Z",
     engagement: { score: 0, replies: 0, shares: null, views: null },
     sentiment: { score: 0, confidence: 0, method: "keyword", tickers },
-    metadata: {},
+    metadata,
   };
 }
 
@@ -143,6 +148,21 @@ describe("sentiment query matching", () => {
 
     expect(recordMatchesSentimentQuery(record("Bank stress is rising"), terms)).toBe(true);
     expect(recordMatchesSentimentQuery(record("Regional bank dividend thread"), terms)).toBe(false);
+  });
+
+  it("counts subreddit metadata for subreddit-qualified ticker queries", () => {
+    const terms = sentimentQueryTerms("r/wallstreetbets saying about META");
+
+    expect(terms).toEqual(["meta", "wallstreetbets"]);
+    expect(
+      recordMatchesSentimentQuery(
+        record("META earnings thread", "", ["META"], { subreddit: "wallstreetbets" }),
+        terms,
+      ),
+    ).toBe(true);
+    expect(recordMatchesSentimentQuery(record("META earnings thread", "", ["META"]), terms)).toBe(
+      false,
+    );
   });
 
   it("matches simple singular and plural topic variants", () => {

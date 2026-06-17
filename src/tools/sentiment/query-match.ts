@@ -76,6 +76,12 @@ export function recordMatchesSentimentQuery(
   if (terms.length === 0) return true;
   const text = `${record.title ?? ""}\n${record.text}`.toLowerCase();
   const textTokens = new Set(text.match(/[a-z0-9]+/g) ?? []);
+  const metadataTokens = new Set<string>();
+  const subreddit = record.metadata.subreddit;
+  if (typeof subreddit === "string") {
+    metadataTokens.add(subreddit.toLowerCase());
+    metadataTokens.add(subreddit.toLowerCase().replace(/^r\//, ""));
+  }
   if (/\bs\s*&\s*p\s*500\b/i.test(text) || /\bspx\b/i.test(text)) textTokens.add("sp500");
   for (const match of text.matchAll(/\b([a-z])\s*[&/]\s*([a-z])\b/g)) {
     textTokens.add(`${match[1]}${match[2]}`);
@@ -89,7 +95,9 @@ export function recordMatchesSentimentQuery(
     tickerTokens.add(normalized);
     tickerTokens.add(normalized.replace(/[^a-z0-9]/g, ""));
   }
-  const matchedTerms = terms.filter((term) => tickerTokens.has(term) || textTokens.has(term));
+  const matchedTerms = terms.filter(
+    (term) => tickerTokens.has(term) || textTokens.has(term) || metadataTokens.has(term),
+  );
   for (const term of terms) {
     if (matchedTerms.includes(term) || !term.includes(" ")) continue;
     if (text.includes(term)) matchedTerms.push(term);
