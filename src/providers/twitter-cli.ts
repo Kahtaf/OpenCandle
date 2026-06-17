@@ -65,6 +65,8 @@ export async function searchTweets(query: string, max = 20): Promise<TwitterTwee
     query,
     "--max",
     String(max),
+    "-t",
+    "Latest",
     "--json",
   ]);
 

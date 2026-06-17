@@ -101,7 +101,7 @@ describe("provider status probes", () => {
       mode: "session",
       state: "session_ok",
     });
-    expect(calls).toEqual([["feed", "--max", "0", "--json"]]);
+    expect(calls).toEqual([["feed", "--max", "1", "--json"]]);
   });
 
   it("checks Reddit passive status with --version only", async () => {

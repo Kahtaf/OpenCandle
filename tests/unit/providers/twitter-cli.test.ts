@@ -25,7 +25,15 @@ describe("twitter-cli provider wrapper", () => {
 
     const tweets = await searchTweets("$AAPL", 20);
 
-    expect(runner).toHaveBeenCalledWith("twitter", ["search", "$AAPL", "--max", "20", "--json"]);
+    expect(runner).toHaveBeenCalledWith("twitter", [
+      "search",
+      "$AAPL",
+      "--max",
+      "20",
+      "-t",
+      "Latest",
+      "--json",
+    ]);
     expect(tweets[0]).toMatchObject({
       id: "1234567890",
       author: "trader_joe",

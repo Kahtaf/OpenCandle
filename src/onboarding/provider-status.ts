@@ -185,7 +185,7 @@ async function probeExternalTool(
   const args =
     mode === "install"
       ? ["--version"]
-      : (provider.sessionProbeArgs ?? ["feed", "--max", "0", "--json"]);
+      : (provider.sessionProbeArgs ?? ["feed", "--max", "1", "--json"]);
   try {
     const result = await options.commandRunner(provider.binary, args, {
       timeoutMs: COMMAND_TIMEOUT_MS,

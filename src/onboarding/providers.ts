@@ -211,6 +211,7 @@ export const PROVIDERS = [
     binary: "twitter",
     installCmd: "uv tool install twitter-cli",
     sessionSource: "browser-cookies",
+    sessionProbeArgs: ["feed", "--max", "1", "--json"],
     supportedBrowsers: ["Chrome", "Arc", "Edge", "Firefox", "Brave"],
     unlocks: ["X/Twitter sentiment", "recent ticker mentions", "social engagement context"],
     fallbackDescription:
