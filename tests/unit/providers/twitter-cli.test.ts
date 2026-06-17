@@ -69,13 +69,28 @@ describe("twitter-cli provider wrapper", () => {
       vi.fn().mockResolvedValue({
         code: 1,
         stdout: "",
-        stderr: "auth_token=secret123 ct0=secret456 No Twitter cookies found",
+        stderr:
+          "auth_token=secret123 ct0=secret456 twid=u%3D123 kdt=secret789 guest_id=v1%3Aabc No Twitter cookies found",
       }),
     );
 
     await expect(searchTweets("$AAPL", 20)).rejects.toThrow(
-      "auth_token=[redacted] ct0=[redacted] No Twitter cookies found",
+      "auth_token=[redacted] ct0=[redacted] twid=[redacted] kdt=[redacted] guest_id=[redacted] No Twitter cookies found",
     );
+  });
+
+  it("redacts full Cookie headers before surfacing errors", async () => {
+    setTwitterCliCommandRunnerForTests(
+      vi.fn().mockResolvedValue({
+        code: 1,
+        stdout: "",
+        stderr:
+          "Cookie: auth_token=secret123; ct0=secret456; twid=u%3D123; kdt=secret789\n401 unauthorized",
+      }),
+    );
+
+    await expect(searchTweets("$AAPL", 20)).rejects.toThrow("Cookie: [redacted]\n401 unauthorized");
+    await expect(searchTweets("$AAPL", 20)).rejects.not.toThrow("secret123");
   });
 
   it("throws ExternalToolError for malformed JSON", async () => {

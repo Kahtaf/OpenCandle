@@ -158,10 +158,13 @@ function nullableNumberValue(value: unknown): number | null {
 }
 
 export function redactSensitiveOutput(input: string): string {
+  const xCookieNames =
+    "auth_token|ct0|twid|kdt|guest_id|guest_id_ads|guest_id_marketing|personalization_id";
   return input
     .slice(0, MAX_OUTPUT_CHARS)
-    .replace(/\b(auth_token|ct0)\b\s*[:=]\s*[^;\s,)]+/gi, "$1=[redacted]")
-    .replace(/\b(auth_token|ct0)=([^;\s,)]+)/gi, "$1=[redacted]");
+    .replace(/\b(cookie|set-cookie)\s*:\s*[^\r\n]+/gi, "$1: [redacted]")
+    .replace(new RegExp(`\\b(${xCookieNames})\\b\\s*[:=]\\s*[^;\\s,)]+`, "gi"), "$1=[redacted]")
+    .replace(new RegExp(`\\b(${xCookieNames})=([^;\\s,)]+)`, "gi"), "$1=[redacted]");
 }
 
 function runCommand(command: string, args: readonly string[]): Promise<CommandResult> {

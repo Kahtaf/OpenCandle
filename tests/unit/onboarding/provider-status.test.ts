@@ -213,7 +213,8 @@ describe("provider status probes", () => {
     const runner: CommandRunner = async () => ({
       code: 1,
       stdout: "",
-      stderr: "No Twitter cookies found. Log into x.com in Chrome.",
+      stderr:
+        "Cookie: auth_token=secret123; ct0=secret456; twid=u%3D123\nNo Twitter cookies found. Log into x.com in Chrome.",
     });
 
     const status = await probeProviderStatus("twitter", { mode: "session", commandRunner: runner });
@@ -223,7 +224,10 @@ describe("provider status probes", () => {
       mode: "session",
       state: "session_missing",
     });
+    expect(status.message).toContain("Cookie: [redacted]");
     expect(status.message).not.toContain("auth_token");
+    expect(status.message).not.toContain("secret123");
+    expect(status.message).not.toContain("twid");
   });
 
   it("bounds public HTTP reachability and caches the result", async () => {

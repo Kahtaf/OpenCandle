@@ -324,15 +324,20 @@ function classifySessionFailure(message: string | undefined): ExternalToolProvid
 }
 
 export function redactSensitiveOutput(input: string): string {
+  const xCookieNames =
+    "auth_token|ct0|twid|kdt|guest_id|guest_id_ads|guest_id_marketing|personalization_id";
+  const genericSecretName =
+    "[a-z0-9_]*(?:session|token)[a-z0-9_]*|[a-z0-9_]+cookie[a-z0-9_]*|[a-z0-9_]*cookie[a-z0-9_]+";
   return input
     .slice(0, MAX_OUTPUT_CHARS)
-    .replace(/\b(auth_token|ct0)\b\s*[:=]\s*[^;\s,)]+/gi, "$1=[redacted]")
-    .replace(/\b(auth_token|ct0)=([^;\s,)]+)/gi, "$1=[redacted]")
+    .replace(/\b(cookie|set-cookie)\s*:\s*[^\r\n]+/gi, "$1: [redacted]")
+    .replace(new RegExp(`\\b(${xCookieNames})\\b\\s*[:=]\\s*[^;\\s,)]+`, "gi"), "$1=[redacted]")
+    .replace(new RegExp(`\\b(${xCookieNames})=([^;\\s,)]+)`, "gi"), "$1=[redacted]")
     .replace(
-      /\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)\b\s*[:=]\s*[^;\s,)]+/gi,
+      new RegExp(`\\b(${genericSecretName})\\b\\s*[:=]\\s*[^;\\s,)]+`, "gi"),
       "$1=[redacted]",
     )
-    .replace(/\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)=([^;\s,)]+)/gi, "$1=[redacted]")
+    .replace(new RegExp(`\\b(${genericSecretName})=([^;\\s,)]+)`, "gi"), "$1=[redacted]")
     .replace(
       /(?:~|\/Users\/[^/\s]+|\/home\/[^/\s]+)?\/\.config\/rdt-cli\/credential\.json/g,
       "[redacted-credential-path]",
