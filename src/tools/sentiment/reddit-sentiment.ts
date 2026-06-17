@@ -56,9 +56,11 @@ interface RedditSentimentToolOptions {
   askUserHandler?: AskUserHandler;
 }
 
+type RedditToolDetails = RedditSentimentResult | null;
+
 export function createRedditSentimentTool(
   options: RedditSentimentToolOptions = {},
-): AgentTool<typeof params, RedditSentimentResult> {
+): AgentTool<typeof params, RedditToolDetails> {
   return {
     name: "get_reddit_sentiment",
     label: "Reddit Sentiment",
@@ -161,14 +163,14 @@ export function createRedditSentimentTool(
               : "Reddit sentiment requires an active Reddit browser session for rdt-cli. Run `rdt login` or refresh your Reddit browser login.";
           return {
             content: [{ type: "text", text: `${tag}\n\n${guidance}` }],
-            details: null as any,
+            details: null,
           };
         }
         return {
           content: [
             { type: "text", text: `⚠ Reddit sentiment unavailable (${warnings.join("; ")}).` },
           ],
-          details: null as any,
+          details: null,
         };
       }
 
@@ -227,6 +229,25 @@ export function createRedditSentimentTool(
       const firstResult = allResults[0];
       const postRecords = pipelineResult.fresh.filter((r) => !r.metadata.isComment);
       const commentRecords = pipelineResult.fresh.filter((r) => r.metadata.isComment);
+      const rawPostsById = new Map(
+        allResults.flatMap((result) => result.posts.map((post) => [post.id, post] as const)),
+      );
+      const aggregatePosts: RedditSentimentResult["posts"] = postRecords.map((record) => {
+        const rawPost = rawPostsById.get(record.sourceId);
+        return {
+          id: record.sourceId,
+          title: rawPost?.title ?? record.title ?? "",
+          selftext: rawPost?.selftext ?? "",
+          author: rawPost?.author ?? record.author ?? "unknown",
+          score: rawPost?.score ?? record.engagement.score,
+          comments: rawPost?.comments ?? record.engagement.replies ?? 0,
+          url: rawPost?.url ?? record.url,
+          created: rawPost?.created ?? record.publishedAt ?? record.fetchedAt,
+        };
+      });
+      const aggregateTopMentions = [
+        ...new Set(postRecords.flatMap((record) => record.sentiment.tickers)),
+      ];
       const avgScore =
         postRecords.length > 0
           ? postRecords.reduce((s, r) => s + r.sentiment.score, 0) / postRecords.length
@@ -252,9 +273,13 @@ export function createRedditSentimentTool(
 
       const details: RedditSentimentResult = {
         ...firstResult,
+        subreddit: subreddits.length === 1 ? firstResult.subreddit : subreddits.join(","),
         postCount: postRecords.length,
-        posts: firstResult.posts,
+        posts: aggregatePosts,
+        topMentions: aggregateTopMentions,
         sentimentScore: avgScore,
+        bullishCount: postRecords.filter((record) => record.sentiment.score > 0).length,
+        bearishCount: postRecords.filter((record) => record.sentiment.score < 0).length,
         insight: pipelineResult.insight,
       };
 
@@ -262,8 +287,8 @@ export function createRedditSentimentTool(
         lines.push(...formatInsightSection(pipelineResult.insight));
       }
 
-      if (firstResult.topMentions.length > 0) {
-        lines.push(`Tickers: ${firstResult.topMentions.map((t) => `$${t}`).join(", ")}`);
+      if (aggregateTopMentions.length > 0) {
+        lines.push(`Tickers: ${aggregateTopMentions.map((t) => `$${t}`).join(", ")}`);
       }
 
       lines.push("");

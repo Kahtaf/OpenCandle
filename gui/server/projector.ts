@@ -36,6 +36,7 @@ const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
   compare_companies: "alpha_vantage",
   get_economic_data: "fred",
   get_twitter_sentiment: "twitter",
+  get_reddit_sentiment: "reddit",
 };
 
 export function createEmptyDashboardState(): DashboardState {
@@ -213,7 +214,8 @@ function parseSkippedProviders(text: string): string[] {
 
 function parseSoftGapProviders(text: string): string[] {
   const providers: string[] = [];
-  const re = /\[OPENCANDLE_(?:SKIPPED|SOFT_DEGRADED)[^\]]*provider=([a-z0-9_-]+)/gi;
+  const re =
+    /\[OPENCANDLE_(?:SKIPPED|SOFT_DEGRADED|EXTERNAL_TOOL_REQUIRED)[^\]]*provider=([a-z0-9_-]+)/gi;
   while (true) {
     const match = re.exec(text);
     if (!match) break;

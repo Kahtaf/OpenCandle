@@ -129,6 +129,60 @@ describe("get_reddit_sentiment tool", () => {
     expect(result.details?.insight?.caveats.join(" ")).toContain("Low sample size");
   });
 
+  it("returns aggregate details across multiple subreddits", async () => {
+    const runner = vi.fn(async (_command, args) => {
+      const subreddit = args[args.indexOf("--subreddit") + 1];
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          ok: true,
+          schema_version: "1",
+          data: [
+            {
+              id: `${subreddit}-aapl`,
+              title: `$AAPL bullish setup in r/${subreddit}`,
+              selftext: "Breakout demand looks constructive.",
+              author: "stock_guru",
+              score: subreddit === "stocks" ? 100 : 80,
+              num_comments: 0,
+              subreddit,
+              permalink: `/r/${subreddit}/comments/${subreddit}-aapl/aapl/`,
+              created_utc: 1744300800,
+            },
+            {
+              id: `${subreddit}-tsla`,
+              title: `$TSLA unrelated thread in r/${subreddit}`,
+              selftext: "Different ticker should not be returned for the requested query.",
+              author: "stock_guru",
+              score: 30,
+              num_comments: 0,
+              subreddit,
+              permalink: `/r/${subreddit}/comments/${subreddit}-tsla/tsla/`,
+              created_utc: 1744300900,
+            },
+          ],
+        }),
+        stderr: "",
+      };
+    });
+    setRdtCommandRunnerForTests(runner);
+
+    const result = await redditSentimentTool.execute("call-multi-details", {
+      subreddits: ["stocks", "investing"],
+      query: "AAPL",
+    });
+
+    expect(result.details?.postCount).toBe(2);
+    expect(result.details?.posts.map((post) => post.id).sort()).toEqual([
+      "investing-aapl",
+      "stocks-aapl",
+    ]);
+    expect(result.details?.posts.find((post) => post.id === "stocks-aapl")?.selftext).toBe(
+      "Breakout demand looks constructive.",
+    );
+    expect(result.details?.topMentions).toEqual(["AAPL"]);
+  });
+
   it("marks and escapes untrusted post titles in output", async () => {
     setRdtCommandRunnerForTests(
       vi.fn().mockResolvedValue({
