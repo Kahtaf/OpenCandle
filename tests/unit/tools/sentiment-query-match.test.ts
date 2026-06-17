@@ -32,6 +32,21 @@ describe("sentiment query matching", () => {
     expect(recordMatchesSentimentQuery(record("AAPL earnings thread"), terms)).toBe(false);
   });
 
+  it("does not require incidental prompt words for natural-language ticker queries", () => {
+    const peopleTerms = sentimentQueryTerms("what are people saying about NVDA");
+    const latestTerms = sentimentQueryTerms("latest sentiment on AAPL");
+    const twitterTerms = sentimentQueryTerms("what's twitter saying about SPCX");
+
+    expect(peopleTerms).toEqual(["nvda"]);
+    expect(latestTerms).toEqual(["aapl"]);
+    expect(twitterTerms).toEqual(["spcx"]);
+    expect(recordMatchesSentimentQuery(record("NVDA traders lean bullish"), peopleTerms)).toBe(
+      true,
+    );
+    expect(recordMatchesSentimentQuery(record("AAPL earnings thread"), latestTerms)).toBe(true);
+    expect(recordMatchesSentimentQuery(record("SPCX launch discussion"), twitterTerms)).toBe(true);
+  });
+
   it("keeps topic qualifiers with ticker queries", () => {
     const terms = sentimentQueryTerms("AAPL layoffs");
 
