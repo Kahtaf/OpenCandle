@@ -30,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   clearProviderStatusCache();
   delete process.env.FRED_API_KEY;
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -178,6 +179,32 @@ describe("provider status probes", () => {
     });
     expect(status.message).toContain("opencandle doctor --enable reddit");
     expect(runner).not.toHaveBeenCalled();
+
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it("runs forced external tool checks even after the provider was skipped", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-provider-status-force-"));
+    vi.stubEnv("OPENCANDLE_HOME", home);
+    saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
+    const runner = vi.fn<CommandRunner>(async () => ({
+      code: 0,
+      stdout: "rdt, version 0.4.1\n",
+      stderr: "",
+    }));
+
+    const status = await probeProviderStatus("reddit", {
+      force: true,
+      commandRunner: runner,
+    });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "install",
+      state: "installed",
+    });
+    expect(runner).toHaveBeenCalledWith("rdt", ["--version"], { timeoutMs: 5000 });
 
     rmSync(home, { recursive: true, force: true });
   });

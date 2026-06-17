@@ -27,7 +27,7 @@ export function formatInsightSection(insight: SentimentInsight): string[] {
   }
   if (insight.representativeItems.length > 0) {
     lines.push(
-      `- Representative evidence preview: ${insight.representativeItems.length} shown from ${insight.sampleSize} scored records.`,
+      `- Representative evidence preview: ${insight.representativeItems.length} shown from ${insight.scoredSampleSize} scored records (${insight.sampleSize} total records).`,
     );
   }
   return lines;

@@ -93,6 +93,22 @@ export async function probeProviderStatus(
   const mode = isExternalToolProvider(provider) ? (options.mode ?? "install") : "default";
   const cacheKey = `${providerId}:${mode}`;
   const now = options.now ?? new Date();
+  const skippedByPreference =
+    isExternalToolProvider(provider) &&
+    loadOnboardingState().providers[providerId]?.status === "never_ask";
+
+  if (skippedByPreference && !options.force) {
+    return {
+      providerId,
+      kind: "external-tool",
+      mode: mode as "install" | "session",
+      state: "skipped",
+      installCmd: provider.installCmd,
+      message: `Skipped by user preference; run opencandle doctor --enable ${providerId} to re-enable.`,
+      checkedAt: now.toISOString(),
+      cacheHit: false,
+    };
+  }
 
   if (!options.force) {
     const cached = statusCache.get(cacheKey);
@@ -113,23 +129,10 @@ export async function probeProviderStatus(
       cacheHit: false,
     };
   } else if (isExternalToolProvider(provider)) {
-    if (loadOnboardingState().providers[providerId]?.status === "never_ask") {
-      status = {
-        providerId,
-        kind: "external-tool",
-        mode: mode as "install" | "session",
-        state: "skipped",
-        installCmd: provider.installCmd,
-        message: `Skipped by user preference; run opencandle doctor --enable ${providerId} to re-enable.`,
-        checkedAt: now.toISOString(),
-        cacheHit: false,
-      };
-    } else {
-      status = await probeExternalTool(providerId, mode as "install" | "session", {
-        now,
-        commandRunner: options.commandRunner ?? runCommand,
-      });
-    }
+    status = await probeExternalTool(providerId, mode as "install" | "session", {
+      now,
+      commandRunner: options.commandRunner ?? runCommand,
+    });
   } else if (isPublicHttpProvider(provider)) {
     status = await probePublicHttp(providerId, {
       now,
