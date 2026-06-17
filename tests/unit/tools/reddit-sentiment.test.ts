@@ -297,4 +297,58 @@ describe("get_reddit_sentiment tool", () => {
     expect(result.content[0].text).toContain("Reddit");
     expect(result.content[0].text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
   });
+
+  it("does not emit a second setup tag when continue retry still fails", async () => {
+    const runner = vi.fn().mockImplementation(() => {
+      const err = new Error("spawn rdt ENOENT") as NodeJS.ErrnoException;
+      err.code = "ENOENT";
+      throw err;
+    });
+    setRdtCommandRunnerForTests(runner);
+    const askUserHandler: AskUserHandler = vi.fn(async () => ({
+      answer: "Continue after installing Reddit",
+      cancelled: false,
+    }));
+    const tool = createRedditSentimentTool({ askUserHandler });
+
+    const result = await tool.execute("call-retry-fail", {
+      subreddit: "stocks",
+      query: "SPCX",
+    });
+
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(result.content[0].text).toContain("⚠ Reddit sentiment unavailable");
+    expect(result.content[0].text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
+  });
+
+  it("emits login setup guidance when install retry advances to missing session", async () => {
+    const runner = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        const err = new Error("spawn rdt ENOENT") as NodeJS.ErrnoException;
+        err.code = "ENOENT";
+        throw err;
+      })
+      .mockResolvedValueOnce({
+        code: 1,
+        stdout: "",
+        stderr: "No Reddit cookies found.",
+      });
+    setRdtCommandRunnerForTests(runner);
+    const askUserHandler: AskUserHandler = vi.fn(async () => ({
+      answer: "Continue after installing Reddit",
+      cancelled: false,
+    }));
+    const tool = createRedditSentimentTool({ askUserHandler });
+
+    const result = await tool.execute("call-retry-login", {
+      subreddit: "stocks",
+      query: "SPCX",
+    });
+
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(result.content[0].text).toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit");
+    expect(result.content[0].text).toContain("reason=session_missing");
+    expect(result.content[0].text).toContain('loginCmd="rdt login"');
+  });
 });

@@ -96,10 +96,13 @@ export function createRedditSentimentTool(
       }
 
       let { allResults, warnings } = await fetchRedditSubreddits(subreddits, limit, args.query);
+      let retriedAfterContinue = false;
+      let promptedSetupIssue: ReturnType<typeof classifyRedditSetupIssue> = null;
 
       if (allResults.length === 0) {
         const setupIssue = classifyRedditSetupIssue(warnings);
         if (setupIssue) {
+          promptedSetupIssue = setupIssue;
           const askUserHandler =
             options.askUserHandler ??
             (ctx as ExtensionContextWithAskUserHandler | undefined)?.askUserHandler;
@@ -124,6 +127,7 @@ export function createRedditSentimentTool(
             );
 
             if (!promptResult.cancelled && promptResult.answer?.startsWith("Continue")) {
+              retriedAfterContinue = true;
               ({ allResults, warnings } = await fetchRedditSubreddits(
                 subreddits,
                 limit,
@@ -149,6 +153,9 @@ export function createRedditSentimentTool(
 
       if (allResults.length === 0) {
         const setupIssue = classifyRedditSetupIssue(warnings);
+        if (retriedAfterContinue && (!setupIssue || setupIssue === promptedSetupIssue)) {
+          return unavailableRedditResult(warnings);
+        }
         if (setupIssue) {
           const tag = buildExternalToolRequiredTag({
             provider: "reddit",
@@ -166,12 +173,7 @@ export function createRedditSentimentTool(
             details: null,
           };
         }
-        return {
-          content: [
-            { type: "text", text: `⚠ Reddit sentiment unavailable (${warnings.join("; ")}).` },
-          ],
-          details: null,
-        };
+        return unavailableRedditResult(warnings);
       }
 
       // Merge records returned by the provider. rdt-cli handles query-bearing
@@ -320,6 +322,16 @@ export function createRedditSentimentTool(
 }
 
 export const redditSentimentTool = createRedditSentimentTool();
+
+function unavailableRedditResult(warnings: readonly string[]): {
+  content: [{ type: "text"; text: string }];
+  details: null;
+} {
+  return {
+    content: [{ type: "text", text: `⚠ Reddit sentiment unavailable (${warnings.join("; ")}).` }],
+    details: null,
+  };
+}
 
 async function fetchRedditSubreddits(
   subreddits: readonly string[],
