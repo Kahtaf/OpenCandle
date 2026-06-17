@@ -60,7 +60,7 @@ export function createTwitterSentimentTool(
         return skippedResult(
           "You previously asked not to be reminded about X/Twitter.",
           true,
-          "run /connect twitter to re-enable X/Twitter sentiment (silenced)",
+          "run opencandle doctor --enable twitter to re-enable X/Twitter sentiment (silenced)",
         );
       }
 
@@ -112,7 +112,7 @@ export function createTwitterSentimentTool(
             return skippedResult(
               `User chose to always skip ${descriptor.displayName} data. Do not ask about X/Twitter setup again unless the user explicitly reconnects it.`,
               true,
-              "run /connect twitter to re-enable X/Twitter sentiment (silenced)",
+              "run opencandle doctor --enable twitter to re-enable X/Twitter sentiment (silenced)",
             );
           }
 
