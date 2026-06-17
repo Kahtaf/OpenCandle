@@ -205,6 +205,55 @@ describe("get_sentiment_summary tool", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
+  it("keeps Reddit search results for natural-language ticker queries", async () => {
+    mockedWrapProvider.mockImplementation(async (provider) => {
+      if (provider === "twitter") {
+        return { status: "unavailable", reason: "No Twitter session found" } as any;
+      }
+      return {
+        status: "ok",
+        data: {
+          subreddit: "stocks",
+          postCount: 1,
+          posts: [
+            {
+              id: "gme1",
+              title: "GME traders lean bullish into the close",
+              selftext: "The setup looks constructive after retail buying picked up.",
+              author: "retail_bull",
+              score: 120,
+              comments: 0,
+              url: "https://reddit.com/r/stocks/comments/gme1/gme/",
+              created: "2026-05-21T12:00:00.000Z",
+            },
+          ],
+          topMentions: ["GME"],
+          sentimentScore: 1,
+          bullishCount: 1,
+          bearishCount: 0,
+          fetchedAt: "2026-05-21T12:00:00.000Z",
+        },
+      };
+    });
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "retail mood around GME right now",
+        results: [],
+        resultCount: 0,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-natural-reddit", {
+      query: "retail mood around GME right now",
+    });
+
+    expect(result.content[0].text).toContain("Reddit");
+    expect(result.details.insight.sampleSize).toBeGreaterThan(0);
+  });
+
   it("adds price context for ticker-specific sentiment summaries", async () => {
     mockedWrapProvider.mockResolvedValue({ status: "unavailable", reason: "disabled" } as any);
     mockedSearchWeb.mockResolvedValue({

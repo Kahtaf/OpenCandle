@@ -17,6 +17,7 @@ import { WebAdapter } from "../../sentiment/adapters/web.js";
 import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { SentinelRecord } from "../../sentiment/types.js";
 import { formatInsightSection } from "./insight-format.js";
+import { recordMatchesSentimentQuery, sentimentQueryTerms } from "./query-match.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic for cross-source sentiment summary" }),
@@ -336,12 +337,9 @@ async function fetchRedditCrossSubreddit(
     }
     const postRecords = adapter.mapPostsToRecords(result.data, query);
 
-    // Topic filter
-    const queryLower = query.toLowerCase();
-    const filtered = postRecords.filter(
-      (r) =>
-        r.text.toLowerCase().includes(queryLower) ||
-        (r.title?.toLowerCase().includes(queryLower) ?? false),
+    const queryTerms = sentimentQueryTerms(query);
+    const filtered = postRecords.filter((record) =>
+      recordMatchesSentimentQuery(record, queryTerms),
     );
     records.push(...filtered);
 

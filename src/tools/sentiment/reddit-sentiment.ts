@@ -17,6 +17,7 @@ import { getSentimentPipeline } from "../../sentiment/index.js";
 import type { AskUserHandler } from "../../types/index.js";
 import type { RedditSentimentResult } from "../../types/sentiment.js";
 import { formatInsightSection } from "./insight-format.js";
+import { recordMatchesSentimentQuery, sentimentQueryTerms } from "./query-match.js";
 import { renderUntrustedText, untrustedContentHeader } from "./untrusted-text.js";
 
 const params = Type.Object({
@@ -180,12 +181,8 @@ export function createRedditSentimentTool(
 
       // Topic filtering
       if (args.query) {
-        const queryLower = args.query.toLowerCase();
-        allRecords = allRecords.filter(
-          (r) =>
-            r.text.toLowerCase().includes(queryLower) ||
-            (r.title?.toLowerCase().includes(queryLower) ?? false),
-        );
+        const queryTerms = sentimentQueryTerms(args.query);
+        allRecords = allRecords.filter((record) => recordMatchesSentimentQuery(record, queryTerms));
       }
 
       // Deduplicate by sourceId (crossposts)
