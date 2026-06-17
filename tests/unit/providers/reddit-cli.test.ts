@@ -126,9 +126,7 @@ describe("rdt-cli provider wrapper", () => {
     setRdtCommandRunnerForTests(
       vi.fn().mockResolvedValue({ code: 0, stdout: "<html>nope</html>", stderr: "" }),
     );
-    await expect(searchRedditPosts("SPCX", { limit: 5 })).rejects.toBeInstanceOf(
-      ExternalToolError,
-    );
+    await expect(searchRedditPosts("SPCX", { limit: 5 })).rejects.toBeInstanceOf(ExternalToolError);
     await expect(searchRedditPosts("SPCX", { limit: 5 })).rejects.toThrow("non-JSON");
 
     setRdtCommandRunnerForTests(

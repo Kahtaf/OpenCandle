@@ -80,7 +80,7 @@
   ],
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
-    "prebuild": "npm run check:node",
+    "prebuild": "npm run check:node && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc && chmod +x dist/cli.js",
     "prepare": "npm run build && npm run gui:web:build",
     "prestart": "npm run check:node",

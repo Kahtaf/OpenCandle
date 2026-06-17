@@ -8,8 +8,8 @@ import {
   markProviderNeverAsk,
   saveOnboardingState,
 } from "../../../src/onboarding/state.js";
-import type { AskUserHandler } from "../../../src/types/index.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
+import type { AskUserHandler } from "../../../src/types/index.js";
 import type { RedditSentimentResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
 

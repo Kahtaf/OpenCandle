@@ -208,7 +208,10 @@ function adaptPost(raw: RawRdtPost): RdtPost {
   };
 }
 
-function adaptComment(raw: RawRdtComment | undefined, postPermalink?: string): RedditComment | null {
+function adaptComment(
+  raw: RawRdtComment | undefined,
+  postPermalink?: string,
+): RedditComment | null {
   if (!raw || typeof raw.body !== "string" || raw.body.length === 0) return null;
   const permalink = stringValue(raw.permalink) || postPermalink || "";
   return {
@@ -243,9 +246,15 @@ function numberValue(value: unknown): number {
 export function redactSensitiveOutput(input: string): string {
   return input
     .slice(0, MAX_OUTPUT_CHARS)
-    .replace(/\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)\b\s*[:=]\s*[^;\s,)]+/gi, "$1=[redacted]")
+    .replace(
+      /\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)\b\s*[:=]\s*[^;\s,)]+/gi,
+      "$1=[redacted]",
+    )
     .replace(/\b([a-z0-9_]*(?:cookie|session|token)[a-z0-9_]*)=([^;\s,)]+)/gi, "$1=[redacted]")
-    .replace(/(?:~|\/Users\/[^/\s]+|\/home\/[^/\s]+)?\/\.config\/rdt-cli\/credential\.json/g, "[redacted-credential-path]");
+    .replace(
+      /(?:~|\/Users\/[^/\s]+|\/home\/[^/\s]+)?\/\.config\/rdt-cli\/credential\.json/g,
+      "[redacted-credential-path]",
+    );
 }
 
 function runCommand(command: string, args: readonly string[]): Promise<CommandResult> {
