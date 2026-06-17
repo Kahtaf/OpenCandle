@@ -404,6 +404,37 @@ describe("get_reddit_sentiment tool", () => {
     expect(result.content[0].text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
   });
 
+  it("does not mark one-time Reddit setup skips as silenced", async () => {
+    const runner = vi.fn().mockImplementation(() => {
+      const err = new Error("spawn rdt ENOENT") as NodeJS.ErrnoException;
+      err.code = "ENOENT";
+      throw err;
+    });
+    setRdtCommandRunnerForTests(runner);
+    const askUserHandler: AskUserHandler = vi.fn(async () => ({
+      answer: "Skip Reddit once",
+      cancelled: false,
+    }));
+    const tool = createRedditSentimentTool({ askUserHandler });
+
+    const result = await tool.execute("call-skip-once", {
+      subreddit: "stocks",
+      query: "SPCX",
+    });
+    const text = result.content[0].text;
+
+    expect(askUserHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionType: "select",
+        options: ["Continue after installing Reddit", "Skip Reddit once", "Always skip Reddit"],
+      }),
+    );
+    expect(text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
+    expect(text).not.toContain("silenced=true");
+    expect(text).toContain("Do not ask about Reddit setup again in this turn");
+    expect(text).toContain('remediation="user chose to skip Reddit for this request"');
+  });
+
   it("does not emit a second setup tag when continue retry still fails", async () => {
     const runner = vi.fn().mockImplementation(() => {
       const err = new Error("spawn rdt ENOENT") as NodeJS.ErrnoException;

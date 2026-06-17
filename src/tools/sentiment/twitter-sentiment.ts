@@ -119,8 +119,8 @@ export function createTwitterSentimentTool(
 
           return skippedResult(
             `User chose to skip ${descriptor.displayName} data for this request. Do not ask about X/Twitter setup again in this turn.`,
-            true,
-            "user chose to skip X/Twitter for this request (silenced)",
+            false,
+            "user chose to skip X/Twitter for this request",
           );
         }
 

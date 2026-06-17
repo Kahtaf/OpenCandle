@@ -143,8 +143,8 @@ export function createRedditSentimentTool(
             } else {
               return skippedRedditResult(
                 `User chose to skip ${descriptor.displayName} data for this request. Do not ask about Reddit setup again in this turn.`,
-                "user chose to skip Reddit for this request (silenced)",
-                true,
+                "user chose to skip Reddit for this request",
+                false,
               );
             }
           }

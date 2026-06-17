@@ -176,9 +176,10 @@ describe("get_twitter_sentiment tool", () => {
       }),
     );
     expect(text).toContain("[OPENCANDLE_SKIPPED provider=twitter");
-    expect(text).toContain("silenced=true");
+    expect(text).not.toContain("silenced=true");
     expect(text).toContain("User chose to skip X / Twitter data for this request");
     expect(text).toContain("Do not ask about X/Twitter setup again in this turn");
+    expect(text).toContain('remediation="user chose to skip X/Twitter for this request"');
     expect(text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
   });
 
