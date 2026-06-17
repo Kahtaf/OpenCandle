@@ -115,7 +115,12 @@ describe("answer contracts", () => {
 
     expect(contract.implemented).toBe(true);
     expect(contract.requiredEvidenceTypes).toEqual([]);
-    expect(contract.requiredFinalFields).toEqual(["source_coverage", "data_gap_disclosure"]);
+    expect(contract.requiredFinalFields).toEqual([
+      "source_coverage",
+      "sentiment_rationale",
+      "confidence_or_caveats",
+      "data_gap_disclosure",
+    ]);
     expect(contract.requiresFreshness).toBe(false);
     expect(contract.requiresDataGapDisclosure).toBe(true);
     expect(contract.requiresSourceCoverage).toBe(true);
@@ -335,6 +340,45 @@ describe("structured checks", () => {
     expect(trace.failures).toEqual([]);
     expect(trace.results.every((result) => result.observedOnly)).toBe(true);
     expect(trace.retryEligibility.eligible).toBe(false);
+  });
+
+  it("enforces sentiment-specific final fields", () => {
+    const missing = runStructuredChecks({
+      contract: ANSWER_CONTRACT_REGISTRY.sentiment_snapshot,
+      evidenceRecords: [],
+      finalAnswerMetadata: {
+        commitmentMode: "framework",
+        finalFields: ["framework_or_checklist", "source_coverage", "data_gap_disclosure"],
+        sourceCoverage: { sources: ["twitter", "reddit"] },
+        disclosedCapabilityGapIds: ["sentiment_sample_depth"],
+      },
+    });
+    const passing = runStructuredChecks({
+      contract: ANSWER_CONTRACT_REGISTRY.sentiment_snapshot,
+      evidenceRecords: [],
+      finalAnswerMetadata: {
+        commitmentMode: "framework",
+        finalFields: [
+          "framework_or_checklist",
+          "source_coverage",
+          "sentiment_rationale",
+          "confidence_or_caveats",
+          "data_gap_disclosure",
+        ],
+        sourceCoverage: { sources: ["twitter", "reddit"] },
+        disclosedCapabilityGapIds: ["sentiment_sample_depth"],
+      },
+    });
+
+    expect(missing.failures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkId: "required_final_fields_present",
+          failureReason: expect.stringContaining("sentiment_rationale"),
+        }),
+      ]),
+    );
+    expect(passing.failures).toEqual([]);
   });
 
   it("checks freshness and source coverage from metadata rather than prose headings", () => {

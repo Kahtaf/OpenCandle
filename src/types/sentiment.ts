@@ -1,3 +1,5 @@
+import type { SentinelRecord } from "../sentiment/types.js";
+
 export interface FearGreedData {
   value: number;
   label: string; // "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
@@ -19,6 +21,60 @@ export interface TwitterTweet {
   created: string;
 }
 
+export type SentimentInsightMethod = "deterministic-keyword-v1" | "llm";
+export type SentimentConfidenceLevel = "low" | "medium" | "high";
+
+export interface SentimentInsightConfidence {
+  level: SentimentConfidenceLevel;
+  score: number; // 0.0 to 1.0
+  reasons: string[];
+}
+
+export interface SentimentInsightDriver {
+  label: string;
+  count: number;
+  polarity: "positive" | "negative" | "mixed";
+  terms: string[];
+  sourceIds: string[];
+}
+
+export interface SentimentRepresentativeItem {
+  source: "twitter" | "reddit" | "web" | "finnhub" | "aggregate";
+  sourceId: string;
+  title: string | null;
+  excerpt: string;
+  url: string | null;
+  author: string | null;
+  publishedAt: string | null;
+  engagement: number | null;
+  score: number;
+  matchedTerms: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface SentimentSourceCoverage {
+  sources: string[];
+  counts: Record<string, number>;
+  missingSources?: string[];
+  notes?: string[];
+}
+
+export interface SentimentInsight {
+  label: string;
+  score: number;
+  sampleSize: number;
+  scoredSampleSize: number;
+  confidence: SentimentInsightConfidence;
+  positiveDrivers: SentimentInsightDriver[];
+  negativeDrivers: SentimentInsightDriver[];
+  mixedDrivers: SentimentInsightDriver[];
+  notableClaims: string[];
+  representativeItems: SentimentRepresentativeItem[];
+  sourceCoverage: SentimentSourceCoverage;
+  caveats: string[];
+  method: SentimentInsightMethod;
+}
+
 export interface TwitterSentimentResult {
   query: string;
   tweetCount: number;
@@ -28,6 +84,7 @@ export interface TwitterSentimentResult {
   bearishCount: number;
   topMentions: string[];
   fetchedAt: string;
+  insight?: SentimentInsight;
 }
 
 export interface WebSearchResult {
@@ -67,4 +124,6 @@ export interface RedditSentimentResult {
   bullishCount: number;
   bearishCount: number;
   fetchedAt: string;
+  insight?: SentimentInsight;
+  records?: SentinelRecord[];
 }

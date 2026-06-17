@@ -80,7 +80,7 @@
   ],
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
-    "prebuild": "npm run check:node",
+    "prebuild": "npm run check:node && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc && chmod +x dist/cli.js",
     "prepare": "npm run build && npm run gui:web:build",
     "prestart": "npm run check:node",
@@ -127,12 +127,10 @@
     "@earendil-works/pi-agent-core": "^0.75.5",
     "@earendil-works/pi-ai": "^0.75.5",
     "@earendil-works/pi-coding-agent": "^0.75.5",
-    "@the-convocation/twitter-scraper": "^0.22.3",
     "better-sqlite3": "^12.10.0",
-    "camoufox-js": "^0.10.2",
     "duck-duck-scrape": "^2.2.7",
-    "playwright-core": "^1.60.0",
-    "tsx": "^4.22.3"
+    "tsx": "^4.22.3",
+    "yahoo-finance2": "^3.15.3"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"
@@ -145,6 +143,7 @@
     "@types/node": "^22.19.19",
     "@zed-industries/codex-acp": "^0.15.0",
     "acpx": "^0.10.0",
+    "playwright-core": "^1.61.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.14",
     "vitest": "^4.1.7",

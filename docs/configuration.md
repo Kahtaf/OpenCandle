@@ -40,7 +40,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `BRAVE_API_KEY` | unset | Brave search in the web-search cascade. Overrides `providers.brave.apiKey`. |
 | `EXA_API_KEY` | unset | Exa search. Overrides `providers.exa.apiKey`. |
 | `FINNHUB_API_KEY` | unset | Finnhub company news for sentiment summaries. Overrides `providers.finnhub.apiKey`. |
-| `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config, local state, and browser profile data. |
+| `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config and local state. |
 | `OPENCANDLE_DEBATE` | `true` | Enables adversarial bull/bear debate for comprehensive analysis. Set `false` or `0` to disable. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
 | `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API` | unset | Allow the GUI's private market-state API to accept cookie-authenticated requests from non-loopback peers. Set `1` only together with an intentional `OPENCANDLE_GUI_HOST` network bind. |
@@ -48,6 +48,8 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | unset | Optional local webhook target for alert/report notification delivery attempts. In-app notifications are still recorded first. |
 
 Run `opencandle monitor` to keep local alert/report automations active from a foreground terminal process without opening the GUI. Use `opencandle monitor --once` for a single local automation heartbeat.
+
+Run `opencandle doctor` to check provider readiness, including API-key sources, public Yahoo reachability, and external-tool install status for Reddit and Twitter/X sentiment. Reddit and Twitter/X session checks that may read browser cookies are only run from explicit GUI/TUI re-check actions.
 
 ### Advanced Developer Diagnostics
 
@@ -95,7 +97,6 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | `onboarding.json` | Provider setup, snooze, never-ask, and welcome state. |
 | `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, prediction records, alert rules/events, report history, and import provenance. |
 | `sentinel.db` | Sentiment trend store. |
-| `browser-profile/` | Browser profile data used by Twitter/X login flows. |
 | `logs/` | Reserved OpenCandle log directory. |
 
 Watchlists, portfolios, and predictions are not loaded from `watchlist.json`, `portfolio.json`, or `predictions.json`. Those filenames are intentionally unsupported state sources; OpenCandle uses `state.db` for durable market state.

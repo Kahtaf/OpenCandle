@@ -98,6 +98,7 @@ export type StructuredCheckId =
   | "freshness_disclosed"
   | "data_gap_disclosed"
   | "commitment_mode_respected"
+  | "required_final_fields_present"
   | "source_coverage_disclosed"
   | "capability_gap_disclosure"
   | "assumption_disclosed"

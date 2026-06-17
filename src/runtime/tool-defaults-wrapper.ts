@@ -7,9 +7,19 @@ export function wrapWithDefaults<TParams extends TSchema, TDetails>(
 ): AgentTool<TParams, TDetails> {
   return {
     ...tool,
-    execute: async (toolCallId, params, signal, onUpdate) => {
+    execute: async (toolCallId, params, signal, onUpdate, ctx?: unknown) => {
       const merged = mergeDefaults(defaults, params as Record<string, unknown>);
-      return tool.execute(toolCallId, merged as typeof params, signal, onUpdate);
+      const executeWithContext = tool.execute as unknown as (
+        id: string,
+        params: unknown,
+        signal?: AbortSignal,
+        onUpdate?: unknown,
+        ctx?: unknown,
+      ) => ReturnType<typeof tool.execute>;
+      if (ctx === undefined) {
+        return executeWithContext(toolCallId, merged, signal, onUpdate);
+      }
+      return executeWithContext(toolCallId, merged, signal, onUpdate, ctx);
     },
   };
 }

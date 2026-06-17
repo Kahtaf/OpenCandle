@@ -93,7 +93,7 @@ Tools are small finance capabilities. They fetch and format data. They should no
 | Fundamentals | company overview, financials, earnings, DCF, comparisons | Alpha Vantage |
 | Macro | rates, CPI, GDP, unemployment, fear/greed | FRED, alternative.me |
 | Technical | indicators, moving-average backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | Reddit, local browser session, Finnhub, Exa, Brave, DuckDuckGo |
+| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | `rdt-cli`, `twitter-cli`, local browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | holdings, watchlists, predictions, risk, correlation | Local state plus market data |
 
@@ -138,7 +138,7 @@ Common files:
 - `config.json` for provider keys and file-backed settings.
 - `state.db` for memory, workflow state, and durable user market state such as instruments, watchlists, portfolio lots, predictions, alerts, report runs, and import provenance.
 - `sentinel.db` for sentiment trend state.
-- `browser-profile/` for browser-backed sentiment flows such as Twitter/X.
+- `onboarding.json` for provider setup, snooze, never-ask, and welcome state.
 
 OpenCandle does not treat `watchlist.json`, `portfolio.json`, or `predictions.json` as supported state sources.
 

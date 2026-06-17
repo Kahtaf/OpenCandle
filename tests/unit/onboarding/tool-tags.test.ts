@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildConnectedTag,
   buildCredentialRequiredTag,
+  buildExternalToolRequiredTag,
   buildSkippedTag,
   buildSoftDegradedTag,
   parseToolTag,
@@ -69,6 +70,20 @@ describe("tool-tags — builder output format", () => {
   it("buildConnectedTag produces the canonical format", () => {
     const tag = buildConnectedTag({ provider: "alpha_vantage" });
     expect(tag).toMatch(/^\[OPENCANDLE_CONNECTED provider=alpha_vantage.*\]$/);
+  });
+
+  it("buildExternalToolRequiredTag produces the canonical format", () => {
+    const tag = buildExternalToolRequiredTag({
+      provider: "reddit",
+      reason: "not_installed",
+      installCmd: "uv tool install rdt-cli",
+      loginCmd: "rdt login",
+      fallback: "twitter-web-news",
+    });
+    expect(tag).toMatch(/^\[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit .+\]$/);
+    expect(tag).toContain("reason=not_installed");
+    expect(tag).toContain('installCmd="uv tool install rdt-cli"');
+    expect(tag).toContain('loginCmd="rdt login"');
   });
 });
 
@@ -142,6 +157,25 @@ describe("tool-tags — parser", () => {
     const built = buildConnectedTag({ provider: "fred" });
     const parsed = parseToolTag(built);
     expect(parsed).toEqual({ kind: "connected", provider: "fred" });
+  });
+
+  it("roundtrips an external-tool-required tag", () => {
+    const built = buildExternalToolRequiredTag({
+      provider: "reddit",
+      reason: "session_missing",
+      installCmd: "uv tool install rdt-cli",
+      loginCmd: "rdt login",
+      fallback: null,
+    });
+    const parsed = parseToolTag(built);
+    expect(parsed).toEqual({
+      kind: "external_tool_required",
+      provider: "reddit",
+      reason: "session_missing",
+      installCmd: "uv tool install rdt-cli",
+      loginCmd: "rdt login",
+      fallback: null,
+    });
   });
 
   it("returns undefined for non-tag text", () => {

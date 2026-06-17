@@ -3,7 +3,7 @@ import { Favicon } from "../../../components/ui/favicon.jsx";
 import { hostFrom } from "../../../components/ui/favicon-utils.js";
 import { SourcePill } from "../../../components/ui/source-pill.jsx";
 import { MoneyTile, PlainOutput, Sparkline, StackBar, ToolCard } from "./_shared.jsx";
-import { extractDetails, formatDateShort, formatLargeNumber, relativeTime } from "./card-format.js";
+import { extractDetails, formatLargeNumber, relativeTime } from "./card-format.js";
 
 export function WebSearchCard({ message, header, text }) {
   const d = extractDetails(message);
@@ -102,6 +102,7 @@ export function SocialSentimentCard({ message, header, text, sourceLabel }) {
           : "text-foreground";
   const items = (d?.tweets || d?.posts || []).slice(0, 4);
   const subject = d?.query || d?.subreddit;
+  const insight = d?.insight || null;
   return (
     <ToolCard>
       {header}
@@ -144,6 +145,7 @@ export function SocialSentimentCard({ message, header, text, sourceLabel }) {
           ))}
         </div>
       ) : null}
+      <InsightPanel insight={insight} />
       {items.length > 0 ? (
         <div className="rounded-md border border-border">
           <div className="border-b border-border px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -250,6 +252,7 @@ export function WebSentimentCard({ message, header, text }) {
       {trendValues && trendValues.length > 1 ? (
         <Sparkline values={trendValues} height={48} />
       ) : null}
+      <InsightPanel insight={d?.insight} />
       {/* Source pill row above the detailed list */}
       <div className="flex flex-wrap gap-1.5">
         {records.slice(0, 10).map((r, i) => (
@@ -305,6 +308,7 @@ export function WebSentimentCard({ message, header, text }) {
 export function SentimentSummaryCard({ message, header, text }) {
   const d = extractDetails(message);
   const sources = d?.sources || d?.bySource || null;
+  const insight = d?.insight || null;
   const score = Number.isFinite(d?.score)
     ? d.score
     : Number.isFinite(d?.aggregateScore)
@@ -317,6 +321,7 @@ export function SentimentSummaryCard({ message, header, text }) {
     return (
       <ToolCard>
         {header}
+        <InsightPanel insight={insight} />
         <PlainOutput text={text} />
       </ToolCard>
     );
@@ -342,6 +347,7 @@ export function SentimentSummaryCard({ message, header, text }) {
         </div>
       ) : null}
       {trend && trend.length > 1 ? <Sparkline values={trend} height={48} /> : null}
+      <InsightPanel insight={insight} />
       {sources ? (
         <div className="grid gap-1">
           {Object.entries(sources).map(([key, value]) => {
@@ -361,6 +367,71 @@ export function SentimentSummaryCard({ message, header, text }) {
         </div>
       ) : null}
     </ToolCard>
+  );
+}
+
+function InsightPanel({ insight }) {
+  if (!insight) return null;
+  const confidence = insight.confidence || {};
+  const representativeCount = Array.isArray(insight.representativeItems)
+    ? insight.representativeItems.length
+    : 0;
+  return (
+    <div className="grid gap-2 rounded-md border border-border bg-secondary/35 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Findings
+        </div>
+        <Badge variant="outline" className="capitalize">
+          {confidence.level || "unknown"} confidence
+        </Badge>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <MoneyTile label="Scored sample" value={insight.sampleSize ?? "—"} />
+        <MoneyTile label="With evidence" value={insight.scoredSampleSize ?? "—"} />
+        <MoneyTile label="Preview shown" value={representativeCount} />
+      </div>
+      <DriverList label="Positive drivers" drivers={insight.positiveDrivers} />
+      <DriverList label="Negative drivers" drivers={insight.negativeDrivers} />
+      <DriverList label="Mixed drivers" drivers={insight.mixedDrivers} />
+      {Array.isArray(insight.caveats) && insight.caveats.length > 0 ? (
+        <div className="grid gap-1">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            Caveats
+          </div>
+          <ul className="grid gap-1 text-[11.5px] leading-relaxed text-muted-foreground">
+            {insight.caveats.slice(0, 3).map((caveat) => (
+              <li key={caveat}>{caveat}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {representativeCount > 0 ? (
+        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+          Representative evidence preview: {representativeCount} shown from{" "}
+          {insight.scoredSampleSize ?? "the scored"} scored records
+          {insight.sampleSize != null ? ` (${insight.sampleSize} total records).` : "."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DriverList({ label, drivers }) {
+  if (!Array.isArray(drivers) || drivers.length === 0) return null;
+  return (
+    <div className="grid gap-1">
+      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {drivers.slice(0, 4).map((driver) => (
+          <Badge variant="outline" key={`${driver.polarity}-${driver.label}`}>
+            Source evidence: {driver.label} ({driver.count})
+          </Badge>
+        ))}
+      </div>
+    </div>
   );
 }
 

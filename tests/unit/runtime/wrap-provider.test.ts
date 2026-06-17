@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { InvalidSymbolError } from "../../../src/providers/errors.js";
+import {
+  ExternalToolError,
+  ExternalToolNotInstalled,
+} from "../../../src/providers/external-tool-error.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
 import { clearRunContext, setRunContext } from "../../../src/runtime/run-context.js";
@@ -80,6 +84,74 @@ describe("wrapProvider", () => {
       provider: "yahoo",
     });
     expect(tracker.isCircuitOpen("yahoo")).toBe(false);
+  });
+
+  it("does not record external-tool setup errors as provider failures", async () => {
+    const tracker = new ProviderTracker(1);
+    setRunContext({ providerTracker: tracker });
+
+    const result = await wrapProvider("reddit", async () => {
+      throw new ExternalToolNotInstalled("rdt", "uv tool install rdt-cli");
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider: "reddit",
+      reason: "rdt is not installed. Install it with: uv tool install rdt-cli",
+    });
+    expect(tracker.isCircuitOpen("reddit")).toBe(false);
+  });
+
+  it("does not record external-tool auth errors as provider failures", async () => {
+    const tracker = new ProviderTracker(1);
+    setRunContext({ providerTracker: tracker });
+
+    const result = await wrapProvider("reddit", async () => {
+      throw new ExternalToolError(
+        "rdt",
+        "No Reddit cookies found. Run rdt login.",
+        "not_authenticated",
+      );
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider: "reddit",
+      reason: "No Reddit cookies found. Run rdt login.",
+    });
+    expect(tracker.isCircuitOpen("reddit")).toBe(false);
+  });
+
+  it("does not record external-tool missing-session errors as provider failures", async () => {
+    const tracker = new ProviderTracker(1);
+    setRunContext({ providerTracker: tracker });
+
+    const result = await wrapProvider("twitter", async () => {
+      throw new ExternalToolError("twitter", "No Twitter session found");
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider: "twitter",
+      reason: "No Twitter session found",
+    });
+    expect(tracker.isCircuitOpen("twitter")).toBe(false);
+  });
+
+  it("records generic external-tool execution errors as provider failures", async () => {
+    const tracker = new ProviderTracker(1);
+    setRunContext({ providerTracker: tracker });
+
+    const result = await wrapProvider("reddit", async () => {
+      throw new ExternalToolError("rdt", "rdt-cli returned non-JSON output");
+    });
+
+    expect(result).toMatchObject({
+      status: "unavailable",
+      provider: "reddit",
+      reason: "rdt-cli returned non-JSON output",
+    });
+    expect(tracker.isCircuitOpen("reddit")).toBe(true);
   });
 
   it("works without run context (no tracker present)", async () => {

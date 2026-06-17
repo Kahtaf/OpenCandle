@@ -1,37 +1,7 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { Scraper, SearchMode } from "@the-convocation/twitter-scraper";
-import Database from "better-sqlite3";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
-import { getBrowserProfileDir } from "../infra/opencandle-paths.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import type { TwitterSentimentResult, TwitterTweet } from "../types/sentiment.js";
-
-// ── Cookie extraction ────────────────────────────────────
-
-interface FirefoxCookie {
-  name: string;
-  value: string;
-  domain: string;
-  path: string;
-}
-
-export function readTwitterCookies(profileDir: string): FirefoxCookie[] {
-  const dbPath = join(profileDir, "cookies.sqlite");
-  if (!existsSync(dbPath)) return [];
-
-  const db = new Database(dbPath, { readonly: true });
-  try {
-    const rows = db
-      .prepare(
-        `SELECT name, value, host AS domain, path FROM moz_cookies WHERE host LIKE ? OR host LIKE ?`,
-      )
-      .all("%x.com%", "%twitter.com%") as FirefoxCookie[];
-    return rows;
-  } finally {
-    db.close();
-  }
-}
+import { searchTweets } from "./twitter-cli.js";
 
 // ── Sentiment scoring ────────────────────────────────────
 
@@ -87,49 +57,10 @@ export async function getTwitterSentiment(
   await rateLimiter.acquire("twitter");
 
   try {
-    const profileDir = getBrowserProfileDir();
-    const cookies = readTwitterCookies(profileDir);
-
-    const authToken = cookies.find((c) => c.name === "auth_token");
-    const ct0 = cookies.find((c) => c.name === "ct0");
-
-    if (!authToken || !ct0) {
-      throw new Error("No Twitter session found.");
-    }
-
-    const scraper = new Scraper();
-    const cookieStrings = cookies.map(
-      (c) => `${c.name}=${c.value}; Domain=${c.domain}; Path=${c.path}`,
-    );
-    await scraper.setCookies(cookieStrings);
-
-    const loggedIn = await scraper.isLoggedIn();
-    if (!loggedIn) {
-      throw new Error("Twitter session expired.");
-    }
-
     const cutoff = new Date(Date.now() - hours * 3_600_000);
-    const tweets: TwitterTweet[] = [];
-    const results = scraper.searchTweets(normalizedQuery, limit, SearchMode.Latest);
-
-    for await (const tweet of results) {
-      const created = tweet.timeParsed ?? new Date(0);
-      if (created < cutoff) continue;
-
-      tweets.push({
-        id: tweet.id ?? "",
-        text: tweet.text?.slice(0, 280) ?? "",
-        author: tweet.username ?? "unknown",
-        likes: tweet.likes ?? 0,
-        retweets: tweet.retweets ?? 0,
-        replies: tweet.replies ?? 0,
-        views: tweet.views ?? null,
-        url: tweet.permanentUrl ?? "",
-        created: created.toISOString(),
-      });
-
-      if (tweets.length >= limit) break;
-    }
+    const tweets: TwitterTweet[] = (await searchTweets(normalizedQuery, limit))
+      .filter((tweet) => new Date(tweet.created) >= cutoff)
+      .slice(0, limit);
 
     // Extract co-mentioned cashtags
     const tickerRegex = /\$([A-Z]{1,5})\b/g;

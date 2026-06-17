@@ -44,7 +44,6 @@ import type {
 import { SessionCoordinator } from "../runtime/session-coordinator.js";
 import { generateSessionTitle } from "../runtime/session-title.js";
 import { registerAskUserTool } from "../tools/interaction/ask-user.js";
-import { registerTwitterLoginTool } from "../tools/interaction/twitter-login.js";
 import type { AskUserHandler } from "../types/index.js";
 import {
   buildCompareAssetsWorkflowDefinition,
@@ -105,11 +104,10 @@ export default function openCandleExtension(
   let sessionTitleAttempted = false;
 
   // Register tools
-  for (const tool of getOpenCandleToolDefinitions()) {
+  for (const tool of getOpenCandleToolDefinitions({ askUserHandler: options?.askUserHandler })) {
     pi.registerTool(tool);
   }
   registerAskUserTool(pi, options?.askUserHandler);
-  registerTwitterLoginTool(pi);
 
   // /analyze command
   pi.registerCommand("analyze", {
@@ -144,11 +142,10 @@ export default function openCandleExtension(
   // `/connect <alias|id|category>` routes to a specific provider (or a
   // sub-picker for multi-provider categories like "search").
   pi.registerCommand("connect", {
-    description: "Connect a data provider (Alpha Vantage, FRED, Finnhub, Brave, Exa)",
+    description: "Connect an API-key data provider (Alpha Vantage, FRED, Finnhub, Brave, Exa)",
     handler: async (args, ctx) => {
-      const { listAllProviders, resolveProviderFromArgument, hasCredential } = await import(
-        "../onboarding/providers.js"
-      );
+      const { listApiKeyProviders, resolveProviderFromArgument, hasCredential, isApiKeyProvider } =
+        await import("../onboarding/providers.js");
 
       const formatState = (id: ProviderId): string => {
         const state = loadOnboardingState().providers[id];
@@ -178,11 +175,11 @@ export default function openCandleExtension(
 
       if (trimmed === "") {
         // Bare /connect → full picker.
-        targetId = await pickProvider(listAllProviders());
+        targetId = await pickProvider(listApiKeyProviders());
       } else {
         const resolved = resolveProviderFromArgument(trimmed);
         if (!resolved) {
-          const all = listAllProviders()
+          const all = listApiKeyProviders()
             .map((p) => `  ${p.displayName} (${p.aliases.join(", ")})`)
             .join("\n");
           ctx.ui.notify(`Unknown provider: "${trimmed}". Available:\n${all}`, "warning");
@@ -190,9 +187,25 @@ export default function openCandleExtension(
         }
         if (Array.isArray(resolved)) {
           // Multi-provider category — show a sub-picker.
-          targetId = await pickProvider(resolved as readonly ReturnType<typeof getProvider>[]);
+          const apiKeyProviders = resolved.filter(isApiKeyProvider);
+          if (apiKeyProviders.length === 0) {
+            ctx.ui.notify(
+              `"${trimmed}" does not use API-key setup. Run opencandle doctor for setup status.`,
+              "warning",
+            );
+            return;
+          }
+          targetId = await pickProvider(apiKeyProviders);
         } else {
-          targetId = (resolved as ReturnType<typeof getProvider>).id;
+          const descriptor = resolved as ReturnType<typeof getProvider>;
+          if (!isApiKeyProvider(descriptor)) {
+            ctx.ui.notify(
+              `${descriptor.displayName} does not use API-key setup. Run opencandle doctor for setup status.`,
+              "warning",
+            );
+            return;
+          }
+          targetId = descriptor.id;
         }
       }
 
@@ -389,15 +402,100 @@ export default function openCandleExtension(
       }
     }
 
-    // Second pass: look for a credential-required tag; on match, run the
-    // interception decision and either replace the tool result or prompt
-    // the user. Only the first credential_required tag in the content list
-    // is acted on — subsequent hard-tier prompts are silenced by the
-    // per-workflow cap at the decision-function level.
+    // Second pass: look for setup-required tags; on match, run the interception
+    // decision and either replace the tool result or prompt the user. Only the
+    // first setup tag in the content list is acted on.
     for (const block of event.content) {
       if (block.type !== "text") continue;
       const parsed = parseToolTag(block.text);
-      if (!parsed || parsed.kind !== "credential_required") continue;
+      if (
+        !parsed ||
+        (parsed.kind !== "credential_required" && parsed.kind !== "external_tool_required")
+      ) {
+        continue;
+      }
+
+      if (parsed.kind === "external_tool_required") {
+        const state = loadOnboardingState();
+        const descriptor = getProvider(parsed.provider);
+        if (state.providers[parsed.provider]?.status === "never_ask") {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `${buildSkippedTag({
+                    provider: parsed.provider,
+                    reason: "credential_not_provided",
+                    remediation: `run ${parsed.installCmd} and ${parsed.loginCmd ?? "rdt login"} to enable ${descriptor.displayName} (silenced)`,
+                    silenced: true,
+                  })}\n\n` +
+                  `${descriptor.displayName} data was not fetched because you previously asked not to be reminded about this provider.`,
+              },
+            ],
+          };
+        }
+        const setupLabel =
+          parsed.reason === "not_installed"
+            ? `Continue after installing ${descriptor.displayName}`
+            : `Continue after logging in to ${descriptor.displayName}`;
+        const skipLabel = `Skip ${descriptor.displayName} once`;
+        const neverLabel = `Always skip ${descriptor.displayName}`;
+        const installOrLogin =
+          parsed.reason === "not_installed"
+            ? `Install command: ${parsed.installCmd}.`
+            : `Login command: ${parsed.loginCmd ?? "rdt login"}.`;
+        const questionBody =
+          `${descriptor.displayName} requires a local external tool before this data can be fetched. ` +
+          `${installOrLogin} How would you like to proceed?`;
+
+        sessionPromptedSet.add(parsed.provider);
+        const promptResult = await promptUser(
+          ctx,
+          {
+            question: questionBody,
+            questionType: "select",
+            options: [setupLabel, skipLabel, neverLabel],
+          },
+          options?.askUserHandler,
+        );
+
+        const answer = promptResult.cancelled ? skipLabel : (promptResult.answer ?? skipLabel);
+        if (answer.startsWith("Always")) {
+          saveOnboardingState(markProviderNeverAsk(state, parsed.provider));
+        }
+
+        if (answer.startsWith("Continue")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text:
+                  `${buildConnectedTag({ provider: parsed.provider })}\n\n` +
+                  `${descriptor.displayName} setup was acknowledged. Re-run the original ${descriptor.displayName} request now; if setup is still unavailable, continue without ${descriptor.displayName} and disclose the source gap.`,
+              },
+            ],
+          };
+        }
+
+        const silenced = answer.startsWith("Always");
+        const remediation = silenced
+          ? `run ${parsed.installCmd} and ${parsed.loginCmd ?? "rdt login"} to enable ${descriptor.displayName} (silenced)`
+          : `run ${parsed.installCmd} and ${parsed.loginCmd ?? "rdt login"} to enable ${descriptor.displayName}`;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${buildSkippedTag({
+                provider: parsed.provider,
+                reason: "credential_not_provided",
+                remediation,
+                silenced,
+              })}\n\n${descriptor.displayName} data was omitted per your choice.`,
+            },
+          ],
+        };
+      }
 
       const state = loadOnboardingState();
       const action = resolveCredentialRequired({

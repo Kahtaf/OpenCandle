@@ -1,4 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AskUserHandler } from "../types/index.js";
 import { companyOverviewTool } from "./fundamentals/company-overview.js";
 import { compsTool } from "./fundamentals/comps.js";
 import { dcfTool } from "./fundamentals/dcf.js";
@@ -23,10 +24,10 @@ import { predictionsTool } from "./portfolio/predictions.js";
 import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { watchlistTool } from "./portfolio/watchlist.js";
-import { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
-import { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
+import { createRedditSentimentTool } from "./sentiment/reddit-sentiment.js";
+import { createSentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 import { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
-import { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
+import { createTwitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 import { webSearchTool } from "./sentiment/web-search.js";
 import { webSentimentTool } from "./sentiment/web-sentiment.js";
 import { backtestTool } from "./technical/backtest.js";
@@ -57,7 +58,7 @@ export { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 export { portfolioTrackerTool } from "./portfolio/tracker.js";
 export { watchlistTool } from "./portfolio/watchlist.js";
 export { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
-export { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
+export { createSentimentSummaryTool, sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 export { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
 export { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 export { webSearchTool } from "./sentiment/web-search.js";
@@ -65,7 +66,7 @@ export { webSentimentTool } from "./sentiment/web-sentiment.js";
 export { backtestTool } from "./technical/backtest.js";
 export { technicalIndicatorsTool } from "./technical/indicators.js";
 
-export function getAllTools(): AgentTool<any>[] {
+export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): AgentTool<any>[] {
   return [
     searchTickerTool,
     stockQuoteTool,
@@ -81,8 +82,8 @@ export function getAllTools(): AgentTool<any>[] {
     secFilingsTool,
     fredDataTool,
     fearGreedTool,
-    redditSentimentTool,
-    twitterSentimentTool,
+    createRedditSentimentTool({ askUserHandler: options.askUserHandler }),
+    createTwitterSentimentTool({ askUserHandler: options.askUserHandler }),
     technicalIndicatorsTool,
     backtestTool,
     portfolioTrackerTool,
@@ -98,6 +99,6 @@ export function getAllTools(): AgentTool<any>[] {
     webSearchTool,
     webSentimentTool,
     sentimentTrendTool,
-    sentimentSummaryTool,
+    createSentimentSummaryTool({ askUserHandler: options.askUserHandler }),
   ];
 }

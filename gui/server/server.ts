@@ -13,6 +13,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
+import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import {
@@ -117,6 +118,7 @@ const toolInvokeController = createToolInvokeController({
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
   onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
+  askUserHandler: askUserBridge.ask,
 });
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,
@@ -223,6 +225,22 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
   if (url.pathname === "/api/instruments/search" && req.method === "GET") {
     if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
     writeJson(res, await searchInstrumentCandidates(url.searchParams.get("q") ?? ""));
+    return;
+  }
+
+  if (url.pathname === "/api/diagnostics/twitter-cli" && req.method === "GET") {
+    if (!allowTrustedGuiRequest(req, res, "Diagnostics API")) return;
+    const mode = url.searchParams.get("mode") === "session" ? "session" : "install";
+    const force = url.searchParams.get("force") === "1";
+    writeJson(res, await probeProviderStatus("twitter", { mode, force }));
+    return;
+  }
+
+  if (url.pathname === "/api/diagnostics/reddit-cli" && req.method === "GET") {
+    if (!allowTrustedGuiRequest(req, res, "Diagnostics API")) return;
+    const mode = url.searchParams.get("mode") === "session" ? "session" : "install";
+    const force = url.searchParams.get("force") === "1";
+    writeJson(res, await probeProviderStatus("reddit", { mode, force }));
     return;
   }
 

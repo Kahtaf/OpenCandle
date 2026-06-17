@@ -20,7 +20,7 @@
 // All validators share a 5-second timeout via `AbortSignal.timeout` so the
 // connect flow cannot hang if a provider is unreachable.
 
-import type { ProviderId } from "./providers.js";
+import type { ApiKeyProviderId } from "./providers.js";
 
 const VALIDATION_TIMEOUT_MS = 5_000;
 
@@ -107,7 +107,7 @@ function classifyAlphaVantageBody(body: string): ValidationResult | undefined {
  * touch the config file, onboarding state, or any in-memory cache.
  */
 export async function validateCredential(
-  providerId: ProviderId,
+  providerId: ApiKeyProviderId,
   key: string,
 ): Promise<ValidationResult> {
   switch (providerId) {

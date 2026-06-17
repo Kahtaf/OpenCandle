@@ -1,0 +1,39 @@
+{
+  "ok": true,
+  "schema_version": "1",
+  "data": [
+    {
+      "id": "1234567890",
+      "text": "$AAPL moon incoming! So bullish on this breakout",
+      "author": { "username": "trader_joe", "name": "Trader Joe" },
+      "url": "https://x.com/trader_joe/status/1234567890",
+      "createdAt": "2026-04-04T10:00:00.000Z",
+      "likeCount": 150,
+      "retweetCount": 45,
+      "replyCount": 12,
+      "viewCount": 5000
+    },
+    {
+      "id": "1234567891",
+      "text": "$AAPL overvalued, this bubble is about to crash. Puts loaded.",
+      "username": "bear_market_bob",
+      "url": "https://x.com/bear_market_bob/status/1234567891",
+      "created_at": 1775295000000,
+      "likes": 500,
+      "retweets": 120,
+      "replies": 88,
+      "views": 15000
+    },
+    {
+      "id": "1234567892",
+      "text": "Watching $AAPL and $TSLA today. Earnings next week could be interesting.",
+      "author": { "screenName": "market_watcher" },
+      "url": "https://x.com/market_watcher/status/1234567892",
+      "createdAt": "2026-04-04T08:00:00.000Z",
+      "likeCount": 30,
+      "retweetCount": 5,
+      "replyCount": 3,
+      "viewCount": 800
+    }
+  ]
+}

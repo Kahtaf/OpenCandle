@@ -1,4 +1,5 @@
 import type { SentimentConfig } from "../config.js";
+import { buildSentimentInsight } from "./insights.js";
 import { scoreRecords } from "./scorer.js";
 import type { SentimentStore } from "./store.js";
 import { computeDivergence, computeTrend, type SourceStats } from "./trends.js";
@@ -65,7 +66,18 @@ export class SentimentPipeline {
       divergence = computeDivergence(sourceStats, this.config.divergenceThreshold);
     }
 
-    return { fresh: scored, trend, divergence, warnings };
+    return {
+      fresh: scored,
+      trend,
+      divergence,
+      warnings,
+      insight: buildSentimentInsight({
+        query,
+        records: scored,
+        config: this.config,
+        aggregate: true,
+      }),
+    };
   }
 }
 

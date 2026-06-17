@@ -7,6 +7,8 @@ interface ScoreResult {
   score: number;
   confidence: number;
   tickers: string[];
+  bullishTerms: string[];
+  bearishTerms: string[];
 }
 
 export function keywordScore(record: SentinelRecord): ScoreResult {
@@ -17,11 +19,14 @@ export function keywordScore(record: SentinelRecord): ScoreResult {
   let bearishWeight = 0;
   let bullishCount = 0;
   let bearishCount = 0;
+  const bullishTerms: string[] = [];
+  const bearishTerms: string[] = [];
 
   for (const term of BULLISH_TERMS) {
     if (lower.includes(term)) {
       bullishCount++;
       bullishWeight += engagement;
+      bullishTerms.push(term);
     }
   }
 
@@ -29,6 +34,7 @@ export function keywordScore(record: SentinelRecord): ScoreResult {
     if (lower.includes(term)) {
       bearishCount++;
       bearishWeight += engagement;
+      bearishTerms.push(term);
     }
   }
 
@@ -59,7 +65,7 @@ export function keywordScore(record: SentinelRecord): ScoreResult {
     }
   }
 
-  return { score, confidence, tickers };
+  return { score, confidence, tickers, bullishTerms, bearishTerms };
 }
 
 export function scoreRecords(records: SentinelRecord[]): SentinelRecord[] {
@@ -72,6 +78,11 @@ export function scoreRecords(records: SentinelRecord[]): SentinelRecord[] {
         confidence: result.confidence,
         method: "keyword" as const,
         tickers: result.tickers,
+      },
+      metadata: {
+        ...record.metadata,
+        matchedBullishTerms: result.bullishTerms,
+        matchedBearishTerms: result.bearishTerms,
       },
     };
   });

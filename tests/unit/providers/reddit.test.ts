@@ -5,63 +5,60 @@ import {
   getSubredditPosts,
   scoreSentiment,
 } from "../../../src/providers/reddit.js";
-import commentsFixture from "../../fixtures/reddit/comments.json";
-import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
-import fixture from "../../fixtures/yahoo/reddit-wallstreetbets.json";
+import {
+  resetRdtCommandRunnerForTests,
+  setRdtCommandRunnerForTests,
+} from "../../../src/providers/reddit-cli.js";
+import commentsFixture from "../../fixtures/rdt-cli/read-1u1jsys.json";
+import listingFixture from "../../fixtures/rdt-cli/sub-stocks.json";
+import fixture from "../../fixtures/rdt-cli/sub-stocks.json";
 
 describe("reddit provider", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     cache.clear();
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    resetRdtCommandRunnerForTests();
     vi.restoreAllMocks();
   });
 
   it("returns posts from subreddit", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(fixture),
-    });
+    setRdtCommandRunnerForTests(
+      vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(fixture), stderr: "" }),
+    );
 
     const result = await getSubredditPosts("wallstreetbets", 25);
     expect(result.subreddit).toBe("wallstreetbets");
-    expect(result.postCount).toBe(3);
+    expect(result.postCount).toBe(1);
     expect(result.posts[0].title).toContain("$AAPL");
-    expect(result.posts[0].score).toBe(1523);
+    expect(result.posts[0].score).toBe(542);
   });
 
   it("extracts ticker mentions from post titles", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(fixture),
-    });
+    setRdtCommandRunnerForTests(
+      vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(fixture), stderr: "" }),
+    );
 
     const result = await getSubredditPosts("wallstreetbets");
     expect(result.topMentions).toContain("AAPL");
-    expect(result.topMentions).toContain("TSLA");
-    expect(result.topMentions).toContain("NVDA");
   });
 
   it("caches results", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(fixture),
-    });
+    const runner = vi
+      .fn()
+      .mockResolvedValue({ code: 0, stdout: JSON.stringify(fixture), stderr: "" });
+    setRdtCommandRunnerForTests(runner);
 
     await getSubredditPosts("wallstreetbets", 25);
     await getSubredditPosts("wallstreetbets", 25);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(runner).toHaveBeenCalledTimes(1);
   });
 
   it("includes sentiment score in results", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(fixture),
-    });
+    setRdtCommandRunnerForTests(
+      vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(fixture), stderr: "" }),
+    );
 
     const result = await getSubredditPosts("wallstreetbets", 25);
     expect(result).toHaveProperty("sentimentScore");
@@ -74,10 +71,9 @@ describe("reddit provider", () => {
   });
 
   it("returns id, author, and selftext per post", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(listingFixture),
-    });
+    setRdtCommandRunnerForTests(
+      vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(listingFixture), stderr: "" }),
+    );
 
     const result = await getSubredditPosts("stocks", 25);
     expect(result.posts[0]).toHaveProperty("id");
@@ -90,39 +86,36 @@ describe("reddit provider", () => {
 });
 
 describe("getPostComments", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     cache.clear();
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    resetRdtCommandRunnerForTests();
     vi.restoreAllMocks();
   });
 
   it("extracts top N comments by score", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(commentsFixture),
-    });
+    setRdtCommandRunnerForTests(
+      vi.fn().mockResolvedValue({ code: 0, stdout: JSON.stringify(commentsFixture), stderr: "" }),
+    );
 
-    const comments = await getPostComments("stocks", "abc123", 5);
-    expect(comments).toHaveLength(5);
-    expect(comments[0].author).toBe("bull_trader");
-    expect(comments[0].score).toBe(312);
+    const comments = await getPostComments("stocks", "1u1jsys", 5);
+    expect(comments).toHaveLength(2);
+    expect(comments[0].author).toBe("launch_bull");
+    expect(comments[0].score).toBe(41);
     expect(comments[0].body).toContain("bullish");
   });
 
   it("caches comments with 30-min TTL", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(commentsFixture),
-    });
+    const runner = vi
+      .fn()
+      .mockResolvedValue({ code: 0, stdout: JSON.stringify(commentsFixture), stderr: "" });
+    setRdtCommandRunnerForTests(runner);
 
-    await getPostComments("stocks", "abc123", 5);
-    await getPostComments("stocks", "abc123", 5);
-    expect(fetch).toHaveBeenCalledTimes(1);
+    await getPostComments("stocks", "1u1jsys", 5);
+    await getPostComments("stocks", "1u1jsys", 5);
+    expect(runner).toHaveBeenCalledTimes(1);
   });
 });
 

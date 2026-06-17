@@ -18,7 +18,9 @@ export type FinalAnswerField =
   | "freshness_disclosure"
   | "data_gap_disclosure"
   | "risk_downside"
-  | "source_coverage";
+  | "source_coverage"
+  | "sentiment_rationale"
+  | "confidence_or_caveats";
 
 export type FrameworkFallbackMode =
   | "not_allowed"
@@ -342,7 +344,12 @@ export const ANSWER_CONTRACT_REGISTRY: Record<AnswerContractId, AnswerContractDe
     commitmentMode: "framework",
     implemented: true,
     requiredEvidenceTypes: [],
-    requiredFinalFields: ["source_coverage", "data_gap_disclosure"],
+    requiredFinalFields: [
+      "source_coverage",
+      "sentiment_rationale",
+      "confidence_or_caveats",
+      "data_gap_disclosure",
+    ],
     requiresFreshness: false,
     requiresDataGapDisclosure: true,
     requiresRiskDownside: false,
@@ -408,6 +415,7 @@ export function runStructuredChecks(input: StructuredCheckInput): StructuredChec
     checkFreshness(input.contract, input.finalAnswerMetadata),
     checkDataGapDisclosure(input.contract, input.evidenceRecords, input.finalAnswerMetadata),
     checkCommitmentMode(input.contract, input.finalAnswerMetadata),
+    checkRequiredFinalFields(input.contract, input.finalAnswerMetadata),
     checkSourceCoverage(input.contract, input.finalAnswerMetadata),
     checkCapabilityGapDisclosure(input.contract, input.evidenceRecords, input.finalAnswerMetadata),
     ...semanticChecks(requestedChecks, input.answerText),
@@ -617,6 +625,19 @@ function checkCommitmentMode(
     passed
       ? undefined
       : `Expected ${contract.commitmentMode} metadata and fields: ${modeContract.requiredFinalFields.join(", ")}`,
+  );
+}
+
+function checkRequiredFinalFields(
+  contract: AnswerContractDefinition,
+  metadata: FinalAnswerMetadata,
+): StructuredCheckResult {
+  const fields = new Set(metadata.finalFields);
+  const missing = contract.requiredFinalFields.filter((field) => !fields.has(field));
+  return structuredResult(
+    "required_final_fields_present",
+    missing.length === 0,
+    missing.length > 0 ? `Missing required final fields: ${missing.join(", ")}` : undefined,
   );
 }
 

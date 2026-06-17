@@ -51,6 +51,9 @@ describe("SentimentPipeline", () => {
     expect(result.fresh[0].sentiment.score).toBeGreaterThan(0);
     expect(result.fresh[1].sentiment.score).toBeLessThan(0);
     expect(result.fresh[0].sentiment.method).toBe("keyword");
+    expect(result.insight?.positiveDrivers[0]?.label).toBe("bullish");
+    expect(result.insight?.negativeDrivers[0]?.label).toBe("crash");
+    expect(result.insight?.confidence.level).toMatch(/low|medium|high/);
   });
 
   it("inserts scored records into store", async () => {
@@ -119,5 +122,17 @@ describe("SentimentPipeline", () => {
     expect(result.divergence).not.toBeNull();
     // May or may not be detected depending on scoring, but the field should exist
     expect(result.divergence).toHaveProperty("detected");
+  });
+
+  it("caps aggregate representative items while preserving full sample size", async () => {
+    const records = Array.from({ length: 12 }, (_, i) =>
+      makeRecord({ sourceId: `src-${i}`, text: `bullish breakout ${i}` }),
+    );
+
+    const result = await pipeline.processRecords(records, "AAPL");
+
+    expect(result.insight?.sampleSize).toBe(12);
+    expect(result.insight?.representativeItems.length).toBeLessThanOrEqual(8);
+    expect(result.insight?.method).toBe("deterministic-keyword-v1");
   });
 });

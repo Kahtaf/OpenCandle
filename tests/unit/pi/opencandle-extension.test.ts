@@ -1,8 +1,17 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildComprehensiveAnalysisDefinition } from "../../../src/analysts/orchestrator.js";
 import { resetConfigCache } from "../../../src/config.js";
+import {
+  loadOnboardingState,
+  markProviderNeverAsk,
+  saveOnboardingState,
+} from "../../../src/onboarding/state.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
+import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
 import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
@@ -122,7 +131,7 @@ describe("opencandle extension", () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);
 
-    expect(fake.tools).toHaveLength(34);
+    expect(fake.tools).toHaveLength(getOpenCandleToolDefinitions().length + 1);
     expect(fake.tools.map((tool) => tool.name)).toContain("screen_stocks");
     expect(fake.tools.map((tool) => tool.name)).toContain("analyze_holdings_overlap");
     expect(fake.tools.map((tool) => tool.name)).toContain("manage_alerts");
@@ -1310,6 +1319,88 @@ describe("opencandle extension", () => {
           (c: any[]) => c[0] === "opencandle-turn-gap",
         ),
       ).toHaveLength(0);
+    });
+
+    it("prompts for external-tool setup and persists always-skip choices", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi.fn().mockResolvedValue({ answer: "Always skip Reddit" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      expect(toolResultHandler).toBeDefined();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit reason=not_installed installCmd="uv tool install rdt-cli" fallback=twitter-web-news loginCmd="rdt login"]',
+        ),
+        { ui: { notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          question: expect.stringContaining("Install command: uv tool install rdt-cli."),
+          options: ["Continue after installing Reddit", "Skip Reddit once", "Always skip Reddit"],
+        }),
+      );
+      expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
+      expect(result?.content[0]?.text).toContain("silenced=true");
+      expect(loadOnboardingState().providers.reddit?.status).toBe("never_ask");
+
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("uses the requested external-tool provider in continue responses", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi
+        .fn()
+        .mockResolvedValue({ answer: "Continue after logging in to X/Twitter" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      expect(toolResultHandler).toBeDefined();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=twitter reason=session_missing installCmd="uv tool install twitter-cli" fallback=reddit-web-news loginCmd="log into x.com in a supported browser"]',
+        ),
+        { ui: { notify: vi.fn() } },
+      );
+
+      expect(result?.content[0]?.text).toContain("[OPENCANDLE_CONNECTED provider=twitter]");
+      expect(result?.content[0]?.text).toContain("Re-run the original X / Twitter request now");
+      expect(result?.content[0]?.text).not.toContain("Reddit sentiment request");
+
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("honors saved always-skip choices before prompting for external tools", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
+      const askUserHandler = vi.fn();
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      expect(toolResultHandler).toBeDefined();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit reason=not_installed installCmd="uv tool install rdt-cli" fallback=twitter-web-news loginCmd="rdt login"]',
+        ),
+        { ui: { notify: vi.fn() } },
+      );
+
+      expect(askUserHandler).not.toHaveBeenCalled();
+      expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
+      expect(result?.content[0]?.text).toContain("silenced=true");
+      expect(result?.content[0]?.text).toContain("previously asked not to be reminded");
+
+      rmSync(home, { recursive: true, force: true });
     });
   });
 

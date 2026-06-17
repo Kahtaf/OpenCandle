@@ -1,6 +1,15 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import {
+  getDefaultOnboardingState,
+  markProviderNeverAsk,
+  saveOnboardingState,
+} from "../../../src/onboarding/state.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
+import type { AskUserHandler } from "../../../src/types/index.js";
 import type { RedditSentimentResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
 
@@ -63,13 +72,18 @@ vi.mock("../../../src/sentiment/index.js", async (importOriginal) => {
 
 import { getConfig } from "../../../src/config.js";
 import { getCompanyNews } from "../../../src/providers/finnhub.js";
+import { getPostComments } from "../../../src/providers/reddit.js";
 import { getTwitterSentiment } from "../../../src/providers/twitter.js";
 import { searchWeb } from "../../../src/providers/web-search.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { sentimentSummaryTool } from "../../../src/tools/sentiment/sentiment-summary.js";
+import {
+  createSentimentSummaryTool,
+  sentimentSummaryTool,
+} from "../../../src/tools/sentiment/sentiment-summary.js";
 
 const mockedGetTwitterSentiment = vi.mocked(getTwitterSentiment);
+const mockedGetPostComments = vi.mocked(getPostComments);
 const mockedWrapProvider = vi.mocked(wrapProvider);
 const mockedSearchWeb = vi.mocked(searchWeb);
 const mockedGetQuote = vi.mocked(getQuote);
@@ -85,6 +99,7 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
 
@@ -152,8 +167,161 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toContain("Aggregate");
     expect(text).toContain("Source");
     expect(text).toContain("Score");
+    expect(text).toContain("Findings:");
+    expect(text).toContain("Price context: unavailable for AAPL");
     expect(text).toMatch(/\bsource-coverage risk\b/i);
     expect(text).toMatch(/\bsentiment can be noisy\b/i);
+    expect(text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
+    expect(result.details.insight.sampleSize).toBeGreaterThan(0);
+    expect(result.details.insight.caveats.join(" ")).toContain("Source warning: Twitter");
+    expect(result.details.insight.caveats.join(" ")).not.toContain(
+      "[OPENCANDLE_EXTERNAL_TOOL_REQUIRED",
+    );
+  });
+
+  it("honors saved external-tool skip preferences before fetching aggregate sources", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-summary-skip-"));
+    vi.stubEnv("OPENCANDLE_HOME", home);
+    const skippedTwitter = markProviderNeverAsk(getDefaultOnboardingState(), "twitter");
+    saveOnboardingState(markProviderNeverAsk(skippedTwitter, "reddit"));
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "AAPL",
+        results: [
+          {
+            title: "AAPL bullish",
+            url: "https://example.com/aapl",
+            snippet: "AAPL sentiment is bullish after demand improved.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
+        resultCount: 1,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-skip", { query: "AAPL" });
+    const text = result.content[0].text;
+
+    expect(mockedWrapProvider).not.toHaveBeenCalled();
+    expect(text).toContain("Sentiment summary");
+    expect(result.details.insight.caveats.join(" ")).toContain("Twitter");
+    expect(result.details.insight.caveats.join(" ")).toContain("Reddit");
+
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it("uses source-specific setup prompts when external tools are unavailable", async () => {
+    mockedWrapProvider.mockImplementation(async (provider) => {
+      if (provider === "twitter") {
+        return {
+          status: "unavailable",
+          reason: "twitter-cli is not installed. Install it with: uv tool install twitter-cli",
+        } as any;
+      }
+      return { status: "unavailable", reason: "No Reddit session found" } as any;
+    });
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "AAPL",
+        results: [
+          {
+            title: "AAPL bullish demand",
+            url: "https://example.com/aapl",
+            snippet: "AAPL sentiment is bullish after demand improved.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
+        resultCount: 1,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+    const askUserHandler: AskUserHandler = vi.fn(async (prompt) => ({
+      answer: prompt.options?.find((option) => option.includes("Skip")) ?? "Skip X/Twitter once",
+      cancelled: false,
+    }));
+
+    const setupAwareSummaryTool = createSentimentSummaryTool({ askUserHandler });
+
+    const result = await setupAwareSummaryTool.execute("call-setup", { query: "AAPL" });
+    const text = result.content[0].text;
+
+    expect(askUserHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionType: "select",
+        options: expect.arrayContaining(["Continue after installing twitter-cli"]),
+      }),
+    );
+    expect(text).toContain("Sentiment summary");
+    expect(text).toContain("Twitter");
+    expect(text).toContain("Reddit");
+    expect(text).toContain("Web/News");
+  });
+
+  it("keeps Reddit search results for natural-language ticker queries", async () => {
+    mockedWrapProvider.mockImplementation(async (provider) => {
+      if (provider === "twitter") {
+        return { status: "unavailable", reason: "No Twitter session found" } as any;
+      }
+      return {
+        status: "ok",
+        data: {
+          subreddit: "stocks",
+          postCount: 1,
+          posts: [
+            {
+              id: "gme1",
+              title: "GME traders lean bullish into the close",
+              selftext: "The setup looks constructive after retail buying picked up.",
+              author: "retail_bull",
+              score: 120,
+              comments: 1,
+              url: "https://reddit.com/r/stocks/comments/gme1/gme/",
+              created: "2026-05-21T12:00:00.000Z",
+            },
+          ],
+          topMentions: ["GME"],
+          sentimentScore: 1,
+          bullishCount: 1,
+          bearishCount: 0,
+          fetchedAt: "2026-05-21T12:00:00.000Z",
+        },
+      };
+    });
+    mockedGetPostComments.mockResolvedValue([
+      {
+        id: "gme-comment-1",
+        body: "GME still has bearish dilution risk despite the bullish retail bid.",
+        author: "risk_watch",
+        score: 45,
+        permalink: "https://reddit.com/r/stocks/comments/gme1/comment/gme-comment-1/",
+      },
+    ]);
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "retail mood around GME right now",
+        results: [],
+        resultCount: 0,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-natural-reddit", {
+      query: "retail mood around GME right now",
+    });
+
+    expect(result.content[0].text).toContain("Reddit");
+    expect(result.details.insight.sampleSize).toBeGreaterThan(1);
   });
 
   it("adds price context for ticker-specific sentiment summaries", async () => {

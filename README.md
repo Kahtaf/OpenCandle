@@ -93,6 +93,13 @@ Useful slash commands:
 /analyze AAPL
 ```
 
+Provider diagnostics run from your shell:
+
+```bash
+opencandle doctor
+opencandle doctor --enable twitter
+```
+
 ## Data Sources
 
 | Area | Examples | Source |
@@ -102,11 +109,11 @@ Useful slash commands:
 | Fundamentals | Overview, financials, earnings, DCF, comparable companies | Alpha Vantage |
 | Macro | Rates, CPI, GDP, unemployment, crypto Fear & Greed | FRED, alternative.me |
 | Technical | Indicators and strategy backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | Reddit JSON API, Twitter/X local browser session, Finnhub, Exa, Brave, DuckDuckGo |
+| Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | Watchlists, holdings, prediction tracking, correlation, risk | Local state plus market data |
 
-Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
+Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Reddit sentiment requires `rdt-cli` (`uv tool install rdt-cli`) plus an active Reddit session in your normal browser. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
 
 ## Configuration
 
@@ -164,7 +171,7 @@ Project shape:
 src/
 |-- providers/    API clients
 |-- tools/        Tool implementations by domain
-|-- infra/        Cache, rate limiter, HTTP, browser, paths
+|-- infra/        Cache, rate limiter, HTTP client, paths
 |-- routing/      Request understanding, entity extraction, slot resolution
 |-- workflows/    WorkflowDefinition builders
 |-- runtime/      Session coordinator, workflow runner, runtime context

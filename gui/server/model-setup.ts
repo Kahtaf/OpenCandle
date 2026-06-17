@@ -1,6 +1,10 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { persistProviderCredential } from "../../src/onboarding/connect.js";
-import { getCredentialSource, PROVIDERS, type ProviderId } from "../../src/onboarding/providers.js";
+import {
+  getCredentialSource,
+  isApiKeyProvider,
+  PROVIDERS,
+} from "../../src/onboarding/providers.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
 
 export type ModelSetupRequirement = "ready" | "select_model" | "connect_auth";
@@ -193,6 +197,9 @@ export function createModelSetupController({
 
     const descriptor = PROVIDERS.find((candidate) => candidate.id === providerId);
     if (!descriptor) throw new Error(`Unknown provider: ${providerId}`);
+    if (!isApiKeyProvider(descriptor)) {
+      throw new Error(`${descriptor.displayName} is not configured with an API key.`);
+    }
 
     if (getCredentialSource(descriptor.id) === "env") {
       throw new Error(
@@ -203,7 +210,7 @@ export function createModelSetupController({
     const trimmed = apiKey.trim();
     if (!trimmed) throw new Error(`Paste a ${descriptor.displayName} API key first.`);
 
-    const validation = await validateCredential(descriptor.id as ProviderId, trimmed);
+    const validation = await validateCredential(descriptor.id, trimmed);
     if (validation.status === "invalid") {
       const statusHint =
         validation.httpStatus !== undefined ? ` (HTTP ${validation.httpStatus})` : "";
@@ -213,7 +220,7 @@ export function createModelSetupController({
       );
     }
 
-    persistProviderCredential(descriptor.id as ProviderId, trimmed);
+    persistProviderCredential(descriptor.id, trimmed);
 
     const verifiedNote =
       validation.status === "transient"

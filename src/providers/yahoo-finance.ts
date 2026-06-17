@@ -1,4 +1,5 @@
-import { StealthBrowser } from "../infra/browser.js";
+import YahooFinance from "yahoo-finance2";
+import type { OptionsResult as YahooFinance2OptionsResult } from "yahoo-finance2/modules/options";
 import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
@@ -16,6 +17,15 @@ import { InvalidSymbolError } from "./errors.js";
 const BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 const QUOTE_SUMMARY_URL = "https://query1.finance.yahoo.com/v10/finance/quoteSummary";
 const STALE_QUOTE_MAX_RETRY_AFTER_MS = 1_000;
+
+let yahooFinance2Client: InstanceType<typeof YahooFinance> | undefined;
+
+function getYahooFinance2Client(): InstanceType<typeof YahooFinance> {
+  yahooFinance2Client ??= new YahooFinance({
+    suppressNotices: ["yahooSurvey", "ripHistorical"],
+  });
+  return yahooFinance2Client;
+}
 
 type YahooNumber = number | { raw?: number; fmt?: string };
 
@@ -410,9 +420,9 @@ export async function getOptionsChain(symbol: string, expiration?: number): Prom
   if (!res?.ok) {
     let browserError: unknown;
     try {
-      const browserData = await fetchOptionsViaBrowser(symbol, expiration);
-      if (browserData) {
-        const chain = parseOptionsResponse(browserData);
+      const fallbackData = await fetchOptionsViaYahooFinance2(symbol, expiration);
+      if (fallbackData) {
+        const chain = parseOptionsResponse(fallbackData);
         cache.set(cacheKey, chain, TTL.OPTIONS_CHAIN);
         return chain;
       }
@@ -425,14 +435,14 @@ export async function getOptionsChain(symbol: string, expiration?: number): Prom
     if (res) {
       const message = `Yahoo Finance options: HTTP ${res.status}`;
       if (browserError instanceof Error) {
-        throw new Error(`${message}; browser fallback failed: ${browserError.message}`);
+        throw new Error(`${message}; yahoo-finance2 fallback failed: ${browserError.message}`);
       }
       throw new Error(message);
     }
     if (browserError instanceof Error) {
       const message =
         fetchError instanceof Error ? fetchError.message : "Yahoo Finance options: fetch failed";
-      throw new Error(`${message}; browser fallback failed: ${browserError.message}`);
+      throw new Error(`${message}; yahoo-finance2 fallback failed: ${browserError.message}`);
     }
     throw fetchError instanceof Error
       ? fetchError
@@ -602,38 +612,61 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
 }
 
 /**
- * Fallback: fetch options data via Camoufox stealth browser.
- * Bypasses Yahoo's TLS fingerprinting and rate limiting.
+ * Fallback: fetch options data via yahoo-finance2 when the raw Yahoo path is blocked.
  */
-async function fetchOptionsViaBrowser(
+async function fetchOptionsViaYahooFinance2(
   symbol: string,
   expiration?: number,
 ): Promise<YahooOptionsResponse | null> {
   try {
-    // Avoid loading the script-heavy Yahoo Finance homepage: Playwright 1.60
-    // can crash on some pageerror payloads emitted by finance.yahoo.com.
-    // Navigating directly to Yahoo's JSON endpoints still uses the browser's
-    // cookies/TLS fingerprint without requiring cross-origin fetch from page JS.
-    const dateParam = expiration ? `&date=${expiration}` : "";
-    return await StealthBrowser.run(async (page) => {
-      await page.goto("https://query2.finance.yahoo.com/v1/test/getcrumb", {
-        waitUntil: "domcontentloaded",
-        timeout: 15000,
-      });
-      const crumb = (await page.locator("body").innerText()).trim();
-      if (!crumb) return null;
-
-      const url = `https://query1.finance.yahoo.com/v7/finance/options/${encodeURIComponent(symbol)}?crumb=${encodeURIComponent(crumb)}${dateParam}`;
-      const response = await page.goto(url, {
-        waitUntil: "domcontentloaded",
-        timeout: 15000,
-      });
-      if (!response?.ok()) return null;
-
-      const text = (await page.locator("body").innerText()).trim();
-      return JSON.parse(text) as YahooOptionsResponse;
-    });
+    const result = await getYahooFinance2Client().options(
+      symbol,
+      expiration ? { date: new Date(expiration * 1000) } : undefined,
+    );
+    return normalizeYahooFinance2OptionsResponse(result);
   } catch (error) {
     throw error instanceof Error ? error : new Error(String(error));
   }
+}
+
+function normalizeYahooFinance2OptionsResponse(
+  data: YahooFinance2OptionsResult | YahooOptionsResponse,
+): YahooOptionsResponse {
+  if ("optionChain" in data) return data as YahooOptionsResponse;
+
+  const options = data.options.map((option) => ({
+    expirationDate: toYahooUnixSeconds(option.expirationDate),
+    calls: option.calls,
+    puts: option.puts,
+  }));
+  const strikes = [
+    ...new Set(
+      options
+        .flatMap((option) => [...option.calls, ...option.puts])
+        .map((contract) => Number((contract as { strike?: unknown }).strike))
+        .filter((strike) => Number.isFinite(strike)),
+    ),
+  ].sort((a, b) => a - b);
+
+  return {
+    optionChain: {
+      result: [
+        {
+          underlyingSymbol: data.underlyingSymbol,
+          expirationDates: data.expirationDates.map(toYahooUnixSeconds),
+          strikes,
+          quote: data.quote as Record<string, any>,
+          options,
+        },
+      ],
+    },
+  };
+}
+
+function toYahooUnixSeconds(value: Date | number | string): number {
+  if (value instanceof Date) return Math.floor(value.getTime() / 1000);
+  if (typeof value === "number") {
+    return value > 1_000_000_000_000 ? Math.floor(value / 1000) : value;
+  }
+  return Math.floor(new Date(value).getTime() / 1000);
 }

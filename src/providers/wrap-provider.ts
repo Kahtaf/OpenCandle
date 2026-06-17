@@ -2,6 +2,7 @@ import { runWithStaleMetadata } from "../infra/cache.js";
 import type { ProviderResult } from "../runtime/evidence.js";
 import { getProviderTracker } from "../runtime/run-context.js";
 import { InvalidSymbolError } from "./errors.js";
+import { ExternalToolError, ExternalToolNotInstalled } from "./external-tool-error.js";
 import { ProviderCredentialError } from "./provider-credential-error.js";
 
 /**
@@ -51,6 +52,13 @@ export async function wrapProvider<T>(
     if (error instanceof ProviderCredentialError) {
       throw error;
     }
+    if (isExternalToolSetupError(error)) {
+      return {
+        status: "unavailable",
+        reason: error.message,
+        provider: providerId,
+      };
+    }
     if (error instanceof InvalidSymbolError) {
       return {
         status: "unavailable",
@@ -66,4 +74,30 @@ export async function wrapProvider<T>(
       provider: providerId,
     };
   }
+}
+
+function isExternalToolSetupError(
+  error: unknown,
+): error is ExternalToolError | ExternalToolNotInstalled {
+  if (error instanceof ExternalToolNotInstalled) return true;
+  if (!(error instanceof ExternalToolError)) return false;
+
+  const code = error.code?.toLowerCase() ?? "";
+  const message = error.message.toLowerCase();
+  return (
+    code.includes("auth") ||
+    code.includes("session") ||
+    code.includes("unauthorized") ||
+    code.includes("expired") ||
+    message.includes("no twitter cookies") ||
+    message.includes("no twitter session") ||
+    message.includes("no reddit cookies") ||
+    message.includes("session missing") ||
+    message.includes("not authenticated") ||
+    message.includes("no cookies") ||
+    message.includes("rdt login") ||
+    message.includes("401") ||
+    message.includes("unauthorized") ||
+    message.includes("expired")
+  );
 }

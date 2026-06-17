@@ -20,15 +20,10 @@ describe("tool adapter", () => {
     };
 
     const adapted = agentToolToPiTool(source);
-    const result = await adapted.execute(
-      "tool-1",
-      { symbol: "MSFT" },
-      undefined,
-      undefined,
-      {} as never,
-    );
+    const ctx = {} as never;
+    const result = await adapted.execute("tool-1", { symbol: "MSFT" }, undefined, undefined, ctx);
 
-    expect(execute).toHaveBeenCalledWith("tool-1", { symbol: "MSFT" }, undefined, undefined);
+    expect(execute).toHaveBeenCalledWith("tool-1", { symbol: "MSFT" }, undefined, undefined, ctx);
     expect(adapted.name).toBe(source.name);
     expect(adapted.label).toBe(source.label);
     expect(adapted.description).toBe(source.description);

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildCatalog } from "../../../gui/server/tool-metadata.js";
 import * as configModule from "../../../src/config.js";
+import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
 describe("GUI tool metadata catalog", () => {
   const originalOpenCandleHome = process.env.OPENCANDLE_HOME;
@@ -35,6 +36,47 @@ describe("GUI tool metadata catalog", () => {
     expect(fred).toMatchObject({
       source: "file",
       apiKey: "fred-file-key",
+    });
+  });
+
+  it("serializes non-key providers without API-key setup fields", () => {
+    const catalog = buildCatalog();
+
+    expect(catalog.providers.find((provider) => provider.id === "twitter")).toMatchObject({
+      id: "twitter",
+      kind: "external-tool",
+      binary: "twitter",
+      installCmd: "uv tool install twitter-cli",
+      status: "unknown",
+    });
+    expect(catalog.providers.find((provider) => provider.id === "twitter")).not.toHaveProperty(
+      "envVar",
+    );
+    expect(catalog.providers.find((provider) => provider.id === "twitter")).not.toHaveProperty(
+      "apiKey",
+    );
+
+    expect(catalog.providers.find((provider) => provider.id === "yahoo")).toMatchObject({
+      id: "yahoo",
+      kind: "public-http",
+      status: "unknown",
+      probeUrl: expect.stringMatching(/^https:\/\//),
+    });
+  });
+
+  it("surfaces skipped external-tool providers from onboarding preferences", () => {
+    saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "twitter"));
+
+    const twitter = buildCatalog().providers.find((provider) => provider.id === "twitter");
+
+    expect(twitter).toMatchObject({
+      id: "twitter",
+      kind: "external-tool",
+      status: "skipped",
+      statusDetail: {
+        state: "skipped",
+        message: expect.stringContaining("opencandle doctor --enable twitter"),
+      },
     });
   });
 });

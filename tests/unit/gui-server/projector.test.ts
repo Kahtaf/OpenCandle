@@ -140,6 +140,27 @@ describe("projectDashboard", () => {
     expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual(["fred", "brave"]);
   });
 
+  it("projects Reddit external-tool-required results into data quality", () => {
+    const state = projectDashboard([
+      messageEntry({
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "get_reddit_sentiment",
+        content: [
+          {
+            type: "text",
+            text: '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=reddit reason=not_installed installCmd="uv tool install rdt-cli"]',
+          },
+        ],
+        details: null,
+        isError: false,
+        timestamp: Date.now(),
+      }),
+    ]);
+
+    expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual(["reddit"]);
+  });
+
   it("does not double count soft gaps that are present in tool results and turn sidecars", () => {
     const state = projectDashboard([
       messageEntry({

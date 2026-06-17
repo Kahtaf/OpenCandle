@@ -1,13 +1,17 @@
 import {
   ArrowRight,
   ChevronLeft,
+  Clipboard,
   ExternalLink,
   Eye,
   EyeOff,
+  Globe2,
   KeyRound,
   Play,
+  RefreshCw,
   Search,
   Sparkles,
+  Terminal,
   Wrench,
   X,
 } from "lucide-react";
@@ -327,6 +331,7 @@ function ToolRow({ tool, onSelect }) {
 
 function ProviderRow({ provider, onSelect }) {
   const status = providerStatus(provider);
+  const Icon = providerIcon(provider);
   return (
     <li>
       <button
@@ -334,7 +339,7 @@ function ProviderRow({ provider, onSelect }) {
         onClick={() => onSelect({ kind: "provider", id: provider.id })}
         className="group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary"
       >
-        <KeyRound aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-foreground">{provider.displayName}</span>
@@ -376,6 +381,7 @@ function EmptyState({ query, kind }) {
 
 function BuilderHeader({ selection, catalog, onBack }) {
   const entity = resolveSelection(selection, catalog);
+  const ProviderIcon = selection.kind === "provider" && entity ? providerIcon(entity) : KeyRound;
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2 sm:px-4">
       <Button variant="ghost" size="icon-sm" aria-label="Back to catalog" onClick={onBack}>
@@ -389,7 +395,7 @@ function BuilderHeader({ selection, catalog, onBack }) {
           <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         ) : null}
         {selection.kind === "provider" ? (
-          <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <ProviderIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         ) : null}
         <h2 className="truncate text-sm font-semibold text-foreground">
           {builderTitle(selection, entity)}
@@ -639,6 +645,16 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
 }
 
 function ProviderBuilder({ provider, send, setToast }) {
+  if (provider.kind === "external-tool") {
+    return <ExternalToolProviderBuilder provider={provider} send={send} setToast={setToast} />;
+  }
+  if (provider.kind === "public-http") {
+    return <PublicHttpProviderBuilder provider={provider} send={send} setToast={setToast} />;
+  }
+  return <ApiKeyProviderBuilder provider={provider} send={send} setToast={setToast} />;
+}
+
+function ApiKeyProviderBuilder({ provider, send, setToast }) {
   const providerStateKey = `${provider.id}:${provider.apiKey || ""}`;
   const [lastProviderStateKey, setLastProviderStateKey] = useState(providerStateKey);
   const [apiKey, setApiKey] = useState(provider.apiKey || "");
@@ -770,6 +786,146 @@ function ProviderBuilder({ provider, send, setToast }) {
   );
 }
 
+function ExternalToolProviderBuilder({ provider, send, setToast }) {
+  const status = providerStatus(provider);
+  const detail = provider.statusDetail;
+  const reenable = status === "skipped";
+
+  const checkInstall = () => {
+    setToast?.(
+      reenable
+        ? `Re-enabling ${provider.displayName} and checking install status...`
+        : `Checking ${provider.displayName} install status...`,
+    );
+    send?.("provider.status.check", { providerId: provider.id, mode: "install", reenable });
+  };
+  const checkSession = () => {
+    setToast?.(
+      reenable
+        ? `Re-enabling ${provider.displayName} and checking session. This may read browser cookies and trigger a Keychain prompt.`
+        : `Checking ${provider.displayName} session. This may read browser cookies and trigger a Keychain prompt.`,
+    );
+    send?.("provider.status.check", { providerId: provider.id, mode: "session", reenable });
+  };
+  const copyInstall = () => {
+    void navigator.clipboard?.writeText?.(provider.installCmd);
+    setToast?.("Install command copied.");
+  };
+
+  return (
+    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+      <div className="grid gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <ProviderStatusDot status={status} />
+          <span className={cn("text-xs font-medium", statusColor(status))}>
+            {statusLabel(status)}
+          </span>
+          {detail?.checkedAt ? (
+            <span className="text-[11px] text-muted-foreground">
+              Checked {formatRelativeTime(detail.checkedAt)}
+            </span>
+          ) : null}
+        </div>
+        <p className="text-sm leading-5 text-muted-foreground">{provider.fallbackDescription}</p>
+      </div>
+
+      <div className="grid gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Install
+        </span>
+        <div className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-secondary px-3 py-2">
+          <Terminal className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-foreground">
+            {provider.installCmd}
+          </code>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Copy install command"
+            tooltip="Copy install command"
+            onClick={copyInstall}
+          >
+            <Clipboard />
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Session source
+        </span>
+        <p className="text-sm leading-5 text-muted-foreground">
+          Uses your normal browser session. Supported browsers:{" "}
+          {(provider.supportedBrowsers || []).join(", ") || "Chrome, Arc, Edge, Firefox, Brave"}.
+        </p>
+        {detail?.message ? (
+          <p className="rounded-md border border-border bg-secondary px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {detail.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
+        <Button variant="bordered" size="sm" prefixIcon={RefreshCw} onClick={checkInstall}>
+          {reenable ? "Re-enable & check install" : "Check install"}
+        </Button>
+        <Button variant="brand" size="sm" onClick={checkSession}>
+          {reenable ? "Re-enable & check session" : "Check session"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PublicHttpProviderBuilder({ provider, send, setToast }) {
+  const status = providerStatus(provider);
+  const detail = provider.statusDetail;
+  const checkReachability = () => {
+    setToast?.(`Checking ${provider.displayName} reachability...`);
+    send?.("provider.status.check", { providerId: provider.id });
+  };
+
+  return (
+    <div className="grid animate-fade-in-once gap-5 px-4 py-4 sm:px-5">
+      <div className="grid gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <ProviderStatusDot status={status} />
+          <span className={cn("text-xs font-medium", statusColor(status))}>
+            {statusLabel(status)}
+          </span>
+          {detail?.checkedAt ? (
+            <span className="text-[11px] text-muted-foreground">
+              Checked {formatRelativeTime(detail.checkedAt)}
+            </span>
+          ) : null}
+        </div>
+        <p className="text-sm leading-5 text-muted-foreground">
+          {provider.fallbackDescription || "No account or API key is required."}
+        </p>
+      </div>
+
+      <div className="grid gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Probe
+        </span>
+        <code className="overflow-x-auto rounded-md border border-border bg-secondary px-3 py-2 text-[11px] text-muted-foreground">
+          {provider.probeUrl}
+        </code>
+        {detail?.message ? (
+          <p className="text-xs leading-5 text-muted-foreground">{detail.message}</p>
+        ) : null}
+      </div>
+
+      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
+        <Button variant="brand" size="sm" prefixIcon={RefreshCw} onClick={checkReachability}>
+          Check reachability
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PromptPreview({ prompt, title = "Chat prompt" }) {
   return (
     <div className="grid gap-1.5">
@@ -888,11 +1044,20 @@ function filterProviders(providers, query) {
   if (!query.trim()) return providers;
   const q = query.toLowerCase();
   return providers.filter((provider) =>
-    [provider.id, provider.displayName, provider.envVar, ...(provider.unlocks || [])].some(
-      (field) =>
-        String(field || "")
-          .toLowerCase()
-          .includes(q),
+    [
+      provider.id,
+      provider.kind,
+      provider.displayName,
+      provider.envVar,
+      provider.binary,
+      provider.installCmd,
+      provider.probeUrl,
+      ...(provider.aliases || []),
+      ...(provider.unlocks || []),
+    ].some((field) =>
+      String(field || "")
+        .toLowerCase()
+        .includes(q),
     ),
   );
 }
@@ -908,22 +1073,63 @@ function groupBy(items, keyFn) {
 }
 
 function providerStatus(provider) {
-  return provider.source ?? "absent";
+  return provider.statusDetail?.state ?? provider.status ?? provider.source ?? "absent";
+}
+
+function providerIcon(provider) {
+  if (provider.kind === "external-tool") return Terminal;
+  if (provider.kind === "public-http") return Globe2;
+  return KeyRound;
 }
 
 function ProviderStatusDot({ status }) {
-  const cls = status === "file" ? "bg-success" : status === "env" ? "bg-info" : "bg-warning";
+  const cls = successStatuses.has(status)
+    ? "bg-success"
+    : infoStatuses.has(status)
+      ? "bg-info"
+      : dangerStatuses.has(status)
+        ? "bg-destructive"
+        : "bg-warning";
   return <span aria-hidden="true" className={cn("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 
 function statusLabel(status) {
+  if (status === "configured") return "Configured";
   if (status === "file") return "Configured";
   if (status === "env") return "From environment";
+  if (status === "installed") return "Installed";
+  if (status === "missing") return "Missing";
+  if (status === "session_ok") return "Session ready";
+  if (status === "session_missing") return "Login needed";
+  if (status === "session_stale") return "Session stale";
+  if (status === "skipped") return "Skipped";
+  if (status === "reachable") return "Reachable";
+  if (status === "unreachable") return "Unreachable";
+  if (status === "error") return "Needs attention";
+  if (status === "unknown") return "Not checked";
   return "Not configured";
 }
 
 function statusColor(status) {
-  if (status === "file") return "text-success";
-  if (status === "env") return "text-info";
+  if (successStatuses.has(status)) return "text-success";
+  if (infoStatuses.has(status)) return "text-info";
+  if (dangerStatuses.has(status)) return "text-destructive";
   return "text-warning";
+}
+
+const successStatuses = new Set(["configured", "file", "installed", "session_ok", "reachable"]);
+const infoStatuses = new Set(["env", "skipped"]);
+const dangerStatuses = new Set(["error", "unreachable"]);
+
+function formatRelativeTime(value) {
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return "just now";
+  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
 }

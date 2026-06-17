@@ -451,6 +451,11 @@ describe("loadConfig", () => {
         defaultSubreddits: ["wallstreetbets", "stocks", "investing", "options"],
         commentsPerPost: 5,
         divergenceThreshold: 0.4,
+        minUsefulSampleSize: 10,
+        maxInsightDriversPerPolarity: 3,
+        maxRepresentativeItemsPerSource: 5,
+        maxAggregateRepresentativeItems: 8,
+        maxNotableClaims: 5,
       });
     });
 
@@ -475,6 +480,11 @@ describe("loadConfig", () => {
         defaultSubreddits: ["stocks"],
         commentsPerPost: 3,
         divergenceThreshold: 0.5,
+        minUsefulSampleSize: 10,
+        maxInsightDriversPerPolarity: 3,
+        maxRepresentativeItemsPerSource: 5,
+        maxAggregateRepresentativeItems: 8,
+        maxNotableClaims: 5,
       });
     });
 

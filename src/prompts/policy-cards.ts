@@ -68,7 +68,7 @@ For "today", "right now", "this morning", "after close", or "why did it move" pr
     status: "implemented",
     capabilityGapIds: ["sentiment_sample_depth"],
     content: `## Sentiment Snapshot Policy
-For sentiment-only prompts, include the direction and strength of the sentiment signal, the score scale when available, missing sources, why missing sources matter for the user's question, source-coverage risk, low sample counts, and how those gaps downgrade confidence. For ticker-specific sentiment prompts, compare sentiment with fetched price action and state whether sentiment diverges from price action. Treat sentiment as supporting evidence, not a standalone buy/sell verdict. Disclose sparse source coverage, unavailable Twitter/X sessions, provider gaps, or low sample depth instead of implying full-market sentiment coverage.`,
+For sentiment-only prompts, include the direction and strength of the sentiment signal, the score scale when available, the key positive and negative drivers behind the signal, representative source evidence, missing sources, why missing sources matter for the user's question, source-coverage risk, low sample counts, and how those gaps downgrade confidence. For ticker-specific sentiment prompts, compare sentiment with fetched price action and state whether sentiment diverges from price action; if quote data is unavailable, say price-action divergence could not be evaluated. Treat sentiment as supporting evidence, not a standalone buy/sell verdict. Disclose sparse source coverage, unavailable Twitter/X sessions, provider gaps, or low sample depth instead of implying full-market sentiment coverage.`,
   },
   filing_thesis_review: {
     id: "filing_thesis_review",

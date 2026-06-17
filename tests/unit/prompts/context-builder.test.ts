@@ -1200,8 +1200,10 @@ describe("PromptContextBuilder", () => {
     const result = builder.build();
     expect(result).toContain("Sentiment Snapshot Policy");
     expect(result).toContain("For sentiment-only prompts, include");
+    expect(result).toContain("key positive and negative drivers");
     expect(result).toContain("source-coverage risk");
     expect(result).toContain("whether sentiment diverges from price action");
+    expect(result).toContain("price-action divergence could not be evaluated");
     expect(
       buildFallbackPlaybook({
         assumptionsBlock: "No assumptions.",
@@ -1533,12 +1535,15 @@ describe("PromptContextBuilder", () => {
     const result = builder.build();
     expect(result).toContain("sentiment-only");
     expect(result).toContain("score scale");
+    expect(result).toContain("key positive and negative drivers");
+    expect(result).toContain("representative source evidence");
     expect(result).toContain("why those missing sources matter");
     expect(result).toContain("source-coverage risk");
     expect(result).toContain("low sample counts");
     expect(result).toContain("downgrade confidence");
     expect(result).toContain("For ticker-specific sentiment prompts, call get_stock_quote");
     expect(result).toContain("whether sentiment diverges from price action");
+    expect(result).toContain("price-action divergence could not be evaluated");
   });
 
   it("requires full backtest metric reporting", () => {
