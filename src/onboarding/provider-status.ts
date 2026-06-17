@@ -207,13 +207,14 @@ async function probeExternalTool(
 
     if (result.code === 0) {
       const parsed = parseCliEnvelope(result.stdout, provider.binary);
+      const session = classifySessionEnvelope(providerId, parsed);
       return {
         providerId,
         kind: "external-tool",
         mode,
-        state: parsed.ok ? "session_ok" : classifySessionFailure(parsed.message),
+        state: session.state,
         installCmd: provider.installCmd,
-        message: parsed.ok ? undefined : parsed.message,
+        message: session.message,
         checkedAt: options.now.toISOString(),
         cacheHit: false,
       };
@@ -289,14 +290,19 @@ async function probePublicHttp(
   }
 }
 
-function parseCliEnvelope(stdout: string, binary: string): { ok: boolean; message?: string } {
+function parseCliEnvelope(
+  stdout: string,
+  binary: string,
+): { ok: boolean; message?: string; data?: unknown } {
   try {
     const parsed = JSON.parse(stdout) as {
       ok?: unknown;
+      data?: unknown;
       error?: { message?: unknown };
     };
     return {
       ok: parsed.ok === true,
+      data: parsed.data,
       message:
         typeof parsed.error?.message === "string"
           ? redactSensitiveOutput(parsed.error.message)
@@ -305,6 +311,31 @@ function parseCliEnvelope(stdout: string, binary: string): { ok: boolean; messag
   } catch {
     return { ok: false, message: `${binary} returned non-JSON output` };
   }
+}
+
+function classifySessionEnvelope(
+  providerId: ProviderId,
+  parsed: { ok: boolean; message?: string; data?: unknown },
+): { state: ExternalToolProviderStatus["state"]; message?: string } {
+  if (!parsed.ok) {
+    return {
+      state: classifySessionFailure(parsed.message),
+      message: parsed.message,
+    };
+  }
+
+  if (providerId === "reddit" && isRecord(parsed.data) && parsed.data.authenticated === false) {
+    return {
+      state: "session_missing",
+      message: "Reddit is not authenticated. Run rdt login.",
+    };
+  }
+
+  return { state: "session_ok" };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function classifySessionFailure(message: string | undefined): ExternalToolProviderStatus["state"] {

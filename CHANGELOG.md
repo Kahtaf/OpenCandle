@@ -14,6 +14,7 @@
 - GitHub Actions workflows now use Node 24-compatible first-party action majors, clearing the hosted-runner Node 20 deprecation warning.
 - One-time Twitter/X and Reddit setup skips no longer get tagged as saved "never ask" choices, so final answers can still show setup remediation on later requests.
 - Aggregate sentiment summaries no longer expose nested setup control tags when another source returns data, and subreddit-qualified Reddit queries keep matching posts from that subreddit.
+- Reddit session diagnostics now treat `rdt status --json` responses with `authenticated: false` as missing-session setup work instead of ready status.
 
 ## [0.6.0] - 2026-06-13
 

@@ -163,6 +163,24 @@ describe("provider status probes", () => {
     expect(status.message).toContain("No Reddit cookies found");
   });
 
+  it("classifies Reddit authenticated=false status as session missing", async () => {
+    const runner: CommandRunner = async () => ({
+      code: 0,
+      stdout: '{"ok":true,"schema_version":"1","data":{"authenticated":false}}',
+      stderr: "",
+    });
+
+    const status = await probeProviderStatus("reddit", { mode: "session", commandRunner: runner });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "session",
+      state: "session_missing",
+    });
+    expect(status.message).toContain("rdt login");
+  });
+
   it("reports skipped external tools from onboarding preferences without probing", async () => {
     const home = mkdtempSync(join(tmpdir(), "opencandle-provider-status-"));
     vi.stubEnv("OPENCANDLE_HOME", home);
