@@ -1,3 +1,5 @@
+import type { SentinelRecord } from "../sentiment/types.js";
+
 export interface FearGreedData {
   value: number;
   label: string; // "Extreme Fear" | "Fear" | "Neutral" | "Greed" | "Extreme Greed"
@@ -123,4 +125,5 @@ export interface RedditSentimentResult {
   bearishCount: number;
   fetchedAt: string;
   insight?: SentimentInsight;
+  records?: SentinelRecord[];
 }

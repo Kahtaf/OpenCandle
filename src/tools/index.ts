@@ -25,7 +25,7 @@ import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { watchlistTool } from "./portfolio/watchlist.js";
 import { createRedditSentimentTool } from "./sentiment/reddit-sentiment.js";
-import { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
+import { createSentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 import { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
 import { createTwitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 import { webSearchTool } from "./sentiment/web-search.js";
@@ -58,7 +58,7 @@ export { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 export { portfolioTrackerTool } from "./portfolio/tracker.js";
 export { watchlistTool } from "./portfolio/watchlist.js";
 export { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
-export { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
+export { createSentimentSummaryTool, sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 export { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
 export { twitterSentimentTool } from "./sentiment/twitter-sentiment.js";
 export { webSearchTool } from "./sentiment/web-search.js";
@@ -99,6 +99,6 @@ export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): 
     webSearchTool,
     webSentimentTool,
     sentimentTrendTool,
-    sentimentSummaryTool,
+    createSentimentSummaryTool({ askUserHandler: options.askUserHandler }),
   ];
 }

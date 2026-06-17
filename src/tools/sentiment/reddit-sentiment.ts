@@ -283,6 +283,7 @@ export function createRedditSentimentTool(
         bullishCount: postRecords.filter((record) => record.sentiment.score > 0).length,
         bearishCount: postRecords.filter((record) => record.sentiment.score < 0).length,
         insight: pipelineResult.insight,
+        records: pipelineResult.fresh,
       };
 
       if (pipelineResult.insight) {
