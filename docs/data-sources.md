@@ -17,7 +17,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage |
 | Macro | `get_economic_data`, `get_fear_greed` | FRED, alternative.me crypto Fear & Greed |
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
-| Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | Reddit JSON API, `twitter-cli` using your normal browser session, Finnhub, DuckDuckGo, Brave, Exa |
+| Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, DuckDuckGo, Brave, Exa |
 | Filings | `get_sec_filings` | SEC EDGAR |
 | Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `track_prediction` | Local state plus market providers |
 
@@ -28,13 +28,13 @@ Keyless by default:
 - Yahoo Finance
 - TradingView scanner (unofficial, delayed scanner endpoint; used read-only and batch-first)
 - CoinGecko
-- Reddit JSON API
 - SEC EDGAR
 - DuckDuckGo search
 - alternative.me crypto Fear & Greed
 
 External local tools:
 
+- Reddit sentiment uses `rdt-cli` and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted, `opencandle doctor`, or the GUI provider panel to check install and session status.
 - Twitter/X sentiment uses `twitter-cli` and the user's normal x.com browser session. Install with `uv tool install twitter-cli`, then run `opencandle doctor` or use the GUI provider panel to check install and session status.
 
 Optional keys:
@@ -44,7 +44,7 @@ Optional keys:
 - `BRAVE_API_KEY` enables Brave as a web search fallback.
 - `EXA_API_KEY` enables Exa web search.
 - `FINNHUB_API_KEY` enables Finnhub company news in sentiment summaries.
-- Search and social providers can degrade based on available credentials, external-tool availability, local browser login state, and provider health. Twitter/X sentiment requires `twitter-cli` plus a usable x.com browser session.
+- Search and social providers can degrade based on available credentials, external-tool availability, local browser login state, and provider health. Reddit sentiment requires `rdt-cli` plus a usable Reddit browser session; Twitter/X sentiment requires `twitter-cli` plus a usable x.com browser session.
 
 ## Caching and Degradation
 

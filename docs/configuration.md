@@ -49,7 +49,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 
 Run `opencandle monitor` to keep local alert/report automations active from a foreground terminal process without opening the GUI. Use `opencandle monitor --once` for a single local automation heartbeat.
 
-Run `opencandle doctor` to check provider readiness, including API-key sources, public Yahoo/Reddit reachability, and `twitter-cli` install status. Twitter/X session checks that may read browser cookies are only run from explicit GUI/TUI re-check actions.
+Run `opencandle doctor` to check provider readiness, including API-key sources, public Yahoo reachability, and external-tool install status for Reddit and Twitter/X sentiment. Reddit and Twitter/X session checks that may read browser cookies are only run from explicit GUI/TUI re-check actions.
 
 ### Advanced Developer Diagnostics
 

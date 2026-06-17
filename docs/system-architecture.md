@@ -93,7 +93,7 @@ Tools are small finance capabilities. They fetch and format data. They should no
 | Fundamentals | company overview, financials, earnings, DCF, comparisons | Alpha Vantage |
 | Macro | rates, CPI, GDP, unemployment, fear/greed | FRED, alternative.me |
 | Technical | indicators, moving-average backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | Reddit, local browser session, Finnhub, Exa, Brave, DuckDuckGo |
+| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | `rdt-cli`, `twitter-cli`, local browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | holdings, watchlists, predictions, risk, correlation | Local state plus market data |
 

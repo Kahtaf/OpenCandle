@@ -38,7 +38,7 @@ Compare BTC and ETH over the last month
 What's r/wallstreetbets saying about META?
 ```
 
-Yahoo Finance, CoinGecko, Reddit, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index work without OpenCandle-specific provider keys.
+Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index work without OpenCandle-specific provider keys. Reddit sentiment uses `rdt-cli` plus your normal Reddit browser session.
 
 4. Add provider keys only when needed.
 
