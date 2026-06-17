@@ -1,5 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import {
+  getDefaultOnboardingState,
+  markProviderNeverAsk,
+  saveOnboardingState,
+} from "../../../src/onboarding/state.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
 import type { RedditSentimentResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
@@ -85,6 +93,7 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
 
@@ -158,6 +167,42 @@ describe("get_sentiment_summary tool", () => {
     expect(text).toMatch(/\bsentiment can be noisy\b/i);
     expect(result.details.insight.sampleSize).toBeGreaterThan(0);
     expect(result.details.insight.caveats.join(" ")).toContain("Source warning: Twitter");
+  });
+
+  it("honors saved external-tool skip preferences before fetching aggregate sources", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-summary-skip-"));
+    vi.stubEnv("OPENCANDLE_HOME", home);
+    const skippedTwitter = markProviderNeverAsk(getDefaultOnboardingState(), "twitter");
+    saveOnboardingState(markProviderNeverAsk(skippedTwitter, "reddit"));
+    mockedSearchWeb.mockResolvedValue({
+      status: "ok",
+      data: {
+        query: "AAPL",
+        results: [
+          {
+            title: "AAPL bullish",
+            url: "https://example.com/aapl",
+            snippet: "AAPL sentiment is bullish after demand improved.",
+            source: "example.com",
+            published: null,
+            category: "news",
+          },
+        ],
+        resultCount: 1,
+        fetchedAt: "2026-05-21T12:00:00Z",
+        provider: "exa",
+      },
+    } as any);
+
+    const result = await sentimentSummaryTool.execute("call-skip", { query: "AAPL" });
+    const text = result.content[0].text;
+
+    expect(mockedWrapProvider).not.toHaveBeenCalled();
+    expect(text).toContain("Sentiment summary");
+    expect(result.details.insight.caveats.join(" ")).toContain("Twitter");
+    expect(result.details.insight.caveats.join(" ")).toContain("Reddit");
+
+    rmSync(home, { recursive: true, force: true });
   });
 
   it("adds price context for ticker-specific sentiment summaries", async () => {

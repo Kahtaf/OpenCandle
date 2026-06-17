@@ -24,7 +24,7 @@ import { predictionsTool } from "./portfolio/predictions.js";
 import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { watchlistTool } from "./portfolio/watchlist.js";
-import { redditSentimentTool } from "./sentiment/reddit-sentiment.js";
+import { createRedditSentimentTool } from "./sentiment/reddit-sentiment.js";
 import { sentimentSummaryTool } from "./sentiment/sentiment-summary.js";
 import { sentimentTrendTool } from "./sentiment/sentiment-trend.js";
 import { createTwitterSentimentTool } from "./sentiment/twitter-sentiment.js";
@@ -82,7 +82,7 @@ export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): 
     secFilingsTool,
     fredDataTool,
     fearGreedTool,
-    redditSentimentTool,
+    createRedditSentimentTool({ askUserHandler: options.askUserHandler }),
     createTwitterSentimentTool({ askUserHandler: options.askUserHandler }),
     technicalIndicatorsTool,
     backtestTool,

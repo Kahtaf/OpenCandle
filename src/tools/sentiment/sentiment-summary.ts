@@ -2,6 +2,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
 import { hasCredential } from "../../onboarding/providers.js";
+import { loadOnboardingState } from "../../onboarding/state.js";
 import { buildSoftDegradedTag } from "../../onboarding/tool-tags.js";
 import { finnhubDateRange, getCompanyNews } from "../../providers/finnhub.js";
 import { getPostComments, getSubredditPosts } from "../../providers/reddit.js";
@@ -35,6 +36,7 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
     const config = getConfig();
     const warnings: string[] = [];
     const allRecords: SentinelRecord[] = [];
+    const onboardingState = loadOnboardingState();
 
     const twitterAdapter = new TwitterAdapter();
     const webAdapter = new WebAdapter();
@@ -62,15 +64,36 @@ export const sentimentSummaryTool: AgentTool<typeof params> = {
           })()
         : Promise.resolve([]);
 
+    const twitterFetch =
+      onboardingState.providers.twitter?.status === "never_ask"
+        ? Promise.resolve({
+            status: "unavailable" as const,
+            reason: "skipped_by_user_preference",
+            provider: "twitter",
+          })
+        : wrapProvider("twitter", () => getTwitterSentiment(args.query, 50, hours));
+    const redditFetch =
+      onboardingState.providers.reddit?.status === "never_ask"
+        ? Promise.resolve({
+            records: [] as SentinelRecord[],
+            warnings: ["Reddit: skipped_by_user_preference"],
+          })
+        : fetchRedditCrossSubreddit(
+            args.query,
+            config.sentiment?.defaultSubreddits ?? [
+              "wallstreetbets",
+              "stocks",
+              "investing",
+              "options",
+            ],
+          );
+
     // Fetch all sources in parallel
     const [twitterResult, redditResults, webResult, finnhubResult] = await Promise.allSettled([
       // Twitter
-      wrapProvider("twitter", () => getTwitterSentiment(args.query, 50, hours)),
+      twitterFetch,
       // Reddit — cross-subreddit
-      fetchRedditCrossSubreddit(
-        args.query,
-        config.sentiment?.defaultSubreddits ?? ["wallstreetbets", "stocks", "investing", "options"],
-      ),
+      redditFetch,
       // Web
       searchWeb(args.query, { freshness: "day", limit: 10, category: "news" }),
       // Finnhub — only when includeFinnhub; otherwise resolves to []

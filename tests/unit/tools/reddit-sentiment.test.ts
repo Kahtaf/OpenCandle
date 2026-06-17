@@ -1,9 +1,15 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import {
   resetRdtCommandRunnerForTests,
   setRdtCommandRunnerForTests,
 } from "../../../src/providers/reddit-cli.js";
+import type { AskUserHandler } from "../../../src/types/index.js";
 import listingFixture from "../../fixtures/rdt-cli/sub-stocks.json";
 
 // Mock the sentiment singleton to use :memory:
@@ -25,13 +31,26 @@ vi.mock("../../../src/sentiment/index.js", async (importOriginal) => {
   };
 });
 
-import { redditSentimentTool } from "../../../src/tools/sentiment/reddit-sentiment.js";
+import {
+  createRedditSentimentTool,
+  redditSentimentTool,
+} from "../../../src/tools/sentiment/reddit-sentiment.js";
+
+let testHome: string;
 
 beforeEach(() => {
+  testHome = mkdtempSync(join(tmpdir(), "opencandle-reddit-sentiment-"));
+  vi.stubEnv("OPENCANDLE_HOME", testHome);
   cache.clear();
+  rateLimiter.configure("reddit", 1000, 1000);
+  rateLimiter.configure("reddit_comments", 1000, 1000);
 });
 afterEach(() => {
   resetRdtCommandRunnerForTests();
+  rateLimiter.configure("reddit", 5, 0.167);
+  rateLimiter.configure("reddit_comments", 10, 0.5);
+  vi.unstubAllEnvs();
+  rmSync(testHome, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
 
@@ -162,7 +181,66 @@ describe("get_reddit_sentiment tool", () => {
 
     expect(result.content[0].text).toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
     expect(result.content[0].text).toContain("provider=reddit");
-    expect(result.content[0].text).toContain("installCmd=\"uv tool install rdt-cli\"");
-    expect(result.content[0].text).toContain("loginCmd=\"rdt login\"");
+    expect(result.content[0].text).toContain('installCmd="uv tool install rdt-cli"');
+    expect(result.content[0].text).toContain('loginCmd="rdt login"');
+  });
+
+  it("retries once when the user continues after installing rdt-cli", async () => {
+    const runner = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        const err = new Error("spawn rdt ENOENT") as NodeJS.ErrnoException;
+        err.code = "ENOENT";
+        throw err;
+      })
+      .mockResolvedValueOnce({
+        code: 0,
+        stdout: JSON.stringify({
+          ok: true,
+          schema_version: "1",
+          data: [
+            {
+              id: "spcx1",
+              title: "SPCX bullish setup",
+              selftext: "SPCX demand looks constructive.",
+              author: "stock_guru",
+              score: 42,
+              num_comments: 0,
+              subreddit: "stocks",
+              permalink: "/r/stocks/comments/spcx1/spcx_bullish_setup/",
+              url: "https://reddit.com/r/stocks/comments/spcx1/spcx_bullish_setup/",
+              created_utc: 1744300800,
+            },
+          ],
+        }),
+        stderr: "",
+      });
+    setRdtCommandRunnerForTests(runner);
+    const askUserHandler: AskUserHandler = vi.fn(async () => ({
+      answer: "Continue after installing Reddit",
+      cancelled: false,
+    }));
+    const ctx: Partial<ExtensionContext> = {
+      hasUI: false,
+    };
+    const tool = createRedditSentimentTool({ askUserHandler });
+
+    const result = await tool.execute(
+      "call-retry",
+      { subreddit: "stocks", query: "SPCX" },
+      undefined,
+      undefined,
+      ctx as ExtensionContext,
+    );
+
+    expect(runner).toHaveBeenCalledTimes(2);
+    expect(askUserHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionType: "select",
+        options: ["Continue after installing Reddit", "Skip Reddit once", "Always skip Reddit"],
+      }),
+    );
+    expect(result.content[0].text).toContain("Reddit");
+    expect(result.content[0].text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
   });
 });
