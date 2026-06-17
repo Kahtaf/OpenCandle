@@ -408,7 +408,8 @@ function InsightPanel({ insight }) {
       {representativeCount > 0 ? (
         <p className="text-[11.5px] leading-relaxed text-muted-foreground">
           Representative evidence preview: {representativeCount} shown from{" "}
-          {insight.sampleSize ?? "the full"} scored records.
+          {insight.scoredSampleSize ?? "the scored"} scored records
+          {insight.sampleSize != null ? ` (${insight.sampleSize} total records).` : "."}
         </p>
       ) : null}
     </div>

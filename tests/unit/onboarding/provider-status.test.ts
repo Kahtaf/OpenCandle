@@ -241,7 +241,7 @@ describe("provider status probes", () => {
     });
     expect(second).toMatchObject({ cacheHit: true });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    expect(fetchImpl.mock.calls[0][1]).toMatchObject({ method: "HEAD" });
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({ method: "GET" });
     expect(fetchImpl.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
 });

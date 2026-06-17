@@ -88,6 +88,8 @@ describe("sentiment insight GUI rendering", () => {
     expect(html).toContain("Preview shown");
     expect(html).toContain("2");
     expect(html).toContain("Source evidence: breakout");
-    expect(html).toContain("Representative evidence preview: 2 shown from 14 scored records");
+    expect(html).toContain(
+      "Representative evidence preview: 2 shown from 8 scored records (14 total records).",
+    );
   });
 });
