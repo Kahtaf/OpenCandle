@@ -138,7 +138,7 @@ Common files:
 - `config.json` for provider keys and file-backed settings.
 - `state.db` for memory, workflow state, and durable user market state such as instruments, watchlists, portfolio lots, predictions, alerts, report runs, and import provenance.
 - `sentinel.db` for sentiment trend state.
-- `browser-profile/` for browser-backed sentiment flows such as Twitter/X.
+- `onboarding.json` for provider setup, snooze, never-ask, and welcome state.
 
 OpenCandle does not treat `watchlist.json`, `portfolio.json`, or `predictions.json` as supported state sources.
 

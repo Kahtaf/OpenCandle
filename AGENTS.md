@@ -19,7 +19,7 @@ npm run test:e2e:providers     # e2e provider tests (hits live APIs)
 src/
 ├── providers/    # API clients and provider wrappers
 ├── tools/        # Market data tools by domain → see src/tools/AGENTS.md
-├── infra/        # HTTP client, cache, rate-limiter, browser, opencandle-paths
+├── infra/        # HTTP client, cache, rate-limiter, opencandle-paths
 ├── types/        # Shared interfaces (market, options, fundamentals, macro, sentiment, portfolio)
 ├── routing/      # Intent classification, entity extraction, slot resolution
 ├── workflows/    # WorkflowDefinition builders

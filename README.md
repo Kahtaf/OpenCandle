@@ -171,7 +171,7 @@ Project shape:
 src/
 |-- providers/    API clients
 |-- tools/        Tool implementations by domain
-|-- infra/        Cache, rate limiter, HTTP, browser, paths
+|-- infra/        Cache, rate limiter, HTTP client, paths
 |-- routing/      Request understanding, entity extraction, slot resolution
 |-- workflows/    WorkflowDefinition builders
 |-- runtime/      Session coordinator, workflow runner, runtime context
