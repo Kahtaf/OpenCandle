@@ -92,4 +92,50 @@ describe("sentiment insight GUI rendering", () => {
       "Representative evidence preview: 2 shown from 8 scored records (14 total records).",
     );
   });
+
+  it("renders sentiment summary insights without legacy score fields", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ToolResultCard, {
+        message: {
+          role: "tool",
+          toolName: "get_sentiment_summary",
+          content: [{ type: "text", text: "Sentiment summary output" }],
+          details: {
+            fresh: [],
+            trend: [],
+            divergence: null,
+            warnings: [],
+            insight: {
+              label: "Leaning Bullish",
+              score: 0.22,
+              sampleSize: 14,
+              scoredSampleSize: 9,
+              confidence: { level: "medium", score: 0.6, reasons: ["cross-source support"] },
+              positiveDrivers: [
+                {
+                  label: "demand",
+                  count: 4,
+                  polarity: "positive",
+                  terms: ["demand"],
+                  sourceIds: ["record-1"],
+                },
+              ],
+              negativeDrivers: [],
+              mixedDrivers: [],
+              notableClaims: [],
+              representativeItems: [],
+              sourceCoverage: { sources: ["reddit", "twitter"], counts: { reddit: 7, twitter: 7 } },
+              caveats: [],
+              method: "deterministic-keyword-v1",
+            },
+          },
+        },
+      }),
+    );
+
+    expect(html).toContain("Findings");
+    expect(html).toContain("medium confidence");
+    expect(html).toContain("Source evidence: demand");
+    expect(html).toContain("Sentiment summary output");
+  });
 });

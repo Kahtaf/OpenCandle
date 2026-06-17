@@ -3,7 +3,7 @@ import { Favicon } from "../../../components/ui/favicon.jsx";
 import { hostFrom } from "../../../components/ui/favicon-utils.js";
 import { SourcePill } from "../../../components/ui/source-pill.jsx";
 import { MoneyTile, PlainOutput, Sparkline, StackBar, ToolCard } from "./_shared.jsx";
-import { extractDetails, formatDateShort, formatLargeNumber, relativeTime } from "./card-format.js";
+import { extractDetails, formatLargeNumber, relativeTime } from "./card-format.js";
 
 export function WebSearchCard({ message, header, text }) {
   const d = extractDetails(message);
@@ -321,6 +321,7 @@ export function SentimentSummaryCard({ message, header, text }) {
     return (
       <ToolCard>
         {header}
+        <InsightPanel insight={insight} />
         <PlainOutput text={text} />
       </ToolCard>
     );
@@ -399,8 +400,8 @@ function InsightPanel({ insight }) {
             Caveats
           </div>
           <ul className="grid gap-1 text-[11.5px] leading-relaxed text-muted-foreground">
-            {insight.caveats.slice(0, 3).map((caveat, i) => (
-              <li key={`${caveat}-${i}`}>{caveat}</li>
+            {insight.caveats.slice(0, 3).map((caveat) => (
+              <li key={caveat}>{caveat}</li>
             ))}
           </ul>
         </div>
@@ -424,8 +425,8 @@ function DriverList({ label, drivers }) {
         {label}
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {drivers.slice(0, 4).map((driver, i) => (
-          <Badge variant="outline" key={`${driver.label}-${i}`}>
+        {drivers.slice(0, 4).map((driver) => (
+          <Badge variant="outline" key={`${driver.polarity}-${driver.label}`}>
             Source evidence: {driver.label} ({driver.count})
           </Badge>
         ))}
