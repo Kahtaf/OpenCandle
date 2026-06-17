@@ -229,7 +229,7 @@ export const PROVIDERS = [
     installCmd: "uv tool install rdt-cli",
     sessionSource: "browser-cookies",
     supportedBrowsers: ["Chrome", "Arc", "Edge", "Firefox", "Brave"],
-    sessionProbeArgs: ["status"],
+    sessionProbeArgs: ["status", "--json"],
     unlocks: ["Reddit sentiment", "ticker discussion context", "retail investor discussion"],
     fallbackDescription:
       "Sentiment summaries continue with X/Twitter, web search, and news when Reddit is unavailable",

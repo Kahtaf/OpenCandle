@@ -140,7 +140,7 @@ describe("provider status probes", () => {
       mode: "session",
       state: "session_ok",
     });
-    expect(calls).toEqual([["status"]]);
+    expect(calls).toEqual([["status", "--json"]]);
   });
 
   it("classifies Reddit missing-cookie session errors", async () => {
