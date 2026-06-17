@@ -49,6 +49,36 @@ describe("twitter-cli provider wrapper", () => {
     });
   });
 
+  it("adapts nested metrics from twitter-cli JSON", async () => {
+    setTwitterCliCommandRunnerForTests(
+      vi.fn().mockResolvedValue({
+        code: 0,
+        stdout: JSON.stringify({
+          ok: true,
+          schema_version: "1",
+          data: [
+            {
+              id: "nested-metrics",
+              text: "$AAPL breakout watch",
+              username: "metrics_trader",
+              metrics: { likes: 21, retweets: 5, replies: 3, views: 900 },
+            },
+          ],
+        }),
+        stderr: "",
+      }),
+    );
+
+    const tweets = await searchTweets("$AAPL", 20);
+
+    expect(tweets[0]).toMatchObject({
+      likes: 21,
+      retweets: 5,
+      replies: 3,
+      views: 900,
+    });
+  });
+
   it("throws typed not-installed error on ENOENT", async () => {
     const runner = vi.fn().mockImplementation(() => {
       const err = new Error("spawn twitter ENOENT") as NodeJS.ErrnoException;

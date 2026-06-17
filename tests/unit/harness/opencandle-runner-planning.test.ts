@@ -133,6 +133,110 @@ describe("OpenCandle harness planning telemetry", () => {
     expect(trace.planning?.retryEligibility.eligible).toBe(false);
   });
 
+  it("does not infer sentiment rationale from generic findings headings", () => {
+    const agentTrace: AgentTrace = {
+      prompt: "What is sentiment around NVDA?",
+      turns: [{ text: "answer", toolCalls: [] }],
+      interactions: [],
+      finalText:
+        "Findings: source coverage used Reddit and Twitter. Confidence is low because sample size is thin.",
+      toolSequence: [],
+      durationMs: 100,
+      customEntries: [
+        {
+          customType: "opencandle-route-context",
+          timestamp: "2026-05-24T00:00:00.000Z",
+          data: {
+            routeKind: "agent_task",
+            legacyRoute: "fallback",
+            workflow: "general_finance_qa",
+            entities: { symbols: ["NVDA"] },
+            toolBundles: [],
+            activeToolNames: [],
+            memoryQueryPlan: { categories: [] },
+            diagnostics: [],
+            planning: {
+              version: "planning-v1",
+              behaviorMode: "observe_only",
+              taskFamily: "sentiment_snapshot",
+              commitmentMode: "framework",
+              policyCardId: "sentiment_snapshot",
+              evidencePlanId: "placeholder_sentiment_snapshot",
+              answerContractId: "sentiment_snapshot",
+              structuredCheckIds: ["commitment_mode_respected"],
+              workspacePlaceholderIds: [],
+              artifactPlaceholderIds: [],
+              capabilityGapIds: ["sentiment_sample_depth"],
+              diagnostics: [],
+            },
+          },
+        },
+      ],
+    };
+
+    const trace = toEvalTrace(agentTrace);
+
+    expect(trace.planning?.structuredCheckFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          checkId: "required_final_fields_present",
+          failureReason: expect.stringContaining("sentiment_rationale"),
+        }),
+      ]),
+    );
+  });
+
+  it("infers sentiment rationale from explicit driver evidence", () => {
+    const agentTrace: AgentTrace = {
+      prompt: "What is sentiment around NVDA?",
+      turns: [{ text: "answer", toolCalls: [] }],
+      interactions: [],
+      finalText:
+        "Bottom line: source coverage used Reddit and Twitter with a data gap from low sample size. " +
+        "Positive drivers: datacenter demand and AI order momentum. Confidence is medium with caveats.",
+      toolSequence: [],
+      durationMs: 100,
+      customEntries: [
+        {
+          customType: "opencandle-route-context",
+          timestamp: "2026-05-24T00:00:00.000Z",
+          data: {
+            routeKind: "agent_task",
+            legacyRoute: "fallback",
+            workflow: "general_finance_qa",
+            entities: { symbols: ["NVDA"] },
+            toolBundles: [],
+            activeToolNames: [],
+            memoryQueryPlan: { categories: [] },
+            diagnostics: [],
+            planning: {
+              version: "planning-v1",
+              behaviorMode: "observe_only",
+              taskFamily: "sentiment_snapshot",
+              commitmentMode: "framework",
+              policyCardId: "sentiment_snapshot",
+              evidencePlanId: "placeholder_sentiment_snapshot",
+              answerContractId: "sentiment_snapshot",
+              structuredCheckIds: ["commitment_mode_respected"],
+              workspacePlaceholderIds: [],
+              artifactPlaceholderIds: [],
+              capabilityGapIds: ["sentiment_sample_depth"],
+              diagnostics: [],
+            },
+          },
+        },
+      ],
+    };
+
+    const trace = toEvalTrace(agentTrace);
+
+    expect(trace.planning?.structuredCheckFailures).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ checkId: "required_final_fields_present" }),
+      ]),
+    );
+  });
+
   it("adds portfolio exposure-map evidence for portfolio rebalance planning traces", () => {
     const agentTrace: AgentTrace = {
       prompt: "I have 45% tech, 25% S&P 500 index, 20% bonds, and 10% cash. Should I rebalance?",

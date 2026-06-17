@@ -451,6 +451,18 @@ function inferFinalAnswerFieldsForEval(text: string): FinalAnswerField[] {
     fields.push("source_coverage");
   }
   if (
+    /\b(?:positive|negative|bullish|bearish|mixed)\s+(?:drivers?|factors?|signals?|evidence|rationale)\b|\b(?:sentiment|source)\s+(?:drivers?|rationale|evidence)\b|\bdrivers?:/.test(
+      lower,
+    )
+  ) {
+    fields.push("sentiment_rationale");
+  }
+  if (
+    /\b(confidence|conviction|caveat|caveats|sample size|low sample|mixed|uncertain)\b/.test(lower)
+  ) {
+    fields.push("confidence_or_caveats");
+  }
+  if (
     /\b(based on your|stated percentages?|stated allocation|user[- ]stated|provided allocation)\b/.test(
       lower,
     )

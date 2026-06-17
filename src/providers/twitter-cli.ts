@@ -29,6 +29,12 @@ export interface RawTweet {
   readonly replies?: number;
   readonly viewCount?: number | null;
   readonly views?: number | null;
+  readonly metrics?: {
+    readonly likes?: number;
+    readonly retweets?: number;
+    readonly replies?: number;
+    readonly views?: number | null;
+  };
 }
 
 interface TwitterCliEnvelope<T> {
@@ -124,10 +130,10 @@ function adaptRawTweet(raw: RawTweet): TwitterTweet {
       stringValue(raw.author?.screenName) ||
       stringValue(raw.username) ||
       "unknown",
-    likes: numberValue(raw.likeCount ?? raw.likes),
-    retweets: numberValue(raw.retweetCount ?? raw.retweets),
-    replies: numberValue(raw.replyCount ?? raw.replies),
-    views: nullableNumberValue(raw.viewCount ?? raw.views),
+    likes: numberValue(raw.metrics?.likes ?? raw.likeCount ?? raw.likes),
+    retweets: numberValue(raw.metrics?.retweets ?? raw.retweetCount ?? raw.retweets),
+    replies: numberValue(raw.metrics?.replies ?? raw.replyCount ?? raw.replies),
+    views: nullableNumberValue(raw.metrics?.views ?? raw.viewCount ?? raw.views),
     url: stringValue(raw.url ?? raw.permanentUrl),
     created: normalizeCreatedAt(raw.createdAt ?? raw.created_at),
   };

@@ -415,6 +415,7 @@ export function runStructuredChecks(input: StructuredCheckInput): StructuredChec
     checkFreshness(input.contract, input.finalAnswerMetadata),
     checkDataGapDisclosure(input.contract, input.evidenceRecords, input.finalAnswerMetadata),
     checkCommitmentMode(input.contract, input.finalAnswerMetadata),
+    checkRequiredFinalFields(input.contract, input.finalAnswerMetadata),
     checkSourceCoverage(input.contract, input.finalAnswerMetadata),
     checkCapabilityGapDisclosure(input.contract, input.evidenceRecords, input.finalAnswerMetadata),
     ...semanticChecks(requestedChecks, input.answerText),
@@ -624,6 +625,19 @@ function checkCommitmentMode(
     passed
       ? undefined
       : `Expected ${contract.commitmentMode} metadata and fields: ${modeContract.requiredFinalFields.join(", ")}`,
+  );
+}
+
+function checkRequiredFinalFields(
+  contract: AnswerContractDefinition,
+  metadata: FinalAnswerMetadata,
+): StructuredCheckResult {
+  const fields = new Set(metadata.finalFields);
+  const missing = contract.requiredFinalFields.filter((field) => !fields.has(field));
+  return structuredResult(
+    "required_final_fields_present",
+    missing.length === 0,
+    missing.length > 0 ? `Missing required final fields: ${missing.join(", ")}` : undefined,
   );
 }
 
