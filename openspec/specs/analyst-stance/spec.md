@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Analyst Stance Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Committal Recommendations
 

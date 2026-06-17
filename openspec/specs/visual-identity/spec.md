@@ -1,20 +1,28 @@
-## Visual Identity
+# Visual Identity Specification
 
-### Requirements
+## Purpose
+TBD - normalized from existing baseline requirements.
 
-- Logo exists as SVG source and PNG raster in `assets/`
-- Logo is legible at 32px (favicon) and 200px (README header)
-- Logo uses a candle or candlestick motif consistent with the project name
-- Demo videos show the real TUI and local GUI experiences
-- README displays poster images in or near the intro that link to the demo videos
-- README video links use CDN URLs that serve `video/mp4`, with GitHub raw URLs as download fallbacks
-- `assets/` is NOT included in the npm tarball - `package.json` `files` remains `["dist"]`
+## Requirements
 
-### Acceptance
+### Requirement: Logo assets
+The project MUST provide logo assets as SVG source and PNG raster files in `assets/`, using a candle or candlestick motif that remains legible at favicon and README display sizes.
 
-- [ ] `assets/logo.svg` and `assets/logo.png` exist and render correctly
-- [ ] `assets/opencandle-tui.mp4` and `assets/opencandle-gui.mp4` exist and show real agent output
-- [ ] `assets/opencandle-tui-poster.png` and `assets/opencandle-gui-poster.png` exist and render correctly
-- [ ] README renders the poster images on GitHub and links to the demo videos
-- [ ] README renders the poster images and video links on npmjs.com (verified after publish or via preview)
-- [ ] `npm pack --dry-run` output does NOT include any `assets/` files
+#### Scenario: Logo assets render at required sizes
+- **WHEN** `assets/logo.svg` and `assets/logo.png` are rendered at 32px and 200px widths
+- **THEN** the mark remains recognizable and consistent with the OpenCandle name
+
+### Requirement: Demo media in README
+The README MUST display poster images near the intro that link to demo videos showing the real TUI and local GUI experiences.
+
+#### Scenario: README media renders
+- **WHEN** README is rendered on GitHub or npm preview
+- **THEN** the TUI and GUI poster images are visible
+- **AND** their links open the corresponding demo videos or download fallbacks
+
+### Requirement: Visual assets excluded from npm package
+The package configuration MUST keep `assets/` out of the npm tarball, with package files limited to distributable runtime output.
+
+#### Scenario: Package dry run excludes assets
+- **WHEN** `npm pack --dry-run` is executed
+- **THEN** no `assets/` files are listed in the tarball output

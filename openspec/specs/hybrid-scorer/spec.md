@@ -1,7 +1,17 @@
-## ADDED Requirements
+# Hybrid Scorer Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Keyword-only sentiment scoring (v1)
 The system SHALL score SentinelRecords using engagement-weighted keyword matching. LLM-based scoring is deferred to a future change that adds runtime LLM access for tools.
+
+#### Scenario: Tool scores without LLM access
+- **WHEN** sentiment records are scored in a runtime without LLM access for tools
+- **THEN** the scorer uses keyword matching and engagement weighting
+- **AND** it does not attempt an LLM call
 
 ### Requirement: Keyword scoring with engagement weighting
 The scorer SHALL compute keyword sentiment using shared bullish/bearish term lists from `src/sentiment/keywords.ts`. Each term match SHALL be weighted by engagement: `weight = count × (1 + engagement.score)`. The final score SHALL be `(bullishWeight - bearishWeight) / (bullishWeight + bearishWeight)`, clamped to [-1.0, +1.0].

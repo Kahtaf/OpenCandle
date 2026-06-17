@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Eval Baseline Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Baseline storage
 Eval baselines SHALL be stored in `tests/evals/baseline.json`, checked into git. The baseline file SHALL contain per-case scores from the last accepted eval run.

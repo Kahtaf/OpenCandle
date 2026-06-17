@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Sentiment Trend Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: get_sentiment_trend tool (query-only, no live fetch)
 The system SHALL expose a `get_sentiment_trend` AgentTool that queries the sentiment store for historical sentiment data. It SHALL NOT make any live API calls — it reads only from previously indexed data in `sentinel.db`.
@@ -12,7 +17,7 @@ The system SHALL expose a `get_sentiment_trend` AgentTool that queries the senti
 - **THEN** the tool returns "No historical sentiment data for RIVN. Run a sentiment query first to populate the store."
 
 ### Requirement: Tool parameters
-Parameters: `query` (required string — ticker or topic), `days` (optional number, default 7, max from `config.sentiment.retentionDays`), `source` (optional, "twitter" | "reddit" | "web" — filters to one source, default: all sources).
+The tool SHALL accept `query` as a required ticker or topic string, `days` as an optional number defaulting to 7 and capped by `config.sentiment.retentionDays`, and `source` as an optional `"twitter" | "reddit" | "web"` filter defaulting to all sources.
 
 #### Scenario: Source filter
 - **WHEN** called with `query: "NVDA"`, `source: "twitter"`

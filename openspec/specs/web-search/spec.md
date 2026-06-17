@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Web Search Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Web search provider with conditional cascade
 The system SHALL provide a `searchWeb(query, opts)` function in `src/providers/web-search.ts` that returns `ProviderResult<WebSearchEnvelope>`. The provider uses `withFallback()` with a cascade order that depends on configuration and category:
@@ -35,6 +40,10 @@ The provider SHALL NOT be additionally wrapped with `wrapProvider()` at the tool
 
 ### Requirement: WebSearchOpts type
 The provider SHALL define `WebSearchOpts`: `{ category: "news" | "general"; freshness: "hours" | "day" | "week" | "month"; limit: number }`. The `searchWeb` function accepts `Partial<WebSearchOpts>` and applies defaults: `category: "news"`, `freshness: "day"`, `limit: 10`.
+
+#### Scenario: Partial options use defaults
+- **WHEN** `searchWeb("AAPL earnings", {})` is called without explicit options
+- **THEN** the provider uses category `"news"`, freshness `"day"`, and limit `10`
 
 ### Requirement: DuckDuckGo search via duck-duck-scrape
 The system SHALL use the `duck-duck-scrape` npm package for DuckDuckGo searches. Enum names and method signatures SHALL be verified against the published package before implementation (not assumed from the spec).

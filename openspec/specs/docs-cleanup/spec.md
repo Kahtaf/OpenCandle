@@ -1,20 +1,29 @@
-## Docs Cleanup
+# Docs Cleanup Specification
 
-### Requirements
+## Purpose
+TBD - normalized from existing baseline requirements.
 
-- No stale absolute paths (`/home/user/...`) remain in any tracked `.md` file in the repo
-- This includes files moved to `docs/internal/` — they are still tracked by git
-- Internal planning docs are in `docs/internal/`, not top-level `docs/`
-- Public-facing docs (`build-a-tool.md`, `production-plan.md`) remain in `docs/`
-- This-repo paths in internal docs are converted to relative paths from their `docs/internal/` location
-- External-repo paths (e.g. claude-code-working references) have link markup removed but descriptive text preserved
-- npm keywords include at least 10 relevant search terms
-- "Why OpenCandle?" section exists in README (1 paragraph, no feature table)
+## Requirements
 
-### Acceptance
+### Requirement: Repository markdown avoids stale local paths
+Tracked markdown documentation MUST NOT contain stale absolute local paths such as `/home/user/...`, except inside archived OpenSpec artifacts that intentionally preserve historical examples.
 
-- [ ] `git grep '/home/user' -- ':!openspec/'` returns no results (openspec change artifacts are excluded — they reference the path in examples)
-- [ ] `docs/internal/` contains the 5 moved planning docs
-- [ ] `docs/build-a-tool.md` and `docs/production-plan.md` still exist at their current paths
-- [ ] `package.json` keywords array has 10+ entries including finance-relevant terms
-- [ ] README contains a "Why OpenCandle?" heading
+#### Scenario: Markdown path audit
+- **WHEN** maintainers run a markdown path audit excluding archived OpenSpec examples
+- **THEN** no tracked public or internal markdown file contains `/home/user`
+
+### Requirement: Internal and public docs are separated
+Internal planning documentation MUST live under `docs/internal/`, while public-facing docs such as `docs/build-a-tool.md` and `docs/production-plan.md` MUST remain in `docs/`.
+
+#### Scenario: Documentation layout check
+- **WHEN** documentation is inspected after cleanup
+- **THEN** internal planning docs are under `docs/internal/`
+- **AND** public docs remain at their existing public paths
+
+### Requirement: Public package and README metadata
+The package metadata MUST include at least ten relevant npm keywords, and the README MUST include a concise "Why OpenCandle?" section.
+
+#### Scenario: README and package metadata check
+- **WHEN** the package manifest and README are inspected
+- **THEN** `package.json` has at least ten finance-relevant keywords
+- **AND** README contains a "Why OpenCandle?" heading

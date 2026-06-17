@@ -1,19 +1,22 @@
-## CI Hardening
+# Ci Hardening Specification
 
-### Requirements
+## Purpose
+TBD - normalized from existing baseline requirements.
 
-- `.github/workflows/ci.yml` runs typecheck (`tsc --noEmit`) on every PR and push to main
-- `.github/workflows/ci.yml` runs a packaging validation step that:
-  - Executes `npm pack --dry-run` and captures its output
-  - Fails CI if the tarball contains unexpected files (tests/, fixtures/, docs/, .env, openspec/)
-  - Fails CI if the tarball is missing `dist/`
-- Both steps run after `npm ci` and before or alongside `npm test`
-- The validation step must use the exit code to block CI — not just print warnings
+## Requirements
 
-### Acceptance
+### Requirement: CI typecheck gate
+The CI workflow MUST run a typecheck step with `npx tsc --noEmit` on every pull request and push to `main`, after dependency installation and before merge eligibility.
 
-- [ ] CI workflow includes a "Typecheck" step that runs `npx tsc --noEmit`
-- [ ] CI workflow includes a "Validate package contents" step with grep assertions
-- [ ] A PR that adds `tests/` to the `files` array would be blocked by CI
-- [ ] A PR with a type error is blocked by CI
-- [ ] Workflow completes in under 3 minutes total
+#### Scenario: Pull request has a type error
+- **WHEN** a pull request introduces a TypeScript error
+- **THEN** `.github/workflows/ci.yml` runs the typecheck step
+- **AND** the workflow fails with a non-zero exit code
+
+### Requirement: Package contents validation
+The CI workflow MUST run a package validation step that executes `npm pack --dry-run`, verifies `dist/` is present, and blocks unexpected package contents such as `tests/`, `fixtures/`, `docs/`, `.env`, or `openspec/`.
+
+#### Scenario: Package includes unexpected files
+- **WHEN** a pull request changes package configuration so `tests/` would be included in the published tarball
+- **THEN** the package validation step fails with a non-zero exit code
+- **AND** the workflow blocks the pull request

@@ -1,63 +1,37 @@
-## ADDED Requirements
+# Provider Registry Specification
 
+## Purpose
+TBD - normalized from existing baseline requirements.
+## Requirements
 ### Requirement: Provider descriptor registry is the single source of truth for credentialed providers
-`src/onboarding/providers.ts` SHALL export a `PROVIDERS` array of `ProviderDescriptor` records, with exactly one entry per credentialed provider currently supported by OpenCandle (Alpha Vantage, FRED, Finnhub, Brave Search, Exa). Every setup pathway — first-run startup, the `/connect` command, the `connect_provider` agent tool, and the orchestrator's `credential_required` interception — SHALL read provider metadata exclusively from this registry. No other module SHALL hardcode provider signup URLs, display names, env var names, or config paths.
 
-#### Scenario: Registry exposes all five credentialed providers
+`src/onboarding/providers.ts` SHALL export provider descriptors as the single source of truth for provider setup, status, and gap-reporting metadata across API-key providers and external-tool providers. Every setup pathway, GUI catalog provider row, TUI doctor/provider-status surface, and provider-gap note SHALL read provider metadata from this registry. No other module SHALL hardcode provider signup URLs, display names, env var names, install commands, binary names, probe commands, or config paths.
+
+#### Scenario: Registry exposes API-key and external-tool providers
+
 - **WHEN** code imports `PROVIDERS` from `src/onboarding/providers.ts`
-- **THEN** the array contains exactly five entries with ids `alpha_vantage`, `fred`, `finnhub`, `brave`, and `exa`
-
-#### Scenario: Setup module has no hardcoded provider constants
-- **WHEN** `src/pi/setup.ts` is read after this change is applied
-- **THEN** it contains no references to `ALPHA_VANTAGE_SIGNUP_URL`, `FRED_SIGNUP_URL`, or any other hardcoded provider signup URL, env var, or config path
-- **AND** any code paths that previously referenced those constants SHALL obtain the same values by looking up the provider in the registry
+- **THEN** the array contains the existing API-key providers `alpha_vantage`, `fred`, `finnhub`, `brave`, and `exa`
+- **AND** it contains `reddit` as an external-tool provider using `rdt-cli`
+- **AND** Reddit is not represented as a public HTTP provider after this migration
 
 ### Requirement: ProviderDescriptor shape carries all metadata needed for setup and gap reporting
-Each `ProviderDescriptor` SHALL define the following fields:
-- `id`: a `ProviderId` discriminated-union value
-- `displayName`: the human-readable name shown in UI copy (e.g., `"Alpha Vantage"`)
-- `category`: one of `"fundamentals" | "macro" | "news" | "web_search"`
-- `tier`: either `"hard"` or `"soft"`. Hard providers have no meaningful fallback and trigger a just-in-time prompt; soft providers have a usable fallback and silently degrade with a post-answer gap note. See the `conversational-provider-setup` capability for how each tier behaves.
-- `aliases`: a readonly array of lowercase friendly names accepted by the `/connect` command (e.g., `["financials", "fundamentals", "company-financials"]` for Alpha Vantage)
-- `signupUrl`: an absolute HTTPS URL opened by `runProviderConnect`
-- `freeTier`: a boolean indicating whether the free tier is sufficient for OpenCandle
-- `envVar`: the exact environment variable name read by `src/config.ts`
-- `configPath`: a readonly string array describing the nested key path in `OpenCandleFileConfig` where the key is persisted (e.g., `["providers", "alphaVantage", "apiKey"]`)
-- `unlocks`: a readonly array of short human strings describing what the provider unlocks (e.g., `["fundamentals", "DCF", "earnings history"]`)
-- `fallbackDescription`: a human string describing the degraded experience when the provider is missing, or `null` if there is no fallback. For `brave` the fallback is DuckDuckGo; for `exa` the fallback is the keyless Exa MCP endpoint (NOT DuckDuckGo — that's a further fallback through the cascade). For `alpha_vantage`, `fred`, and `finnhub` this field is `null`.
-- `snoozeDurationDays`: a positive integer number of days for the snooze option (7 for all providers in this change)
-- `instructionsHint`: a one-line human copy used in the connect-now prompt (e.g., `"Free, ~30 seconds, signup opens in your browser"`)
 
-#### Scenario: All descriptors conform to the shape
-- **WHEN** each entry in `PROVIDERS` is validated against the `ProviderDescriptor` interface
-- **THEN** every field is present with the correct type AND no extra fields exist
+Each `ProviderDescriptor` SHALL be a discriminated union with common metadata and kind-specific fields:
 
-#### Scenario: Hard providers are tagged correctly
-- **WHEN** the `alpha_vantage` and `fred` descriptors are read
-- **THEN** `tier === "hard"` for both
-- **AND** `fallbackDescription` is `null` for both
+- common fields: `kind`, `id`, `displayName`, `category`, `tier`, `aliases`, `unlocks`, `fallbackDescription`, `snoozeDurationDays`, and `instructionsHint`
+- `kind: "api-key"` fields: `signupUrl`, `freeTier`, `envVar`, and `configPath`
+- `kind: "external-tool"` fields: `binary`, `installCmd`, `sessionSource`, and optional `supportedBrowsers`
+- `kind: "public-http"` fields: `probeUrl` when such providers exist
 
-#### Scenario: Soft providers are tagged correctly
-- **WHEN** the `finnhub`, `brave`, and `exa` descriptors are read
-- **THEN** `tier === "soft"` for all three
+Credential helpers SHALL operate only on `api-key` descriptors. Callers that need generic provider readiness SHALL use status probes rather than destructuring `envVar` from every provider.
 
-#### Scenario: Brave fallback description mentions DuckDuckGo
-- **WHEN** the `brave` descriptor is read
-- **THEN** `fallbackDescription` is a non-null human string mentioning DuckDuckGo as the fallback search provider
+#### Scenario: Reddit descriptor has no API key input
 
-#### Scenario: Exa fallback description mentions keyless MCP
-- **WHEN** the `exa` descriptor is read
-- **THEN** `fallbackDescription` is a non-null human string mentioning the keyless Exa MCP endpoint as the fallback
-- **AND** it does NOT claim the fallback is DuckDuckGo
-
-#### Scenario: Aliases are non-empty and lowercase
-- **WHEN** any descriptor is read
-- **THEN** `aliases` contains at least one entry
-- **AND** every alias is lowercase and kebab-case-friendly (letters, digits, hyphens only)
-
-#### Scenario: Aliases are unique across providers
-- **WHEN** the full set of aliases across all descriptors is collected
-- **THEN** no alias appears in more than one descriptor
+- **WHEN** the `reddit` descriptor is read
+- **THEN** `kind === "external-tool"`
+- **AND** it includes `binary: "rdt"` and install command `uv tool install rdt-cli`
+- **AND** its session source mentions the user's supported browser session as consumed by `rdt-cli`
+- **AND** it does not include API-key-only fields that would cause the GUI to render an API key input
 
 ### Requirement: Registry lookup helpers provide typed access by id, category, and alias
 The registry module SHALL export the following helper functions:
@@ -136,15 +110,14 @@ These helpers SHALL be the only public API of the registry module besides the `P
 - **THEN** it returns an array containing Finnhub, Brave, and Exa (no other providers)
 
 ### Requirement: ProviderId is a string literal union matching the registry
-`ProviderId` SHALL be declared as the string literal union `"alpha_vantage" | "fred" | "finnhub" | "brave" | "exa"`. The registry array SHALL be typed such that TypeScript fails the build if the array does not contain exactly one descriptor per `ProviderId` value. This catches the case where someone adds a new id to the union but forgets the registry entry (or vice versa).
 
-#### Scenario: Compile-time exhaustiveness
-- **WHEN** a developer adds a new value to the `ProviderId` union without adding a corresponding `PROVIDERS` entry
-- **THEN** TypeScript compilation fails with a clear error
+`ProviderId` SHALL be declared as a string literal union matching the full registry, including API-key and external-tool providers. The registry array SHALL be typed such that TypeScript fails the build if the array does not contain exactly one descriptor per `ProviderId` value or if a descriptor branch is missing required kind-specific fields.
 
-#### Scenario: Duplicate id rejected at build time
-- **WHEN** two `PROVIDERS` entries share the same `id`
-- **THEN** TypeScript compilation fails OR a startup assertion throws
+#### Scenario: Credential map excludes non-key providers intentionally
+
+- **WHEN** a helper maps provider ids to config/env credential fields
+- **THEN** it covers only `api-key` provider ids or uses an explicit narrowed type
+- **AND** adding `reddit` does not create an impossible credential-map entry
 
 ### Requirement: Registry is pure and import-safe
 The provider registry module SHALL have no side effects at import time, SHALL NOT read files or environment variables during module initialization, and SHALL NOT import any module that transitively triggers network or filesystem access. `hasCredential` is the only helper that touches env/config state, and it SHALL read them lazily on each invocation via the existing `getConfig()` cache.
@@ -156,3 +129,97 @@ The provider registry module SHALL have no side effects at import time, SHALL NO
 #### Scenario: hasCredential uses the cached config
 - **WHEN** `hasCredential` is called after `loadConfig` has been invoked once
 - **THEN** it uses the cached `Config` object rather than re-reading the file
+
+### Requirement: Provider Status Probes Are Shared By GUI Catalog And TUI Doctor
+
+OpenCandle SHALL expose provider readiness through shared status probes consumed by both the GUI catalog and `opencandle doctor`. Status probes SHALL be cached for 60 seconds by provider id and probe type. Passive probes SHALL avoid side effects such as browser-cookie reads, Keychain prompts, account login attempts, or system-level installs.
+
+Provider status responses SHALL use a discriminated union shape that includes provider id, provider kind, state, checked timestamp, and cache-hit indicator. API-key responses SHALL include credential source. External-tool responses SHALL include mode (`install` or `session`) and MAY include an install command or redacted message. Public HTTP responses MAY include HTTP status code.
+
+#### Scenario: API-key provider status uses credential source
+
+- **WHEN** status is requested for an API-key provider
+- **THEN** the probe reports env, file, or absent credential state using existing credential helpers
+
+#### Scenario: External-tool passive status checks only installation
+
+- **WHEN** passive status is requested for the Twitter external-tool provider
+- **THEN** the probe spawns `twitter --version` or equivalent
+- **AND** it does not run a command that reads browser cookies
+- **AND** the response state is `installed`, `missing`, or `error` with `mode: "install"`
+
+#### Scenario: Explicit Twitter session check may read cookies
+
+- **WHEN** the user explicitly clicks re-check or check X session in setup
+- **THEN** OpenCandle may run a short `twitter-cli` JSON smoke command
+- **AND** the UI/TUI copy warns that the command may read browser cookies and trigger Keychain prompts
+- **AND** the response state is `session_ok`, `session_missing`, `session_stale`, or `error` with `mode: "session"`
+
+#### Scenario: Public HTTP status uses bounded reachability
+
+- **WHEN** status is requested for a public HTTP provider such as Yahoo or Reddit
+- **THEN** OpenCandle runs a bounded reachability probe with a short timeout
+- **AND** the probe result is cached for the provider status TTL
+
+### Requirement: Yahoo Options Fallback Uses yahoo-finance2 Without Browser Runtime
+
+OpenCandle SHALL preserve the existing Yahoo options primary raw-fetch path and replace only the Camoufox/StealthBrowser fallback with a `yahoo-finance2` fallback. The fallback SHALL return the same public `OptionsChain` contract as before, including greeks, expiration dates, quote status warnings, cache/stale-cache behavior, and invalid-symbol handling.
+
+#### Scenario: Primary raw fetch still succeeds without yahoo-finance2 fallback
+
+- **WHEN** the existing raw Yahoo options endpoint succeeds
+- **THEN** `getOptionsChain()` returns the parsed `OptionsChain`
+- **AND** it does not call `yahoo-finance2`
+
+#### Scenario: yahoo-finance2 fallback replaces StealthBrowser
+
+- **WHEN** the raw options fetch and retry fail
+- **THEN** `getOptionsChain()` attempts the `yahoo-finance2` fallback
+- **AND** it does not import or invoke `StealthBrowser`
+
+#### Scenario: Stale options cache remains the last fallback
+
+- **WHEN** both the raw fetch path and `yahoo-finance2` fallback fail
+- **AND** a stale cached options chain exists within the stale limit
+- **THEN** `getOptionsChain()` returns the stale cached chain
+
+### Requirement: Runtime Browser Dependencies Are Removed Separately From Test Browser Tooling
+
+OpenCandle SHALL remove Camoufox and the old Twitter scraper from runtime dependencies once their runtime call sites are gone. Playwright-based GUI e2e and screenshot harnesses SHALL be audited separately: they may be migrated off Playwright, or `playwright-core` may remain as explicit dev/test-only tooling. Production install-size claims SHALL distinguish runtime/browser-removal wins from retained test harness dependencies.
+
+#### Scenario: Runtime Camoufox references are gone
+
+- **WHEN** the Camoufox deletion PR lands
+- **THEN** runtime code under `src/` and `gui/server/` no longer imports `camoufox-js`, `StealthBrowser`, `twitter-login`, or `@the-convocation/twitter-scraper`
+
+#### Scenario: Test-only Playwright retention is explicit
+
+- **WHEN** `tests/e2e/gui-browser.test.ts` or `tests/screenshots/capture.ts` still imports `playwright-core`
+- **THEN** `playwright-core` remains dev/test-only unless a separate test-harness change migrates those tests before removing it
+- **AND** release notes do not claim all browser tooling was removed from the repository
+
+### Requirement: Reddit Status Probes Separate Install And Session Checks
+
+OpenCandle SHALL expose Reddit readiness through provider status probes consumed by both the GUI catalog and `opencandle doctor`. Status probes SHALL be cached for 60 seconds by provider id and probe type. Passive probes SHALL avoid side effects such as browser-cookie reads, Keychain prompts, account login attempts, or system-level installs.
+
+Provider status responses SHALL use a discriminated union shape that includes provider id, provider kind, state, checked timestamp, and cache-hit indicator. API-key responses SHALL include credential source. External-tool responses SHALL include mode (`install` or `session`) and MAY include an install command or redacted message.
+
+#### Scenario: Reddit external-tool passive status checks only installation
+
+- **WHEN** passive status is requested for the Reddit external-tool provider
+- **THEN** the probe spawns `rdt --version` or equivalent
+- **AND** it does not run `rdt status`, `rdt login`, or a Reddit data command
+- **AND** the response state is `installed`, `missing`, or `error` with `mode: "install"`
+
+#### Scenario: Explicit Reddit session check may read cookies
+
+- **WHEN** the user explicitly clicks re-check or check Reddit session in setup
+- **THEN** OpenCandle may run `rdt status`
+- **AND** the UI/TUI copy warns that the command may read browser cookies or `rdt-cli` credential state and may trigger Keychain prompts
+- **AND** the response state is `session_ok`, `session_missing`, `session_stale`, or `error` with `mode: "session"`
+
+#### Scenario: Reddit no longer uses public HTTP reachability for readiness
+
+- **WHEN** status is requested for Reddit after this migration
+- **THEN** OpenCandle reports `rdt-cli` install/session readiness
+- **AND** it does not use `https://www.reddit.com/r/stocks/about.json` or another public URL as the primary readiness signal

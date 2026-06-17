@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Sentinel Store Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: SQLite FTS5 sentiment store with schema versioning
 The system SHALL maintain a SQLite database at `~/.opencandle/sentinel.db` with a `sentinel_records` table, a `sentinel_fts` FTS5 virtual table, and a `schema_version` table (following the pattern in `src/memory/sqlite.ts:8-23`). The store persists all sentiment records fetched from any source and supports full-text search, time-range queries, source filtering, and ticker-based lookups.

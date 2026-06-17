@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Tool Authoring Docs Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Build-a-tool guide exists in core repo
 A `docs/build-a-tool.md` file SHALL exist in the OpenCandle repo documenting how to contribute a tool. The primary path SHALL be contributing directly to this repo via PR. A secondary "Advanced" section SHALL cover shipping tools as standalone npm packages. The guide SHALL be written in a style consumable by both humans and coding agents.

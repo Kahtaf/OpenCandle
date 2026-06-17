@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Conversational Provider Setup Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Startup prompts for LLM auth only, then auto-selects a default model when possible
 On `session_start`, if the user has no configured LLM, the setup flow SHALL present the LLM sign-in choices (Google, OpenAI, Anthropic, paste API key, or advanced OAuth). It SHALL NOT prompt for Alpha Vantage, FRED, Finnhub, Brave, Exa, or any other data provider during first run. After a successful sign-in or API-key entry, the flow SHALL look up the connected provider's `defaultModelId` in the LLM-provider registry. If a default is declared AND an exact-match model is present in `ctx.modelRegistry.getAvailable()`, the flow SHALL call `api.setModel(<that model>)` and return ready — no model-picker dialog appears. Only when no default matches (or none is declared) SHALL the existing `selectModel` picker be shown.

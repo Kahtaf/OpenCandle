@@ -1,4 +1,9 @@
-## ADDED Requirements
+# Tool Extensibility Specification
+
+## Purpose
+TBD - normalized from existing baseline requirements.
+
+## Requirements
 
 ### Requirement: Add-on tool registry uses first-class naming
 The addon tool registry in `tool-kit.ts` SHALL export `registerTools`, `getAddonToolDescriptions`, and use `addonToolRegistry` internally. The `PromptContextBuilder` option SHALL be renamed from `thirdPartyToolDescriptions` to `addonToolDescriptions`. The `buildToolCatalog()` heading SHALL be renamed from "Third-Party Tools" to "Add-on Tools". The `SessionCoordinator` SHALL import and use the renamed exports. The root `index.ts` SHALL re-export `registerTools` instead of `registerOpenCandleTools`. The previous "thirdParty" naming SHALL be removed entirely.
