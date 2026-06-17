@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildCatalog } from "../../../gui/server/tool-metadata.js";
 import * as configModule from "../../../src/config.js";
+import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
 describe("GUI tool metadata catalog", () => {
   const originalOpenCandleHome = process.env.OPENCANDLE_HOME;
@@ -60,6 +61,22 @@ describe("GUI tool metadata catalog", () => {
       kind: "public-http",
       status: "unknown",
       probeUrl: expect.stringMatching(/^https:\/\//),
+    });
+  });
+
+  it("surfaces skipped external-tool providers from onboarding preferences", () => {
+    saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "twitter"));
+
+    const twitter = buildCatalog().providers.find((provider) => provider.id === "twitter");
+
+    expect(twitter).toMatchObject({
+      id: "twitter",
+      kind: "external-tool",
+      status: "skipped",
+      statusDetail: {
+        state: "skipped",
+        message: expect.stringContaining("opencandle doctor --enable twitter"),
+      },
     });
   });
 });

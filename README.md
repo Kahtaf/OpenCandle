@@ -90,8 +90,14 @@ Useful slash commands:
 /login
 /model
 /connect
-/doctor
 /analyze AAPL
+```
+
+Provider diagnostics run from your shell:
+
+```bash
+opencandle doctor
+opencandle doctor --enable twitter
 ```
 
 ## Data Sources

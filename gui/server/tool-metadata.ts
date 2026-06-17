@@ -8,6 +8,7 @@ import {
   PROVIDERS,
   type ProviderDescriptor,
 } from "../../src/onboarding/providers.js";
+import { loadOnboardingState, type OnboardingState } from "../../src/onboarding/state.js";
 
 const WORKFLOWS = [
   {
@@ -42,6 +43,7 @@ const WORKFLOWS = [
 
 export function buildCatalog() {
   const defaults = getAllDefaults();
+  const onboardingState = loadOnboardingState();
   const tools = getOpenCandleToolDefinitions().map((tool) => ({
     name: tool.name,
     label: tool.label,
@@ -55,11 +57,11 @@ export function buildCatalog() {
   return {
     tools,
     workflows: WORKFLOWS,
-    providers: PROVIDERS.map(serializeProvider),
+    providers: PROVIDERS.map((provider) => serializeProvider(provider, onboardingState)),
   };
 }
 
-function serializeProvider(provider: ProviderDescriptor) {
+function serializeProvider(provider: ProviderDescriptor, onboardingState: OnboardingState) {
   const common = {
     id: provider.id,
     kind: provider.kind,
@@ -87,6 +89,26 @@ function serializeProvider(provider: ProviderDescriptor) {
   }
 
   if (isExternalToolProvider(provider)) {
+    if (onboardingState.providers[provider.id]?.status === "never_ask") {
+      return {
+        ...common,
+        status: "skipped",
+        statusDetail: {
+          providerId: provider.id,
+          kind: "external-tool",
+          mode: "install",
+          state: "skipped",
+          installCmd: provider.installCmd,
+          message: `Skipped by user preference; run opencandle doctor --enable ${provider.id} to re-enable.`,
+          checkedAt: new Date().toISOString(),
+          cacheHit: false,
+        },
+        binary: provider.binary,
+        installCmd: provider.installCmd,
+        sessionSource: provider.sessionSource,
+        supportedBrowsers: provider.supportedBrowsers,
+      };
+    }
     return {
       ...common,
       status: "unknown",

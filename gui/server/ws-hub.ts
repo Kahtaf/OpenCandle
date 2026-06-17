@@ -7,6 +7,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
+import {
+  clearProviderOnboardingEntry,
+  loadOnboardingState,
+  saveOnboardingState,
+} from "../../src/onboarding/state.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import type { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
@@ -150,6 +155,10 @@ export function createWsHub({
           const providerId = String(data.providerId ?? "") as ProviderId;
           getProvider(providerId);
           const mode = data.mode === "session" ? "session" : "install";
+          if (data.reenable === true) {
+            saveOnboardingState(clearProviderOnboardingEntry(loadOnboardingState(), providerId));
+            broadcast({ type: "catalog", catalog: buildCatalog() });
+          }
           const status = await probeProviderStatus(providerId, { mode, force: true });
           client.send({ type: "provider.status", providerId, status });
           break;

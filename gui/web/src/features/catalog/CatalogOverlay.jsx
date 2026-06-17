@@ -789,16 +789,23 @@ function ApiKeyProviderBuilder({ provider, send, setToast }) {
 function ExternalToolProviderBuilder({ provider, send, setToast }) {
   const status = providerStatus(provider);
   const detail = provider.statusDetail;
+  const reenable = status === "skipped";
 
   const checkInstall = () => {
-    setToast?.(`Checking ${provider.displayName} install status...`);
-    send?.("provider.status.check", { providerId: provider.id, mode: "install" });
+    setToast?.(
+      reenable
+        ? `Re-enabling ${provider.displayName} and checking install status...`
+        : `Checking ${provider.displayName} install status...`,
+    );
+    send?.("provider.status.check", { providerId: provider.id, mode: "install", reenable });
   };
   const checkSession = () => {
     setToast?.(
-      `Checking ${provider.displayName} session. This may read browser cookies and trigger a Keychain prompt.`,
+      reenable
+        ? `Re-enabling ${provider.displayName} and checking session. This may read browser cookies and trigger a Keychain prompt.`
+        : `Checking ${provider.displayName} session. This may read browser cookies and trigger a Keychain prompt.`,
     );
-    send?.("provider.status.check", { providerId: provider.id, mode: "session" });
+    send?.("provider.status.check", { providerId: provider.id, mode: "session", reenable });
   };
   const copyInstall = () => {
     void navigator.clipboard?.writeText?.(provider.installCmd);
@@ -861,10 +868,10 @@ function ExternalToolProviderBuilder({ provider, send, setToast }) {
 
       <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-4 py-3 sm:-mx-5 sm:px-5">
         <Button variant="bordered" size="sm" prefixIcon={RefreshCw} onClick={checkInstall}>
-          Check install
+          {reenable ? "Re-enable & check install" : "Check install"}
         </Button>
         <Button variant="brand" size="sm" onClick={checkSession}>
-          Check session
+          {reenable ? "Re-enable & check session" : "Check session"}
         </Button>
       </div>
     </div>
