@@ -8,7 +8,7 @@ import {
   markProviderNeverAsk,
   saveOnboardingState,
 } from "../../onboarding/state.js";
-import { buildSkippedTag } from "../../onboarding/tool-tags.js";
+import { buildExternalToolRequiredTag, buildSkippedTag } from "../../onboarding/tool-tags.js";
 import { getTwitterSentiment } from "../../providers/twitter.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { TwitterAdapter } from "../../sentiment/adapters/twitter.js";
@@ -104,6 +104,7 @@ export function createTwitterSentimentTool(
             return passiveUnavailableResult(
               retried.reason,
               classifyUnavailableReason(retried.reason),
+              { interceptable: false },
             );
           }
 
@@ -151,13 +152,39 @@ function setupQuestion(kind: Exclude<TwitterUnavailableKind, "other">, reason: s
   return `X/Twitter sentiment needs an active browser session. Log into or refresh x.com in a supported browser, then choose whether to continue or skip X/Twitter. Current status: ${reason}`;
 }
 
-function passiveUnavailableResult(reason: string, kind: TwitterUnavailableKind) {
-  const text =
-    kind === "install"
-      ? `⚠ Twitter sentiment unavailable: ${reason}\n[EXTERNAL_TOOL_SETUP provider=twitter action=install command="uv tool install twitter-cli"] Ask whether to continue after install, skip X once, or always skip X.`
-      : kind === "session"
-        ? `⚠ Twitter sentiment unavailable: ${reason}\n[EXTERNAL_TOOL_SETUP provider=twitter action=session] Ask the user to log into or refresh x.com in a supported browser, then retry after confirmation.`
-        : `⚠ Twitter sentiment unavailable (${reason}).`;
+function passiveUnavailableResult(
+  reason: string,
+  kind: TwitterUnavailableKind,
+  options: { interceptable?: boolean } = {},
+) {
+  if ((options.interceptable ?? true) && (kind === "install" || kind === "session")) {
+    const tag = buildExternalToolRequiredTag({
+      provider: "twitter",
+      reason:
+        kind === "install"
+          ? "not_installed"
+          : /401|unauthorized|expired/i.test(reason)
+            ? "session_stale"
+            : "session_missing",
+      installCmd: "uv tool install twitter-cli",
+      loginCmd: "log into x.com in a supported browser",
+      fallback: "reddit-web-news",
+    });
+    const guidance =
+      kind === "install"
+        ? "Twitter sentiment requires twitter-cli. Install it with `uv tool install twitter-cli`, then choose whether to continue or skip X/Twitter."
+        : "Twitter sentiment requires an active X/Twitter browser session. Log into or refresh x.com in a supported browser, then retry after confirmation.";
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `⚠ Twitter sentiment unavailable: ${reason}\n${tag}\n${guidance}`,
+        },
+      ],
+      details: null,
+    };
+  }
+  const text = `⚠ Twitter sentiment unavailable (${reason}).`;
   return {
     content: [{ type: "text" as const, text }],
     details: null,

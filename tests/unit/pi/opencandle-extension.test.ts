@@ -1341,16 +1341,38 @@ describe("opencandle extension", () => {
       expect(askUserHandler).toHaveBeenCalledWith(
         expect.objectContaining({
           question: expect.stringContaining("Install command: uv tool install rdt-cli."),
-          options: [
-            "Continue after installing Reddit",
-            "Skip Reddit once",
-            "Always skip Reddit",
-          ],
+          options: ["Continue after installing Reddit", "Skip Reddit once", "Always skip Reddit"],
         }),
       );
       expect(result?.content[0]?.text).toContain("[OPENCANDLE_SKIPPED provider=reddit");
       expect(result?.content[0]?.text).toContain("silenced=true");
       expect(loadOnboardingState().providers.reddit?.status).toBe("never_ask");
+
+      rmSync(home, { recursive: true, force: true });
+    });
+
+    it("uses the requested external-tool provider in continue responses", async () => {
+      const home = mkdtempSync(join(tmpdir(), "opencandle-external-tool-"));
+      vi.stubEnv("OPENCANDLE_HOME", home);
+      const askUserHandler = vi
+        .fn()
+        .mockResolvedValue({ answer: "Continue after logging in to X/Twitter" });
+      const fake = createFakeApi();
+      openCandleExtension(fake.api, { askUserHandler });
+
+      const toolResultHandler = fake.handlers.get("tool_result")?.[0];
+      expect(toolResultHandler).toBeDefined();
+
+      const result = await toolResultHandler!(
+        toolResultEvent(
+          '[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=twitter reason=session_missing installCmd="uv tool install twitter-cli" fallback=reddit-web-news loginCmd="log into x.com in a supported browser"]',
+        ),
+        { ui: { notify: vi.fn() } },
+      );
+
+      expect(result?.content[0]?.text).toContain("[OPENCANDLE_CONNECTED provider=twitter]");
+      expect(result?.content[0]?.text).toContain("Re-run the original X / Twitter request now");
+      expect(result?.content[0]?.text).not.toContain("Reddit sentiment request");
 
       rmSync(home, { recursive: true, force: true });
     });

@@ -125,7 +125,9 @@ describe("get_twitter_sentiment tool", () => {
     const text = textContent(result);
 
     expect(text).toContain("⚠ Twitter sentiment unavailable");
-    expect(text).toContain("[EXTERNAL_TOOL_SETUP provider=twitter action=session]");
+    expect(text).toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=twitter");
+    expect(text).toContain("reason=session_missing");
+    expect(text).toContain('loginCmd="log into x.com in a supported browser"');
     expect(text).toContain("x.com");
     expect(result.details).toBeNull();
   });
@@ -141,7 +143,8 @@ describe("get_twitter_sentiment tool", () => {
     const result = await twitterSentimentTool.execute("call-2a", { query: "AAPL" });
     const text = textContent(result);
 
-    expect(text).toContain("[EXTERNAL_TOOL_SETUP provider=twitter action=install");
+    expect(text).toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED provider=twitter");
+    expect(text).toContain("reason=not_installed");
     expect(text).toContain("uv tool install twitter-cli");
     expect(result.details).toBeNull();
   });
@@ -176,7 +179,7 @@ describe("get_twitter_sentiment tool", () => {
     expect(text).toContain("silenced=true");
     expect(text).toContain("User chose to skip X / Twitter data for this request");
     expect(text).toContain("Do not ask about X/Twitter setup again in this turn");
-    expect(text).not.toContain("[EXTERNAL_TOOL_SETUP");
+    expect(text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
   });
 
   it("retries once when the user continues after installing twitter-cli", async () => {
@@ -216,6 +219,34 @@ describe("get_twitter_sentiment tool", () => {
     expect(text).toContain("Twitter: $AAPL");
   });
 
+  it("does not emit a second setup tag when continue retry still fails", async () => {
+    const { wrapProvider } = await import("../../../src/providers/wrap-provider.js");
+    vi.mocked(wrapProvider)
+      .mockResolvedValueOnce({
+        status: "unavailable",
+        reason: "twitter-cli is not installed. Install it with: uv tool install twitter-cli",
+        provider: "twitter",
+      })
+      .mockResolvedValueOnce({
+        status: "unavailable",
+        reason: "No Twitter session found.",
+        provider: "twitter",
+      });
+    const tool = createTwitterSentimentTool({
+      askUserHandler: vi.fn(async () => ({
+        answer: "Continue after installing twitter-cli",
+        cancelled: false,
+      })),
+    });
+
+    const result = await tool.execute("call-2aba", { query: "AAPL" });
+    const text = textContent(result);
+
+    expect(wrapProvider).toHaveBeenCalledTimes(2);
+    expect(text).toContain("⚠ Twitter sentiment unavailable");
+    expect(text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
+  });
+
   it("persists always-skip for missing twitter-cli prompts", async () => {
     const { wrapProvider } = await import("../../../src/providers/wrap-provider.js");
     vi.mocked(wrapProvider).mockResolvedValue({
@@ -251,7 +282,7 @@ describe("get_twitter_sentiment tool", () => {
     const text = textContent(result);
 
     expect(text).toContain("⚠ Twitter sentiment unavailable");
-    expect(text).not.toContain("[EXTERNAL_TOOL_SETUP");
+    expect(text).not.toContain("[OPENCANDLE_EXTERNAL_TOOL_REQUIRED");
     expect(result.details).toBeNull();
   });
 

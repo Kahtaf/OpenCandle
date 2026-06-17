@@ -19,11 +19,7 @@ import {
   saveOnboardingState,
   shouldShowWelcome,
 } from "../onboarding/state.js";
-import {
-  buildConnectedTag,
-  buildSkippedTag,
-  parseToolTag,
-} from "../onboarding/tool-tags.js";
+import { buildConnectedTag, buildSkippedTag, parseToolTag } from "../onboarding/tool-tags.js";
 import { DISCLAIMER_TEXT } from "../prompts/disclaimer.js";
 import { formatPreflightDropAnnotation, preflightSymbols } from "../prompts/symbol-preflight.js";
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
@@ -476,7 +472,7 @@ export default function openCandleExtension(
                 type: "text",
                 text:
                   `${buildConnectedTag({ provider: parsed.provider })}\n\n` +
-                  `${descriptor.displayName} setup was acknowledged. Re-run the Reddit sentiment request now; if setup is still unavailable, continue without Reddit and disclose the source gap.`,
+                  `${descriptor.displayName} setup was acknowledged. Re-run the original ${descriptor.displayName} request now; if setup is still unavailable, continue without ${descriptor.displayName} and disclose the source gap.`,
               },
             ],
           };
