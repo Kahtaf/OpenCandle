@@ -145,4 +145,23 @@ describe("rdt-cli provider wrapper", () => {
       message: "No Reddit cookies found",
     });
   });
+
+  it("preserves structured JSON error envelopes from non-zero exits", async () => {
+    setRdtCommandRunnerForTests(
+      vi.fn().mockResolvedValue({
+        code: 1,
+        stdout: JSON.stringify({
+          ok: false,
+          schema_version: "1",
+          error: { code: "not_authenticated", message: "No Reddit cookies found" },
+        }),
+        stderr: "",
+      }),
+    );
+
+    await expect(searchRedditPosts("SPCX", { limit: 5 })).rejects.toMatchObject({
+      code: "not_authenticated",
+      message: "No Reddit cookies found",
+    });
+  });
 });

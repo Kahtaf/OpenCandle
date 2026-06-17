@@ -105,6 +105,14 @@ async function runTwitterCli<T>(args: readonly string[]): Promise<T> {
   }
 
   if (result.code !== 0) {
+    const envelopeError = parseCliErrorEnvelope(result.stdout);
+    if (envelopeError) {
+      throw new ExternalToolError(
+        TWITTER_CLI_TOOL_NAME,
+        redactSensitiveOutput(envelopeError.message),
+        envelopeError.code,
+      );
+    }
     throw new ExternalToolError(
       TWITTER_CLI_TOOL_NAME,
       redactSensitiveOutput(result.stderr.trim() || `twitter-cli exited with code ${result.code}`),
@@ -118,6 +126,22 @@ async function runTwitterCli<T>(args: readonly string[]): Promise<T> {
       TWITTER_CLI_TOOL_NAME,
       `twitter-cli returned non-JSON output: ${redactSensitiveOutput(result.stdout.slice(0, 200))}`,
     );
+  }
+}
+
+function parseCliErrorEnvelope(stdout: string): { code?: string; message: string } | null {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      ok?: unknown;
+      error?: { code?: unknown; message?: unknown };
+    };
+    if (parsed.ok !== false || typeof parsed.error?.message !== "string") return null;
+    return {
+      code: typeof parsed.error.code === "string" ? parsed.error.code : undefined,
+      message: parsed.error.message,
+    };
+  } catch {
+    return null;
   }
 }
 

@@ -151,4 +151,23 @@ describe("twitter-cli provider wrapper", () => {
       message: "401 unauthorized",
     });
   });
+
+  it("preserves structured JSON error envelopes from non-zero exits", async () => {
+    setTwitterCliCommandRunnerForTests(
+      vi.fn().mockResolvedValue({
+        code: 1,
+        stdout: JSON.stringify({
+          ok: false,
+          schema_version: "1",
+          error: { code: "not_authenticated", message: "No Twitter cookies found" },
+        }),
+        stderr: "",
+      }),
+    );
+
+    await expect(searchTweets("$AAPL", 20)).rejects.toMatchObject({
+      code: "not_authenticated",
+      message: "No Twitter cookies found",
+    });
+  });
 });

@@ -162,6 +162,14 @@ async function runRdt<T>(args: readonly string[]): Promise<T> {
   }
 
   if (result.code !== 0) {
+    const envelopeError = parseCliErrorEnvelope(result.stdout);
+    if (envelopeError) {
+      throw new ExternalToolError(
+        RDT_BINARY,
+        redactSensitiveOutput(envelopeError.message),
+        envelopeError.code,
+      );
+    }
     throw new ExternalToolError(
       RDT_BINARY,
       redactSensitiveOutput(result.stderr.trim() || `rdt-cli exited with code ${result.code}`),
@@ -189,6 +197,22 @@ async function runRdt<T>(args: readonly string[]): Promise<T> {
     throw new ExternalToolError(RDT_BINARY, "rdt-cli returned no data");
   }
   return envelope.data;
+}
+
+function parseCliErrorEnvelope(stdout: string): { code?: string; message: string } | null {
+  try {
+    const parsed = JSON.parse(stdout) as {
+      ok?: unknown;
+      error?: { code?: unknown; message?: unknown };
+    };
+    if (parsed.ok !== false || typeof parsed.error?.message !== "string") return null;
+    return {
+      code: typeof parsed.error.code === "string" ? parsed.error.code : undefined,
+      message: parsed.error.message,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function adaptPost(raw: RawRdtPost): RdtPost {
