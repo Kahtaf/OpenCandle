@@ -182,10 +182,10 @@ export function createRedditSentimentTool(
       let allRecords = allResults.flatMap((r) =>
         adapter.mapPostsToRecords(r, args.query ?? subreddits.join("+")),
       );
+      const queryTerms = args.query ? sentimentQueryTerms(args.query) : null;
 
       // Topic filtering
-      if (args.query) {
-        const queryTerms = sentimentQueryTerms(args.query);
+      if (queryTerms) {
         allRecords = allRecords.filter((record) => recordMatchesSentimentQuery(record, queryTerms));
       }
 
@@ -214,7 +214,11 @@ export function createRedditSentimentTool(
             sub,
             args.query ?? subreddits.join("+"),
           );
-          allRecords.push(...commentRecords);
+          allRecords.push(
+            ...(queryTerms
+              ? commentRecords.filter((record) => recordMatchesSentimentQuery(record, queryTerms))
+              : commentRecords),
+          );
         } catch {
           // Comment fetch failures are non-fatal
         }
@@ -231,6 +235,7 @@ export function createRedditSentimentTool(
       const firstResult = allResults[0];
       const postRecords = pipelineResult.fresh.filter((r) => !r.metadata.isComment);
       const commentRecords = pipelineResult.fresh.filter((r) => r.metadata.isComment);
+      const sentimentRecords = pipelineResult.fresh;
       const rawPostsById = new Map(
         allResults.flatMap((result) => result.posts.map((post) => [post.id, post] as const)),
       );
@@ -251,8 +256,8 @@ export function createRedditSentimentTool(
         ...new Set(postRecords.flatMap((record) => record.sentiment.tickers)),
       ];
       const avgScore =
-        postRecords.length > 0
-          ? postRecords.reduce((s, r) => s + r.sentiment.score, 0) / postRecords.length
+        sentimentRecords.length > 0
+          ? sentimentRecords.reduce((s, r) => s + r.sentiment.score, 0) / sentimentRecords.length
           : 0;
 
       const sentimentLabel =
@@ -280,8 +285,8 @@ export function createRedditSentimentTool(
         posts: aggregatePosts,
         topMentions: aggregateTopMentions,
         sentimentScore: avgScore,
-        bullishCount: postRecords.filter((record) => record.sentiment.score > 0).length,
-        bearishCount: postRecords.filter((record) => record.sentiment.score < 0).length,
+        bullishCount: sentimentRecords.filter((record) => record.sentiment.score > 0).length,
+        bearishCount: sentimentRecords.filter((record) => record.sentiment.score < 0).length,
         insight: pipelineResult.insight,
         records: pipelineResult.fresh,
       };

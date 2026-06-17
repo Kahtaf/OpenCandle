@@ -129,6 +129,112 @@ describe("get_reddit_sentiment tool", () => {
     expect(result.details?.insight?.caveats.join(" ")).toContain("Low sample size");
   });
 
+  it("keeps Reddit score aligned with comment-inclusive insight records", async () => {
+    const runner = vi.fn(async (_command, args) => {
+      if (args[0] === "read") {
+        return {
+          code: 0,
+          stdout: JSON.stringify({
+            ok: true,
+            schema_version: "1",
+            data: [
+              {
+                data: {
+                  children: [
+                    {
+                      kind: "t3",
+                      data: {
+                        id: "aapl-comments",
+                        title: "AAPL bullish breakout setup",
+                        selftext: "I am long AAPL after the breakout.",
+                        author: "retail_bull",
+                        score: 120,
+                        num_comments: 1,
+                        subreddit: "stocks",
+                        permalink: "/r/stocks/comments/aapl-comments/aapl/",
+                        created_utc: 1744300800,
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                data: {
+                  children: [
+                    {
+                      kind: "t1",
+                      data: {
+                        id: "bear-comment",
+                        body: "Bearish dilution risk makes this AAPL rally look like a bubble.",
+                        author: "risk_watch",
+                        score: 55,
+                        permalink: "/r/stocks/comments/aapl-comments/aapl/bear-comment/",
+                      },
+                    },
+                    {
+                      kind: "t1",
+                      data: {
+                        id: "off-topic-comment",
+                        body: "TSLA is a bubble, but that is a different setup.",
+                        author: "topic_drift",
+                        score: 20,
+                        permalink: "/r/stocks/comments/aapl-comments/aapl/off-topic-comment/",
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          stderr: "",
+        };
+      }
+
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          ok: true,
+          schema_version: "1",
+          data: [
+            {
+              id: "aapl-comments",
+              title: "AAPL bullish breakout setup",
+              selftext: "I am long AAPL after the breakout.",
+              author: "retail_bull",
+              score: 120,
+              num_comments: 1,
+              subreddit: "stocks",
+              permalink: "/r/stocks/comments/aapl-comments/aapl/",
+              created_utc: 1744300800,
+            },
+          ],
+        }),
+        stderr: "",
+      };
+    });
+    setRdtCommandRunnerForTests(runner);
+
+    const result = await redditSentimentTool.execute("call-comment-consistency", {
+      subreddit: "stocks",
+      query: "AAPL",
+    });
+
+    const records = result.details?.records ?? [];
+    const recordAverage =
+      records.reduce((sum, record) => sum + record.sentiment.score, 0) / records.length;
+
+    expect(records).toHaveLength(2);
+    expect(records.map((record) => record.sourceId)).not.toContain("off-topic-comment");
+    expect(result.details?.insight?.sampleSize).toBe(2);
+    expect(result.details?.sentimentScore).toBeCloseTo(recordAverage, 5);
+    expect(result.details?.bullishCount).toBe(
+      records.filter((record) => record.sentiment.score > 0).length,
+    );
+    expect(result.details?.bearishCount).toBe(
+      records.filter((record) => record.sentiment.score < 0).length,
+    );
+  });
+
   it("returns aggregate details across multiple subreddits", async () => {
     const runner = vi.fn(async (_command, args) => {
       const subreddit = args[args.indexOf("--subreddit") + 1];
