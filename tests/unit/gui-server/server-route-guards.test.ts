@@ -24,6 +24,26 @@ describe("GUI server route guards", () => {
       handler: "writeJson(res, {",
       guard: 'allowTrustedGuiRequest(req, res, "Session API")',
     },
+    {
+      route: 'url.pathname === "/api/model-setup/refresh"',
+      handler: "session.modelRegistry.refresh();",
+      guard: 'allowTrustedGuiRequest(req, res, "Model setup API")',
+    },
+    {
+      route: 'url.pathname === "/api/model-setup/api-key"',
+      handler: "modelSetupController.handleSaveModelApiKey",
+      guard: 'allowTrustedGuiRequest(req, res, "Model setup API")',
+    },
+    {
+      route: 'url.pathname === "/api/model-setup/model"',
+      handler: "modelSetupController.handleSelectModel",
+      guard: 'allowTrustedGuiRequest(req, res, "Model setup API")',
+    },
+    {
+      route: 'url.pathname === "/api/provider-setup/api-key"',
+      handler: "modelSetupController.handleSaveProviderApiKey",
+      guard: 'allowTrustedGuiRequest(req, res, "Provider setup API")',
+    },
   ])("requires trusted GUI requests before serving $route", ({ route, handler, guard }) => {
     const routeBlock = routeBlockBefore(route, handler);
 

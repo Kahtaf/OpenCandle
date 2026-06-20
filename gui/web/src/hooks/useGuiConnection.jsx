@@ -20,6 +20,30 @@ export function buildGuiToastPayload(message, options = {}) {
   };
 }
 
+export function buildHttpFallbackMessageRequest(type, payload = {}) {
+  switch (type) {
+    case "model.setup.refresh":
+      return { path: "/api/model-setup/refresh", body: {} };
+    case "model.setup.save_api_key":
+      return {
+        path: "/api/model-setup/api-key",
+        body: { provider: payload.provider, apiKey: payload.apiKey },
+      };
+    case "model.setup.select_model":
+      return {
+        path: "/api/model-setup/model",
+        body: { provider: payload.provider, modelId: payload.modelId },
+      };
+    case "provider.save_api_key":
+      return {
+        path: "/api/provider-setup/api-key",
+        body: { providerId: payload.providerId, apiKey: payload.apiKey },
+      };
+    default:
+      return null;
+  }
+}
+
 export function settlePendingToolInvoke(pendingToolInvokes, requestId, settle, payload) {
   const pending = pendingToolInvokes.get(requestId);
   if (!pending) return false;
@@ -204,25 +228,48 @@ export function useGuiConnection() {
       window.clearTimeout(reconnect);
       wsRef.current?.close();
     };
-  }, [applyBootstrap]);
+  }, [applyBootstrap, setToast, settleToolInvoke]);
+
+  const sendHttpFallbackMessage = useCallback(
+    async (request) => {
+      try {
+        const response = await fetch(request.path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(request.body),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || response.statusText);
+        applyBootstrap(data);
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : String(error), { destructive: true });
+      }
+    },
+    [applyBootstrap, setToast],
+  );
 
   const send = useCallback(
     (type, payload = {}) => {
       const socket = wsRef.current;
-      if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
-        setToast("GUI connection is not open.", { destructive: true });
-        return false;
+      if (socket?.readyState !== 1 || typeof socket.send !== "function") {
+        const request = buildHttpFallbackMessageRequest(type, payload);
+        if (!request) {
+          setToast("GUI connection is not open.", { destructive: true });
+          return false;
+        }
+        void sendHttpFallbackMessage(request);
+        return true;
       }
       socket.send(JSON.stringify({ type, ...payload }));
       return true;
     },
-    [setToast],
+    [sendHttpFallbackMessage, setToast],
   );
 
   const invokeTool = useCallback(
     (toolName, args = {}) => {
       const socket = wsRef.current;
-      if (!socket || socket.readyState !== 1 || typeof socket.send !== "function") {
+      if (socket?.readyState !== 1 || typeof socket.send !== "function") {
         const error = new Error("GUI connection is not open.");
         setToast(error.message, { destructive: true });
         return Promise.reject(error);
@@ -240,7 +287,7 @@ export function useGuiConnection() {
       socket.send(JSON.stringify({ type: "tool.invoke", requestId, toolName, args }));
       return promise;
     },
-    [setToast, settleToolInvoke],
+    [setToast],
   );
 
   const newSession = useCallback(async () => {

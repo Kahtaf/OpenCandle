@@ -134,8 +134,8 @@ function ModelSetupBody({ modelSetup, send, setToast }) {
       </div>
       <div className="flex flex-col items-stretch justify-between gap-3 border-t border-border pt-4 text-sm leading-relaxed text-muted-foreground sm:flex-row sm:items-center">
         <span className="text-xs">
-          Prefer the terminal? Run <code>/login</code> or export an API key, then refresh this
-          panel.
+          Pi sign-in is terminal-only for now. Run <code>/login</code> or export an API key, then
+          refresh this panel.
         </span>
         <Button variant="bordered" size="sm" onClick={() => send?.("model.setup.refresh")}>
           Refresh

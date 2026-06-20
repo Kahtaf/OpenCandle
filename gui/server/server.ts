@@ -42,6 +42,7 @@ import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createSessionActionsController, promptAndSettle } from "./session-actions.js";
 import { waitForNewEntryId } from "./session-entry-wait.js";
 import { createGracefulShutdown } from "./shutdown.js";
+import { buildCatalog } from "./tool-metadata.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
 
@@ -206,6 +207,50 @@ async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Pro
       sessionId: sessionManager.getSessionId(),
       role: lockResult.role,
       events: wsHub.currentChatEvents(),
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/model-setup/refresh" && req.method === "POST") {
+    if (!allowTrustedGuiRequest(req, res, "Model setup API")) return;
+    session.modelRegistry.refresh();
+    wsHub.broadcastModelSetup();
+    writeJson(res, await wsHub.buildBootstrapPayload());
+    return;
+  }
+
+  if (url.pathname === "/api/model-setup/api-key" && req.method === "POST") {
+    if (!allowTrustedGuiRequest(req, res, "Model setup API")) return;
+    await handleTrustedGuiMutation(req, res, async (body) => {
+      await modelSetupController.handleSaveModelApiKey(
+        String(body.provider ?? ""),
+        String(body.apiKey ?? ""),
+      );
+      wsHub.broadcastModelSetup();
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/model-setup/model" && req.method === "POST") {
+    if (!allowTrustedGuiRequest(req, res, "Model setup API")) return;
+    await handleTrustedGuiMutation(req, res, async (body) => {
+      await modelSetupController.handleSelectModel(
+        String(body.provider ?? ""),
+        String(body.modelId ?? ""),
+      );
+      wsHub.broadcastModelSetup();
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/provider-setup/api-key" && req.method === "POST") {
+    if (!allowTrustedGuiRequest(req, res, "Provider setup API")) return;
+    await handleTrustedGuiMutation(req, res, async (body) => {
+      await modelSetupController.handleSaveProviderApiKey(
+        String(body.providerId ?? ""),
+        String(body.apiKey ?? ""),
+      );
+      wsHub.broadcast({ type: "catalog", catalog: buildCatalog() });
     });
     return;
   }
@@ -403,6 +448,20 @@ async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Prom
   } finally {
     unsubscribeLive();
     res.end();
+  }
+}
+
+async function handleTrustedGuiMutation(
+  req: IncomingMessage,
+  res: ServerResponse,
+  action: (body: Record<string, unknown>) => Promise<void>,
+): Promise<void> {
+  try {
+    await action(asRecord(await readJsonBody(req)));
+    writeJson(res, await wsHub.buildBootstrapPayload());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeJson(res, { error: message }, message === "Read-only follower mode" ? 409 : 400);
   }
 }
 
