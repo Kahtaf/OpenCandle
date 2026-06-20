@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { PromptContextBuilder } from "../../../src/prompts/context-builder.js";
 import {
   activeToolsForBundles,
@@ -713,6 +713,39 @@ describe("route()", () => {
           preference_updates: [],
           missing_required: ["budget"],
           reasoning: "misread rebalance as construction",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "portfolio_evaluation_corrected_to_agent_task",
+      }),
+    );
+  });
+
+  it("corrects portfolio-builder dispatch for saved portfolio exposure reviews", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text:
+          "Does my current portfolio look too exposed if rates stay high for another year, " +
+          "and what would you change first?",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "portfolio_builder",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread existing portfolio exposure review as construction",
         }),
       ),
     );

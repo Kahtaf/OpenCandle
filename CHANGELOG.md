@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Existing saved-portfolio exposure reviews such as "does my current portfolio look too exposed if rates stay high" now route through the portfolio-review agent path instead of the portfolio-builder workflow, preserving saved portfolio/watchlist/prediction context in competitive evals and normal finance fallback turns.
+
 ## [0.7.0] - 2026-06-17
 
 ### Changed

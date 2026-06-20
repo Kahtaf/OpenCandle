@@ -776,6 +776,49 @@ describe("planning layer", () => {
     expect(planning.policyCardId).toBe("portfolio_rebalance_review");
   });
 
+  it("selects portfolio rebalance review for saved portfolio rate-exposure prompts", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text:
+          "Does my current portfolio look too exposed if rates stay high for another year, " +
+          "and what would you change first?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        tool_bundles: ["core_market", "macro"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("portfolio_review");
+    expect(planning.policyCardId).toBe("portfolio_rebalance_review");
+    expect(planning.evidencePlanId).toBe("placeholder_portfolio_review");
+  });
+
+  it("keeps broad bond-rate mechanics in macro review instead of portfolio rebalance", () => {
+    const planning = buildPlanningEnvelope(
+      {
+        ...input,
+        text: "How would falling rates change bond prices over the next year?",
+      },
+      {
+        ...compareOutput,
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "general_finance_qa",
+        entities: { symbols: [] },
+        tool_bundles: ["macro"],
+      },
+    );
+
+    expect(planning.taskFamily).toBe("macro_allocation_review");
+    expect(planning.policyCardId).toBe("macro_allocation_review");
+  });
+
   it("selects portfolio rebalance review for existing allocation growth-adjustment prompts", () => {
     const planning = buildPlanningEnvelope(
       {

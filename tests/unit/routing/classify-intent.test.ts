@@ -320,6 +320,24 @@ describe("classifyIntent", () => {
       expect(result.entities.symbols).toEqual([]);
     });
 
+    it("routes current portfolio exposure reviews to the general path", () => {
+      const result = classifyIntent(
+        "Does my current portfolio look too exposed if rates stay high for another year, and what would you change first?",
+      );
+
+      expect(result.workflow).toBe("general_finance_qa");
+      expect(result.entities.symbols).toEqual([]);
+    });
+
+    it("does not treat broad bond-rate mechanics as portfolio construction", () => {
+      const result = classifyIntent(
+        "How would falling rates change bond prices over the next year?",
+      );
+
+      expect(result.workflow).toBe("unclassified");
+      expect(result.entities.symbols).toEqual([]);
+    });
+
     it("keeps explicit AI ticker prompts as single-asset analysis", () => {
       const result = classifyIntent("analyze AI");
       expect(result.workflow).toBe("single_asset_analysis");

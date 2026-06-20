@@ -556,17 +556,17 @@ function defaultTaskFamilyForOutput(output: RouterOutput, text: string): TaskFam
   if (/\bbacktest(?:ing|ed)?\b/.test(lower)) {
     return "backtest_review";
   }
-  if (/\b(?:macro|inflation|fed|rates?|duration|recession)\b/.test(lower)) {
-    return "macro_allocation_review";
-  }
-  if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
-    return "sentiment_snapshot";
-  }
   if (
     isPortfolioRebalancePrompt(lower) ||
     isAddToExistingHoldingsPrompt(lower, output.entities.symbols.length)
   ) {
     return "portfolio_review";
+  }
+  if (/\b(?:macro|inflation|fed|rates?|duration|recession)\b/.test(lower)) {
+    return "macro_allocation_review";
+  }
+  if (/\b(?:sentiment|mood|reddit|twitter|x\/twitter)\b/.test(lower)) {
+    return "sentiment_snapshot";
   }
   if (/\b(?:today|right now|this morning|after close|moved|catalyst)\b/.test(lower)) {
     return "current_event_explanation";
@@ -766,11 +766,16 @@ function isValuationMetricEducationPrompt(lower: string): boolean {
 }
 
 function isPortfolioRebalancePrompt(lower: string): boolean {
-  return (
-    /\b(?:portfolio|allocation|holdings?|sleeves?|ira|etfs?|funds?|s&p\s*500|index|equity|bonds?|cash)\b/.test(
+  const hasExplicitPortfolioSubject =
+    /\b(?:portfolio|allocation|holdings?|sleeves?|ira|401k|401\(k\)|etfs?|funds?|s&p\s*500|index)\b/.test(
       lower,
-    ) &&
-    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|target\s+bands?|drift|reduce\s+concentration|adjust|adjustment|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|hedge|protect|protection|missing\s+out\s+on\s+growth)\b/.test(
+    );
+  const hasOwnedAssetMix =
+    /\b(?:my|current|have|holding|hold|own|invested|positions?|\d+(?:\.\d+)?%)\b/.test(lower) &&
+    /\b(?:stocks?|equity|fixed\s+income|bonds?|cash|etfs?|funds?)\b/.test(lower);
+  return (
+    (hasExplicitPortfolioSubject || hasOwnedAssetMix) &&
+    /\b(?:rebalance|diversify|diversifying|concentration|overweight|underweight|expos(?:ed|ure)|target\s+bands?|drift|reduce\s+concentration|adjust(?:ment)?|change|more\s+aggressive|higher\s+growth|too\s+risky|riskier|worried|crash|hedge|protect|protection|missing\s+out\s+on\s+growth)\b/.test(
       lower,
     )
   );

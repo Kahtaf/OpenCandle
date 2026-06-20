@@ -604,17 +604,22 @@ function isCoveredCallRequest(text: string): boolean {
 function isPortfolioEvaluationRequest(text: string): boolean {
   const lower = text.toLowerCase();
   const hasEvaluationIntent =
-    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|risky|opportunities?|mitigat(?:e|ion)|adjustment|rebalance|diversify|concentration|overweight|underweight|target\s+bands?|drift|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(
+    /\b(?:evaluat(?:e|ion)|review|assess|analy[sz]e|prospects?|risks?|risky|opportunities?|mitigat(?:e|ion)|adjust(?:ment)?|change|rebalance|diversify|concentration|overweight|underweight|expos(?:ed|ure)|target\s+bands?|drift|worried|crash|protect|protection|missing\s+out\s+on\s+growth)\b/.test(
       lower,
     );
-  const hasPortfolioObject =
-    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|equity|fixed\s+income|bonds?)\b/.test(
-      lower,
-    );
+  const hasExplicitPortfolioSubject =
+    /\b(?:portfolio|allocation|asset\s+allocation|60\/40|holdings?|positions?)\b/.test(lower);
+  const hasOwnedAssetMix =
+    /\b(?:my|current|have|holding|hold|own|invested|positions?|\d+(?:\.\d+)?%)\b/.test(lower) &&
+    /\b(?:equity|fixed\s+income|bonds?|cash|stocks?|etfs?|funds?)\b/.test(lower);
   const hasConstructionIntent =
     /\b(?:build|create|construct|put\s+together|invest|allocate)\b/.test(lower) &&
     /\$\s*\d|\b\d+(?:\.\d+)?\s*k\b|\bbudget\b|\bcapital\b/.test(lower);
-  return hasEvaluationIntent && hasPortfolioObject && !hasConstructionIntent;
+  return (
+    hasEvaluationIntent &&
+    (hasExplicitPortfolioSubject || hasOwnedAssetMix) &&
+    !hasConstructionIntent
+  );
 }
 
 function isStatefulTrackingRequest(text: string): boolean {
