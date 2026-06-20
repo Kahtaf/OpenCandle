@@ -27,6 +27,21 @@ The repo is strong in several public OSS basics: GitHub reports a 100% community
 
 Post-audit update: the dirty-checkout/routing-regression item found during the audit was addressed in the cleanup that commits this report; it remains documented below because it was a real P0 finding at audit time.
 
+Implementation rollout update: the follow-up release-readiness implementation completed the repository-code findings in this report:
+
+- upgraded Pi runtime packages and Vite, clearing production and full npm audit findings
+- aligned Node support to `>=22.19.0 <27`, matching the upgraded Pi runtime
+- moved the native dependency guard onto the installed `opencandle` entrypoint
+- added release preflight, packed-install smoke, docs build, public-link check, and tag-only publish gates
+- added CI coverage for the declared Node range, hardened workflow permissions, Dependabot, and CODEOWNERS
+- converted npm README links and media to package-safe public URLs
+- removed tracked `dogfood-output/` and `design-inspo/` artifacts and ignored them going forward
+- added GUI HTTP fallback support for first-run model setup actions, while keeping Pi sign-in terminal-only
+- accepted both `GEMINI_API_KEY` and `GOOGLE_API_KEY` in credential e2e setup
+- corrected stale docs links, benchmark settle-window docs, package homepage metadata, native install docs, and repo wiki/branch-cleanup settings
+
+`main` branch protection is configured through GitHub repository settings after the implementation commits are pushed, because enabling it first would block the atomic release-readiness push itself.
+
 ## Validation Run
 
 Commands run during this audit:

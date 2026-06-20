@@ -11,3 +11,5 @@ graphify-out/
 tests/screenshots/out/
 website/dist/
 validation-output/
+dogfood-output/
+design-inspo/

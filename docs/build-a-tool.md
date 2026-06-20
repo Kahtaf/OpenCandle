@@ -235,7 +235,7 @@ export default function(pi: ExtensionAPI): void {
 }
 ```
 
-Pi discovers it automatically when installed. For Pi extension lifecycle details, see [Pi documentation](https://github.com/nicobailon/pi-coding-agent).
+Pi discovers it automatically when installed. For Pi extension lifecycle details, see [Pi coding-agent documentation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md).
 
 ## Checklist
 

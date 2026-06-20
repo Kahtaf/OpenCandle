@@ -72,3 +72,12 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
 | The GUI is open but not updating | Use the terminal session that owns the writer lock, or restart the GUI and reopen `http://127.0.0.1:14567`. |
+
+## Native Dependency Troubleshooting
+
+OpenCandle stores local state with `better-sqlite3`, which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
+
+1. Use a supported Node.js version: `>=22.19.0 <27`.
+2. Retry a clean install.
+3. Run `npm rebuild better-sqlite3` after switching Node versions.
+4. Install platform build tools if npm has to compile native modules locally.

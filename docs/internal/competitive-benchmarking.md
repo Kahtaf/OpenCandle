@@ -97,7 +97,7 @@ Useful environment variables:
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout in milliseconds for each baseline call. Defaults to `900000`.
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip one-time baseline smoke calls before running OpenCandle. Defaults to enabled so auth failures happen early.
 - `OPENCANDLE_COMPETITIVE_REQUIRE_ALL`: set to `1` to fail when any baseline fails preflight. By default, unavailable local baselines are recorded under `skippedCompetitors` and the loop continues with the available agents.
-- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `30000` in this loop.
+- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `90000` in this loop.
 - `OPENCANDLE_ROUTER_MODE`: defaults to `llm`; set `rules` to compare against legacy keyword routing.
 
 `acpx` requires its ACP adapter binaries to be available on PATH or passed through `--agent`. The repo carries `acpx`, `@zed-industries/codex-acp`, and `@agentclientprotocol/claude-agent-acp` as dev dependencies so `npm run test:evals:competitive` can use the structured ACP path instead of raw CLI/PTTY scraping. Gemini uses the local `gemini --acp --skip-trust` command with `GEMINI_CLI_TRUST_WORKSPACE=true`.

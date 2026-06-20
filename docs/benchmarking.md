@@ -82,7 +82,7 @@ Generic-agent baselines:
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout for each baseline call. Defaults to `900000`.
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip one-time baseline smoke calls.
 - `OPENCANDLE_COMPETITIVE_REQUIRE_ALL`: set to `1` to fail if any baseline is unavailable. By default, unavailable baselines are recorded as skipped and the run continues.
-- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `30000` in this runner.
+- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `90000` in this runner.
 Developer diagnostic:
 
 - `OPENCANDLE_ROUTER_MODE`: advanced request-understanding mode. Keep the default unless you are intentionally comparing task-selection behavior.

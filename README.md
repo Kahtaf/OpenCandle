@@ -8,19 +8,19 @@ npx opencandle gui
 
 OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for market research that starts from real provider data, shows source gaps, and keeps risk visible.
 
-[Docs](./docs/index.md) | [First run](./docs/first-run.md) | [GUI quickstart](./docs/gui-quickstart.md) | [Data sources](./docs/data-sources.md) | [Build a tool](./docs/build-a-tool.md)
+[Docs](https://opencandle.app/docs/) | [First run](https://opencandle.app/docs/first-run.html) | [GUI quickstart](https://opencandle.app/docs/gui-quickstart.html) | [Data sources](https://opencandle.app/docs/data-sources.html) | [Build a tool](https://opencandle.app/docs/build-a-tool.html)
 
 ## See It Work
 
 ### Terminal UI
 
-[![OpenCandle terminal UI demo](./assets/opencandle-tui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4)
+[![OpenCandle terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4)
 
 [Watch the terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
 
 ### Local GUI
 
-[![OpenCandle local GUI demo](./assets/opencandle-gui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4)
+[![OpenCandle local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4)
 
 [Watch the local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
 
@@ -53,7 +53,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 ## Quick Start
 
-Requires Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0 <27`.
+Requires Node.js `>=22.19.0 <27`.
 
 ```bash
 npx opencandle
@@ -69,7 +69,7 @@ npx opencandle gui
 
 Then open `http://127.0.0.1:14567`.
 
-For a five-minute path from install to a successful answer, see [docs/first-run.md](./docs/first-run.md).
+For a five-minute path from install to a successful answer, see [First Run](https://opencandle.app/docs/first-run.html).
 
 ## Example Prompts
 
@@ -134,7 +134,7 @@ Model access comes from Pi. Market data provider keys can be set in the environm
 | `OPENCANDLE_GUI_PORT` | GUI port, default `14567` |
 | `OPENCANDLE_NOTIFICATION_WEBHOOK_URL` | Optional local webhook target for alert/report notification delivery attempts |
 
-Environment variables override `~/.opencandle/config.json`. See [docs/configuration.md](./docs/configuration.md) for the full reference, including advanced routing and diagnostic switches.
+Environment variables override `~/.opencandle/config.json`. See [Configuration](https://opencandle.app/docs/configuration.html) for the full reference, including advanced routing and diagnostic switches.
 
 ## From Source
 
@@ -196,7 +196,7 @@ Package exports:
 - `opencandle/tools`
 - `opencandle/workflows`
 
-If you want to add a new first-party tool or publish an add-on package, start with [docs/build-a-tool.md](./docs/build-a-tool.md).
+If you want to add a new first-party tool or publish an add-on package, start with [Build a Tool](https://opencandle.app/docs/build-a-tool.html).
 
 ## Development
 
@@ -220,7 +220,7 @@ Baseline check:
 npm test
 ```
 
-The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. Run them intentionally; see [docs/testing-and-evals.md](./docs/testing-and-evals.md).
+The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. Run them intentionally; see [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html).
 
 Repository rules that matter:
 
@@ -238,20 +238,20 @@ npx tsx tests/harness/cli.ts wait --ipc /tmp/opencandle-ipc
 npx tsx tests/harness/cli.ts trace --ipc /tmp/opencandle-ipc
 ```
 
-See [tests/harness/README.md](./tests/harness/README.md) for the full flow.
+See [tests/harness/README.md](https://github.com/Kahtaf/OpenCandle/blob/main/tests/harness/README.md) for the full flow.
 
 ## Documentation
 
-- [Getting Started](./docs/getting-started.md)
-- [First Run](./docs/first-run.md)
-- [TUI](./docs/tui.md)
-- [GUI Quickstart](./docs/gui-quickstart.md)
-- [Investigation Recipes](./docs/investigation-recipes.md)
-- [Data Sources](./docs/data-sources.md)
-- [Configuration](./docs/configuration.md)
-- [System Architecture](./docs/system-architecture.md)
-- [Testing and Evals](./docs/testing-and-evals.md)
-- [Benchmarking](./docs/benchmarking.md)
+- [Getting Started](https://opencandle.app/docs/getting-started.html)
+- [First Run](https://opencandle.app/docs/first-run.html)
+- [TUI](https://opencandle.app/docs/tui.html)
+- [GUI Quickstart](https://opencandle.app/docs/gui-quickstart.html)
+- [Investigation Recipes](https://opencandle.app/docs/investigation-recipes.html)
+- [Data Sources](https://opencandle.app/docs/data-sources.html)
+- [Configuration](https://opencandle.app/docs/configuration.html)
+- [System Architecture](https://opencandle.app/docs/system-architecture.html)
+- [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html)
+- [Benchmarking](https://opencandle.app/docs/benchmarking.html)
 
 ## License
 

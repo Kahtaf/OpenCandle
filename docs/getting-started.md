@@ -11,7 +11,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 ## Requirements
 
-- Node.js `^20.19.0`, `^22.12.0`, or `>=24.0.0 <27`
+- Node.js `>=22.19.0 <27`
 - One supported model provider configured through Pi: OpenAI, Anthropic, or Google
 - Optional market data provider keys for expanded coverage
 
@@ -37,6 +37,15 @@ npm start
 ```
 
 On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`. OpenCandle stores local state in `~/.opencandle` on macOS/Linux and `%USERPROFILE%\.opencandle` on Windows unless `OPENCANDLE_HOME` is set.
+
+## Native Dependency Troubleshooting
+
+OpenCandle uses `better-sqlite3`, a native dependency, for local state. Most installs use a prebuilt binary automatically. If install or startup fails with a native module, ABI, or `node-gyp` error:
+
+1. Confirm your Node.js version matches the supported range above.
+2. Retry from a clean install by removing `node_modules` and running `npm install` again.
+3. Run `npm rebuild better-sqlite3` after changing Node versions.
+4. Install your platform build tools if npm falls back to compiling native modules.
 
 On first run, OpenCandle walks through model setup. You can rerun setup later from inside the agent with `/setup`.
 
