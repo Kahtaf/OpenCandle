@@ -1,0 +1,13 @@
+* @Kahtaf
+
+/.github/ @Kahtaf
+/package.json @Kahtaf
+/package-lock.json @Kahtaf
+/scripts/release* @Kahtaf
+/scripts/packed-install-smoke.mjs @Kahtaf
+/scripts/check-public-doc-links.mjs @Kahtaf
+/src/pi/ @Kahtaf
+/src/providers/ @Kahtaf
+/src/prompts/ @Kahtaf
+/gui/server/ @Kahtaf
+/SECURITY.md @Kahtaf

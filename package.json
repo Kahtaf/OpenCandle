@@ -3,7 +3,7 @@
   "version": "0.7.0",
   "description": "Financial trading & investing agent",
   "license": "MIT",
-  "homepage": "https://github.com/Kahtaf/OpenCandle#readme",
+  "homepage": "https://opencandle.app",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kahtaf/OpenCandle.git"
@@ -88,6 +88,7 @@
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
     "docs:site:build": "node website/build.mjs",
     "docs:site:serve": "node website/serve.mjs",
+    "docs:links:check": "node scripts/check-public-doc-links.mjs",
     "gui": "tsx gui/server/server.ts",
     "gui:dev": "tsx gui/server/server.ts",
     "lint": "biome check .",
@@ -108,6 +109,7 @@
     "test:evals:usually": "EVAL_TIER=usually vitest run --config vitest.config.evals.ts",
     "test:evals:product": "tsx tests/scripts/run-product-evals.ts",
     "test:evals:competitive": "tsx tests/scripts/run-competitive-finance-eval.ts",
+    "test:packed-install": "node scripts/packed-install-smoke.mjs",
     "eval:competitive:analyze": "tsx tests/scripts/analyze-competitive-finance-report.ts",
     "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx vitest run\"",
     "version:patch": "npm version patch --no-git-tag-version",
@@ -116,17 +118,18 @@
     "version:set": "npm version",
     "prepublishOnly": "npm test",
     "publish:dry": "npm publish --access public --dry-run",
+    "release:check": "npx tsc --noEmit && npx biome ci . && npm test && npm run docs:site:build && npm pack --dry-run && npm run test:packed-install && npm run docs:links:check",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major"
   },
   "engines": {
-    "node": "^20.19.0 || ^22.12.0 || >=24.0.0 <27"
+    "node": ">=22.19.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.75.5",
-    "@earendil-works/pi-ai": "^0.75.5",
-    "@earendil-works/pi-coding-agent": "^0.75.5",
+    "@earendil-works/pi-agent-core": "^0.79.8",
+    "@earendil-works/pi-ai": "^0.79.8",
+    "@earendil-works/pi-coding-agent": "^0.79.8",
     "better-sqlite3": "^12.10.0",
     "duck-duck-scrape": "^2.2.7",
     "tsx": "^4.22.3",
@@ -145,7 +148,7 @@
     "acpx": "^0.10.0",
     "playwright-core": "^1.61.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14",
+    "vite": "^8.0.16",
     "vitest": "^4.1.7",
     "vitest-evals": "^0.11.0"
   }

@@ -1,12 +1,11 @@
-const SUPPORTED_NODE_RANGE = "20.19+, 22.12+, or 24.x-26.x";
+const SUPPORTED_NODE_RANGE = "22.19+ or 24.x-26.x";
 
 function isSupportedNodeVersion(version: string): boolean {
   const [majorRaw, minorRaw] = version.split(".");
   const major = Number(majorRaw);
   const minor = Number(minorRaw);
 
-  if (major === 20) return minor >= 19;
-  if (major === 22) return minor >= 12;
+  if (major === 22) return minor >= 19;
   return major >= 24 && major < 27;
 }
 

@@ -1,14 +1,13 @@
 import { spawn } from "node:child_process";
 
-const supportedNodeRange = "20.19+, 22.12+, or 24.x-26.x";
+const supportedNodeRange = "22.19+ or 24.x-26.x";
 
 export function isSupportedNodeVersion(version) {
   const [majorRaw, minorRaw] = version.split(".");
   const major = Number(majorRaw);
   const minor = Number(minorRaw);
 
-  if (major === 20) return minor >= 19;
-  if (major === 22) return minor >= 12;
+  if (major === 22) return minor >= 19;
   return major >= 24 && major < 27;
 }
 

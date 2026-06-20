@@ -20,7 +20,7 @@ function run(cmd, options = {}) {
       stdio: options.silent ? "pipe" : "inherit",
       ...options,
     });
-  } catch (error) {
+  } catch (_error) {
     if (!options.ignoreError) {
       console.error(`Command failed: ${cmd}`);
       process.exit(1);
@@ -38,12 +38,16 @@ console.log("\n=== Release Script ===\n");
 
 console.log("Checking for uncommitted changes...");
 const status = run("git status --porcelain", { silent: true });
-if (status && status.trim()) {
+if (status?.trim()) {
   console.error("Error: Uncommitted changes detected. Commit or stash first.");
   console.error(status);
   process.exit(1);
 }
 console.log(" Working directory clean\n");
+
+console.log("Running release preflight...");
+run("npm run release:check");
+console.log(" Release preflight passed\n");
 
 console.log(`Bumping version (${bumpType})...`);
 run(`npm run version:${bumpType}`);

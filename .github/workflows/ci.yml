@@ -10,9 +10,16 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["22.19.0", "24.x", "26.x"]
 
     steps:
       - name: Checkout
@@ -21,7 +28,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
       - name: Install dependencies
@@ -33,7 +40,12 @@ jobs:
       - name: Lint
         run: npx biome ci .
 
+      - name: Build public docs
+        if: matrix.node-version == '24.x'
+        run: npm run docs:site:build
+
       - name: Validate package contents
+        if: matrix.node-version == '24.x'
         run: |
           PACK_OUTPUT=$(npm pack --dry-run 2>&1)
           echo "$PACK_OUTPUT"
@@ -52,3 +64,11 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Packed install smoke
+        if: matrix.node-version == '24.x'
+        run: npm run test:packed-install
+
+      - name: Check public docs external links
+        if: matrix.node-version == '24.x'
+        run: npm run docs:links:check
