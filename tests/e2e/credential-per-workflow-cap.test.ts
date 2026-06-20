@@ -25,7 +25,8 @@
  *
  * Usage: npx tsx tests/e2e/credential-per-workflow-cap.test.ts
  *
- * Requires at least one of ANTHROPIC_API_KEY / OPENAI_API_KEY / GOOGLE_API_KEY in
+ * Requires at least one of GEMINI_API_KEY / GOOGLE_API_KEY / ANTHROPIC_API_KEY /
+ * OPENAI_API_KEY in
  * the environment. If none is present, the test exits 0 with a skip notice so CI
  * without LLM credentials can still run the suite.
  */
@@ -43,17 +44,17 @@ process.env.OPENCANDLE_HOME = openCandleHome;
 delete process.env.ALPHA_VANTAGE_API_KEY;
 delete process.env.FRED_API_KEY;
 
-type LlmChoice = { provider: string; model: string; envVar: string };
+type LlmChoice = { provider: string; model: string; envVars: string[] };
 const LLM_CANDIDATES: readonly LlmChoice[] = [
-  { provider: "google", model: "gemini-2.5-flash", envVar: "GOOGLE_API_KEY" },
-  { provider: "anthropic", model: "claude-haiku-4-5", envVar: "ANTHROPIC_API_KEY" },
-  { provider: "openai", model: "gpt-5-mini", envVar: "OPENAI_API_KEY" },
+  { provider: "google", model: "gemini-2.5-flash", envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
+  { provider: "anthropic", model: "claude-haiku-4-5", envVars: ["ANTHROPIC_API_KEY"] },
+  { provider: "openai", model: "gpt-5-mini", envVars: ["OPENAI_API_KEY"] },
 ];
-const llmChoice = LLM_CANDIDATES.find((c) => !!process.env[c.envVar]);
+const llmChoice = LLM_CANDIDATES.find((c) => c.envVars.some((envVar) => !!process.env[envVar]));
 if (!llmChoice) {
   console.log(
     "⚠ Skipping credential-per-workflow-cap e2e: no LLM credential in env " +
-      `(need one of ${LLM_CANDIDATES.map((c) => c.envVar).join(", ")})`,
+      `(need one of ${LLM_CANDIDATES.flatMap((c) => c.envVars).join(", ")})`,
   );
   rmSync(openCandleHome, { recursive: true, force: true });
   delete process.env.OPENCANDLE_HOME;
