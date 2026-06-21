@@ -169,13 +169,13 @@ Write the tests described in the Test plan.
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0; new permission tests exist and pass
-- [ ] `grep -n "mode: 0o700" src/infra/opencandle-paths.ts` matches
-- [ ] `grep -n "chmodSync" src/infra/opencandle-paths.ts` matches (existing-dir repair)
-- [ ] `grep -n "0o600" src/config.ts` matches
-- [ ] No files outside the in-scope list are modified (`git status`)
-- [ ] `plans/README.md` status row updated
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0; new permission tests exist and pass
+- [x] `grep -n "mode: 0o700" src/infra/opencandle-paths.ts` matches
+- [x] `grep -n "chmodSync" src/infra/opencandle-paths.ts` matches (existing-dir repair)
+- [x] `grep -n "0o600" src/config.ts` matches
+- [x] No files outside the in-scope list are modified (`git status`)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 

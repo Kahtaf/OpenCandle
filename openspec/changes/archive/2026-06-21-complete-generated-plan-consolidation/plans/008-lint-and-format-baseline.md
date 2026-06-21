@@ -127,11 +127,11 @@ suite + GUI build prove the mechanical diff is behavior-neutral.
 
 ## Done criteria
 
-- [ ] `biome.json` exists; `npm run lint` exits 0
-- [ ] CI workflow contains the `biome ci` step
-- [ ] `npx tsc --noEmit` exits 0; `npx vitest run` exits 0; `npm run gui:web:build` exits 0
-- [ ] Formatting changes isolated in their own commit (verify `git log --stat`)
-- [ ] `plans/README.md` status row updated
+- [x] `biome.json` exists; `npm run lint` exits 0
+- [x] CI workflow contains the `biome ci` step
+- [x] `npx tsc --noEmit` exits 0; `npx vitest run` exits 0; `npm run gui:web:build` exits 0
+- [x] Formatting changes isolated in their own commit (verify `git log --stat`)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 
@@ -141,8 +141,8 @@ Stop and report back if:
 - Error-level findings exceed ~200 after reasonable rule tuning.
 - The mechanical format commit breaks tests or the GUI build and the cause
   isn't an obvious import-order issue you can exclude via config.
-- Plans 001–007 are still IN PROGRESS per `plans/README.md` — formatting now
-  would conflict with their diffs; coordinate ordering with the operator.
+- Plans 001–007 are not complete per `plans/README.md` — formatting now would
+  conflict with their diffs; coordinate ordering with the operator.
 
 ## Maintenance notes
 

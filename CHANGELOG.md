@@ -12,6 +12,7 @@
 - OpenCandle now requires Node.js `>=22.19.0 <27`, matching the upgraded Pi runtime dependency stack.
 - Public README/docs links and package metadata now target public URLs that work from npm, and tracked dogfood/design artifacts were removed from the release tree.
 - Release scripts now require current `main`, fetch tags before mutation, reject duplicate release tags, and run the full release gate for local publish paths.
+- The completed generated plan backlog now lives under an archived OpenSpec change, with the GUI server decomposition and prompt-layer consolidation plans finished and recorded there.
 
 ### Fixed
 

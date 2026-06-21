@@ -156,12 +156,12 @@ See Test plan.
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0, including 3 new tests
-- [ ] No sequential `await providers.getYahooQuote` inside a `for` loop remains
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0, including 3 new tests
+- [x] No sequential `await providers.getYahooQuote` inside a `for` loop remains
       in `src/market-state/alert-runner.ts` (verify by reading the function)
-- [ ] No files outside the in-scope list modified (`git status`)
-- [ ] `plans/README.md` status row updated
+- [x] No files outside the in-scope list modified (`git status`)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 

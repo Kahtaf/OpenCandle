@@ -214,13 +214,13 @@ See Test plan.
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0, including the new tests
-- [ ] `grep -n "isLoopbackAddress" gui/server/private-api-access.ts` shows it used inside `isTrustedPrivateApiRequest`
-- [ ] `grep -rn "OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API" gui/server/ docs/configuration.md` matches in both
-- [ ] `grep -n "isAllowedWebhookUrl" src/market-state/notification-delivery.ts` matches
-- [ ] No files outside the in-scope list modified (`git status`)
-- [ ] `plans/README.md` status row updated
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0, including the new tests
+- [x] `grep -n "isLoopbackAddress" gui/server/private-api-access.ts` shows it used inside `isTrustedPrivateApiRequest`
+- [x] `grep -rn "OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API" gui/server/ docs/configuration.md` matches in both
+- [x] `grep -n "isAllowedWebhookUrl" src/market-state/notification-delivery.ts` matches
+- [x] No files outside the in-scope list modified (`git status`)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 

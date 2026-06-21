@@ -151,13 +151,13 @@ here is a hard fail).
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0; `npx vitest run` exits 0
-- [ ] `wc -l gui/server/server.ts` ≤ ~350 lines
-- [ ] server.ts contains no `setInterval` except writer-lock heartbeat (or
+- [x] `npx tsc --noEmit` exits 0; `npx vitest run` exits 0
+- [x] `wc -l gui/server/server.ts` ≤ ~350 lines
+- [x] server.ts contains no `setInterval` except writer-lock heartbeat (or
       none, if that also moved with its owner)
-- [ ] Live smoke test performed and described in the final commit message
-- [ ] No behavior/protocol change (no test assertion edits beyond file moves)
-- [ ] `plans/README.md` status row updated
+- [x] Live smoke test performed and described in the final commit message
+- [x] No behavior/protocol change (no test assertion edits beyond file moves)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 
