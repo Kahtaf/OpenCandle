@@ -101,12 +101,12 @@ build are the regression gate. Verification: the three commands in Step 2.
 
 ## Done criteria
 
-- [ ] `npm audit --omit=dev` reports 0 vulnerabilities
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0
-- [ ] `npm run gui:web:build` exits 0
-- [ ] `git status` shows only `package-lock.json` (and at most root `package.json` for overrides) modified
-- [ ] `plans/README.md` status row updated
+- [x] `npm audit --omit=dev` reports 0 vulnerabilities
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0
+- [x] `npm run gui:web:build` exits 0
+- [x] `git status` shows only `package-lock.json` (and at most root `package.json` for overrides) modified
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 

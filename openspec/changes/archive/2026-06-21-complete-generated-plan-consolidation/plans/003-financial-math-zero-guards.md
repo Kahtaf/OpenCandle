@@ -209,11 +209,11 @@ New tests (one `it` each unless noted), modeled on existing tests in the same fi
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0; all new tests above exist and pass
-- [ ] `addPortfolioLot`/`updatePortfolioLot` reject non-finite or ≤0 quantity/avgCost
-- [ ] No files outside the in-scope list modified (`git status`)
-- [ ] `plans/README.md` status row updated
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0; all new tests above exist and pass
+- [x] `addPortfolioLot`/`updatePortfolioLot` reject non-finite or ≤0 quantity/avgCost
+- [x] No files outside the in-scope list modified (`git status`)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 

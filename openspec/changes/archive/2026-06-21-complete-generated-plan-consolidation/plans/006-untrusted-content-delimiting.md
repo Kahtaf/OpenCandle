@@ -187,12 +187,12 @@ See Test plan.
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0, including new tests
-- [ ] `grep -rn "renderUntrustedText" src/tools/sentiment/` shows use in reddit-sentiment, twitter-sentiment, web-sentiment, web-search
-- [ ] Exactly one markdown-escaping implementation remains in `src/tools/sentiment/` (`grep -rn "escapeMd" src/tools/sentiment/` → only the shared helper)
-- [ ] No files outside the in-scope list modified (`git status`)
-- [ ] `plans/README.md` status row updated
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0, including new tests
+- [x] `grep -rn "renderUntrustedText" src/tools/sentiment/` shows use in reddit-sentiment, twitter-sentiment, web-sentiment, web-search
+- [x] Exactly one markdown-escaping implementation remains in `src/tools/sentiment/` (`grep -rn "escapeMd" src/tools/sentiment/` → only the shared helper)
+- [x] No files outside the in-scope list modified (`git status`)
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 
