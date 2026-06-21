@@ -30,7 +30,15 @@ npm run test:e2e:cli
 npm run test:e2e:providers
 ```
 
-`npm test` is the required baseline validation after changes.
+`npm test` is the required quick-loop validation after changes.
+
+Before opening a release-facing PR, run the CI-equivalent local gate:
+
+```bash
+npm run release:check
+```
+
+That gate runs typecheck, Biome CI, unit tests, docs build, package-content validation, packed-install smoke, and public-doc link checks. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials.
 
 ## Contribution Rules
 
@@ -101,6 +109,10 @@ npm run release:major
 The `release:*` scripts are intended for maintainers. They bump the version, update `CHANGELOG.md`, create a release commit and tag, restore the `Unreleased` section for the next cycle, and push both `main` and the release tag.
 
 The actual npm publish step runs in GitHub Actions from the pushed `v*` tag using trusted publishing. That keeps the local release flow minimal while avoiding laptop-based npm publishes.
+
+## Public Agent Artifacts
+
+OpenCandle intentionally publishes `AGENTS.md` as an AI-agent contributor guide and keeps repo-local skills under version control when they are part of maintainer workflow. Generated local locks, raw agent traces, local plans, and machine-specific outputs are not part of the public contract and should not be committed.
 
 ## Scope Boundaries
 

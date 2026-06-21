@@ -24,6 +24,26 @@ npm run docs:site:build
 
 `npm test` runs the Vitest suite. Unit tests should be fixture-backed and should not call live APIs.
 
+For release-facing changes, run the same local gate that release and publish paths use:
+
+```bash
+npm run release:check
+```
+
+That command runs typecheck, Biome CI, unit tests, docs build, package-content validation, packed-install smoke, and public-doc link checks.
+
+## First-Run Release Smoke
+
+Before a public release or broad announcement, exercise the fresh-user path separately from default CI:
+
+1. Set a fresh `OPENCANDLE_HOME`.
+2. Start `opencandle` and complete terminal model setup, including sign-in if that path is part of the release claim.
+3. Start `opencandle gui`, open the browser, and verify the model setup state is ready or complete API-key setup in the panel.
+4. Ask one keyless prompt such as `What is AAPL trading at?`.
+5. If release scope touched providers, run one provider-backed prompt with available credentials.
+
+Do not commit generated traces or local market-state files from this smoke.
+
 ## End-to-End Tool Tests
 
 ```bash

@@ -8,6 +8,10 @@ npx opencandle gui
 
 OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for market research that starts from real provider data, shows source gaps, and keeps risk visible.
 
+[![CI](https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml/badge.svg)](https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/opencandle)](https://www.npmjs.com/package/opencandle)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Kahtaf/OpenCandle/blob/main/LICENSE)
+
 [Docs](https://opencandle.app/docs/) | [First run](https://opencandle.app/docs/first-run.html) | [GUI quickstart](https://opencandle.app/docs/gui-quickstart.html) | [Data sources](https://opencandle.app/docs/data-sources.html) | [Build a tool](https://opencandle.app/docs/build-a-tool.html)
 
 ## See It Work
@@ -59,7 +63,7 @@ Requires Node.js `>=22.19.0 <27`.
 npx opencandle
 ```
 
-On first run, OpenCandle walks you through model setup. You can use Pi sign-in when available or provide a model API key. Data-provider keys are separate and optional.
+On first run, OpenCandle walks you through model setup. In the terminal, you can use Pi sign-in when available or provide a model API key. In the GUI, use the API-key setup panel or complete terminal `/setup` first and refresh the browser. Data-provider keys are separate and optional.
 
 Start the GUI instead:
 
@@ -256,3 +260,7 @@ See [tests/harness/README.md](https://github.com/Kahtaf/OpenCandle/blob/main/tes
 ## License
 
 MIT
+
+## Contributing and Security
+
+See [Contributing](https://opencandle.app/docs/contributing.html), [Security](https://opencandle.app/docs/security.html), and the [Code of Conduct](https://github.com/Kahtaf/OpenCandle/blob/main/CODE_OF_CONDUCT.md) before opening large changes or reporting sensitive issues. Redact API keys, account identifiers, holdings, and local state from public issues.

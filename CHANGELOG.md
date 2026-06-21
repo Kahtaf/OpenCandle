@@ -5,11 +5,13 @@
 ### Added
 
 - Release readiness gates now include docs-site builds, public-doc link checks, packed tarball install smoke tests, tag/version publish validation, Dependabot, CODEOWNERS, and a local `release:check` preflight before version/tag mutation.
+- Package-content validation now parses `npm pack --dry-run --json`, blocks internal/generated artifact paths, and is shared by CI, release checks, and local publish dry runs.
 
 ### Changed
 
 - OpenCandle now requires Node.js `>=22.19.0 <27`, matching the upgraded Pi runtime dependency stack.
 - Public README/docs links and package metadata now target public URLs that work from npm, and tracked dogfood/design artifacts were removed from the release tree.
+- Release scripts now require current `main`, fetch tags before mutation, reject duplicate release tags, and run the full release gate for local publish paths.
 - The completed generated plan backlog now lives under an archived OpenSpec change, with the GUI server decomposition and prompt-layer consolidation plans finished and recorded there.
 
 ### Fixed
@@ -17,7 +19,9 @@
 - Existing saved-portfolio exposure reviews such as "does my current portfolio look too exposed if rates stay high" now route through the portfolio-review agent path instead of the portfolio-builder workflow, preserving saved portfolio/watchlist/prediction context in competitive evals and normal finance fallback turns.
 - Runtime Pi dependencies and Vite were upgraded to clear npm audit advisories, and the installed `opencandle` entrypoint now runs the native `better-sqlite3` guard before loading the main CLI.
 - GUI first-run model setup actions now work through trusted HTTP fallback when WebSockets are unavailable, while Pi sign-in remains clearly terminal-only.
+- GUI startup now loads `.env` before GUI/monitor command dispatch, and the chat composer stays disabled until model setup is ready.
 - Credential e2e setup now accepts both `GEMINI_API_KEY` and `GOOGLE_API_KEY` for Google model credentials.
+- Security, contributor, setup, API-stability, and AI-readable website docs now call out public redaction rules, validation gates, GUI versus terminal model setup support, and stable add-on API boundaries.
 
 ## [0.7.0] - 2026-06-17
 

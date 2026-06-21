@@ -167,7 +167,6 @@ async function handleMonitorCommand(args: string[], cwd: string): Promise<boolea
 async function handleDoctorCommand(args: string[]): Promise<boolean> {
   if (args[0] !== "doctor") return false;
 
-  loadEnv();
   const enableFlag = args.findIndex((arg) => arg === "--enable" || arg === "--reenable");
   if (enableFlag >= 0) {
     const providerId = args[enableFlag + 1] as ProviderId | undefined;
@@ -199,6 +198,8 @@ async function main(): Promise<void> {
   const cwd = process.cwd();
   const agentDir = getAgentDir();
 
+  loadEnv();
+
   if (await handleGuiCommand(rawArgs, cwd)) {
     return;
   }
@@ -216,7 +217,6 @@ async function main(): Promise<void> {
   }
 
   // Default: start the OpenCandle interactive agent
-  loadEnv();
   const settingsManager = SettingsManager.create(cwd, agentDir);
   const authStorage = AuthStorage.create();
   const modelRegistry = ModelRegistry.create(authStorage);

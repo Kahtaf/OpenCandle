@@ -8,6 +8,8 @@ body:
     attributes:
       value: |
         Please use this form for non-trivial feature work. Start here before opening a large PR so scope and tradeoffs can be discussed first.
+
+        Do not include API keys, account identifiers, personal holdings, portfolio screenshots, or full `~/.opencandle` state in public examples.
   - type: textarea
     id: problem
     attributes:

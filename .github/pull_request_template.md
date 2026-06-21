@@ -9,7 +9,8 @@ Explain the problem being solved and the user or maintainer impact.
 ## Validation
 
 - [ ] `npm test`
-- [ ] `npm run review:pr` (optional local autoreview)
+- [ ] `npm run release:check` for release-facing changes, or note why the focused check is enough
+- [ ] `npm run review:pr` before merge for non-trivial changes
 - [ ] Docs updated if behavior or workflow changed
 - [ ] Tests added or updated for behavior changes
 

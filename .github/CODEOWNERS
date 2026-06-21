@@ -6,6 +6,7 @@
 /scripts/release* @Kahtaf
 /scripts/packed-install-smoke.mjs @Kahtaf
 /scripts/check-public-doc-links.mjs @Kahtaf
+/scripts/check-package-contents.mjs @Kahtaf
 /src/pi/ @Kahtaf
 /src/providers/ @Kahtaf
 /src/prompts/ @Kahtaf

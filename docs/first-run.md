@@ -28,7 +28,9 @@ npm start
 
 2. Connect an AI model when the setup prompt opens.
 
-Choose sign-in or paste an API key. OpenCandle needs a model before chat can start. After a successful connection, it selects a fast default model when one is available; otherwise it asks you to choose a model.
+In the terminal, choose Pi sign-in when available or paste an API key. OpenCandle needs a model before chat can start. After a successful connection, it selects a fast default model when one is available; otherwise it asks you to choose a model.
+
+If you start with `opencandle gui`, the browser setup panel currently supports model API keys. Users who prefer Pi sign-in should complete terminal `/setup` first, then refresh the GUI.
 
 3. Start with a keyless market-data prompt.
 
@@ -58,7 +60,7 @@ OpenCandle is research software, not a financial advisor. Treat warnings, stale-
 
 ## Model Setup Expectations
 
-OpenCandle uses Pi for model credentials and model selection. You can connect with sign-in or with an API key for OpenAI, Anthropic, or Google models. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
+OpenCandle uses Pi for model credentials and model selection. In the terminal/TUI, you can connect with sign-in or with an API key for OpenAI, Anthropic, or Google models. In the GUI, use the API-key setup panel, or complete terminal `/setup` for sign-in based setup and refresh the browser. Model credentials are stored by Pi; OpenCandle data-provider keys are separate and live in environment variables or `~/.opencandle/config.json`.
 
 Use `/setup` later if you want to reconnect auth or choose a different model setup path. Use `/model` when you only want to switch among models that are already available.
 
