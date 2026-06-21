@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { createReadStream, existsSync } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { extname, join, resolve } from "node:path";
+import { createServer } from "node:http";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
@@ -9,12 +8,9 @@ import {
   createAgentSessionServices,
   getAgentDir,
   ModelRegistry,
-  SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
-import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
-import type { ChatEvent } from "../shared/chat-events.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import {
   createLocalAutomationHeartbeat,
@@ -25,24 +21,15 @@ import {
   BackgroundQuoteRefreshes,
   createBackgroundQuotePoller,
 } from "./background-quotes.js";
-import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
-import { chatRunSessionConflict } from "./chat-run-session.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
+import { createHttpRequestHandler } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
-import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
-import {
-  buildMarketStateQuoteSnapshot,
-  buildMarketStateSnapshot,
-  searchInstrumentCandidates,
-} from "./market-state-api.js";
-import { buildModelSetupState, createModelSetupController } from "./model-setup.js";
-import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
-import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
+import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
+import { createModelSetupController } from "./model-setup.js";
+import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
-import { createSessionActionsController, promptAndSettle } from "./session-actions.js";
-import { waitForNewEntryId } from "./session-entry-wait.js";
+import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
-import { buildCatalog } from "./tool-metadata.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
 
@@ -161,157 +148,26 @@ runtime.setRebindSession(async (nextSession) => {
   unsubscribeSession = wsHub.subscribeToSessionEvents();
 });
 
-const server = createServer((req, res) => {
-  void handleHttpRequest(req, res);
+const httpRequestHandler = createHttpRequestHandler({
+  host,
+  port,
+  webDist,
+  role: lockResult.role,
+  cwd,
+  sessionDir,
+  privateApiSessionToken,
+  allowRemotePrivateApi,
+  getSession: () => session,
+  getSessionManager: () => sessionManager,
+  wsHub,
+  modelSetupController,
+  sessionActionsController,
+  quoteSnapshotStore,
 });
 
-async function handleHttpRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const url = new URL(req.url ?? "/", `http://${host}:${port}`);
-  if (url.pathname === "/health") {
-    writeJson(res, { ok: true, role: lockResult.role });
-    return;
-  }
-
-  if (url.pathname === "/api/bootstrap" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Bootstrap API")) return;
-    writeJson(res, await wsHub.buildBootstrapPayload());
-    return;
-  }
-
-  if (url.pathname === "/api/session/new" && req.method === "POST") {
-    if (!allowTrustedGuiRequest(req, res, "Session API")) return;
-    if (lockResult.role !== "writer") {
-      writeJson(res, { error: "Read-only follower mode" }, 409);
-      return;
-    }
-    await sessionActionsController.handleNewSession();
-    wsHub.broadcastState();
-    wsHub.broadcastSessions();
-    writeJson(res, await wsHub.buildBootstrapPayload());
-    return;
-  }
-
-  if (url.pathname === "/api/sessions" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Session API")) return;
-    writeJson(res, {
-      currentSessionId: sessionManager.getSessionId(),
-      role: lockResult.role,
-      sessions: await SessionManager.list(cwd, sessionDir),
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/session/events" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Session API")) return;
-    writeJson(res, {
-      sessionId: sessionManager.getSessionId(),
-      role: lockResult.role,
-      events: wsHub.currentChatEvents(),
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/model-setup/refresh" && req.method === "POST") {
-    if (!allowTrustedGuiRequest(req, res, "Model setup API")) return;
-    session.modelRegistry.refresh();
-    wsHub.broadcastModelSetup();
-    writeJson(res, await wsHub.buildBootstrapPayload());
-    return;
-  }
-
-  if (url.pathname === "/api/model-setup/api-key" && req.method === "POST") {
-    if (!allowTrustedGuiRequest(req, res, "Model setup API")) return;
-    await handleTrustedGuiMutation(req, res, async (body) => {
-      await modelSetupController.handleSaveModelApiKey(
-        String(body.provider ?? ""),
-        String(body.apiKey ?? ""),
-      );
-      wsHub.broadcastModelSetup();
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/model-setup/model" && req.method === "POST") {
-    if (!allowTrustedGuiRequest(req, res, "Model setup API")) return;
-    await handleTrustedGuiMutation(req, res, async (body) => {
-      await modelSetupController.handleSelectModel(
-        String(body.provider ?? ""),
-        String(body.modelId ?? ""),
-      );
-      wsHub.broadcastModelSetup();
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/provider-setup/api-key" && req.method === "POST") {
-    if (!allowTrustedGuiRequest(req, res, "Provider setup API")) return;
-    await handleTrustedGuiMutation(req, res, async (body) => {
-      await modelSetupController.handleSaveProviderApiKey(
-        String(body.providerId ?? ""),
-        String(body.apiKey ?? ""),
-      );
-      wsHub.broadcast({ type: "catalog", catalog: buildCatalog() });
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/market-state" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
-    writeJson(res, buildMarketStateSnapshot());
-    return;
-  }
-
-  if (url.pathname === "/api/market-state/quotes" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
-    writeJson(res, await quoteSnapshotStore.get());
-    return;
-  }
-
-  if (url.pathname === "/api/instruments/search" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Market-state API")) return;
-    writeJson(res, await searchInstrumentCandidates(url.searchParams.get("q") ?? ""));
-    return;
-  }
-
-  if (url.pathname === "/api/diagnostics/twitter-cli" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Diagnostics API")) return;
-    const mode = url.searchParams.get("mode") === "session" ? "session" : "install";
-    const force = url.searchParams.get("force") === "1";
-    writeJson(res, await probeProviderStatus("twitter", { mode, force }));
-    return;
-  }
-
-  if (url.pathname === "/api/diagnostics/reddit-cli" && req.method === "GET") {
-    if (!allowTrustedGuiRequest(req, res, "Diagnostics API")) return;
-    const mode = url.searchParams.get("mode") === "session" ? "session" : "install";
-    const force = url.searchParams.get("force") === "1";
-    writeJson(res, await probeProviderStatus("reddit", { mode, force }));
-    return;
-  }
-
-  if (url.pathname === "/api/chat/run" && req.method === "POST") {
-    if (!allowTrustedGuiRequest(req, res, "Chat run API")) return;
-    await handleSseChatRun(req, res);
-    return;
-  }
-
-  const requested = url.pathname === "/" ? "/index.html" : url.pathname;
-  const path = resolve(join(webDist, requested));
-  if (!path.startsWith(webDist) || !existsSync(path)) {
-    const fallback = resolve(join(webDist, "index.html"));
-    if (!extname(requested) && fallback.startsWith(webDist) && existsSync(fallback)) {
-      res.writeHead(200, privateGuiHeaders("text/html; charset=utf-8"));
-      createReadStream(fallback).pipe(res);
-      return;
-    }
-    res.writeHead(404).end("Not found");
-    return;
-  }
-
-  const type = contentType(path);
-  res.writeHead(200, privateGuiHeaders(type));
-  createReadStream(path).pipe(res);
-}
+const server = createServer((req, res) => {
+  void httpRequestHandler(req, res);
+});
 
 server.on("upgrade", (req, socket) => wsHub.handleUpgrade(req, socket));
 
@@ -345,185 +201,3 @@ const shutdown = createGracefulShutdown({
 
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
-
-async function handleSseChatRun(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (lockResult.role !== "writer") {
-    writeJson(res, { error: "Read-only follower mode" }, 409);
-    return;
-  }
-
-  const body = await readJsonBody(req);
-  const prompt = String(asRecord(body).prompt ?? "").trim();
-  if (!prompt) {
-    writeJson(res, { error: "prompt is required" }, 400);
-    return;
-  }
-
-  const sessionConflict = chatRunSessionConflict(
-    asRecord(body).sessionId,
-    sessionManager.getSessionId(),
-  );
-  if (sessionConflict) {
-    writeJson(res, sessionConflict, 409);
-    return;
-  }
-
-  res.writeHead(200, {
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache, no-transform",
-    connection: "keep-alive",
-  });
-
-  let seq = 1;
-  const runId = `gui-run-${Date.now()}`;
-  const runSession = session;
-  const runSessionManager = sessionManager;
-  const sessionId = runSessionManager.getSessionId();
-  // Name new sessions by the user's words before any workflow transform
-  // replaces the turn text, so the sidebar shows what the user actually asked.
-  if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
-    runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
-  }
-  const beforeEntries = runSessionManager.getEntries();
-  const beforeCount = beforeEntries.length;
-  const beforeIds = new Set(beforeEntries.map((entry) => entry.id));
-  writeSse(res, { type: "run.started", runId, sessionId, seq: seq++ });
-  res.flushHeaders?.();
-  const liveStartSeq = seq;
-  const liveAdapter = createLiveChatEventAdapter({
-    runId,
-    sessionId,
-    startSeq: seq,
-    emit: (event) => writeSse(res, event),
-    originalPrompt: prompt,
-  });
-  const observation = createPromptObservation();
-  const unsubscribeLive = runSession.subscribe((event) => {
-    liveAdapter.handle(event);
-    observePromptEvent(observation, event);
-  });
-
-  try {
-    const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
-    if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
-      runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
-      const message =
-        modelSetup.requirement === "select_model"
-          ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
-          : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
-      runSessionManager.appendCustomMessageEntry("opencandle-model-setup", message, true, {
-        source: "gui",
-        requirement: modelSetup.requirement,
-      });
-      wsHub.broadcastState();
-    } else {
-      await promptAndSettle(runSession, prompt, beforeIds, observation);
-      wsHub.broadcastState();
-    }
-    seq = liveAdapter.nextSeq();
-    if (seq === liveStartSeq) {
-      await waitForNewEntryId(
-        () => runSessionManager.getEntries().map((entry) => entry.id),
-        beforeIds,
-      );
-      const newEntries = runSessionManager
-        .getEntries()
-        .slice(beforeCount)
-        .filter((entry) => !beforeIds.has(entry.id));
-      const events = sessionEntriesToChatEvents(newEntries, {
-        sessionId,
-        updatedAt: new Date().toISOString(),
-        startSeq: seq,
-      });
-      for (const event of events) {
-        writeSse(res, event);
-        seq = event.seq + 1;
-      }
-    }
-    writeSse(res, { type: "run.completed", runId, seq });
-  } catch (error) {
-    seq = liveAdapter.nextSeq();
-    const message = error instanceof Error ? error.message : String(error);
-    writeSse(res, { type: "run.failed", runId, error: { message }, seq });
-  } finally {
-    unsubscribeLive();
-    res.end();
-  }
-}
-
-async function handleTrustedGuiMutation(
-  req: IncomingMessage,
-  res: ServerResponse,
-  action: (body: Record<string, unknown>) => Promise<void>,
-): Promise<void> {
-  try {
-    await action(asRecord(await readJsonBody(req)));
-    writeJson(res, await wsHub.buildBootstrapPayload());
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    writeJson(res, { error: message }, message === "Read-only follower mode" ? 409 : 400);
-  }
-}
-
-function writeJson(res: ServerResponse, value: unknown, status = 200): void {
-  res.writeHead(status, { "content-type": "application/json" });
-  res.end(JSON.stringify(value));
-}
-
-function allowTrustedGuiRequest(req: IncomingMessage, res: ServerResponse, label: string): boolean {
-  if (
-    isTrustedPrivateApiRequest(req.headers, privateApiSessionToken, req.socket.remoteAddress, {
-      allowRemote: allowRemotePrivateApi,
-    })
-  )
-    return true;
-  res.writeHead(403, { "content-type": "application/json" });
-  res.end(
-    JSON.stringify({
-      error: `${label} is only available to trusted GUI browser sessions.`,
-    }),
-  );
-  return false;
-}
-
-function privateGuiHeaders(contentTypeValue: string): Record<string, string> {
-  const headers: Record<string, string> = { "content-type": contentTypeValue };
-  if (contentTypeValue.startsWith("text/html")) {
-    headers["set-cookie"] = privateApiCookieHeader(privateApiSessionToken);
-  }
-  return headers;
-}
-
-function writeSse(res: ServerResponse, event: ChatEvent): void {
-  res.write(`data: ${JSON.stringify(event)}\n\n`);
-}
-
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  if (chunks.length === 0) return {};
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-}
-
-function contentType(path: string): string {
-  switch (extname(path)) {
-    case ".html":
-      return "text/html; charset=utf-8";
-    case ".css":
-      return "text/css; charset=utf-8";
-    case ".js":
-      return "text/javascript; charset=utf-8";
-    case ".svg":
-      return "image/svg+xml";
-    default:
-      return "application/octet-stream";
-  }
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}

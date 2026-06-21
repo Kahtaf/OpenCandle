@@ -142,11 +142,11 @@ style. Verification: `npx vitest run tests/unit/routing/` → all pass.
 
 ## Done criteria
 
-- [ ] `npx tsc --noEmit` exits 0
-- [ ] `npx vitest run` exits 0; ≥4 new negative cases and ≥2 positive regression cases present
-- [ ] No recorded fixture in `tests/fixtures/router/` modified (`git status`)
-- [ ] No files outside the in-scope list modified
-- [ ] `plans/README.md` status row updated
+- [x] `npx tsc --noEmit` exits 0
+- [x] `npx vitest run` exits 0; ≥4 new negative cases and ≥2 positive regression cases present
+- [x] No recorded fixture in `tests/fixtures/router/` modified (`git status`)
+- [x] No files outside the in-scope list modified
+- [x] `plans/README.md` status row updated
 
 ## STOP conditions
 

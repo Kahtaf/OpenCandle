@@ -118,8 +118,8 @@ doc) the list of task families whose guidance text or selection logic appears
 in BOTH policy-cards and workflow-prompts, with current line refs.
 
 **Then STOP and report the map to the operator regardless of what it shows.**
-Mark this plan's status `DONE (Phase A)` in `plans/README.md` with a one-line
-pointer to the map. Do not begin Step 3 in the same execution run; Phase B
+Mark this plan's Phase A status in `plans/README.md` with a one-line pointer
+to the map. Do not begin Step 3 in the same execution run; Phase B
 requires explicit operator approval, and is skipped entirely if fewer than 3
 families are genuinely duplicated.
 
@@ -148,15 +148,15 @@ with ZERO snapshot updates (`--update` is forbidden in this plan). Commit.
 
 Phase A (sufficient for DONE):
 
-- [ ] Snapshot suite exists and passes (`npx vitest run tests/unit/prompts/`)
-- [ ] Duplication map reported to the operator (PR description or report-back)
-- [ ] `npx tsc --noEmit` exits 0; `npx vitest run` exits 0
-- [ ] `plans/README.md` status row updated (`DONE (Phase A)` or, after Phase B, `DONE`)
+- [x] Snapshot suite exists and passes (`npx vitest run tests/unit/prompts/`)
+- [x] Duplication map reported to the operator (PR description or report-back)
+- [x] `npx tsc --noEmit` exits 0; `npx vitest run` exits 0
+- [x] `plans/README.md` status row updated for the completed phase status
 
 Phase B (only if approved and executed):
 
-- [ ] Zero snapshot changes across the refactor (`git log -p -- tests/unit/prompts/__snapshots__ | grep -c "^+"` shows only the initial add)
-- [ ] Each duplicated task family has exactly one guidance source (`grep` the moved literals — each appears in one src file)
+- [x] Zero snapshot changes across the refactor (`git log -p -- tests/unit/prompts/__snapshots__ | grep -c "^+"` shows only the initial add)
+- [x] Each duplicated task family has exactly one guidance source (`grep` the moved literals — each appears in one src file)
 
 ## STOP conditions
 

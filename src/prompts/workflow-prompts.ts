@@ -56,6 +56,13 @@ const DISPLAY_NAMES: Record<string, string> = {
   metrics: "metrics",
 };
 
+const ASSUMPTIONS_RESPONSE_INSTRUCTION =
+  "- Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.";
+
+function currentDateLine(date = todayStr()): string {
+  return `Current date: ${date}`;
+}
+
 /**
  * Build a deterministic assumption disclosure block from resolution.sources.
  * This is the single authoritative provenance representation.
@@ -172,7 +179,7 @@ export function buildPortfolioPrompt(resolution: SlotResolution<PortfolioSlots>)
 4. Use analyze_risk on each candidate for volatility, Sharpe, and max drawdown.
 5. Use analyze_correlation across all candidates to check diversification.`;
 
-  return `Current date: ${todayStr()}
+  return `${currentDateLine()}
 
 Build a draft portfolio under these parameters:
 - Budget: ${formatBudget(s.budget)}
@@ -194,7 +201,7 @@ Portfolio construction guardrails:
 ${disclosureBlock}
 
 Response format:
-- Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
+${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 - Then start the analysis with "Bottom line:" and directly say what portfolio you would build for the user.
 - Commit to the draft: give concrete percentages for each position, not ranges, and not "consider allocating X-Y%".
 - Present an allocation table: symbol, allocation %, dollar amount, current price used, estimated shares, role, and a one-line analyst rationale for each position (what the data showed and why it belongs in this portfolio).
@@ -315,7 +322,7 @@ Protective-put hedge guidance:
     ? `Explain why the top pick is ranked #1. For covered calls with a cost basis, include the effective assignment sale price (strike + premium collected) and compare it with the ${s.costBasis !== undefined ? formatBudget(s.costBasis) : "user's"} cost basis.`
     : "Explain why the top pick is ranked #1.";
 
-  return `Current date: ${dateStr}
+  return `${currentDateLine(dateStr)}
 Do NOT invent or assume a different current date.${expirationSection}
 
 Screen and rank options contracts for ${s.symbol}:
@@ -349,7 +356,7 @@ ${rankingConstraints}
 ${disclosureBlock}
 
 Response format:
-- Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
+${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 - ${isCoveredCallContext ? `Start with an Interpretation line: "Interpretation: Treating ${s.symbol} as the held ticker because you phrased it as an existing position. If you meant ${s.symbol} as memory exposure or another ticker, clarify before trading."` : isProtectivePutContext ? `Start with an Interpretation line: "Interpretation: Treating this as buying protective puts on an existing long ${s.symbol} share position."` : "State the interpretation only if the user's requested underlying is ambiguous."}
 - Present top 3-5 ranked contracts in a table: strike, expiry, premium, delta, gamma, theta, vega, rho, IV, OI, bid-ask spread${isProtectivePutContext ? ", hedge floor, premium % of position" : ""}.
 - ${topPickExplanation}
@@ -460,7 +467,7 @@ macro hedge decision guidance:
     resolution.sources as Record<string, SlotSource | undefined>,
   );
 
-  return `Current date: ${todayStr()}
+  return `${currentDateLine()}
 
 Compare these assets side by side: ${symbolList}${horizonLine}${budgetLine}
 
@@ -475,7 +482,7 @@ ${overlapGuidance}
 ${disclosureBlock}
 
 Response format:
-- Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
+${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 ${tableInstruction}
 - Provide a summary verdict: which is most attractive and why.
 - Note any caveats (different sectors, concentration, market cap disparity, unavailable fundamentals, unavailable forward-looking estimates, etc.).${horizonResponse}`;
