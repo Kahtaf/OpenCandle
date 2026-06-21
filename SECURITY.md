@@ -14,7 +14,9 @@ Until OpenCandle reaches `1.0.0`, security support is limited to the latest pre-
 
 Do not open public GitHub issues for security vulnerabilities.
 
-Use GitHub Security Advisories or the repository's private vulnerability reporting channel to report suspected vulnerabilities to the maintainers.
+Do not include API keys, provider tokens, account identifiers, personal holdings screenshots, full `~/.opencandle` state, or unredacted local paths in public reports, screenshots, logs, or traces.
+
+Use GitHub Security Advisories or the repository's private vulnerability reporting channel to report suspected vulnerabilities to the maintainers. If GitHub private reporting is unavailable to you, open a minimal public issue that says you need a private security contact without including exploit details or sensitive data.
 
 When reporting an issue, include:
 
@@ -23,4 +25,4 @@ When reporting an issue, include:
 - reproduction steps or proof of concept
 - any suggested mitigation if known
 
-Maintainers will acknowledge valid reports, investigate them privately, and coordinate a fix and release before public disclosure when practical.
+Maintainers aim to acknowledge valid reports within 7 days, investigate them privately, and coordinate a fix and release before public disclosure when practical.

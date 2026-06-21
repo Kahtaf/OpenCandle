@@ -75,7 +75,7 @@ export function ChatPanel({
     setAllowToolAutoOpen(false);
   }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const chatDisabled = role === "follower" || inputDisabled;
+  const chatDisabled = role === "follower" || inputDisabled || needsSetup;
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
@@ -86,7 +86,11 @@ export function ChatPanel({
   };
 
   const placeholder =
-    role === "follower" ? "Follower mode: take over this session to send" : "Ask anything";
+    role === "follower"
+      ? "Follower mode: take over this session to send"
+      : needsSetup
+        ? "Complete model setup to chat"
+        : "Ask anything";
 
   return (
     <section

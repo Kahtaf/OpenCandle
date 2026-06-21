@@ -213,6 +213,8 @@ Save fixture JSON in `tests/fixtures/<provider>/` so tests are deterministic.
 
 ## Add-on Packages (Advanced)
 
+The stable package surface for add-ons is `opencandle/tool-kit` plus documented TypeScript types. Other exported subpaths such as `opencandle/providers`, `opencandle/tools`, `opencandle/workflows`, and `opencandle/infra` are available for first-party integration and experimentation, but they can change more often until the project documents a narrower API reference for them.
+
 If your tool has heavy dependencies or needs separate maintenance, you can ship it as a standalone npm package instead. It's a Pi extension that imports from `opencandle/tool-kit`:
 
 ```ts

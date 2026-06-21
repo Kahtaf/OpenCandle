@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
@@ -18,6 +19,32 @@ describe("release readiness automation", () => {
     );
   });
 
+  it("loads .env before GUI and monitor command handlers read process env", () => {
+    const cliMain = read("src/cli-main.ts");
+
+    expect(cliMain.indexOf("loadEnv();")).toBeLessThan(
+      cliMain.indexOf("await handleGuiCommand(rawArgs, cwd)"),
+    );
+    expect(cliMain.indexOf("loadEnv();")).toBeLessThan(
+      cliMain.indexOf("await handleMonitorCommand(rawArgs, cwd)"),
+    );
+  });
+
+  it("guards release tagging against wrong branches, stale main, and duplicate tags", () => {
+    const releaseScript = read("scripts/release.mjs");
+
+    expect(releaseScript).toContain("assertMainBranch();");
+    expect(releaseScript).toContain('run("git fetch origin main:refs/remotes/origin/main --tags")');
+    expect(releaseScript).toContain("assertHeadMatchesOriginMain();");
+    expect(releaseScript).toContain("assertTagAvailable(version);");
+    expect(releaseScript.indexOf("assertMainBranch();")).toBeLessThan(
+      releaseScript.indexOf("Bumping version"),
+    );
+    expect(releaseScript.indexOf("assertTagAvailable(version);")).toBeLessThan(
+      releaseScript.indexOf("Committing and tagging"),
+    );
+  });
+
   it("defines a local release check that covers compile, lint, tests, docs, packing, and link checks", () => {
     const pkg = JSON.parse(read("package.json")) as {
       scripts: Record<string, string>;
@@ -28,9 +55,53 @@ describe("release readiness automation", () => {
     expect(releaseCheck).toContain("npx biome ci .");
     expect(releaseCheck).toContain("npm test");
     expect(releaseCheck).toContain("npm run docs:site:build");
-    expect(releaseCheck).toContain("npm pack --dry-run");
+    expect(releaseCheck).toContain("npm run package:contents:check");
     expect(releaseCheck).toContain("npm run test:packed-install");
     expect(releaseCheck).toContain("npm run docs:links:check");
+  });
+
+  it("uses the full release gate for local publish paths", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(pkg.scripts.prepublishOnly).toBe("npm run release:check");
+    expect(pkg.scripts["publish:dry"]).toContain("npm run release:check");
+  });
+
+  it("keeps package-content validation machine-readable and denylist based", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      scripts: Record<string, string>;
+    };
+    const packageCheck = read("scripts/check-package-contents.mjs");
+
+    expect(pkg.scripts["package:contents:check"]).toBe("node scripts/check-package-contents.mjs");
+    expect(packageCheck).toContain("--dry-run");
+    expect(packageCheck).toContain("--json");
+    expect(packageCheck).not.toContain("--ignore-scripts");
+    expect(packageCheck).toContain("deniedDirectorySegments");
+    expect(packageCheck).toContain('"docs"');
+    expect(packageCheck).toContain('".agents"');
+    expect(packageCheck).toContain('"graphify-out"');
+  });
+
+  it("rejects denied package artifacts below published runtime directories", async () => {
+    const { isDeniedPackagePath, parsePackDryRunJson } = (await import(
+      pathToFileURL(join(root, "scripts/check-package-contents.mjs")).href
+    )) as {
+      isDeniedPackagePath: (path: string) => boolean;
+      parsePackDryRunJson: (output: string) => unknown;
+    };
+
+    expect(isDeniedPackagePath("fixtures/provider/quote.json")).toBe(true);
+    expect(isDeniedPackagePath("src/providers/yahoo/fixtures/quote.json")).toBe(true);
+    expect(isDeniedPackagePath("src/tools/market/tests/quote.test.ts")).toBe(true);
+    expect(isDeniedPackagePath("gui/server/.env.local")).toBe(true);
+    expect(isDeniedPackagePath("website/dist/index.html")).toBe(true);
+    expect(isDeniedPackagePath("src/providers/yahoo-finance.ts")).toBe(false);
+    expect(
+      parsePackDryRunJson('> opencandle@0.7.0 prepare\n[{"files":[{"path":"dist/cli.js"}]}]'),
+    ).toEqual([{ files: [{ path: "dist/cli.js" }] }]);
   });
 
   it("keeps publish tag-only and checks that the tag matches the package version", () => {
@@ -48,8 +119,24 @@ describe("release readiness automation", () => {
     expect(ciWorkflow).toContain("permissions:\n  contents: read");
     expect(ciWorkflow).toContain('node-version: ["22.19.0", "24.x", "26.x"]');
     expect(ciWorkflow).toContain("npm run docs:site:build");
+    expect(ciWorkflow).toContain("npm run package:contents:check");
     expect(ciWorkflow).toContain("npm run test:packed-install");
     expect(ciWorkflow).toContain("npm run docs:links:check");
+  });
+
+  it("uses production model setup requirement literals in GUI browser smokes", () => {
+    const guiBrowserTest = read("tests/e2e/gui-browser.test.ts");
+
+    expect(guiBrowserTest).not.toContain("needs_api_key");
+    expect(guiBrowserTest).toContain('requirement: "connect_auth"');
+  });
+
+  it("rewrites llms-full markdown links to absolute public URLs", () => {
+    const websiteBuild = read("website/build.mjs");
+
+    expect(websiteBuild).toContain("function rewriteMarkdownLinksForSite");
+    expect(websiteBuild).toContain("rewriteMarkdownLinksForSite(body.trim(), page)");
+    expect(websiteBuild).toContain("AGENTS.md");
   });
 
   it("adds dependency update automation and code ownership for sensitive surfaces", () => {

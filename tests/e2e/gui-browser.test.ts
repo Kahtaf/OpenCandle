@@ -93,7 +93,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
       modelSetup: {
-        requirement: "needs_api_key",
+        requirement: "connect_auth",
         providers: [
           {
             id: "google",

@@ -90,4 +90,20 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).toContain("Skip X/Twitter once");
     expect(html).not.toContain("Browse tools");
   });
+
+  it("disables chat submission while model setup is incomplete", () => {
+    const html = renderChatPanelHtml({
+      draft: "Can I buy AAPL today?",
+      modelSetup: {
+        requirement: "connect_auth",
+        providers: [],
+        availableModels: [],
+      },
+    });
+
+    expect(html).toContain("Complete model setup to chat");
+    expect(html).toContain('id="chat-composer"');
+    expect(html).toContain("disabled");
+    expect(html).toContain('aria-label="Send message"');
+  });
 });

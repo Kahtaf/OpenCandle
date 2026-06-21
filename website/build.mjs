@@ -46,6 +46,37 @@ const markdownOutput = (output) => output.replace(/\.html$/, ".md");
 
 const absoluteUrl = (path) => `${siteUrl}/${path.replace(/^index\.html$/, "").replace(/^\//, "")}`;
 
+function rewriteMarkdownLinksForSite(markdown, page) {
+  const pageDir = page.source.includes("/") ? page.source.split("/").slice(0, -1).join("/") : "";
+
+  return markdown.replace(/\]\(([^)]+)\)/g, (match, target) => {
+    if (/^(https?:|mailto:|#)/.test(target)) return match;
+
+    const [rawPath, rawHash] = target.split("#");
+    if (!rawPath) return match;
+
+    let normalizedPath;
+    if (rawPath === "./AGENTS.md" || rawPath === "AGENTS.md" || rawPath.endsWith("/AGENTS.md")) {
+      normalizedPath = "AGENTS.md";
+    } else if (rawPath.startsWith("./")) {
+      normalizedPath = `${pageDir}/${rawPath.slice(2)}`;
+    } else if (rawPath.startsWith("../")) {
+      normalizedPath = rawPath.replace(/^(\.\.\/)+/, "");
+    } else {
+      normalizedPath = rawPath;
+    }
+
+    const basename = normalizedPath.split("/").at(-1);
+    const mappedOutput =
+      sourceToOutput.get(normalizedPath) ??
+      basenameToOutput.get(basename) ??
+      (normalizedPath.endsWith(".md") ? normalizedPath.replace(/\.md$/, ".html") : normalizedPath);
+    const hash = rawHash ? `#${rawHash}` : "";
+
+    return `](${absoluteUrl(mappedOutput)}${hash})`;
+  });
+}
+
 function jsonLd(data) {
   return `<script type="application/ld+json">${JSON.stringify(data).replaceAll("<", "\\u003c")}</script>`;
 }
@@ -663,11 +694,12 @@ async function renderLlmsFullTxt(loaded, buildDate) {
   for (const page of loaded) {
     const markdown = await readFile(join(root, page.source), "utf8");
     const { body } = stripFrontmatter(markdown);
+    const publicBody = rewriteMarkdownLinksForSite(body.trim(), page);
     sections.push(`## ${page.title}
 
 Source: ${siteUrl}/${page.output}
 
-${body.trim()}`);
+${publicBody}`);
   }
 
   return `# OpenCandle full AI context

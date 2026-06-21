@@ -46,21 +46,7 @@ jobs:
 
       - name: Validate package contents
         if: matrix.node-version == '24.x'
-        run: |
-          PACK_OUTPUT=$(npm pack --dry-run 2>&1)
-          echo "$PACK_OUTPUT"
-
-          # Fail if tests, fixtures, or internal docs leak into tarball
-          if echo "$PACK_OUTPUT" | grep -qE '(tests/|fixtures/|docs/|\.env|openspec/)'; then
-            echo "::error::Tarball contains files that should not be published"
-            exit 1
-          fi
-
-          # Fail if dist/ is missing
-          if ! echo "$PACK_OUTPUT" | grep -q 'dist/'; then
-            echo "::error::Tarball is missing dist/ — build may have failed"
-            exit 1
-          fi
+        run: npm run package:contents:check
 
       - name: Run tests
         run: npm test

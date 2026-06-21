@@ -8,6 +8,8 @@ body:
     attributes:
       value: |
         Thanks for reporting a bug. Please provide a small, reproducible report with the exact command, prompt, or workflow that failed.
+
+        Before attaching logs, screenshots, traces, or provider setup details, redact API keys, account identifiers, personal holdings, portfolio screenshots, full `~/.opencandle` state, and local paths you do not want public.
   - type: textarea
     id: summary
     attributes:
@@ -61,4 +63,4 @@ body:
     id: notes
     attributes:
       label: Additional context
-      description: Logs, screenshots, relevant provider setup, or anything else maintainers should know
+      description: Logs, screenshots, relevant provider setup, or anything else maintainers should know. Redact secrets, account identifiers, holdings, and private local paths.
