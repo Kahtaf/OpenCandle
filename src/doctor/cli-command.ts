@@ -38,10 +38,16 @@ export async function handleDoctorCommand(
   const authStorage = AuthStorage.create();
   const modelRegistry = ModelRegistry.create(authStorage);
   const settingsManager = SettingsManager.create(cwd, agentDir);
+  const includeSessions = args.includes("--sessions");
+  if (includeSessions) {
+    console.error(
+      "Session checks may read browser cookies or trigger platform permission prompts for Reddit and X/Twitter.",
+    );
+  }
   const report = await buildDoctorReport({
     cwd,
     agentDir,
-    includeSessions: args.includes("--sessions"),
+    includeSessions,
     includeGui: args.includes("--full"),
     modelSetup: buildCliModelSetupState(modelRegistry, settingsManager),
   });

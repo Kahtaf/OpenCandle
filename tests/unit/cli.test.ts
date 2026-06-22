@@ -191,6 +191,8 @@ describe("opencandle package commands", () => {
   });
 
   it("passes explicit doctor scope flags to the shared report builder", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
     await runCli(["doctor", "--sessions", "--full", "--json"]);
 
     expect(piMocks.buildDoctorReport).toHaveBeenCalledWith(
@@ -198,6 +200,9 @@ describe("opencandle package commands", () => {
         includeSessions: true,
         includeGui: true,
       }),
+    );
+    expect(error).toHaveBeenCalledWith(
+      "Session checks may read browser cookies or trigger platform permission prompts for Reddit and X/Twitter.",
     );
   });
 
