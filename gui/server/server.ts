@@ -111,7 +111,6 @@ const toolInvokeController = createToolInvokeController({
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,
   cwd,
-  agentDir,
   sessionDir,
   getSession: () => session,
   getSessionManager: () => sessionManager,
@@ -155,6 +154,7 @@ const httpRequestHandler = createHttpRequestHandler({
   webDist,
   role: lockResult.role,
   cwd,
+  agentDir,
   sessionDir,
   privateApiSessionToken,
   allowRemotePrivateApi,

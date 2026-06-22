@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,9 +9,21 @@ import {
 } from "../../../src/doctor/report.js";
 import type { CommandRunner } from "../../../src/onboarding/provider-status.js";
 
+const tempHomes: string[] = [];
+
 afterEach(() => {
+  for (const home of tempHomes.splice(0)) {
+    rmSync(home, { recursive: true, force: true });
+  }
   vi.unstubAllEnvs();
 });
+
+function useTempOpenCandleHome(): string {
+  const home = mkdtempSync(join(tmpdir(), "opencandle-doctor-"));
+  tempHomes.push(home);
+  vi.stubEnv("OPENCANDLE_HOME", home);
+  return home;
+}
 
 function check(overrides: Partial<DoctorCheck>): DoctorCheck {
   return {
@@ -35,6 +47,7 @@ describe("doctor report", () => {
   });
 
   it("does not run browser-session probes unless sessions are requested", async () => {
+    useTempOpenCandleHome();
     const calls: Array<{ command: string; args: readonly string[] }> = [];
     const commandRunner: CommandRunner = async (command, args) => {
       calls.push({ command, args });
@@ -64,6 +77,7 @@ describe("doctor report", () => {
   });
 
   it("runs explicit session probes and keeps optional session failures non-blocking", async () => {
+    useTempOpenCandleHome();
     const commandRunner: CommandRunner = async (command, args) => {
       if (args.includes("--version")) return { code: 0, stdout: "ok", stderr: "" };
       if (command === "rdt") {
@@ -83,6 +97,7 @@ describe("doctor report", () => {
       includeSessions: true,
       commandRunner,
       fetchImpl: async () => new Response("ok", { status: 200 }),
+      providerStatuses: [],
       modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
     });
 
@@ -98,9 +113,8 @@ describe("doctor report", () => {
   });
 
   it("reports an invalid config file as a blocking core failure", async () => {
-    const home = mkdtempSync(join(tmpdir(), "opencandle-doctor-"));
+    const home = useTempOpenCandleHome();
     writeFileSync(join(home, "config.json"), "{nope");
-    vi.stubEnv("OPENCANDLE_HOME", home);
 
     const report = await buildDoctorReport({
       cwd: process.cwd(),
