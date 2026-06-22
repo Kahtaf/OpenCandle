@@ -1,7 +1,10 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { DiagnosticsPage } from "../../../gui/web/src/features/diagnostics/DiagnosticsPage.jsx";
+import { describe, expect, it, vi } from "vitest";
+import {
+  confirmSessionCheck,
+  DiagnosticsPage,
+} from "../../../gui/web/src/features/diagnostics/DiagnosticsPage.jsx";
 
 describe("DiagnosticsPage rendering", () => {
   it("renders report sections and remediation actions", () => {
@@ -76,5 +79,10 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toContain("Model setup");
     expect(html).toContain("Providers");
     expect(html).toContain("Check sessions");
+  });
+
+  it("uses the browser-session confirmation result", () => {
+    expect(confirmSessionCheck(vi.fn(() => true))).toBe(true);
+    expect(confirmSessionCheck(vi.fn(() => false))).toBe(false);
   });
 });

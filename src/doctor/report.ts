@@ -333,7 +333,6 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
     (await probeAllProviderStatuses({
       commandRunner: options.commandRunner,
       fetchImpl: options.fetchImpl,
-      force: true,
     }));
   const checks: DoctorCheck[] = statuses.map((status) => providerStatusCheck(status));
 
@@ -341,7 +340,6 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
     if (options.includeSessions) {
       const status = await probeProviderStatus(provider.id, {
         mode: "session",
-        force: true,
         commandRunner: options.commandRunner,
       });
       checks.push(providerStatusCheck(status, "session"));
@@ -413,7 +411,13 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
   return {
     id: `provider.${status.providerId}.binary`,
     label: `${provider.displayName} CLI`,
-    status: installed ? "pass" : status.state === "missing" ? "warn" : "unknown",
+    status: installed
+      ? "pass"
+      : status.state === "skipped"
+        ? "skip"
+        : status.state === "missing"
+          ? "warn"
+          : "unknown",
     capability: "optional",
     summary: installed ? "Installed" : (status.message ?? `CLI ${status.state}`),
     remediation: installed ? undefined : status.installCmd,

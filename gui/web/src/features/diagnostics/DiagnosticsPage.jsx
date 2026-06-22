@@ -23,6 +23,12 @@ const STATUS_META = {
   unknown: { label: "Info", tone: "muted", icon: CircleHelp },
 };
 
+export function confirmSessionCheck(confirmImpl = window.confirm) {
+  return confirmImpl(
+    "Session checks may read browser cookies or trigger platform permission prompts for Reddit and X/Twitter. Continue?",
+  );
+}
+
 export function DiagnosticsPage({
   role,
   onOpenSidebar,
@@ -66,6 +72,10 @@ export function DiagnosticsPage({
     void loadReport();
   }, [initialReport, loadReport]);
 
+  const checkSessions = useCallback(() => {
+    if (confirmSessionCheck()) void loadReport({ sessions: true });
+  }, [loadReport]);
+
   const counts = useMemo(() => summarizeChecks(report), [report]);
 
   return (
@@ -103,12 +113,7 @@ export function DiagnosticsPage({
                 size="sm"
                 prefixIcon={ShieldCheck}
                 disabled={loading || checkingSessions}
-                onClick={() => {
-                  const ok = window.confirm(
-                    "Session checks may read browser cookies or trigger platform permission prompts for Reddit and X/Twitter. Continue?",
-                  );
-                  if (ok) void loadReport({ sessions: true });
-                }}
+                onClick={checkSessions}
               >
                 {checkingSessions ? "Checking..." : "Check sessions"}
               </Button>
@@ -149,7 +154,7 @@ export function DiagnosticsPage({
                         check={check}
                         onOpenProviders={onOpenProviders}
                         onOpenModelSetup={onOpenModelSetup}
-                        onCheckSessions={() => loadReport({ sessions: true })}
+                        onCheckSessions={checkSessions}
                       />
                     ))}
                   </div>

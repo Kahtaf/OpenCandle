@@ -7,7 +7,11 @@ import {
   type DoctorCheck,
   deriveDoctorStatus,
 } from "../../../src/doctor/report.js";
-import type { CommandRunner } from "../../../src/onboarding/provider-status.js";
+import {
+  type CommandRunner,
+  clearProviderStatusCache,
+} from "../../../src/onboarding/provider-status.js";
+import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
 const tempHomes: string[] = [];
 
@@ -15,6 +19,7 @@ afterEach(() => {
   for (const home of tempHomes.splice(0)) {
     rmSync(home, { recursive: true, force: true });
   }
+  clearProviderStatusCache();
   vi.unstubAllEnvs();
 });
 
@@ -110,6 +115,36 @@ describe("doctor report", () => {
       capability: "optional",
     });
     expect(report.status).toBe("degraded");
+  });
+
+  it("honors skipped external-tool provider preferences", async () => {
+    useTempOpenCandleHome();
+    saveOnboardingState(markProviderNeverAsk({ version: 2, providers: {} }, "reddit"));
+    const commandRunner = vi.fn<CommandRunner>(async () => ({
+      code: 0,
+      stdout: "ok",
+      stderr: "",
+    }));
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: "/tmp/opencandle-agent",
+      now: new Date("2026-06-22T12:00:00.000Z"),
+      commandRunner,
+      fetchImpl: async () => new Response("ok", { status: 200 }),
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    const redditCli = report.sections
+      .flatMap((section) => section.checks)
+      .find((candidate) => candidate.id === "provider.reddit.binary");
+
+    expect(redditCli).toMatchObject({
+      status: "skip",
+      capability: "optional",
+      summary: expect.stringContaining("Skipped by user preference"),
+    });
+    expect(commandRunner).not.toHaveBeenCalledWith("rdt", expect.anything(), expect.anything());
   });
 
   it("reports an invalid config file as a blocking core failure", async () => {
