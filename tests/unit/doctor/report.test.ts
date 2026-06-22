@@ -8,9 +8,11 @@ import {
   deriveDoctorStatus,
 } from "../../../src/doctor/report.js";
 import {
+  type ApiKeyProviderStatus,
   type CommandRunner,
   clearProviderStatusCache,
   type ExternalToolProviderStatus,
+  type PublicHttpProviderStatus,
 } from "../../../src/onboarding/provider-status.js";
 import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
@@ -182,6 +184,40 @@ describe("doctor report", () => {
     expect(checkIds).toContain("provider.reddit.binary");
     expect(checkIds).not.toContain("provider.twitter.session");
     expect(checkIds).not.toContain("provider.reddit.session");
+  });
+
+  it("treats missing keyed data providers as degraded rather than blocked", async () => {
+    const missingKey = (providerId: "alpha_vantage" | "fred"): ApiKeyProviderStatus => ({
+      providerId,
+      kind: "api-key",
+      state: "missing",
+      credentialSource: "absent",
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    });
+    const yahooReachable: PublicHttpProviderStatus = {
+      providerId: "yahoo",
+      kind: "public-http",
+      state: "reachable",
+      statusCode: 200,
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    };
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: "/tmp/opencandle-agent",
+      providerStatuses: [missingKey("alpha_vantage"), missingKey("fred"), yahooReachable],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    expect(report.status).toBe("degraded");
+    expect(
+      report.sections
+        .flatMap((section) => section.checks)
+        .filter((check) => check.id.endsWith(".credential"))
+        .map((check) => check.status),
+    ).toEqual(["warn", "warn"]);
   });
 
   it("forces fresh provider probes for each doctor report", async () => {

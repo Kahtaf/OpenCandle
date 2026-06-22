@@ -419,7 +419,7 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
     return {
       id: `provider.${status.providerId}.credential`,
       label: provider.displayName,
-      status: status.state === "configured" ? "pass" : provider.tier === "hard" ? "fail" : "warn",
+      status: status.state === "configured" ? "pass" : "warn",
       capability,
       summary:
         status.state === "configured"
