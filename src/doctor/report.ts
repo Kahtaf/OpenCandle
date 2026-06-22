@@ -480,7 +480,11 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
           : "unknown",
     capability: "optional",
     summary: installed ? "Installed" : (status.message ?? `CLI ${status.state}`),
-    remediation: installed ? undefined : status.installCmd,
+    remediation: installed
+      ? undefined
+      : status.state === "skipped"
+        ? `Run \`opencandle doctor --enable ${status.providerId}\` to re-enable this provider.`
+        : status.installCmd,
     metadata,
   };
 }

@@ -179,6 +179,7 @@ describe("doctor report", () => {
       status: "skip",
       capability: "optional",
       summary: expect.stringContaining("Skipped by user preference"),
+      remediation: "Run `opencandle doctor --enable reddit` to re-enable this provider.",
     });
     expect(commandRunner).not.toHaveBeenCalledWith("rdt", expect.anything(), expect.anything());
   });
