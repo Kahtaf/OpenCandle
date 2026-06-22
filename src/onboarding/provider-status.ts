@@ -1,4 +1,7 @@
-import { spawn } from "node:child_process";
+import {
+  type ExternalToolCommandResult,
+  runExternalToolCommand,
+} from "../providers/external-tool-command.js";
 import type { ProviderId } from "./providers.js";
 import {
   getCredentialSource,
@@ -14,11 +17,7 @@ const COMMAND_TIMEOUT_MS = 5_000;
 const PUBLIC_HTTP_TIMEOUT_MS = 3_000;
 const MAX_OUTPUT_CHARS = 32_000;
 
-export interface CommandResult {
-  readonly code: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
-}
+export type CommandResult = ExternalToolCommandResult;
 
 export type CommandRunner = (
   command: string,
@@ -69,6 +68,7 @@ export type ProviderStatus =
 export interface ProbeProviderStatusOptions {
   readonly mode?: "install" | "session";
   readonly force?: boolean;
+  readonly respectSkipped?: boolean;
   readonly commandRunner?: CommandRunner;
   readonly fetchImpl?: typeof fetch;
   readonly now?: Date;
@@ -97,7 +97,7 @@ export async function probeProviderStatus(
     isExternalToolProvider(provider) &&
     loadOnboardingState().providers[providerId]?.status === "never_ask";
 
-  if (skippedByPreference && !options.force) {
+  if (skippedByPreference && (!options.force || options.respectSkipped)) {
     return {
       providerId,
       kind: "external-tool",
@@ -376,35 +376,7 @@ export function redactSensitiveOutput(input: string): string {
 }
 
 export const runCommand: CommandRunner = (command, args, options) =>
-  new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGTERM");
-      reject(new Error(`${command} timed out after ${options?.timeoutMs ?? COMMAND_TIMEOUT_MS}ms`));
-    }, options?.timeoutMs ?? COMMAND_TIMEOUT_MS);
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout = (stdout + chunk.toString("utf8")).slice(0, MAX_OUTPUT_CHARS);
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(0, MAX_OUTPUT_CHARS);
-    });
-    child.on("error", (err) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(err);
-    });
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      resolve({ code, stdout, stderr });
-    });
+  runExternalToolCommand(command, args, {
+    timeoutMs: options?.timeoutMs ?? COMMAND_TIMEOUT_MS,
+    maxOutputChars: MAX_OUTPUT_CHARS,
   });

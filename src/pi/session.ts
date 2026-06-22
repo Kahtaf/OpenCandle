@@ -1,4 +1,3 @@
-import "../infra/node-version.js";
 import {
   type AuthStorage,
   type CreateAgentSessionResult,
@@ -10,6 +9,7 @@ import {
   type SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../config.js";
+import { assertSupportedNodeVersion } from "../infra/node-version.js";
 import type { AskUserHandler } from "../types/index.js";
 import openCandleExtension from "./opencandle-extension.js";
 
@@ -28,6 +28,7 @@ export interface CreateOpenCandleSessionOptions {
 export async function createOpenCandleSession(
   options: CreateOpenCandleSessionOptions = {},
 ): Promise<CreateAgentSessionResult> {
+  assertSupportedNodeVersion();
   loadEnv();
 
   const cwd = options.cwd ?? process.cwd();

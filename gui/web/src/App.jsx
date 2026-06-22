@@ -6,7 +6,9 @@ import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-us
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
 import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
+import { DiagnosticsPage } from "./features/diagnostics/DiagnosticsPage.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
+import { ModelSetupDialog } from "./features/onboarding/ModelSetupDialog.jsx";
 import {
   chatRunSessionTarget,
   hasSessionContent,
@@ -63,6 +65,7 @@ export function AppShell() {
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [modelSetupOpen, setModelSetupOpen] = useState(false);
   const homeResetSessionRef = useRef("");
   const freshRunPendingRef = useRef(false);
   const sessionView = routeSessionView({
@@ -76,6 +79,8 @@ export function AppShell() {
   const visibleAskUserPrompts = gui.askUserPrompts.filter(
     (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
   );
+  const hasGuiSessionContent = hasSessionContent(gui.events);
+  const guiEventCount = gui.events.length;
   const inputDisabled = gui.role !== "writer" || sessionView.pendingSessionSwitch;
 
   const openDrawer = useCallback(
@@ -125,7 +130,7 @@ export function AppShell() {
         pathname,
         role: gui.role,
         currentSessionId: gui.currentSessionId,
-        entryCount: hasSessionContent(gui.events) ? gui.events.length : 0,
+        entryCount: hasGuiSessionContent ? guiEventCount : 0,
         lastResetSessionId: homeResetSessionRef.current,
         canStartFreshHomeSession: gui.supportsSessionActions,
       })
@@ -137,7 +142,8 @@ export function AppShell() {
     pathname,
     gui.role,
     gui.currentSessionId,
-    gui.events.length,
+    hasGuiSessionContent,
+    guiEventCount,
     gui.newSession,
     gui.supportsSessionActions,
   ]);
@@ -281,7 +287,17 @@ export function AppShell() {
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ConnectionStatusBanner role={gui.role} />
-        {marketDomain ? (
+        {pathname === "/diagnostics" ? (
+          <DiagnosticsPage
+            role={gui.role}
+            onOpenSidebar={() => openDrawer("history")}
+            sidebarCollapsed={sidebarCollapsed}
+            onExpandSidebar={() => setSidebarCollapsed(false)}
+            onOpenProviders={() => openCatalog("providers")}
+            onOpenModelSetup={() => setModelSetupOpen(true)}
+            setToast={gui.setToast}
+          />
+        ) : marketDomain ? (
           <MarketStatePage
             domain={marketDomain}
             role={gui.role}
@@ -350,6 +366,13 @@ export function AppShell() {
           />
         ) : null}
       </Suspense>
+      <ModelSetupDialog
+        open={modelSetupOpen}
+        onOpenChange={setModelSetupOpen}
+        modelSetup={gui.modelSetup}
+        send={gui.send}
+        setToast={gui.setToast}
+      />
       <Toaster />
     </ToolDrawerProvider>
   );

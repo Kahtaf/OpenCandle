@@ -11,6 +11,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
+import { assertSupportedNodeVersion } from "../../src/infra/node-version.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import {
   createLocalAutomationHeartbeat,
@@ -32,6 +33,8 @@ import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
+
+assertSupportedNodeVersion();
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
@@ -154,6 +157,7 @@ const httpRequestHandler = createHttpRequestHandler({
   webDist,
   role: lockResult.role,
   cwd,
+  agentDir,
   sessionDir,
   privateApiSessionToken,
   allowRemotePrivateApi,

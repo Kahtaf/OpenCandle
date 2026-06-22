@@ -21,5 +21,3 @@ export function assertSupportedNodeVersion(version?: string): void {
   const message = getUnsupportedNodeVersionMessage(version);
   if (message) throw new Error(message);
 }
-
-assertSupportedNodeVersion();
