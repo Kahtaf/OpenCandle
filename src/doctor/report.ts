@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import Database from "better-sqlite3";
 import { getUnsupportedNodeVersionMessage } from "../infra/node-version.js";
 import {
   getConfigPath,
@@ -89,6 +89,13 @@ export interface DoctorReport {
 }
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const require = createRequire(import.meta.url);
+
+interface BetterSqliteDatabase {
+  close(): void;
+}
+
+type BetterSqliteConstructor = new (path: string) => BetterSqliteDatabase;
 
 export async function buildDoctorReport(
   options: BuildDoctorReportOptions = {},
@@ -160,6 +167,7 @@ function section(id: string, label: string, checks: DoctorCheck[]): DoctorSectio
 function buildRuntimeChecks(cwd: string): DoctorCheck[] {
   const packageJson = readPackageJson();
   const nodeMessage = getUnsupportedNodeVersionMessage();
+  const sqliteLoads = canLoadBetterSqlite();
   return [
     {
       id: "runtime.opencandle_version",
@@ -183,12 +191,10 @@ function buildRuntimeChecks(cwd: string): DoctorCheck[] {
     {
       id: "runtime.better_sqlite3",
       label: "better-sqlite3",
-      status: canLoadBetterSqlite() ? "pass" : "fail",
+      status: sqliteLoads ? "pass" : "fail",
       capability: "core",
-      summary: canLoadBetterSqlite()
-        ? "Native SQLite binding loads"
-        : "Native SQLite binding failed to load",
-      remediation: canLoadBetterSqlite()
+      summary: sqliteLoads ? "Native SQLite binding loads" : "Native SQLite binding failed to load",
+      remediation: sqliteLoads
         ? undefined
         : "Run `npm rebuild better-sqlite3` or reinstall dependencies under the active Node with `npm install`.",
     },
@@ -597,6 +603,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function canLoadBetterSqlite(): boolean {
   try {
+    const Database = require("better-sqlite3") as BetterSqliteConstructor;
     const db = new Database(":memory:");
     db.close();
     return true;
