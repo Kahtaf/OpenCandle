@@ -92,6 +92,31 @@ describe("doctor report", () => {
     ).toEqual(["unknown", "unknown"]);
   });
 
+  it("warns when state directory paths point at files", async () => {
+    const homeFile = join(tmpdir(), `opencandle-home-file-${Date.now()}`);
+    const agentFile = join(tmpdir(), `opencandle-agent-file-${Date.now()}`);
+    writeFileSync(homeFile, "not a directory");
+    writeFileSync(agentFile, "not a directory");
+    tempHomes.push(homeFile, agentFile);
+    vi.stubEnv("OPENCANDLE_HOME", homeFile);
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: agentFile,
+      now: new Date("2026-06-22T12:00:00.000Z"),
+      providerStatuses: [],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    const checks = report.sections.flatMap((section) => section.checks);
+    expect(checks.find((candidate) => candidate.id === "state.opencandle_home")).toMatchObject({
+      status: "warn",
+    });
+    expect(checks.find((candidate) => candidate.id === "state.pi_agent_dir")).toMatchObject({
+      status: "warn",
+    });
+  });
+
   it("runs explicit session probes and keeps optional session failures non-blocking", async () => {
     useTempOpenCandleHome();
     const commandRunner: CommandRunner = async (command, args) => {

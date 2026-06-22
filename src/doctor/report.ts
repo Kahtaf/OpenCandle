@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -613,12 +613,19 @@ function canLoadBetterSqlite(): boolean {
 }
 
 function directoryUsable(path: string): boolean {
-  return existsSync(path) && canAccess(path);
+  try {
+    return (
+      statSync(path).isDirectory() &&
+      canAccess(path, constants.R_OK | constants.W_OK | constants.X_OK)
+    );
+  } catch {
+    return false;
+  }
 }
 
-function canAccess(path: string): boolean {
+function canAccess(path: string, mode = constants.R_OK | constants.W_OK): boolean {
   try {
-    accessSync(path, constants.R_OK | constants.W_OK);
+    accessSync(path, mode);
     return true;
   } catch {
     return false;
