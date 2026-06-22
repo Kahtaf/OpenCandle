@@ -82,6 +82,7 @@ export interface DoctorReport {
   readonly sections: DoctorSection[];
   readonly metadata: {
     readonly cwd: string;
+    readonly agentDir?: string;
     readonly opencandleHome: string;
     readonly opencandleHomeSource: "default" | "env";
   };
@@ -96,7 +97,7 @@ export async function buildDoctorReport(
   const cwd = options.cwd ?? process.cwd();
   const home = getOpenCandleHomeDir();
   const runtimeChecks = buildRuntimeChecks(cwd);
-  const stateChecks = buildStateChecks(home);
+  const stateChecks = buildStateChecks(home, options.agentDir);
   const providerChecks = stateChecks.some(
     (check) => check.id === "state.config" && check.status === "fail",
   )
@@ -123,6 +124,7 @@ export async function buildDoctorReport(
     sections,
     metadata: {
       cwd,
+      agentDir: options.agentDir,
       opencandleHome: home,
       opencandleHomeSource: process.env.OPENCANDLE_HOME ? "env" : "default",
     },
@@ -201,7 +203,7 @@ function buildRuntimeChecks(cwd: string): DoctorCheck[] {
   ];
 }
 
-function buildStateChecks(home: string): DoctorCheck[] {
+function buildStateChecks(home: string, agentDir: string | undefined): DoctorCheck[] {
   return [
     {
       id: "state.opencandle_home",
@@ -214,6 +216,7 @@ function buildStateChecks(home: string): DoctorCheck[] {
         : "OpenCandle will create this directory when state is first written.",
       metadata: { path: home, source: process.env.OPENCANDLE_HOME ? "env" : "default" },
     },
+    piAgentDirCheck(agentDir),
     configCheck(),
     fileStateCheck("state.onboarding", "Onboarding state", getOnboardingPath()),
     fileStateCheck("state.sqlite", "State database", getStateDbPath()),
@@ -261,6 +264,30 @@ function configCheck(): DoctorCheck {
       metadata: { path },
     };
   }
+}
+
+function piAgentDirCheck(agentDir: string | undefined): DoctorCheck {
+  if (!agentDir) {
+    return {
+      id: "state.pi_agent_dir",
+      label: "Pi agent directory",
+      status: "unknown",
+      capability: "core",
+      summary: "Pi agent directory was not checked",
+      remediation: "Run doctor from an initialized OpenCandle CLI or GUI session.",
+    };
+  }
+  return {
+    id: "state.pi_agent_dir",
+    label: "Pi agent directory",
+    status: directoryUsable(agentDir) ? "pass" : existsSync(agentDir) ? "warn" : "skip",
+    capability: "core",
+    summary: agentDir,
+    remediation: existsSync(agentDir)
+      ? "Ensure the Pi agent directory is readable and writable."
+      : "Pi will create this directory when model/auth state is first written.",
+    metadata: { path: agentDir },
+  };
 }
 
 function fileStateCheck(id: string, label: string, path: string): DoctorCheck {

@@ -70,6 +70,14 @@ describe("doctor report", () => {
     });
 
     expect(report.schemaVersion).toBe(1);
+    expect(report.metadata.agentDir).toBe("/tmp/opencandle-agent");
+    expect(
+      report.sections
+        .flatMap((section) => section.checks)
+        .find((candidate) => candidate.id === "state.pi_agent_dir"),
+    ).toMatchObject({
+      summary: "/tmp/opencandle-agent",
+    });
     expect(calls).toEqual([
       { command: "twitter", args: ["--version"] },
       { command: "rdt", args: ["--version"] },
