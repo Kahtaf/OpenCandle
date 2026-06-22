@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-22
+
 ### Added
 
 - `opencandle doctor` now emits a shared CLI/GUI health report covering runtime, local state, model readiness, provider readiness, optional social sessions, GUI reachability, JSON output, and remediation guidance; the GUI exposes the same report on a new Diagnostics page.
