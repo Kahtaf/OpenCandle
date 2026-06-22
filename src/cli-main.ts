@@ -14,7 +14,8 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "./config.js";
-import { formatProviderStatus, probeAllProviderStatuses } from "./onboarding/provider-status.js";
+import { renderDoctorReport } from "./doctor/render.js";
+import { buildDoctorReport, type DoctorModelSetupState } from "./doctor/report.js";
 import { getProvider, type ProviderId } from "./onboarding/providers.js";
 import {
   clearProviderOnboardingEntry,
@@ -164,9 +165,14 @@ async function handleMonitorCommand(args: string[], cwd: string): Promise<boolea
   return true;
 }
 
-async function handleDoctorCommand(args: string[]): Promise<boolean> {
+async function handleDoctorCommand(
+  args: string[],
+  cwd: string,
+  agentDir: string,
+): Promise<boolean> {
   if (args[0] !== "doctor") return false;
 
+  const json = args.includes("--json");
   const enableFlag = args.findIndex((arg) => arg === "--enable" || arg === "--reenable");
   if (enableFlag >= 0) {
     const providerId = args[enableFlag + 1] as ProviderId | undefined;
@@ -183,14 +189,48 @@ async function handleDoctorCommand(args: string[]): Promise<boolean> {
       return true;
     }
     saveOnboardingState(clearProviderOnboardingEntry(loadOnboardingState(), providerId));
-    console.log(`Re-enabled ${providerId}.`);
+    if (!json) console.log(`Re-enabled ${providerId}.`);
   }
-  const statuses = await probeAllProviderStatuses({ force: args.includes("--no-cache") });
-  console.log("OpenCandle provider status");
-  for (const status of statuses) {
-    console.log(`  ${formatProviderStatus(status)}`);
-  }
+
+  const authStorage = AuthStorage.create();
+  const modelRegistry = ModelRegistry.create(authStorage);
+  const settingsManager = SettingsManager.create(cwd, agentDir);
+  const report = await buildDoctorReport({
+    cwd,
+    agentDir,
+    includeSessions: args.includes("--sessions"),
+    includeGui: args.includes("--full"),
+    modelSetup: buildCliModelSetupState(modelRegistry, settingsManager),
+  });
+  console.log(json ? JSON.stringify(report, null, 2) : renderDoctorReport(report));
   return true;
+}
+
+function buildCliModelSetupState(
+  modelRegistry: ModelRegistry,
+  settingsManager: SettingsManager,
+): DoctorModelSetupState {
+  modelRegistry.refresh();
+  const provider = settingsManager.getDefaultProvider();
+  const modelId = settingsManager.getDefaultModel();
+  const activeModel = provider && modelId ? modelRegistry.find(provider, modelId) : undefined;
+  if (activeModel && modelRegistry.hasConfiguredAuth(activeModel)) {
+    return {
+      requirement: "ready",
+      currentModel: `${activeModel.provider}/${activeModel.id}`,
+    };
+  }
+
+  const availableModels = modelRegistry.getAvailable().map((model) => ({
+    provider: model.provider,
+    id: model.id,
+    label: `${model.provider}/${model.id}`,
+  }));
+  return {
+    requirement: availableModels.length > 0 ? "select_model" : "connect_auth",
+    currentModel: activeModel ? `${activeModel.provider}/${activeModel.id}` : undefined,
+    availableModels,
+  };
 }
 
 async function main(): Promise<void> {
@@ -208,7 +248,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (await handleDoctorCommand(rawArgs)) {
+  if (await handleDoctorCommand(rawArgs, cwd, agentDir)) {
     return;
   }
 
