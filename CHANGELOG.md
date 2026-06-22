@@ -4,6 +4,7 @@
 
 ### Added
 
+- `opencandle doctor` now emits a shared CLI/GUI health report covering runtime, local state, model readiness, provider readiness, optional social sessions, GUI reachability, JSON output, and remediation guidance; the GUI exposes the same report on a new Diagnostics page.
 - Release readiness gates now include docs-site builds, public-doc link checks, packed tarball install smoke tests, tag/version publish validation, Dependabot, CODEOWNERS, and a local `release:check` preflight before version/tag mutation.
 - Package-content validation now parses `npm pack --dry-run --json`, blocks internal/generated artifact paths, and is shared by CI, release checks, and local publish dry runs.
 
@@ -16,6 +17,7 @@
 
 ### Fixed
 
+- Twitter/X and Reddit sentiment setup now discovers uv-installed `twitter` and `rdt` shims in user bin directories even when OpenCandle was launched from an environment whose `PATH` has not yet picked up `~/.local/bin`.
 - Existing saved-portfolio exposure reviews such as "does my current portfolio look too exposed if rates stay high" now route through the portfolio-review agent path instead of the portfolio-builder workflow, preserving saved portfolio/watchlist/prediction context in competitive evals and normal finance fallback turns.
 - Runtime Pi dependencies and Vite were upgraded to clear npm audit advisories, and the installed `opencandle` entrypoint now runs the native `better-sqlite3` guard before loading the main CLI.
 - GUI first-run model setup actions now work through trusted HTTP fallback when WebSockets are unavailable, while Pi sign-in remains clearly terminal-only.

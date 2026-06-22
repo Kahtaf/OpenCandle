@@ -49,7 +49,7 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 
 Run `opencandle monitor` to keep local alert/report automations active from a foreground terminal process without opening the GUI. Use `opencandle monitor --once` for a single local automation heartbeat.
 
-Run `opencandle doctor` to check provider readiness, including API-key sources, public Yahoo reachability, and external-tool install status for Reddit and Twitter/X sentiment. Reddit and Twitter/X session checks that may read browser cookies are only run from explicit GUI/TUI re-check actions.
+Run `opencandle doctor` to check OpenCandle health, including runtime, `OPENCANDLE_HOME`, config parsing, model readiness, provider readiness, public Yahoo reachability, and external-tool install status for Reddit and Twitter/X sentiment. Use `opencandle doctor --json` for automation, `opencandle doctor --full` to include GUI reachability, and `opencandle doctor --sessions` only when you explicitly want Reddit and Twitter/X browser-session checks that may read browser cookies or trigger platform permission prompts. The GUI exposes the same report on the Diagnostics page at `/diagnostics`.
 
 ### Advanced Developer Diagnostics
 

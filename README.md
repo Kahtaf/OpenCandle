@@ -97,12 +97,17 @@ Useful slash commands:
 /analyze AAPL
 ```
 
-Provider diagnostics run from your shell:
+Health diagnostics run from your shell:
 
 ```bash
 opencandle doctor
+opencandle doctor --json
+opencandle doctor --sessions
+opencandle doctor --full
 opencandle doctor --enable twitter
 ```
+
+The GUI also has a Diagnostics page at `/diagnostics` with the same health report, provider setup links, model setup actions, and an explicit browser-session check for Reddit and Twitter/X.
 
 ## Data Sources
 
