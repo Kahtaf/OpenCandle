@@ -10,6 +10,7 @@ import {
 import {
   type CommandRunner,
   clearProviderStatusCache,
+  type ExternalToolProviderStatus,
 } from "../../../src/onboarding/provider-status.js";
 import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
@@ -145,6 +146,34 @@ describe("doctor report", () => {
       summary: expect.stringContaining("Skipped by user preference"),
     });
     expect(commandRunner).not.toHaveBeenCalledWith("rdt", expect.anything(), expect.anything());
+  });
+
+  it("does not add session checks for skipped external-tool providers", async () => {
+    const skipped = (providerId: "twitter" | "reddit"): ExternalToolProviderStatus => ({
+      providerId,
+      kind: "external-tool",
+      mode: "install",
+      state: "skipped",
+      installCmd: providerId === "twitter" ? "uv tool install twitter-cli" : "uv tool install rdt",
+      message: "Skipped by user preference",
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    });
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: "/tmp/opencandle-agent",
+      includeSessions: true,
+      providerStatuses: [skipped("twitter"), skipped("reddit")],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    const checkIds = report.sections.flatMap((section) => section.checks.map((check) => check.id));
+
+    expect(checkIds).toContain("provider.twitter.binary");
+    expect(checkIds).toContain("provider.reddit.binary");
+    expect(checkIds).not.toContain("provider.twitter.session");
+    expect(checkIds).not.toContain("provider.reddit.session");
   });
 
   it("forces fresh provider probes for each doctor report", async () => {

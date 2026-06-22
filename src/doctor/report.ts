@@ -346,6 +346,11 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
   const checks: DoctorCheck[] = statuses.map((status) => providerStatusCheck(status));
 
   for (const provider of providers.filter(isExternalToolProvider)) {
+    const installStatus = statuses.find(
+      (status) => status.providerId === provider.id && status.kind === "external-tool",
+    );
+    if (installStatus?.state === "skipped") continue;
+
     if (options.includeSessions) {
       const status = await probeProviderStatus(provider.id, {
         mode: "session",
