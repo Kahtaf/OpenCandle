@@ -95,11 +95,18 @@ export async function buildDoctorReport(
   const now = options.now ?? new Date();
   const cwd = options.cwd ?? process.cwd();
   const home = getOpenCandleHomeDir();
+  const runtimeChecks = buildRuntimeChecks(cwd);
+  const stateChecks = buildStateChecks(home);
+  const providerChecks = stateChecks.some(
+    (check) => check.id === "state.config" && check.status === "fail",
+  )
+    ? [providerChecksSkippedForInvalidConfig()]
+    : await buildProviderChecks(options);
   const sections: DoctorSection[] = [
-    section("runtime", "Runtime", buildRuntimeChecks(cwd)),
-    section("state", "Local state", buildStateChecks(home)),
+    section("runtime", "Runtime", runtimeChecks),
+    section("state", "Local state", stateChecks),
     section("model", "Model", [buildModelCheck(options.modelSetup)]),
-    section("providers", "Providers", await buildProviderChecks(options)),
+    section("providers", "Providers", providerChecks),
   ];
 
   if (options.includeGui || options.gui) {
@@ -353,6 +360,17 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
   }
 
   return checks;
+}
+
+function providerChecksSkippedForInvalidConfig(): DoctorCheck {
+  return {
+    id: "providers.config_blocked",
+    label: "Provider checks",
+    status: "skip",
+    capability: "optional",
+    summary: "Skipped because config.json is invalid",
+    remediation: "Repair the config file, then rerun doctor to check provider readiness.",
+  };
 }
 
 function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): DoctorCheck {

@@ -198,12 +198,13 @@ describe("doctor report", () => {
   it("reports an invalid config file as a blocking core failure", async () => {
     const home = useTempOpenCandleHome();
     writeFileSync(join(home, "config.json"), "{nope");
+    const commandRunner = vi.fn<CommandRunner>();
 
     const report = await buildDoctorReport({
       cwd: process.cwd(),
       agentDir: "/tmp/opencandle-agent",
       now: new Date("2026-06-22T12:00:00.000Z"),
-      providerStatuses: [],
+      commandRunner,
       modelSetup: { requirement: "ready" },
     });
 
@@ -217,5 +218,6 @@ describe("doctor report", () => {
     });
     expect(config?.remediation).toContain("Repair");
     expect(report.status).toBe("blocked");
+    expect(commandRunner).not.toHaveBeenCalled();
   });
 });
