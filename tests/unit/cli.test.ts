@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const piMocks = vi.hoisted(() => ({
   addSourceToSettings: vi.fn(),
+  assertSupportedNodeVersion: vi.fn(),
   buildDoctorReport: vi.fn(),
   ensureOpenCandleNativeDependencies: vi.fn(),
   install: vi.fn(),
@@ -76,6 +77,11 @@ vi.mock("../../src/infra/native-dependencies.js", () => ({
   ensureOpenCandleNativeDependencies: piMocks.ensureOpenCandleNativeDependencies,
 }));
 
+vi.mock("../../src/infra/node-version.js", () => ({
+  assertSupportedNodeVersion: piMocks.assertSupportedNodeVersion,
+  getUnsupportedNodeVersionMessage: vi.fn(() => null),
+}));
+
 vi.mock("../../src/doctor/report.js", () => ({
   buildDoctorReport: piMocks.buildDoctorReport.mockImplementation(() =>
     Promise.resolve({
@@ -143,6 +149,7 @@ describe("opencandle package commands", () => {
     expect(piMocks.addSourceToSettings).toHaveBeenCalledWith("./fixture-package", {
       local: true,
     });
+    expect(piMocks.assertSupportedNodeVersion).toHaveBeenCalled();
     expect(piMocks.ensureOpenCandleNativeDependencies).toHaveBeenCalled();
   });
 
@@ -169,6 +176,7 @@ describe("opencandle package commands", () => {
     await runCli(["doctor"]);
 
     expect(log).toHaveBeenCalledWith("rendered doctor report");
+    expect(piMocks.assertSupportedNodeVersion).not.toHaveBeenCalled();
     expect(piMocks.ensureOpenCandleNativeDependencies).not.toHaveBeenCalled();
   });
 

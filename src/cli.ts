@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import "./infra/node-version.js";
 import { ensureOpenCandleNativeDependencies } from "./infra/native-dependencies.js";
+import { assertSupportedNodeVersion } from "./infra/node-version.js";
 
 if (process.argv[2] === "doctor") {
   const [{ loadEnv }, { handleDoctorCommand }, { getAgentDir }] = await Promise.all([
@@ -11,6 +11,7 @@ if (process.argv[2] === "doctor") {
   loadEnv();
   await handleDoctorCommand(process.argv.slice(2), process.cwd(), getAgentDir());
 } else {
+  assertSupportedNodeVersion();
   await ensureOpenCandleNativeDependencies();
   await import("./cli-main.js");
 }

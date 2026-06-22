@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-import "./infra/node-version.js";
 import { parseArgs } from "node:util";
 import { loadEnv } from "./config.js";
+import { assertSupportedNodeVersion } from "./infra/node-version.js";
 import { runLocalAutomationHeartbeat } from "./market-state/local-automation-service.js";
 import { MarketStateService } from "./market-state/service.js";
 import { initDefaultDatabase } from "./memory/sqlite.js";
+
+assertSupportedNodeVersion();
 
 const DEFAULT_MONITOR_INTERVAL_MS = 60_000;
 const MIN_MONITOR_INTERVAL_MS = 5_000;
