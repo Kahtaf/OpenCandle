@@ -383,6 +383,7 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
       (status) => status.providerId === provider.id && status.kind === "external-tool",
     );
     if (installStatus?.state === "skipped") continue;
+    if (installStatus?.state !== "installed") continue;
 
     if (options.includeSessions) {
       const status = await probeProviderStatus(provider.id, {

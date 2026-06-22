@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const piMocks = vi.hoisted(() => ({
   addSourceToSettings: vi.fn(),
   buildDoctorReport: vi.fn(),
+  ensureOpenCandleNativeDependencies: vi.fn(),
   install: vi.fn(),
   remove: vi.fn(),
   removeSourceFromSettings: vi.fn(),
@@ -71,6 +72,10 @@ vi.mock("../../src/config.js", () => ({
   loadEnv: vi.fn(),
 }));
 
+vi.mock("../../src/infra/native-dependencies.js", () => ({
+  ensureOpenCandleNativeDependencies: piMocks.ensureOpenCandleNativeDependencies,
+}));
+
 vi.mock("../../src/doctor/report.js", () => ({
   buildDoctorReport: piMocks.buildDoctorReport.mockImplementation(() =>
     Promise.resolve({
@@ -117,6 +122,7 @@ describe("opencandle package commands", () => {
     piMocks.remove.mockResolvedValue(undefined);
     piMocks.removeSourceFromSettings.mockReturnValue(true);
     piMocks.update.mockResolvedValue(undefined);
+    piMocks.ensureOpenCandleNativeDependencies.mockResolvedValue(undefined);
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -137,6 +143,7 @@ describe("opencandle package commands", () => {
     expect(piMocks.addSourceToSettings).toHaveBeenCalledWith("./fixture-package", {
       local: true,
     });
+    expect(piMocks.ensureOpenCandleNativeDependencies).toHaveBeenCalled();
   });
 
   it("spawns the foreground local automation monitor", async () => {
@@ -162,6 +169,7 @@ describe("opencandle package commands", () => {
     await runCli(["doctor"]);
 
     expect(log).toHaveBeenCalledWith("rendered doctor report");
+    expect(piMocks.ensureOpenCandleNativeDependencies).not.toHaveBeenCalled();
   });
 
   it("prints structured JSON for doctor --json", async () => {

@@ -119,6 +119,15 @@ describe("doctor report", () => {
 
   it("runs explicit session probes and keeps optional session failures non-blocking", async () => {
     useTempOpenCandleHome();
+    const installed = (providerId: "twitter" | "reddit"): ExternalToolProviderStatus => ({
+      providerId,
+      kind: "external-tool",
+      mode: "install",
+      state: "installed",
+      installCmd: providerId === "twitter" ? "uv tool install twitter-cli" : "uv tool install rdt",
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    });
     const commandRunner: CommandRunner = async (command, args) => {
       if (args.includes("--version")) return { code: 0, stdout: "ok", stderr: "" };
       if (command === "rdt") {
@@ -138,7 +147,7 @@ describe("doctor report", () => {
       includeSessions: true,
       commandRunner,
       fetchImpl: async () => new Response("ok", { status: 200 }),
-      providerStatuses: [],
+      providerStatuses: [installed("twitter"), installed("reddit")],
       modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
     });
 
@@ -201,6 +210,33 @@ describe("doctor report", () => {
       agentDir: "/tmp/opencandle-agent",
       includeSessions: true,
       providerStatuses: [skipped("twitter"), skipped("reddit")],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    const checkIds = report.sections.flatMap((section) => section.checks.map((check) => check.id));
+
+    expect(checkIds).toContain("provider.twitter.binary");
+    expect(checkIds).toContain("provider.reddit.binary");
+    expect(checkIds).not.toContain("provider.twitter.session");
+    expect(checkIds).not.toContain("provider.reddit.session");
+  });
+
+  it("does not add session checks when the external CLI is missing", async () => {
+    const missing = (providerId: "twitter" | "reddit"): ExternalToolProviderStatus => ({
+      providerId,
+      kind: "external-tool",
+      mode: "install",
+      state: "missing",
+      installCmd: providerId === "twitter" ? "uv tool install twitter-cli" : "uv tool install rdt",
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    });
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: "/tmp/opencandle-agent",
+      includeSessions: true,
+      providerStatuses: [missing("twitter"), missing("reddit")],
       modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
     });
 
