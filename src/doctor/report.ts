@@ -333,6 +333,8 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
     (await probeAllProviderStatuses({
       commandRunner: options.commandRunner,
       fetchImpl: options.fetchImpl,
+      force: true,
+      respectSkipped: true,
     }));
   const checks: DoctorCheck[] = statuses.map((status) => providerStatusCheck(status));
 
@@ -340,6 +342,8 @@ async function buildProviderChecks(options: BuildDoctorReportOptions): Promise<D
     if (options.includeSessions) {
       const status = await probeProviderStatus(provider.id, {
         mode: "session",
+        force: true,
+        respectSkipped: true,
         commandRunner: options.commandRunner,
       });
       checks.push(providerStatusCheck(status, "session"));
@@ -466,19 +470,26 @@ async function buildGuiChecks(options: BuildDoctorReportOptions): Promise<Doctor
     const response = await (options.fetchImpl ?? fetch)(endpoint, {
       signal: AbortSignal.timeout(1_500),
     });
-    const body = (await response.json().catch(() => ({}))) as { role?: unknown };
-    const role = typeof body.role === "string" ? body.role : "unknown";
+    const body = await response.json().catch(() => null);
+    const role = isRecord(body) && typeof body.role === "string" ? body.role : "unknown";
+    const verified =
+      response.ok &&
+      isRecord(body) &&
+      body.ok === true &&
+      (role === "writer" || role === "follower");
     return [
       {
         id: "gui.server",
         label: "GUI server",
-        status: response.ok ? (role === "follower" ? "warn" : "pass") : "warn",
+        status: verified ? (role === "follower" ? "warn" : "pass") : "warn",
         capability: "optional",
-        summary: response.ok
+        summary: verified
           ? `GUI server is ${role}`
-          : `GUI health returned HTTP ${response.status}`,
+          : response.ok
+            ? "OpenCandle GUI health payload was not verified"
+            : `GUI health returned HTTP ${response.status}`,
         remediation:
-          role === "follower"
+          verified && role === "follower"
             ? "Open the writer GUI process to perform setup mutations."
             : undefined,
         metadata: { host, port, role, endpoint, statusCode: response.status },
@@ -528,6 +539,10 @@ function readPackageJson(): { version?: string; engines?: { node?: string } } {
   } catch {
     return {};
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function canLoadBetterSqlite(): boolean {

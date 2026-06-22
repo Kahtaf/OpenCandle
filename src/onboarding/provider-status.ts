@@ -68,6 +68,7 @@ export type ProviderStatus =
 export interface ProbeProviderStatusOptions {
   readonly mode?: "install" | "session";
   readonly force?: boolean;
+  readonly respectSkipped?: boolean;
   readonly commandRunner?: CommandRunner;
   readonly fetchImpl?: typeof fetch;
   readonly now?: Date;
@@ -96,7 +97,7 @@ export async function probeProviderStatus(
     isExternalToolProvider(provider) &&
     loadOnboardingState().providers[providerId]?.status === "never_ask";
 
-  if (skippedByPreference && !options.force) {
+  if (skippedByPreference && (!options.force || options.respectSkipped)) {
     return {
       providerId,
       kind: "external-tool",

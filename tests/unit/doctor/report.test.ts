@@ -147,6 +147,54 @@ describe("doctor report", () => {
     expect(commandRunner).not.toHaveBeenCalledWith("rdt", expect.anything(), expect.anything());
   });
 
+  it("forces fresh provider probes for each doctor report", async () => {
+    useTempOpenCandleHome();
+    const commandRunner = vi.fn<CommandRunner>(async () => ({
+      code: 0,
+      stdout: "ok",
+      stderr: "",
+    }));
+    const options = {
+      cwd: process.cwd(),
+      agentDir: "/tmp/opencandle-agent",
+      commandRunner,
+      fetchImpl: async () => new Response("ok", { status: 200 }),
+      modelSetup: { requirement: "ready" as const, currentModel: "google/gemini-2.5-flash" },
+    };
+
+    await buildDoctorReport(options);
+    await buildDoctorReport(options);
+
+    expect(commandRunner.mock.calls.filter(([command]) => command === "twitter")).toHaveLength(2);
+    expect(commandRunner.mock.calls.filter(([command]) => command === "rdt")).toHaveLength(2);
+  });
+
+  it("does not pass GUI health for unverified 200 responses", async () => {
+    useTempOpenCandleHome();
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: "/tmp/opencandle-agent",
+      includeGui: true,
+      providerStatuses: [],
+      fetchImpl: async () =>
+        new Response("<html>not opencandle</html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    const gui = report.sections
+      .flatMap((section) => section.checks)
+      .find((candidate) => candidate.id === "gui.server");
+
+    expect(gui).toMatchObject({
+      status: "warn",
+      summary: "OpenCandle GUI health payload was not verified",
+    });
+  });
+
   it("reports an invalid config file as a blocking core failure", async () => {
     const home = useTempOpenCandleHome();
     writeFileSync(join(home, "config.json"), "{nope");
