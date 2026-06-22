@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { type ExternalToolCommandResult, runExternalToolCommand } from "./external-tool-command.js";
 import { ExternalToolError, ExternalToolNotInstalled } from "./external-tool-error.js";
 import type { RedditComment } from "./reddit.js";
 
@@ -62,13 +62,10 @@ interface RdtListing<T> {
   };
 }
 
-interface CommandResult {
-  readonly code: number | null;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-type RdtCommandRunner = (command: string, args: readonly string[]) => Promise<CommandResult>;
+type RdtCommandRunner = (
+  command: string,
+  args: readonly string[],
+) => Promise<ExternalToolCommandResult>;
 
 let commandRunner: RdtCommandRunner = runCommand;
 
@@ -147,7 +144,7 @@ export async function readRedditPost(
 }
 
 async function runRdt<T>(args: readonly string[]): Promise<T> {
-  let result: CommandResult;
+  let result: ExternalToolCommandResult;
   try {
     result = await commandRunner(RDT_BINARY, args);
   } catch (err) {
@@ -281,37 +278,9 @@ export function redactSensitiveOutput(input: string): string {
     );
 }
 
-function runCommand(command: string, args: readonly string[]): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "";
-    let stderr = "";
-    let settled = false;
-
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      child.kill("SIGTERM");
-      reject(new Error(`${command} timed out after ${COMMAND_TIMEOUT_MS}ms`));
-    }, COMMAND_TIMEOUT_MS);
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      stdout = (stdout + chunk.toString("utf8")).slice(0, MAX_OUTPUT_CHARS);
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      stderr = (stderr + chunk.toString("utf8")).slice(0, MAX_OUTPUT_CHARS);
-    });
-    child.on("error", (err) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(err);
-    });
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      resolve({ code, stdout, stderr });
-    });
+function runCommand(command: string, args: readonly string[]): Promise<ExternalToolCommandResult> {
+  return runExternalToolCommand(command, args, {
+    timeoutMs: COMMAND_TIMEOUT_MS,
+    maxOutputChars: MAX_OUTPUT_CHARS,
   });
 }
