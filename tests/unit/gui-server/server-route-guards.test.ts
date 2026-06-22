@@ -44,6 +44,11 @@ describe("GUI server route guards", () => {
       handler: "options.modelSetupController.handleSaveProviderApiKey",
       guard: 'allowTrustedGuiRequest(req, res, "Provider setup API", options)',
     },
+    {
+      route: 'url.pathname === "/api/doctor"',
+      handler: "await buildDoctorReport({",
+      guard: 'allowTrustedGuiRequest(req, res, "Diagnostics API", options)',
+    },
   ])("requires trusted GUI requests before serving $route", ({ route, handler, guard }) => {
     const routeBlock = routeBlockBefore(route, handler);
 

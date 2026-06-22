@@ -111,6 +111,7 @@ const toolInvokeController = createToolInvokeController({
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,
   cwd,
+  agentDir,
   sessionDir,
   getSession: () => session,
   getSessionManager: () => sessionManager,

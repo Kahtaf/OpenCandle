@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Bell,
   BriefcaseBusiness,
+  ClipboardCheck,
   FileText,
   ListPlus,
   PanelLeft,
@@ -144,6 +145,7 @@ function MarketStateNav({ currentPath }) {
     { to: "/alerts", label: "Alerts", icon: Bell },
     { to: "/reports", label: "Reports", icon: FileText },
     { to: "/predictions", label: "Predictions", icon: TrendingUp },
+    { to: "/diagnostics", label: "Diagnostics", icon: ClipboardCheck },
   ];
   return (
     <div className="flex flex-col gap-0.5 border-b border-border pb-2">

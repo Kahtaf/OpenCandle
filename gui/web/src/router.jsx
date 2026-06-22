@@ -29,6 +29,12 @@ const settingsRoute = createRoute({
   validateSearch: validateGuiSearch,
 });
 
+const diagnosticsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/diagnostics",
+  validateSearch: validateGuiSearch,
+});
+
 const watchlistsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/watchlists",
@@ -64,6 +70,7 @@ const routeTree = rootRoute.addChildren([
   sessionRoute,
   historyRoute,
   settingsRoute,
+  diagnosticsRoute,
   watchlistsRoute,
   portfoliosRoute,
   alertsRoute,

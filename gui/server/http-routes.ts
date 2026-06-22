@@ -2,6 +2,7 @@ import { createReadStream, existsSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, resolve } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { buildDoctorReport } from "../../src/doctor/report.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
@@ -23,6 +24,7 @@ interface GuiHttpRouteOptions {
   webDist: string;
   role: string;
   cwd: string;
+  agentDir: string;
   sessionDir: string;
   privateApiSessionToken: string;
   allowRemotePrivateApi: boolean;
@@ -137,6 +139,28 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/market-state/quotes" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
       writeJson(res, await options.quoteSnapshotStore.get());
+      return;
+    }
+
+    if (url.pathname === "/api/doctor" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Diagnostics API", options)) return;
+      const session = options.getSession();
+      writeJson(
+        res,
+        await buildDoctorReport({
+          cwd: options.cwd,
+          agentDir: options.agentDir,
+          includeSessions: url.searchParams.get("sessions") === "1",
+          gui: {
+            host: options.host,
+            port: options.port,
+            role: options.role,
+            reachable: true,
+            healthEndpoint: `http://${options.host}:${options.port}/health`,
+          },
+          modelSetup: buildModelSetupState(session.modelRegistry, session.model),
+        }),
+      );
       return;
     }
 
