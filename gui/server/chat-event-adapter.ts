@@ -7,6 +7,7 @@ export interface SessionEventOptions {
   title?: string;
   updatedAt?: string;
   startSeq?: number;
+  markUnresolvedToolCalls?: boolean;
 }
 
 export function sessionEntriesToChatEvents(
@@ -16,6 +17,8 @@ export function sessionEntriesToChatEvents(
   let seq = options.startSeq ?? 1;
   const events: ChatEvent[] = [];
   const seenToolCalls = new Set<string>();
+  const resolvedToolCalls = new Set<string>();
+  const pendingToolCalls = new Map<string, { name: string }>();
   // Set by an opencandle-user-input marker: the user's words before a workflow
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
@@ -73,6 +76,7 @@ export function sessionEntriesToChatEvents(
         }
         if (part.type === "toolCall") {
           seenToolCalls.add(part.id);
+          pendingToolCalls.set(part.id, { name: part.name });
           content.push({ type: "tool", toolCallId: part.id });
           events.push({
             type: "tool.started",
@@ -94,6 +98,8 @@ export function sessionEntriesToChatEvents(
     if (message.role === "toolResult") {
       const tool = message as ToolResultMessage;
       const toolCallId = tool.toolCallId || `tool-${entry.id}`;
+      resolvedToolCalls.add(toolCallId);
+      pendingToolCalls.delete(toolCallId);
       if (!seenToolCalls.has(toolCallId)) {
         events.push({
           type: "tool.started",
@@ -112,6 +118,22 @@ export function sessionEntriesToChatEvents(
           : { output: toolOutput(tool) }),
         seq: seq++,
       } as ChatEvent);
+    }
+  }
+
+  if (options.markUnresolvedToolCalls !== false) {
+    for (const [toolCallId, tool] of pendingToolCalls) {
+      if (resolvedToolCalls.has(toolCallId)) continue;
+      events.push({
+        type: "tool.failed",
+        toolCallId,
+        error: {
+          message:
+            "Tool call did not finish. The run may have been interrupted before OpenCandle received a tool result.",
+          details: { toolName: tool.name, reason: "missing_tool_result" },
+        },
+        seq: seq++,
+      });
     }
   }
 

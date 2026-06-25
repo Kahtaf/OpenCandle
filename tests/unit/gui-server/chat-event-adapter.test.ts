@@ -231,6 +231,86 @@ describe("sessionEntriesToChatEvents", () => {
       input: { symbol: "NVDA" },
     });
   });
+
+  it("marks assistant tool calls without persisted results as interrupted", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content: "quote BTC",
+          timestamp: Date.now(),
+        } as Message),
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "get_crypto_price",
+              arguments: { id: "bitcoin" },
+            },
+          ],
+          api: "google-generative-ai",
+          provider: "google",
+          model: "test",
+          usage: usage(),
+          stopReason: "toolUse",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      "session.updated",
+      "message.created",
+      "message.completed",
+      "message.created",
+      "tool.started",
+      "message.completed",
+      "tool.failed",
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: "tool.failed",
+      toolCallId: "call-1",
+      error: {
+        message:
+          "Tool call did not finish. The run may have been interrupted before OpenCandle received a tool result.",
+      },
+    });
+  });
+
+  it("can preserve unresolved tool calls while a live run is active", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "get_crypto_price",
+              arguments: { id: "bitcoin" },
+            },
+          ],
+          api: "google-generative-ai",
+          provider: "google",
+          model: "test",
+          usage: usage(),
+          stopReason: "toolUse",
+          timestamp: Date.now(),
+        } as Message),
+      ],
+      { sessionId: "s1", markUnresolvedToolCalls: false },
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      "session.updated",
+      "message.created",
+      "tool.started",
+      "message.completed",
+    ]);
+  });
 });
 
 function messageEntry(id: string, message: Message): SessionEntry {

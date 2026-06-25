@@ -265,9 +265,11 @@ export function createWsHub({
 
   function currentChatEvents(entries = getSessionManager().getEntries()): ChatEvent[] {
     const sessionManager = getSessionManager();
+    const session = getSession();
     return sessionEntriesToChatEvents(entries, {
       sessionId: sessionManager.getSessionId(),
       title: sessionManager.getSessionName(),
+      markUnresolvedToolCalls: !(session.isStreaming || session.pendingMessageCount > 0),
     });
   }
 

@@ -1,3 +1,5 @@
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+
 export interface WaitForEntryCountOptions {
   timeoutMs?: number;
   intervalMs?: number;
@@ -10,6 +12,11 @@ export interface WaitForSessionTurnSettlementOptions extends WaitForEntryCountOp
 export interface SessionRunStatus {
   isStreaming: boolean;
   pendingMessageCount: number;
+}
+
+export interface UnresolvedToolCall {
+  id: string;
+  name: string;
 }
 
 export async function waitForEntryCount(
@@ -76,6 +83,76 @@ export async function waitForSessionTurnSettlement(
   throw new Error("Timed out waiting for the session turn to settle");
 }
 
+export function findUnresolvedToolCalls(entries: SessionEntry[]): UnresolvedToolCall[] {
+  const latestAssistantIndex = latestAssistantToolUseIndex(entries);
+  if (latestAssistantIndex === -1) return [];
+
+  const assistant = asMessage(entries[latestAssistantIndex]);
+  const calls = toolCallsFromContent(assistant?.content);
+  if (calls.length === 0) return [];
+
+  const resolved = new Set<string>();
+  for (const entry of entries.slice(latestAssistantIndex + 1)) {
+    const message = asMessage(entry);
+    if (message?.role !== "toolResult") continue;
+    const toolCallId = typeof message.toolCallId === "string" ? message.toolCallId : "";
+    if (toolCallId) resolved.add(toolCallId);
+  }
+
+  return calls.filter((call) => !resolved.has(call.id));
+}
+
+export async function waitForResolvedToolCalls(
+  getEntries: () => SessionEntry[],
+  options: WaitForEntryCountOptions = {},
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  const intervalMs = options.intervalMs ?? 25;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (findUnresolvedToolCalls(getEntries()).length === 0) return;
+    await delay(intervalMs);
+  }
+
+  const unresolved = findUnresolvedToolCalls(getEntries());
+  if (unresolved.length > 0) {
+    throw new Error(
+      `Timed out waiting for tool results: ${unresolved.map((call) => call.name).join(", ")}`,
+    );
+  }
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function latestAssistantToolUseIndex(entries: SessionEntry[]): number {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const message = asMessage(entries[index]);
+    if (message?.role === "assistant" && message.stopReason === "toolUse") return index;
+    if (message?.role === "assistant" && message.stopReason === "stop") return -1;
+    if (message?.role === "user") return -1;
+  }
+  return -1;
+}
+
+function asMessage(entry: SessionEntry | undefined): Record<string, unknown> | undefined {
+  if (entry?.type !== "message") return undefined;
+  const message = (entry as { message?: unknown }).message;
+  return typeof message === "object" && message !== null && !Array.isArray(message)
+    ? (message as Record<string, unknown>)
+    : undefined;
+}
+
+function toolCallsFromContent(content: unknown): UnresolvedToolCall[] {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((part): UnresolvedToolCall[] => {
+    if (typeof part !== "object" || part === null || Array.isArray(part)) return [];
+    const record = part as Record<string, unknown>;
+    if (record.type !== "toolCall") return [];
+    const id = typeof record.id === "string" ? record.id : "";
+    const name = typeof record.name === "string" ? record.name : "tool";
+    return id ? [{ id, name }] : [];
+  });
 }

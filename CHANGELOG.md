@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI session replay now marks interrupted tool-use turns as failed instead of leaving historical threads permanently loading when tool results were never persisted.
+
 ## [0.8.0] - 2026-06-22
 
 ### Added
