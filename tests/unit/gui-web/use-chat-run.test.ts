@@ -8,9 +8,7 @@ import {
 describe("chat run request helpers", () => {
   it("uses a session-addressed run endpoint when a session id is provided", () => {
     expect(chatRunEndpoint("session-1")).toBe("/api/sessions/session-1/runs");
-    expect(chatRunEndpoint("session/with/slash")).toBe(
-      "/api/sessions/session%2Fwith%2Fslash/runs",
-    );
+    expect(chatRunEndpoint("session/with/slash")).toBe("/api/sessions/session%2Fwith%2Fslash/runs");
   });
 
   it("keeps the legacy run endpoint only when no session id is available", () => {
