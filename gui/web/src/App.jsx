@@ -13,6 +13,7 @@ import {
   chatRunSessionTarget,
   hasSessionContent,
   routeSessionView,
+  sessionIdFromPath,
   shouldStartFreshHomeSession,
 } from "./features/sessions/route-session-state.js";
 import { SessionDrawer, SessionSidebar } from "./features/sessions/SessionHistory.jsx";
@@ -31,31 +32,52 @@ export function AppShell() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const search = useRouterState({ select: (state) => state.location.search });
   const gui = useGuiConnection();
-  const [liveEvents, setLiveEvents] = useState([]);
-  const [liveBaseEventCount, setLiveBaseEventCount] = useState(0);
+  const routeSessionId = sessionIdFromPath(pathname);
+  const activeSessionId = routeSessionId || gui.currentSessionId || "";
+  const visibleSessionSnapshot = activeSessionId ? gui.sessionSnapshots[activeSessionId] : null;
+  const visibleEvents = visibleSessionSnapshot?.events || gui.events;
+  const visibleDashboard = visibleSessionSnapshot?.dashboard || gui.dashboard;
+  const visibleEventCount = visibleEvents.length;
+  const [liveEventsBySession, setLiveEventsBySession] = useState({});
+  const [liveBaseEventCountBySession, setLiveBaseEventCountBySession] = useState({});
   const chatRun = useChatRun({
+    activeSessionId,
     setToast: gui.setToast,
     onRunStart: useCallback(
-      (prompt, baseEventCount) => {
-        setLiveBaseEventCount(baseEventCount ?? gui.events.length);
-        setLiveEvents(createOptimisticUserMessageEvents(prompt));
+      (prompt, baseEventCount, sessionId) => {
+        const key = sessionId || activeSessionId;
+        if (!key) return;
+        const targetSnapshot = gui.sessionSnapshots[key];
+        setLiveBaseEventCountBySession((current) => ({
+          ...current,
+          [key]: baseEventCount ?? targetSnapshot?.events?.length ?? visibleEventCount,
+        }));
+        setLiveEventsBySession((current) => ({
+          ...current,
+          [key]: createOptimisticUserMessageEvents(prompt, key),
+        }));
       },
-      [gui.events.length],
+      [activeSessionId, gui.sessionSnapshots, visibleEventCount],
     ),
     onEvent: useCallback(
-      (event) => {
-        setLiveEvents((current) => [...current, event]);
+      (event, fallbackSessionId) => {
+        const eventSessionId = String(event.sessionId || fallbackSessionId || activeSessionId);
+        if (!eventSessionId) return;
+        setLiveEventsBySession((current) => ({
+          ...current,
+          [eventSessionId]: [...(current[eventSessionId] || []), event],
+        }));
         if (event.type !== "run.started" || !event.sessionId) return;
         const sessionId = String(event.sessionId);
         const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
-        if (pathname === sessionPath) return;
+        if (routeSessionId || pathname === sessionPath) return;
         void navigate({
           to: "/sessions/$sessionId",
           params: { sessionId },
           search: (current) => ({ ...current, drawer: undefined }),
         });
       },
-      [pathname, navigate],
+      [activeSessionId, pathname, routeSessionId, navigate],
     ),
   });
   const activeDrawer = search?.drawer;
@@ -70,17 +92,19 @@ export function AppShell() {
   const freshRunPendingRef = useRef(false);
   const sessionView = routeSessionView({
     pathname,
-    currentSessionId: gui.currentSessionId,
-    events: gui.events,
+    currentSessionId: routeSessionId && visibleSessionSnapshot ? routeSessionId : gui.currentSessionId,
+    events: visibleEvents,
     runState: chatRun.runState,
-    liveBaseEventCount,
+    liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
     canStartFreshHomeSession: gui.supportsSessionActions,
   });
+  const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
+  const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
   const visibleAskUserPrompts = gui.askUserPrompts.filter(
     (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
   );
-  const hasGuiSessionContent = hasSessionContent(gui.events);
-  const guiEventCount = gui.events.length;
+  const hasGuiSessionContent = hasSessionContent(visibleEvents);
+  const guiEventCount = visibleEvents.length;
   const inputDisabled = gui.role !== "writer" || sessionView.pendingSessionSwitch;
 
   const openDrawer = useCallback(
@@ -110,15 +134,9 @@ export function AppShell() {
   }, [closeDrawer, openDrawer]);
 
   useEffect(() => {
-    if (
-      !sessionView.routeSessionId ||
-      sessionView.routeSessionId === gui.currentSessionId ||
-      gui.sessions.length === 0
-    )
-      return;
-    const session = gui.sessions.find((candidate) => candidate.id === sessionView.routeSessionId);
-    if (session) gui.send("session.open", { path: session.path });
-  }, [gui.currentSessionId, gui.sessions, gui.send, sessionView.routeSessionId]);
+    if (!routeSessionId || visibleSessionSnapshot) return;
+    void gui.loadSession(routeSessionId);
+  }, [gui.loadSession, routeSessionId, visibleSessionSnapshot]);
 
   useEffect(() => {
     if (pathname !== "/") {
@@ -155,8 +173,19 @@ export function AppShell() {
       chatRun.runState === "streaming"
     )
       return;
-    if (gui.events.length > liveBaseEventCount) setLiveEvents([]);
-  }, [chatRun.runState, gui.events.length, liveBaseEventCount, liveEvents.length]);
+    if (visibleEvents.length <= liveBaseEventCount) return;
+    setLiveEventsBySession((current) => {
+      const next = { ...current };
+      delete next[sessionView.activeSessionId];
+      return next;
+    });
+  }, [
+    chatRun.runState,
+    liveBaseEventCount,
+    liveEvents.length,
+    sessionView.activeSessionId,
+    visibleEvents.length,
+  ]);
 
   const openCatalog = useCallback(
     (target = "catalog") => {
@@ -227,13 +256,20 @@ export function AppShell() {
   );
 
   const newSession = useCallback(() => {
-    void gui.newSession();
-    void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
+    void (async () => {
+      const sessionId = await gui.newSession();
+      if (!sessionId) return;
+      setSidebarCollapsed(false);
+      void navigate({
+        to: "/sessions/$sessionId",
+        params: { sessionId },
+        search: (current) => ({ ...current, drawer: undefined }),
+      });
+    })();
   }, [gui, navigate]);
 
   const openSession = useCallback(
     (session) => {
-      gui.send("session.open", { path: session.path });
       setSidebarCollapsed(false);
       void navigate({
         to: "/sessions/$sessionId",
@@ -254,11 +290,11 @@ export function AppShell() {
   const deleteSession = useCallback(
     (session) => {
       gui.send("session.delete", { path: session.path });
-      if (session.id === gui.currentSessionId) {
+      if (session.id === sessionView.activeSessionId) {
         void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
       }
     },
-    [gui, navigate],
+    [gui, navigate, sessionView.activeSessionId],
   );
 
   const sidebarProps = {
@@ -340,7 +376,7 @@ export function AppShell() {
       <SessionDrawer open={sessionsOpen} {...sidebarProps} onClose={closeDrawer} />
       <FinancialContextDrawer
         open={contextOpen}
-        state={gui.dashboard}
+        state={visibleDashboard}
         catalog={gui.catalog}
         onClose={closeDrawer}
         onOpenMarketState={(path) => {

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
+  mergeSessionSnapshotMap,
   rejectTimedOutToolInvoke,
+  sessionSnapshotFromPayload,
   settlePendingToolInvoke,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
@@ -77,5 +79,59 @@ describe("useGuiConnection helpers", () => {
     expect(buildHttpFallbackMessageRequest("tool.invoke", { toolName: "get_stock_quote" })).toBe(
       null,
     );
+  });
+
+  it("normalizes bootstrap and state snapshot payloads into session snapshots", () => {
+    expect(
+      sessionSnapshotFromPayload({
+        sessionId: "session-a",
+        snapshot: {
+          entries: [{ id: "entry-a" }],
+          events: [{ type: "message.completed", seq: 1 }],
+          state: { watchlist: [{ symbol: "AAPL" }] },
+        },
+      }),
+    ).toMatchObject({
+      sessionId: "session-a",
+      entries: [{ id: "entry-a" }],
+      events: [{ type: "message.completed", seq: 1 }],
+      dashboard: { watchlist: [{ symbol: "AAPL" }] },
+    });
+
+    expect(
+      sessionSnapshotFromPayload({
+        type: "state.snapshot",
+        sessionId: "session-b",
+        entries: [{ id: "entry-b" }],
+        events: [{ type: "message.completed", seq: 2 }],
+        state: { watchlist: [{ symbol: "MSFT" }] },
+      }),
+    ).toMatchObject({
+      sessionId: "session-b",
+      entries: [{ id: "entry-b" }],
+      events: [{ type: "message.completed", seq: 2 }],
+      dashboard: { watchlist: [{ symbol: "MSFT" }] },
+    });
+  });
+
+  it("keeps snapshots keyed by session so late updates cannot replace another route", () => {
+    const afterA = mergeSessionSnapshotMap(
+      {},
+      {
+        type: "state.snapshot",
+        sessionId: "session-a",
+        entries: [{ id: "entry-a" }],
+        events: [{ type: "message.completed", seq: 1 }],
+      },
+    );
+    const afterB = mergeSessionSnapshotMap(afterA, {
+      type: "state.snapshot",
+      sessionId: "session-b",
+      entries: [{ id: "entry-b" }],
+      events: [{ type: "message.completed", seq: 1 }],
+    });
+
+    expect(afterB["session-a"]?.entries).toEqual([{ id: "entry-a" }]);
+    expect(afterB["session-b"]?.entries).toEqual([{ id: "entry-b" }]);
   });
 });

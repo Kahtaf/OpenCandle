@@ -61,6 +61,26 @@ export function rejectTimedOutToolInvoke(pendingToolInvokes, requestId) {
   return true;
 }
 
+export function sessionSnapshotFromPayload(payload) {
+  const record = asRecord(payload);
+  const nestedSnapshot = asRecord(record.snapshot);
+  const snapshot = Object.keys(nestedSnapshot).length > 0 ? nestedSnapshot : record;
+  const sessionId = String(record.sessionId ?? snapshot.sessionId ?? "").trim();
+  if (!sessionId) return null;
+  const dashboard = asRecord(snapshot.state);
+  return {
+    sessionId,
+    entries: Array.isArray(snapshot.entries) ? snapshot.entries : [],
+    events: Array.isArray(snapshot.events) ? snapshot.events : [],
+    dashboard: Object.keys(dashboard).length > 0 ? dashboard : EMPTY_DASHBOARD,
+  };
+}
+
+export function mergeSessionSnapshotMap(current, payload) {
+  const snapshot = sessionSnapshotFromPayload(payload);
+  return snapshot ? { ...current, [snapshot.sessionId]: snapshot } : current;
+}
+
 export function useGuiConnection() {
   const wsRef = useRef(null);
   const requestSeqRef = useRef(0);
@@ -70,6 +90,7 @@ export function useGuiConnection() {
   const [sessions, setSessions] = useState([]);
   const [entries, setEntries] = useState([]);
   const [events, setEvents] = useState([]);
+  const [sessionSnapshots, setSessionSnapshots] = useState({});
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
@@ -90,21 +111,26 @@ export function useGuiConnection() {
     settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
   }, []);
 
-  const applyBootstrap = useCallback((data) => {
+  const applyBootstrap = useCallback((data, expectedSessionId = "") => {
     const snapshot = data.snapshot || {};
+    const nextSnapshot = sessionSnapshotFromPayload(data);
+    const responseSessionId = String(data.sessionId || snapshot.sessionId || "").trim();
+    if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
     setRole(data.role || "writer");
-    setCurrentSessionId(data.sessionId || snapshot.sessionId || "");
+    setCurrentSessionId(responseSessionId);
     setAskUserPrompts(data.askUserPrompts || []);
-    setEntries(snapshot.entries || []);
+    setEntries(nextSnapshot?.entries || []);
+    if (nextSnapshot) setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
     startTransition(() => {
       setSessions(data.sessions || []);
-      setDashboard(snapshot.state || EMPTY_DASHBOARD);
-      setEvents(snapshot.events || []);
+      setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
+      setEvents(nextSnapshot?.events || []);
       setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
       setModelSetup(
         data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
       );
     });
+    return true;
   }, []);
 
   useEffect(() => {
@@ -185,11 +211,15 @@ export function useGuiConnection() {
         } else if (message.type === "sessions") {
           startTransition(() => setSessions(message.sessions));
         } else if (message.type === "state.snapshot") {
-          setEntries(message.entries || []);
+          const nextSnapshot = sessionSnapshotFromPayload(message);
+          setEntries(nextSnapshot?.entries || []);
           setCurrentSessionId(message.sessionId || "");
+          if (nextSnapshot) {
+            setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+          }
           startTransition(() => {
-            setDashboard(message.state || EMPTY_DASHBOARD);
-            setEvents(message.events || []);
+            setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
+            setEvents(nextSnapshot?.events || []);
           });
         } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
           setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
@@ -304,6 +334,26 @@ export function useGuiConnection() {
     }
   }, [applyBootstrap, setToast]);
 
+  const loadSession = useCallback(
+    async (sessionId) => {
+      const targetSessionId = String(sessionId ?? "").trim();
+      if (!targetSessionId) return false;
+      try {
+        const response = await fetch(
+          `/api/sessions/${encodeURIComponent(targetSessionId)}/bootstrap`,
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || response.statusText);
+        setSupportsSessionActions(true);
+        return applyBootstrap(data, targetSessionId);
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : String(error), { destructive: true });
+        return false;
+      }
+    },
+    [applyBootstrap, setToast],
+  );
+
   return useMemo(
     () => ({
       role,
@@ -311,6 +361,7 @@ export function useGuiConnection() {
       sessions,
       entries,
       events,
+      sessionSnapshots,
       askUserPrompts,
       dashboard,
       currentSessionId,
@@ -320,6 +371,7 @@ export function useGuiConnection() {
       send,
       invokeTool,
       newSession,
+      loadSession,
     }),
     [
       role,
@@ -327,6 +379,7 @@ export function useGuiConnection() {
       sessions,
       entries,
       events,
+      sessionSnapshots,
       askUserPrompts,
       dashboard,
       currentSessionId,
@@ -336,8 +389,13 @@ export function useGuiConnection() {
       send,
       invokeTool,
       newSession,
+      loadSession,
     ],
   );
+}
+
+function asRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
 }
 
 function upsertPrompt(current, prompt) {

@@ -58,7 +58,25 @@ describe("GUI server route guards", () => {
   it("requires trusted GUI requests before starting chat runs", () => {
     const routeBlock = routeBlockBefore(
       'url.pathname === "/api/chat/run"',
-      "await handleSseChatRun(req, res, options);",
+      "await handleSseChatRun(req, res, options, activeRunSessionIds);",
+    );
+
+    expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');
+  });
+
+  it("requires trusted GUI requests before session-addressed bootstrap", () => {
+    const routeBlock = routeBlockBefore(
+      'sessionIdFromRoute(url.pathname, "bootstrap")',
+      "const sessionManager = await resolveSessionManagerById(options, sessionBootstrapId);",
+    );
+
+    expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Session API", options)');
+  });
+
+  it("requires trusted GUI requests before session-addressed chat runs", () => {
+    const routeBlock = routeBlockBefore(
+      'sessionIdFromRoute(url.pathname, "runs")',
+      "const sessionManager = await resolveSessionManagerById(options, runSessionId);",
     );
 
     expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');

@@ -12,10 +12,17 @@ import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-s
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
+import { projectDashboard } from "./projector.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
 import { waitForNewEntryId } from "./session-entry-wait.js";
 import { buildCatalog } from "./tool-metadata.js";
+import {
+  acquireWriterLock,
+  refreshWriterLock,
+  releaseWriterLock,
+  writerLockScopeForSession,
+} from "./writer-lock.js";
 import type { WsHub } from "./ws-hub.js";
 
 interface GuiHttpRouteOptions {
@@ -30,6 +37,9 @@ interface GuiHttpRouteOptions {
   allowRemotePrivateApi: boolean;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
+  createSessionForManager: (
+    sessionManager: SessionManager,
+  ) => Promise<{ session: AgentSession }>;
   wsHub: WsHub;
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
@@ -37,6 +47,8 @@ interface GuiHttpRouteOptions {
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
+  const activeRunSessionIds = new Set<string>();
+
   return async function handleHttpRequest(
     req: IncomingMessage,
     res: ServerResponse,
@@ -73,6 +85,18 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         role: options.role,
         sessions: await SessionManager.list(options.cwd, options.sessionDir),
       });
+      return;
+    }
+
+    const sessionBootstrapId = sessionIdFromRoute(url.pathname, "bootstrap");
+    if (sessionBootstrapId && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Session API", options)) return;
+      const sessionManager = await resolveSessionManagerById(options, sessionBootstrapId);
+      if (!sessionManager) {
+        writeJson(res, { error: "Unknown saved session" }, 404);
+        return;
+      }
+      writeJson(res, await buildSessionBootstrapPayload(options, sessionManager));
       return;
     }
 
@@ -188,7 +212,19 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
 
     if (url.pathname === "/api/chat/run" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
-      await handleSseChatRun(req, res, options);
+      await handleSseChatRun(req, res, options, activeRunSessionIds);
+      return;
+    }
+
+    const runSessionId = sessionIdFromRoute(url.pathname, "runs");
+    if (runSessionId && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
+      const sessionManager = await resolveSessionManagerById(options, runSessionId);
+      if (!sessionManager) {
+        writeJson(res, { error: "Unknown saved session" }, 404);
+        return;
+      }
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager);
       return;
     }
 
@@ -200,6 +236,8 @@ async function handleSseChatRun(
   req: IncomingMessage,
   res: ServerResponse,
   options: GuiHttpRouteOptions,
+  activeRunSessionIds: Set<string>,
+  targetSessionManager?: SessionManager,
 ): Promise<void> {
   if (options.role !== "writer") {
     writeJson(res, { error: "Read-only follower mode" }, 409);
@@ -213,13 +251,56 @@ async function handleSseChatRun(
     return;
   }
 
-  const sessionManager = options.getSessionManager();
-  const sessionConflict = chatRunSessionConflict(
-    asRecord(body).sessionId,
-    sessionManager.getSessionId(),
-  );
-  if (sessionConflict) {
-    writeJson(res, sessionConflict, 409);
+  const currentSessionManager = options.getSessionManager();
+  const requestedSessionId = String(asRecord(body).sessionId ?? "").trim();
+  const runSessionManager = targetSessionManager ?? currentSessionManager;
+  const sessionId = runSessionManager.getSessionId();
+  if (!targetSessionManager) {
+    const sessionConflict = chatRunSessionConflict(requestedSessionId, sessionId);
+    if (sessionConflict) {
+      writeJson(res, sessionConflict, 409);
+      return;
+    }
+  } else if (requestedSessionId && requestedSessionId !== sessionId) {
+    writeJson(
+      res,
+      { error: "Session route and request body disagree", code: "session_changed" },
+      409,
+    );
+    return;
+  }
+
+  if (activeRunSessionIds.has(sessionId)) {
+    writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
+    return;
+  }
+
+  const currentSessionFile = currentSessionManager.getSessionFile();
+  const targetSessionFile = runSessionManager.getSessionFile();
+  const useCurrentSession = !targetSessionManager || currentSessionFile === targetSessionFile;
+  let acquiredLockScope = "";
+  let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
+  if (!useCurrentSession) {
+    const lockScope = writerLockScopeForSession(runSessionManager);
+    const lockResult = await acquireWriterLock(lockScope, "gui", { staleGraceMs: 500 });
+    if (lockResult.role !== "writer") {
+      writeJson(res, { error: "Read-only follower mode", lock: lockResult.lock }, 409);
+      return;
+    }
+    acquiredLockScope = lockScope;
+    lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
+  }
+
+  activeRunSessionIds.add(sessionId);
+  let createdSession: { session: AgentSession } | null = null;
+  try {
+    createdSession = useCurrentSession ? null : await options.createSessionForManager(runSessionManager);
+  } catch (error) {
+    activeRunSessionIds.delete(sessionId);
+    if (lockHeartbeat) clearInterval(lockHeartbeat);
+    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    const message = error instanceof Error ? error.message : String(error);
+    writeJson(res, { error: message }, 500);
     return;
   }
 
@@ -231,9 +312,7 @@ async function handleSseChatRun(
 
   let seq = 1;
   const runId = `gui-run-${Date.now()}`;
-  const runSession = options.getSession();
-  const runSessionManager = options.getSessionManager();
-  const sessionId = runSessionManager.getSessionId();
+  const runSession = createdSession?.session ?? options.getSession();
   if (!prompt.startsWith("/") && !runSessionManager.getSessionName()) {
     runSessionManager.appendSessionInfo(prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt);
   }
@@ -268,10 +347,10 @@ async function handleSseChatRun(
         source: "gui",
         requirement: modelSetup.requirement,
       });
-      options.wsHub.broadcastState();
+      if (useCurrentSession) options.wsHub.broadcastState();
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
-      options.wsHub.broadcastState();
+      if (useCurrentSession) options.wsHub.broadcastState();
     }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
@@ -299,9 +378,55 @@ async function handleSseChatRun(
     const message = error instanceof Error ? error.message : String(error);
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
   } finally {
+    activeRunSessionIds.delete(sessionId);
     unsubscribeLive();
+    createdSession?.session.dispose();
+    if (lockHeartbeat) clearInterval(lockHeartbeat);
+    if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     res.end();
   }
+}
+
+export async function buildSessionBootstrapPayload(
+  options: Pick<
+    GuiHttpRouteOptions,
+    "cwd" | "sessionDir" | "role" | "modelSetupController"
+  >,
+  sessionManager: SessionManager,
+): Promise<Record<string, unknown>> {
+  const sessionId = sessionManager.getSessionId();
+  const entries = sessionManager.getEntries();
+  return {
+    role: options.role,
+    sessionId,
+    catalog: buildCatalog(),
+    modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
+    askUserPrompts: [],
+    sessions: await SessionManager.list(options.cwd, options.sessionDir),
+    snapshot: {
+      sessionId,
+      state: projectDashboard(entries, sessionId),
+      entries,
+      events: sessionEntriesToChatEvents(entries, {
+        sessionId,
+        title: sessionManager.getSessionName(),
+      }),
+    },
+  };
+}
+
+async function resolveSessionManagerById(
+  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir">,
+  sessionId: string,
+): Promise<SessionManager | null> {
+  const sessions = await SessionManager.list(options.cwd, options.sessionDir);
+  const match = sessions.find((candidate) => candidate.id === sessionId);
+  return match ? SessionManager.open(match.path, options.sessionDir, options.cwd) : null;
+}
+
+function sessionIdFromRoute(pathname: string, action: "bootstrap" | "runs"): string {
+  const match = pathname.match(new RegExp(`^/api/sessions/([^/]+)/${action}$`));
+  return match ? decodeURIComponent(match[1] ?? "") : "";
 }
 
 async function handleTrustedGuiMutation(

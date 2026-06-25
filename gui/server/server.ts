@@ -169,6 +169,15 @@ const httpRequestHandler = createHttpRequestHandler({
   allowRemotePrivateApi,
   getSession: () => session,
   getSessionManager: () => sessionManager,
+  createSessionForManager: async (targetSessionManager) =>
+    createOpenCandleSession({
+      cwd,
+      agentDir,
+      authStorage,
+      modelRegistry,
+      settingsManager,
+      sessionManager: targetSessionManager,
+    }),
   wsHub,
   modelSetupController,
   sessionActionsController,
