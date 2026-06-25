@@ -44,34 +44,47 @@ export interface Usage {
   cost?: unknown;
 }
 
+interface ChatEventBase {
+  sessionId: string;
+  seq: number;
+}
+
+interface RunScopedChatEventBase extends ChatEventBase {
+  runId: string;
+}
+
 export type ChatEvent =
-  | { type: "run.started"; runId: string; sessionId: string; seq: number }
-  | { type: "thinking.delta"; runId: string; text: string; seq: number }
-  | { type: "thinking.completed"; runId: string; text?: string; seq: number }
-  | { type: "message.created"; messageId: string; role: ChatRole; seq: number }
-  | { type: "message.delta"; messageId: string; text: string; seq: number }
-  | { type: "message.completed"; messageId: string; content: MessageContent[]; seq: number }
-  | {
+  | ({ type: "run.started" } & RunScopedChatEventBase)
+  | ({ type: "thinking.delta"; text: string } & RunScopedChatEventBase)
+  | ({ type: "thinking.completed"; text?: string } & RunScopedChatEventBase)
+  | ({ type: "message.created"; messageId: string; role: ChatRole; runId?: string } & ChatEventBase)
+  | ({ type: "message.delta"; messageId: string; text: string; runId?: string } & ChatEventBase)
+  | ({
+      type: "message.completed";
+      messageId: string;
+      content: MessageContent[];
+      runId?: string;
+    } & ChatEventBase)
+  | ({
       type: "custom.message";
       messageId: string;
       customType: string;
       content: MessageContent[];
-      seq: number;
-    }
-  | {
+    } & ChatEventBase)
+  | ({
       type: "tool.started";
       toolCallId: string;
       messageId: string;
       name: string;
       input: unknown;
-      seq: number;
-    }
-  | { type: "tool.delta"; toolCallId: string; chunk: unknown; seq: number }
-  | { type: "tool.completed"; toolCallId: string; output: ToolOutput; seq: number }
-  | { type: "tool.failed"; toolCallId: string; error: ToolError; seq: number }
-  | { type: "run.completed"; runId: string; usage?: Usage; seq: number }
-  | { type: "run.failed"; runId: string; error: RunError; seq: number }
-  | { type: "session.updated"; sessionId: string; title?: string; updatedAt: string; seq: number };
+      runId?: string;
+    } & ChatEventBase)
+  | ({ type: "tool.delta"; toolCallId: string; chunk: unknown; runId?: string } & ChatEventBase)
+  | ({ type: "tool.completed"; toolCallId: string; output: ToolOutput; runId?: string } & ChatEventBase)
+  | ({ type: "tool.failed"; toolCallId: string; error: ToolError; runId?: string } & ChatEventBase)
+  | ({ type: "run.completed"; usage?: Usage } & RunScopedChatEventBase)
+  | ({ type: "run.failed"; error: RunError } & RunScopedChatEventBase)
+  | ({ type: "session.updated"; title?: string; updatedAt: string } & ChatEventBase);
 
 export interface RenderMessage {
   id: string;
@@ -109,7 +122,8 @@ export interface ChatRunState {
 
 export interface ChatRenderState {
   lastSeq: number;
-  seenSeq: Set<number>;
+  seenSeq: Set<string>;
+  lastSeqBySession: Map<string, number>;
   messages: RenderMessage[];
   messageById: Map<string, RenderMessage>;
   tools: Map<string, RenderToolCall>;
@@ -123,6 +137,7 @@ export function createChatRenderState(): ChatRenderState {
   return {
     lastSeq: 0,
     seenSeq: new Set(),
+    lastSeqBySession: new Map(),
     messages: [],
     messageById: new Map(),
     tools: new Map(),

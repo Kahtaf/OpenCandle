@@ -8,18 +8,21 @@ import {
 
 export function reduceChatEvents(events: ChatEvent[]): ChatRenderState {
   return [...events]
-    .sort((a, b) => a.seq - b.seq)
+    .sort((a, b) => (a.sessionId === b.sessionId ? a.seq - b.seq : 0))
     .reduce((state, event) => applyChatEvent(state, event), createChatRenderState());
 }
 
 export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRenderState {
-  if (state.seenSeq.has(event.seq)) return state;
+  const eventKey = `${event.sessionId}:${event.seq}`;
+  if (state.seenSeq.has(eventKey)) return state;
 
   const next = cloneState(state);
-  if (event.seq > next.lastSeq + 1 && next.lastSeq !== 0) {
-    next.gaps.push({ expected: next.lastSeq + 1, received: event.seq });
+  const sessionLastSeq = next.lastSeqBySession.get(event.sessionId) ?? 0;
+  if (event.seq > sessionLastSeq + 1 && sessionLastSeq !== 0) {
+    next.gaps.push({ expected: sessionLastSeq + 1, received: event.seq });
   }
-  next.seenSeq.add(event.seq);
+  next.seenSeq.add(eventKey);
+  next.lastSeqBySession.set(event.sessionId, Math.max(sessionLastSeq, event.seq));
   next.lastSeq = Math.max(next.lastSeq, event.seq);
 
   switch (event.type) {
@@ -170,6 +173,7 @@ function cloneState(state: ChatRenderState): ChatRenderState {
   return {
     ...state,
     seenSeq: new Set(state.seenSeq),
+    lastSeqBySession: new Map(state.lastSeqBySession),
     messages,
     messageById,
     tools: new Map(

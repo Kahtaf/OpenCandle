@@ -107,6 +107,7 @@ describe("sessionEntriesToChatEvents", () => {
 
     expect(events).toContainEqual({
       type: "custom.message",
+      sessionId: "s1",
       messageId: "setup-1",
       customType: "opencandle-model-setup",
       content: [{ type: "text", text: "Connect a model before chat can run." }],

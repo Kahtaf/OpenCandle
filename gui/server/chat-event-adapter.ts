@@ -42,6 +42,7 @@ export function sessionEntriesToChatEvents(
       const messageId = entry.id;
       events.push({
         type: "custom.message",
+        sessionId: options.sessionId,
         messageId,
         customType: String((entry as { customType?: unknown }).customType || "custom"),
         content: [{ type: "text", text: customMessageText(entry.content) }],
@@ -55,9 +56,16 @@ export function sessionEntriesToChatEvents(
     const messageId = entry.id;
 
     if (message.role === "user") {
-      events.push({ type: "message.created", messageId, role: "user", seq: seq++ });
+      events.push({
+        type: "message.created",
+        sessionId: options.sessionId,
+        messageId,
+        role: "user",
+        seq: seq++,
+      });
       events.push({
         type: "message.completed",
+        sessionId: options.sessionId,
         messageId,
         content: [{ type: "text", text: pendingOriginalInput ?? messageText(message.content) }],
         seq: seq++,
@@ -67,7 +75,13 @@ export function sessionEntriesToChatEvents(
     }
 
     if (message.role === "assistant") {
-      events.push({ type: "message.created", messageId, role: "assistant", seq: seq++ });
+      events.push({
+        type: "message.created",
+        sessionId: options.sessionId,
+        messageId,
+        role: "assistant",
+        seq: seq++,
+      });
       const content: MessageContent[] = [];
       for (const part of Array.isArray(message.content) ? message.content : []) {
         if (part.type === "text") {
@@ -80,6 +94,7 @@ export function sessionEntriesToChatEvents(
           content.push({ type: "tool", toolCallId: part.id });
           events.push({
             type: "tool.started",
+            sessionId: options.sessionId,
             toolCallId: part.id,
             messageId,
             name: part.name,
@@ -91,7 +106,13 @@ export function sessionEntriesToChatEvents(
           content.push({ type: "image", url: part.url });
         }
       }
-      events.push({ type: "message.completed", messageId, content, seq: seq++ });
+      events.push({
+        type: "message.completed",
+        sessionId: options.sessionId,
+        messageId,
+        content,
+        seq: seq++,
+      });
       continue;
     }
 
@@ -103,6 +124,7 @@ export function sessionEntriesToChatEvents(
       if (!seenToolCalls.has(toolCallId)) {
         events.push({
           type: "tool.started",
+          sessionId: options.sessionId,
           toolCallId,
           messageId,
           name: tool.toolName || "tool",
@@ -112,6 +134,7 @@ export function sessionEntriesToChatEvents(
       }
       events.push({
         type: tool.isError ? "tool.failed" : "tool.completed",
+        sessionId: options.sessionId,
         toolCallId,
         ...(tool.isError
           ? { error: { message: messageText(tool.content), details: tool.details } }
@@ -126,6 +149,7 @@ export function sessionEntriesToChatEvents(
       if (resolvedToolCalls.has(toolCallId)) continue;
       events.push({
         type: "tool.failed",
+        sessionId: options.sessionId,
         toolCallId,
         error: {
           message:

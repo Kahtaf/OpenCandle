@@ -293,11 +293,11 @@ async function handleSseChatRun(
         seq = event.seq + 1;
       }
     }
-    writeSse(res, { type: "run.completed", runId, seq });
+    writeSse(res, { type: "run.completed", runId, sessionId, seq });
   } catch (error) {
     seq = liveAdapter.nextSeq();
     const message = error instanceof Error ? error.message : String(error);
-    writeSse(res, { type: "run.failed", runId, error: { message }, seq });
+    writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
   } finally {
     unsubscribeLive();
     res.end();

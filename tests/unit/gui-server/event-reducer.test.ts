@@ -49,6 +49,28 @@ describe("chat event reducer", () => {
     expect(state.tools.get("t1")?.output).toEqual(output);
   });
 
+  it("treats the same sequence number in another session as a distinct event", () => {
+    const state = reduceChatEvents([
+      {
+        type: "message.created",
+        sessionId: "session-a",
+        messageId: "a1",
+        role: "assistant",
+        seq: 1,
+      },
+      {
+        type: "message.created",
+        sessionId: "session-b",
+        messageId: "b1",
+        role: "assistant",
+        seq: 1,
+      },
+    ]);
+
+    expect(state.messages.map((message) => message.id)).toEqual(["a1", "b1"]);
+    expect(state.gaps).toEqual([]);
+  });
+
   it("updates one tool call across started, delta, and completed events", () => {
     const state = reduceChatEvents([
       { type: "message.created", messageId: "m1", role: "assistant", seq: 1 },
