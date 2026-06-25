@@ -80,7 +80,12 @@ export type ChatEvent =
       runId?: string;
     } & ChatEventBase)
   | ({ type: "tool.delta"; toolCallId: string; chunk: unknown; runId?: string } & ChatEventBase)
-  | ({ type: "tool.completed"; toolCallId: string; output: ToolOutput; runId?: string } & ChatEventBase)
+  | ({
+      type: "tool.completed";
+      toolCallId: string;
+      output: ToolOutput;
+      runId?: string;
+    } & ChatEventBase)
   | ({ type: "tool.failed"; toolCallId: string; error: ToolError; runId?: string } & ChatEventBase)
   | ({ type: "run.completed"; usage?: Usage } & RunScopedChatEventBase)
   | ({ type: "run.failed"; error: RunError } & RunScopedChatEventBase)

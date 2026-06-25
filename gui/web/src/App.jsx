@@ -92,7 +92,8 @@ export function AppShell() {
   const freshRunPendingRef = useRef(false);
   const sessionView = routeSessionView({
     pathname,
-    currentSessionId: routeSessionId && visibleSessionSnapshot ? routeSessionId : gui.currentSessionId,
+    currentSessionId:
+      routeSessionId && visibleSessionSnapshot ? routeSessionId : gui.currentSessionId,
     events: visibleEvents,
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
@@ -277,7 +278,7 @@ export function AppShell() {
         search: (current) => ({ ...current, drawer: undefined }),
       });
     },
-    [gui, navigate],
+    [navigate],
   );
 
   const renameSession = useCallback(

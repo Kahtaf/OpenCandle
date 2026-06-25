@@ -11,8 +11,8 @@ import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
-import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import { projectDashboard } from "./projector.js";
+import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
 import { waitForNewEntryId } from "./session-entry-wait.js";
@@ -37,9 +37,7 @@ interface GuiHttpRouteOptions {
   allowRemotePrivateApi: boolean;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
-  createSessionForManager: (
-    sessionManager: SessionManager,
-  ) => Promise<{ session: AgentSession }>;
+  createSessionForManager: (sessionManager: SessionManager) => Promise<{ session: AgentSession }>;
   wsHub: WsHub;
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
@@ -294,7 +292,9 @@ async function handleSseChatRun(
   activeRunSessionIds.add(sessionId);
   let createdSession: { session: AgentSession } | null = null;
   try {
-    createdSession = useCurrentSession ? null : await options.createSessionForManager(runSessionManager);
+    createdSession = useCurrentSession
+      ? null
+      : await options.createSessionForManager(runSessionManager);
   } catch (error) {
     activeRunSessionIds.delete(sessionId);
     if (lockHeartbeat) clearInterval(lockHeartbeat);
@@ -388,10 +388,7 @@ async function handleSseChatRun(
 }
 
 export async function buildSessionBootstrapPayload(
-  options: Pick<
-    GuiHttpRouteOptions,
-    "cwd" | "sessionDir" | "role" | "modelSetupController"
-  >,
+  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir" | "role" | "modelSetupController">,
   sessionManager: SessionManager,
 ): Promise<Record<string, unknown>> {
   const sessionId = sessionManager.getSessionId();
