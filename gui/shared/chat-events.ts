@@ -88,6 +88,7 @@ export type ChatEvent =
 
 export interface RenderMessage {
   id: string;
+  sessionId?: string;
   role: ChatRole;
   status: "streaming" | "completed";
   content: MessageContent[];
@@ -97,6 +98,7 @@ export interface RenderMessage {
 
 export interface RenderToolCall {
   id: string;
+  sessionId?: string;
   messageId: string;
   name: string;
   input: unknown;
@@ -108,6 +110,7 @@ export interface RenderToolCall {
 
 export interface RenderThinking {
   runId: string;
+  sessionId?: string;
   status: "streaming" | "completed";
   text: string;
 }

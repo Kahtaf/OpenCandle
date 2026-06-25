@@ -27,7 +27,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
 
   switch (event.type) {
     case "run.started":
-      next.runs.set(event.runId, {
+      next.runs.set(scopedId(event.sessionId, event.runId), {
         id: event.runId,
         sessionId: event.sessionId,
         status: "running",
@@ -36,25 +36,25 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
       break;
 
     case "thinking.delta": {
-      const thinking = ensureThinking(next, event.runId);
+      const thinking = ensureThinking(next, event.sessionId, event.runId);
       thinking.status = "streaming";
       thinking.text += event.text;
       break;
     }
 
     case "thinking.completed": {
-      const thinking = ensureThinking(next, event.runId);
+      const thinking = ensureThinking(next, event.sessionId, event.runId);
       thinking.status = "completed";
       if (event.text !== undefined) thinking.text = event.text;
       break;
     }
 
     case "message.created":
-      ensureMessage(next, event.messageId, event.role);
+      ensureMessage(next, event.sessionId, event.messageId, event.role);
       break;
 
     case "message.delta": {
-      const message = ensureMessage(next, event.messageId, "assistant");
+      const message = ensureMessage(next, event.sessionId, event.messageId, "assistant");
       message.status = "streaming";
       message.text += event.text;
       message.content = [{ type: "text", text: message.text }];
@@ -62,7 +62,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
     }
 
     case "message.completed": {
-      const message = ensureMessage(next, event.messageId, "assistant");
+      const message = ensureMessage(next, event.sessionId, event.messageId, "assistant");
       message.status = "completed";
       message.content = event.content;
       message.text = contentText(event.content);
@@ -70,7 +70,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
     }
 
     case "custom.message": {
-      const message = ensureMessage(next, event.messageId, "assistant");
+      const message = ensureMessage(next, event.sessionId, event.messageId, "assistant");
       message.status = "completed";
       message.content = event.content;
       message.text = contentText(event.content);
@@ -79,9 +79,10 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
     }
 
     case "tool.started":
-      ensureMessage(next, event.messageId, "assistant");
-      next.tools.set(event.toolCallId, {
+      ensureMessage(next, event.sessionId, event.messageId, "assistant");
+      next.tools.set(scopedId(event.sessionId, event.toolCallId), {
         id: event.toolCallId,
+        sessionId: event.sessionId,
         messageId: event.messageId,
         name: event.name,
         input: event.input,
@@ -91,13 +92,13 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
       break;
 
     case "tool.delta": {
-      const tool = next.tools.get(event.toolCallId);
+      const tool = next.tools.get(scopedId(event.sessionId, event.toolCallId));
       if (tool) tool.chunks.push(event.chunk);
       break;
     }
 
     case "tool.completed": {
-      const tool = next.tools.get(event.toolCallId);
+      const tool = next.tools.get(scopedId(event.sessionId, event.toolCallId));
       if (tool) {
         tool.status = event.output.isError ? "failed" : "completed";
         tool.output = event.output;
@@ -106,7 +107,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
     }
 
     case "tool.failed": {
-      const tool = next.tools.get(event.toolCallId);
+      const tool = next.tools.get(scopedId(event.sessionId, event.toolCallId));
       if (tool) {
         tool.status = "failed";
         tool.error = event.error;
@@ -115,7 +116,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
     }
 
     case "run.completed": {
-      const run = next.runs.get(event.runId);
+      const run = next.runs.get(scopedId(event.sessionId, event.runId));
       if (run) {
         run.status = "completed";
         run.usage = event.usage;
@@ -124,7 +125,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
     }
 
     case "run.failed": {
-      const run = next.runs.get(event.runId);
+      const run = next.runs.get(scopedId(event.sessionId, event.runId));
       if (run) {
         run.status = "failed";
         run.error = event.error;
@@ -146,20 +147,23 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
 
 function ensureMessage(
   state: ChatRenderState,
+  sessionId: string,
   id: string,
   role: RenderMessage["role"],
 ): RenderMessage {
-  const existing = state.messageById.get(id);
+  const key = scopedId(sessionId, id);
+  const existing = state.messageById.get(key);
   if (existing) return existing;
 
   const message: RenderMessage = {
     id,
+    sessionId,
     role,
     status: "streaming",
     content: [],
     text: "",
   };
-  state.messageById.set(id, message);
+  state.messageById.set(key, message);
   state.messages.push(message);
   return message;
 }
@@ -169,7 +173,9 @@ function cloneState(state: ChatRenderState): ChatRenderState {
     ...message,
     content: [...message.content],
   }));
-  const messageById = new Map(messages.map((message) => [message.id, message]));
+  const messageById = new Map(
+    messages.map((message) => [scopedId(message.sessionId ?? "", message.id), message]),
+  );
   return {
     ...state,
     seenSeq: new Set(state.seenSeq),
@@ -192,12 +198,17 @@ function cloneState(state: ChatRenderState): ChatRenderState {
   };
 }
 
-function ensureThinking(state: ChatRenderState, runId: string) {
-  const existing = state.thinking.get(runId);
+function ensureThinking(state: ChatRenderState, sessionId: string, runId: string) {
+  const key = scopedId(sessionId, runId);
+  const existing = state.thinking.get(key);
   if (existing) return existing;
-  const thinking = { runId, status: "streaming" as const, text: "" };
-  state.thinking.set(runId, thinking);
+  const thinking = { runId, sessionId, status: "streaming" as const, text: "" };
+  state.thinking.set(key, thinking);
   return thinking;
+}
+
+function scopedId(sessionId: string, id: string): string {
+  return `${sessionId ?? ""}::${id}`;
 }
 
 function contentText(content: MessageContent[]): string {
