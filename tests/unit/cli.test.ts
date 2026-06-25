@@ -7,8 +7,16 @@ const piMocks = vi.hoisted(() => ({
   addSourceToSettings: vi.fn(),
   assertSupportedNodeVersion: vi.fn(),
   buildDoctorReport: vi.fn(),
+  createAgentSessionRuntime: vi.fn(),
+  createOpenCandleSession: vi.fn(),
   ensureOpenCandleNativeDependencies: vi.fn(),
   install: vi.fn(),
+  InteractiveMode: vi.fn(),
+  continueOpenCandleSession: vi.fn(),
+  acquireSessionWriterLock: vi.fn(),
+  refreshSessionWriterLock: vi.fn(),
+  releaseSessionWriterLock: vi.fn(),
+  writerLockScopeForSession: vi.fn(),
   remove: vi.fn(),
   removeSourceFromSettings: vi.fn(),
   renderDoctorReport: vi.fn(),
@@ -44,7 +52,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => {
   return {
     AuthStorage: { create: vi.fn() },
     DefaultPackageManager: vi.fn(DefaultPackageManagerMock),
-    InteractiveMode: vi.fn(),
+    InteractiveMode: piMocks.InteractiveMode,
     ModelRegistry: {
       create: vi.fn(() => ({
         find: vi.fn(),
@@ -62,7 +70,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => {
         getTheme: vi.fn(),
       })),
     },
-    createAgentSessionRuntime: vi.fn(),
+    createAgentSessionRuntime: piMocks.createAgentSessionRuntime,
     createAgentSessionServices: vi.fn(),
     getAgentDir: vi.fn(() => "/tmp/opencandle-test-agent"),
     initTheme: vi.fn(),
@@ -104,11 +112,18 @@ vi.mock("../../src/doctor/render.js", () => ({
 }));
 
 vi.mock("../../src/pi/session.js", () => ({
-  createOpenCandleSession: vi.fn(),
+  createOpenCandleSession: piMocks.createOpenCandleSession,
 }));
 
 vi.mock("../../src/pi/session-storage.js", () => ({
-  continueOpenCandleSession: vi.fn(),
+  continueOpenCandleSession: piMocks.continueOpenCandleSession,
+}));
+
+vi.mock("../../src/pi/session-writer-lock.js", () => ({
+  acquireSessionWriterLock: piMocks.acquireSessionWriterLock,
+  refreshSessionWriterLock: piMocks.refreshSessionWriterLock,
+  releaseSessionWriterLock: piMocks.releaseSessionWriterLock,
+  writerLockScopeForSession: piMocks.writerLockScopeForSession,
 }));
 
 const originalArgv = process.argv;
@@ -129,6 +144,16 @@ describe("opencandle package commands", () => {
     piMocks.removeSourceFromSettings.mockReturnValue(true);
     piMocks.update.mockResolvedValue(undefined);
     piMocks.ensureOpenCandleNativeDependencies.mockResolvedValue(undefined);
+    piMocks.acquireSessionWriterLock.mockResolvedValue({
+      role: "writer",
+      lock: {
+        pid: process.pid,
+        processKind: "tui",
+        acquiredAt: "2026-06-25T12:00:00.000Z",
+        lastHeartbeat: "2026-06-25T12:00:00.000Z",
+      },
+    });
+    piMocks.writerLockScopeForSession.mockReturnValue("/tmp/session.jsonl");
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -221,5 +246,30 @@ describe("opencandle package commands", () => {
     expect(loadOnboardingState().providers.reddit).toBeUndefined();
 
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it("acquires and releases the TUI session writer lock for interactive mode", async () => {
+    const sessionManager = {
+      getSessionFile: vi.fn(() => "/tmp/session.jsonl"),
+      getSessionDir: vi.fn(() => "/tmp/sessions"),
+    };
+    const runtime = {
+      dispose: vi.fn().mockResolvedValue(undefined),
+      modelFallbackMessage: undefined,
+    };
+    const run = vi.fn().mockResolvedValue(undefined);
+    piMocks.continueOpenCandleSession.mockReturnValue(sessionManager);
+    piMocks.createAgentSessionRuntime.mockResolvedValue(runtime);
+    piMocks.InteractiveMode.mockImplementation(function InteractiveModeMock() {
+      return { run };
+    });
+
+    await runCli([]);
+
+    expect(piMocks.writerLockScopeForSession).toHaveBeenCalledWith(sessionManager);
+    expect(piMocks.acquireSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl", "tui");
+    expect(run).toHaveBeenCalled();
+    expect(piMocks.releaseSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl");
+    expect(runtime.dispose).toHaveBeenCalled();
   });
 });

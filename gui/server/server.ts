@@ -31,7 +31,12 @@ import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
-import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
+import {
+  acquireWriterLock,
+  refreshWriterLock,
+  releaseWriterLock,
+  writerLockScopeForSession,
+} from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
 
 assertSupportedNodeVersion();
@@ -54,7 +59,8 @@ const settingsManager = SettingsManager.create(cwd, agentDir);
 const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
-const lockResult = await acquireWriterLock(sessionDir, "gui");
+const initialWriterLockScope = writerLockScopeForSession(sessionManager);
+const lockResult = await acquireWriterLock(initialWriterLockScope, "gui");
 let wsHub: WsHub;
 let quotePoller: BackgroundQuotePoller;
 const askUserBridge = createAskUserBridge({
@@ -84,7 +90,7 @@ const runtime = await createAgentSessionRuntime(
   { cwd, agentDir, sessionManager },
 );
 let session = runtime.session;
-const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
+const heartbeat = setInterval(() => refreshWriterLock(initialWriterLockScope), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 quotePoller = createBackgroundQuotePoller({
@@ -197,7 +203,7 @@ const shutdown = createGracefulShutdown({
     localAutomationHeartbeat.stop();
     wsHub.closeClients();
     unsubscribeSession();
-    releaseWriterLock(sessionDir);
+    releaseWriterLock(initialWriterLockScope);
     await runtime.dispose();
   },
   exit: (code) => process.exit(code),
