@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { buildSessionBootstrapPayload } from "../../../gui/server/http-routes.js";
+import {
+  buildSessionBootstrapPayload,
+  resolveSessionManagerById,
+} from "../../../gui/server/http-routes.js";
 
 describe("session-addressed GUI bootstrap", () => {
   it("builds a transcript snapshot for the requested session without using active state", async () => {
@@ -45,6 +48,28 @@ describe("session-addressed GUI bootstrap", () => {
       );
       expect(JSON.stringify(snapshot.events)).toContain("Load this exact session");
       expect(JSON.stringify(snapshot.events)).not.toContain("Do not load me");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves the current fresh session before it appears in saved-session listings", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
+    try {
+      const current = SessionManager.create(cwd, sessionDir);
+
+      const resolved = await resolveSessionManagerById(
+        {
+          cwd,
+          sessionDir,
+          getSessionManager: () => current,
+        },
+        current.getSessionId(),
+      );
+
+      expect(resolved).toBe(current);
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });

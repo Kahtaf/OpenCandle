@@ -415,10 +415,12 @@ export async function buildSessionBootstrapPayload(
   };
 }
 
-async function resolveSessionManagerById(
-  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir">,
+export async function resolveSessionManagerById(
+  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir" | "getSessionManager">,
   sessionId: string,
 ): Promise<SessionManager | null> {
+  const currentSessionManager = options.getSessionManager();
+  if (currentSessionManager.getSessionId() === sessionId) return currentSessionManager;
   const sessions = await SessionManager.list(options.cwd, options.sessionDir);
   const match = sessions.find((candidate) => candidate.id === sessionId);
   return match ? SessionManager.open(match.path, options.sessionDir, options.cwd) : null;
