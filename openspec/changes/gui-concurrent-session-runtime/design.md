@@ -31,7 +31,9 @@ Each `GuiSessionRuntime` owns only one Pi/OpenCandle session and is responsible 
 
 The registry may lazily create runtimes on first route load or send. It should remove idle runtimes only after no run is active and no clients are subscribed.
 
-The lock key must be derived from the canonical Pi session identity, not the process-wide session directory alone. The exact path can remain an implementation detail, but GUI and TUI must use the same key for a given session so a writer in either surface is visible to the other.
+The lock key must be derived from the canonical Pi session identity, not the process-wide session directory alone. Use the persisted session file path when one exists. For a not-yet-persisted in-memory session, use the session directory only as a startup fallback until the session has a file. Rename and delete operations must release or refresh the old lock scope so stale lock files do not make an unrelated session read-only.
+
+Each runtime that holds a writer role owns that session's lock heartbeat. It releases the lock when the runtime is disposed, when the session is deleted, or after idle eviction once no run is active and no client remains subscribed. A GUI process may hold locks for multiple sessions, but never more than one active writer lock for the same session.
 
 ## 3. Identity And Correlation
 
@@ -73,7 +75,9 @@ The WebSocket layer should support session-scoped subscriptions and mutations. B
 
 If the implementation keeps a single WebSocket connection, the protocol still needs per-message session identity. Multiple sockets are not required.
 
-Direct session routes should be able to load `/sessions/:sessionId` through HTTP before any `session.open` or WebSocket activation message is sent. Opening an existing session through the sidebar may optimistically navigate, but the visible transcript must still be populated from the session-addressed bootstrap for the route id.
+Multiple browser tabs or windows are local clients of the same GUI server. Each client has independent route focus. Server broadcasts may still be shared, but the client must keep focus and subscriptions session-scoped so a snapshot for session A cannot replace the visible route for a tab currently showing session B.
+
+Direct session routes should be able to load `/sessions/:sessionId` through HTTP before any `session.open` or WebSocket activation message is sent. Opening an existing session through the sidebar should navigate to the route id and populate the visible transcript from session-addressed bootstrap. Viewing history must be allowed even when another surface owns the writer lock; only transcript-affecting mutations require writer ownership.
 
 ## 6. Session-Scoped Mutations Beyond Chat
 
@@ -102,6 +106,8 @@ The browser should keep route-visible state separate from per-session state:
 
 The visible route selects from those stores. A run in session A must not put the session B composer into a global streaming state, and stopping session B must not abort session A.
 
+Reducers that combine events from more than one session must scope message IDs, tool-call IDs, run IDs, and sequence numbers by `sessionId`. Persisted replay events do not need a synthetic `runId` when the run id was never stored; live run lifecycle events and live tool/message events from an active run must carry `runId`.
+
 ## 8. TUI And Pi Parity
 
 The TUI can keep a single focused session because that matches terminal UX. The parity requirement is semantic and storage-backed:
@@ -109,6 +115,7 @@ The TUI can keep a single focused session because that matches terminal UX. The 
 - GUI and TUI read and write the same Pi/OpenCandle session entries;
 - a GUI-created session can be resumed in TUI;
 - a TUI-created session can be resumed in GUI;
+- explicit resume by session path/id and continue-recent behavior remain well-defined for GUI-created sessions;
 - writer/follower lock behavior is per session in both surfaces;
 - the same prompt/tool/result/custom-entry model is used for persistence and replay;
 - branch context and OpenCandle custom entries remain available to later turns in both surfaces.
@@ -127,7 +134,8 @@ Implementation should prove the old races are gone with targeted tests:
 - browser tests that stop/retry a run in one session without affecting another active run;
 - browser tests for direct navigation to an old session URL with and without an already-open WebSocket;
 - parity smoke that a GUI-created session is readable from TUI/Pi session APIs and a TUI-created session is readable from GUI APIs;
-- parity smoke that GUI and TUI respect the same per-session writer lock.
+- parity smoke that GUI and TUI respect the same per-session writer lock;
+- parity smoke that branch context, OpenCandle custom entries, direct tool results, and setup custom messages survive GUI-to-TUI and TUI-to-GUI round trips.
 
 ## 10. Rollout
 

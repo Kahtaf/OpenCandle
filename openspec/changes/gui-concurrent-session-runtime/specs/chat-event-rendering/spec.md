@@ -2,7 +2,7 @@
 
 ### Requirement: Canonical Chat Event Stream
 
-The system SHALL expose a canonical chat event stream for GUI rendering and replay, covering run lifecycle, message lifecycle, tool lifecycle, errors, and session updates. Every live and replayed chat event SHALL include the target session ID, and run-scoped events SHALL include the run ID, so the GUI can route events without relying on global active-session state.
+The system SHALL expose a canonical chat event stream for GUI rendering and replay, covering run lifecycle, message lifecycle, tool lifecycle, errors, and session updates. Every live and replayed chat event SHALL include the target session ID. Live run lifecycle events and live events observed during a run SHALL include the run ID when the runtime has one; historical replay events are not required to synthesize run IDs that were never persisted.
 
 #### Scenario: Run starts
 
@@ -29,7 +29,7 @@ The system SHALL expose a canonical chat event stream for GUI rendering and repl
 
 ### Requirement: Ordered and Idempotent Events
 
-Every chat event SHALL include a monotonic sequence number within its session. The GUI SHALL evaluate ordering and idempotence by the pair of session ID and sequence number, so concurrent sessions can reuse local sequence ranges without colliding.
+Every chat event SHALL include a monotonic sequence number within its session. The GUI SHALL evaluate ordering and idempotence by the pair of session ID and sequence number, so concurrent sessions can reuse local sequence ranges without colliding. When a reducer combines events from multiple sessions, message IDs, tool-call IDs, and run IDs SHALL also be scoped by session ID.
 
 #### Scenario: Duplicate event arrives
 
@@ -45,6 +45,12 @@ Every chat event SHALL include a monotonic sequence number within its session. T
 
 - **WHEN** session A and session B both emit an event with sequence number 1
 - **THEN** the GUI treats those events as distinct because their session IDs differ
+
+#### Scenario: Same message id in another session
+
+- **WHEN** session A and session B contain replayed or live events with the same message id or tool-call id
+- **THEN** the GUI stores and renders those items independently by session
+- **AND** completing the item in session A does not mutate the item in session B
 
 ### Requirement: Stream Controls
 

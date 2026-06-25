@@ -23,19 +23,29 @@ The GUI SHALL address session reads, writes, replay, run state, and writer owner
 - **WHEN** the user starts a new conversation
 - **THEN** the GUI waits for the server to acknowledge the created session id before treating the route as writable
 - **AND** no old session transcript is shown as the new conversation's canonical transcript
+- **AND** creation failure leaves the current visible route unchanged except for an error state
 
 #### Scenario: Direct historical route resolves by id
 
 - **WHEN** the user opens `/sessions/<existing-session-id>` directly
 - **THEN** the GUI loads that session by id from Pi/OpenCandle session storage
 - **AND** it does not require a previous active-session selection or WebSocket activation message
+- **AND** it can replay the transcript read-only when another surface currently owns that session's writer lock
 
 #### Scenario: Existing session open is correlated
 
 - **WHEN** the user opens an existing session from the sidebar
-- **THEN** the open request includes the target session id and request id
-- **AND** the acknowledgement or error echoes the same session id and request id
-- **AND** a late acknowledgement for a different route does not replace the visible transcript
+- **THEN** the route target is the selected session id
+- **AND** the visible transcript is populated from a session-addressed bootstrap or a correlated acknowledgement for that id
+- **AND** a late acknowledgement or snapshot for a different route does not replace the visible transcript
+
+#### Scenario: Browser clients keep independent focus
+
+- **WHEN** browser tab A is viewing session A
+- **AND** browser tab B is viewing session B
+- **AND** the GUI server broadcasts a snapshot or run event for session A
+- **THEN** browser tab B stores the payload under session A state only
+- **AND** browser tab B continues rendering session B
 
 ### Requirement: Session-Scoped GUI Mutations
 
@@ -98,6 +108,18 @@ The GUI SHALL permit concurrent runs in different sessions owned by the same GUI
 
 OpenCandle SHALL use a canonical per-session writer lock for both TUI and GUI writers so cross-surface writer/follower state is based on the same session identity.
 
+#### Scenario: Persisted file path is the canonical lock key
+
+- **WHEN** a session has a persisted Pi session file
+- **THEN** GUI and TUI derive the writer lock from that file path
+- **AND** they do not derive the lock solely from the process-wide session directory
+
+#### Scenario: Runtime releases idle lock
+
+- **WHEN** a GUI session runtime has no active run and no subscribed browser clients
+- **THEN** the runtime may be evicted
+- **AND** any writer lock and heartbeat for that session are released before eviction completes
+
 #### Scenario: GUI observes TUI writer
 
 - **WHEN** the TUI owns the writer lock for session A
@@ -109,6 +131,7 @@ OpenCandle SHALL use a canonical per-session writer lock for both TUI and GUI wr
 - **WHEN** the GUI owns the writer lock for session A
 - **THEN** the TUI does not start a competing writer for session A
 - **AND** the TUI either enters follower/read-only mode or clearly rejects the write attempt
+- **AND** the rejection does not prevent the TUI from opening a different unlocked session when that flow is available
 
 #### Scenario: Per-session lock does not block unrelated session
 
@@ -124,9 +147,16 @@ The GUI SHALL preserve semantic parity with the TUI and Pi by using canonical Pi
 #### Scenario: GUI-created session resumes in TUI
 
 - **WHEN** a session is created and written through the GUI
-- **THEN** the TUI can resume that session from canonical Pi/OpenCandle storage
+- **THEN** the TUI can resume that session from canonical Pi/OpenCandle storage by supported exact-session or recent-session flow
 - **AND** the transcript contains the same user, assistant, tool-call, tool-result, error, and interruption entries expected by Pi session readers
 - **AND** OpenCandle custom entries and branch context remain available to later TUI turns
+
+#### Scenario: Direct tool and setup entries round trip
+
+- **WHEN** a GUI-created session contains direct tool invocation results and setup-created OpenCandle custom messages
+- **THEN** those entries are persisted in canonical Pi/OpenCandle session format
+- **AND** the TUI can replay or continue the session without losing those entries
+- **AND** a later GUI route bootstrap can replay the same entries after a TUI turn
 
 #### Scenario: TUI-created session runs in GUI
 
