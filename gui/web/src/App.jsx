@@ -256,6 +256,10 @@ export function AppShell() {
     [pathname, gui.supportsSessionActions, gui.newSession, gui.setToast, chatRun.startChatRun],
   );
 
+  const openHome = useCallback(() => {
+    void navigate({ to: "/", search: (current) => ({ ...current, drawer: undefined }) });
+  }, [navigate]);
+
   const newSession = useCallback(() => {
     void (async () => {
       const sessionId = await gui.newSession();
@@ -308,6 +312,7 @@ export function AppShell() {
     onRenameSession: renameSession,
     onDeleteSession: deleteSession,
     onNewSession: newSession,
+    onOpenHome: openHome,
   };
 
   const initialCatalogTab =
@@ -332,6 +337,7 @@ export function AppShell() {
             onExpandSidebar={() => setSidebarCollapsed(false)}
             onOpenProviders={() => openCatalog("providers")}
             onOpenModelSetup={() => setModelSetupOpen(true)}
+            onOpenHome={openHome}
             setToast={gui.setToast}
           />
         ) : marketDomain ? (
@@ -343,6 +349,7 @@ export function AppShell() {
             navigate={navigate}
             setToast={gui.setToast}
             onOpenSidebar={() => openDrawer("history")}
+            onOpenHome={openHome}
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}
           />
@@ -366,6 +373,7 @@ export function AppShell() {
             setDraft={setDraft}
             onOpenCommandPalette={openCatalog}
             onOpenSidebar={() => openDrawer("history")}
+            onOpenHome={openHome}
             onOpenContext={() => openDrawer("context")}
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}

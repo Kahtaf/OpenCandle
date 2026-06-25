@@ -4,12 +4,20 @@ import { cn } from "../../lib/utils.js";
 import { Button } from "../ui/button.jsx";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../ui/popover.jsx";
 
+export const sessionMenuLongPressDelayMs = 500;
+
+export function isSessionMenuLongPressPointer(pointerType) {
+  return pointerType === "touch" || pointerType === "pen";
+}
+
 export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
   const title = session.name || session.firstMessage || "Untitled session";
   const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(title);
   const inputRef = useRef(null);
+  const longPressTimerRef = useRef(null);
+  const suppressOpenRef = useRef(false);
 
   useEffect(() => {
     if (!renaming) setDraft(title);
@@ -21,6 +29,30 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
       inputRef.current?.select?.();
     }
   }, [renaming]);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) window.clearTimeout(longPressTimerRef.current);
+    };
+  }, []);
+
+  const clearLongPressTimer = () => {
+    if (!longPressTimerRef.current) return;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  const openContextMenu = () => {
+    clearLongPressTimer();
+    suppressOpenRef.current = true;
+    setMenuOpen(true);
+  };
+
+  const startLongPress = (event) => {
+    if (!isSessionMenuLongPressPointer(event.pointerType)) return;
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(openContextMenu, sessionMenuLongPressDelayMs);
+  };
 
   const submitRename = () => {
     const next = draft.trim();
@@ -69,13 +101,36 @@ export function HistoryItem({ session, active, onOpen, onRename, onDelete }) {
     >
       <button
         type="button"
-        onClick={() => onOpen(session)}
+        data-long-press-menu
+        onPointerDown={startLongPress}
+        onPointerUp={clearLongPressTimer}
+        onPointerCancel={clearLongPressTimer}
+        onPointerLeave={clearLongPressTimer}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openContextMenu();
+        }}
+        onClick={(event) => {
+          if (suppressOpenRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            suppressOpenRef.current = false;
+            return;
+          }
+          onOpen(session);
+        }}
         className="min-w-0 flex-1 truncate px-3 py-2 text-left text-sm focus-visible:outline-none"
         title={title}
       >
         {title}
       </button>
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+      <Popover
+        open={menuOpen}
+        onOpenChange={(nextOpen) => {
+          setMenuOpen(nextOpen);
+          if (!nextOpen) suppressOpenRef.current = false;
+        }}
+      >
         <PopoverAnchor className="mr-1 shrink-0">
           <PopoverTrigger asChild>
             <Button

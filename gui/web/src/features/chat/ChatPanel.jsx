@@ -37,6 +37,7 @@ export function ChatPanel({
   setDraft: setDraftProp,
   onOpenCommandPalette,
   onOpenSidebar,
+  onOpenHome,
   onOpenContext,
   sidebarCollapsed,
   onExpandSidebar,
@@ -97,7 +98,7 @@ export function ChatPanel({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
       data-run-state={runState}
     >
-      <MobileHeader onOpenSidebar={onOpenSidebar} />
+      <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (

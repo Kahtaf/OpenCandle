@@ -12,16 +12,21 @@ export function DesktopSidebarRestore({ onExpandSidebar }) {
   );
 }
 
-export function MobileHeader({ onOpenSidebar }) {
+export function MobileHeader({ onOpenSidebar, onOpenHome }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-2 md:hidden">
       <Button variant="ghost" size="icon-sm" aria-label="Open sidebar" onClick={onOpenSidebar}>
         <Menu />
       </Button>
-      <div className="flex items-center gap-1.5 text-sm font-semibold tracking-tight">
+      <button
+        type="button"
+        aria-label="Go to new chat"
+        onClick={onOpenHome}
+        className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-semibold tracking-tight text-foreground transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <OpenCandleLogo />
-        OpenCandle
-      </div>
+        <span className="truncate">OpenCandle</span>
+      </button>
     </header>
   );
 }
