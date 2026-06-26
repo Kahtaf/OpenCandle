@@ -51,6 +51,10 @@ module.exports = {
           DEFAULT: withAlpha("--tw-accent"),
           foreground: withAlpha("--tw-accent-foreground"),
         },
+        primary: {
+          DEFAULT: withAlpha("--tw-primary"),
+          foreground: withAlpha("--tw-primary-foreground"),
+        },
         popover: {
           DEFAULT: withAlpha("--tw-popover"),
           foreground: withAlpha("--tw-popover-foreground"),

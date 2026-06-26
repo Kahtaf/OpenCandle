@@ -2,7 +2,11 @@ import { unlink } from "node:fs/promises";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ModelSetupState } from "./model-setup.js";
 import { type PromptObservation, selectReplayPrompt } from "./prompt-observation.js";
-import { waitForNewEntryId, waitForSessionTurnSettlement } from "./session-entry-wait.js";
+import {
+  waitForNewEntryId,
+  waitForResolvedToolCalls,
+  waitForSessionTurnSettlement,
+} from "./session-entry-wait.js";
 
 interface AskUserBridge {
   answer(id: string, answer: string): boolean;
@@ -164,6 +168,7 @@ export async function promptAndSettle(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
     beforeIds,
   );
+  await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
   await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
 }
 
@@ -184,6 +189,7 @@ export async function replayObservedWorkflowPromptIfNeeded(
     isStreaming: runSession.isStreaming,
     pendingMessageCount: runSession.pendingMessageCount,
   }));
+  await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
 }
 
 export async function renameSessionFile(

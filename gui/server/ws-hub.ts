@@ -35,6 +35,7 @@ export interface WsHub {
   broadcast(message: unknown): void;
   broadcastModelSetup(): void;
   broadcastState(): void;
+  broadcastSessionSnapshot(sessionManager: SessionManager): void;
   broadcastSessions(): void;
   buildStateSnapshot(): {
     sessionId: string;
@@ -251,6 +252,13 @@ export function createWsHub({
     });
   }
 
+  function broadcastSessionSnapshot(sessionManager: SessionManager): void {
+    broadcast({
+      type: "session.snapshot",
+      ...buildSnapshotForSession(sessionManager),
+    });
+  }
+
   function buildStateSnapshot() {
     const sessionManager = getSessionManager();
     const sessionId = sessionManager.getSessionId();
@@ -263,11 +271,27 @@ export function createWsHub({
     };
   }
 
+  function buildSnapshotForSession(sessionManager: SessionManager) {
+    const sessionId = sessionManager.getSessionId();
+    const entries = sessionManager.getEntries();
+    return {
+      sessionId,
+      state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
+      entries,
+      events: sessionEntriesToChatEvents(entries, {
+        sessionId,
+        title: sessionManager.getSessionName(),
+      }),
+    };
+  }
+
   function currentChatEvents(entries = getSessionManager().getEntries()): ChatEvent[] {
     const sessionManager = getSessionManager();
+    const session = getSession();
     return sessionEntriesToChatEvents(entries, {
       sessionId: sessionManager.getSessionId(),
       title: sessionManager.getSessionName(),
+      markUnresolvedToolCalls: !(session.isStreaming || session.pendingMessageCount > 0),
     });
   }
 
@@ -297,6 +321,7 @@ export function createWsHub({
     broadcast,
     broadcastModelSetup,
     broadcastState,
+    broadcastSessionSnapshot,
     broadcastSessions,
     buildStateSnapshot,
     currentChatEvents,

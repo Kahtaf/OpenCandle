@@ -23,6 +23,7 @@ export function createAskUserBridge({
   getSessionId: () => string;
 }): {
   ask: AskUserHandler;
+  askForSession: (sessionId: string) => AskUserHandler;
   answer: (id: string, answer: string) => boolean;
   cancel: (id: string) => boolean;
   getPrompts: () => GuiAskUserPrompt[];
@@ -31,26 +32,29 @@ export function createAskUserBridge({
   const prompts = new Map<string, GuiAskUserPrompt>();
   const pending = new Map<string, PendingPrompt>();
 
-  const ask: AskUserHandler = async (params) => {
-    const id = `ask-user-${Date.now()}-${nextId++}`;
-    const prompt: GuiAskUserPrompt = {
-      id,
-      sessionId: getSessionId(),
-      question: params.question,
-      questionType: params.questionType,
-      options: params.options,
-      placeholder: params.placeholder,
-      reason: params.reason,
-      status: "pending",
-      answer: null,
-    };
-    prompts.set(id, prompt);
-    broadcast({ type: "ask_user.prompt", prompt });
+  const createAskHandler =
+    (resolveSessionId: () => string): AskUserHandler =>
+    async (params) => {
+      const id = `ask-user-${Date.now()}-${nextId++}`;
+      const prompt: GuiAskUserPrompt = {
+        id,
+        sessionId: resolveSessionId(),
+        question: params.question,
+        questionType: params.questionType,
+        options: params.options,
+        placeholder: params.placeholder,
+        reason: params.reason,
+        status: "pending",
+        answer: null,
+      };
+      prompts.set(id, prompt);
+      broadcast({ type: "ask_user.prompt", prompt });
 
-    return new Promise<AskUserResult>((resolve) => {
-      pending.set(id, { prompt, resolve });
-    });
-  };
+      return new Promise<AskUserResult>((resolve) => {
+        pending.set(id, { prompt, resolve });
+      });
+    };
+  const ask = createAskHandler(getSessionId);
 
   const resolvePrompt = (id: string, result: AskUserResult): boolean => {
     const item = pending.get(id);
@@ -69,6 +73,9 @@ export function createAskUserBridge({
 
   return {
     ask,
+    askForSession(sessionId) {
+      return createAskHandler(() => sessionId);
+    },
     answer(id, answer) {
       return resolvePrompt(id, { answer, cancelled: false });
     },

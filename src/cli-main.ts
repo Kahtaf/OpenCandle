@@ -17,6 +17,12 @@ import { loadEnv } from "./config.js";
 import { handleDoctorCommand } from "./doctor/cli-command.js";
 import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
+import {
+  acquireSessionWriterLock,
+  refreshSessionWriterLock,
+  releaseSessionWriterLock,
+  writerLockScopeForSession,
+} from "./pi/session-writer-lock.js";
 
 const require = createRequire(import.meta.url);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -190,35 +196,64 @@ async function main(): Promise<void> {
   initTheme(settingsManager.getTheme(), true);
 
   const sessionManager = continueOpenCandleSession(cwd);
-
-  const runtime = await createAgentSessionRuntime(
-    async (opts) => {
-      const services = await createAgentSessionServices({
-        cwd: opts.cwd,
-        agentDir: opts.agentDir,
-        authStorage,
-        settingsManager,
-        modelRegistry,
-      });
-      const result = await createOpenCandleSession({
-        cwd: opts.cwd,
-        agentDir: opts.agentDir,
-        settingsManager,
-        authStorage,
-        modelRegistry,
-        sessionManager: opts.sessionManager,
-        bindExtensions: false,
-      });
-      return {
-        ...result,
-        services,
-        diagnostics: services.diagnostics,
-      };
-    },
-    { cwd, agentDir, sessionManager },
+  const sessionWriterLockScope = writerLockScopeForSession(sessionManager);
+  const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui");
+  if (sessionWriterLock.role !== "writer") {
+    console.error(
+      `Session is currently being written by ${sessionWriterLock.lock.processKind} (pid ${sessionWriterLock.lock.pid}).`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  let activeSessionWriterLockScope = sessionWriterLockScope;
+  const writerLockHeartbeat = setInterval(
+    () => refreshSessionWriterLock(activeSessionWriterLockScope),
+    5000,
   );
 
+  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
   try {
+    runtime = await createAgentSessionRuntime(
+      async (opts) => {
+        const services = await createAgentSessionServices({
+          cwd: opts.cwd,
+          agentDir: opts.agentDir,
+          authStorage,
+          settingsManager,
+          modelRegistry,
+        });
+        const result = await createOpenCandleSession({
+          cwd: opts.cwd,
+          agentDir: opts.agentDir,
+          settingsManager,
+          authStorage,
+          modelRegistry,
+          sessionManager: opts.sessionManager,
+          bindExtensions: false,
+        });
+        return {
+          ...result,
+          services,
+          diagnostics: services.diagnostics,
+        };
+      },
+      { cwd, agentDir, sessionManager },
+    );
+    runtime.setRebindSession(async (nextSession) => {
+      const nextSessionWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
+      if (nextSessionWriterLockScope === activeSessionWriterLockScope) return;
+      const nextSessionWriterLock = await acquireSessionWriterLock(
+        nextSessionWriterLockScope,
+        "tui",
+      );
+      if (nextSessionWriterLock.role !== "writer") {
+        throw new Error(
+          `Session is currently being written by ${nextSessionWriterLock.lock.processKind} (pid ${nextSessionWriterLock.lock.pid}).`,
+        );
+      }
+      releaseSessionWriterLock(activeSessionWriterLockScope);
+      activeSessionWriterLockScope = nextSessionWriterLockScope;
+    });
     const interactiveMode = new InteractiveMode(runtime, {
       modelFallbackMessage: shouldSuppressFallbackMessage
         ? undefined
@@ -226,7 +261,9 @@ async function main(): Promise<void> {
     });
     await interactiveMode.run();
   } finally {
-    await runtime.dispose();
+    clearInterval(writerLockHeartbeat);
+    releaseSessionWriterLock(activeSessionWriterLockScope);
+    await runtime?.dispose();
   }
 }
 

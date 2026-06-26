@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- GUI chat sessions now run independently by route session id, so a prompt can be sent in one browser session while another session is still waiting or streaming.
+
+### Changed
+
+- Development and GUI dependencies were refreshed to current releases, including the Pi runtime stack, React 19, Vite 8, Vitest 4, Biome 2, and Tailwind 4.
+- The GUI chat route now renders a skeleton while session data is loading instead of briefly showing the home prompt or old conversation content.
+
+### Fixed
+
+- Plain-language comparison prompts that say "call out" risks no longer get misclassified as options call requests in rules-mode or LLM-router postprocessing.
+- GUI session replay now marks interrupted tool-use turns as failed instead of leaving historical threads permanently loading when tool results were never persisted.
+- GUI navigation no longer depends on one browser-wide active session, fixing route flicker, stale New Chat content, old-session home fallbacks, and "active session changed before your message was sent" errors.
+- GUI Tailwind 4 builds now use the v4 CSS entrypoint, restoring spacing utilities so sidebar rows, buttons, chat content, and the composer keep their intended density.
+
 ## [0.8.0] - 2026-06-22
 
 ### Added

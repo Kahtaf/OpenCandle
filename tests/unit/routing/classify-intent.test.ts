@@ -184,6 +184,16 @@ describe("classifyIntent", () => {
       expect(result.entities.symbols).toEqual(["AAPL", "MSFT"]);
     });
 
+    it("does not mistake prose asking to call out risks for a call-options request", () => {
+      const result = classifyIntent(
+        "Compare NVDA and AMD for a 6-month swing trade. Use available market data, call out valuation and downside risks, and end with a cautious action plan.",
+      );
+
+      expect(result.workflow).toBe("compare_assets");
+      expect(result.entities.symbols).toEqual(["NVDA", "AMD"]);
+      expect(result.entities.direction).toBeUndefined();
+    });
+
     it("routes ETF strategy tradeoff prompts as comparison instead of portfolio construction", () => {
       const result = classifyIntent(
         "If I have $5,000 for 10-15 years, should I prioritize VYM or SCHD, or something more growth-oriented like VOO or QQQ? What are the tradeoffs?",

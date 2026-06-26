@@ -32,6 +32,7 @@ export function confirmSessionCheck(confirmImpl = window.confirm) {
 export function DiagnosticsPage({
   role,
   onOpenSidebar,
+  onOpenHome,
   sidebarCollapsed = false,
   onExpandSidebar,
   onOpenProviders,
@@ -80,7 +81,7 @@ export function DiagnosticsPage({
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <MobileHeader onOpenSidebar={onOpenSidebar} />
+      <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-3">
