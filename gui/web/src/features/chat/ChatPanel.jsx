@@ -28,6 +28,7 @@ export function ChatPanel({
   modelSetup,
   role,
   inputDisabled = false,
+  sessionLoading = false,
   runState,
   catalog,
   send,
@@ -103,6 +104,8 @@ export function ChatPanel({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
+        ) : sessionLoading ? (
+          <SessionLoadingState />
         ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
           <EmptyThread
             onPrompt={submit}
@@ -140,6 +143,21 @@ export function ChatPanel({
         setToast={setToast}
       />
     </section>
+  );
+}
+
+function SessionLoadingState() {
+  return (
+    <div className="mx-auto flex h-full min-h-[320px] w-full max-w-[760px] items-center justify-center">
+      <div className="grid gap-3 text-center">
+        <TextShimmer className="text-sm font-medium text-muted-foreground">
+          Loading session
+        </TextShimmer>
+        <div className="mx-auto h-1.5 w-36 overflow-hidden rounded-full bg-secondary">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-muted-foreground/30" />
+        </div>
+      </div>
+    </div>
   );
 }
 

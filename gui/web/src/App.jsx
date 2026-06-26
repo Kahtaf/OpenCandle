@@ -386,6 +386,7 @@ export function AppShell() {
             modelSetup={gui.modelSetup}
             role={gui.role}
             inputDisabled={inputDisabled}
+            sessionLoading={sessionView.pendingSessionSwitch}
             runState={chatRun.runState}
             lastPrompt={chatRun.lastPrompt}
             catalog={gui.catalog}
