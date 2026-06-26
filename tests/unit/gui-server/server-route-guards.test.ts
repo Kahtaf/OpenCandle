@@ -81,6 +81,18 @@ describe("GUI server route guards", () => {
 
     expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');
   });
+
+  it("stamps route-created ask_user prompts with the target session id", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const factoryStart = source.indexOf("createSessionForManager:");
+    const factoryEnd = source.indexOf("wsHub,", factoryStart);
+
+    expect(factoryStart).toBeGreaterThan(-1);
+    expect(factoryEnd).toBeGreaterThan(factoryStart);
+    expect(source.slice(factoryStart, factoryEnd)).toContain(
+      "askUserBridge.askForSession(targetSessionManager.getSessionId())",
+    );
+  });
 });
 
 function routeBlockBefore(route: string, handler: string): string {

@@ -346,7 +346,7 @@ function buildAgentActivity(liveState, runState) {
 
   const runs = [...liveState.runs.values()];
   const activeRun = runs.find((run) => run.status === "running") || runs.at(-1);
-  const thinking = activeRun ? liveState.thinking.get(activeRun.id) : undefined;
+  const thinking = activeRun ? thinkingForRun(liveState, activeRun) : undefined;
   const activeTool = [...liveState.tools.values()].some((tool) => tool.status === "running");
   const assistantText = liveState.messages.some(
     (message) => message.role === "assistant" && message.text.trim(),
@@ -357,6 +357,17 @@ function buildAgentActivity(liveState, runState) {
     status: thinking?.status === "completed" ? "completed" : "pending",
     thinkingText: thinking?.text || "",
   };
+}
+
+function thinkingForRun(liveState, run) {
+  const scopedKey = `${run.sessionId || ""}::${run.id}`;
+  return (
+    liveState.thinking.get(scopedKey) ||
+    liveState.thinking.get(run.id) ||
+    [...liveState.thinking.values()].find(
+      (thinking) => thinking.runId === run.id && thinking.sessionId === run.sessionId,
+    )
+  );
 }
 
 function compactThinkingText(text) {

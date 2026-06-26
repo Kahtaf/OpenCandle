@@ -96,6 +96,29 @@ describe("GUI WS hub", () => {
     );
   });
 
+  it("broadcasts targeted snapshots without changing the current session payload", () => {
+    const client = createFakeClient();
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      acceptWebSocketFn: () => client,
+    });
+    const sessionManager = {
+      getSessionId: () => "session-2",
+      getSessionName: () => "Historical session",
+      getEntries: () => [],
+    } as unknown as SessionManager;
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    hub.broadcastSessionSnapshot(sessionManager);
+
+    expect(client.messages.at(-1)).toMatchObject({
+      type: "session.snapshot",
+      sessionId: "session-2",
+      entries: [],
+      events: [{ type: "session.updated", sessionId: "session-2", title: "Historical session" }],
+    });
+  });
+
   function baseHubOptions() {
     return {
       role: "writer",

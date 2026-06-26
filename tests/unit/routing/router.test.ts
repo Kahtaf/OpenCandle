@@ -793,6 +793,37 @@ describe("route()", () => {
     );
   });
 
+  it("corrects options output for prose multi-asset swing-trade comparisons", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Compare NVDA and AMD for a 6-month swing trade. Use available market data, call out valuation and downside risks, and end with a cautious action plan.",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA", "AMD"], direction: "bullish", dteHint: "month" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "misread call out as call options",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.route).toBe("workflow");
+    expect(result.workflow).toBe("compare_assets");
+    expect(result.entities.symbols).toEqual(["NVDA", "AMD"]);
+    expect(result.entities.direction).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "options_comparison_corrected_to_compare_assets",
+      }),
+    );
+  });
+
   it("corrects portfolio lot mutations away from compare workflow dispatch", async () => {
     const result = await route(
       {

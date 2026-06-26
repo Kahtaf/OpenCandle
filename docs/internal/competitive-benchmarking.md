@@ -100,7 +100,7 @@ Useful environment variables:
 - `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `90000` in this loop.
 - `OPENCANDLE_ROUTER_MODE`: defaults to `llm`; set `rules` to compare against legacy keyword routing.
 
-`acpx` requires its ACP adapter binaries to be available on PATH or passed through `--agent`. The repo carries `acpx`, `@zed-industries/codex-acp`, and `@agentclientprotocol/claude-agent-acp` as dev dependencies so `npm run test:evals:competitive` can use the structured ACP path instead of raw CLI/PTTY scraping. Gemini uses the local `gemini --acp --skip-trust` command with `GEMINI_CLI_TRUST_WORKSPACE=true`.
+`acpx` requires its ACP adapter binaries to be available on PATH or passed through `--agent`. The repo carries `acpx`, `@agentclientprotocol/codex-acp`, and `@agentclientprotocol/claude-agent-acp` as dev dependencies so `npm run test:evals:competitive` can use the structured ACP path instead of raw CLI/PTTY scraping. Gemini uses the local `gemini --acp --skip-trust` command with `GEMINI_CLI_TRUST_WORKSPACE=true`.
 
 The runner uses `--agent` for Claude and Gemini instead of relying only on acpx built-ins because acpx's project config is resolved against the benchmark agent cwd, which is an isolated temp directory. This also lets us pin or override adapter commands per provider without changing global `~/.acpx/config.json`.
 

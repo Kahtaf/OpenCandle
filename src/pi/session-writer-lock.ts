@@ -131,6 +131,7 @@ function lockPath(scopePath: string): string {
 }
 
 function isFileScope(scopePath: string): boolean {
+  if (scopePath.endsWith(".jsonl")) return true;
   try {
     return statSync(scopePath).isFile();
   } catch {

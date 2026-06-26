@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
+  buildToolInvokeSocketMessage,
   mergeSessionSnapshotMap,
   rejectTimedOutToolInvoke,
+  resolveBootstrapRole,
+  resolveBootstrapSessionId,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
@@ -81,6 +84,44 @@ describe("useGuiConnection helpers", () => {
     );
   });
 
+  it("stamps direct tool invocation socket messages with the visible session id", () => {
+    expect(
+      buildToolInvokeSocketMessage(
+        { requestId: "req-1", toolName: "get_stock_quote", args: { symbol: "NVDA" } },
+        "session-visible",
+      ),
+    ).toEqual({
+      type: "tool.invoke",
+      requestId: "req-1",
+      sessionId: "session-visible",
+      toolName: "get_stock_quote",
+      args: { symbol: "NVDA" },
+    });
+
+    expect(
+      buildToolInvokeSocketMessage(
+        { requestId: "req-2", toolName: "get_stock_quote", args: { symbol: "AMD" } },
+        "session-from-state-snapshot",
+        "session-visible-route",
+      ),
+    ).toMatchObject({
+      requestId: "req-2",
+      sessionId: "session-visible-route",
+    });
+  });
+
+  it("preserves the global writer role while loading a follower historical session", () => {
+    expect(resolveBootstrapRole("writer", { role: "follower" }, false)).toBe("writer");
+    expect(resolveBootstrapRole("writer", { role: "follower" })).toBe("follower");
+  });
+
+  it("preserves the active writer session id while loading a historical route snapshot", () => {
+    expect(resolveBootstrapSessionId("writer-session", "historical-session", false)).toBe(
+      "writer-session",
+    );
+    expect(resolveBootstrapSessionId("writer-session", "new-session")).toBe("new-session");
+  });
+
   it("normalizes bootstrap and state snapshot payloads into session snapshots", () => {
     expect(
       sessionSnapshotFromPayload({
@@ -125,7 +166,7 @@ describe("useGuiConnection helpers", () => {
       },
     );
     const afterB = mergeSessionSnapshotMap(afterA, {
-      type: "state.snapshot",
+      type: "session.snapshot",
       sessionId: "session-b",
       entries: [{ id: "entry-b" }],
       events: [{ type: "message.completed", seq: 1 }],

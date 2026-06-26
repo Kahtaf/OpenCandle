@@ -141,6 +141,30 @@ describe("findUnresolvedToolCalls", () => {
       ]),
     ).toEqual([]);
   });
+
+  it("reports OpenAI-style tool calls while their results are still pending", () => {
+    expect(
+      findUnresolvedToolCalls([
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-openai-1",
+              name: "get_stock_quote",
+              arguments: { symbol: "NVDA" },
+            },
+          ],
+          stopReason: "tool_calls",
+        }),
+      ]),
+    ).toEqual([
+      {
+        id: "call-openai-1",
+        name: "get_stock_quote",
+      },
+    ]);
+  });
 });
 
 function messageEntry(id: string, message: unknown) {

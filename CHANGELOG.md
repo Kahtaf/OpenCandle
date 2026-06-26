@@ -2,8 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Development and GUI dependencies were refreshed to current releases, including the Pi runtime stack, React 19, Vite 8, Vitest 4, Biome 2, and Tailwind 4.
+
 ### Fixed
 
+- Plain-language comparison prompts that say "call out" risks no longer get misclassified as options call requests in rules-mode or LLM-router postprocessing.
 - GUI session replay now marks interrupted tool-use turns as failed instead of leaving historical threads permanently loading when tool results were never persisted.
 
 ## [0.8.0] - 2026-06-22

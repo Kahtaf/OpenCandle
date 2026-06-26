@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -60,6 +60,24 @@ describe("writer lock", () => {
       expect(sameSession.role).toBe("follower");
       expect(readWriterLock(sessionA)?.processKind).toBe("gui");
       expect(readWriterLock(sessionB)?.processKind).toBe("tui");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("treats future session jsonl paths as file-scoped locks", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
+    try {
+      const sessionFile = join(dir, "future-session.jsonl");
+      const acquired = await acquireWriterLock(sessionFile, "gui", {
+        pid: process.pid,
+        staleGraceMs: 1000,
+      });
+
+      expect(acquired.role).toBe("writer");
+      expect(existsSync(sessionFile)).toBe(false);
+      expect(statSync(`${sessionFile}.writer.lock`).isFile()).toBe(true);
+      expect(readWriterLock(sessionFile)?.processKind).toBe("gui");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

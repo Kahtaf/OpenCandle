@@ -19,6 +19,7 @@ import { waitForNewEntryId } from "./session-entry-wait.js";
 import { buildCatalog } from "./tool-metadata.js";
 import {
   acquireWriterLock,
+  readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
   writerLockScopeForSession,
@@ -280,7 +281,7 @@ async function handleSseChatRun(
   let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
   if (!useCurrentSession) {
     const lockScope = writerLockScopeForSession(runSessionManager);
-    const lockResult = await acquireWriterLock(lockScope, "gui", { staleGraceMs: 500 });
+    const lockResult = await acquireWriterLock(lockScope, "gui");
     if (lockResult.role !== "writer") {
       writeJson(res, { error: "Read-only follower mode", lock: lockResult.lock }, 409);
       return;
@@ -347,10 +348,10 @@ async function handleSseChatRun(
         source: "gui",
         requirement: modelSetup.requirement,
       });
-      if (useCurrentSession) options.wsHub.broadcastState();
+      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
-      if (useCurrentSession) options.wsHub.broadcastState();
+      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
@@ -387,18 +388,35 @@ async function handleSseChatRun(
   }
 }
 
+function broadcastRunSessionSnapshot(
+  options: GuiHttpRouteOptions,
+  sessionManager: SessionManager,
+  useCurrentSession: boolean,
+): void {
+  if (useCurrentSession) {
+    options.wsHub.broadcastState();
+  } else {
+    options.wsHub.broadcastSessionSnapshot(sessionManager);
+    options.wsHub.broadcastSessions();
+  }
+}
+
 export async function buildSessionBootstrapPayload(
-  options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir" | "role" | "modelSetupController">,
+  options: Pick<
+    GuiHttpRouteOptions,
+    "cwd" | "sessionDir" | "role" | "modelSetupController" | "getSessionManager" | "wsHub"
+  >,
   sessionManager: SessionManager,
 ): Promise<Record<string, unknown>> {
   const sessionId = sessionManager.getSessionId();
   const entries = sessionManager.getEntries();
+  const bootstrap = await options.wsHub.buildBootstrapPayload();
   return {
-    role: options.role,
+    role: roleForSessionBootstrap(options, sessionManager),
     sessionId,
     catalog: buildCatalog(),
     modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
-    askUserPrompts: [],
+    askUserPrompts: Array.isArray(bootstrap.askUserPrompts) ? bootstrap.askUserPrompts : [],
     sessions: await SessionManager.list(options.cwd, options.sessionDir),
     snapshot: {
       sessionId,
@@ -412,6 +430,17 @@ export async function buildSessionBootstrapPayload(
   };
 }
 
+function roleForSessionBootstrap(
+  options: Pick<GuiHttpRouteOptions, "role" | "getSessionManager">,
+  sessionManager: SessionManager,
+): string {
+  if (options.role !== "writer") return options.role;
+  const currentSessionManager = options.getSessionManager();
+  if (currentSessionManager.getSessionFile() === sessionManager.getSessionFile()) return "writer";
+  const lock = readWriterLock(writerLockScopeForSession(sessionManager));
+  return lock && lock.pid !== process.pid ? "follower" : "writer";
+}
+
 export async function resolveSessionManagerById(
   options: Pick<GuiHttpRouteOptions, "cwd" | "sessionDir" | "getSessionManager">,
   sessionId: string,
@@ -423,9 +452,14 @@ export async function resolveSessionManagerById(
   return match ? SessionManager.open(match.path, options.sessionDir, options.cwd) : null;
 }
 
-function sessionIdFromRoute(pathname: string, action: "bootstrap" | "runs"): string {
+export function sessionIdFromRoute(pathname: string, action: "bootstrap" | "runs"): string {
   const match = pathname.match(new RegExp(`^/api/sessions/([^/]+)/${action}$`));
-  return match ? decodeURIComponent(match[1] ?? "") : "";
+  if (!match) return "";
+  try {
+    return decodeURIComponent(match[1] ?? "");
+  } catch {
+    return "";
+  }
 }
 
 async function handleTrustedGuiMutation(

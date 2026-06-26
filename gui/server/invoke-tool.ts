@@ -8,6 +8,12 @@ import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { AskUserHandler } from "../../src/types/index.js";
 import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
+import {
+  acquireWriterLock,
+  refreshWriterLock,
+  releaseWriterLock,
+  writerLockScopeForSession,
+} from "./writer-lock.js";
 
 export interface InvokeToolResult {
   toolCallId: string;
@@ -20,7 +26,11 @@ interface ToolInvokeClient {
 }
 
 export interface ToolInvokeController {
-  handleToolInvoke(toolName: string, args: Record<string, unknown>): Promise<InvokeToolResult>;
+  handleToolInvoke(
+    toolName: string,
+    args: Record<string, unknown>,
+    sessionId?: string,
+  ): Promise<InvokeToolResult>;
   handleToolInvokeMessage(client: ToolInvokeClient, data: Record<string, unknown>): Promise<void>;
 }
 
@@ -32,6 +42,10 @@ export interface ToolInvokeControllerOptions {
   getTools?: typeof getAllTools;
   invokeTool?: typeof invokeToolFromUi;
   askUserHandler?: AskUserHandler;
+  askUserHandlerForSessionId?: (sessionId: string) => AskUserHandler;
+  resolveSessionManager?: (sessionId: string) => Promise<SessionManager | null>;
+  broadcastSessionSnapshot?: (sessionManager: SessionManager) => void;
+  broadcastSessions?: () => void;
 }
 
 export function createToolInvokeController({
@@ -42,20 +56,63 @@ export function createToolInvokeController({
   getTools = getAllTools,
   invokeTool = invokeToolFromUi,
   askUserHandler,
+  askUserHandlerForSessionId,
+  resolveSessionManager,
+  broadcastSessionSnapshot,
+  broadcastSessions,
 }: ToolInvokeControllerOptions): ToolInvokeController {
   async function handleToolInvoke(
     toolName: string,
     args: Record<string, unknown>,
+    sessionId = "",
   ): Promise<InvokeToolResult> {
     if (role !== "writer") throw new Error("Read-only follower mode");
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
-    const result = await invokeTool(getSessionManager(), tool, args, "ui", { askUserHandler });
-    if (!result.isError && marketStateToolMapping(toolName) != null) {
-      onMarketStateChanged?.();
+
+    const currentSessionManager = getSessionManager();
+    const runSessionManager = await resolveToolInvokeSessionManager(
+      currentSessionManager,
+      sessionId,
+      resolveSessionManager,
+    );
+    const useCurrentSession = sameSessionStorage(currentSessionManager, runSessionManager);
+    let acquiredLockScope = "";
+    let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
+    if (!useCurrentSession) {
+      const lockScope = writerLockScopeForSession(runSessionManager);
+      const lockResult = await acquireWriterLock(lockScope, "gui");
+      if (lockResult.role !== "writer") {
+        throw new Error(
+          `Session is currently being written by ${lockResult.lock.processKind} (pid ${lockResult.lock.pid}).`,
+        );
+      }
+      acquiredLockScope = lockScope;
+      lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
     }
-    broadcastState();
-    return result;
+
+    try {
+      const runSessionId = safeSessionId(runSessionManager);
+      const result = await invokeTool(runSessionManager, tool, args, "ui", {
+        askUserHandler:
+          runSessionId && askUserHandlerForSessionId
+            ? askUserHandlerForSessionId(runSessionId)
+            : askUserHandler,
+      });
+      if (!result.isError && marketStateToolMapping(toolName) != null) {
+        onMarketStateChanged?.();
+      }
+      if (useCurrentSession) {
+        broadcastState();
+      } else {
+        broadcastSessionSnapshot?.(runSessionManager);
+        broadcastSessions?.();
+      }
+      return result;
+    } finally {
+      if (lockHeartbeat) clearInterval(lockHeartbeat);
+      if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
+    }
   }
 
   async function handleToolInvokeMessage(
@@ -64,8 +121,9 @@ export function createToolInvokeController({
   ): Promise<void> {
     const requestId = typeof data.requestId === "string" ? data.requestId : "";
     const toolName = String(data.toolName ?? "");
+    const sessionId = typeof data.sessionId === "string" ? data.sessionId : "";
     try {
-      const result = await handleToolInvoke(toolName, requestArgs(data.args));
+      const result = await handleToolInvoke(toolName, requestArgs(data.args), sessionId);
       if (requestId) {
         client.send(buildToolInvokeAckMessage(requestId, toolName, result));
       }
@@ -86,6 +144,43 @@ export function createToolInvokeController({
   }
 
   return { handleToolInvoke, handleToolInvokeMessage };
+}
+
+function sameSessionStorage(current: SessionManager, target: SessionManager): boolean {
+  if (current === target) return true;
+  const currentFile = safeSessionFile(current);
+  const targetFile = safeSessionFile(target);
+  return Boolean(currentFile && targetFile && currentFile === targetFile);
+}
+
+function safeSessionFile(sessionManager: SessionManager): string {
+  try {
+    return sessionManager.getSessionFile() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function safeSessionId(sessionManager: SessionManager): string {
+  try {
+    return sessionManager.getSessionId();
+  } catch {
+    return "";
+  }
+}
+
+async function resolveToolInvokeSessionManager(
+  currentSessionManager: SessionManager,
+  sessionId: string,
+  resolveSessionManager: ((sessionId: string) => Promise<SessionManager | null>) | undefined,
+): Promise<SessionManager> {
+  const targetSessionId = sessionId.trim();
+  if (!targetSessionId || targetSessionId === safeSessionId(currentSessionManager)) {
+    return currentSessionManager;
+  }
+  const resolved = await resolveSessionManager?.(targetSessionId);
+  if (!resolved) throw new Error("Unknown saved session");
+  return resolved;
 }
 
 function requestArgs(value: unknown): Record<string, unknown> {

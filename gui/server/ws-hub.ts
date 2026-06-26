@@ -35,6 +35,7 @@ export interface WsHub {
   broadcast(message: unknown): void;
   broadcastModelSetup(): void;
   broadcastState(): void;
+  broadcastSessionSnapshot(sessionManager: SessionManager): void;
   broadcastSessions(): void;
   buildStateSnapshot(): {
     sessionId: string;
@@ -251,6 +252,13 @@ export function createWsHub({
     });
   }
 
+  function broadcastSessionSnapshot(sessionManager: SessionManager): void {
+    broadcast({
+      type: "session.snapshot",
+      ...buildSnapshotForSession(sessionManager),
+    });
+  }
+
   function buildStateSnapshot() {
     const sessionManager = getSessionManager();
     const sessionId = sessionManager.getSessionId();
@@ -260,6 +268,20 @@ export function createWsHub({
       state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
       entries,
       events: currentChatEvents(entries),
+    };
+  }
+
+  function buildSnapshotForSession(sessionManager: SessionManager) {
+    const sessionId = sessionManager.getSessionId();
+    const entries = sessionManager.getEntries();
+    return {
+      sessionId,
+      state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
+      entries,
+      events: sessionEntriesToChatEvents(entries, {
+        sessionId,
+        title: sessionManager.getSessionName(),
+      }),
     };
   }
 
@@ -299,6 +321,7 @@ export function createWsHub({
     broadcast,
     broadcastModelSetup,
     broadcastState,
+    broadcastSessionSnapshot,
     broadcastSessions,
     buildStateSnapshot,
     currentChatEvents,

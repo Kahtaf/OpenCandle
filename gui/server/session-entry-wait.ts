@@ -130,8 +130,10 @@ function delay(ms: number): Promise<void> {
 function latestAssistantToolUseIndex(entries: SessionEntry[]): number {
   for (let index = entries.length - 1; index >= 0; index--) {
     const message = asMessage(entries[index]);
-    if (message?.role === "assistant" && message.stopReason === "toolUse") return index;
-    if (message?.role === "assistant" && message.stopReason === "stop") return -1;
+    if (message?.role === "assistant") {
+      if (toolCallsFromContent(message.content).length > 0) return index;
+      if (message.stopReason === "stop") return -1;
+    }
     if (message?.role === "user") return -1;
   }
   return -1;

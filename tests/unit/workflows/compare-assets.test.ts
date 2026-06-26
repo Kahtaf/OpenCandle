@@ -39,6 +39,7 @@ describe("buildCompareAssetsWorkflowDefinition", () => {
   });
 
   it("includes fallback guidance for unavailable fundamentals", () => {
+    expect(buildCompareAssetsWorkflowDefinition(makeResolution()).steps).toHaveLength(2);
     expect(followUpPrompt()).toContain("unavailable fundamentals");
     expect(followUpPrompt()).toContain("price, technical, and risk data");
   });
@@ -148,6 +149,23 @@ describe("buildCompareAssetsWorkflowDefinition", () => {
     expect(initialPrompt(resolution)).not.toContain("analyze_holdings_overlap");
     expect(followUpPrompt(resolution)).not.toContain("holdings-overlap");
     expect(followUpPrompt(resolution)).toContain("6mo horizon");
+  });
+
+  it("ends short-horizon comparisons with a cautious action plan", () => {
+    const resolution = makeResolution({
+      symbols: ["NVDA", "AMD"],
+      timeHorizon: "6mo",
+    });
+
+    expect(followUpPrompt(resolution)).toContain("Cautious action plan");
+    expect(initialPrompt(resolution)).toContain("Cautious action plan");
+    expect(initialPrompt(resolution)).toContain("Use these response headings in this order");
+    expect(initialPrompt(resolution)).toContain("REQUIRED ACTION SECTION");
+    expect(followUpPrompt(resolution)).toContain("entry conditions");
+    expect(followUpPrompt(resolution)).toContain("invalidation");
+    expect(followUpPrompt(resolution)).toContain("before caveats");
+    expect(followUpPrompt(resolution)).not.toContain("after any Caveats section");
+    expect(followUpPrompt(resolution)).toContain("Do not end at Caveats");
   });
 
   it("uses explicit ETF scope for long-horizon funds outside the common-symbol classifier", () => {

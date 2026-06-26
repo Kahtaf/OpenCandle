@@ -23,7 +23,7 @@ import {
   createBackgroundQuotePoller,
 } from "./background-quotes.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
-import { createHttpRequestHandler } from "./http-routes.js";
+import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
 import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
 import { createModelSetupController } from "./model-setup.js";
@@ -61,6 +61,7 @@ let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const initialWriterLockScope = writerLockScopeForSession(sessionManager);
 const lockResult = await acquireWriterLock(initialWriterLockScope, "gui");
+let activeWriterLockScope = initialWriterLockScope;
 let wsHub: WsHub;
 let quotePoller: BackgroundQuotePoller;
 const askUserBridge = createAskUserBridge({
@@ -90,7 +91,7 @@ const runtime = await createAgentSessionRuntime(
   { cwd, agentDir, sessionManager },
 );
 let session = runtime.session;
-const heartbeat = setInterval(() => refreshWriterLock(initialWriterLockScope), 5000);
+const heartbeat = setInterval(() => refreshWriterLock(activeWriterLockScope), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 quotePoller = createBackgroundQuotePoller({
@@ -114,8 +115,17 @@ const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
+  broadcastSessionSnapshot: (targetSessionManager) =>
+    wsHub.broadcastSessionSnapshot(targetSessionManager),
+  broadcastSessions: () => wsHub.broadcastSessions(),
   onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
   askUserHandler: askUserBridge.ask,
+  askUserHandlerForSessionId: (sessionId) => askUserBridge.askForSession(sessionId),
+  resolveSessionManager: (sessionId) =>
+    resolveSessionManagerById(
+      { cwd, sessionDir, getSessionManager: () => sessionManager },
+      sessionId,
+    ),
 });
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,
@@ -151,6 +161,17 @@ wsHub = createWsHub({
 
 let unsubscribeSession = wsHub.subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
+  const nextWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
+  if (lockResult.role === "writer" && nextWriterLockScope !== activeWriterLockScope) {
+    const nextLockResult = await acquireWriterLock(nextWriterLockScope, "gui");
+    if (nextLockResult.role !== "writer") {
+      throw new Error(
+        `Session is currently being written by ${nextLockResult.lock.processKind} (pid ${nextLockResult.lock.pid}).`,
+      );
+    }
+    releaseWriterLock(activeWriterLockScope);
+    activeWriterLockScope = nextWriterLockScope;
+  }
   unsubscribeSession();
   session = nextSession;
   sessionManager = nextSession.sessionManager;
@@ -177,6 +198,7 @@ const httpRequestHandler = createHttpRequestHandler({
       modelRegistry,
       settingsManager,
       sessionManager: targetSessionManager,
+      askUserHandler: askUserBridge.askForSession(targetSessionManager.getSessionId()),
     }),
   wsHub,
   modelSetupController,
@@ -212,7 +234,7 @@ const shutdown = createGracefulShutdown({
     localAutomationHeartbeat.stop();
     wsHub.closeClients();
     unsubscribeSession();
-    releaseWriterLock(initialWriterLockScope);
+    releaseWriterLock(activeWriterLockScope);
     await runtime.dispose();
   },
   exit: (code) => process.exit(code),

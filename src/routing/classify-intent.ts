@@ -78,11 +78,7 @@ const RULES: Rule[] = [
     confidence: 0.9,
     test: (input, entities) => {
       const lower = input.toLowerCase();
-      const hasOptionKeywords =
-        /\bcalls?\b/.test(lower) ||
-        /\bputs?\b/.test(lower) ||
-        /\boption(?:s)?\s*chain\b/.test(lower) ||
-        /\boptions?\b/.test(lower);
+      const hasOptionKeywords = hasOptionKeywordsInText(lower);
       const hasCompareKeywords =
         /\bcompare\b/.test(lower) ||
         /\bvs\.?\b/.test(lower) ||
@@ -137,12 +133,7 @@ const RULES: Rule[] = [
     confidence: 0.95,
     test: (input, entities) => {
       const lower = input.toLowerCase();
-      const hasOptionKeywords =
-        /\bcalls?\b/.test(lower) ||
-        /\bputs?\b/.test(lower) ||
-        /\boption(?:s)?\s*chain\b/.test(lower) ||
-        /\boptions?\b/.test(lower);
-      return hasOptionKeywords && entities.symbols.length >= 1;
+      return hasOptionKeywordsInText(lower) && entities.symbols.length >= 1;
     },
   },
   // Stateful portfolio/watchlist/alert/prediction mutations must not be
@@ -300,6 +291,15 @@ function isPortfolioEvaluationRequest(input: string): boolean {
     hasEvaluationIntent &&
     (hasExplicitPortfolioSubject || hasOwnedAssetMix) &&
     !hasConstructionIntent
+  );
+}
+
+function hasOptionKeywordsInText(lower: string): boolean {
+  return (
+    /\bcalls?\b(?!\s+out\b)/.test(lower) ||
+    /\bputs?\b/.test(lower) ||
+    /\boption(?:s)?\s*chain\b/.test(lower) ||
+    /\boptions?\b/.test(lower)
   );
 }
 

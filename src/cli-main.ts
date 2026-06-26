@@ -205,8 +205,9 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  let activeSessionWriterLockScope = sessionWriterLockScope;
   const writerLockHeartbeat = setInterval(
-    () => refreshSessionWriterLock(sessionWriterLockScope),
+    () => refreshSessionWriterLock(activeSessionWriterLockScope),
     5000,
   );
 
@@ -238,6 +239,21 @@ async function main(): Promise<void> {
       },
       { cwd, agentDir, sessionManager },
     );
+    runtime.setRebindSession(async (nextSession) => {
+      const nextSessionWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
+      if (nextSessionWriterLockScope === activeSessionWriterLockScope) return;
+      const nextSessionWriterLock = await acquireSessionWriterLock(
+        nextSessionWriterLockScope,
+        "tui",
+      );
+      if (nextSessionWriterLock.role !== "writer") {
+        throw new Error(
+          `Session is currently being written by ${nextSessionWriterLock.lock.processKind} (pid ${nextSessionWriterLock.lock.pid}).`,
+        );
+      }
+      releaseSessionWriterLock(activeSessionWriterLockScope);
+      activeSessionWriterLockScope = nextSessionWriterLockScope;
+    });
     const interactiveMode = new InteractiveMode(runtime, {
       modelFallbackMessage: shouldSuppressFallbackMessage
         ? undefined
@@ -246,7 +262,7 @@ async function main(): Promise<void> {
     await interactiveMode.run();
   } finally {
     clearInterval(writerLockHeartbeat);
-    releaseSessionWriterLock(sessionWriterLockScope);
+    releaseSessionWriterLock(activeSessionWriterLockScope);
     await runtime?.dispose();
   }
 }

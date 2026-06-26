@@ -81,6 +81,27 @@ export function mergeSessionSnapshotMap(current, payload) {
   return snapshot ? { ...current, [snapshot.sessionId]: snapshot } : current;
 }
 
+export function buildToolInvokeSocketMessage(payload, currentSessionId = "", targetSessionId = "") {
+  const sessionId = targetSessionId || currentSessionId;
+  return {
+    type: "tool.invoke",
+    ...payload,
+    ...(sessionId ? { sessionId } : {}),
+  };
+}
+
+export function resolveBootstrapRole(currentRole, data, updateRole = true) {
+  return updateRole ? data.role || "writer" : currentRole;
+}
+
+export function resolveBootstrapSessionId(
+  currentSessionId,
+  responseSessionId,
+  updateSession = true,
+) {
+  return updateSession ? responseSessionId : currentSessionId;
+}
+
 export function useGuiConnection() {
   const wsRef = useRef(null);
   const requestSeqRef = useRef(0);
@@ -111,20 +132,29 @@ export function useGuiConnection() {
     settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
   }, []);
 
-  const applyBootstrap = useCallback((data, expectedSessionId = "") => {
+  const applyBootstrap = useCallback((data, expectedSessionId = "", options = {}) => {
     const snapshot = data.snapshot || {};
     const nextSnapshot = sessionSnapshotFromPayload(data);
     const responseSessionId = String(data.sessionId || snapshot.sessionId || "").trim();
     if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
-    setRole(data.role || "writer");
-    setCurrentSessionId(responseSessionId);
+    const updateVisibleState = options.updateVisibleState !== false;
+    setRole((currentRole) => resolveBootstrapRole(currentRole, data, options.updateRole !== false));
+    setCurrentSessionId((currentSessionId) =>
+      resolveBootstrapSessionId(
+        currentSessionId,
+        responseSessionId,
+        options.updateCurrentSessionId !== false,
+      ),
+    );
     setAskUserPrompts(data.askUserPrompts || []);
-    setEntries(nextSnapshot?.entries || []);
+    if (updateVisibleState) setEntries(nextSnapshot?.entries || []);
     if (nextSnapshot) setSessionSnapshots((current) => mergeSessionSnapshotMap(current, data));
     startTransition(() => {
       setSessions(data.sessions || []);
-      setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
-      setEvents(nextSnapshot?.events || []);
+      if (updateVisibleState) {
+        setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
+        setEvents(nextSnapshot?.events || []);
+      }
       setCatalog(data.catalog || { tools: [], workflows: [], providers: [] });
       setModelSetup(
         data.modelSetup || { requirement: "unknown", providers: [], availableModels: [] },
@@ -221,6 +251,11 @@ export function useGuiConnection() {
             setDashboard(nextSnapshot?.dashboard || EMPTY_DASHBOARD);
             setEvents(nextSnapshot?.events || []);
           });
+        } else if (message.type === "session.snapshot") {
+          const nextSnapshot = sessionSnapshotFromPayload(message);
+          if (nextSnapshot) {
+            setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
+          }
         } else if (message.type === "ask_user.prompt" || message.type === "ask_user.resolved") {
           setAskUserPrompts((current) => upsertPrompt(current, message.prompt));
         } else if (message.type === "tool.invoke.result") {
@@ -290,14 +325,20 @@ export function useGuiConnection() {
         void sendHttpFallbackMessage(request);
         return true;
       }
-      socket.send(JSON.stringify({ type, ...payload }));
+      socket.send(
+        JSON.stringify(
+          type === "tool.invoke"
+            ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
+            : { type, ...payload },
+        ),
+      );
       return true;
     },
-    [sendHttpFallbackMessage, setToast],
+    [currentSessionId, sendHttpFallbackMessage, setToast],
   );
 
   const invokeTool = useCallback(
-    (toolName, args = {}) => {
+    (toolName, args = {}, targetSessionId = "") => {
       const socket = wsRef.current;
       if (socket?.readyState !== 1 || typeof socket.send !== "function") {
         const error = new Error("GUI connection is not open.");
@@ -314,10 +355,18 @@ export function useGuiConnection() {
         pendingToolInvokesRef.current.set(requestId, { resolve, reject, timeout });
       });
 
-      socket.send(JSON.stringify({ type: "tool.invoke", requestId, toolName, args }));
+      socket.send(
+        JSON.stringify(
+          buildToolInvokeSocketMessage(
+            { requestId, toolName, args },
+            currentSessionId,
+            targetSessionId,
+          ),
+        ),
+      );
       return promise;
     },
-    [setToast],
+    [currentSessionId, setToast],
   );
 
   const newSession = useCallback(async () => {
@@ -345,7 +394,11 @@ export function useGuiConnection() {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error || response.statusText);
         setSupportsSessionActions(true);
-        return applyBootstrap(data, targetSessionId);
+        return applyBootstrap(data, targetSessionId, {
+          updateCurrentSessionId: false,
+          updateRole: false,
+          updateVisibleState: false,
+        });
       } catch (error) {
         setToast(error instanceof Error ? error.message : String(error), { destructive: true });
         return false;

@@ -256,6 +256,7 @@ describe("opencandle package commands", () => {
     const runtime = {
       dispose: vi.fn().mockResolvedValue(undefined),
       modelFallbackMessage: undefined,
+      setRebindSession: vi.fn(),
     };
     const run = vi.fn().mockResolvedValue(undefined);
     piMocks.continueOpenCandleSession.mockReturnValue(sessionManager);
@@ -271,5 +272,55 @@ describe("opencandle package commands", () => {
     expect(run).toHaveBeenCalled();
     expect(piMocks.releaseSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl");
     expect(runtime.dispose).toHaveBeenCalled();
+  });
+
+  it("rebinds the TUI session writer lock when interactive mode switches sessions", async () => {
+    let rebindSession:
+      | ((nextSession: {
+          sessionManager: { getSessionFile: () => string; getSessionDir: () => string };
+        }) => Promise<void>)
+      | undefined;
+    const initialSessionManager = {
+      getSessionFile: vi.fn(() => "/tmp/session-a.jsonl"),
+      getSessionDir: vi.fn(() => "/tmp/sessions"),
+    };
+    const nextSessionManager = {
+      getSessionFile: vi.fn(() => "/tmp/session-b.jsonl"),
+      getSessionDir: vi.fn(() => "/tmp/sessions"),
+    };
+    const runtime = {
+      dispose: vi.fn().mockResolvedValue(undefined),
+      modelFallbackMessage: undefined,
+      setRebindSession: vi.fn((handler) => {
+        rebindSession = handler;
+      }),
+    };
+    const run = vi.fn(async () => {
+      await rebindSession?.({ sessionManager: nextSessionManager });
+    });
+    piMocks.continueOpenCandleSession.mockReturnValue(initialSessionManager);
+    piMocks.writerLockScopeForSession.mockImplementation((manager) =>
+      manager === nextSessionManager ? "/tmp/session-b.jsonl" : "/tmp/session-a.jsonl",
+    );
+    piMocks.createAgentSessionRuntime.mockResolvedValue(runtime);
+    piMocks.InteractiveMode.mockImplementation(function InteractiveModeMock() {
+      return { run };
+    });
+
+    await runCli([]);
+
+    expect(runtime.setRebindSession).toHaveBeenCalledOnce();
+    expect(piMocks.acquireSessionWriterLock).toHaveBeenNthCalledWith(
+      1,
+      "/tmp/session-a.jsonl",
+      "tui",
+    );
+    expect(piMocks.acquireSessionWriterLock).toHaveBeenNthCalledWith(
+      2,
+      "/tmp/session-b.jsonl",
+      "tui",
+    );
+    expect(piMocks.releaseSessionWriterLock).toHaveBeenNthCalledWith(1, "/tmp/session-a.jsonl");
+    expect(piMocks.releaseSessionWriterLock).toHaveBeenNthCalledWith(2, "/tmp/session-b.jsonl");
   });
 });

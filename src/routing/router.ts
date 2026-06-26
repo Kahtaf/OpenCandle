@@ -276,6 +276,32 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    next.workflow === "options_screener" &&
+    next.entities.symbols.length >= 2 &&
+    isPlainMultiAssetComparisonRequest(text)
+  ) {
+    diagnostics.push({
+      code: "options_comparison_corrected_to_compare_assets",
+      message:
+        "explicit multi-asset comparison without option contract language should use compare_assets",
+    });
+    next = {
+      ...next,
+      routeKind: "workflow_dispatch",
+      route: "workflow",
+      workflow: "compare_assets",
+      missing_required: [],
+      entities: {
+        ...next.entities,
+        direction: undefined,
+        dteHint: undefined,
+        optionStrategy: undefined,
+      },
+      diagnostics,
+    };
+  }
+
   // Legacy rules may recover a primary route only when the LLM router path has
   // already failed validation. Otherwise they are limited to enrichment and
   // narrow corrections below.
@@ -715,6 +741,26 @@ function isOptionsEducationOrSuitabilityRequest(text: string): boolean {
     /\b(?:covered\s+calls?|protective\s+puts?|options?|selling\s+calls?|option\s+income)\b/.test(
       lower,
     )
+  );
+}
+
+function isPlainMultiAssetComparisonRequest(text: string): boolean {
+  const lower = text.toLowerCase();
+  const hasCompareIntent =
+    /\bcompare\b/.test(lower) ||
+    /\bvs\.?\b/.test(lower) ||
+    /\bversus\b/.test(lower) ||
+    /\bwhich\s+is\s+better\b/.test(lower);
+  return hasCompareIntent && !hasExplicitOptionContractLanguage(lower);
+}
+
+function hasExplicitOptionContractLanguage(lower: string): boolean {
+  return (
+    /\bcalls?\b(?!\s+out\b)/.test(lower) ||
+    /\bputs?\b/.test(lower) ||
+    /\boption(?:s)?\s*chain\b/.test(lower) ||
+    /\boptions?\b/.test(lower) ||
+    /\b(?:strike|expiration|dte|premium|delta|theta|greeks?|contract)\b/.test(lower)
   );
 }
 

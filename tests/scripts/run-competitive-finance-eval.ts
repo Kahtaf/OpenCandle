@@ -15,11 +15,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type Api,
-  completeSimple,
   getModel,
   type Model,
   registerBuiltInApiProviders,
-} from "@earendil-works/pi-ai";
+} from "@earendil-works/pi-ai/compat";
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "../../src/config.js";
 import { getOpenCandleHomeDir } from "../../src/infra/opencandle-paths.js";

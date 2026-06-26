@@ -115,6 +115,22 @@ export function AppShell() {
     [navigate],
   );
 
+  const clearLiveEventsForSession = useCallback((sessionId) => {
+    if (!sessionId) return;
+    setLiveEventsBySession((current) => {
+      if (!current[sessionId]) return current;
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+    setLiveBaseEventCountBySession((current) => {
+      if (!current[sessionId]) return current;
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
+  }, []);
+
   const closeDrawer = useCallback(() => {
     void navigate({ search: (current) => ({ ...current, drawer: undefined }) });
   }, [navigate]);
@@ -175,13 +191,10 @@ export function AppShell() {
     )
       return;
     if (visibleEvents.length <= liveBaseEventCount) return;
-    setLiveEventsBySession((current) => {
-      const next = { ...current };
-      delete next[sessionView.activeSessionId];
-      return next;
-    });
+    clearLiveEventsForSession(sessionView.activeSessionId);
   }, [
     chatRun.runState,
+    clearLiveEventsForSession,
     liveBaseEventCount,
     liveEvents.length,
     sessionView.activeSessionId,
@@ -225,7 +238,7 @@ export function AppShell() {
       if (target.mode === "route") {
         const result = await chatRun.startChatRun(prompt, { sessionId: target.sessionId });
         if (result?.sessionChanged) {
-          setLiveEvents([]);
+          clearLiveEventsForSession(target.sessionId);
           gui.setToast("The active session changed before your message was sent. Please resend.", {
             destructive: true,
           });
@@ -245,7 +258,7 @@ export function AppShell() {
           });
           if (!result?.sessionChanged) return;
         }
-        setLiveEvents([]);
+        clearLiveEventsForSession(homeResetSessionRef.current || activeSessionId);
         gui.setToast("The active session changed before your message was sent. Please resend.", {
           destructive: true,
         });
@@ -253,7 +266,15 @@ export function AppShell() {
         freshRunPendingRef.current = false;
       }
     },
-    [pathname, gui.supportsSessionActions, gui.newSession, gui.setToast, chatRun.startChatRun],
+    [
+      activeSessionId,
+      pathname,
+      gui.supportsSessionActions,
+      gui.newSession,
+      gui.setToast,
+      chatRun.startChatRun,
+      clearLiveEventsForSession,
+    ],
   );
 
   const openHome = useCallback(() => {
@@ -324,6 +345,10 @@ export function AppShell() {
           ? "workflows"
           : "workflows";
   const marketDomain = domainFromPath(pathname);
+  const invokeToolForVisibleSession = useCallback(
+    (toolName, args) => gui.invokeTool(toolName, args, sessionView.activeSessionId),
+    [gui.invokeTool, sessionView.activeSessionId],
+  );
   return (
     <ToolDrawerProvider>
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
@@ -345,7 +370,7 @@ export function AppShell() {
             domain={marketDomain}
             role={gui.role}
             send={gui.send}
-            invokeTool={gui.invokeTool}
+            invokeTool={invokeToolForVisibleSession}
             navigate={navigate}
             setToast={gui.setToast}
             onOpenSidebar={() => openDrawer("history")}
