@@ -10,8 +10,8 @@ import {
 } from "../../components/chat/thread-message.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
-import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
@@ -148,14 +148,25 @@ export function ChatPanel({
 
 function SessionLoadingState() {
   return (
-    <div className="mx-auto flex h-full min-h-[320px] w-full max-w-[760px] items-center justify-center">
-      <div className="grid gap-3 text-center">
-        <TextShimmer className="text-sm font-medium text-muted-foreground">
-          Loading session
-        </TextShimmer>
-        <div className="mx-auto h-1.5 w-36 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full w-1/2 animate-pulse rounded-full bg-muted-foreground/30" />
-        </div>
+    <div
+      className="mx-auto flex w-full max-w-[1040px] flex-col gap-6"
+      aria-label="Loading session"
+      role="status"
+    >
+      <div className="grid max-w-[760px] gap-3">
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+      </div>
+      <div className="ml-auto grid w-full max-w-[720px] gap-3">
+        <Skeleton className="h-4 w-36 justify-self-end" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-2/3 justify-self-end" />
+      </div>
+      <div className="grid max-w-[760px] gap-3">
+        <Skeleton className="h-4 w-52" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-4/5" />
       </div>
     </div>
   );

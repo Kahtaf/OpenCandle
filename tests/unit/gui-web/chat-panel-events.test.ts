@@ -97,7 +97,8 @@ describe("ChatPanel event transcript rendering", () => {
       sessionLoading: true,
     });
 
-    expect(html).toContain("Loading session");
+    expect(html).toContain('aria-label="Loading session"');
+    expect(html).toContain("animate-pulse");
     expect(html).not.toContain("What are we watching");
     expect(html).not.toContain("Compare NVDA and AMD");
   });
