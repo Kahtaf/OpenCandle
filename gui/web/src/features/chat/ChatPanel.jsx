@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
+import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
