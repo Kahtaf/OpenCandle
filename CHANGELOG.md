@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-26
+
 ### Added
 
 - GUI chat sessions now run independently by route session id, so a prompt can be sent in one browser session while another session is still waiting or streaming.
