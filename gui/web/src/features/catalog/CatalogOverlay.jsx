@@ -43,6 +43,7 @@ export function CatalogOverlay({
   setToast,
   startChatRun,
   fillComposer,
+  sessionId,
 }) {
   const activeInitialTab = initialTab ?? INITIAL_TAB;
   const openStateKey = open ? `open:${activeInitialTab}` : "closed";
@@ -117,6 +118,7 @@ export function CatalogOverlay({
                 fillComposer={fillComposer}
                 onClose={close}
                 lookupSymbol={lookupSymbol}
+                sessionId={sessionId}
               />
             ) : (
               <ListBody
@@ -419,6 +421,7 @@ function BuilderBody({
   fillComposer,
   onClose,
   lookupSymbol,
+  sessionId,
 }) {
   const entity = resolveSelection(selection, catalog);
   if (!entity) {
@@ -440,6 +443,7 @@ function BuilderBody({
         onClose={onClose}
         setToast={setToast}
         lookupSymbol={lookupSymbol}
+        sessionId={sessionId}
       />
     );
   }
@@ -572,7 +576,24 @@ function WorkflowBuilder({
   );
 }
 
-function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast, lookupSymbol }) {
+export function buildCatalogToolInvokePayload(toolName, args, sessionId = "") {
+  return {
+    toolName,
+    args,
+    ...(sessionId ? { sessionId } : {}),
+  };
+}
+
+function ToolBuilder({
+  tool,
+  send,
+  startChatRun,
+  fillComposer,
+  onClose,
+  setToast,
+  lookupSymbol,
+  sessionId,
+}) {
   const schema = useMemo(() => schemaForTool(tool.name) ?? deriveGenericSchema(tool), [tool]);
   const [values, setValues] = useState(() => defaultValuesFor(schema));
   const setField = useCallback(
@@ -604,7 +625,7 @@ function ToolBuilder({ tool, send, startChatRun, fillComposer, onClose, setToast
       return;
     }
     if (mode === "run") {
-      if (send?.("tool.invoke", { toolName: tool.name, args: cleanArgs })) {
+      if (send?.("tool.invoke", buildCatalogToolInvokePayload(tool.name, cleanArgs, sessionId))) {
         setToast?.(`Running ${tool.label || tool.name}…`);
         onClose();
       }

@@ -1,4 +1,12 @@
-import { mkdirSync, openSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 export type ProcessKind = "tui" | "gui";
@@ -103,7 +111,11 @@ function tryCreate(scopePath: string, processKind: ProcessKind, pid: number): Wr
   const lock: WriterLock = { pid, processKind, acquiredAt: now, lastHeartbeat: now };
   try {
     const fd = openSync(lockPath(scopePath), "wx");
-    writeFileSync(fd, JSON.stringify(lock, null, 2));
+    try {
+      writeFileSync(fd, JSON.stringify(lock, null, 2));
+    } finally {
+      closeSync(fd);
+    }
     return lock;
   } catch {
     return null;

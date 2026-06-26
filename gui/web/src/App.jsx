@@ -433,6 +433,7 @@ export function AppShell() {
             setToast={gui.setToast}
             startChatRun={startRoutedChatRun}
             fillComposer={fillComposer}
+            sessionId={sessionView.activeSessionId}
           />
         ) : null}
       </Suspense>
