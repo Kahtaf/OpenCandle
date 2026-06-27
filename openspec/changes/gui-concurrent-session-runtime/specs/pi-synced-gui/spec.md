@@ -72,6 +72,37 @@ The GUI SHALL route every transcript-affecting mutation to an explicit session r
 - **THEN** that entry is appended to the explicitly targeted session
 - **AND** the action does not append to whichever session is currently focused in the browser
 
+### Requirement: Current-Thread Auxiliary Panels
+
+The GUI SHALL keep chat-adjacent panels that display tool calls, research evidence, sources, or run timelines scoped to the currently visible route session.
+
+#### Scenario: Panel selection identity includes session
+
+- **WHEN** the GUI stores a selected run, tool group, source list, research card, or transcript outline item for an auxiliary panel
+- **THEN** that selection identity includes the owning `sessionId`
+- **AND** the GUI does not match panel content across sessions by unscoped message id, run id, tool-call id, grouped-row id, title, or index
+
+#### Scenario: Tool panel closes or clears on session change
+
+- **WHEN** the research/tool timeline panel is open for a tool run in session A
+- **AND** the user navigates to session B
+- **THEN** the panel no longer displays session A tool calls as if they belonged to session B
+- **AND** the GUI either closes the panel, clears the panel selection, or binds it only to an explicit session B selection whose identity includes session B
+
+#### Scenario: Open panel updates from the current route session
+
+- **WHEN** the research/tool timeline panel is open while viewing session A
+- **AND** additional tool-call or tool-result events arrive for session A
+- **THEN** the panel updates from session A's current grouped rows or session store
+- **AND** late events from session B do not mutate the visible panel while session A remains the route session
+
+#### Scenario: Auto-open is session-scoped
+
+- **WHEN** session A starts or streams a tool run
+- **AND** the browser is currently viewing session B
+- **THEN** session A's tool run does not auto-open the research/tool panel over session B
+- **AND** session B's panel state is changed only by session B content or by an explicit user action in session B
+
 ### Requirement: Concurrent GUI Sessions Preserve Per-Session Writer Safety
 
 The GUI SHALL permit concurrent runs in different sessions owned by the same GUI process while preserving one writer and one active run per individual session.

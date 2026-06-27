@@ -1,17 +1,20 @@
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { textContent } from "../../rendering/text.js";
 
-export function chatRowsFromEvents(events = [], liveEvents = []) {
+export function chatRowsFromEvents(events = [], liveEvents = [], defaultSessionId = "") {
   const state = reduceChatEvents(mergeChatEvents(events, liveEvents));
   const toolsByMessage = groupToolsByMessage([...state.tools.values()]);
   const rows = [];
 
   for (const message of state.messages) {
     const tools = toolsByMessage.get(message.id) || [];
+    const sessionId = message.sessionId || defaultSessionId || "";
     if (message.customType) {
       rows.push({
         type: "custom_message",
         id: `message-${message.id}`,
+        messageId: message.id,
+        sessionId,
         customType: message.customType,
         content: message.content,
       });
@@ -22,17 +25,20 @@ export function chatRowsFromEvents(events = [], liveEvents = []) {
       rows.push({
         type: "user_message",
         id: `message-${message.id}`,
+        messageId: message.id,
+        sessionId,
         content: message.content,
       });
       continue;
     }
 
     if (message.role === "assistant") {
-      const content = contentForMessage(message, tools);
+      const content = contentForMessage(message, tools, sessionId);
       if (content.length > 0 && !isBackgroundAssistantMessage(content)) {
         rows.push({
           type: "assistant_message",
           id: `message-${message.id}`,
+          sessionId,
           content,
           messageId: message.id,
         });
@@ -45,6 +51,7 @@ export function chatRowsFromEvents(events = [], liveEvents = []) {
       rows.push({
         type: "tool_result",
         id: `tool-${tool.id}`,
+        sessionId: tool.sessionId || sessionId,
         message: toolResultMessage(tool),
       });
     }
@@ -63,7 +70,7 @@ export function mergeChatEvents(events = [], liveEvents = []) {
   return [...events, ...normalizedLive];
 }
 
-function contentForMessage(message, tools) {
+function contentForMessage(message, tools, sessionId = "") {
   const content = (message.content || []).map((part) => {
     if (part.type === "tool") {
       const tool = tools.find((candidate) => candidate.id === part.toolCallId);
@@ -72,6 +79,7 @@ function contentForMessage(message, tools) {
         id: part.toolCallId,
         name: tool?.name || "tool",
         arguments: tool?.input || {},
+        sessionId: tool?.sessionId || sessionId,
       };
     }
     return part;
@@ -87,6 +95,7 @@ function contentForMessage(message, tools) {
       id: tool.id,
       name: tool.name,
       arguments: tool.input || {},
+      sessionId: tool.sessionId || sessionId,
     });
   }
   return content;
@@ -101,6 +110,7 @@ function toolResultMessage(tool) {
       content: tool.output.content || [],
       details: tool.output.details,
       isError: Boolean(tool.output.isError),
+      sessionId: tool.sessionId || "",
     };
   }
 
@@ -111,6 +121,7 @@ function toolResultMessage(tool) {
     content: [{ type: "text", text: tool.error?.message || "Tool failed" }],
     details: tool.error?.details,
     isError: true,
+    sessionId: tool.sessionId || "",
   };
 }
 
