@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  findUnresolvedToolCalls,
   waitForEntryCount,
   waitForNewEntryId,
   waitForSessionTurnSettlement,
@@ -89,3 +90,89 @@ describe("waitForSessionTurnSettlement", () => {
     ).rejects.toThrow("Timed out waiting for the session turn to settle");
   });
 });
+
+describe("findUnresolvedToolCalls", () => {
+  it("reports tool calls from the latest assistant tool-use turn that have no result", () => {
+    expect(
+      findUnresolvedToolCalls([
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "get_crypto_price",
+              arguments: { id: "bitcoin" },
+            },
+          ],
+          stopReason: "toolUse",
+        }),
+      ]),
+    ).toEqual([
+      {
+        id: "call-1",
+        name: "get_crypto_price",
+      },
+    ]);
+  });
+
+  it("does not report calls that have matching tool results", () => {
+    expect(
+      findUnresolvedToolCalls([
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-1",
+              name: "get_crypto_price",
+              arguments: { id: "bitcoin" },
+            },
+          ],
+          stopReason: "toolUse",
+        }),
+        messageEntry("t1", {
+          role: "toolResult",
+          toolCallId: "call-1",
+          toolName: "get_crypto_price",
+          content: [{ type: "text", text: "BTC quote" }],
+          isError: false,
+        }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("reports OpenAI-style tool calls while their results are still pending", () => {
+    expect(
+      findUnresolvedToolCalls([
+        messageEntry("a1", {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "call-openai-1",
+              name: "get_stock_quote",
+              arguments: { symbol: "NVDA" },
+            },
+          ],
+          stopReason: "tool_calls",
+        }),
+      ]),
+    ).toEqual([
+      {
+        id: "call-openai-1",
+        name: "get_stock_quote",
+      },
+    ]);
+  });
+});
+
+function messageEntry(id: string, message: unknown) {
+  return {
+    type: "message",
+    id,
+    parentId: null,
+    timestamp: new Date().toISOString(),
+    message,
+  };
+}

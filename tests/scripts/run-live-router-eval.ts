@@ -17,7 +17,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { getModel, registerBuiltInApiProviders } from "@earendil-works/pi-ai";
+import { getModel, registerBuiltInApiProviders } from "@earendil-works/pi-ai/compat";
 import { route } from "../../src/routing/router.js";
 import { createPiAiRouterClient } from "../../src/routing/router-llm-client.js";
 import type { RouterInputContext, RouterOutput } from "../../src/routing/router-types.js";

@@ -10,6 +10,7 @@ import {
 } from "../../components/chat/thread-message.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { cn } from "../../lib/utils.js";
@@ -28,6 +29,7 @@ export function ChatPanel({
   modelSetup,
   role,
   inputDisabled = false,
+  sessionLoading = false,
   runState,
   catalog,
   send,
@@ -37,6 +39,7 @@ export function ChatPanel({
   setDraft: setDraftProp,
   onOpenCommandPalette,
   onOpenSidebar,
+  onOpenHome,
   onOpenContext,
   sidebarCollapsed,
   onExpandSidebar,
@@ -97,11 +100,13 @@ export function ChatPanel({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
       data-run-state={runState}
     >
-      <MobileHeader onOpenSidebar={onOpenSidebar} />
+      <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
         {needsSetup ? (
           <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
+        ) : sessionLoading ? (
+          <SessionLoadingState />
         ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
           <EmptyThread
             onPrompt={submit}
@@ -139,6 +144,32 @@ export function ChatPanel({
         setToast={setToast}
       />
     </section>
+  );
+}
+
+function SessionLoadingState() {
+  return (
+    <div
+      className="mx-auto flex w-full max-w-[1040px] flex-col gap-6"
+      aria-label="Loading session"
+      role="status"
+    >
+      <div className="grid max-w-[760px] gap-3">
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+      </div>
+      <div className="ml-auto grid w-full max-w-[720px] gap-3">
+        <Skeleton className="h-4 w-36 justify-self-end" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-2/3 justify-self-end" />
+      </div>
+      <div className="grid max-w-[760px] gap-3">
+        <Skeleton className="h-4 w-52" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-4/5" />
+      </div>
+    </div>
   );
 }
 
@@ -345,7 +376,7 @@ function buildAgentActivity(liveState, runState) {
 
   const runs = [...liveState.runs.values()];
   const activeRun = runs.find((run) => run.status === "running") || runs.at(-1);
-  const thinking = activeRun ? liveState.thinking.get(activeRun.id) : undefined;
+  const thinking = activeRun ? thinkingForRun(liveState, activeRun) : undefined;
   const activeTool = [...liveState.tools.values()].some((tool) => tool.status === "running");
   const assistantText = liveState.messages.some(
     (message) => message.role === "assistant" && message.text.trim(),
@@ -356,6 +387,17 @@ function buildAgentActivity(liveState, runState) {
     status: thinking?.status === "completed" ? "completed" : "pending",
     thinkingText: thinking?.text || "",
   };
+}
+
+function thinkingForRun(liveState, run) {
+  const scopedKey = `${run.sessionId || ""}::${run.id}`;
+  return (
+    liveState.thinking.get(scopedKey) ||
+    liveState.thinking.get(run.id) ||
+    [...liveState.thinking.values()].find(
+      (thinking) => thinking.runId === run.id && thinking.sessionId === run.sessionId,
+    )
+  );
 }
 
 function compactThinkingText(text) {

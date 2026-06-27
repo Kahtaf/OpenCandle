@@ -68,4 +68,19 @@ describe("GUI ask_user bridge", () => {
       "session-2",
     ]);
   });
+
+  it("can stamp prompts for an explicit route-addressed session", () => {
+    const bridge = createAskUserBridge({
+      broadcast: vi.fn(),
+      getSessionId: () => "active-session",
+    });
+
+    void bridge.askForSession("target-session")({ question: "Continue?", questionType: "text" });
+
+    expect(bridge.getPrompts()[0]).toMatchObject({
+      question: "Continue?",
+      sessionId: "target-session",
+      status: "pending",
+    });
+  });
 });

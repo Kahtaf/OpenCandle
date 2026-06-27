@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Config } from "../../../src/config.js";
 import * as configModule from "../../../src/config.js";
 import {
   type CommandRunner,
@@ -17,13 +18,15 @@ const DEFAULT_EMPTY_CONFIG = {
   exaApiKey: undefined,
   finnhubApiKey: undefined,
   debate: true,
+  routerMode: "rules",
+  toolScopeMode: "observe",
   sentiment: undefined,
-};
+} satisfies Config;
 
 beforeEach(() => {
   clearProviderStatusCache();
   delete process.env.FRED_API_KEY;
-  vi.spyOn(configModule, "getConfig").mockReturnValue(DEFAULT_EMPTY_CONFIG as any);
+  vi.spyOn(configModule, "getConfig").mockReturnValue(DEFAULT_EMPTY_CONFIG);
   vi.spyOn(configModule, "loadFileConfig").mockReturnValue({});
 });
 
@@ -86,6 +89,26 @@ describe("provider status probes", () => {
     });
   });
 
+  it("finds uv-installed Twitter shims even when the parent PATH is stale", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-twitter-shim-"));
+    const bin = join(dir, "twitter");
+    writeFileSync(bin, "#!/bin/sh\nprintf 'twitter, version 0.8.5\\n'\n");
+    chmodSync(bin, 0o755);
+    vi.stubEnv("PATH", tmpdir());
+    vi.stubEnv("UV_TOOL_BIN_DIR", dir);
+
+    const status = await probeProviderStatus("twitter", { force: true });
+
+    expect(status).toMatchObject({
+      providerId: "twitter",
+      kind: "external-tool",
+      mode: "install",
+      state: "installed",
+    });
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("runs the Twitter session smoke only when explicitly requested", async () => {
     const calls: Array<readonly string[]> = [];
     const runner: CommandRunner = async (_command, args) => {
@@ -142,6 +165,29 @@ describe("provider status probes", () => {
       state: "session_ok",
     });
     expect(calls).toEqual([["status", "--json"]]);
+  });
+
+  it("finds uv-installed Reddit shims for session probes even when the parent PATH is stale", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-reddit-shim-"));
+    const bin = join(dir, "rdt");
+    writeFileSync(
+      bin,
+      '#!/bin/sh\nprintf \'{"ok":true,"schema_version":"1","data":{"authenticated":true}}\'\n',
+    );
+    chmodSync(bin, 0o755);
+    vi.stubEnv("PATH", tmpdir());
+    vi.stubEnv("UV_TOOL_BIN_DIR", dir);
+
+    const status = await probeProviderStatus("reddit", { mode: "session", force: true });
+
+    expect(status).toMatchObject({
+      providerId: "reddit",
+      kind: "external-tool",
+      mode: "session",
+      state: "session_ok",
+    });
+
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it("classifies Reddit missing-cookie session errors", async () => {
@@ -249,10 +295,10 @@ describe("provider status probes", () => {
   });
 
   it("bounds public HTTP reachability and caches the result", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
 
-    const first = await probeProviderStatus("yahoo", { fetchImpl: fetchImpl as any });
-    const second = await probeProviderStatus("yahoo", { fetchImpl: fetchImpl as any });
+    const first = await probeProviderStatus("yahoo", { fetchImpl });
+    const second = await probeProviderStatus("yahoo", { fetchImpl });
 
     expect(first).toMatchObject({
       providerId: "yahoo",

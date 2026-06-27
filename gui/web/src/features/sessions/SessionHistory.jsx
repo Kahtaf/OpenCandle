@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import {
   Bell,
   BriefcaseBusiness,
+  ClipboardCheck,
   FileText,
   ListPlus,
   PanelLeft,
@@ -59,6 +60,7 @@ function SidebarBody({
   onRenameSession,
   onDeleteSession,
   onNewSession,
+  onOpenHome,
   onClose,
   showHeader = true,
   closeLabel = "Close sidebar",
@@ -73,8 +75,15 @@ function SidebarBody({
     <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-3">
       {showHeader ? (
         <div className="flex items-center gap-2 px-1">
-          <OpenCandleLogo />
-          <span className="text-sm font-semibold tracking-tight text-foreground">OpenCandle</span>
+          <button
+            type="button"
+            aria-label="Go to new chat"
+            onClick={onOpenHome}
+            className="flex min-w-0 items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold tracking-tight text-foreground transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <OpenCandleLogo />
+            <span className="truncate">OpenCandle</span>
+          </button>
           {onClose ? (
             <Button
               variant="ghost"
@@ -144,6 +153,7 @@ function MarketStateNav({ currentPath }) {
     { to: "/alerts", label: "Alerts", icon: Bell },
     { to: "/reports", label: "Reports", icon: FileText },
     { to: "/predictions", label: "Predictions", icon: TrendingUp },
+    { to: "/diagnostics", label: "Diagnostics", icon: ClipboardCheck },
   ];
   return (
     <div className="flex flex-col gap-0.5 border-b border-border pb-2">

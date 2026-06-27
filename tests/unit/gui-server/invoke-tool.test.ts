@@ -7,6 +7,7 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createToolInvokeController, invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
+import { readWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 
 describe("invokeToolFromUi", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
@@ -174,6 +175,143 @@ describe("invokeToolFromUi", () => {
         isError: false,
       },
     });
+  });
+
+  it("routes request-scoped tool invocations to the requested session", async () => {
+    const sentMessages: unknown[] = [];
+    const broadcastState = vi.fn();
+    const targetSessionSnapshot = vi.fn();
+    const currentSessionManager = {
+      getSessionId: () => "current-session",
+      getSessionFile: () => "/tmp/current-session.jsonl",
+      appendMessage: vi.fn(),
+    } as unknown as SessionManager;
+    const targetSessionManager = {
+      getSessionId: () => "target-session",
+      getSessionFile: () => "/tmp/current-session.jsonl",
+      appendMessage: vi.fn(),
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "get_stock_quote",
+      label: "Quote",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "NVDA quote" }],
+          details: { symbol: "NVDA", price: 200 },
+        };
+      },
+    };
+    const invokeTool = vi.fn(invokeToolFromUi);
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => currentSessionManager,
+      resolveSessionManager: vi.fn(async () => targetSessionManager),
+      broadcastState,
+      broadcastSessionSnapshot: targetSessionSnapshot,
+      getTools: () => [tool],
+      invokeTool,
+    });
+
+    await controller.handleToolInvokeMessage(
+      { send: (message: unknown) => sentMessages.push(message) },
+      {
+        requestId: "req-target",
+        sessionId: "target-session",
+        toolName: "get_stock_quote",
+        args: { symbol: "NVDA" },
+      },
+    );
+
+    expect(invokeTool).toHaveBeenCalledWith(
+      targetSessionManager,
+      tool,
+      { symbol: "NVDA" },
+      "ui",
+      expect.any(Object),
+    );
+    expect(broadcastState).toHaveBeenCalledOnce();
+    expect(sentMessages[0]).toMatchObject({ ok: true, requestId: "req-target" });
+  });
+
+  it("refreshes and releases non-current session locks during direct tool invocation", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-25T12:00:00.000Z"));
+    try {
+      const currentSessionManager = {
+        getSessionId: () => "current-session",
+        getSessionFile: () => join(openCandleHome, "current-session.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      const targetSessionManager = {
+        getSessionId: () => "target-session",
+        getSessionFile: () => join(openCandleHome, "target-session.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      const params = Type.Object({
+        symbol: Type.String(),
+      });
+      const tool: AgentTool<typeof params> = {
+        name: "get_stock_quote",
+        label: "Quote",
+        description: "test",
+        parameters: params,
+        async execute() {
+          throw new Error("invokeTool mock handles execution");
+        },
+      };
+      let finishInvoke: (() => void) | undefined;
+      const invokeTool = vi.fn(
+        () =>
+          new Promise<Awaited<ReturnType<typeof invokeToolFromUi>>>((resolve) => {
+            finishInvoke = () =>
+              resolve({
+                toolCallId: "tool-call-1",
+                result: { content: [{ type: "text", text: "NVDA quote" }] },
+                isError: false,
+              });
+          }),
+      );
+      const controller = createToolInvokeController({
+        role: "writer",
+        getSessionManager: () => currentSessionManager,
+        resolveSessionManager: vi.fn(async () => targetSessionManager),
+        broadcastState: vi.fn(),
+        getTools: () => [tool],
+        invokeTool,
+      });
+
+      const invokePromise = controller.handleToolInvoke(
+        "get_stock_quote",
+        {
+          symbol: "NVDA",
+        },
+        "target-session",
+      );
+      await vi.waitFor(() => expect(invokeTool).toHaveBeenCalledOnce());
+
+      const lockScope = writerLockScopeForSession(targetSessionManager);
+      const acquiredLock = readWriterLock(lockScope);
+      expect(acquiredLock).not.toBeNull();
+
+      vi.setSystemTime(new Date(Date.parse(acquiredLock?.lastHeartbeat ?? "") + 5000));
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const refreshedLock = readWriterLock(lockScope);
+      expect(Date.parse(refreshedLock?.lastHeartbeat ?? "")).toBeGreaterThan(
+        Date.parse(acquiredLock?.lastHeartbeat ?? ""),
+      );
+
+      finishInvoke?.();
+      await invokePromise;
+      expect(readWriterLock(lockScope)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("passes the GUI ask handler through direct UI tool invocation", async () => {

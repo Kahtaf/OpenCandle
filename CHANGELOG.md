@@ -2,8 +2,29 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-26
+
 ### Added
 
+- GUI chat sessions now run independently by route session id, so a prompt can be sent in one browser session while another session is still waiting or streaming.
+
+### Changed
+
+- Development and GUI dependencies were refreshed to current releases, including the Pi runtime stack, React 19, Vite 8, Vitest 4, Biome 2, and Tailwind 4.
+- The GUI chat route now renders a skeleton while session data is loading instead of briefly showing the home prompt or old conversation content.
+
+### Fixed
+
+- Plain-language comparison prompts that say "call out" risks no longer get misclassified as options call requests in rules-mode or LLM-router postprocessing.
+- GUI session replay now marks interrupted tool-use turns as failed instead of leaving historical threads permanently loading when tool results were never persisted.
+- GUI navigation no longer depends on one browser-wide active session, fixing route flicker, stale New Chat content, old-session home fallbacks, and "active session changed before your message was sent" errors.
+- GUI Tailwind 4 builds now use the v4 CSS entrypoint, restoring spacing utilities so sidebar rows, buttons, chat content, and the composer keep their intended density.
+
+## [0.8.0] - 2026-06-22
+
+### Added
+
+- `opencandle doctor` now emits a shared CLI/GUI health report covering runtime, local state, model readiness, provider readiness, optional social sessions, GUI reachability, JSON output, and remediation guidance; the GUI exposes the same report on a new Diagnostics page.
 - Release readiness gates now include docs-site builds, public-doc link checks, packed tarball install smoke tests, tag/version publish validation, Dependabot, CODEOWNERS, and a local `release:check` preflight before version/tag mutation.
 - Package-content validation now parses `npm pack --dry-run --json`, blocks internal/generated artifact paths, and is shared by CI, release checks, and local publish dry runs.
 
@@ -16,6 +37,7 @@
 
 ### Fixed
 
+- Twitter/X and Reddit sentiment setup now discovers uv-installed `twitter` and `rdt` shims in user bin directories even when OpenCandle was launched from an environment whose `PATH` has not yet picked up `~/.local/bin`.
 - Existing saved-portfolio exposure reviews such as "does my current portfolio look too exposed if rates stay high" now route through the portfolio-review agent path instead of the portfolio-builder workflow, preserving saved portfolio/watchlist/prediction context in competitive evals and normal finance fallback turns.
 - Runtime Pi dependencies and Vite were upgraded to clear npm audit advisories, and the installed `opencandle` entrypoint now runs the native `better-sqlite3` guard before loading the main CLI.
 - GUI first-run model setup actions now work through trusted HTTP fallback when WebSockets are unavailable, while Pi sign-in remains clearly terminal-only.

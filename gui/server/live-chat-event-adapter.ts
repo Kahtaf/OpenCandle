@@ -29,15 +29,20 @@ export function createLiveChatEventAdapter(
   let lastAssistantMessageId: string | undefined;
   const completedMessageIds = new Set<string>();
 
-  const emit = (event: Omit<ChatEvent, "seq">) => {
-    options.emit({ ...event, seq: seq++ } as ChatEvent);
+  const emit = (event: Omit<ChatEvent, "seq" | "sessionId">) => {
+    options.emit({ ...event, sessionId: options.sessionId, seq: seq++ } as ChatEvent);
   };
 
   const ensureAssistantMessage = (): string => {
     if (currentAssistantMessageId) return currentAssistantMessageId;
     currentAssistantMessageId = `${options.runId}-assistant-${++assistantCount}`;
     lastAssistantMessageId = currentAssistantMessageId;
-    emit({ type: "message.created", messageId: currentAssistantMessageId, role: "assistant" });
+    emit({
+      type: "message.created",
+      runId: options.runId,
+      messageId: currentAssistantMessageId,
+      role: "assistant",
+    });
     return currentAssistantMessageId;
   };
 
@@ -49,6 +54,7 @@ export function createLiveChatEventAdapter(
     completedMessageIds.add(messageId);
     emit({
       type: "message.completed",
+      runId: options.runId,
       messageId,
       content: contentToChatContent(message.content),
     });
@@ -66,9 +72,10 @@ export function createLiveChatEventAdapter(
               userCount === 1 && options.originalPrompt
                 ? options.originalPrompt
                 : messageText(message.content);
-            emit({ type: "message.created", messageId, role: "user" });
+            emit({ type: "message.created", runId: options.runId, messageId, role: "user" });
             emit({
               type: "message.completed",
+              runId: options.runId,
               messageId,
               content: [{ type: "text", text }],
             });
@@ -85,6 +92,7 @@ export function createLiveChatEventAdapter(
           if (update.type === "text_delta") {
             emit({
               type: "message.delta",
+              runId: options.runId,
               messageId: ensureAssistantMessage(),
               text: update.delta,
             });
@@ -116,6 +124,7 @@ export function createLiveChatEventAdapter(
           const messageId = messageIdForTool();
           emit({
             type: "tool.started",
+            runId: options.runId,
             toolCallId: event.toolCallId,
             messageId,
             name: event.toolName,
@@ -127,6 +136,7 @@ export function createLiveChatEventAdapter(
         case "tool_execution_update":
           emit({
             type: "tool.delta",
+            runId: options.runId,
             toolCallId: event.toolCallId,
             chunk: event.partialResult,
           });
@@ -137,6 +147,7 @@ export function createLiveChatEventAdapter(
           if (event.isError) {
             emit({
               type: "tool.failed",
+              runId: options.runId,
               toolCallId: event.toolCallId,
               error: {
                 message: messageText(output.content),
@@ -146,6 +157,7 @@ export function createLiveChatEventAdapter(
           } else {
             emit({
               type: "tool.completed",
+              runId: options.runId,
               toolCallId: event.toolCallId,
               output,
             });

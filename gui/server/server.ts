@@ -11,6 +11,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { createOpenCandleSession } from "../../src/index.js";
+import { assertSupportedNodeVersion } from "../../src/infra/node-version.js";
 import { createAskUserBridge } from "./ask-user-bridge.js";
 import {
   createLocalAutomationHeartbeat,
@@ -22,7 +23,7 @@ import {
   createBackgroundQuotePoller,
 } from "./background-quotes.js";
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
-import { createHttpRequestHandler } from "./http-routes.js";
+import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
 import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
 import { createModelSetupController } from "./model-setup.js";
@@ -30,8 +31,15 @@ import { isTrustedPrivateApiRequest } from "./private-api-access.js";
 import { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
-import { acquireWriterLock, refreshWriterLock, releaseWriterLock } from "./writer-lock.js";
+import {
+  acquireWriterLock,
+  refreshWriterLock,
+  releaseWriterLock,
+  writerLockScopeForSession,
+} from "./writer-lock.js";
 import { createWsHub, type WsHub } from "./ws-hub.js";
+
+assertSupportedNodeVersion();
 
 const cwd = process.cwd();
 const host = process.env.OPENCANDLE_GUI_HOST ?? "127.0.0.1";
@@ -51,7 +59,9 @@ const settingsManager = SettingsManager.create(cwd, agentDir);
 const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
-const lockResult = await acquireWriterLock(sessionDir, "gui");
+const initialWriterLockScope = writerLockScopeForSession(sessionManager);
+const lockResult = await acquireWriterLock(initialWriterLockScope, "gui");
+let activeWriterLockScope = initialWriterLockScope;
 let wsHub: WsHub;
 let quotePoller: BackgroundQuotePoller;
 const askUserBridge = createAskUserBridge({
@@ -81,7 +91,7 @@ const runtime = await createAgentSessionRuntime(
   { cwd, agentDir, sessionManager },
 );
 let session = runtime.session;
-const heartbeat = setInterval(() => refreshWriterLock(sessionDir), 5000);
+const heartbeat = setInterval(() => refreshWriterLock(activeWriterLockScope), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 quotePoller = createBackgroundQuotePoller({
@@ -105,8 +115,17 @@ const toolInvokeController = createToolInvokeController({
   role: lockResult.role,
   getSessionManager: () => sessionManager,
   broadcastState: () => wsHub.broadcastState(),
+  broadcastSessionSnapshot: (targetSessionManager) =>
+    wsHub.broadcastSessionSnapshot(targetSessionManager),
+  broadcastSessions: () => wsHub.broadcastSessions(),
   onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
   askUserHandler: askUserBridge.ask,
+  askUserHandlerForSessionId: (sessionId) => askUserBridge.askForSession(sessionId),
+  resolveSessionManager: (sessionId) =>
+    resolveSessionManagerById(
+      { cwd, sessionDir, getSessionManager: () => sessionManager },
+      sessionId,
+    ),
 });
 const sessionActionsController = createSessionActionsController({
   role: lockResult.role,
@@ -142,6 +161,17 @@ wsHub = createWsHub({
 
 let unsubscribeSession = wsHub.subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
+  const nextWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
+  if (lockResult.role === "writer" && nextWriterLockScope !== activeWriterLockScope) {
+    const nextLockResult = await acquireWriterLock(nextWriterLockScope, "gui");
+    if (nextLockResult.role !== "writer") {
+      throw new Error(
+        `Session is currently being written by ${nextLockResult.lock.processKind} (pid ${nextLockResult.lock.pid}).`,
+      );
+    }
+    releaseWriterLock(activeWriterLockScope);
+    activeWriterLockScope = nextWriterLockScope;
+  }
   unsubscribeSession();
   session = nextSession;
   sessionManager = nextSession.sessionManager;
@@ -154,11 +184,22 @@ const httpRequestHandler = createHttpRequestHandler({
   webDist,
   role: lockResult.role,
   cwd,
+  agentDir,
   sessionDir,
   privateApiSessionToken,
   allowRemotePrivateApi,
   getSession: () => session,
   getSessionManager: () => sessionManager,
+  createSessionForManager: async (targetSessionManager) =>
+    createOpenCandleSession({
+      cwd,
+      agentDir,
+      authStorage,
+      modelRegistry,
+      settingsManager,
+      sessionManager: targetSessionManager,
+      askUserHandler: askUserBridge.askForSession(targetSessionManager.getSessionId()),
+    }),
   wsHub,
   modelSetupController,
   sessionActionsController,
@@ -193,7 +234,7 @@ const shutdown = createGracefulShutdown({
     localAutomationHeartbeat.stop();
     wsHub.closeClients();
     unsubscribeSession();
-    releaseWriterLock(sessionDir);
+    releaseWriterLock(activeWriterLockScope);
     await runtime.dispose();
   },
   exit: (code) => process.exit(code),

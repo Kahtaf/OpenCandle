@@ -16,6 +16,13 @@ describe("optimistic GUI user messages", () => {
     });
   });
 
+  it("scopes optimistic events to the target session", () => {
+    expect(createOptimisticUserMessageEvents("hello", "session-a")).toEqual([
+      expect.objectContaining({ type: "message.created", sessionId: "session-a" }),
+      expect.objectContaining({ type: "message.completed", sessionId: "session-a" }),
+    ]);
+  });
+
   it("keeps one user bubble when the persisted server message arrives after the optimistic one", () => {
     const optimistic = createOptimisticUserMessageEvents("Compare MSFT and GOOGL");
     const persisted = persistedUserEvents("persisted-user", "Compare MSFT and GOOGL");

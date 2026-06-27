@@ -62,7 +62,9 @@ export function buildCompareAssetsWorkflowDefinition(
       : timeHorizon
         ? `End with a concise verdict on which asset best fits the ${timeHorizon} horizon and why.`
         : "End with a concise verdict on which asset looks strongest right now and why.";
-
+  const actionPlanGuidance = timeHorizon
+    ? `\n- Required action section: immediately after the summary verdict and before caveats, add a section exactly titled "Cautious action plan" for the ${timeHorizon} horizon. Include preferred tilt, entry conditions, position-sizing caution, downside risk/invalidation trigger, and the missing data that would change the plan. Do not end at Caveats.`
+    : "";
   return {
     workflowType: "compare_assets",
     steps: [
@@ -76,7 +78,7 @@ export function buildCompareAssetsWorkflowDefinition(
         `Now present the side-by-side comparison for ${symbols}:
 - Keep any unavailable fundamentals marked as unavailable instead of retrying the same failed provider calls.
 - Use the ${evidenceList} you already fetched to finish the comparison even if some fundamentals are missing.
-- ${verdictInstruction}${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}${overlapGuidance}`,
+- ${verdictInstruction}${horizonGuidance}${macroHedgeGuidance}${interestRateGuidance}${overlapGuidance}${actionPlanGuidance}`,
         {
           requiredInputs: ["asset_data"],
           expectedOutputs: ["comparison_summary"],

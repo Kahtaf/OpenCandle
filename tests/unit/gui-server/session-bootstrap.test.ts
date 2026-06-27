@@ -1,0 +1,171 @@
+import { mkdtempSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it } from "vitest";
+import {
+  buildSessionBootstrapPayload,
+  resolveSessionManagerById,
+  sessionIdFromRoute,
+} from "../../../gui/server/http-routes.js";
+import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
+import type { WsHub } from "../../../gui/server/ws-hub.js";
+
+describe("session-addressed GUI bootstrap", () => {
+  it("builds a transcript snapshot for the requested session without using active state", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
+    try {
+      const requested = SessionManager.create(cwd, sessionDir);
+      requested.appendSessionInfo("Requested session");
+      requested.appendMessage({ role: "user", content: "Load this exact session" });
+
+      const other = SessionManager.create(cwd, sessionDir);
+      other.appendMessage({ role: "user", content: "Do not load me" });
+
+      const payload = await buildSessionBootstrapPayload(
+        {
+          cwd,
+          sessionDir,
+          role: "writer",
+          getSessionManager: () => other,
+          wsHub: wsHubWithPrompts(),
+          modelSetupController: {
+            buildCurrentModelSetupState: () => ({
+              requirement: "ready",
+              providers: [],
+              availableModels: [],
+            }),
+          },
+        },
+        requested,
+      );
+
+      expect(payload.sessionId).toBe(requested.getSessionId());
+      const snapshot = payload.snapshot as {
+        sessionId: string;
+        events: Array<{ sessionId: string; type: string }>;
+      };
+      expect(snapshot.sessionId).toBe(requested.getSessionId());
+      expect(snapshot.events.every((event) => event.sessionId === requested.getSessionId())).toBe(
+        true,
+      );
+      expect(JSON.stringify(snapshot.events)).toContain("Load this exact session");
+      expect(JSON.stringify(snapshot.events)).not.toContain("Do not load me");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports follower role when the requested session is locked by another writer", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
+    try {
+      const requested = SessionManager.create(cwd, sessionDir);
+      const current = SessionManager.create(cwd, sessionDir);
+      await acquireWriterLock(writerLockScopeForSession(requested), "tui", { pid: 999_999 });
+
+      const payload = await buildSessionBootstrapPayload(
+        {
+          cwd,
+          sessionDir,
+          role: "writer",
+          getSessionManager: () => current,
+          wsHub: wsHubWithPrompts(),
+          modelSetupController: {
+            buildCurrentModelSetupState: () => ({
+              requirement: "ready",
+              providers: [],
+              availableModels: [],
+            }),
+          },
+        },
+        requested,
+      );
+
+      expect(payload.role).toBe("follower");
+      expect(payload.sessionId).toBe(requested.getSessionId());
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves the current fresh session before it appears in saved-session listings", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
+    try {
+      const current = SessionManager.create(cwd, sessionDir);
+
+      const resolved = await resolveSessionManagerById(
+        {
+          cwd,
+          sessionDir,
+          getSessionManager: () => current,
+        },
+        current.getSessionId(),
+      );
+
+      expect(resolved).toBe(current);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("includes pending ask-user prompts in requested session bootstrap payloads", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
+    try {
+      const requested = SessionManager.create(cwd, sessionDir);
+
+      const payload = await buildSessionBootstrapPayload(
+        {
+          cwd,
+          sessionDir,
+          role: "writer",
+          getSessionManager: () => requested,
+          wsHub: wsHubWithPrompts([
+            {
+              id: "ask-1",
+              sessionId: requested.getSessionId(),
+              question: "Continue?",
+              status: "pending",
+            },
+          ]),
+          modelSetupController: {
+            buildCurrentModelSetupState: () => ({
+              requirement: "ready",
+              providers: [],
+              availableModels: [],
+            }),
+          },
+        },
+        requested,
+      );
+
+      expect(payload.askUserPrompts).toMatchObject([
+        { id: "ask-1", sessionId: requested.getSessionId(), status: "pending" },
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores malformed percent-encoded session route ids instead of throwing", () => {
+    expect(sessionIdFromRoute("/api/sessions/%/bootstrap", "bootstrap")).toBe("");
+    expect(sessionIdFromRoute("/api/sessions/%/runs", "runs")).toBe("");
+    expect(sessionIdFromRoute("/api/sessions/session%20id/bootstrap", "bootstrap")).toBe(
+      "session id",
+    );
+  });
+});
+
+function wsHubWithPrompts(askUserPrompts: unknown[] = []): WsHub {
+  return {
+    buildBootstrapPayload: async () => ({ askUserPrompts }),
+  } as unknown as WsHub;
+}

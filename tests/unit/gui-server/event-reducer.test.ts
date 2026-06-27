@@ -6,24 +6,25 @@ import { applyChatEvent, reduceChatEvents } from "../../../gui/shared/event-redu
 describe("chat event reducer", () => {
   it("rebuilds the same state from out-of-order historical events", () => {
     const events: ChatEvent[] = [
-      { type: "message.delta", messageId: "m1", text: "NV", seq: 3 },
+      { type: "message.delta", sessionId: "s1", messageId: "m1", text: "NV", seq: 3 },
       { type: "run.started", runId: "r1", sessionId: "s1", seq: 1 },
-      { type: "message.created", messageId: "m1", role: "assistant", seq: 2 },
-      { type: "message.delta", messageId: "m1", text: "DA", seq: 4 },
+      { type: "message.created", sessionId: "s1", messageId: "m1", role: "assistant", seq: 2 },
+      { type: "message.delta", sessionId: "s1", messageId: "m1", text: "DA", seq: 4 },
       {
         type: "message.completed",
+        sessionId: "s1",
         messageId: "m1",
         content: [{ type: "text", text: "NVDA" }],
         seq: 5,
       },
-      { type: "run.completed", runId: "r1", seq: 6 },
+      { type: "run.completed", sessionId: "s1", runId: "r1", seq: 6 },
     ];
 
     const state = reduceChatEvents(events);
 
     expect(state.messages).toHaveLength(1);
     expect(state.messages[0]).toMatchObject({ id: "m1", text: "NVDA", status: "completed" });
-    expect(state.runs.get("r1")?.status).toBe("completed");
+    expect([...state.runs.values()].find((run) => run.id === "r1")?.status).toBe("completed");
     expect(state.gaps).toEqual([]);
   });
 
@@ -46,7 +47,94 @@ describe("chat event reducer", () => {
     const state = reduceChatEvents(events);
 
     expect([...state.tools.values()]).toHaveLength(1);
-    expect(state.tools.get("t1")?.output).toEqual(output);
+    expect([...state.tools.values()].find((tool) => tool.id === "t1")?.output).toEqual(output);
+  });
+
+  it("treats the same sequence number in another session as a distinct event", () => {
+    const state = reduceChatEvents([
+      {
+        type: "message.created",
+        sessionId: "session-a",
+        messageId: "a1",
+        role: "assistant",
+        seq: 1,
+      },
+      {
+        type: "message.created",
+        sessionId: "session-b",
+        messageId: "b1",
+        role: "assistant",
+        seq: 1,
+      },
+    ]);
+
+    expect(state.messages.map((message) => message.id)).toEqual(["a1", "b1"]);
+    expect(state.gaps).toEqual([]);
+  });
+
+  it("scopes duplicate message, tool, and run ids by session", () => {
+    const state = reduceChatEvents([
+      { type: "run.started", sessionId: "session-a", runId: "run-1", seq: 1 },
+      {
+        type: "message.created",
+        sessionId: "session-a",
+        messageId: "message-1",
+        role: "assistant",
+        seq: 2,
+      },
+      {
+        type: "tool.started",
+        sessionId: "session-a",
+        toolCallId: "tool-1",
+        messageId: "message-1",
+        name: "get_stock_quote",
+        input: { symbol: "AAPL" },
+        seq: 3,
+      },
+      {
+        type: "tool.completed",
+        sessionId: "session-a",
+        toolCallId: "tool-1",
+        output: quoteOutput("AAPL"),
+        seq: 4,
+      },
+      { type: "run.completed", sessionId: "session-a", runId: "run-1", seq: 5 },
+      { type: "run.started", sessionId: "session-b", runId: "run-1", seq: 1 },
+      {
+        type: "message.created",
+        sessionId: "session-b",
+        messageId: "message-1",
+        role: "assistant",
+        seq: 2,
+      },
+      {
+        type: "tool.started",
+        sessionId: "session-b",
+        toolCallId: "tool-1",
+        messageId: "message-1",
+        name: "get_stock_quote",
+        input: { symbol: "MSFT" },
+        seq: 3,
+      },
+      {
+        type: "tool.completed",
+        sessionId: "session-b",
+        toolCallId: "tool-1",
+        output: quoteOutput("MSFT"),
+        seq: 4,
+      },
+      { type: "run.completed", sessionId: "session-b", runId: "run-1", seq: 5 },
+    ]);
+
+    expect(state.messages).toHaveLength(2);
+    expect([...state.tools.values()].map((tool) => tool.output?.details)).toMatchObject([
+      { symbol: "AAPL" },
+      { symbol: "MSFT" },
+    ]);
+    expect([...state.runs.values()].map((run) => run.sessionId)).toEqual([
+      "session-a",
+      "session-b",
+    ]);
   });
 
   it("updates one tool call across started, delta, and completed events", () => {
@@ -65,7 +153,7 @@ describe("chat event reducer", () => {
     ]);
 
     expect([...state.tools.values()]).toHaveLength(1);
-    expect(state.tools.get("t1")).toMatchObject({
+    expect([...state.tools.values()].find((tool) => tool.id === "t1")).toMatchObject({
       name: "get_option_chain",
       status: "completed",
       chunks: [{ loaded: 10 }],
@@ -75,24 +163,37 @@ describe("chat event reducer", () => {
   it("tracks failed tools and failed runs without dropping chat state", () => {
     const state = reduceChatEvents([
       { type: "run.started", runId: "r1", sessionId: "s1", seq: 1 },
-      { type: "message.created", messageId: "m1", role: "assistant", seq: 2 },
+      { type: "message.created", sessionId: "s1", messageId: "m1", role: "assistant", seq: 2 },
       {
         type: "tool.started",
+        sessionId: "s1",
         toolCallId: "t1",
         messageId: "m1",
         name: "get_sec_filings",
         input: { symbol: "NVDA" },
         seq: 3,
       },
-      { type: "tool.failed", toolCallId: "t1", error: { message: "SEC unavailable" }, seq: 4 },
-      { type: "run.failed", runId: "r1", error: { message: "stream failed" }, seq: 5 },
+      {
+        type: "tool.failed",
+        sessionId: "s1",
+        toolCallId: "t1",
+        error: { message: "SEC unavailable" },
+        seq: 4,
+      },
+      {
+        type: "run.failed",
+        sessionId: "s1",
+        runId: "r1",
+        error: { message: "stream failed" },
+        seq: 5,
+      },
     ]);
 
-    expect(state.tools.get("t1")).toMatchObject({
+    expect([...state.tools.values()].find((tool) => tool.id === "t1")).toMatchObject({
       status: "failed",
       error: { message: "SEC unavailable" },
     });
-    expect(state.runs.get("r1")).toMatchObject({
+    expect([...state.runs.values()].find((run) => run.id === "r1")).toMatchObject({
       status: "failed",
       error: { message: "stream failed" },
     });
@@ -154,19 +255,33 @@ describe("chat event reducer", () => {
   it("tracks streaming thinking text for an active run", () => {
     const state = reduceChatEvents([
       { type: "run.started", runId: "r1", sessionId: "s1", seq: 1 },
-      { type: "thinking.delta", runId: "r1", text: "Checking expirations", seq: 2 },
-      { type: "thinking.delta", runId: "r1", text: " and filtering LEAPS.", seq: 3 },
+      {
+        type: "thinking.delta",
+        sessionId: "s1",
+        runId: "r1",
+        text: "Checking expirations",
+        seq: 2,
+      },
+      {
+        type: "thinking.delta",
+        sessionId: "s1",
+        runId: "r1",
+        text: " and filtering LEAPS.",
+        seq: 3,
+      },
       {
         type: "thinking.completed",
+        sessionId: "s1",
         runId: "r1",
         text: "Checking expirations and filtering LEAPS.",
         seq: 4,
       },
-      { type: "run.completed", runId: "r1", seq: 5 },
+      { type: "run.completed", sessionId: "s1", runId: "r1", seq: 5 },
     ]);
 
-    expect(state.thinking.get("r1")).toEqual({
+    expect([...state.thinking.values()].find((thinking) => thinking.runId === "r1")).toEqual({
       runId: "r1",
+      sessionId: "s1",
       status: "completed",
       text: "Checking expirations and filtering LEAPS.",
     });

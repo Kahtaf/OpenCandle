@@ -455,6 +455,19 @@ macro hedge decision guidance:
 - Prioritize the evidence that matters most over ${timeHorizon}: near-term catalysts, earnings/guidance, forward-looking valuation/estimates, sentiment, macro sensitivity, and company-specific risks.
 - Call out evidence that is missing or unavailable, especially forward-looking estimates or company-specific catalysts.`
     : "";
+  const actionPlanResponse = timeHorizon
+    ? `
+- REQUIRED ACTION SECTION: Immediately after the summary verdict and before caveats, include a section exactly titled "### Cautious action plan". Use bullets for preferred tilt, entry conditions, position-sizing caution, downside risk/invalidation trigger, and the missing data that would change the plan for the ${timeHorizon} horizon. If this section is missing, the answer is incomplete.`
+    : "";
+  const responseHeadingOrder = timeHorizon
+    ? `
+Use these response headings in this order:
+1. Assumptions
+2. Comparison table
+3. Summary Verdict
+4. Cautious action plan
+5. Caveats`
+    : "";
 
   const disclosureBlock = buildDisclosureBlock(
     {
@@ -482,8 +495,10 @@ ${overlapGuidance}
 ${disclosureBlock}
 
 Response format:
+${responseHeadingOrder}
 ${ASSUMPTIONS_RESPONSE_INSTRUCTION}
 ${tableInstruction}
 - Provide a summary verdict: which is most attractive and why.
+${actionPlanResponse}
 - Note any caveats (different sectors, concentration, market cap disparity, unavailable fundamentals, unavailable forward-looking estimates, etc.).${horizonResponse}`;
 }

@@ -528,10 +528,12 @@ Assumptions (reproduce this block exactly — do not relabel sources):
   User-specified: symbols (VOO, QQQ)
 
 Response format:
+
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - Present a comparison table with key metrics: price, P/E, revenue growth, profit margin, RSI, Sharpe, max drawdown.
 - Highlight which asset is stronger on each metric.
 - Provide a summary verdict: which is most attractive and why.
+
 - Note any caveats (different sectors, concentration, market cap disparity, unavailable fundamentals, unavailable forward-looking estimates, etc.).",
   "compareOverlap": "Current date: 2026-06-13
 
@@ -561,9 +563,18 @@ Assumptions (reproduce this block exactly — do not relabel sources):
   User-specified: symbols (VOO, QQQ, SCHD), metrics (overlap), time horizon (5y)
 
 Response format:
+
+Use these response headings in this order:
+1. Assumptions
+2. Comparison table
+3. Summary Verdict
+4. Cautious action plan
+5. Caveats
 - Start with the assumptions block above exactly as written. Do not relabel source attribution anywhere else in your response.
 - Present an ETF overlap table with columns: fund role, shared top holdings/overlap weight from provider when available, sector concentration, what exposure is duplicated, what exposure is new, and diversification implication.
 - Provide a summary verdict: which is most attractive and why.
+
+- REQUIRED ACTION SECTION: Immediately after the summary verdict and before caveats, include a section exactly titled "### Cautious action plan". Use bullets for preferred tilt, entry conditions, position-sizing caution, downside risk/invalidation trigger, and the missing data that would change the plan for the 5y horizon. If this section is missing, the answer is incomplete.
 - Note any caveats (different sectors, concentration, market cap disparity, unavailable fundamentals, unavailable forward-looking estimates, etc.).
 - Start the verdict by directly answering whether the assets should compare for a 5y horizon and why.
 - Prioritize the evidence that matters most over 5y: near-term catalysts, earnings/guidance, forward-looking valuation/estimates, sentiment, macro sensitivity, and company-specific risks.

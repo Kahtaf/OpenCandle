@@ -34,8 +34,8 @@ Keyless by default:
 
 External local tools:
 
-- Reddit sentiment uses `rdt-cli` and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted, `opencandle doctor`, or the GUI provider panel to check install and session status.
-- Twitter/X sentiment uses `twitter-cli` and the user's normal x.com browser session. Install with `uv tool install twitter-cli`, then run `opencandle doctor` or use the GUI provider panel to check install and session status.
+- Reddit sentiment uses `rdt-cli` and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
+- Twitter/X sentiment uses `twitter-cli` and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
 
 Optional keys:
 

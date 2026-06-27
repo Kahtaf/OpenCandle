@@ -91,6 +91,36 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Browse tools");
   });
 
+  it("renders a loading state instead of home suggestions while switching sessions", () => {
+    const html = renderChatPanelHtml({
+      inputDisabled: true,
+      sessionLoading: true,
+    });
+
+    expect(html).toContain('aria-label="Loading session"');
+    expect(html).toContain("animate-pulse");
+    expect(html).not.toContain("What are we watching");
+    expect(html).not.toContain("Compare NVDA and AMD");
+  });
+
+  it("renders scoped live thinking text for the active run", () => {
+    const html = renderChatPanelHtml({
+      runState: "streaming",
+      liveEvents: [
+        { type: "run.started", sessionId: "session-1", runId: "run-1", seq: 1 },
+        {
+          type: "thinking.delta",
+          sessionId: "session-1",
+          runId: "run-1",
+          text: "Reviewing the latest quote data",
+          seq: 2,
+        },
+      ],
+    });
+
+    expect(html).toContain("Reviewing the latest quote data");
+  });
+
   it("disables chat submission while model setup is incomplete", () => {
     const html = renderChatPanelHtml({
       draft: "Can I buy AAPL today?",

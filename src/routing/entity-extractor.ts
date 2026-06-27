@@ -451,7 +451,7 @@ function extractCostBasis(input: string): number | undefined {
 
 function extractDirection(input: string): "bullish" | "bearish" | undefined {
   const lower = input.toLowerCase();
-  if (/\bcalls?\b/.test(lower) || /\bbullish\b/.test(lower)) return "bullish";
+  if (/\bcalls?\b(?!\s+out\b)/.test(lower) || /\bbullish\b/.test(lower)) return "bullish";
   if (/\bputs?\b/.test(lower) || /\bbearish\b/.test(lower)) return "bearish";
   return undefined;
 }

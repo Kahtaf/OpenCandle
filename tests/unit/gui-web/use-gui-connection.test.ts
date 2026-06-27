@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
+  buildToolInvokeSocketMessage,
+  mergeSessionSnapshotMap,
   rejectTimedOutToolInvoke,
+  resolveBootstrapRole,
+  resolveBootstrapSessionId,
+  sessionSnapshotFromPayload,
   settlePendingToolInvoke,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
@@ -77,5 +82,97 @@ describe("useGuiConnection helpers", () => {
     expect(buildHttpFallbackMessageRequest("tool.invoke", { toolName: "get_stock_quote" })).toBe(
       null,
     );
+  });
+
+  it("stamps direct tool invocation socket messages with the visible session id", () => {
+    expect(
+      buildToolInvokeSocketMessage(
+        { requestId: "req-1", toolName: "get_stock_quote", args: { symbol: "NVDA" } },
+        "session-visible",
+      ),
+    ).toEqual({
+      type: "tool.invoke",
+      requestId: "req-1",
+      sessionId: "session-visible",
+      toolName: "get_stock_quote",
+      args: { symbol: "NVDA" },
+    });
+
+    expect(
+      buildToolInvokeSocketMessage(
+        { requestId: "req-2", toolName: "get_stock_quote", args: { symbol: "AMD" } },
+        "session-from-state-snapshot",
+        "session-visible-route",
+      ),
+    ).toMatchObject({
+      requestId: "req-2",
+      sessionId: "session-visible-route",
+    });
+  });
+
+  it("preserves the global writer role while loading a follower historical session", () => {
+    expect(resolveBootstrapRole("writer", { role: "follower" }, false)).toBe("writer");
+    expect(resolveBootstrapRole("writer", { role: "follower" })).toBe("follower");
+  });
+
+  it("preserves the active writer session id while loading a historical route snapshot", () => {
+    expect(resolveBootstrapSessionId("writer-session", "historical-session", false)).toBe(
+      "writer-session",
+    );
+    expect(resolveBootstrapSessionId("writer-session", "new-session")).toBe("new-session");
+  });
+
+  it("normalizes bootstrap and state snapshot payloads into session snapshots", () => {
+    expect(
+      sessionSnapshotFromPayload({
+        sessionId: "session-a",
+        snapshot: {
+          entries: [{ id: "entry-a" }],
+          events: [{ type: "message.completed", seq: 1 }],
+          state: { watchlist: [{ symbol: "AAPL" }] },
+        },
+      }),
+    ).toMatchObject({
+      sessionId: "session-a",
+      entries: [{ id: "entry-a" }],
+      events: [{ type: "message.completed", seq: 1 }],
+      dashboard: { watchlist: [{ symbol: "AAPL" }] },
+    });
+
+    expect(
+      sessionSnapshotFromPayload({
+        type: "state.snapshot",
+        sessionId: "session-b",
+        entries: [{ id: "entry-b" }],
+        events: [{ type: "message.completed", seq: 2 }],
+        state: { watchlist: [{ symbol: "MSFT" }] },
+      }),
+    ).toMatchObject({
+      sessionId: "session-b",
+      entries: [{ id: "entry-b" }],
+      events: [{ type: "message.completed", seq: 2 }],
+      dashboard: { watchlist: [{ symbol: "MSFT" }] },
+    });
+  });
+
+  it("keeps snapshots keyed by session so late updates cannot replace another route", () => {
+    const afterA = mergeSessionSnapshotMap(
+      {},
+      {
+        type: "state.snapshot",
+        sessionId: "session-a",
+        entries: [{ id: "entry-a" }],
+        events: [{ type: "message.completed", seq: 1 }],
+      },
+    );
+    const afterB = mergeSessionSnapshotMap(afterA, {
+      type: "session.snapshot",
+      sessionId: "session-b",
+      entries: [{ id: "entry-b" }],
+      events: [{ type: "message.completed", seq: 1 }],
+    });
+
+    expect(afterB["session-a"]?.entries).toEqual([{ id: "entry-a" }]);
+    expect(afterB["session-b"]?.entries).toEqual([{ id: "entry-b" }]);
   });
 });

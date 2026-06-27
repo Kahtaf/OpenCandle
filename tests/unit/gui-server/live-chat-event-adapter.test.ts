@@ -173,8 +173,20 @@ describe("live chat event adapter", () => {
     );
 
     expect(events).toEqual([
-      { type: "thinking.delta", runId: "run-1", text: "Check the option expirations", seq: 1 },
-      { type: "thinking.completed", runId: "run-1", text: "Check the option expirations", seq: 2 },
+      {
+        type: "thinking.delta",
+        sessionId: "session-1",
+        runId: "run-1",
+        text: "Check the option expirations",
+        seq: 1,
+      },
+      {
+        type: "thinking.completed",
+        sessionId: "session-1",
+        runId: "run-1",
+        text: "Check the option expirations",
+        seq: 2,
+      },
     ]);
   });
 });

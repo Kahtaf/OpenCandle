@@ -7,6 +7,7 @@ export interface SessionEventOptions {
   title?: string;
   updatedAt?: string;
   startSeq?: number;
+  markUnresolvedToolCalls?: boolean;
 }
 
 export function sessionEntriesToChatEvents(
@@ -16,6 +17,8 @@ export function sessionEntriesToChatEvents(
   let seq = options.startSeq ?? 1;
   const events: ChatEvent[] = [];
   const seenToolCalls = new Set<string>();
+  const resolvedToolCalls = new Set<string>();
+  const pendingToolCalls = new Map<string, { name: string }>();
   // Set by an opencandle-user-input marker: the user's words before a workflow
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
@@ -39,6 +42,7 @@ export function sessionEntriesToChatEvents(
       const messageId = entry.id;
       events.push({
         type: "custom.message",
+        sessionId: options.sessionId,
         messageId,
         customType: String((entry as { customType?: unknown }).customType || "custom"),
         content: [{ type: "text", text: customMessageText(entry.content) }],
@@ -52,9 +56,16 @@ export function sessionEntriesToChatEvents(
     const messageId = entry.id;
 
     if (message.role === "user") {
-      events.push({ type: "message.created", messageId, role: "user", seq: seq++ });
+      events.push({
+        type: "message.created",
+        sessionId: options.sessionId,
+        messageId,
+        role: "user",
+        seq: seq++,
+      });
       events.push({
         type: "message.completed",
+        sessionId: options.sessionId,
         messageId,
         content: [{ type: "text", text: pendingOriginalInput ?? messageText(message.content) }],
         seq: seq++,
@@ -64,7 +75,13 @@ export function sessionEntriesToChatEvents(
     }
 
     if (message.role === "assistant") {
-      events.push({ type: "message.created", messageId, role: "assistant", seq: seq++ });
+      events.push({
+        type: "message.created",
+        sessionId: options.sessionId,
+        messageId,
+        role: "assistant",
+        seq: seq++,
+      });
       const content: MessageContent[] = [];
       for (const part of Array.isArray(message.content) ? message.content : []) {
         if (part.type === "text") {
@@ -73,9 +90,11 @@ export function sessionEntriesToChatEvents(
         }
         if (part.type === "toolCall") {
           seenToolCalls.add(part.id);
+          pendingToolCalls.set(part.id, { name: part.name });
           content.push({ type: "tool", toolCallId: part.id });
           events.push({
             type: "tool.started",
+            sessionId: options.sessionId,
             toolCallId: part.id,
             messageId,
             name: part.name,
@@ -87,16 +106,25 @@ export function sessionEntriesToChatEvents(
           content.push({ type: "image", url: part.url });
         }
       }
-      events.push({ type: "message.completed", messageId, content, seq: seq++ });
+      events.push({
+        type: "message.completed",
+        sessionId: options.sessionId,
+        messageId,
+        content,
+        seq: seq++,
+      });
       continue;
     }
 
     if (message.role === "toolResult") {
       const tool = message as ToolResultMessage;
       const toolCallId = tool.toolCallId || `tool-${entry.id}`;
+      resolvedToolCalls.add(toolCallId);
+      pendingToolCalls.delete(toolCallId);
       if (!seenToolCalls.has(toolCallId)) {
         events.push({
           type: "tool.started",
+          sessionId: options.sessionId,
           toolCallId,
           messageId,
           name: tool.toolName || "tool",
@@ -106,12 +134,30 @@ export function sessionEntriesToChatEvents(
       }
       events.push({
         type: tool.isError ? "tool.failed" : "tool.completed",
+        sessionId: options.sessionId,
         toolCallId,
         ...(tool.isError
           ? { error: { message: messageText(tool.content), details: tool.details } }
           : { output: toolOutput(tool) }),
         seq: seq++,
       } as ChatEvent);
+    }
+  }
+
+  if (options.markUnresolvedToolCalls !== false) {
+    for (const [toolCallId, tool] of pendingToolCalls) {
+      if (resolvedToolCalls.has(toolCallId)) continue;
+      events.push({
+        type: "tool.failed",
+        sessionId: options.sessionId,
+        toolCallId,
+        error: {
+          message:
+            "Tool call did not finish. The run may have been interrupted before OpenCandle received a tool result.",
+          details: { toolName: tool.name, reason: "missing_tool_result" },
+        },
+        seq: seq++,
+      });
     }
   }
 

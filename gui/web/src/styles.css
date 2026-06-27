@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.cjs";
 
 :root {
   color-scheme: light;
@@ -18,6 +17,8 @@
   --tw-muted-foreground: 240 4% 46%;
   --tw-accent: 142 71% 35%;
   --tw-accent-foreground: 0 0% 100%;
+  --tw-primary: 240 6% 10%;
+  --tw-primary-foreground: 0 0% 100%;
   --tw-brand: 240 6% 10%;
   --tw-brand-foreground: 0 0% 100%;
   --tw-destructive: 0 84% 60%;
@@ -65,7 +66,15 @@
   input,
   select,
   textarea {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
     font: inherit;
+  }
+  a {
+    color: inherit;
+    text-decoration: inherit;
   }
   button {
     cursor: pointer;

@@ -1,6 +1,6 @@
 {
   "name": "opencandle",
-  "version": "0.7.0",
+  "version": "0.9.0",
   "description": "Financial trading & investing agent",
   "license": "MIT",
   "homepage": "https://opencandle.app",
@@ -128,29 +128,29 @@
     "node": ">=22.19.0 <27"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.79.8",
-    "@earendil-works/pi-ai": "^0.79.8",
-    "@earendil-works/pi-coding-agent": "^0.79.8",
-    "better-sqlite3": "^12.10.0",
+    "@earendil-works/pi-agent-core": "^0.80.2",
+    "@earendil-works/pi-ai": "^0.80.2",
+    "@earendil-works/pi-coding-agent": "^0.80.2",
+    "better-sqlite3": "^12.11.1",
     "duck-duck-scrape": "^2.2.7",
-    "tsx": "^4.22.3",
+    "tsx": "^4.22.4",
     "yahoo-finance2": "^3.15.3"
   },
   "peerDependencies": {
     "@sinclair/typebox": "*"
   },
   "devDependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.37.0",
-    "@biomejs/biome": "2.5.0",
+    "@agentclientprotocol/claude-agent-acp": "^0.52.0",
+    "@agentclientprotocol/codex-acp": "^1.0.0",
+    "@biomejs/biome": "^2.5.1",
     "@sinclair/typebox": "^0.34.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.19.19",
-    "@zed-industries/codex-acp": "^0.15.0",
-    "acpx": "^0.10.0",
-    "playwright-core": "^1.61.0",
+    "@types/node": "^26.0.1",
+    "acpx": "^0.11.2",
+    "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.7",
-    "vitest-evals": "^0.11.0"
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9",
+    "vitest-evals": "^0.14.0"
   }
 }
