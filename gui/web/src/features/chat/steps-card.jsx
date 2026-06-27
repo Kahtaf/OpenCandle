@@ -15,7 +15,7 @@ import { useToolDrawer } from "./tool-drawer-context.jsx";
 // run is still pending the title shimmers and the icon spins.
 export function StepsCard({ run, autoOpen = false }) {
   const { open, requestAutoOpen, run: openRun } = useToolDrawer();
-  const isOpen = openRun?.id === run.id;
+  const isOpen = openRun?.id === run.id && (openRun?.sessionId || "") === (run.sessionId || "");
   const stepCount = run.steps.length;
   const title = summarizeRunTitle(run.steps.map((s) => s.name));
   const isPending = run.status === "pending";
@@ -100,7 +100,7 @@ function argSummary(step) {
   if (!step?.args) return "";
   const entries = Object.entries(step.args).filter(([, v]) => v != null && v !== "");
   if (entries.length === 0) return "";
-  const [k, v] = entries[0];
+  const [, v] = entries[0];
   const value = typeof v === "string" ? v : typeof v === "number" ? String(v) : null;
   if (!value) return "";
   return value.length > 24 ? `${value.slice(0, 24)}…` : value;

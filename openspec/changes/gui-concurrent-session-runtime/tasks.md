@@ -17,12 +17,27 @@
 - [x] Treat active session state as UI focus only: sidebar selection, route, default composer target, and context projection.
 - [x] Store transcript events, live events, run state, abort handles, and retry metadata by `sessionId`.
 - [ ] Store pending prompts and pending request acknowledgements by `sessionId`.
+- [x] Store transcript scroll anchors, live-edge state, unread/new-content markers, and saved restore targets by `sessionId`.
+- [x] Scope research/tool timeline drawer selection by `sessionId` and clear, close, or rebind it when the route session changes.
 - [x] Ignore snapshots, chat events, and run-control results whose `sessionId` does not match the route or subscribed session store being updated.
 - [ ] Ignore or settle mutation acknowledgements only by matching `sessionId` and `requestId`.
 - [x] Ensure creating a new session navigates only after the server acknowledges the created session id.
 - [x] Ensure opening an existing session either waits for an acknowledgement or uses route-addressed bootstrap so stale `session.open` responses cannot overwrite the visible route.
 - [x] Ensure direct navigation to an existing session never falls back to the home page while that session exists.
 - [ ] Verify independent browser-tab focus when two browser clients view different sessions.
+
+## 2.5 Transcript And Panel UX
+
+- [x] Wrap or replace the plain transcript overflow container with a session-scoped scroller behavior layer.
+- [x] Anchor submitted user turns near the top of the transcript while streaming the assistant response below.
+- [x] Auto-follow streamed content only while the reader is already at the live edge.
+- [x] Stop auto-follow when the reader scrolls away, selects text, uses keyboard navigation, opens transcript links, opens search/command UI, or opens the tool/research drawer.
+- [x] Show a jump-to-latest/new-content control when the visible session receives content while the reader is not at the live edge.
+- [x] Restore saved sessions to the last meaningful turn or stored reader anchor instead of blindly forcing the absolute bottom.
+- [ ] Preserve reader position when history is prepended, markdown completes, tool cards render, tool results stream, or the inline tool/research drawer changes layout.
+- [x] Keep existing OpenCandle message, grouped tool-run, and finance-result card visuals unless a separate UI redesign change is created.
+- [x] Ensure the research/tool timeline panel renders from the current route session's grouped rows or session store, not from a stale unscoped run object.
+- [x] Prevent pending tool runs in a background session from auto-opening or updating the visible route session's panel.
 
 ## 3. Concurrency
 
@@ -57,8 +72,13 @@
 - [ ] Add browser tests for switching from a running session to another session and sending there.
 - [ ] Add browser tests for new-session creation and direct old-session navigation.
 - [ ] Add browser tests for stop/retry controls affecting only the targeted session/run.
+- [ ] Add browser tests for long streamed transcript scroll behavior: user-turn anchoring, live-edge auto-follow, reader-intent freeze, jump-to-latest, saved restore, and layout-change position preservation.
+- [ ] Add browser tests proving explicit message, research, synthesis, or scroll-anchor links override default saved-session restore only when the anchor belongs to the route session.
+- [x] Add browser tests for navigating between sessions with the research/tool timeline panel open, verifying it closes, clears, rebinds, or displays only the new route session's tool calls.
+- [ ] Capture browser screenshots for PR evidence covering: anchored streaming turn, reader-intent freeze with jump-to-latest visible, restored saved session position, explicit research/synthesis anchor navigation, and route-switch behavior with the research/tool panel no longer showing the previous thread's tool calls.
+- [ ] Upload the browser validation screenshots to the PR before deleting local screenshot files.
 - [ ] Add a Pi/TUI parity smoke test or documented harness check covering GUI-to-TUI resume, TUI-to-GUI resume, writer-lock participation, branch context, custom entries, and tool-result persistence.
-- [ ] Run focused GUI server/web tests.
-- [ ] Run browser verification on the local GUI.
-- [ ] Run `openspec validate gui-concurrent-session-runtime --strict`.
-- [ ] Run `npm test`.
+- [x] Run focused GUI server/web tests.
+- [x] Run browser verification on the local GUI.
+- [x] Run `openspec validate gui-concurrent-session-runtime --strict`.
+- [x] Run `npm test`.

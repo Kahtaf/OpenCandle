@@ -108,7 +108,38 @@ The visible route selects from those stores. A run in session A must not put the
 
 Reducers that combine events from more than one session must scope message IDs, tool-call IDs, run IDs, and sequence numbers by `sessionId`. Persisted replay events do not need a synthetic `runId` when the run id was never stored; live run lifecycle events and live tool/message events from an active run must carry `runId`.
 
-## 8. TUI And Pi Parity
+## 8. Transcript Scroll Behavior
+
+The transcript scroller should be treated as a session-scoped runtime surface, not as incidental overflow behavior. Long OpenCandle runs can stream assistant text, append grouped tool cards, open a tool timeline drawer, and change layout heights while the user is reading earlier financial evidence. The GUI should preserve the reader's intent while still making live progress visible.
+
+Rules:
+
+- user turns are scroll anchors by default;
+- when the user submits a prompt, the new user turn anchors within the first quarter of the visible transcript viewport when there is enough scrollable height, and the assistant response streams below it;
+- auto-follow happens only while the reader is already at the live edge, meaning a bottom sentinel is visible or the scroll position is within a small bottom threshold;
+- scrolling away, selecting text, keyboard navigation, opening links, opening command/search UI, or opening the tool/research drawer stops auto-follow for that transcript until the user explicitly returns to latest;
+- when new content arrives offscreen, the GUI shows an unobtrusive jump-to-latest/new-content control for the visible session;
+- saved session routes without an explicit anchor reopen at the last meaningful turn when available, using a stored reader anchor first and otherwise the most recent user message, not blindly at the absolute bottom;
+- explicit message, synthesis, research, or scroll anchors in links override the default saved-session restore target and must belong to the route session before changing scroll position;
+- prepending history, completing markdown, rendering rich cards, opening the inline tool drawer, and receiving streamed tool results preserve the visible reader position;
+- scroll state is keyed by route session id so navigating between sessions does not reuse another transcript's anchor, live-edge state, or unread marker.
+
+This can be implemented with a headless message-scroller primitive or a local hook. The implementation should not replace OpenCandle's existing message components, finance result cards, or grouped tool-run cards unless a smaller follow-up explicitly chooses that visual migration.
+
+## 9. Current-Thread Auxiliary Panels
+
+Auxiliary panels that summarize or expand chat evidence must derive from the route session, not from the last opened panel object. The current bug is that the research/tool timeline panel can remain open while the user navigates to another chat, but still show tool calls from the old thread.
+
+The panel state should therefore include the owning `sessionId` for any selected run, tool group, source list, or research card. It must not match panel content across sessions by unscoped message id, run id, tool-call id, row id, title, or array index. On route change, the client must either:
+
+- bind the panel to an explicit selection in the new route session whose identity includes that new session id; or
+- clear/close the panel when its selected content belongs to a different session.
+
+The drawer body should render from the selected route session's grouped rows or session store, not from an unscoped object captured before navigation. Pending auto-open behavior must also be session-scoped: a tool run in session A must not auto-open or update the drawer while the browser is viewing session B unless the drawer explicitly belongs to session A and the route still allows viewing that session's panel.
+
+This same rule should apply to any future transcript outline, source panel, or research summary panel: if it claims to describe "this thread," its inputs must be selected from the visible route session.
+
+## 10. TUI And Pi Parity
 
 The TUI can keep a single focused session because that matches terminal UX. The parity requirement is semantic and storage-backed:
 
@@ -122,7 +153,7 @@ The TUI can keep a single focused session because that matches terminal UX. The 
 
 The GUI runtime may run multiple session actors in one process, but each actor must behave like a normal Pi session writer for its specific session.
 
-## 9. Verification Strategy
+## 11. Verification Strategy
 
 Implementation should prove the old races are gone with targeted tests:
 
@@ -133,10 +164,15 @@ Implementation should prove the old races are gone with targeted tests:
 - browser tests that start a long response in session A, switch to session B, send a message there, and verify both transcripts remain separated;
 - browser tests that stop/retry a run in one session without affecting another active run;
 - browser tests for direct navigation to an old session URL with and without an already-open WebSocket;
+- browser tests for transcript scroll behavior during a long streaming response: anchor the submitted user turn, follow only at live edge, stop following when the reader scrolls away, show a jump-to-latest control, and preserve position when tool cards/drawers change layout;
+- browser tests that navigate from session A to session B while the tool/research drawer is open and verify the panel closes, clears, or shows only session B tool calls;
+- screenshot evidence from browser validation uploaded to the PR for the transcript scroller states and current-thread panel synchronization; local screenshots may be deleted after upload;
 - parity smoke that a GUI-created session is readable from TUI/Pi session APIs and a TUI-created session is readable from GUI APIs;
 - parity smoke that GUI and TUI respect the same per-session writer lock;
 - parity smoke that branch context, OpenCandle custom entries, direct tool results, and setup custom messages survive GUI-to-TUI and TUI-to-GUI round trips.
 
-## 10. Rollout
+## 12. Rollout
 
 Implement the new session-addressed read and write path first, update the browser to use it, then remove the old active-session mutation path. Avoid leaving two send paths because that recreates ambiguous ownership.
+
+Transcript scroll behavior and auxiliary-panel scoping should land after the browser has reliable per-session stores. That keeps the scroller and drawer logic keyed to stable route/session state instead of patching around the current global active-session assumptions.

@@ -25,7 +25,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await page.goto(guiUrl, { waitUntil: "networkidle" });
 
     await expectVisible(page.getByText("OpenCandle").first());
-    await expectVisible(page.getByRole("button", { name: "New chat" }).first());
+    await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
     await expectVisible(page.getByRole("button", { name: "Open context" }).first());
   });
 
@@ -90,7 +90,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   });
 
   it("renders missing API-key onboarding in a browser", async () => {
-    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const mocked = await browser.newPage({ viewport: { width: 815, height: 938 } });
     await installMockSocket(mocked, {
       modelSetup: {
         requirement: "connect_auth",
@@ -153,12 +153,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await installMockSocket(mocked);
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await mocked.getByRole("button", { name: "Collapse sidebar" }).click();
-    await mocked.getByRole("button", { name: "New chat" }).waitFor({ state: "detached" });
+    await mocked
+      .getByRole("button", { name: "New chat", exact: true })
+      .waitFor({ state: "detached" });
     await expectVisible(mocked.getByRole("button", { name: "Expand sidebar" }));
     await mocked.getByRole("button", { name: "Expand sidebar" }).click();
-    await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await mocked.close();
   });
 
@@ -168,7 +170,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await installMockMarketState(mocked);
 
     await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
-    await expectVisible(mocked.getByRole("button", { name: "New chat" }));
+    await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await expectVisible(mocked.getByRole("heading", { name: "Watchlists" }));
     await expectVisible(mocked.getByRole("button", { name: "Refresh prices" }));
     await expect(mocked.getByRole("button", { name: "Quotes" }).count()).resolves.toBe(0);
@@ -203,7 +205,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("heading", { name: "Portfolios" }));
 
     await mocked.getByRole("button", { name: "Collapse sidebar" }).click();
-    await mocked.getByRole("button", { name: "New chat" }).waitFor({ state: "detached" });
+    await mocked
+      .getByRole("button", { name: "New chat", exact: true })
+      .waitFor({ state: "detached" });
     await expectVisible(mocked.getByRole("button", { name: "Expand sidebar" }));
     await mocked.getByRole("button", { name: "Expand sidebar" }).click();
     await expectVisible(mocked.getByRole("link", { name: "Alerts" }));
@@ -353,6 +357,86 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.getByRole("button", { name: "Close drawer" }).click();
     await dialog.waitFor({ state: "detached" });
+    await mocked.close();
+  });
+
+  it("closes an open tool drawer when navigating to another session", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockHttpBootstrap(mocked, {
+      sessionId: "session-a",
+      entries: toolRunEntries("tool-call-aapl", "AAPL"),
+      sessionBootstraps: {
+        "session-b": {
+          entries: [
+            {
+              type: "message",
+              id: "session-b-user",
+              timestamp: new Date().toISOString(),
+              message: { role: "user", content: "Session B prompt" },
+            },
+            {
+              type: "message",
+              id: "session-b-assistant",
+              timestamp: new Date().toISOString(),
+              message: { role: "assistant", content: "Session B answer" },
+            },
+          ],
+        },
+      },
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const card = mocked.locator("button").filter({ hasText: "Market lookup" });
+    await expectVisible(card.first());
+    await card.first().click();
+    await expectVisible(mocked.getByRole("button", { name: "Close drawer" }));
+
+    await mocked.goto(`${guiUrl}/sessions/session-b`, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByText("Session B prompt"));
+    await expect(mocked.getByRole("button", { name: "Close drawer" }).count()).resolves.toBe(0);
+    await mocked.close();
+  });
+
+  it("restores deep-linked transcript anchors and offers jump to latest", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockHttpBootstrap(mocked, {
+      entries: longTranscriptEntries(44),
+    });
+
+    await mocked.goto(`${guiUrl}/?messageId=user-31`, { waitUntil: "networkidle" });
+    await mocked.waitForSelector('[data-message-id="user-31"]');
+    await mocked.waitForFunction(() => {
+      const viewport = document.querySelector("[data-chat-transcript]");
+      const anchor = document.querySelector('[data-message-id="user-31"]');
+      if (!viewport || !anchor) return false;
+      const viewportBox = viewport.getBoundingClientRect();
+      const anchorBox = anchor.getBoundingClientRect();
+      const top = anchorBox.top - viewportBox.top;
+      return top >= 0 && top < viewport.clientHeight / 4;
+    });
+    const anchorPosition = await mocked.evaluate(() => {
+      const viewport = document.querySelector("[data-chat-transcript]");
+      const anchor = document.querySelector('[data-message-id="user-31"]');
+      const viewportBox = viewport.getBoundingClientRect();
+      const anchorBox = anchor.getBoundingClientRect();
+      return {
+        top: anchorBox.top - viewportBox.top,
+        quarter: viewport.clientHeight / 4,
+      };
+    });
+    expect(anchorPosition.top).toBeGreaterThanOrEqual(0);
+    expect(anchorPosition.top).toBeLessThan(anchorPosition.quarter);
+
+    await mocked.locator("[data-chat-transcript]").evaluate((element) => {
+      element.scrollTop = 0;
+      element.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expectVisible(mocked.getByRole("button", { name: "Jump to latest" }));
+    await mocked.getByRole("button", { name: "Jump to latest" }).click();
+    const nearBottom = await mocked.locator("[data-chat-transcript]").evaluate((element) => {
+      return element.scrollHeight - element.scrollTop - element.clientHeight <= 48;
+    });
+    expect(nearBottom).toBe(true);
     await mocked.close();
   });
 
@@ -736,7 +820,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       null,
       { timeout: 5_000 },
     );
-    await mocked.getByRole("button", { name: "New chat" }).click();
+    await mocked.getByRole("button", { name: "New chat", exact: true }).click();
     expect(pageErrors).toEqual([]);
     await mocked.getByLabel("Message OpenCandle").fill("Fallback browser prompt");
     await mocked.getByRole("button", { name: "Send" }).click();
@@ -798,7 +882,7 @@ async function submitPrompt(page: Page, prompt: string): Promise<void> {
 
 async function startNewChat(page: Page): Promise<void> {
   await waitForRunIdle(page);
-  await page.getByRole("button", { name: "New chat" }).click();
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
   await expectVisible(page.getByRole("heading", { name: "What are we watching?" }));
 }
 
@@ -828,11 +912,221 @@ function hasScrollableAncestor(element: Element): boolean {
   return false;
 }
 
+function toolRunEntries(toolCallId: string, symbol: string) {
+  return [
+    {
+      type: "message",
+      id: `assistant-${symbol.toLowerCase()}-tool`,
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: toolCallId,
+            name: "get_stock_quote",
+            arguments: { symbol },
+          },
+        ],
+      },
+    },
+    {
+      type: "message",
+      id: `tool-result-${symbol.toLowerCase()}`,
+      timestamp: new Date().toISOString(),
+      message: {
+        role: "toolResult",
+        toolCallId,
+        toolName: "get_stock_quote",
+        content: `${symbol} quote`,
+        details: { symbol },
+      },
+    },
+  ];
+}
+
+function longTranscriptEntries(count: number) {
+  return Array.from({ length: count }, (_, index) => {
+    const turn = index + 1;
+    const role = turn % 2 === 0 ? "assistant" : "user";
+    const id = `${role}-${turn}`;
+    return {
+      type: "message",
+      id,
+      timestamp: new Date().toISOString(),
+      message: {
+        role,
+        content:
+          role === "user"
+            ? `User turn ${turn}: compare AAPL, MSFT, and NVDA with enough detail for scrolling.`
+            : `Assistant turn ${turn}: here is a concise market summary with valuation, momentum, risk, and data quality notes.`,
+      },
+    };
+  });
+}
+
+async function installMockHttpBootstrap(
+  page: Page,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  await page.addInitScript((mockOverrides) => {
+    const bootSessionId = mockOverrides.sessionId ?? "mock-session";
+    window.WebSocket = function BrokenWebSocket() {
+      throw new TypeError("WebSocket is not a constructor");
+    };
+    window.fetch = (input) => {
+      const rawUrl = typeof input === "string" ? input : input.url;
+      const url = new URL(rawUrl, window.location.origin);
+      if (url.pathname === "/api/bootstrap") {
+        const entries = mockOverrides.entries ?? [];
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              role: mockOverrides.role ?? "writer",
+              sessionId: bootSessionId,
+              sessions: mockOverrides.sessions ?? [],
+              catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
+              modelSetup: mockOverrides.modelSetup ?? {
+                requirement: "ready",
+                providers: [],
+                availableModels: [],
+              },
+              askUserPrompts: mockOverrides.askUserPrompts ?? [],
+              snapshot: snapshotPayload(bootSessionId, entries, mockOverrides),
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+        );
+      }
+      const match = url.pathname.match(/^\/api\/sessions\/([^/]+)\/bootstrap$/);
+      if (match) {
+        const sessionId = decodeURIComponent(match[1]);
+        const snapshot = mockOverrides.sessionBootstraps?.[sessionId];
+        if (!snapshot) return Promise.resolve(new Response("Not found", { status: 404 }));
+        const entries = snapshot.entries ?? [];
+        return Promise.resolve(
+          new Response(JSON.stringify(snapshotPayload(sessionId, entries, snapshot)), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    };
+
+    function snapshotPayload(sessionId, entries, source) {
+      return {
+        sessionId,
+        catalog: source.catalog ?? { tools: [], workflows: [], providers: [] },
+        modelSetup: source.modelSetup ?? {
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        },
+        entries,
+        events: source.events ?? entriesToEvents(entries, sessionId),
+        state: source.state ?? {
+          watchlist: [],
+          activeAnalyses: [],
+          recentResearch: [],
+          dataQuality: { softGaps: [], hardSkips: [] },
+        },
+      };
+    }
+
+    function entriesToEvents(entries, fallbackSessionId) {
+      let seq = 1;
+      const events = [];
+      const seenToolCalls = new Set();
+      for (const entry of entries) {
+        const sessionId = entry.sessionId ?? fallbackSessionId;
+        if (entry.type !== "message") continue;
+        const message = entry.message || {};
+        if (message.role === "user" || message.role === "assistant") {
+          events.push({
+            type: "message.created",
+            sessionId,
+            messageId: entry.id,
+            role: message.role,
+            seq: seq++,
+          });
+          const content = [];
+          for (const part of Array.isArray(message.content)
+            ? message.content
+            : [{ type: "text", text: String(message.content || "") }]) {
+            if (part.type === "toolCall") {
+              seenToolCalls.add(part.id);
+              content.push({ type: "tool", toolCallId: part.id });
+              events.push({
+                type: "tool.started",
+                sessionId,
+                toolCallId: part.id,
+                messageId: entry.id,
+                name: part.name,
+                input: part.arguments || {},
+                seq: seq++,
+              });
+            } else {
+              content.push(part);
+            }
+          }
+          events.push({
+            type: "message.completed",
+            sessionId,
+            messageId: entry.id,
+            content,
+            seq: seq++,
+          });
+        }
+        if (message.role === "toolResult") {
+          const toolCallId = message.toolCallId || `tool-${entry.id}`;
+          if (!seenToolCalls.has(toolCallId)) {
+            events.push({
+              type: "tool.started",
+              sessionId,
+              toolCallId,
+              messageId: entry.id,
+              name: message.toolName || "tool",
+              input: message.details?.args || {},
+              seq: seq++,
+            });
+          }
+          events.push({
+            type: message.isError ? "tool.failed" : "tool.completed",
+            sessionId,
+            toolCallId,
+            ...(message.isError
+              ? {
+                  error: {
+                    message: String(message.content || ""),
+                    details: message.details,
+                  },
+                }
+              : {
+                  output: {
+                    content: [{ type: "text", text: String(message.content || "") }],
+                    details: message.details,
+                    isError: Boolean(message.isError),
+                  },
+                }),
+            seq: seq++,
+          });
+        }
+      }
+      return events;
+    }
+  }, overrides);
+}
+
 async function installMockSocket(
   page: Page,
   overrides: Record<string, unknown> = {},
 ): Promise<void> {
   await page.addInitScript((mockOverrides) => {
+    const bootSessionId = mockOverrides.sessionId ?? "mock-session";
     class MockWebSocket extends EventTarget {
       static CONNECTING = 0;
       static OPEN = 1;
@@ -848,12 +1142,12 @@ async function installMockSocket(
       constructor() {
         super();
         this.sessions = [...(mockOverrides.sessions ?? [])];
-        queueMicrotask(() => {
+        setTimeout(() => {
           this.onopen?.(new Event("open"));
           this.emit({
             type: "boot",
             role: mockOverrides.role ?? "writer",
-            sessionId: "mock-session",
+            sessionId: bootSessionId,
             catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
             modelSetup: mockOverrides.modelSetup ?? {
               requirement: "ready",
@@ -863,7 +1157,7 @@ async function installMockSocket(
           });
           this.emit({
             type: "state.snapshot",
-            sessionId: "mock-session",
+            sessionId: bootSessionId,
             state: mockOverrides.dashboard ?? {
               watchlist: [],
               activeAnalyses: [],
@@ -871,10 +1165,11 @@ async function installMockSocket(
               dataQuality: { softGaps: [], hardSkips: [] },
             },
             entries: mockOverrides.entries ?? [],
-            events: mockOverrides.events ?? entriesToEvents(mockOverrides.entries ?? []),
+            events:
+              mockOverrides.events ?? entriesToEvents(mockOverrides.entries ?? [], bootSessionId),
           });
           this.emit({ type: "sessions", sessions: this.sessions });
-        });
+        }, 0);
       }
 
       send(message) {
@@ -905,14 +1200,16 @@ async function installMockSocket(
       }
     }
 
-    function entriesToEvents(entries) {
+    function entriesToEvents(entries, fallbackSessionId = bootSessionId) {
       let seq = 1;
       const events = [];
       const seenToolCalls = new Set();
       for (const entry of entries) {
+        const sessionId = entry.sessionId ?? fallbackSessionId;
         if (entry.type === "custom_message") {
           events.push({
             type: "custom.message",
+            sessionId,
             messageId: entry.id,
             customType: entry.customType || "custom",
             content: normalizeContent(entry.content),
@@ -923,9 +1220,16 @@ async function installMockSocket(
         if (entry.type !== "message") continue;
         const message = entry.message || {};
         if (message.role === "user") {
-          events.push({ type: "message.created", messageId: entry.id, role: "user", seq: seq++ });
+          events.push({
+            type: "message.created",
+            sessionId,
+            messageId: entry.id,
+            role: "user",
+            seq: seq++,
+          });
           events.push({
             type: "message.completed",
+            sessionId,
             messageId: entry.id,
             content: normalizeContent(message.content),
             seq: seq++,
@@ -935,6 +1239,7 @@ async function installMockSocket(
         if (message.role === "assistant") {
           events.push({
             type: "message.created",
+            sessionId,
             messageId: entry.id,
             role: "assistant",
             seq: seq++,
@@ -948,6 +1253,7 @@ async function installMockSocket(
               content.push({ type: "tool", toolCallId: part.id });
               events.push({
                 type: "tool.started",
+                sessionId,
                 toolCallId: part.id,
                 messageId: entry.id,
                 name: part.name,
@@ -958,7 +1264,13 @@ async function installMockSocket(
               content.push(part);
             }
           }
-          events.push({ type: "message.completed", messageId: entry.id, content, seq: seq++ });
+          events.push({
+            type: "message.completed",
+            sessionId,
+            messageId: entry.id,
+            content,
+            seq: seq++,
+          });
           continue;
         }
         if (message.role === "toolResult") {
@@ -966,6 +1278,7 @@ async function installMockSocket(
           if (!seenToolCalls.has(toolCallId)) {
             events.push({
               type: "tool.started",
+              sessionId,
               toolCallId,
               messageId: entry.id,
               name: message.toolName || "tool",
@@ -975,6 +1288,7 @@ async function installMockSocket(
           }
           events.push({
             type: message.isError ? "tool.failed" : "tool.completed",
+            sessionId,
             toolCallId,
             ...(message.isError
               ? { error: { message: textContent(message.content), details: message.details } }

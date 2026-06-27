@@ -23,6 +23,19 @@ describe("optimistic GUI user messages", () => {
     ]);
   });
 
+  it("keeps the session id on rendered rows for route-scoped UI state", () => {
+    const rows = chatRowsFromEvents(
+      [],
+      createOptimisticUserMessageEvents("What is AAPL trading at?", "session-a"),
+      "session-a",
+    );
+
+    expect(rows[0]).toMatchObject({
+      type: "user_message",
+      sessionId: "session-a",
+    });
+  });
+
   it("keeps one user bubble when the persisted server message arrives after the optimistic one", () => {
     const optimistic = createOptimisticUserMessageEvents("Compare MSFT and GOOGL");
     const persisted = persistedUserEvents("persisted-user", "Compare MSFT and GOOGL");

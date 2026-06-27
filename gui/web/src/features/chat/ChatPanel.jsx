@@ -1,5 +1,5 @@
-import { CircleHelp, Send, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, CircleHelp, Send, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
@@ -43,6 +43,8 @@ export function ChatPanel({
   onOpenContext,
   sidebarCollapsed,
   onExpandSidebar,
+  sessionId = "",
+  scrollAnchorId = "",
 }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
@@ -51,7 +53,10 @@ export function ChatPanel({
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
   const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
-  const visibleRows = useMemo(() => chatRowsFromEvents(events, liveEvents), [events, liveEvents]);
+  const visibleRows = useMemo(
+    () => chatRowsFromEvents(events, liveEvents, sessionId),
+    [events, liveEvents, sessionId],
+  );
   const groupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
   const hasAskUserPrompts = askUserPrompts.length > 0;
@@ -63,12 +68,31 @@ export function ChatPanel({
     return pendingRuns[pendingRuns.length - 1]?.id ?? null;
   }, [allowToolAutoOpen, groupedRows]);
   const drawer = useToolDrawer();
+  const drawerOpenForSession = Boolean(
+    drawer.run && (!drawer.run.sessionId || drawer.run.sessionId === sessionId),
+  );
+  const transcript = useTranscriptScroller({
+    rows: groupedRows,
+    sessionId,
+    scrollAnchorId,
+    drawerOpen: drawerOpenForSession,
+  });
+  const rowAnchorId = scrollAnchorId || latestUserRowIdFromRows(groupedRows);
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
     if (!drawer.run) return;
-    const latest = groupedRows.find((e) => e.type === "tool_run" && e.id === drawer.run.id);
+    if (drawer.run.sessionId && drawer.run.sessionId !== sessionId) {
+      drawer.close();
+      return;
+    }
+    const latest = groupedRows.find(
+      (e) =>
+        e.type === "tool_run" &&
+        e.id === drawer.run.id &&
+        (e.sessionId || "") === (drawer.run.sessionId || ""),
+    );
     if (latest && latest !== drawer.run) drawer.open(latest);
-  }, [groupedRows, drawer]);
+  }, [groupedRows, drawer, sessionId]);
   if (
     allowToolAutoOpen &&
     !autoOpenRunId &&
@@ -102,33 +126,62 @@ export function ChatPanel({
     >
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 sm:px-6 md:px-12">
-        {needsSetup ? (
-          <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
-        ) : sessionLoading ? (
-          <SessionLoadingState />
-        ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
-          <EmptyThread
-            onPrompt={submit}
-            onOpenCatalog={onOpenCommandPalette}
-            disabled={chatDisabled}
-          />
-        ) : (
-          <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
-            {groupedRows.map((entry) => (
-              <MessageRow
-                key={entry.id}
-                entry={entry}
-                catalog={catalog}
-                autoOpenToolRun={entry.id === autoOpenRunId}
-              />
-            ))}
-            {askUserPrompts.map((prompt) => (
-              <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
-            ))}
-            {activity ? <AgentActivity activity={activity} /> : null}
-          </div>
-        )}
+      <div className="relative min-h-0 flex-1">
+        <section
+          ref={transcript.viewportRef}
+          className="h-full overflow-y-auto px-3 py-6 sm:px-6 md:px-12"
+          data-chat-transcript
+          data-scroll-anchor-id={scrollAnchorId || undefined}
+          aria-label="Chat transcript"
+          onScroll={transcript.onScroll}
+          onWheel={transcript.onReaderIntent}
+          onMouseDown={transcript.onReaderIntent}
+          onTouchStart={transcript.onReaderIntent}
+          onKeyDown={transcript.onReaderIntent}
+        >
+          {needsSetup ? (
+            <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
+          ) : sessionLoading ? (
+            <SessionLoadingState />
+          ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
+            <EmptyThread
+              onPrompt={submit}
+              onOpenCatalog={onOpenCommandPalette}
+              disabled={chatDisabled}
+            />
+          ) : (
+            <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-6">
+              {groupedRows.map((entry) => (
+                <MessageRow
+                  key={entry.id}
+                  entry={entry}
+                  catalog={catalog}
+                  autoOpenToolRun={entry.id === autoOpenRunId}
+                  anchorRowId={rowAnchorId}
+                  anchorRef={transcript.anchorRowRef}
+                />
+              ))}
+              {askUserPrompts.map((prompt) => (
+                <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
+              ))}
+              {activity ? <AgentActivity activity={activity} /> : null}
+              <div ref={transcript.bottomRef} data-chat-bottom-sentinel aria-hidden="true" />
+            </div>
+          )}
+        </section>
+        {transcript.showJumpToLatest ? (
+          <Button
+            type="button"
+            size="sm"
+            rounded="full"
+            className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 gap-1.5 shadow-subtle-md"
+            onClick={transcript.jumpToLatest}
+            aria-label="Jump to latest"
+          >
+            <ArrowDown className="h-4 w-4" />
+            Latest
+          </Button>
+        ) : null}
       </div>
       <ChatComposer
         draft={draft}
@@ -145,6 +198,173 @@ export function ChatPanel({
       />
     </section>
   );
+}
+
+function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) {
+  const viewportRef = useRef(null);
+  const bottomRef = useRef(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const followingRef = useRef(true);
+  const previousSessionRef = useRef("");
+  const previousLatestUserRef = useRef("");
+  const appliedAnchorRef = useRef("");
+  const pendingRowAnchorRef = useRef("");
+  const latestUserRowId = useMemo(() => {
+    for (let index = rows.length - 1; index >= 0; index -= 1) {
+      if (rows[index].type === "user_message") return rows[index].id;
+    }
+    return "";
+  }, [rows]);
+
+  const updateJumpState = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    setShowJumpToLatest(rows.length > 0 && !isNearBottom(viewport));
+  }, [rows.length]);
+
+  const scrollToBottom = useCallback(() => {
+    const bottom = bottomRef.current;
+    if (bottom) {
+      bottom.scrollIntoView({ block: "end" });
+      return;
+    }
+    const viewport = viewportRef.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    followingRef.current = true;
+    scrollToBottom();
+    setShowJumpToLatest(false);
+  }, [scrollToBottom]);
+
+  const anchorRowRef = useCallback(
+    (node) => {
+      if (!node) return;
+      const anchorId = scrollAnchorId || latestUserRowId;
+      if (!anchorId) return;
+      const key = `${sessionId || ""}::${anchorId}`;
+      window.setTimeout(() => {
+        if (pendingRowAnchorRef.current !== key) return;
+        const viewport = node.closest("[data-chat-transcript]");
+        if (!(viewport instanceof HTMLElement)) return;
+        positionRowElement(viewport, node);
+        pendingRowAnchorRef.current = "";
+        updateJumpState();
+      }, 0);
+    },
+    [latestUserRowId, scrollAnchorId, sessionId, updateJumpState],
+  );
+
+  const onReaderIntent = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || isNearBottom(viewport)) return;
+    followingRef.current = false;
+    setShowJumpToLatest(rows.length > 0);
+  }, [rows.length]);
+
+  const onScroll = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    if (isNearBottom(viewport)) {
+      followingRef.current = true;
+      setShowJumpToLatest(false);
+      return;
+    }
+    setShowJumpToLatest(rows.length > 0);
+  }, [rows.length]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    followingRef.current = false;
+    updateJumpState();
+  }, [drawerOpen, updateJumpState]);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || rows.length === 0) {
+      setShowJumpToLatest(false);
+      return;
+    }
+
+    const sessionChanged = previousSessionRef.current !== sessionId;
+    const latestUserChanged = previousLatestUserRef.current !== latestUserRowId;
+    const anchorKey = `${sessionId || ""}::${scrollAnchorId || ""}`;
+    const hasNewExplicitAnchor = scrollAnchorId && appliedAnchorRef.current !== anchorKey;
+    const pendingAnchorId = pendingTranscriptAnchorId({
+      hasNewExplicitAnchor,
+      scrollAnchorId,
+      sessionChanged,
+      latestUserChanged,
+      latestUserRowId,
+      following: followingRef.current,
+    });
+    if (pendingAnchorId) {
+      pendingRowAnchorRef.current = `${sessionId || ""}::${pendingAnchorId}`;
+    }
+
+    previousSessionRef.current = sessionId;
+    previousLatestUserRef.current = latestUserRowId;
+
+    const positionTranscript = () => {
+      const currentViewport = viewportRef.current;
+      if (!currentViewport) return;
+
+      if (hasNewExplicitAnchor) {
+        if (scrollToRowAnchor(currentViewport, scrollAnchorId, sessionId)) {
+          appliedAnchorRef.current = anchorKey;
+          followingRef.current = false;
+          pendingRowAnchorRef.current = "";
+          updateJumpState();
+          return;
+        }
+      }
+
+      if (sessionChanged) {
+        appliedAnchorRef.current = scrollAnchorId ? appliedAnchorRef.current : "";
+        if (latestUserRowId && scrollToRowAnchor(currentViewport, latestUserRowId, sessionId)) {
+          followingRef.current = true;
+          pendingRowAnchorRef.current = "";
+          updateJumpState();
+          return;
+        }
+        followingRef.current = true;
+        scrollToBottom();
+        updateJumpState();
+        return;
+      }
+
+      if (latestUserChanged && latestUserRowId && followingRef.current) {
+        scrollToRowAnchor(currentViewport, latestUserRowId, sessionId);
+        followingRef.current = true;
+        pendingRowAnchorRef.current = "";
+        updateJumpState();
+        return;
+      }
+
+      if (followingRef.current || isNearBottom(currentViewport)) {
+        scrollToBottom();
+        setShowJumpToLatest(false);
+        return;
+      }
+
+      updateJumpState();
+    };
+
+    positionTranscript();
+    const timeout = window.setTimeout(positionTranscript, 0);
+    return () => window.clearTimeout(timeout);
+  }, [latestUserRowId, rows.length, scrollAnchorId, scrollToBottom, sessionId, updateJumpState]);
+
+  return {
+    viewportRef,
+    bottomRef,
+    anchorRowRef,
+    showJumpToLatest,
+    jumpToLatest,
+    onReaderIntent,
+    onScroll,
+  };
 }
 
 function SessionLoadingState() {
@@ -352,7 +572,30 @@ function AgentActivity({ activity }) {
   );
 }
 
-function MessageRow({ entry, catalog, autoOpenToolRun = false }) {
+function MessageRow({ entry, catalog, autoOpenToolRun = false, anchorRowId = "", anchorRef }) {
+  const messageId =
+    entry.messageId || (String(entry.id || "").startsWith("message-") ? entry.id.slice(8) : "");
+  const isAnchorRow =
+    anchorRowId &&
+    (entry.id === anchorRowId ||
+      messageId === anchorRowId ||
+      entry.id === `message-${anchorRowId}`);
+  const row = (
+    <div
+      ref={isAnchorRow ? anchorRef : undefined}
+      data-chat-row-id={entry.id}
+      data-message-id={messageId || undefined}
+      data-session-id={entry.sessionId || undefined}
+      data-scroll-anchor={entry.type === "user_message" ? "true" : undefined}
+      className="min-w-0 scroll-mt-6"
+    >
+      <MessageRowContent entry={entry} catalog={catalog} autoOpenToolRun={autoOpenToolRun} />
+    </div>
+  );
+  return row;
+}
+
+function MessageRowContent({ entry, catalog, autoOpenToolRun = false }) {
   if (entry.type === "tool_run") {
     return <StepsCard run={entry} autoOpen={autoOpenToolRun} />;
   }
@@ -368,6 +611,52 @@ function MessageRow({ entry, catalog, autoOpenToolRun = false }) {
       {JSON.stringify(entry)}
     </div>
   );
+}
+
+function isNearBottom(element) {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= 48;
+}
+
+function latestUserRowIdFromRows(rows) {
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    if (rows[index].type === "user_message") return rows[index].id;
+  }
+  return "";
+}
+
+export function pendingTranscriptAnchorId({
+  hasNewExplicitAnchor = false,
+  scrollAnchorId = "",
+  sessionChanged = false,
+  latestUserChanged = false,
+  latestUserRowId = "",
+  following = false,
+} = {}) {
+  if (hasNewExplicitAnchor) return scrollAnchorId;
+  if (sessionChanged && latestUserRowId) return latestUserRowId;
+  if (latestUserChanged && latestUserRowId && following) return latestUserRowId;
+  return "";
+}
+
+function scrollToRowAnchor(viewport, anchorId, sessionId) {
+  if (!anchorId) return false;
+  const candidates = [...viewport.querySelectorAll("[data-chat-row-id]")];
+  const target = candidates.find((element) => {
+    if (sessionId && element.dataset.sessionId && element.dataset.sessionId !== sessionId) {
+      return false;
+    }
+    const rowId = element.dataset.chatRowId || "";
+    const messageId = element.dataset.messageId || "";
+    return rowId === anchorId || messageId === anchorId || rowId === `message-${anchorId}`;
+  });
+  if (!target) return false;
+  positionRowElement(viewport, target);
+  return true;
+}
+
+function positionRowElement(viewport, row) {
+  const top = Math.max(0, row.offsetTop - viewport.clientHeight * 0.12);
+  viewport.scrollTo({ top, behavior: "auto" });
 }
 
 function buildAgentActivity(liveState, runState) {

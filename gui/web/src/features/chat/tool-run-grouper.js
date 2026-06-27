@@ -21,7 +21,8 @@ function narrativeText(content) {
 //   {
 //     type: "tool_run",
 //     id: "run-<first-tool-call-id>",
-//     steps: [{ id, name, args, status, result?, narration?, messageId }],
+//     sessionId: "session-id",
+//     steps: [{ id, name, args, status, result?, narration?, messageId, sessionId }],
 //     status: "pending" | "completed" | "error",
 //     narrationBefore: string  (assistant text immediately preceding the first
 //                               tool call, e.g. "Let me look up the quote.")
@@ -76,7 +77,7 @@ export function groupToolRuns(rows) {
       // The assistant emitted tool calls. Start a run if there isn't one;
       // otherwise continue the existing run.
       if (!run) {
-        run = startRun(toolCalls[0]);
+        run = startRun(toolCalls[0], row.sessionId);
         run.narrationBefore = (pendingNarration || text || "").trim();
         pendingNarration = "";
       } else if (text) {
@@ -97,6 +98,7 @@ export function groupToolRuns(rows) {
           status: "pending",
           result: null,
           messageId: row.messageId,
+          sessionId: tc.sessionId || row.sessionId || run.sessionId || "",
         });
       }
       continue;
@@ -110,6 +112,7 @@ export function groupToolRuns(rows) {
         run = {
           type: "tool_run",
           id: `run-${message.toolCallId || row.id}`,
+          sessionId: row.sessionId || message.sessionId || "",
           steps: [],
           status: "pending",
           narrationBefore: "",
@@ -122,6 +125,7 @@ export function groupToolRuns(rows) {
           status: "pending",
           result: null,
           messageId: null,
+          sessionId: row.sessionId || message.sessionId || "",
         });
       }
       const step =
@@ -138,6 +142,7 @@ export function groupToolRuns(rows) {
           status: message.isError ? "error" : "completed",
           result: message,
           messageId: null,
+          sessionId: row.sessionId || message.sessionId || run.sessionId || "",
         });
       }
       continue;
@@ -152,10 +157,11 @@ export function groupToolRuns(rows) {
   return out;
 }
 
-function startRun(firstCall) {
+function startRun(firstCall, fallbackSessionId = "") {
   return {
     type: "tool_run",
     id: `run-${firstCall.id}`,
+    sessionId: firstCall.sessionId || fallbackSessionId || "",
     steps: [],
     status: "pending",
     narrationBefore: "",

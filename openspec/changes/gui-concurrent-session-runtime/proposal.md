@@ -19,6 +19,8 @@ The bigger product issue is that one global active writer target also prevents a
 - Route chat prompts, `ask_user` answers/cancels, direct tool invocations, stop/cancel, retry, and setup-driven transcript mutations to explicit target sessions.
 - Correlate session snapshots, route transitions, send acknowledgements, and run events by `sessionId`, `requestId`, and `runId` so stale events cannot update the wrong route.
 - Make direct session routes and historical session loads independent of WebSocket ordering.
+- Make transcript scrolling session-aware and reader-intent-aware: anchored user turns, live-edge-only auto-follow, jump-to-latest controls, saved-thread restore, and position preservation during streaming/tool-card layout changes.
+- Keep auxiliary chat panels, including the research/tool timeline drawer, derived from the current route session so navigating to another chat cannot leave a panel showing tool calls from the previous thread.
 - Preserve canonical Pi/OpenCandle session storage, branch context, custom entries, and chat event rendering semantics.
 
 ## Capabilities
@@ -27,11 +29,14 @@ The bigger product issue is that one global active writer target also prevents a
 
 - **`pi-synced-gui`**: Defines the session-addressed GUI runtime, per-session writer ownership, route identity, and TUI/Pi parity expectations.
 - **`chat-event-rendering`**: Tightens the event stream contract so every live and replayed event is scoped to the target session and run.
+- **`stateful-market-surfaces`**: Replaces process-global active-session wording for GUI-originated market-state mutations with explicit target-session transcript visibility.
 
 ## Impact
 
 - **GUI server:** Introduces a session-runtime registry or equivalent actor map keyed by Pi session id/path instead of a singleton active runtime.
 - **GUI web app:** Makes route params, composer sends, direct tool invocations, `ask_user` responses, run controls, and live run state target explicit session ids; stale responses are ignored rather than rendered.
+- **Transcript UX:** Adds a session-scoped scroll behavior contract for long streaming finance workflows without replacing OpenCandle's finance-specific message and tool cards.
+- **Auxiliary panels:** Keeps the tool/research timeline drawer and any current-thread summaries synchronized with the visible route session, closing stale-panel leakage when switching chats.
 - **Session concurrency:** Allows independent sessions to run concurrently in the same GUI process, while rejecting overlapping runs in the same session.
 - **TUI/Pi parity:** Reuses Pi session storage and branch/read APIs while adding shared per-session writer-lock participation for TUI and GUI. TUI behavior remains singleton-focused because the terminal has one visible session, but durable session semantics and write safety stay shared.
 - **No storage migration:** This change does not require a SQLite schema migration or Pi session format change.
@@ -42,6 +47,6 @@ The bigger product issue is that one global active writer target also prevents a
 - Do not allow simultaneous writers to append to the same Pi session.
 - Do not fork or modify Pi session storage format.
 - Do not add cross-machine session sync.
-- Do not redesign the transcript UI, financial cards, or market-state pages.
+- Do not redesign the transcript visual language, financial cards, or market-state pages; this change may add transcript behavior and session-scoped panel synchronization needed for correctness.
 - Do not keep compatibility shims for the current active-session mutation path once the replacement endpoint and WebSocket actions are in place.
 - Do not add queued same-session prompts; same-session overlap is rejected until a separate queueing change defines that behavior.

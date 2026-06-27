@@ -349,8 +349,10 @@ export function AppShell() {
     (toolName, args) => gui.invokeTool(toolName, args, sessionView.activeSessionId),
     [gui.invokeTool, sessionView.activeSessionId],
   );
+  const scrollAnchorId = search?.messageId || search?.researchId || search?.synthesisId || "";
+
   return (
-    <ToolDrawerProvider>
+    <ToolDrawerProvider activeSessionId={sessionView.activeSessionId}>
       <div className="flex overflow-hidden bg-background" style={{ height: "100dvh" }}>
         <SessionSidebar {...sidebarProps} />
         <ConnectionStatusBanner role={gui.role} />
@@ -403,6 +405,8 @@ export function AppShell() {
             onOpenContext={() => openDrawer("context")}
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}
+            sessionId={sessionView.activeSessionId}
+            scrollAnchorId={scrollAnchorId}
           />
         )}
         <ToolDrawerInline />
