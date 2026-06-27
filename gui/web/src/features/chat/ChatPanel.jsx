@@ -208,7 +208,7 @@ function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) 
   const previousSessionRef = useRef("");
   const previousLatestUserRef = useRef("");
   const appliedAnchorRef = useRef("");
-  const mountedAnchorRef = useRef("");
+  const pendingRowAnchorRef = useRef("");
   const latestUserRowId = useMemo(() => {
     for (let index = rows.length - 1; index >= 0; index -= 1) {
       if (rows[index].type === "user_message") return rows[index].id;
@@ -244,12 +244,12 @@ function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) 
       const anchorId = scrollAnchorId || latestUserRowId;
       if (!anchorId) return;
       const key = `${sessionId || ""}::${anchorId}`;
-      if (mountedAnchorRef.current === key) return;
-      mountedAnchorRef.current = key;
       window.setTimeout(() => {
+        if (pendingRowAnchorRef.current !== key) return;
         const viewport = node.closest("[data-chat-transcript]");
         if (!(viewport instanceof HTMLElement)) return;
         positionRowElement(viewport, node);
+        pendingRowAnchorRef.current = "";
         updateJumpState();
       }, 0);
     },
@@ -291,6 +291,17 @@ function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) 
     const latestUserChanged = previousLatestUserRef.current !== latestUserRowId;
     const anchorKey = `${sessionId || ""}::${scrollAnchorId || ""}`;
     const hasNewExplicitAnchor = scrollAnchorId && appliedAnchorRef.current !== anchorKey;
+    const pendingAnchorId = pendingTranscriptAnchorId({
+      hasNewExplicitAnchor,
+      scrollAnchorId,
+      sessionChanged,
+      latestUserChanged,
+      latestUserRowId,
+      following: followingRef.current,
+    });
+    if (pendingAnchorId) {
+      pendingRowAnchorRef.current = `${sessionId || ""}::${pendingAnchorId}`;
+    }
 
     previousSessionRef.current = sessionId;
     previousLatestUserRef.current = latestUserRowId;
@@ -303,6 +314,7 @@ function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) 
         if (scrollToRowAnchor(currentViewport, scrollAnchorId, sessionId)) {
           appliedAnchorRef.current = anchorKey;
           followingRef.current = false;
+          pendingRowAnchorRef.current = "";
           updateJumpState();
           return;
         }
@@ -312,6 +324,7 @@ function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) 
         appliedAnchorRef.current = scrollAnchorId ? appliedAnchorRef.current : "";
         if (latestUserRowId && scrollToRowAnchor(currentViewport, latestUserRowId, sessionId)) {
           followingRef.current = true;
+          pendingRowAnchorRef.current = "";
           updateJumpState();
           return;
         }
@@ -321,9 +334,10 @@ function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) 
         return;
       }
 
-      if (latestUserChanged && latestUserRowId) {
+      if (latestUserChanged && latestUserRowId && followingRef.current) {
         scrollToRowAnchor(currentViewport, latestUserRowId, sessionId);
         followingRef.current = true;
+        pendingRowAnchorRef.current = "";
         updateJumpState();
         return;
       }
@@ -607,6 +621,20 @@ function latestUserRowIdFromRows(rows) {
   for (let index = rows.length - 1; index >= 0; index -= 1) {
     if (rows[index].type === "user_message") return rows[index].id;
   }
+  return "";
+}
+
+export function pendingTranscriptAnchorId({
+  hasNewExplicitAnchor = false,
+  scrollAnchorId = "",
+  sessionChanged = false,
+  latestUserChanged = false,
+  latestUserRowId = "",
+  following = false,
+} = {}) {
+  if (hasNewExplicitAnchor) return scrollAnchorId;
+  if (sessionChanged && latestUserRowId) return latestUserRowId;
+  if (latestUserChanged && latestUserRowId && following) return latestUserRowId;
   return "";
 }
 
