@@ -446,6 +446,7 @@ export function AppShell() {
         open={modelSetupOpen}
         onOpenChange={setModelSetupOpen}
         modelSetup={gui.modelSetup}
+        role={gui.role}
         send={gui.send}
         setToast={gui.setToast}
       />

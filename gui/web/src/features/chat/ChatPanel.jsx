@@ -102,11 +102,17 @@ export function ChatPanel({
     setAllowToolAutoOpen(false);
   }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const chatDisabled = role === "follower" || inputDisabled || needsSetup;
+  const composerDisabled = role === "follower" || inputDisabled;
+  const chatDisabled = composerDisabled || needsSetup;
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
-    if (!prompt || chatDisabled) return;
+    if (!prompt) return;
+    if (needsSetup) {
+      setToast?.("Connect or select an AI model before sending this message.");
+      return;
+    }
+    if (chatDisabled) return;
     setAllowToolAutoOpen(true);
     setDraft("");
     void startChatRun(prompt);
@@ -116,7 +122,7 @@ export function ChatPanel({
     role === "follower"
       ? "Follower mode: take over this session to send"
       : needsSetup
-        ? "Complete model setup to chat"
+        ? "Draft a question, then connect a model to send"
         : "Ask anything";
 
   return (
@@ -140,7 +146,7 @@ export function ChatPanel({
           onKeyDown={transcript.onReaderIntent}
         >
           {needsSetup ? (
-            <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
+            <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
           ) : sessionLoading ? (
             <SessionLoadingState />
           ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
@@ -186,13 +192,15 @@ export function ChatPanel({
       <ChatComposer
         draft={draft}
         setDraft={setDraft}
-        disabled={chatDisabled}
+        disabled={composerDisabled}
+        setupBlocked={needsSetup}
         placeholder={placeholder}
         canSend={Boolean(draft.trim()) && !chatDisabled}
         onSubmit={() => submit()}
         onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
         onOpenContext={onOpenContext}
         modelSetup={modelSetup}
+        role={role}
         send={send}
         setToast={setToast}
       />

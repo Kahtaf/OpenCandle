@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI model setup now keeps the composer usable for drafting while setup is incomplete, explains read-only follower mode, and disables model setup controls when another window owns the session.
+
 ## [0.10.0] - 2026-06-27
 
 ## [0.9.0] - 2026-06-26

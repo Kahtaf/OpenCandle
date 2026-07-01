@@ -112,6 +112,38 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Connect an AI model"));
     await expectVisible(mocked.getByLabel("API key"));
     await expectVisible(mocked.getByRole("button", { name: "Save key" }));
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await mocked.getByLabel("Message OpenCandle").fill("Draft while I find my key");
+    await expect(mocked.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
+      true,
+    );
+    await mocked.close();
+  });
+
+  it("explains read-only onboarding when another writer owns the session", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      role: "follower",
+      modelSetup: {
+        requirement: "connect_auth",
+        providers: [
+          {
+            id: "google",
+            label: "Google Gemini",
+            envVar: "GEMINI_API_KEY",
+            defaultModel: "gemini-2.5-flash",
+            signupUrl: "https://aistudio.google.com/app/apikey",
+          },
+        ],
+        availableModels: [],
+      },
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+
+    await expectVisible(mocked.getByText("Setup is locked in follower mode."));
+    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
+    await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
     await mocked.close();
   });
 

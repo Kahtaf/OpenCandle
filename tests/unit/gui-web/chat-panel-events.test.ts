@@ -131,7 +131,7 @@ describe("ChatPanel event transcript rendering", () => {
       },
     });
 
-    expect(html).toContain("Complete model setup to chat");
+    expect(html).toContain("Draft a question, then connect a model to send");
     expect(html).toContain('id="chat-composer"');
     expect(html).toContain("disabled");
     expect(html).toContain('aria-label="Send message"');
