@@ -8,6 +8,7 @@ import {
   resolveBootstrapRole,
   resolveBootstrapSessionId,
   sessionSnapshotFromPayload,
+  shouldReconnectOnForeground,
   settlePendingToolInvoke,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
@@ -120,6 +121,23 @@ describe("useGuiConnection helpers", () => {
       "writer-session",
     );
     expect(resolveBootstrapSessionId("writer-session", "new-session")).toBe("new-session");
+  });
+
+  it("reconnects on foreground only when the socket is not already active", () => {
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 3 })).toBe(
+      true,
+    );
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: undefined }))
+      .toBe(true);
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 1 })).toBe(
+      false,
+    );
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 0 })).toBe(
+      false,
+    );
+    expect(shouldReconnectOnForeground({ documentVisibility: "hidden", readyState: 3 })).toBe(
+      false,
+    );
   });
 
   it("normalizes bootstrap and state snapshot payloads into session snapshots", () => {

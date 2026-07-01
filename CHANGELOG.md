@@ -5,6 +5,7 @@
 ### Fixed
 
 - GUI model setup now keeps the composer usable for drafting while setup is incomplete, explains read-only follower mode, and disables model setup controls when another window owns the session.
+- The GUI now retries a stale session connection as soon as the browser returns to the foreground instead of leaving editing disabled behind the reconnect banner.
 
 ## [0.10.0] - 2026-06-27
 

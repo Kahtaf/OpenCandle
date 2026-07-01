@@ -180,6 +180,24 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
+  it("reconnects stale GUI sockets when the browser returns to the foreground", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("button", { name: "Send message" }));
+
+    await mocked.evaluate(() => window.__mockWebSocketInstances.at(-1).close());
+    await expectVisible(mocked.getByText("Reconnecting to the GUI session."));
+
+    await mocked.evaluate(() => window.dispatchEvent(new Event("focus")));
+
+    await mocked.waitForFunction(() => window.__mockWebSocketInstances.length >= 2);
+    await mocked.getByText("Reconnecting to the GUI session.").waitFor({ state: "detached" });
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await mocked.close();
+  });
+
   it("collapses and restores the desktop sidebar", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
@@ -1173,6 +1191,8 @@ async function installMockSocket(
 
       constructor() {
         super();
+        window.__mockWebSocketInstances = window.__mockWebSocketInstances || [];
+        window.__mockWebSocketInstances.push(this);
         this.sessions = [...(mockOverrides.sessions ?? [])];
         setTimeout(() => {
           this.onopen?.(new Event("open"));

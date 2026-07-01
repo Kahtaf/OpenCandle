@@ -102,6 +102,11 @@ export function resolveBootstrapSessionId(
   return updateSession ? responseSessionId : currentSessionId;
 }
 
+export function shouldReconnectOnForeground({ documentVisibility, readyState }) {
+  if (documentVisibility && documentVisibility !== "visible") return false;
+  return readyState !== 0 && readyState !== 1;
+}
+
 export function useGuiConnection() {
   const wsRef = useRef(null);
   const requestSeqRef = useRef(0);
@@ -275,6 +280,7 @@ export function useGuiConnection() {
       };
       ws.onclose = () => {
         window.clearTimeout(bootTimeout);
+        if (wsRef.current !== ws) return;
         for (const [requestId, pending] of pendingToolInvokesRef.current) {
           window.clearTimeout(pending.timeout);
           pending.reject(new Error("GUI connection closed before the tool finished."));
@@ -287,10 +293,33 @@ export function useGuiConnection() {
       };
     };
 
+    const reconnectOnForeground = () => {
+      if (disposed) return;
+      const documentVisibility =
+        typeof document === "undefined" ? "visible" : document.visibilityState;
+      if (
+        !shouldReconnectOnForeground({
+          documentVisibility,
+          readyState: wsRef.current?.readyState,
+        })
+      ) {
+        return;
+      }
+      window.clearTimeout(reconnect);
+      setSupportsSessionActions(false);
+      setRole("connecting");
+      wsRef.current?.close?.();
+      connect();
+    };
+
     connect();
+    window.addEventListener("focus", reconnectOnForeground);
+    document.addEventListener("visibilitychange", reconnectOnForeground);
     return () => {
       disposed = true;
       window.clearTimeout(reconnect);
+      window.removeEventListener("focus", reconnectOnForeground);
+      document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
     };
   }, [applyBootstrap, setToast, settleToolInvoke]);
