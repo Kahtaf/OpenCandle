@@ -3,12 +3,20 @@ const defaultTheme = require("tailwindcss/defaultTheme");
 const withAlpha = (token) => `hsl(var(${token}) / <alpha-value>)`;
 
 const sansStack = ["Inter", "system-ui", "-apple-system", ...defaultTheme.fontFamily.sans];
-const monoStack = ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", ...defaultTheme.fontFamily.mono];
+const monoStack = [
+  "JetBrains Mono",
+  "ui-monospace",
+  "SFMono-Regular",
+  "Menlo",
+  "Monaco",
+  "Consolas",
+  ...defaultTheme.fontFamily.mono,
+];
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
-  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"],
+  content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}", "../../packages/ui/src/**/*.{js,jsx}"],
   theme: {
     container: {
       center: true,

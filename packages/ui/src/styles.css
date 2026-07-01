@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light;
+  --tw-background: 0 0% 100%;
+  --tw-foreground: 240 6% 10%;
+  --tw-secondary: 240 5% 96%;
+  --tw-secondary-foreground: 240 6% 10%;
+  --tw-tertiary: 240 5% 92%;
+  --tw-tertiary-foreground: 240 6% 10%;
+  --tw-card: 0 0% 100%;
+  --tw-card-foreground: 240 6% 10%;
+  --tw-popover: 0 0% 100%;
+  --tw-popover-foreground: 240 6% 10%;
+  --tw-muted: 240 5% 96%;
+  --tw-muted-foreground: 240 4% 46%;
+  --tw-accent: 142 71% 35%;
+  --tw-accent-foreground: 0 0% 100%;
+  --tw-primary: 240 6% 10%;
+  --tw-primary-foreground: 0 0% 100%;
+  --tw-brand: 240 6% 10%;
+  --tw-brand-foreground: 0 0% 100%;
+  --tw-destructive: 0 84% 60%;
+  --tw-destructive-foreground: 0 0% 100%;
+  --tw-success: 142 71% 35%;
+  --tw-warning: 35 92% 45%;
+  --tw-info: 217 91% 60%;
+  --tw-border: 240 6% 90%;
+  --tw-soft: 240 5% 96%;
+  --tw-hard: 240 5% 84%;
+  --tw-input: 240 6% 90%;
+  --tw-ring: 240 6% 10%;
+  --shadow-subtle-xs: 0 1px 2px rgba(15, 15, 15, 0.04);
+  --shadow-subtle-sm: 0 4px 12px rgba(15, 15, 15, 0.06);
+  --shadow-subtle-md: 0 16px 32px rgba(15, 15, 15, 0.08);
+  --radius: 8px;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+}
