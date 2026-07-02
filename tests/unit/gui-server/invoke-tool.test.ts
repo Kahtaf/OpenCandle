@@ -269,8 +269,7 @@ describe("invokeToolFromUi", () => {
             JSON.stringify({
               result: {
                 toolCallId: proxiedResult.toolCallId,
-                content: proxiedResult.result.content,
-                details: proxiedResult.result.details,
+                result: proxiedResult.result,
                 isError: proxiedResult.isError,
               },
             }),

@@ -289,11 +289,12 @@ async function proxyToolInvokeToCoordinator(
   if (!response.ok || !ackResult.toolCallId) {
     throw new Error(String(body.error ?? "OpenCandle is reconnecting to this session."));
   }
+  const toolResult = asRecord(ackResult.result);
   return {
     toolCallId: String(ackResult.toolCallId),
     result: {
-      content: Array.isArray(ackResult.content) ? ackResult.content : [],
-      details: ackResult.details,
+      content: Array.isArray(toolResult.content) ? toolResult.content : [],
+      details: toolResult.details,
     },
     isError: Boolean(ackResult.isError),
   };
