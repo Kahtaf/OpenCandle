@@ -293,7 +293,7 @@ function SiteHeader({ output = "index.html" }) {
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
           </Button>
-          <Button asChild variant="brand" size="sm">
+          <Button asChild variant="brand" size="sm" rounded="full">
             <a href={`${prefix}docs/getting-started.html`}>Install</a>
           </Button>
         </nav>
@@ -588,9 +588,9 @@ function HomePage({ buildDate, version }) {
       }}
     >
       <SiteHeader />
-      <main className="mx-auto max-w-[1320px] px-4 py-5 lg:px-6">
-        <section className="min-h-[calc(100vh-96px)] rounded-lg border border-border bg-card shadow-subtle-xs">
-          <div className="border-border border-b px-4 py-3">
+      <main className="mx-auto max-w-[1320px] px-4 py-6 lg:px-6">
+        <section>
+          <div className="border-border border-b pb-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h1 className="font-semibold text-2xl text-foreground">
@@ -611,7 +611,7 @@ function HomePage({ buildDate, version }) {
               </div>
             </div>
           </div>
-          <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="grid gap-4 pt-4 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-4">
               <Card className="p-4">
                 <p className="text-muted-foreground text-xs uppercase">Prompt</p>
@@ -704,12 +704,9 @@ function HomePage({ buildDate, version }) {
               </Card>
               <Card className="p-4">
                 <h2 className="font-semibold text-base">FAQ</h2>
-                <div className="mt-3 space-y-3">
+                <div className="mt-1 divide-y divide-border">
                   {faqs.map((faq) => (
-                    <details
-                      key={faq.question}
-                      className="rounded-md border border-border p-3 text-sm"
-                    >
+                    <details key={faq.question} className="py-3 text-sm">
                       <summary className="cursor-pointer font-medium">{faq.question}</summary>
                       <p className="mt-2 text-muted-foreground">{faq.answer}</p>
                     </details>
