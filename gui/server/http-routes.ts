@@ -35,6 +35,7 @@ import {
   readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
+  shouldBlockFailedCoordinatorAction as shouldBlockFailedCoordinatorLockAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
 import type { WsHub } from "./ws-hub.js";
@@ -813,19 +814,7 @@ function shouldBlockFailedCoordinatorAction(
   runSessionManager: SessionManager,
   body: Record<string, unknown>,
 ): boolean {
-  if (!hasClientActionId(body)) return false;
-  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
-  if (!lock || lock.pid === process.pid) return false;
-  return isCoordinatorOwnerAlive(lock.pid);
-}
-
-function isCoordinatorOwnerAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
+  return hasClientActionId(body) && shouldBlockFailedCoordinatorLockAction(runSessionManager);
 }
 
 async function handleTrustedGuiMutation(

@@ -338,6 +338,25 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
+// Unlike isPidAlive, EPERM counts as alive: the process exists but belongs to
+// another user, so its coordinator may still be serving the session.
+export function isCoordinatorOwnerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+export function shouldBlockFailedCoordinatorAction(
+  sessionManager: SessionLockScopeSource,
+): boolean {
+  const lock = readWriterLock(writerLockScopeForSession(sessionManager));
+  if (!lock || lock.pid === process.pid) return false;
+  return isCoordinatorOwnerAlive(lock.pid);
+}
+
 function classifyLock(
   lock: WriterLock,
   staleGraceMs: number,

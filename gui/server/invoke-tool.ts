@@ -21,6 +21,7 @@ import {
   readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
+  shouldBlockFailedCoordinatorAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
 
@@ -246,21 +247,6 @@ export function canProxyToolInvokeToCoordinator(runSessionManager: SessionManage
       lock.coordinatorSecret &&
       lock.pid !== process.pid,
   );
-}
-
-function shouldBlockFailedCoordinatorAction(runSessionManager: SessionManager): boolean {
-  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
-  if (!lock || lock.pid === process.pid) return false;
-  return isCoordinatorOwnerAlive(lock.pid);
-}
-
-function isCoordinatorOwnerAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
 }
 
 async function proxyToolInvokeToCoordinator(

@@ -176,7 +176,8 @@ describe("GUI server route guards", () => {
       "shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)",
     );
     expect(proxyBlock).toContain('"OpenCandle is reconnecting to this session."');
-    expect(source).toContain("return isCoordinatorOwnerAlive(lock.pid)");
+    const lockSource = readFileSync(resolve("src/pi/session-writer-lock.ts"), "utf-8");
+    expect(lockSource).toContain("return isCoordinatorOwnerAlive(lock.pid)");
   });
 
   it("broadcasts target session snapshots after proxied chat runs", () => {
