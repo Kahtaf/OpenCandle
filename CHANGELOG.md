@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- The public homepage now leads with the product claim and answers pre-install questions directly: a bring-your-own-model note, the evidence breakdown behind a sample answer, a visible MIT/Node/OS requirements line, a current-version badge, and a ChatGPT-differentiation FAQ.
+- Public docs were consolidated: the standalone ChatGPT and spreadsheet comparison pages merged into one Comparisons page, the benchmarking page merged into Testing and Evals, System Architecture links to the data-sources and configuration pages instead of duplicating their tables, and docs navigation now separates user pages from contributor pages.
+
+### Fixed
+
+- Docs now enumerate the `/connect` provider/category targets, warn that `.env` values override exported shell variables, and mark one model provider as required instead of listing all model keys as optional.
+- DESIGN.md and DESIGN.json now name `packages/ui` as the normative token/primitive source and match the shipped button, badge, page-width, and typography metrics instead of retired aspirational values.
+
 ## [0.10.0] - 2026-06-27
 
 ## [0.9.0] - 2026-06-26
