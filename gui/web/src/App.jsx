@@ -69,6 +69,7 @@ export function AppShell() {
         }));
         if (event.type !== "run.started" || !event.sessionId) return;
         const sessionId = String(event.sessionId);
+        gui.adoptSessionId(sessionId);
         const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
         if (routeSessionId || pathname === sessionPath) return;
         void navigate({
@@ -77,7 +78,7 @@ export function AppShell() {
           search: (current) => ({ ...current, drawer: undefined }),
         });
       },
-      [activeSessionId, pathname, routeSessionId, navigate],
+      [activeSessionId, pathname, routeSessionId, navigate, gui],
     ),
   });
   const activeDrawer = search?.drawer;
@@ -97,16 +98,25 @@ export function AppShell() {
     events: visibleEvents,
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
-    canStartFreshHomeSession: gui.supportsSessionActions,
+    canStartFreshHomeSession:
+      gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
-  const visibleAskUserPrompts = gui.askUserPrompts.filter(
-    (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
-  );
+  const nonChatActionsUnavailable =
+    gui.coordination?.sessionId === sessionView.activeSessionId &&
+    gui.coordination?.ownerKind === "tui";
+  const visibleAskUserPrompts = nonChatActionsUnavailable
+    ? []
+    : gui.askUserPrompts.filter(
+        (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
+      );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const guiEventCount = visibleEvents.length;
-  const inputDisabled = gui.role !== "writer" || sessionView.pendingSessionSwitch;
+  const inputDisabled =
+    sessionView.pendingSessionSwitch ||
+    sessionView.pendingFreshHomeSession ||
+    !gui.supportsSessionActions;
 
   const openDrawer = useCallback(
     (drawer) => {
@@ -163,11 +173,11 @@ export function AppShell() {
     if (
       !shouldStartFreshHomeSession({
         pathname,
-        role: gui.role,
         currentSessionId: gui.currentSessionId,
         entryCount: hasGuiSessionContent ? guiEventCount : 0,
         lastResetSessionId: homeResetSessionRef.current,
-        canStartFreshHomeSession: gui.supportsSessionActions,
+        canStartFreshHomeSession:
+          gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
       })
     )
       return;
@@ -175,12 +185,13 @@ export function AppShell() {
     void gui.newSession();
   }, [
     pathname,
-    gui.role,
     gui.currentSessionId,
     hasGuiSessionContent,
     guiEventCount,
     gui.newSession,
+    gui.role,
     gui.supportsSessionActions,
+    search?.messageId,
   ]);
 
   useEffect(() => {
@@ -222,14 +233,16 @@ export function AppShell() {
     }, 220);
   }, []);
 
-  // Home sends always run in a fresh session so a stale client can never
-  // append to the previous writer session; the server rejects mismatches
-  // with a session_changed 409, retried once against another fresh session.
+  // Writer home sends run in a fresh session so a stale client cannot append to
+  // the previous active session. Non-owner windows submit to the active session
+  // and let the server proxy to the current coordinator when one is available.
   const startRoutedChatRun = useCallback(
     async (prompt) => {
       const target = chatRunSessionTarget({
         pathname,
         supportsSessionActions: gui.supportsSessionActions,
+        hasCurrentSessionContent: hasGuiSessionContent,
+        canStartFreshHomeSession: gui.role === "writer",
       });
       if (target.mode === "current") {
         void chatRun.startChatRun(prompt);
@@ -269,6 +282,8 @@ export function AppShell() {
     [
       activeSessionId,
       pathname,
+      hasGuiSessionContent,
+      gui.role,
       gui.supportsSessionActions,
       gui.newSession,
       gui.setToast,
@@ -346,8 +361,15 @@ export function AppShell() {
           : "workflows";
   const marketDomain = domainFromPath(pathname);
   const invokeToolForVisibleSession = useCallback(
-    (toolName, args) => gui.invokeTool(toolName, args, sessionView.activeSessionId),
-    [gui.invokeTool, sessionView.activeSessionId],
+    (toolName, args) => {
+      if (nonChatActionsUnavailable) {
+        const message = "OpenCandle is reconnecting to this session.";
+        gui.setToast(message);
+        return Promise.reject(new Error(message));
+      }
+      return gui.invokeTool(toolName, args, sessionView.activeSessionId);
+    },
+    [gui.invokeTool, gui.setToast, nonChatActionsUnavailable, sessionView.activeSessionId],
   );
   const scrollAnchorId = search?.messageId || search?.researchId || search?.synthesisId || "";
 
@@ -446,6 +468,7 @@ export function AppShell() {
         open={modelSetupOpen}
         onOpenChange={setModelSetupOpen}
         modelSetup={gui.modelSetup}
+        role={gui.role}
         send={gui.send}
         setToast={gui.setToast}
       />
@@ -459,7 +482,7 @@ function ConnectionStatusBanner({ role }) {
   const message =
     role === "connecting"
       ? "Connecting to the GUI session..."
-      : "Reconnecting to the GUI session. Editing is disabled until the writer reconnects.";
+      : "Reconnecting to the GUI session. Editing will resume automatically.";
   return (
     <div
       className="fixed left-1/2 top-3 z-[90] max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-subtle-md"

@@ -4,14 +4,24 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { getDefaults } from "../../src/memory/tool-defaults.js";
+import {
+  clearPendingSessionAction,
+  hasAcceptedSessionAction,
+  hasPendingSessionAction,
+  recordAcceptedSessionAction,
+  recordPendingSessionAction,
+} from "../../src/pi/session-action-dedupe.js";
 import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { AskUserHandler } from "../../src/types/index.js";
+import type { LocalSessionCoordinator } from "./local-session-coordinator.js";
 import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import {
   acquireWriterLock,
+  readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
+  shouldBlockFailedCoordinatorAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
 
@@ -30,6 +40,7 @@ export interface ToolInvokeController {
     toolName: string,
     args: Record<string, unknown>,
     sessionId?: string,
+    options?: { actionId?: string; allowProxy?: boolean },
   ): Promise<InvokeToolResult>;
   handleToolInvokeMessage(client: ToolInvokeClient, data: Record<string, unknown>): Promise<void>;
 }
@@ -46,6 +57,10 @@ export interface ToolInvokeControllerOptions {
   resolveSessionManager?: (sessionId: string) => Promise<SessionManager | null>;
   broadcastSessionSnapshot?: (sessionManager: SessionManager) => void;
   broadcastSessions?: () => void;
+  localSessionCoordinator?: LocalSessionCoordinator;
+  localCoordinatorEndpoint?: string;
+  localCoordinatorSecret?: string;
+  syncWriterLockScope?: () => void;
 }
 
 export function createToolInvokeController({
@@ -60,13 +75,17 @@ export function createToolInvokeController({
   resolveSessionManager,
   broadcastSessionSnapshot,
   broadcastSessions,
+  localSessionCoordinator,
+  localCoordinatorEndpoint,
+  localCoordinatorSecret,
+  syncWriterLockScope,
 }: ToolInvokeControllerOptions): ToolInvokeController {
   async function handleToolInvoke(
     toolName: string,
     args: Record<string, unknown>,
     sessionId = "",
+    options: { actionId?: string; allowProxy?: boolean } = {},
   ): Promise<InvokeToolResult> {
-    if (role !== "writer") throw new Error("Read-only follower mode");
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
 
@@ -77,15 +96,50 @@ export function createToolInvokeController({
       resolveSessionManager,
     );
     const useCurrentSession = sameSessionStorage(currentSessionManager, runSessionManager);
+    const allowProxy = options.allowProxy !== false;
+    const shouldProxyToolInvoke =
+      allowProxy &&
+      (role !== "writer" || !useCurrentSession) &&
+      canProxyToolInvokeToCoordinator(runSessionManager);
+    if (shouldProxyToolInvoke) {
+      const proxied = await proxyToolInvokeToCoordinator(
+        runSessionManager,
+        toolName,
+        args,
+        options.actionId,
+      );
+      if (proxied) return proxied;
+      if (options.actionId && hasAcceptedSessionAction(runSessionManager, options.actionId)) {
+        throw new Error("OpenCandle already accepted this action in the active session.");
+      }
+      if (options.actionId && hasPendingSessionAction(runSessionManager, options.actionId)) {
+        throw new Error("OpenCandle is reconnecting to this session.");
+      }
+      if (options.actionId && shouldBlockFailedCoordinatorAction(runSessionManager)) {
+        throw new Error("OpenCandle is reconnecting to this session.");
+      }
+    }
+    if (options.actionId && hasAcceptedSessionAction(runSessionManager, options.actionId)) {
+      throw new Error("OpenCandle already accepted this action in the active session.");
+    }
+    if (options.actionId && hasPendingSessionAction(runSessionManager, options.actionId)) {
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
     let acquiredLockScope = "";
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
-    if (!useCurrentSession) {
+    const needsWriterLock = !useCurrentSession || role !== "writer";
+    // The writer fast path must fail closed like chat runs when this process
+    // lost its lock scope migration, or it can double-write to a session
+    // another process now owns.
+    if (!needsWriterLock) syncWriterLockScope?.();
+    if (needsWriterLock) {
       const lockScope = writerLockScopeForSession(runSessionManager);
-      const lockResult = await acquireWriterLock(lockScope, "gui");
+      const lockResult = await acquireWriterLock(lockScope, "gui", {
+        coordinatorEndpoint: localCoordinatorEndpoint,
+        coordinatorSecret: localCoordinatorSecret,
+      });
       if (lockResult.role !== "writer") {
-        throw new Error(
-          `Session is currently being written by ${lockResult.lock.processKind} (pid ${lockResult.lock.pid}).`,
-        );
+        throw new Error("OpenCandle is reconnecting to this session.");
       }
       acquiredLockScope = lockScope;
       lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
@@ -93,12 +147,27 @@ export function createToolInvokeController({
 
     try {
       const runSessionId = safeSessionId(runSessionManager);
-      const result = await invokeTool(runSessionManager, tool, args, "ui", {
-        askUserHandler:
-          runSessionId && askUserHandlerForSessionId
-            ? askUserHandlerForSessionId(runSessionId)
-            : askUserHandler,
-      });
+      recordPendingSessionAction(runSessionManager, options.actionId ?? "");
+      let actionAccepted = false;
+      const recordAcceptedAction = () => {
+        if (actionAccepted) return;
+        recordAcceptedSessionAction(runSessionManager, options.actionId ?? "");
+        actionAccepted = true;
+      };
+      let result: InvokeToolResult;
+      try {
+        result = await invokeTool(runSessionManager, tool, args, "ui", {
+          askUserHandler:
+            runSessionId && askUserHandlerForSessionId
+              ? askUserHandlerForSessionId(runSessionId)
+              : askUserHandler,
+          onTranscriptStarted: recordAcceptedAction,
+        });
+      } catch (error) {
+        if (!actionAccepted) clearPendingSessionAction(runSessionManager, options.actionId ?? "");
+        throw error;
+      }
+      recordAcceptedAction();
       if (!result.isError && marketStateToolMapping(toolName) != null) {
         onMarketStateChanged?.();
       }
@@ -120,10 +189,28 @@ export function createToolInvokeController({
     data: Record<string, unknown>,
   ): Promise<void> {
     const requestId = typeof data.requestId === "string" ? data.requestId : "";
+    const actionId = typeof data.actionId === "string" ? data.actionId : "";
     const toolName = String(data.toolName ?? "");
     const sessionId = typeof data.sessionId === "string" ? data.sessionId : "";
+    const allowProxy = data.allowProxy !== false;
     try {
-      const result = await handleToolInvoke(toolName, requestArgs(data.args), sessionId);
+      const invoke = () =>
+        handleToolInvoke(toolName, requestArgs(data.args), sessionId, { actionId, allowProxy });
+      const actionResult =
+        localSessionCoordinator && actionId
+          ? await localSessionCoordinator.runSessionAction(
+              {
+                sessionId: sessionId || safeSessionId(getSessionManager()),
+                actionId,
+                actionType: "tool.invoke",
+                payload: { toolName, args: requestArgs(data.args) },
+                source: "browser",
+              },
+              invoke,
+            )
+          : await invoke().then((result) => ({ ok: true as const, duplicate: false, result }));
+      if (!actionResult.ok) throw new Error(actionResult.message);
+      const result = actionResult.result;
       if (requestId) {
         client.send(buildToolInvokeAckMessage(requestId, toolName, result));
       }
@@ -144,6 +231,64 @@ export function createToolInvokeController({
   }
 
   return { handleToolInvoke, handleToolInvokeMessage };
+}
+
+export function canProxyToolInvokeToCoordinator(runSessionManager: SessionManager): boolean {
+  let lockScope: string;
+  try {
+    lockScope = writerLockScopeForSession(runSessionManager);
+  } catch {
+    return false;
+  }
+  const lock = readWriterLock(lockScope);
+  return Boolean(
+    lock?.processKind === "gui" &&
+      lock.coordinatorEndpoint &&
+      lock.coordinatorSecret &&
+      lock.pid !== process.pid,
+  );
+}
+
+async function proxyToolInvokeToCoordinator(
+  runSessionManager: SessionManager,
+  toolName: string,
+  args: Record<string, unknown>,
+  actionId = "",
+): Promise<InvokeToolResult | null> {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return null;
+  const endpoint = new URL("/api/local-coordinator/tool-invoke", lock.coordinatorEndpoint);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      body: JSON.stringify({
+        sessionId: safeSessionId(runSessionManager),
+        actionId,
+        toolName,
+        args,
+      }),
+    });
+  } catch {
+    return null;
+  }
+  const body = asRecord(await response.json());
+  const ackResult = asRecord(body.result);
+  if (!response.ok || !ackResult.toolCallId) {
+    throw new Error(String(body.error ?? "OpenCandle is reconnecting to this session."));
+  }
+  return {
+    toolCallId: String(ackResult.toolCallId),
+    result: {
+      content: Array.isArray(ackResult.content) ? ackResult.content : [],
+      details: ackResult.details,
+    },
+    isError: Boolean(ackResult.isError),
+  };
 }
 
 function sameSessionStorage(current: SessionManager, target: SessionManager): boolean {
@@ -192,7 +337,11 @@ export async function invokeToolFromUi(
   tool: AgentTool<TSchema, unknown>,
   args: Record<string, unknown>,
   source: "ui" | "background" = "ui",
-  options: { askUserHandler?: AskUserHandler; recordTranscript?: boolean } = {},
+  options: {
+    askUserHandler?: AskUserHandler;
+    recordTranscript?: boolean;
+    onTranscriptStarted?: () => void;
+  } = {},
 ): Promise<InvokeToolResult> {
   if (!Value.Check(tool.parameters, args)) {
     const errors = [...Value.Errors(tool.parameters, args)]
@@ -222,6 +371,7 @@ export async function invokeToolFromUi(
   const recordTranscript = options.recordTranscript ?? true;
   if (recordTranscript) {
     sessionManager.appendMessage(assistant);
+    options.onTranscriptStarted?.();
   }
 
   const wrapped = wrapWithDefaults(tool, getDefaults(tool.name));

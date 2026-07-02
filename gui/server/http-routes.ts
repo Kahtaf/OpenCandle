@@ -4,10 +4,23 @@ import { extname, join, resolve } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { buildDoctorReport } from "../../src/doctor/report.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
+import {
+  clearPendingSessionAction,
+  hasAcceptedSessionAction,
+  hasPendingSessionAction,
+  recordAcceptedSessionAction,
+  recordPendingSessionAction,
+} from "../../src/pi/session-action-dedupe.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
+import type { ToolInvokeController } from "./invoke-tool.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
+import type {
+  LocalSessionCoordinator,
+  SessionActionEnvelope,
+  SessionActionResult,
+} from "./local-session-coordinator.js";
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
@@ -22,6 +35,7 @@ import {
   readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
+  shouldBlockFailedCoordinatorAction as shouldBlockFailedCoordinatorLockAction,
   writerLockScopeForSession,
 } from "./writer-lock.js";
 import type { WsHub } from "./ws-hub.js";
@@ -35,14 +49,19 @@ interface GuiHttpRouteOptions {
   agentDir: string;
   sessionDir: string;
   privateApiSessionToken: string;
+  localCoordinatorEndpoint: string;
+  localCoordinatorSecret: string;
   allowRemotePrivateApi: boolean;
+  syncCurrentWriterLockScope?: () => void;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
   createSessionForManager: (sessionManager: SessionManager) => Promise<{ session: AgentSession }>;
   wsHub: WsHub;
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
+  toolInvokeController: ToolInvokeController;
   quoteSnapshotStore: QuoteSnapshotStore;
+  localSessionCoordinator?: LocalSessionCoordinator;
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
@@ -67,7 +86,11 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/session/new" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Session API", options)) return;
       if (options.role !== "writer") {
-        writeJson(res, { error: "Read-only follower mode" }, 409);
+        writeJson(
+          res,
+          { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+          409,
+        );
         return;
       }
       await options.sessionActionsController.handleNewSession();
@@ -215,6 +238,84 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/local-coordinator/chat-run" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      const requestedSessionId = String(body.sessionId ?? "").trim();
+      const sessionManager = requestedSessionId
+        ? await resolveSessionManagerById(options, requestedSessionId)
+        : undefined;
+      if (requestedSessionId && !sessionManager) {
+        writeJson(res, { error: "Unknown saved session" }, 404);
+        return;
+      }
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body);
+      return;
+    }
+
+    if (url.pathname === "/api/local-coordinator/tool-invoke" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      let ack: unknown;
+      await options.toolInvokeController.handleToolInvokeMessage(
+        { send: (message) => (ack = message) },
+        {
+          requestId: "local-coordinator-tool",
+          actionId: String(body.actionId ?? ""),
+          sessionId: String(body.sessionId ?? ""),
+          toolName: String(body.toolName ?? ""),
+          args: asRecord(body.args),
+          allowProxy: false,
+        },
+      );
+      const message = asRecord(ack);
+      const result = asRecord(message.result);
+      if (result.toolCallId) {
+        writeJson(res, { result });
+      } else {
+        writeJson(
+          res,
+          { error: String(asRecord(message.error).message ?? "Tool invocation failed") },
+          409,
+        );
+      }
+      return;
+    }
+
+    if (url.pathname === "/api/local-coordinator/ask-user" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      const payload = asRecord(body.payload);
+      try {
+        const action = {
+          actionId: String(body.actionId ?? ""),
+          sessionId: String(body.sessionId ?? ""),
+          source: "browser" as const,
+          allowProxy: false,
+        };
+        if (body.actionType === "ask_user.answer") {
+          await options.sessionActionsController.handleAskUserAnswer(
+            String(payload.id ?? ""),
+            payload.answer,
+            action,
+          );
+        } else if (body.actionType === "ask_user.cancel") {
+          await options.sessionActionsController.handleAskUserCancel(
+            String(payload.id ?? ""),
+            action,
+          );
+        } else {
+          writeJson(res, { error: "Unknown ask_user action" }, 400);
+          return;
+        }
+        writeJson(res, { ok: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        writeJson(res, { error: message }, 409);
+      }
+      return;
+    }
+
     const runSessionId = sessionIdFromRoute(url.pathname, "runs");
     if (runSessionId && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
@@ -237,13 +338,9 @@ async function handleSseChatRun(
   options: GuiHttpRouteOptions,
   activeRunSessionIds: Set<string>,
   targetSessionManager?: SessionManager,
+  bodyOverride?: Record<string, unknown>,
 ): Promise<void> {
-  if (options.role !== "writer") {
-    writeJson(res, { error: "Read-only follower mode" }, 409);
-    return;
-  }
-
-  const body = await readJsonBody(req);
+  const body = bodyOverride ?? asRecord(await readJsonBody(req));
   const prompt = String(asRecord(body).prompt ?? "").trim();
   if (!prompt) {
     writeJson(res, { error: "prompt is required" }, 400);
@@ -251,7 +348,8 @@ async function handleSseChatRun(
   }
 
   const currentSessionManager = options.getSessionManager();
-  const requestedSessionId = String(asRecord(body).sessionId ?? "").trim();
+  const bodyRecord = asRecord(body);
+  const requestedSessionId = String(bodyRecord.sessionId ?? "").trim();
   const runSessionManager = targetSessionManager ?? currentSessionManager;
   const sessionId = runSessionManager.getSessionId();
   if (!targetSessionManager) {
@@ -269,9 +367,153 @@ async function handleSseChatRun(
     return;
   }
 
+  const proxyAllowed = bodyOverride === undefined;
+  const actionId = String(bodyRecord.actionId ?? "").trim();
+  const shouldProxyChatRun = proxyAllowed && canProxyChatRunToCoordinator(runSessionManager);
+  if (shouldProxyChatRun) {
+    if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) {
+      const useCurrentSession =
+        !targetSessionManager ||
+        currentSessionManager.getSessionFile() === runSessionManager.getSessionFile();
+      await broadcastFreshRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      return;
+    }
+    if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
+      writeJson(res, { ok: true, duplicate: true });
+      return;
+    }
+    if (actionId && hasPendingSessionAction(runSessionManager, actionId)) {
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
+      return;
+    }
+    if (shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)) {
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
+      return;
+    }
+  }
+  if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
+    writeJson(res, { ok: true, duplicate: true });
+    return;
+  }
+  if (actionId && hasPendingSessionAction(runSessionManager, actionId)) {
+    writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+    return;
+  }
+
+  if (options.localSessionCoordinator) {
+    const action = buildChatRunActionEnvelope(bodyRecord, sessionId);
+    let result: SessionActionResult<{ streamed: boolean }>;
+    try {
+      result = await options.localSessionCoordinator.runSessionAction(action, async () => {
+        const admitted = await streamAcceptedSseChatRun({
+          res,
+          options,
+          activeRunSessionIds,
+          targetSessionManager,
+          currentSessionManager,
+          runSessionManager,
+          sessionId,
+          prompt,
+          actionId: action.actionId,
+        });
+        if (!admitted) throw new SessionActionNotAdmitted();
+        return { streamed: true };
+      });
+    } catch (error) {
+      if (error instanceof SessionActionNotAdmitted) return;
+      throw error;
+    }
+    if (!result.ok) {
+      writeJson(res, { error: result.message, code: result.code }, 409);
+      return;
+    }
+    if (result.duplicate && !res.headersSent) {
+      writeJson(res, { ok: true, duplicate: true });
+    }
+    return;
+  }
+
+  await streamAcceptedSseChatRun({
+    res,
+    options,
+    activeRunSessionIds,
+    targetSessionManager,
+    currentSessionManager,
+    runSessionManager,
+    sessionId,
+    prompt,
+    actionId,
+  });
+}
+
+export function canProxyChatRunToCoordinator(runSessionManager: SessionManager): boolean {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  return Boolean(lock?.coordinatorEndpoint && lock.coordinatorSecret && lock.pid !== process.pid);
+}
+
+async function proxyChatRunToCoordinator(
+  res: ServerResponse,
+  runSessionManager: SessionManager,
+  body: Record<string, unknown>,
+): Promise<boolean> {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return false;
+  const endpoint = new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      body: JSON.stringify({ ...body, sessionId: runSessionManager.getSessionId() }),
+    });
+  } catch {
+    return false;
+  }
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  if (response.body) {
+    for await (const chunk of response.body) {
+      res.write(chunk);
+    }
+  }
+  res.end();
+  return true;
+}
+
+async function streamAcceptedSseChatRun({
+  res,
+  options,
+  activeRunSessionIds,
+  targetSessionManager,
+  currentSessionManager,
+  runSessionManager,
+  sessionId,
+  prompt,
+  actionId,
+}: {
+  res: ServerResponse;
+  options: GuiHttpRouteOptions;
+  activeRunSessionIds: Set<string>;
+  targetSessionManager?: SessionManager;
+  currentSessionManager: SessionManager;
+  runSessionManager: SessionManager;
+  sessionId: string;
+  prompt: string;
+  actionId: string;
+}): Promise<boolean> {
   if (activeRunSessionIds.has(sessionId)) {
     writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
-    return;
+    return false;
   }
 
   const currentSessionFile = currentSessionManager.getSessionFile();
@@ -279,12 +521,20 @@ async function handleSseChatRun(
   const useCurrentSession = !targetSessionManager || currentSessionFile === targetSessionFile;
   let acquiredLockScope = "";
   let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
-  if (!useCurrentSession) {
+  const needsWriterLock = !useCurrentSession || options.role !== "writer";
+  if (needsWriterLock) {
     const lockScope = writerLockScopeForSession(runSessionManager);
-    const lockResult = await acquireWriterLock(lockScope, "gui");
+    const lockResult = await acquireWriterLock(lockScope, "gui", {
+      coordinatorEndpoint: options.localCoordinatorEndpoint,
+      coordinatorSecret: options.localCoordinatorSecret,
+    });
     if (lockResult.role !== "writer") {
-      writeJson(res, { error: "Read-only follower mode", lock: lockResult.lock }, 409);
-      return;
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
+      return false;
     }
     acquiredLockScope = lockScope;
     lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
@@ -302,7 +552,7 @@ async function handleSseChatRun(
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     const message = error instanceof Error ? error.message : String(error);
     writeJson(res, { error: message }, 500);
-    return;
+    return false;
   }
 
   res.writeHead(200, {
@@ -331,15 +581,31 @@ async function handleSseChatRun(
     originalPrompt: prompt,
   });
   const observation = createPromptObservation();
+  let actionAccepted = false;
+  const recordAcceptedAction = () => {
+    if (actionAccepted) return;
+    recordAcceptedSessionAction(runSessionManager, actionId);
+    if (useCurrentSession) options.syncCurrentWriterLockScope?.();
+    actionAccepted = true;
+  };
   const unsubscribeLive = runSession.subscribe((event) => {
     liveAdapter.handle(event);
     observePromptEvent(observation, event);
+    if (
+      !prompt.startsWith("/") &&
+      !actionAccepted &&
+      observation.userTexts.some((text) => text.trim() === prompt.trim())
+    ) {
+      recordAcceptedAction();
+    }
   });
 
   try {
+    recordPendingSessionAction(runSessionManager, actionId);
     const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
     if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
       runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
+      recordAcceptedAction();
       const message =
         modelSetup.requirement === "select_model"
           ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
@@ -348,10 +614,11 @@ async function handleSseChatRun(
         source: "gui",
         requirement: modelSetup.requirement,
       });
-      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
-      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      recordAcceptedAction();
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
@@ -375,6 +642,7 @@ async function handleSseChatRun(
     }
     writeSse(res, { type: "run.completed", runId, sessionId, seq });
   } catch (error) {
+    if (!actionAccepted) clearPendingSessionAction(runSessionManager, actionId);
     seq = liveAdapter.nextSeq();
     const message = error instanceof Error ? error.message : String(error);
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
@@ -386,19 +654,68 @@ async function handleSseChatRun(
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     res.end();
   }
+  return actionAccepted;
 }
 
-function broadcastRunSessionSnapshot(
+class SessionActionNotAdmitted extends Error {}
+
+async function broadcastRunSessionSnapshot(
   options: GuiHttpRouteOptions,
   sessionManager: SessionManager,
   useCurrentSession: boolean,
-): void {
+): Promise<void> {
   if (useCurrentSession) {
+    options.syncCurrentWriterLockScope?.();
     options.wsHub.broadcastState();
   } else {
     options.wsHub.broadcastSessionSnapshot(sessionManager);
     options.wsHub.broadcastSessions();
   }
+}
+
+async function broadcastFreshRunSessionSnapshot(
+  options: GuiHttpRouteOptions,
+  sessionManager: SessionManager,
+  useCurrentSession: boolean,
+): Promise<void> {
+  const freshSessionManager = await reloadSessionManager(sessionManager, options);
+  if (useCurrentSession) {
+    options.syncCurrentWriterLockScope?.();
+    options.wsHub.broadcast({
+      type: "state.snapshot",
+      ...buildSnapshotPayload(freshSessionManager),
+    });
+  } else {
+    options.wsHub.broadcast({
+      type: "session.snapshot",
+      ...buildSnapshotPayload(freshSessionManager),
+    });
+    options.wsHub.broadcastSessions();
+  }
+}
+
+async function reloadSessionManager(
+  sessionManager: SessionManager,
+  options: Pick<GuiHttpRouteOptions, "sessionDir" | "cwd">,
+): Promise<SessionManager> {
+  const sessionFile = sessionManager.getSessionFile();
+  return sessionFile
+    ? SessionManager.open(sessionFile, options.sessionDir, options.cwd)
+    : sessionManager;
+}
+
+function buildSnapshotPayload(sessionManager: SessionManager): Record<string, unknown> {
+  const sessionId = sessionManager.getSessionId();
+  const entries = sessionManager.getEntries();
+  return {
+    sessionId,
+    state: projectDashboard(entries, sessionId),
+    entries,
+    events: sessionEntriesToChatEvents(entries, {
+      sessionId,
+      title: sessionManager.getSessionName(),
+    }),
+  };
 }
 
 export async function buildSessionBootstrapPayload(
@@ -414,6 +731,11 @@ export async function buildSessionBootstrapPayload(
   return {
     role: roleForSessionBootstrap(options, sessionManager),
     sessionId,
+    coordination: {
+      sessionId,
+      status: roleForSessionBootstrap(options, sessionManager) === "writer" ? "ready" : "syncing",
+      ownerKind: ownerKindForSessionBootstrap(options, sessionManager),
+    },
     catalog: buildCatalog(),
     modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
     askUserPrompts: Array.isArray(bootstrap.askUserPrompts) ? bootstrap.askUserPrompts : [],
@@ -428,6 +750,14 @@ export async function buildSessionBootstrapPayload(
       }),
     },
   };
+}
+
+function ownerKindForSessionBootstrap(
+  options: Pick<GuiHttpRouteOptions, "getSessionManager" | "role">,
+  sessionManager: SessionManager,
+): string | undefined {
+  if (roleForSessionBootstrap(options, sessionManager) === "writer") return "gui";
+  return readWriterLock(writerLockScopeForSession(sessionManager))?.processKind;
 }
 
 function roleForSessionBootstrap(
@@ -462,6 +792,31 @@ export function sessionIdFromRoute(pathname: string, action: "bootstrap" | "runs
   }
 }
 
+export function buildChatRunActionEnvelope(
+  body: Record<string, unknown>,
+  sessionId: string,
+): SessionActionEnvelope {
+  const actionId = String(body.actionId ?? "").trim() || `legacy-chat-${Date.now()}`;
+  return {
+    sessionId,
+    actionId,
+    actionType: "chat.prompt",
+    payload: { prompt: String(body.prompt ?? "") },
+    source: "browser",
+  };
+}
+
+function hasClientActionId(body: Record<string, unknown>): boolean {
+  return typeof body.actionId === "string" && body.actionId.trim().length > 0;
+}
+
+function shouldBlockFailedCoordinatorAction(
+  runSessionManager: SessionManager,
+  body: Record<string, unknown>,
+): boolean {
+  return hasClientActionId(body) && shouldBlockFailedCoordinatorLockAction(runSessionManager);
+}
+
 async function handleTrustedGuiMutation(
   req: IncomingMessage,
   res: ServerResponse,
@@ -473,7 +828,15 @@ async function handleTrustedGuiMutation(
     writeJson(res, await options.wsHub.buildBootstrapPayload());
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    writeJson(res, { error: message }, message === "Read-only follower mode" ? 409 : 400);
+    const coordinationError = message === "Read-only follower mode";
+    writeJson(
+      res,
+      {
+        error: coordinationError ? "OpenCandle is reconnecting to this session." : message,
+        ...(coordinationError ? { code: "syncing" } : {}),
+      },
+      coordinationError ? 409 : 400,
+    );
   }
 }
 
@@ -528,6 +891,19 @@ function allowTrustedGuiRequest(
       error: `${label} is only available to trusted GUI browser sessions.`,
     }),
   );
+  return false;
+}
+
+function allowLocalCoordinatorRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  options: GuiHttpRouteOptions,
+): boolean {
+  if (req.headers["x-opencandle-coordinator-secret"] === options.localCoordinatorSecret) {
+    return true;
+  }
+  res.writeHead(403, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: "Local coordinator request was not authorized." }));
   return false;
 }
 

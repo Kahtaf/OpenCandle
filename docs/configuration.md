@@ -117,8 +117,8 @@ By default it listens on `http://127.0.0.1:14567`. The health endpoint is:
 curl http://127.0.0.1:14567/health
 ```
 
-It returns `{"ok":true,"role":"writer"}` or `{"ok":true,"role":"follower"}`. `ok` means the HTTP server is alive. `role` describes whether this process acquired the Pi session writer lock.
+It returns `{"ok":true,...}` when the HTTP server is alive. The response also includes diagnostic role metadata that can help with support logs, but normal use should not require choosing a process role.
 
-Writer processes can mutate the session: chat runs, tool toggles, provider/model setup, and session create/open/rename/delete. Follower processes serve read APIs and the browser app but reject mutating actions with "Read-only follower mode".
+Chat runs, follow-up answers, supported tool actions, provider/model setup, and session management are coordinated through the active local session owner. If OpenCandle is starting, switching sessions, or recovering ownership, mutating actions may briefly return neutral syncing/reconnecting responses.
 
-Only one process should be writer for a session directory. A lock with a live process and fresh heartbeat stays authoritative; stale locks are recovered after the grace window.
+Only one local process applies a given session action at a time. A lock with a live process and fresh heartbeat stays authoritative; stale locks are recovered after the grace window.

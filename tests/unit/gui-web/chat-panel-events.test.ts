@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -91,6 +93,59 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Browse tools");
   });
 
+  it("keeps ask_user controls available in non-owner windows for proxying", () => {
+    const html = renderChatPanelHtml({
+      role: "follower",
+      askUserPrompts: [
+        {
+          id: "ask-user-1",
+          sessionId: "session-1",
+          question: "Continue?",
+          questionType: "confirm",
+          options: ["Yes", "No"],
+          reason: "",
+          status: "pending",
+          answer: null,
+        },
+      ],
+    });
+
+    expect(html).toContain("Continue?");
+    expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*>Answer yes/);
+    expect(html).not.toMatch(/writer|follower|read-only|takeover/i);
+  });
+
+  it("routes ask_user actions through the prompt session id", () => {
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
+    const cardStart = source.indexOf("function AskUserPromptCard");
+    const cardSource = source.slice(cardStart, source.indexOf("return (", cardStart));
+
+    expect(cardSource).toContain("sessionId: prompt.sessionId");
+  });
+
+  it("keeps home sends available for non-owner sessions that can be proxied", () => {
+    const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+
+    expect(source).not.toContain("homeNeedsFreshWriterSession");
+    expect(source).toContain('canStartFreshHomeSession: gui.role === "writer"');
+    expect(source).toContain("Non-owner windows submit to the active session");
+  });
+
+  it("keeps non-chat actions unavailable for TUI-owned routed sessions", () => {
+    const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+
+    expect(source).toContain("const nonChatActionsUnavailable");
+    expect(source).toContain('gui.coordination?.ownerKind === "tui"');
+    expect(source).not.toContain(
+      'gui.coordination?.ownerKind === "tui" &&\n    gui.role !== "writer"',
+    );
+    expect(source).toContain("const visibleAskUserPrompts = nonChatActionsUnavailable");
+    // The unavailable branch must reject (not return a bare false) so awaiting
+    // consumers treat the blocked invocation as a failure instead of a success.
+    expect(source).toContain("return Promise.reject(new Error(message));");
+    expect(source).not.toContain("return false;\n      }\n      return gui.invokeTool(");
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,
@@ -131,7 +186,7 @@ describe("ChatPanel event transcript rendering", () => {
       },
     });
 
-    expect(html).toContain("Complete model setup to chat");
+    expect(html).toContain("Draft a question, then connect a model to send");
     expect(html).toContain('id="chat-composer"');
     expect(html).toContain("disabled");
     expect(html).toContain('aria-label="Send message"');

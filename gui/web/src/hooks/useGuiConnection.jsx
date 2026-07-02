@@ -85,7 +85,25 @@ export function buildToolInvokeSocketMessage(payload, currentSessionId = "", tar
   const sessionId = targetSessionId || currentSessionId;
   return {
     type: "tool.invoke",
+    actionId: payload.actionId || createSessionActionId("tool"),
     ...payload,
+    ...(sessionId ? { sessionId } : {}),
+  };
+}
+
+export function createSessionActionId(prefix = "action") {
+  const random =
+    globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${random}`;
+}
+
+export function buildSessionActionSocketMessage(type, payload = {}, currentSessionId = "") {
+  const actionPrefix = type.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "action";
+  const sessionId = payload.sessionId || currentSessionId;
+  return {
+    type,
+    ...payload,
+    actionId: payload.actionId || createSessionActionId(actionPrefix),
     ...(sessionId ? { sessionId } : {}),
   };
 }
@@ -102,6 +120,20 @@ export function resolveBootstrapSessionId(
   return updateSession ? responseSessionId : currentSessionId;
 }
 
+export function resolveSnapshotCoordination(current, coordination) {
+  if (!coordination) return current;
+  // Only refresh coordination we are already tracking for that session;
+  // a snapshot for the server's current session must not clobber the
+  // coordination bootstrapped for a different routed session.
+  if (!current || current.sessionId === coordination.sessionId) return coordination;
+  return current;
+}
+
+export function shouldReconnectOnForeground({ documentVisibility, readyState }) {
+  if (documentVisibility && documentVisibility !== "visible") return false;
+  return readyState !== 0 && readyState !== 1;
+}
+
 export function useGuiConnection() {
   const wsRef = useRef(null);
   const requestSeqRef = useRef(0);
@@ -115,6 +147,7 @@ export function useGuiConnection() {
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
+  const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState({
     requirement: "unknown",
     providers: [],
@@ -139,6 +172,7 @@ export function useGuiConnection() {
     if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
     const updateVisibleState = options.updateVisibleState !== false;
     setRole((currentRole) => resolveBootstrapRole(currentRole, data, options.updateRole !== false));
+    setCoordination(data.coordination || null);
     setCurrentSessionId((currentSessionId) =>
       resolveBootstrapSessionId(
         currentSessionId,
@@ -174,7 +208,7 @@ export function useGuiConnection() {
         if (!response.ok) throw new Error(response.statusText);
         const data = await response.json();
         if (disposed) return;
-        setSupportsSessionActions(false);
+        setSupportsSessionActions(data.supportsSessionActions !== false);
         applyBootstrap(data);
       } catch {
         if (!disposed) setRole("disconnected");
@@ -216,6 +250,7 @@ export function useGuiConnection() {
           window.clearTimeout(bootTimeout);
           setSupportsSessionActions(true);
           setRole(message.role);
+          setCoordination(message.coordination || null);
           setCurrentSessionId(message.sessionId);
           setAskUserPrompts(message.askUserPrompts || []);
           startTransition(() => {
@@ -244,6 +279,7 @@ export function useGuiConnection() {
           const nextSnapshot = sessionSnapshotFromPayload(message);
           setEntries(nextSnapshot?.entries || []);
           setCurrentSessionId(message.sessionId || "");
+          setCoordination((current) => resolveSnapshotCoordination(current, message.coordination));
           if (nextSnapshot) {
             setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
           }
@@ -275,6 +311,7 @@ export function useGuiConnection() {
       };
       ws.onclose = () => {
         window.clearTimeout(bootTimeout);
+        if (wsRef.current !== ws) return;
         for (const [requestId, pending] of pendingToolInvokesRef.current) {
           window.clearTimeout(pending.timeout);
           pending.reject(new Error("GUI connection closed before the tool finished."));
@@ -287,10 +324,33 @@ export function useGuiConnection() {
       };
     };
 
+    const reconnectOnForeground = () => {
+      if (disposed) return;
+      const documentVisibility =
+        typeof document === "undefined" ? "visible" : document.visibilityState;
+      if (
+        !shouldReconnectOnForeground({
+          documentVisibility,
+          readyState: wsRef.current?.readyState,
+        })
+      ) {
+        return;
+      }
+      window.clearTimeout(reconnect);
+      setSupportsSessionActions(false);
+      setRole("connecting");
+      wsRef.current?.close?.();
+      connect();
+    };
+
     connect();
+    window.addEventListener("focus", reconnectOnForeground);
+    document.addEventListener("visibilitychange", reconnectOnForeground);
     return () => {
       disposed = true;
       window.clearTimeout(reconnect);
+      window.removeEventListener("focus", reconnectOnForeground);
+      document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
     };
   }, [applyBootstrap, setToast, settleToolInvoke]);
@@ -329,7 +389,7 @@ export function useGuiConnection() {
         JSON.stringify(
           type === "tool.invoke"
             ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
-            : { type, ...payload },
+            : buildSessionActionSocketMessage(type, payload, currentSessionId),
         ),
       );
       return true;
@@ -347,6 +407,7 @@ export function useGuiConnection() {
       }
 
       const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
+      const actionId = createSessionActionId("tool");
       const timeout = window.setTimeout(() => {
         rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
       }, 30_000);
@@ -358,7 +419,7 @@ export function useGuiConnection() {
       socket.send(
         JSON.stringify(
           buildToolInvokeSocketMessage(
-            { requestId, toolName, args },
+            { requestId, actionId, toolName, args },
             currentSessionId,
             targetSessionId,
           ),
@@ -418,6 +479,7 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
+      coordination,
       modelSetup,
       supportsSessionActions,
       setToast,
@@ -425,6 +487,7 @@ export function useGuiConnection() {
       invokeTool,
       newSession,
       loadSession,
+      adoptSessionId: setCurrentSessionId,
     }),
     [
       role,
@@ -436,6 +499,7 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
+      coordination,
       modelSetup,
       supportsSessionActions,
       setToast,

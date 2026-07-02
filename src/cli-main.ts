@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
@@ -11,6 +13,7 @@ import {
   InteractiveMode,
   initTheme,
   ModelRegistry,
+  SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "./config.js";
@@ -19,10 +22,13 @@ import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
 import {
   acquireSessionWriterLock,
+  migrateWriterLockScope,
   refreshSessionWriterLock,
   releaseSessionWriterLock,
+  type WriterLock,
   writerLockScopeForSession,
 } from "./pi/session-writer-lock.js";
+import { startTuiSessionCoordinatorServer } from "./pi/tui-session-coordinator.js";
 
 const require = createRequire(import.meta.url);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -196,22 +202,62 @@ async function main(): Promise<void> {
   initTheme(settingsManager.getTheme(), true);
 
   const sessionManager = continueOpenCandleSession(cwd);
+  let activeSessionManager = sessionManager;
   const sessionWriterLockScope = writerLockScopeForSession(sessionManager);
-  const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui");
+  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
+  const tuiCoordinator = await startTuiSessionCoordinatorServer({
+    getSession: () => {
+      if (!runtime) throw new Error("OpenCandle is still starting this session.");
+      return runtime.session;
+    },
+    getSessionManager: () => activeSessionManager,
+    getModelUnavailableMessage: () => {
+      if (!runtime) return "OpenCandle is still starting this session.";
+      const session = runtime.session;
+      const model = session.model;
+      if (!model) {
+        return "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
+      }
+      if (!session.modelRegistry.hasConfiguredAuth(model)) {
+        return "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
+      }
+      return null;
+    },
+    syncWriterLockScope: () => syncActiveSessionWriterLockScope(),
+  });
+  const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui", {
+    coordinatorEndpoint: tuiCoordinator.endpoint,
+    coordinatorSecret: tuiCoordinator.secret,
+  });
   if (sessionWriterLock.role !== "writer") {
-    console.error(
-      `Session is currently being written by ${sessionWriterLock.lock.processKind} (pid ${sessionWriterLock.lock.pid}).`,
-    );
+    await tuiCoordinator.close();
+    if (await runFollowerTuiProxy(sessionWriterLock.lock, sessionManager, cwd)) return;
+    console.error("OpenCandle is syncing this session in another window. Try again shortly.");
     process.exitCode = 1;
     return;
   }
   let activeSessionWriterLockScope = sessionWriterLockScope;
-  const writerLockHeartbeat = setInterval(
-    () => refreshSessionWriterLock(activeSessionWriterLockScope),
-    5000,
-  );
+  let activeSessionWriterLockLost = false;
+  function syncActiveSessionWriterLockScope(): void {
+    if (activeSessionWriterLockLost) throw new Error("OpenCandle is reconnecting to this session.");
+    const nextScope = writerLockScopeForSession(activeSessionManager);
+    if (nextScope === activeSessionWriterLockScope) return;
+    if (migrateWriterLockScope(activeSessionWriterLockScope, nextScope)) {
+      activeSessionWriterLockScope = nextScope;
+    } else {
+      activeSessionWriterLockLost = true;
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
+  }
+  const writerLockHeartbeat = setInterval(() => {
+    try {
+      syncActiveSessionWriterLockScope();
+      refreshSessionWriterLock(activeSessionWriterLockScope);
+    } catch {
+      clearInterval(writerLockHeartbeat);
+    }
+  }, 5000);
 
-  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
   try {
     runtime = await createAgentSessionRuntime(
       async (opts) => {
@@ -239,20 +285,28 @@ async function main(): Promise<void> {
       },
       { cwd, agentDir, sessionManager },
     );
+    syncActiveSessionWriterLockScope();
     runtime.setRebindSession(async (nextSession) => {
       const nextSessionWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
-      if (nextSessionWriterLockScope === activeSessionWriterLockScope) return;
+      if (nextSessionWriterLockScope === activeSessionWriterLockScope) {
+        activeSessionManager = nextSession.sessionManager;
+        syncActiveSessionWriterLockScope();
+        return;
+      }
       const nextSessionWriterLock = await acquireSessionWriterLock(
         nextSessionWriterLockScope,
         "tui",
+        {
+          coordinatorEndpoint: tuiCoordinator.endpoint,
+          coordinatorSecret: tuiCoordinator.secret,
+        },
       );
       if (nextSessionWriterLock.role !== "writer") {
-        throw new Error(
-          `Session is currently being written by ${nextSessionWriterLock.lock.processKind} (pid ${nextSessionWriterLock.lock.pid}).`,
-        );
+        throw new Error("OpenCandle is syncing this session in another window. Try again shortly.");
       }
       releaseSessionWriterLock(activeSessionWriterLockScope);
       activeSessionWriterLockScope = nextSessionWriterLockScope;
+      activeSessionManager = nextSession.sessionManager;
     });
     const interactiveMode = new InteractiveMode(runtime, {
       modelFallbackMessage: shouldSuppressFallbackMessage
@@ -263,8 +317,194 @@ async function main(): Promise<void> {
   } finally {
     clearInterval(writerLockHeartbeat);
     releaseSessionWriterLock(activeSessionWriterLockScope);
+    await tuiCoordinator.close();
     await runtime?.dispose();
   }
+}
+
+async function runFollowerTuiProxy(
+  lock: WriterLock,
+  sessionManager: ReturnType<typeof continueOpenCandleSession>,
+  cwd: string,
+): Promise<boolean> {
+  if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return false;
+  if (!process.stdin.isTTY) return false;
+
+  const input = createInterface({ input: process.stdin, output: process.stdout });
+  const follower = startFollowerTranscriptPrinter(sessionManager, cwd);
+  try {
+    console.log("Connected to the active OpenCandle session. Type /exit to close.");
+    while (true) {
+      const prompt = (await input.question("> ")).trim();
+      if (!prompt) continue;
+      if (prompt === "/exit" || prompt === "/quit") break;
+      await forwardTuiPrompt(lock, sessionManager.getSessionId(), prompt);
+      follower.markSeen();
+    }
+  } finally {
+    follower.stop();
+    input.close();
+  }
+  return true;
+}
+
+function startFollowerTranscriptPrinter(
+  sessionManager: ReturnType<typeof continueOpenCandleSession>,
+  cwd: string,
+): { stop: () => void; markSeen: () => void } {
+  const sessionFile = sessionManager.getSessionFile();
+  if (!sessionFile) return { stop: () => {}, markSeen: () => {} };
+  const seenEntryIds = new Set(
+    sessionManager
+      .getEntries()
+      .map((entry) => entryId(entry))
+      .filter((id): id is string => Boolean(id)),
+  );
+  const openFreshSession = () =>
+    SessionManager.open(sessionFile, sessionManager.getSessionDir(), cwd);
+  const markSeen = () => {
+    try {
+      for (const entry of openFreshSession().getEntries()) {
+        const id = entryId(entry);
+        if (id) seenEntryIds.add(id);
+      }
+    } catch {
+      // The owner may be rotating the session file; the next poll will catch up.
+    }
+  };
+  let polling = false;
+  const poll = () => {
+    if (polling) return;
+    polling = true;
+    try {
+      for (const entry of openFreshSession().getEntries()) {
+        const id = entryId(entry);
+        if (!id || seenEntryIds.has(id)) continue;
+        seenEntryIds.add(id);
+        const text = followerEntryText(entry);
+        if (text) process.stdout.write(`\n${text}\n`);
+      }
+    } catch {
+      // The owner may be rotating the session file; the next poll will catch up.
+    } finally {
+      polling = false;
+    }
+  };
+  const interval = setInterval(poll, 1000);
+  return { stop: () => clearInterval(interval), markSeen };
+}
+
+function entryId(entry: unknown): string | null {
+  const record = asRecord(entry);
+  return typeof record.id === "string" ? record.id : null;
+}
+
+function followerEntryText(entry: unknown): string {
+  const record = asRecord(entry);
+  if (record.type === "message") {
+    const message = asRecord(record.message);
+    const role = typeof message.role === "string" ? message.role : "message";
+    const text = contentText(message.content);
+    return text ? `${role}: ${text}` : "";
+  }
+  if (record.type === "custom") {
+    const text = contentText(record.message ?? record.text ?? record.content);
+    return text ? `system: ${text}` : "";
+  }
+  return "";
+}
+
+async function forwardTuiPrompt(
+  lock: WriterLock,
+  sessionId: string,
+  prompt: string,
+): Promise<void> {
+  if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return;
+  const response = await fetch(
+    new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      body: JSON.stringify({
+        prompt,
+        sessionId,
+        actionId: `tui-proxy-${randomUUID()}`,
+      }),
+    },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    console.error(body.error || response.statusText);
+    return;
+  }
+  await printSseResponse(response);
+}
+
+async function printSseResponse(response: Response): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let index = buffer.indexOf("\n\n");
+    while (index !== -1) {
+      const block = buffer.slice(0, index);
+      buffer = buffer.slice(index + 2);
+      printSseBlock(block);
+      index = buffer.indexOf("\n\n");
+    }
+  }
+}
+
+function printSseBlock(block: string): void {
+  const data = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim())
+    .join("\n");
+  if (!data) return;
+  const event = JSON.parse(data) as {
+    type?: string;
+    role?: string;
+    text?: string;
+    content?: Array<{ type?: string; text?: string }>;
+    error?: { message?: string };
+  };
+  const text = sseEventText(event);
+  if (event.type === "message.completed" && text) {
+    process.stdout.write(`${text}\n`);
+  } else if (event.type === "run.failed") {
+    process.stderr.write(`${event.error?.message || "Run failed"}\n`);
+  }
+}
+
+function sseEventText(event: {
+  text?: string;
+  content?: Array<{ type?: string; text?: string }>;
+}): string {
+  if (event.text) return event.text;
+  return contentText(event.content);
+}
+
+function contentText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part) => part.type === "text" && part.text)
+    .map((part) => part.text)
+    .join("");
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 await main();

@@ -102,22 +102,25 @@ export function ChatPanel({
     setAllowToolAutoOpen(false);
   }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const chatDisabled = role === "follower" || inputDisabled || needsSetup;
+  const composerDisabled = inputDisabled;
+  const chatDisabled = composerDisabled || needsSetup;
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
-    if (!prompt || chatDisabled) return;
+    if (!prompt) return;
+    if (needsSetup) {
+      setToast?.("Connect or select an AI model before sending this message.");
+      return;
+    }
+    if (chatDisabled) return;
     setAllowToolAutoOpen(true);
     setDraft("");
     void startChatRun(prompt);
   };
 
-  const placeholder =
-    role === "follower"
-      ? "Follower mode: take over this session to send"
-      : needsSetup
-        ? "Complete model setup to chat"
-        : "Ask anything";
+  const placeholder = needsSetup
+    ? "Draft a question, then connect a model to send"
+    : "Ask anything";
 
   return (
     <section
@@ -140,7 +143,7 @@ export function ChatPanel({
           onKeyDown={transcript.onReaderIntent}
         >
           {needsSetup ? (
-            <ModelSetupCard modelSetup={modelSetup} send={send} setToast={setToast} />
+            <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
           ) : sessionLoading ? (
             <SessionLoadingState />
           ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
@@ -162,7 +165,7 @@ export function ChatPanel({
                 />
               ))}
               {askUserPrompts.map((prompt) => (
-                <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
+                <AskUserPromptCard key={prompt.id} prompt={prompt} send={send} />
               ))}
               {activity ? <AgentActivity activity={activity} /> : null}
               <div ref={transcript.bottomRef} data-chat-bottom-sentinel aria-hidden="true" />
@@ -186,13 +189,15 @@ export function ChatPanel({
       <ChatComposer
         draft={draft}
         setDraft={setDraft}
-        disabled={chatDisabled}
+        disabled={composerDisabled}
+        setupBlocked={needsSetup}
         placeholder={placeholder}
         canSend={Boolean(draft.trim()) && !chatDisabled}
         onSubmit={() => submit()}
         onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
         onOpenContext={onOpenContext}
         modelSetup={modelSetup}
+        role={role}
         send={send}
         setToast={setToast}
       />
@@ -393,18 +398,18 @@ function SessionLoadingState() {
   );
 }
 
-function AskUserPromptCard({ prompt, role, send }) {
+function AskUserPromptCard({ prompt, send }) {
   const [draft, setDraft] = useState("");
   const pending = prompt.status === "pending";
-  const disabled = role === "follower" || !pending;
+  const disabled = !pending;
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;
-    send("ask_user.answer", { id: prompt.id, answer: value });
+    send("ask_user.answer", { id: prompt.id, sessionId: prompt.sessionId, answer: value });
     setDraft("");
   };
   const cancel = () => {
-    if (!disabled) send("ask_user.cancel", { id: prompt.id });
+    if (!disabled) send("ask_user.cancel", { id: prompt.id, sessionId: prompt.sessionId });
   };
 
   return (

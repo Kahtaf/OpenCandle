@@ -7,12 +7,14 @@ export function ChatComposer({
   draft,
   setDraft,
   disabled,
+  setupBlocked,
   placeholder,
   canSend,
   onSubmit,
   onOpenCatalog,
   onOpenContext,
   modelSetup,
+  role,
   send,
   setToast,
 }) {
@@ -50,6 +52,7 @@ export function ChatComposer({
         <div className="flex items-center gap-1 border-t border-dashed border-border px-2 py-2">
           <ModelSelector
             modelSetup={modelSetup}
+            role={role}
             send={send}
             setToast={setToast}
             disabled={disabled}
@@ -83,7 +86,7 @@ export function ChatComposer({
               variant={canSend ? "brand" : "secondary"}
               size="icon-sm"
               rounded="full"
-              tooltip="Send message"
+              tooltip={setupBlocked ? "Connect a model to send" : "Send message"}
               aria-label="Send message"
               onClick={onSubmit}
               disabled={!canSend}
