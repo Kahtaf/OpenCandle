@@ -4,13 +4,14 @@ import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
-import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackgroundQuoteRefreshes } from "../../../gui/server/background-quotes.js";
 import type { ToolInvokeController } from "../../../gui/server/invoke-tool.js";
 import type { ModelSetupController } from "../../../gui/server/model-setup.js";
 import type { SessionActionsController } from "../../../gui/server/session-actions.js";
 import type { WsClient } from "../../../gui/server/websocket.js";
+import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 import { createWsHub } from "../../../gui/server/ws-hub.js";
 
 describe("GUI WS hub", () => {
@@ -133,6 +134,47 @@ describe("GUI WS hub", () => {
     });
     expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
     expect(JSON.stringify(bootstrap)).not.toContain("owner-secret");
+  });
+
+  it("derives boot coordination from the current session lock", async () => {
+    const client = createFakeClient();
+    const sessionManager = SessionManager.create(cwd, sessionDir);
+    await acquireWriterLock(writerLockScopeForSession(sessionManager), "tui", {
+      pid: 999_999,
+      coordinatorEndpoint: "http://127.0.0.1:25000",
+      coordinatorSecret: "owner-secret",
+    });
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "writer",
+      lock: { role: "writer", processKind: "gui", pid: process.pid },
+      getSessionManager: () => sessionManager,
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    const bootstrap = await hub.buildBootstrapPayload();
+
+    expect(client.messages[0]).toMatchObject({
+      type: "boot",
+      role: "writer",
+      sessionId: sessionManager.getSessionId(),
+      coordination: {
+        sessionId: sessionManager.getSessionId(),
+        status: "syncing",
+        ownerKind: "tui",
+      },
+    });
+    expect(bootstrap).toMatchObject({
+      role: "writer",
+      sessionId: sessionManager.getSessionId(),
+      coordination: {
+        sessionId: sessionManager.getSessionId(),
+        status: "syncing",
+        ownerKind: "tui",
+      },
+    });
+    expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
   });
 
   it("broadcasts targeted snapshots without changing the current session payload", () => {

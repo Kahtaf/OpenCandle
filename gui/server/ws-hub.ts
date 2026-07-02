@@ -21,6 +21,7 @@ import { projectDashboard } from "./projector.js";
 import type { SessionActionsController } from "./session-actions.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
+import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
 
 interface AskUserBridge {
   getPrompts(): unknown[];
@@ -219,12 +220,13 @@ export function createWsHub({
 
   function sendBoot(client: WsClient): void {
     const snapshot = buildStateSnapshot();
+    const sessionManager = getSessionManager();
     client.send({
       type: "boot",
       role,
       lock: publicWriterLock(lock),
-      sessionId: getSessionManager().getSessionId(),
-      coordination: coordinationStateFor(getSessionManager().getSessionId(), role, lock),
+      sessionId: sessionManager.getSessionId(),
+      coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -239,10 +241,11 @@ export function createWsHub({
   }
 
   async function buildBootstrapPayload(): Promise<Record<string, unknown>> {
+    const sessionManager = getSessionManager();
     return {
       role,
-      sessionId: getSessionManager().getSessionId(),
-      coordination: coordinationStateFor(getSessionManager().getSessionId(), role, lock),
+      sessionId: sessionManager.getSessionId(),
+      coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -342,16 +345,28 @@ export function createWsHub({
   };
 }
 
-function coordinationStateFor(sessionId: string, role: string, lock: unknown) {
+function coordinationStateForSession(
+  sessionManager: SessionManager,
+  role: string,
+  fallbackLock: unknown,
+) {
+  let sessionLock: unknown = fallbackLock;
+  try {
+    sessionLock = readWriterLock(writerLockScopeForSession(sessionManager)) ?? fallbackLock;
+  } catch {
+    sessionLock = fallbackLock;
+  }
+  const sessionId = sessionManager.getSessionId();
+  const publicLock = asRecord(publicWriterLock(sessionLock));
+  const ownedByThisProcess = publicLock.pid === process.pid;
   const status =
-    role === "writer"
+    role === "writer" && (!publicLock.pid || ownedByThisProcess)
       ? "ready"
       : role === "connecting"
         ? "connecting"
         : role === "disconnected"
           ? "reconnecting"
           : "syncing";
-  const publicLock = asRecord(publicWriterLock(lock));
   return {
     sessionId,
     status,
