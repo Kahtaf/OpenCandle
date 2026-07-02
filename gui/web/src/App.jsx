@@ -171,7 +171,7 @@ export function AppShell() {
         currentSessionId: gui.currentSessionId,
         entryCount: hasGuiSessionContent ? guiEventCount : 0,
         lastResetSessionId: homeResetSessionRef.current,
-        canStartFreshHomeSession: gui.supportsSessionActions,
+        canStartFreshHomeSession: gui.role === "writer" && gui.supportsSessionActions,
       })
     )
       return;
@@ -183,6 +183,7 @@ export function AppShell() {
     hasGuiSessionContent,
     guiEventCount,
     gui.newSession,
+    gui.role,
     gui.supportsSessionActions,
   ]);
 
