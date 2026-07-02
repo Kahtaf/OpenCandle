@@ -156,6 +156,41 @@ describe("TUI session coordinator", () => {
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
+
+  it("rejects forwarded prompts while the TUI session is already streaming", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      const prompt = vi.fn();
+      const server = await startTuiSessionCoordinatorServer({
+        getSession: () => fakeSession(manager, prompt, { isStreaming: true }),
+        getSessionManager: () => manager,
+        getModelUnavailableMessage: () => null,
+      });
+      servers.push(server);
+
+      const response = await fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": server.secret,
+        },
+        body: JSON.stringify({
+          prompt: "GUI overlap",
+          sessionId: manager.getSessionId(),
+          actionId: "chat-action-1",
+        }),
+      });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ code: "session_busy" });
+      expect(prompt).not.toHaveBeenCalled();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function fakeSession(
@@ -164,11 +199,12 @@ function fakeSession(
     sessionManager.appendMessage({ role: "user", content: value });
     sessionManager.appendMessage({ role: "assistant", content: "ok" });
   },
+  state: { isStreaming?: boolean; pendingMessageCount?: number } = {},
 ) {
   return {
     sessionManager,
     prompt,
-    isStreaming: false,
-    pendingMessageCount: 0,
+    isStreaming: state.isStreaming ?? false,
+    pendingMessageCount: state.pendingMessageCount ?? 0,
   } as unknown as import("@earendil-works/pi-coding-agent").AgentSession;
 }

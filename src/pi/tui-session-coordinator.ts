@@ -97,7 +97,12 @@ export async function startTuiSessionCoordinatorServer(
       writeJson(res, { ok: true, duplicate: true });
       return;
     }
-    if (activeRunSessions.has(sessionId)) {
+    const session = options.getSession();
+    if (
+      activeRunSessions.has(sessionId) ||
+      session.isStreaming ||
+      session.pendingMessageCount > 0
+    ) {
       writeJson(
         res,
         {

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildChatRunActionEnvelope,
   buildSessionBootstrapPayload,
+  canProxyChatRunToCoordinator,
   resolveSessionManagerById,
   sessionIdFromRoute,
 } from "../../../gui/server/http-routes.js";
@@ -193,6 +194,27 @@ describe("session-addressed GUI bootstrap", () => {
       source: "browser",
     });
     expect(action.actionId).toMatch(/^legacy-chat-/);
+  });
+
+  it("detects a per-session coordinator even when this process owns another session", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
+    try {
+      const current = SessionManager.create(cwd, sessionDir);
+      const requested = SessionManager.create(cwd, sessionDir);
+      await acquireWriterLock(writerLockScopeForSession(current), "gui", { pid: process.pid });
+      await acquireWriterLock(writerLockScopeForSession(requested), "tui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+
+      expect(canProxyChatRunToCoordinator(current)).toBe(false);
+      expect(canProxyChatRunToCoordinator(requested)).toBe(true);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
   });
 });
 

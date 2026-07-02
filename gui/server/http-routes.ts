@@ -292,8 +292,13 @@ async function handleSseChatRun(
     return;
   }
 
+  const proxyAllowed = bodyOverride === undefined;
+  if (proxyAllowed && canProxyChatRunToCoordinator(runSessionManager)) {
+    if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
+  }
+
   if (options.role !== "writer") {
-    if (await proxyChatRunToCoordinator(res, options, runSessionManager, bodyRecord)) return;
+    if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
     writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
     return;
   }
@@ -335,23 +340,32 @@ async function handleSseChatRun(
   });
 }
 
+export function canProxyChatRunToCoordinator(runSessionManager: SessionManager): boolean {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  return Boolean(lock?.coordinatorEndpoint && lock.coordinatorSecret && lock.pid !== process.pid);
+}
+
 async function proxyChatRunToCoordinator(
   res: ServerResponse,
-  options: GuiHttpRouteOptions,
   runSessionManager: SessionManager,
   body: Record<string, unknown>,
 ): Promise<boolean> {
   const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
   if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return false;
   const endpoint = new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-opencandle-coordinator-secret": lock.coordinatorSecret,
-    },
-    body: JSON.stringify({ ...body, sessionId: runSessionManager.getSessionId() }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      body: JSON.stringify({ ...body, sessionId: runSessionManager.getSessionId() }),
+    });
+  } catch {
+    return false;
+  }
   res.writeHead(response.status, Object.fromEntries(response.headers));
   if (response.body) {
     for await (const chunk of response.body) {
@@ -398,7 +412,11 @@ async function streamAcceptedSseChatRun({
       coordinatorSecret: options.localCoordinatorSecret,
     });
     if (lockResult.role !== "writer") {
-      writeJson(res, { error: "Read-only follower mode", lock: lockResult.lock }, 409);
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
       return;
     }
     acquiredLockScope = lockScope;
