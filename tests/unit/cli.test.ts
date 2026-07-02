@@ -14,6 +14,7 @@ const piMocks = vi.hoisted(() => ({
   InteractiveMode: vi.fn(),
   continueOpenCandleSession: vi.fn(),
   acquireSessionWriterLock: vi.fn(),
+  migrateWriterLockScope: vi.fn(),
   refreshSessionWriterLock: vi.fn(),
   releaseSessionWriterLock: vi.fn(),
   startTuiSessionCoordinatorServer: vi.fn(),
@@ -122,6 +123,7 @@ vi.mock("../../src/pi/session-storage.js", () => ({
 
 vi.mock("../../src/pi/session-writer-lock.js", () => ({
   acquireSessionWriterLock: piMocks.acquireSessionWriterLock,
+  migrateWriterLockScope: piMocks.migrateWriterLockScope,
   refreshSessionWriterLock: piMocks.refreshSessionWriterLock,
   releaseSessionWriterLock: piMocks.releaseSessionWriterLock,
   writerLockScopeForSession: piMocks.writerLockScopeForSession,
@@ -158,6 +160,7 @@ describe("opencandle package commands", () => {
         lastHeartbeat: "2026-06-25T12:00:00.000Z",
       },
     });
+    piMocks.migrateWriterLockScope.mockReturnValue(true);
     piMocks.startTuiSessionCoordinatorServer.mockResolvedValue({
       endpoint: "http://127.0.0.1:24000",
       secret: "test-secret",

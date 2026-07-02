@@ -48,6 +48,7 @@ interface GuiHttpRouteOptions {
   localCoordinatorEndpoint: string;
   localCoordinatorSecret: string;
   allowRemotePrivateApi: boolean;
+  syncCurrentWriterLockScope?: () => void;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
   createSessionForManager: (sessionManager: SessionManager) => Promise<{ session: AgentSession }>;
@@ -612,6 +613,7 @@ function broadcastRunSessionSnapshot(
   useCurrentSession: boolean,
 ): void {
   if (useCurrentSession) {
+    options.syncCurrentWriterLockScope?.();
     options.wsHub.broadcastState();
   } else {
     options.wsHub.broadcastSessionSnapshot(sessionManager);

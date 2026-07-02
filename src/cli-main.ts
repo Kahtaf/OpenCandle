@@ -19,6 +19,7 @@ import { createOpenCandleSession } from "./pi/session.js";
 import { continueOpenCandleSession } from "./pi/session-storage.js";
 import {
   acquireSessionWriterLock,
+  migrateWriterLockScope,
   refreshSessionWriterLock,
   releaseSessionWriterLock,
   writerLockScopeForSession,
@@ -230,10 +231,17 @@ async function main(): Promise<void> {
     return;
   }
   let activeSessionWriterLockScope = sessionWriterLockScope;
-  const writerLockHeartbeat = setInterval(
-    () => refreshSessionWriterLock(activeSessionWriterLockScope),
-    5000,
-  );
+  function syncActiveSessionWriterLockScope(): void {
+    const nextScope = writerLockScopeForSession(activeSessionManager);
+    if (nextScope === activeSessionWriterLockScope) return;
+    if (migrateWriterLockScope(activeSessionWriterLockScope, nextScope)) {
+      activeSessionWriterLockScope = nextScope;
+    }
+  }
+  const writerLockHeartbeat = setInterval(() => {
+    syncActiveSessionWriterLockScope();
+    refreshSessionWriterLock(activeSessionWriterLockScope);
+  }, 5000);
 
   try {
     runtime = await createAgentSessionRuntime(

@@ -34,6 +34,7 @@ import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import {
   acquireWriterLock,
+  migrateWriterLockScope,
   refreshWriterLock,
   releaseWriterLock,
   writerLockScopeForSession,
@@ -97,7 +98,18 @@ const runtime = await createAgentSessionRuntime(
   { cwd, agentDir, sessionManager },
 );
 let session = runtime.session;
-const heartbeat = setInterval(() => refreshWriterLock(activeWriterLockScope), 5000);
+function syncCurrentWriterLockScope(): void {
+  if (lockResult.role !== "writer") return;
+  const nextScope = writerLockScopeForSession(sessionManager);
+  if (nextScope === activeWriterLockScope) return;
+  if (migrateWriterLockScope(activeWriterLockScope, nextScope)) {
+    activeWriterLockScope = nextScope;
+  }
+}
+const heartbeat = setInterval(() => {
+  syncCurrentWriterLockScope();
+  refreshWriterLock(activeWriterLockScope);
+}, 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const localSessionCoordinator = createLocalSessionCoordinator();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
@@ -202,6 +214,7 @@ const httpRequestHandler = createHttpRequestHandler({
   localCoordinatorEndpoint,
   localCoordinatorSecret,
   allowRemotePrivateApi,
+  syncCurrentWriterLockScope,
   getSession: () => session,
   getSessionManager: () => sessionManager,
   createSessionForManager: async (targetSessionManager) =>

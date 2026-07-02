@@ -132,6 +132,28 @@ describe("GUI server route guards", () => {
       "askUserBridge.askForSession(targetSessionManager.getSessionId())",
     );
   });
+
+  it("migrates current-session writer locks before broadcasting current run snapshots", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const broadcastStart = source.indexOf("function broadcastRunSessionSnapshot");
+    const currentBranch = source.slice(broadcastStart, source.indexOf("} else {", broadcastStart));
+
+    expect(currentBranch).toContain("options.syncCurrentWriterLockScope?.()");
+  });
+
+  it("refreshes GUI heartbeats against the migrated canonical session lock scope", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const syncStart = source.indexOf("function syncCurrentWriterLockScope");
+    const heartbeatStart = source.indexOf("const heartbeat = setInterval", syncStart);
+    const heartbeatBlock = source.slice(
+      heartbeatStart,
+      source.indexOf("const backgroundQuoteRefreshes", heartbeatStart),
+    );
+
+    expect(source.slice(syncStart, heartbeatStart)).toContain("migrateWriterLockScope");
+    expect(heartbeatBlock).toContain("syncCurrentWriterLockScope()");
+    expect(heartbeatBlock).toContain("refreshWriterLock(activeWriterLockScope)");
+  });
 });
 
 function routeBlockBefore(route: string, handler: string): string {
