@@ -105,8 +105,7 @@ export function AppShell() {
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
   const nonChatActionsUnavailable =
     gui.coordination?.sessionId === sessionView.activeSessionId &&
-    gui.coordination?.ownerKind === "tui" &&
-    gui.role !== "writer";
+    gui.coordination?.ownerKind === "tui";
   const visibleAskUserPrompts = nonChatActionsUnavailable
     ? []
     : gui.askUserPrompts.filter(

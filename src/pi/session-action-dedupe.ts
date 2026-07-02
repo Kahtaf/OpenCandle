@@ -12,6 +12,8 @@ interface PendingActionRecord {
   pendingAtMs: number;
 }
 
+const pendingSessionActionTtlMs = 2 * 60 * 1000;
+
 export function hasAcceptedSessionAction(
   sessionManager: SessionLockScopeSource,
   actionId: string,
@@ -87,11 +89,12 @@ function readAcceptedActionStore(sessionManager: SessionLockScopeSource): Accept
       pendingActionIds?: unknown;
     };
     const pendingRecords = readPendingActionRecords(parsed.pendingActionIds);
+    const acceptedActionIds = Array.isArray(parsed.acceptedActionIds)
+      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
+      : [];
     return {
-      acceptedActionIds: Array.isArray(parsed.acceptedActionIds)
-        ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
-        : [],
-      pendingActionIds: pendingRecords.map((record) => record.id),
+      acceptedActionIds: [...new Set([...acceptedActionIds, ...pendingRecords.staleActionIds])],
+      pendingActionIds: pendingRecords.activeRecords.map((record) => record.id),
     };
   } catch {
     return { acceptedActionIds: [], pendingActionIds: [] };
@@ -117,17 +120,30 @@ function writeAcceptedActionStore(storePath: string, store: AcceptedActionStore)
   );
 }
 
-function readPendingActionRecords(value: unknown): PendingActionRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry): PendingActionRecord | null => {
+function readPendingActionRecords(value: unknown): {
+  activeRecords: PendingActionRecord[];
+  staleActionIds: string[];
+} {
+  if (!Array.isArray(value)) return { activeRecords: [], staleActionIds: [] };
+  const now = Date.now();
+  const activeRecords: PendingActionRecord[] = [];
+  const staleActionIds: string[] = [];
+  for (const entry of value) {
+    const record = (() => {
       if (typeof entry === "string") return null;
       if (!entry || typeof entry !== "object") return null;
-      const record = entry as { id?: unknown; pendingAtMs?: unknown };
-      if (typeof record.id !== "string" || typeof record.pendingAtMs !== "number") return null;
-      return { id: record.id, pendingAtMs: record.pendingAtMs };
-    })
-    .filter((entry): entry is PendingActionRecord => entry !== null);
+      const pending = entry as { id?: unknown; pendingAtMs?: unknown };
+      if (typeof pending.id !== "string" || typeof pending.pendingAtMs !== "number") return null;
+      return { id: pending.id, pendingAtMs: pending.pendingAtMs };
+    })();
+    if (!record) continue;
+    if (now - record.pendingAtMs > pendingSessionActionTtlMs) {
+      staleActionIds.push(record.id);
+    } else {
+      activeRecords.push(record);
+    }
+  }
+  return { activeRecords, staleActionIds };
 }
 
 function acceptedActionStorePath(sessionManager: SessionLockScopeSource): string {

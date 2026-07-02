@@ -87,7 +87,7 @@ describe("session action dedupe store", () => {
     }
   });
 
-  it("keeps unresolved pending action ids until explicit reconciliation", async () => {
+  it("converts stale unresolved pending action ids into accepted tombstones", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
     const dir = mkdtempSync(join(tmpdir(), "opencandle-action-dedupe-stale-"));
@@ -102,10 +102,12 @@ describe("session action dedupe store", () => {
       expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(true);
 
       vi.setSystemTime(new Date("2026-07-01T00:03:00.000Z"));
-      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(true);
+      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(false);
+      expect(hasAcceptedSessionAction(sessionManager, "action-1")).toBe(true);
 
       recordPendingSessionAction(sessionManager, "action-1");
-      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(true);
+      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(false);
+      expect(hasAcceptedSessionAction(sessionManager, "action-1")).toBe(true);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -46,6 +46,7 @@ export interface SessionLockScopeSource {
 const DEFAULT_STALE_GRACE_MS = 15_000;
 const WRITER_LOCK_PROTOCOL_VERSION = 1;
 const PROCESS_STARTED_AT = new Date(Date.now() - process.uptime() * 1000).toISOString();
+const PENDING_SESSION_ACTION_TTL_MS = 2 * 60 * 1000;
 
 export async function acquireWriterLock(
   scopePath: string,
@@ -263,24 +264,39 @@ function parseAcceptedActionStore(parsed: {
   acceptedActionIds?: unknown;
   pendingActionIds?: unknown;
 }): AcceptedActionStore {
+  const acceptedActionIds = Array.isArray(parsed.acceptedActionIds)
+    ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
+    : [];
+  const pending = parsePendingActionRecords(parsed.pendingActionIds);
   return {
-    acceptedActionIds: Array.isArray(parsed.acceptedActionIds)
-      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
-      : [],
-    pendingActions: parsePendingActionRecords(parsed.pendingActionIds),
+    acceptedActionIds: [...new Set([...acceptedActionIds, ...pending.staleActionIds])],
+    pendingActions: pending.activeRecords,
   };
 }
 
-function parsePendingActionRecords(value: unknown): PendingActionRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry): PendingActionRecord | null => {
+function parsePendingActionRecords(value: unknown): {
+  activeRecords: PendingActionRecord[];
+  staleActionIds: string[];
+} {
+  if (!Array.isArray(value)) return { activeRecords: [], staleActionIds: [] };
+  const now = Date.now();
+  const activeRecords: PendingActionRecord[] = [];
+  const staleActionIds: string[] = [];
+  for (const entry of value) {
+    const record = (() => {
       if (!entry || typeof entry !== "object") return null;
-      const record = entry as { id?: unknown; pendingAtMs?: unknown };
-      if (typeof record.id !== "string" || typeof record.pendingAtMs !== "number") return null;
-      return { id: record.id, pendingAtMs: record.pendingAtMs };
-    })
-    .filter((record): record is PendingActionRecord => record !== null);
+      const pending = entry as { id?: unknown; pendingAtMs?: unknown };
+      if (typeof pending.id !== "string" || typeof pending.pendingAtMs !== "number") return null;
+      return { id: pending.id, pendingAtMs: pending.pendingAtMs };
+    })();
+    if (!record) continue;
+    if (now - record.pendingAtMs > PENDING_SESSION_ACTION_TTL_MS) {
+      staleActionIds.push(record.id);
+    } else {
+      activeRecords.push(record);
+    }
+  }
+  return { activeRecords, staleActionIds };
 }
 
 function tryCreate(

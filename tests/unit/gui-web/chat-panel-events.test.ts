@@ -136,6 +136,9 @@ describe("ChatPanel event transcript rendering", () => {
 
     expect(source).toContain("const nonChatActionsUnavailable");
     expect(source).toContain('gui.coordination?.ownerKind === "tui"');
+    expect(source).not.toContain(
+      'gui.coordination?.ownerKind === "tui" &&\n    gui.role !== "writer"',
+    );
     expect(source).toContain("const visibleAskUserPrompts = nonChatActionsUnavailable");
     expect(source).toContain('gui.setToast("OpenCandle is reconnecting to this session.");');
   });

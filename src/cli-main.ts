@@ -331,7 +331,7 @@ async function runFollowerTuiProxy(
   if (!process.stdin.isTTY) return false;
 
   const input = createInterface({ input: process.stdin, output: process.stdout });
-  const stopFollowing = startFollowerTranscriptPrinter(sessionManager, cwd);
+  const follower = startFollowerTranscriptPrinter(sessionManager, cwd);
   try {
     console.log("Connected to the active OpenCandle session. Type /exit to close.");
     while (true) {
@@ -339,9 +339,10 @@ async function runFollowerTuiProxy(
       if (!prompt) continue;
       if (prompt === "/exit" || prompt === "/quit") break;
       await forwardTuiPrompt(lock, sessionManager.getSessionId(), prompt);
+      follower.markSeen();
     }
   } finally {
-    stopFollowing();
+    follower.stop();
     input.close();
   }
   return true;
@@ -350,22 +351,33 @@ async function runFollowerTuiProxy(
 function startFollowerTranscriptPrinter(
   sessionManager: ReturnType<typeof continueOpenCandleSession>,
   cwd: string,
-): () => void {
+): { stop: () => void; markSeen: () => void } {
   const sessionFile = sessionManager.getSessionFile();
-  if (!sessionFile) return () => {};
+  if (!sessionFile) return { stop: () => {}, markSeen: () => {} };
   const seenEntryIds = new Set(
     sessionManager
       .getEntries()
       .map((entry) => entryId(entry))
       .filter((id): id is string => Boolean(id)),
   );
+  const openFreshSession = () =>
+    SessionManager.open(sessionFile, sessionManager.getSessionDir(), cwd);
+  const markSeen = () => {
+    try {
+      for (const entry of openFreshSession().getEntries()) {
+        const id = entryId(entry);
+        if (id) seenEntryIds.add(id);
+      }
+    } catch {
+      // The owner may be rotating the session file; the next poll will catch up.
+    }
+  };
   let polling = false;
   const poll = () => {
     if (polling) return;
     polling = true;
     try {
-      const freshSession = SessionManager.open(sessionFile, sessionManager.getSessionDir(), cwd);
-      for (const entry of freshSession.getEntries()) {
+      for (const entry of openFreshSession().getEntries()) {
         const id = entryId(entry);
         if (!id || seenEntryIds.has(id)) continue;
         seenEntryIds.add(id);
@@ -379,7 +391,7 @@ function startFollowerTranscriptPrinter(
     }
   };
   const interval = setInterval(poll, 1000);
-  return () => clearInterval(interval);
+  return { stop: () => clearInterval(interval), markSeen };
 }
 
 function entryId(entry: unknown): string | null {
