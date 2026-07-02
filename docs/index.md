@@ -23,19 +23,22 @@ OpenCandle keeps a simple research loop:
 
 Pi provides the bundled local agent runtime, model setup, sessions, and terminal shell. You do not need a separate Pi install for normal OpenCandle usage. OpenCandle adds the finance tools, workflows, provider integrations, local finance state, GUI cards, and evaluation harness.
 
-## Start Here
+## Using OpenCandle
 
-- [Getting Started](./getting-started.md) for install, setup, and first investigations.
 - [First Run](./first-run.md) for a five-minute path from install to a successful keyless market answer.
+- [Getting Started](./getting-started.md) for requirements, install options, provider keys, and interfaces.
 - [TUI](./tui.md) for terminal usage, slash commands, sessions, and CLI-vs-GUI tradeoffs.
+- [GUI Quickstart](./gui-quickstart.md) for the local browser workbench.
 - [Investigation Recipes](./investigation-recipes.md) for repeatable research paths.
 - [Data Sources](./data-sources.md) for provider coverage, optional keys, and local state.
 - [Configuration](./configuration.md) for env vars, file config, OpenCandle state files, and GUI runtime knobs.
-- [GUI Quickstart](./gui-quickstart.md) for the local browser workbench.
+- [Comparisons](./comparisons.md) for how OpenCandle relates to chatbots, finance sites, spreadsheets, and scripts.
+
+## Contributing
+
 - [System Architecture](./system-architecture.md) for how questions become investigations, evidence, and answers.
 - [Build a Tool](./build-a-tool.md) for adding first-party tools or external add-on packages.
-- [Testing and Evals](./testing-and-evals.md) for validating tools, workflows, GUI behavior, and full-session quality.
-- [Benchmarking](./benchmarking.md) for comparing OpenCandle against generic no-tool agents.
+- [Testing and Evals](./testing-and-evals.md) for validating tools, workflows, GUI behavior, full-session quality, and competitive benchmarking.
 
 ## What OpenCandle Investigates
 
@@ -68,9 +71,6 @@ OpenCandle can answer pure education questions without unnecessary tools, but it
 ```bash
 opencandle
 opencandle gui
-npm run gui
-npm test
-npm run docs:site:build
 ```
 
 Inside the agent, start with prompts like:

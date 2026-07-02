@@ -81,7 +81,7 @@ npm run test:evals:competitive
 | `npm run test:evals:usually` | Same Vitest eval suite with `EVAL_TIER=usually` | The common eval tier when you want the usual subset rather than every case. |
 | `npm run eval:router-live` | `tests/scripts/run-live-router-eval.ts` against request-understanding fixtures with a live model | Opt-in task-selection quality check. Requires live model credentials and compares live output to fixture expectations. |
 | `npm run test:evals:product` | `tests/scripts/run-product-evals.ts` | Full-session product evals over curated finance prompts, using the OpenCandle harness and rubric-style dimensions. |
-| `npm run test:evals:competitive` | `tests/scripts/run-competitive-finance-eval.ts` | Competitive finance benchmark against generic no-tool Claude, Codex, and Gemini baselines. See [Benchmarking](./benchmarking.md). |
+| `npm run test:evals:competitive` | `tests/scripts/run-competitive-finance-eval.ts` | Competitive finance benchmark against generic no-tool Claude, Codex, and Gemini baselines. See [Competitive Benchmarking](#competitive-benchmarking). |
 
 Eval reports are written under `tests/evals/runs/` when a runner produces a JSON report. Treat those run files as local evidence, not committed documentation.
 
@@ -118,6 +118,27 @@ PRODUCT_EVAL_FAMILY=options PRODUCT_EVAL_LIMIT=1 npm run test:evals:product
 ```
 
 Each run writes a timestamped `*_product-evals.json` report under `tests/evals/runs/`.
+
+## Competitive Benchmarking
+
+The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins — generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
+
+Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude, Codex, and Gemini baselines run as generic no-tool agents through `acpx`, an Agent Client Protocol runner bundled in the repo; unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
+
+```bash
+npm run test:evals:competitive
+```
+
+The runner generates (or accepts) finance prompts, runs each through OpenCandle and the baselines, judges usefulness, correctness, evidence, clarity, and uncertainty handling with a configured judge model, and writes a timestamped `*_competitive-finance.json` report under `tests/evals/runs/`.
+
+Useful knobs (all optional):
+
+- `COMPETITIVE_PROMPT_COUNT` / `COMPETITIVE_PROMPT_SEED`: size and reproducibility of the generated prompt set.
+- `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
+- `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
+- `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides, timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls.
+
+Do not commit raw transcripts or one-off run reports; treat run files as local evidence.
 
 ## GUI Browser Smoke
 

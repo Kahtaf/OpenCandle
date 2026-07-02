@@ -84,20 +84,9 @@ In the GUI, these appear as question cards in the chat. After you answer, OpenCa
 
 ## Tools And Providers
 
-Tools are small finance capabilities. They fetch and format data. They should not invent market facts or make the final investment conclusion.
+Tools are small finance capabilities. They fetch and format data. They should not invent market facts or make the final investment conclusion. Provider helpers add caching, rate limiting, fallback behavior, and degraded-state metadata; if a provider is missing, stale, or unavailable, that shows up in the result instead of being hidden.
 
-| Area | Examples | Providers or source |
-| --- | --- | --- |
-| Market data | quotes, history, ticker lookup, crypto price/history | Yahoo Finance, Alpha Vantage when configured, CoinGecko |
-| Options | option chains, open interest, implied volatility, Greeks | Yahoo Finance plus local calculations |
-| Fundamentals | company overview, financials, earnings, DCF, comparisons | Alpha Vantage |
-| Macro | rates, CPI, GDP, unemployment, fear/greed | FRED, alternative.me |
-| Technical | indicators, moving-average backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | `rdt-cli`, `twitter-cli`, local browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
-| Filings | SEC filing search | SEC EDGAR |
-| Portfolio | holdings, watchlists, predictions, risk, correlation | Local state plus market data |
-
-Provider helpers add caching, rate limiting, fallback behavior, and degraded-state metadata. If a provider is missing, stale, or unavailable, that should show up in the result instead of being hidden.
+The full domain-by-domain map of tools and providers lives in [Data Sources](./data-sources.md).
 
 ## Evidence And Answer Quality
 
@@ -114,35 +103,11 @@ Expected behavior:
 
 The model synthesizes after evidence is gathered. It should answer directly, name risks, disclose gaps, and avoid unsupported certainty.
 
-## GUI Runtime
+## GUI Runtime And Local State
 
-The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates.
+The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Only one GUI process writes to a session at a time; followers can view the same state but cannot mutate it. See [GUI Quickstart](./gui-quickstart.md) for the endpoint list and writer/follower behavior.
 
-Useful local endpoints:
-
-- `GET /health` returns whether the process is alive and whether it is the session `writer` or a read-only `follower`.
-- `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
-- `GET /api/sessions` lists saved sessions.
-- `GET /api/session/events` returns the current projected chat events.
-- `POST /api/chat/run` streams one chat run.
-- `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
-
-Only one GUI process writes to a session at a time. A writer can run chat, answer follow-ups, save provider/model setup, toggle tools, and manage sessions. Followers can view the same state but cannot mutate it.
-
-## Local State
-
-OpenCandle state defaults to `~/.opencandle/`.
-
-Common files:
-
-- `config.json` for provider keys and file-backed settings.
-- `state.db` for memory, workflow state, and durable user market state such as instruments, watchlists, portfolio lots, predictions, alerts, report runs, and import provenance.
-- `sentinel.db` for sentiment trend state.
-- `onboarding.json` for provider setup, snooze, never-ask, and welcome state.
-
-OpenCandle does not treat `watchlist.json`, `portfolio.json`, or `predictions.json` as supported state sources.
-
-Pi owns its own runtime config and session storage separately. OpenCandle should not depend on repo-local `.pi/extensions/` artifacts.
+OpenCandle state defaults to `~/.opencandle/`; the state files and their purposes are documented in [Configuration](./configuration.md). Pi owns its own runtime config and session storage separately.
 
 ## Validation
 
@@ -154,4 +119,4 @@ OpenCandle uses layered validation:
 - Full-session evals that check whether the agent chose the right investigation path, used relevant tools, disclosed gaps, framed risk, and answered the user directly.
 - Competitive evals that compare OpenCandle against generic agents on realistic finance prompts.
 
-See [Testing and Evals](./testing-and-evals.md) and [Benchmarking](./benchmarking.md).
+See [Testing and Evals](./testing-and-evals.md).

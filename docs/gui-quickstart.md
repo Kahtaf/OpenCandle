@@ -24,6 +24,14 @@ curl http://127.0.0.1:14567/health
 
 `{"ok":true,"role":"writer"}` means this process owns the writer lock. `{"ok":true,"role":"follower"}` means the server is healthy but another live process owns the lock.
 
+Other useful local endpoints:
+
+- `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
+- `GET /api/sessions` lists saved sessions.
+- `GET /api/session/events` returns the current projected chat events.
+- `POST /api/chat/run` streams one chat run.
+- `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
+
 ## Tailscale Access
 
 For remote viewing, keep the local GUI running and expose it with Tailscale Serve from the machine that is running OpenCandle. Use your own Tailscale node address or hostname:

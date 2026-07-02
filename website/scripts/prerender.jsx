@@ -45,18 +45,7 @@ const sourcePages = [
   },
   { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
-  { source: "docs/benchmarking.md", output: "docs/benchmarking.html", section: "Build" },
   { source: "docs/comparisons.md", output: "docs/comparisons.html", section: "Compare" },
-  {
-    source: "docs/opencandle-vs-chatgpt.md",
-    output: "docs/opencandle-vs-chatgpt.html",
-    section: "Compare",
-  },
-  {
-    source: "docs/opencandle-vs-spreadsheets.md",
-    output: "docs/opencandle-vs-spreadsheets.html",
-    section: "Compare",
-  },
   { source: "CONTRIBUTING.md", output: "docs/contributing.html", section: "Project" },
   { source: "SECURITY.md", output: "docs/security.html", section: "Project" },
 ];

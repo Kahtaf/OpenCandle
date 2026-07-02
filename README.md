@@ -260,7 +260,7 @@ See [tests/harness/README.md](https://github.com/Kahtaf/OpenCandle/blob/main/tes
 - [Configuration](https://opencandle.app/docs/configuration.html)
 - [System Architecture](https://opencandle.app/docs/system-architecture.html)
 - [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html)
-- [Benchmarking](https://opencandle.app/docs/benchmarking.html)
+- [Comparisons](https://opencandle.app/docs/comparisons.html)
 
 ## License
 
