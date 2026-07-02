@@ -114,13 +114,24 @@ describe("route session state", () => {
     ).toEqual({ mode: "route", sessionId: "session-1" });
   });
 
-  it("targets a fresh session for home sends so they never append to a previous session", () => {
+  it("targets a fresh session for home sends when home shows existing content", () => {
     expect(
       chatRunSessionTarget({
         pathname: "/",
         supportsSessionActions: true,
+        hasCurrentSessionContent: true,
       }),
     ).toEqual({ mode: "fresh" });
+  });
+
+  it("uses the current session for empty home sends", () => {
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: true,
+        hasCurrentSessionContent: false,
+      }),
+    ).toEqual({ mode: "current" });
   });
 
   it("falls back to the unguarded current session when session actions are unavailable", () => {

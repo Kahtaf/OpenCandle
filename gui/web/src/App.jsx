@@ -69,6 +69,7 @@ export function AppShell() {
         }));
         if (event.type !== "run.started" || !event.sessionId) return;
         const sessionId = String(event.sessionId);
+        gui.adoptSessionId(sessionId);
         const sessionPath = `/sessions/${encodeURIComponent(sessionId)}`;
         if (routeSessionId || pathname === sessionPath) return;
         void navigate({
@@ -77,7 +78,7 @@ export function AppShell() {
           search: (current) => ({ ...current, drawer: undefined }),
         });
       },
-      [activeSessionId, pathname, routeSessionId, navigate],
+      [activeSessionId, pathname, routeSessionId, navigate, gui],
     ),
   });
   const activeDrawer = search?.drawer;
@@ -97,7 +98,7 @@ export function AppShell() {
     events: visibleEvents,
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
-    canStartFreshHomeSession: gui.supportsSessionActions,
+    canStartFreshHomeSession: gui.supportsSessionActions && !search?.messageId,
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
@@ -106,7 +107,10 @@ export function AppShell() {
   );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const guiEventCount = visibleEvents.length;
-  const inputDisabled = sessionView.pendingSessionSwitch || !gui.supportsSessionActions;
+  const inputDisabled =
+    sessionView.pendingSessionSwitch ||
+    sessionView.pendingFreshHomeSession ||
+    !gui.supportsSessionActions;
 
   const openDrawer = useCallback(
     (drawer) => {
@@ -228,6 +232,7 @@ export function AppShell() {
       const target = chatRunSessionTarget({
         pathname,
         supportsSessionActions: gui.supportsSessionActions,
+        hasCurrentSessionContent: hasGuiSessionContent,
       });
       if (target.mode === "current") {
         void chatRun.startChatRun(prompt);
@@ -267,6 +272,7 @@ export function AppShell() {
     [
       activeSessionId,
       pathname,
+      hasGuiSessionContent,
       gui.supportsSessionActions,
       gui.newSession,
       gui.setToast,

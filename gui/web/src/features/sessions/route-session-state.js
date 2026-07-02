@@ -31,10 +31,14 @@ export function routeSessionView({
   };
 }
 
-export function chatRunSessionTarget({ pathname, supportsSessionActions }) {
+export function chatRunSessionTarget({
+  pathname,
+  supportsSessionActions,
+  hasCurrentSessionContent = false,
+}) {
   const routeSessionId = sessionIdFromPath(pathname);
   if (routeSessionId) return { mode: "route", sessionId: routeSessionId };
-  if (supportsSessionActions) return { mode: "fresh" };
+  if (supportsSessionActions && hasCurrentSessionContent) return { mode: "fresh" };
   return { mode: "current" };
 }
 

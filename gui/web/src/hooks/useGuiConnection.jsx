@@ -198,7 +198,7 @@ export function useGuiConnection() {
         if (!response.ok) throw new Error(response.statusText);
         const data = await response.json();
         if (disposed) return;
-        setSupportsSessionActions(false);
+        setSupportsSessionActions(data.supportsSessionActions !== false);
         applyBootstrap(data);
       } catch {
         if (!disposed) setRole("disconnected");
@@ -476,6 +476,7 @@ export function useGuiConnection() {
       invokeTool,
       newSession,
       loadSession,
+      adoptSessionId: setCurrentSessionId,
     }),
     [
       role,
