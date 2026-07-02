@@ -41,6 +41,22 @@ export function recordPendingSessionAction(
   });
 }
 
+export function clearPendingSessionAction(
+  sessionManager: SessionLockScopeSource,
+  actionId: string,
+): void {
+  const normalizedActionId = actionId.trim();
+  if (!normalizedActionId) return;
+  const storePath = acceptedActionStorePath(sessionManager);
+  if (!storePath) return;
+  const store = readAcceptedActionStore(sessionManager);
+  if (!store.pendingActionIds.includes(normalizedActionId)) return;
+  writeAcceptedActionStore(storePath, {
+    acceptedActionIds: store.acceptedActionIds,
+    pendingActionIds: store.pendingActionIds.filter((id) => id !== normalizedActionId),
+  });
+}
+
 export function recordAcceptedSessionAction(
   sessionManager: SessionLockScopeSource,
   actionId: string,

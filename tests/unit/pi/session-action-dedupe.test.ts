@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  clearPendingSessionAction,
   hasAcceptedSessionAction,
   hasPendingSessionAction,
   recordAcceptedSessionAction,
@@ -55,6 +56,25 @@ describe("session action dedupe store", () => {
       expect(hasAcceptedSessionAction(fileManager, "action-1")).toBe(true);
       expect(hasPendingSessionAction(fileManager, "pending-action")).toBe(true);
       expect(hasAcceptedSessionAction(fallbackManager, "action-1")).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("clears pending action ids after handled failures", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-dedupe-clear-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      const sessionManager = {
+        getSessionFile: () => sessionFile,
+        getSessionDir: () => dir,
+      };
+
+      recordPendingSessionAction(sessionManager, "action-1");
+      clearPendingSessionAction(sessionManager, "action-1");
+
+      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(false);
+      expect(hasAcceptedSessionAction(sessionManager, "action-1")).toBe(false);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

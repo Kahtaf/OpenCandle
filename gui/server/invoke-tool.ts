@@ -5,6 +5,7 @@ import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { getDefaults } from "../../src/memory/tool-defaults.js";
 import {
+  clearPendingSessionAction,
   hasAcceptedSessionAction,
   hasPendingSessionAction,
   recordAcceptedSessionAction,
@@ -140,12 +141,18 @@ export function createToolInvokeController({
     try {
       const runSessionId = safeSessionId(runSessionManager);
       recordPendingSessionAction(runSessionManager, options.actionId ?? "");
-      const result = await invokeTool(runSessionManager, tool, args, "ui", {
-        askUserHandler:
-          runSessionId && askUserHandlerForSessionId
-            ? askUserHandlerForSessionId(runSessionId)
-            : askUserHandler,
-      });
+      let result: InvokeToolResult;
+      try {
+        result = await invokeTool(runSessionManager, tool, args, "ui", {
+          askUserHandler:
+            runSessionId && askUserHandlerForSessionId
+              ? askUserHandlerForSessionId(runSessionId)
+              : askUserHandler,
+        });
+      } catch (error) {
+        clearPendingSessionAction(runSessionManager, options.actionId ?? "");
+        throw error;
+      }
       recordAcceptedSessionAction(runSessionManager, options.actionId ?? "");
       if (!result.isError && marketStateToolMapping(toolName) != null) {
         onMarketStateChanged?.();

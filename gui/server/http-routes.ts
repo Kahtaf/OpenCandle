@@ -5,6 +5,7 @@ import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-age
 import { buildDoctorReport } from "../../src/doctor/report.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import {
+  clearPendingSessionAction,
   hasAcceptedSessionAction,
   hasPendingSessionAction,
   recordAcceptedSessionAction,
@@ -611,6 +612,7 @@ async function streamAcceptedSseChatRun({
     }
     writeSse(res, { type: "run.completed", runId, sessionId, seq });
   } catch (error) {
+    clearPendingSessionAction(runSessionManager, actionId);
     seq = liveAdapter.nextSeq();
     const message = error instanceof Error ? error.message : String(error);
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
