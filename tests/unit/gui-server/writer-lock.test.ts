@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   acquireWriterLock,
+  migrateWriterLockScope,
   readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
-  migrateWriterLockScope,
   writerLockScopeForSession,
 } from "../../../gui/server/writer-lock.js";
 
@@ -102,6 +102,7 @@ describe("writer lock", () => {
         coordinatorEndpoint: "http://127.0.0.1:14567",
         coordinatorSecret: "secret-1",
       });
+      expect(statSync(join(dir, "writer.lock")).mode & 0o777).toBe(0o600);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

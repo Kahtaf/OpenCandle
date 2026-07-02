@@ -64,7 +64,8 @@ export async function acquireWriterLock(
   const existing = readWriterLock(scopePath);
   if (existing) {
     const status = classifyLock(existing, staleGraceMs, pidAlive);
-    if (status !== "recoverable") return { role: "follower", lock: withRecoveryState(existing, status) };
+    if (status !== "recoverable")
+      return { role: "follower", lock: withRecoveryState(existing, status) };
   }
 
   await sleep(staleGraceMs);
@@ -110,7 +111,11 @@ export function refreshWriterLock(
   if (!lock || !isSameLockOwner(lock, identity)) return;
   writeFileSync(
     lockPath(scopePath),
-    JSON.stringify({ ...lock, lastHeartbeat: (identity.now?.() ?? new Date()).toISOString() }, null, 2),
+    JSON.stringify(
+      { ...lock, lastHeartbeat: (identity.now?.() ?? new Date()).toISOString() },
+      null,
+      2,
+    ),
   );
 }
 
@@ -153,7 +158,7 @@ export function migrateWriterLockScope(
   const nextLock = { ...lock, scope: toScopePath };
   let fd: number | undefined;
   try {
-    fd = openSync(lockPath(toScopePath), "wx");
+    fd = openSync(lockPath(toScopePath), "wx", 0o600);
     writeFileSync(fd, JSON.stringify(nextLock, null, 2));
   } catch {
     return false;
@@ -193,7 +198,7 @@ function tryCreate(
     ...(identity.coordinatorSecret ? { coordinatorSecret: identity.coordinatorSecret } : {}),
   };
   try {
-    const fd = openSync(lockPath(scopePath), "wx");
+    const fd = openSync(lockPath(scopePath), "wx", 0o600);
     try {
       writeFileSync(fd, JSON.stringify(lock, null, 2));
     } finally {
@@ -226,18 +231,12 @@ function classifyLock(
   return lock.ownerId ? "current" : "ambiguous";
 }
 
-function withRecoveryState(
-  lock: WriterLock,
-  status: "current" | "ambiguous",
-): WriterLock {
+function withRecoveryState(lock: WriterLock, status: "current" | "ambiguous"): WriterLock {
   if (status === "current") return { ...lock, recoveryState: "live" };
   return { ...lock, recoveryState: "ambiguous" };
 }
 
-function isSameLockOwner(
-  lock: WriterLock,
-  identity: { pid: number; ownerId?: string },
-): boolean {
+function isSameLockOwner(lock: WriterLock, identity: { pid: number; ownerId?: string }): boolean {
   if (lock.pid !== identity.pid) return false;
   if (lock.ownerId) return lock.ownerId === identity.ownerId;
   return !identity.ownerId;
