@@ -23,6 +23,7 @@ import {
   releaseSessionWriterLock,
   writerLockScopeForSession,
 } from "./pi/session-writer-lock.js";
+import { startTuiSessionCoordinatorServer } from "./pi/tui-session-coordinator.js";
 
 const require = createRequire(import.meta.url);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -196,12 +197,35 @@ async function main(): Promise<void> {
   initTheme(settingsManager.getTheme(), true);
 
   const sessionManager = continueOpenCandleSession(cwd);
+  let activeSessionManager = sessionManager;
   const sessionWriterLockScope = writerLockScopeForSession(sessionManager);
-  const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui");
+  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
+  const tuiCoordinator = await startTuiSessionCoordinatorServer({
+    getSession: () => {
+      if (!runtime) throw new Error("OpenCandle is still starting this session.");
+      return runtime.session;
+    },
+    getSessionManager: () => activeSessionManager,
+    getModelUnavailableMessage: () => {
+      if (!runtime) return "OpenCandle is still starting this session.";
+      const session = runtime.session;
+      const model = session.model;
+      if (!model) {
+        return "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
+      }
+      if (!session.modelRegistry.hasConfiguredAuth(model)) {
+        return "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
+      }
+      return null;
+    },
+  });
+  const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui", {
+    coordinatorEndpoint: tuiCoordinator.endpoint,
+    coordinatorSecret: tuiCoordinator.secret,
+  });
   if (sessionWriterLock.role !== "writer") {
-    console.error(
-      `Session is currently being written by ${sessionWriterLock.lock.processKind} (pid ${sessionWriterLock.lock.pid}).`,
-    );
+    await tuiCoordinator.close();
+    console.error("OpenCandle is syncing this session in another window. Try again shortly.");
     process.exitCode = 1;
     return;
   }
@@ -211,7 +235,6 @@ async function main(): Promise<void> {
     5000,
   );
 
-  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
   try {
     runtime = await createAgentSessionRuntime(
       async (opts) => {
@@ -241,18 +264,24 @@ async function main(): Promise<void> {
     );
     runtime.setRebindSession(async (nextSession) => {
       const nextSessionWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
-      if (nextSessionWriterLockScope === activeSessionWriterLockScope) return;
+      if (nextSessionWriterLockScope === activeSessionWriterLockScope) {
+        activeSessionManager = nextSession.sessionManager;
+        return;
+      }
       const nextSessionWriterLock = await acquireSessionWriterLock(
         nextSessionWriterLockScope,
         "tui",
+        {
+          coordinatorEndpoint: tuiCoordinator.endpoint,
+          coordinatorSecret: tuiCoordinator.secret,
+        },
       );
       if (nextSessionWriterLock.role !== "writer") {
-        throw new Error(
-          `Session is currently being written by ${nextSessionWriterLock.lock.processKind} (pid ${nextSessionWriterLock.lock.pid}).`,
-        );
+        throw new Error("OpenCandle is syncing this session in another window. Try again shortly.");
       }
       releaseSessionWriterLock(activeSessionWriterLockScope);
       activeSessionWriterLockScope = nextSessionWriterLockScope;
+      activeSessionManager = nextSession.sessionManager;
     });
     const interactiveMode = new InteractiveMode(runtime, {
       modelFallbackMessage: shouldSuppressFallbackMessage
@@ -263,6 +292,7 @@ async function main(): Promise<void> {
   } finally {
     clearInterval(writerLockHeartbeat);
     releaseSessionWriterLock(activeSessionWriterLockScope);
+    await tuiCoordinator.close();
     await runtime?.dispose();
   }
 }
