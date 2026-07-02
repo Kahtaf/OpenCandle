@@ -21,13 +21,13 @@
 
 ## 3. Session-Scoped Idempotent Actions
 
-- [ ] 3.1 Define a session action envelope with `sessionId`, `actionId`, action type, payload, and source surface.
+- [x] 3.1 Define a session action envelope with `sessionId`, `actionId`, action type, payload, and source surface.
 - [ ] 3.2 Add action-id dedupe tests for session prompts, direct tool invocation, run controls, and `ask_user` answers/cancels.
-- [ ] 3.3 Implement coordinator-side dedupe for accepted session action IDs with retention at least as long as the retry/recovery horizon selected in implementation.
+- [x] 3.3 Implement coordinator-side dedupe for accepted session action IDs with retention at least as long as the retry/recovery horizon selected in implementation.
 - [ ] 3.4 Persist action IDs in transcript metadata, a durable per-session action store, or an equivalent tested mechanism before enabling automatic retry across owner recovery.
 - [ ] 3.5 Update GUI write call sites to reuse action IDs only for retries of the same user action and mint fresh IDs for intentional repeats.
 - [ ] 3.6 Update TUI chat write call sites to use the same action envelope after GUI proxying is stable.
-- [ ] 3.7 Return a neutral busy/retry state for a second prompt submitted while a session run is active, rather than silently queueing or starting a competing run.
+- [x] 3.7 Return a neutral busy/retry state for a second prompt submitted while a session run is active, rather than silently queueing or starting a competing run.
 
 ## 4. GUI UX Language and State
 
