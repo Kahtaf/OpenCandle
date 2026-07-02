@@ -379,7 +379,7 @@ describe("opencandle package commands", () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it("keeps a non-owner TUI alive when the owner advertises a coordinator", async () => {
+  it("does not silently succeed for a non-interactive non-owner TUI", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const close = vi.fn().mockResolvedValue(undefined);
     piMocks.startTuiSessionCoordinatorServer.mockResolvedValue({
@@ -406,11 +406,11 @@ describe("opencandle package commands", () => {
 
     await runCli([]);
 
-    expect(error).not.toHaveBeenCalledWith(
+    expect(error).toHaveBeenCalledWith(
       "OpenCandle is syncing this session in another window. Try again shortly.",
     );
     expect(close).toHaveBeenCalled();
-    expect(process.exitCode).toBeUndefined();
+    expect(process.exitCode).toBe(1);
   });
 
   it("prints proxied TUI message content arrays", () => {

@@ -314,7 +314,7 @@ async function main(): Promise<void> {
 
 async function runFollowerTuiProxy(lock: WriterLock, sessionManager: ReturnType<typeof continueOpenCandleSession>): Promise<boolean> {
   if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return false;
-  if (!process.stdin.isTTY) return true;
+  if (!process.stdin.isTTY) return false;
 
   const input = createInterface({ input: process.stdin, output: process.stdout });
   try {

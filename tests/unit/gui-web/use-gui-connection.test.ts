@@ -132,6 +132,16 @@ describe("useGuiConnection helpers", () => {
       actionId: "ask-action-1",
       sessionId: "session-visible",
     });
+    expect(
+      buildSessionActionSocketMessage(
+        "ask_user.answer",
+        { id: "ask-2", answer: "No", actionId: "ask-action-2", sessionId: "prompt-session" },
+        "current-session",
+      ),
+    ).toMatchObject({
+      actionId: "ask-action-2",
+      sessionId: "prompt-session",
+    });
   });
 
   it("preserves the global writer role while loading a follower historical session", () => {

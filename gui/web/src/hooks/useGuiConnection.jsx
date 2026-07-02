@@ -99,11 +99,12 @@ export function createSessionActionId(prefix = "action") {
 
 export function buildSessionActionSocketMessage(type, payload = {}, currentSessionId = "") {
   const actionPrefix = type.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "action";
+  const sessionId = payload.sessionId || currentSessionId;
   return {
     type,
     ...payload,
     actionId: payload.actionId || createSessionActionId(actionPrefix),
-    ...(currentSessionId ? { sessionId: currentSessionId } : {}),
+    ...(sessionId ? { sessionId } : {}),
   };
 }
 
