@@ -940,6 +940,44 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(baselineFetchCount);
     await mocked.close();
   }, 30_000);
+
+  it("keeps two browser clients on one coordinated session without role wording", async () => {
+    const first = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const second = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const sessionId = "coordinated-session";
+    await installTwoClientCoordinatorMock(first, sessionId);
+    await installTwoClientCoordinatorMock(second, sessionId);
+
+    await first.goto(`${guiUrl}/sessions/${sessionId}`, { waitUntil: "networkidle" });
+    await second.goto(`${guiUrl}/sessions/${sessionId}`, { waitUntil: "networkidle" });
+    await expectVisible(first.getByRole("heading", { name: "What are we watching?" }));
+    await expectVisible(second.getByRole("heading", { name: "What are we watching?" }));
+
+    await first.getByLabel("Message OpenCandle").fill("First browser prompt");
+    await first.getByRole("button", { name: "Send" }).click();
+    await second.getByLabel("Message OpenCandle").fill("Second browser prompt");
+    await second.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(first.getByText("First browser answer"));
+    await expectVisible(second.getByText("OpenCandle is still working in this session").first());
+    await expect(first.getByText(/writer|follower|read-only|takeover/i).count()).resolves.toBe(0);
+    await expect(second.getByText(/writer|follower|read-only|takeover/i).count()).resolves.toBe(0);
+
+    const firstRequests = await first.evaluate(() => window.__coordinatedRequests);
+    const secondRequests = await second.evaluate(() => window.__coordinatedRequests);
+    expect([...firstRequests, ...secondRequests]).toEqual([
+      expect.objectContaining({
+        url: `/api/sessions/${sessionId}/runs`,
+        prompt: "First browser prompt",
+      }),
+      expect.objectContaining({
+        url: `/api/sessions/${sessionId}/runs`,
+        prompt: "Second browser prompt",
+      }),
+    ]);
+    await first.close();
+    await second.close();
+  }, 30_000);
 });
 
 function resolveChromiumExecutable(): string {
@@ -1446,4 +1484,92 @@ async function installMockMarketState(
       return Promise.resolve(new Response("Not found", { status: 404, statusText: "Not found" }));
     };
   }, overrides);
+}
+
+async function installTwoClientCoordinatorMock(page: Page, sessionId: string): Promise<void> {
+  await page.addInitScript((mockSessionId) => {
+    window.__coordinatedRequests = [];
+    window.WebSocket = function BrokenWebSocket() {
+      throw new TypeError("WebSocket is not a constructor");
+    };
+    window.fetch = async (input, init) => {
+      const rawUrl = typeof input === "string" ? input : input.url;
+      const url = new URL(rawUrl, window.location.origin);
+      if (url.pathname === "/api/bootstrap" || url.pathname.endsWith("/bootstrap")) {
+        return jsonResponse({
+          role: "writer",
+          supportsSessionActions: true,
+          sessionId: mockSessionId,
+          sessions: [],
+          catalog: { tools: [], workflows: [], providers: [] },
+          modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+          askUserPrompts: [],
+          coordination: { sessionId: mockSessionId, status: "ready" },
+          snapshot: {
+            sessionId: mockSessionId,
+            entries: [],
+            events: [],
+            state: {
+              watchlist: [],
+              activeAnalyses: [],
+              recentResearch: [],
+              dataQuality: { softGaps: [], hardSkips: [] },
+            },
+          },
+        });
+      }
+      if (url.pathname === `/api/sessions/${mockSessionId}/runs`) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        window.__coordinatedRequests.push({
+          url: url.pathname,
+          prompt: body.prompt,
+          actionId: body.actionId,
+        });
+        if (body.prompt === "Second browser prompt") {
+          return jsonResponse(
+            {
+              code: "session_busy",
+              error: "OpenCandle is still working in this session. Try again when it finishes.",
+            },
+            409,
+          );
+        }
+        const encoder = new TextEncoder();
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              const send = (event) => {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              };
+              send({ type: "run.started", sessionId: mockSessionId, runId: "run-1", seq: 1 });
+              send({
+                type: "message.completed",
+                sessionId: mockSessionId,
+                messageId: "assistant-1",
+                role: "assistant",
+                content: [{ type: "text", text: "First browser answer" }],
+                seq: 2,
+              });
+              send({ type: "run.completed", sessionId: mockSessionId, runId: "run-1", seq: 3 });
+              controller.close();
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "text/event-stream; charset=utf-8" },
+          },
+        );
+      }
+      return new Response("Not found", { status: 404 });
+    };
+
+    function jsonResponse(payload, status = 200) {
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+  }, sessionId);
 }
