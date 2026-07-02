@@ -126,6 +126,14 @@ describe("ChatPanel event transcript rendering", () => {
     expect(cardSource).toContain("sessionId: prompt.sessionId");
   });
 
+  it("disables home sends when a non-owner window cannot create a fresh session", () => {
+    const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+
+    expect(source).toContain("const homeNeedsFreshWriterSession");
+    expect(source).toContain('pathname === "/" && hasGuiSessionContent && gui.role !== "writer"');
+    expect(source).toContain("homeNeedsFreshWriterSession ||");
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,

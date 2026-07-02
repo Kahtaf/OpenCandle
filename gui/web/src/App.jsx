@@ -108,9 +108,12 @@ export function AppShell() {
   );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const guiEventCount = visibleEvents.length;
+  const homeNeedsFreshWriterSession =
+    pathname === "/" && hasGuiSessionContent && gui.role !== "writer";
   const inputDisabled =
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
+    homeNeedsFreshWriterSession ||
     !gui.supportsSessionActions;
 
   const openDrawer = useCallback(
