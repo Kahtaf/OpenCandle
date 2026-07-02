@@ -60,6 +60,66 @@
 }
 
 @layer components {
+  /* Docs app-shell state. The sidebar/drawer markup is prerendered; these
+     rules react to the data attributes toggled by entry-client.jsx. */
+  [data-sidebar-restore] {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    html:not([data-sidebar-collapsed="true"]) #docs-sidebar {
+      display: block;
+    }
+
+    html[data-sidebar-collapsed="true"] [data-sidebar-restore] {
+      display: flex;
+    }
+  }
+
+  html[data-drawer-open="true"] {
+    overflow: hidden;
+  }
+
+  [data-docs-drawer]:not([hidden]) [data-drawer-overlay] {
+    animation: drawer-fade-in 200ms ease-out;
+  }
+
+  [data-docs-drawer]:not([hidden]) [data-drawer-panel] {
+    animation: drawer-slide-up 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  [data-docs-drawer][data-closing] [data-drawer-overlay] {
+    opacity: 0;
+    transition: opacity 150ms ease-in;
+  }
+
+  [data-docs-drawer][data-closing] [data-drawer-panel] {
+    transform: translateY(100%);
+    transition: transform 200ms ease-in;
+  }
+
+  @keyframes drawer-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes drawer-slide-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-docs-drawer]:not([hidden]) [data-drawer-overlay],
+    [data-docs-drawer]:not([hidden]) [data-drawer-panel],
+    [data-docs-drawer][data-closing] [data-drawer-overlay],
+    [data-docs-drawer][data-closing] [data-drawer-panel] {
+      animation: none;
+      transition: none;
+    }
+  }
+
   .docs-content {
     color: hsl(var(--tw-foreground) / 0.84);
     font-size: 0.875rem;

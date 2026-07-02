@@ -231,6 +231,10 @@ function sharedHeadTags({ title, description, canonicalUrl, image = socialImage,
   );
 }
 
+// Restores the persisted sidebar-collapsed state before first paint so a
+// collapsed sidebar does not flash open on navigation.
+const sidebarStateScript = `try{if(localStorage.getItem("opencandle-docs-sidebar-collapsed")==="1")document.documentElement.dataset.sidebarCollapsed="true"}catch(e){}`;
+
 function HtmlDocument({
   title,
   description,
@@ -249,6 +253,10 @@ function HtmlDocument({
         <meta name="description" content={description} />
         <meta name="author" content="Kahtaf" />
         <title>{title}</title>
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: Static first-paint state restore generated at build time.
+          dangerouslySetInnerHTML={{ __html: sidebarStateScript }}
+        />
         {sharedHeadTags({ title, description, canonicalUrl, markdownUrl })}
         <link rel="icon" href={`${prefix}assets/logo.svg`} type="image/svg+xml" />
         <link rel="alternate icon" href={`${prefix}favicon.ico`} />
@@ -294,6 +302,64 @@ function SiteHeader({ output = "index.html" }) {
   );
 }
 
+// Inline copies of the lucide icons the GUI shell uses (Menu, PanelLeft,
+// PanelLeftOpen) so the static site does not need the lucide-react dependency.
+function LucideIcon({ children, className }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+    >
+      {children}
+    </svg>
+  );
+}
+
+function MenuIcon() {
+  return (
+    <LucideIcon>
+      <line x1="4" x2="20" y1="6" y2="6" />
+      <line x1="4" x2="20" y1="12" y2="12" />
+      <line x1="4" x2="20" y1="18" y2="18" />
+    </LucideIcon>
+  );
+}
+
+function PanelLeftIcon() {
+  return (
+    <LucideIcon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+    </LucideIcon>
+  );
+}
+
+function PanelLeftOpenIcon() {
+  return (
+    <LucideIcon>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+      <path d="m14 9 3 3-3 3" />
+    </LucideIcon>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <p className="flex items-center gap-1.5 px-2 pt-2 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+      {children}
+    </p>
+  );
+}
+
 function NavGroups({ activeOutput }) {
   const groups = new Map();
   for (const page of sitePages) {
@@ -302,22 +368,143 @@ function NavGroups({ activeOutput }) {
   }
 
   return [...groups.entries()].map(([section, items]) => (
-    <div key={section} className="space-y-1">
-      <p className="px-2 pb-1 font-medium text-[0.68rem] text-muted-foreground uppercase">
-        {section}
-      </p>
+    <div key={section} className="flex flex-col gap-0.5">
+      <SectionLabel>{section}</SectionLabel>
       {items.map((page) => (
         <a
           key={page.output}
           href={relativeHref(page.output, activeOutput)}
           aria-current={page.output === activeOutput ? "page" : undefined}
-          className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm hover:bg-secondary hover:text-foreground aria-[current=page]:bg-secondary aria-[current=page]:text-foreground"
+          className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-tertiary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-tertiary aria-[current=page]:font-medium aria-[current=page]:text-foreground"
         >
           {page.title}
         </a>
       ))}
     </div>
   ));
+}
+
+function ResourceLinks() {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <SectionLabel>Resources</SectionLabel>
+      {[
+        ["GitHub", "https://github.com/Kahtaf/OpenCandle"],
+        ["npm", "https://www.npmjs.com/package/opencandle"],
+        ["Changelog", "https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md"],
+      ].map(([label, href]) => (
+        <a
+          key={label}
+          href={href}
+          className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-tertiary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function SidebarBrand({ prefix, className = "" }) {
+  return (
+    <a
+      href={`${prefix}index.html`}
+      className={`flex min-w-0 items-center gap-2 rounded-md px-1 py-1 font-semibold text-foreground text-sm tracking-tight transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+    >
+      <OpenCandleLogo src={`${prefix}assets/logo.svg`} />
+      <span className="truncate">OpenCandle</span>
+    </a>
+  );
+}
+
+function DocsSidebarBody({ page, prefix, showHeader }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-3">
+      {showHeader ? (
+        <div className="flex items-center gap-2 px-1">
+          <SidebarBrand prefix={prefix} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="ml-auto"
+            aria-label="Collapse sidebar"
+            data-sidebar-collapse=""
+          >
+            <PanelLeftIcon />
+          </Button>
+        </div>
+      ) : null}
+      <Button asChild variant="bordered" className="w-full justify-center gap-2">
+        <a href={relativeHref("docs/getting-started.html", page.output)}>Install OpenCandle</a>
+      </Button>
+      <nav
+        aria-label="Documentation"
+        className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2"
+      >
+        <NavGroups activeOutput={page.output} />
+        <ResourceLinks />
+      </nav>
+    </div>
+  );
+}
+
+function DocsShell({ page, children }) {
+  const prefix = rootPrefix(page.output);
+  return (
+    <>
+      <div className="flex min-h-dvh bg-background">
+        <aside
+          id="docs-sidebar"
+          className="sticky top-0 hidden h-dvh w-[260px] shrink-0 overflow-hidden border-border border-r bg-secondary"
+        >
+          <DocsSidebarBody page={page} prefix={prefix} showHeader />
+        </aside>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div
+            data-sidebar-restore=""
+            className="h-12 shrink-0 items-center border-border border-b bg-background px-3"
+          >
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Expand sidebar"
+              data-sidebar-expand=""
+            >
+              <PanelLeftOpenIcon />
+            </Button>
+          </div>
+          <header className="flex h-12 shrink-0 items-center gap-2 border-border border-b bg-background px-2 md:hidden">
+            <Button variant="ghost" size="icon-sm" aria-label="Open navigation" data-drawer-open="">
+              <MenuIcon />
+            </Button>
+            <SidebarBrand prefix={prefix} className="px-1.5 hover:bg-secondary" />
+          </header>
+          {children}
+        </div>
+      </div>
+      <div data-docs-drawer="" hidden>
+        <div
+          data-drawer-overlay=""
+          className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px]"
+        />
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Documentation navigation"
+          data-drawer-panel=""
+          className="fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md"
+        >
+          <div
+            className="mx-auto mt-3 mb-2 h-1 w-9 shrink-0 rounded-full bg-hard"
+            aria-hidden="true"
+          />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <DocsSidebarBody page={page} prefix={prefix} showHeader={false} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
 }
 
 function HomePage({ buildDate, version }) {
@@ -573,21 +760,9 @@ function DocsPage({ page, content, headings, buildDate }) {
         mainEntityOfPage: canonicalUrl,
       }}
     >
-      <SiteHeader output={page.output} />
-      <main className="mx-auto grid max-w-[1320px] gap-4 px-4 py-4 lg:grid-cols-[260px_minmax(0,1fr)_230px] lg:px-6">
-        <aside className="hidden lg:block">
-          <div className="sticky top-[72px] space-y-4 rounded-lg border border-border bg-card p-3 shadow-subtle-xs">
-            <NavGroups activeOutput={page.output} />
-          </div>
-        </aside>
-        <section className="min-w-0">
-          <details className="mb-3 rounded-lg border border-border bg-card p-3 shadow-subtle-xs lg:hidden">
-            <summary className="cursor-pointer font-medium text-sm">Docs navigation</summary>
-            <nav className="mt-3 space-y-4" aria-label="Documentation">
-              <NavGroups activeOutput={page.output} />
-            </nav>
-          </details>
-          <article className="rounded-lg border border-border bg-card p-4 shadow-subtle-xs sm:p-6">
+      <DocsShell page={page}>
+        <main className="mx-auto flex w-full max-w-[1100px] gap-10 px-4 py-6 sm:px-6 lg:px-8">
+          <article className="min-w-0 max-w-[720px] flex-1">
             <p className="mb-4 text-muted-foreground text-xs">
               Last updated <time dateTime={buildDate}>{buildDate}</time>
             </p>
@@ -597,30 +772,26 @@ function DocsPage({ page, content, headings, buildDate }) {
               dangerouslySetInnerHTML={{ __html: content }}
             />
           </article>
-        </section>
-        <aside className="hidden xl:block">
-          <div className="sticky top-[72px] rounded-lg border border-border bg-card p-3 shadow-subtle-xs">
-            <p className="px-2 pb-2 font-medium text-[0.68rem] text-muted-foreground uppercase">
-              On this page
-            </p>
-            <nav className="space-y-1" aria-label="On this page">
-              {toc.length > 0 ? (
-                toc.map((heading) => (
-                  <a
-                    key={heading.id}
-                    href={`#${heading.id}`}
-                    className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm hover:bg-secondary hover:text-foreground"
-                  >
-                    {heading.text}
-                  </a>
-                ))
-              ) : (
-                <span className="px-2 text-muted-foreground text-sm">No sections</span>
-              )}
-            </nav>
-          </div>
-        </aside>
-      </main>
+          {toc.length > 0 ? (
+            <aside className="hidden w-[200px] shrink-0 xl:block">
+              <div className="sticky top-6 flex flex-col gap-0.5">
+                <SectionLabel>On this page</SectionLabel>
+                <nav className="flex flex-col gap-0.5" aria-label="On this page">
+                  {toc.map((heading) => (
+                    <a
+                      key={heading.id}
+                      href={`#${heading.id}`}
+                      className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {heading.text}
+                    </a>
+                  ))}
+                </nav>
+              </div>
+            </aside>
+          ) : null}
+        </main>
+      </DocsShell>
     </HtmlDocument>
   );
 }
