@@ -1,11 +1,18 @@
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { promisify } from "node:util";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const root = process.cwd();
+const execFileAsync = promisify(execFile);
 
 describe("public site build contract", () => {
+  beforeAll(async () => {
+    await execFileAsync("npm", ["run", "docs:site:build"], { cwd: root });
+  }, 30_000);
+
   it("declares shared UI and website workspaces", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 
