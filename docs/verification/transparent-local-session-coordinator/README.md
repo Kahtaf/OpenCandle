@@ -1,6 +1,10 @@
 # Transparent Local Session Coordinator Verification
 
 Generated on 2026-07-01 for OpenSpec change `transparent-local-session-coordinator`.
+Re-validated on 2026-07-02 after the review-fix commits: TUI harness smoke returned
+`finalText: "2+2 equals 4."` in 3.5s with no interactions, and
+`npm run gui:web:build && npm run test:gui:browser` passed all 23 tests including
+the two-browser coordinated session regression.
 
 ## Browser Screenshots
 
