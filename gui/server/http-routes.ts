@@ -7,6 +7,7 @@ import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
+import type { ToolInvokeController } from "./invoke-tool.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import type {
   LocalSessionCoordinator,
@@ -53,6 +54,7 @@ interface GuiHttpRouteOptions {
   wsHub: WsHub;
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
+  toolInvokeController: ToolInvokeController;
   quoteSnapshotStore: QuoteSnapshotStore;
   localSessionCoordinator?: LocalSessionCoordinator;
 }
@@ -239,6 +241,24 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         return;
       }
       await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body);
+      return;
+    }
+
+    if (url.pathname === "/api/local-coordinator/tool-invoke" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      try {
+        const result = await options.toolInvokeController.handleToolInvoke(
+          String(body.toolName ?? ""),
+          asRecord(body.args),
+          String(body.sessionId ?? ""),
+          { allowProxy: false },
+        );
+        writeJson(res, { result });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        writeJson(res, { error: message }, 409);
+      }
       return;
     }
 

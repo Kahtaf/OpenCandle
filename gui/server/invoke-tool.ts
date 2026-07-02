@@ -11,6 +11,7 @@ import type { LocalSessionCoordinator } from "./local-session-coordinator.js";
 import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import {
   acquireWriterLock,
+  readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
   writerLockScopeForSession,
@@ -31,6 +32,7 @@ export interface ToolInvokeController {
     toolName: string,
     args: Record<string, unknown>,
     sessionId?: string,
+    options?: { allowProxy?: boolean },
   ): Promise<InvokeToolResult>;
   handleToolInvokeMessage(client: ToolInvokeClient, data: Record<string, unknown>): Promise<void>;
 }
@@ -68,8 +70,8 @@ export function createToolInvokeController({
     toolName: string,
     args: Record<string, unknown>,
     sessionId = "",
+    options: { allowProxy?: boolean } = {},
   ): Promise<InvokeToolResult> {
-    if (role !== "writer") throw new Error("Read-only follower mode");
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
 
@@ -80,15 +82,21 @@ export function createToolInvokeController({
       resolveSessionManager,
     );
     const useCurrentSession = sameSessionStorage(currentSessionManager, runSessionManager);
+    const allowProxy = options.allowProxy !== false;
+    if (!useCurrentSession && allowProxy && canProxyToolInvokeToCoordinator(runSessionManager)) {
+      const proxied = await proxyToolInvokeToCoordinator(runSessionManager, toolName, args);
+      if (proxied) return proxied;
+    }
+    if (role !== "writer") {
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
     let acquiredLockScope = "";
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
     if (!useCurrentSession) {
       const lockScope = writerLockScopeForSession(runSessionManager);
       const lockResult = await acquireWriterLock(lockScope, "gui");
       if (lockResult.role !== "writer") {
-        throw new Error(
-          `Session is currently being written by ${lockResult.lock.processKind} (pid ${lockResult.lock.pid}).`,
-        );
+        throw new Error("OpenCandle is reconnecting to this session.");
       }
       acquiredLockScope = lockScope;
       lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
@@ -163,6 +171,49 @@ export function createToolInvokeController({
   }
 
   return { handleToolInvoke, handleToolInvokeMessage };
+}
+
+export function canProxyToolInvokeToCoordinator(runSessionManager: SessionManager): boolean {
+  let lockScope: string;
+  try {
+    lockScope = writerLockScopeForSession(runSessionManager);
+  } catch {
+    return false;
+  }
+  const lock = readWriterLock(lockScope);
+  return Boolean(lock?.coordinatorEndpoint && lock.coordinatorSecret && lock.pid !== process.pid);
+}
+
+async function proxyToolInvokeToCoordinator(
+  runSessionManager: SessionManager,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<InvokeToolResult | null> {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return null;
+  const endpoint = new URL("/api/local-coordinator/tool-invoke", lock.coordinatorEndpoint);
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      body: JSON.stringify({
+        sessionId: safeSessionId(runSessionManager),
+        toolName,
+        args,
+      }),
+    });
+  } catch {
+    return null;
+  }
+  const body = (await response.json()) as { error?: string; result?: InvokeToolResult };
+  if (!response.ok || !body.result) {
+    throw new Error(body.error || "OpenCandle is reconnecting to this session.");
+  }
+  return body.result;
 }
 
 function sameSessionStorage(current: SessionManager, target: SessionManager): boolean {

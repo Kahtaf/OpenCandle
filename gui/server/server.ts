@@ -217,6 +217,7 @@ const httpRequestHandler = createHttpRequestHandler({
   wsHub,
   modelSetupController,
   sessionActionsController,
+  toolInvokeController,
   quoteSnapshotStore,
   localSessionCoordinator,
 });

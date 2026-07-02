@@ -8,7 +8,11 @@ import { Type } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createToolInvokeController, invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 import { createLocalSessionCoordinator } from "../../../gui/server/local-session-coordinator.js";
-import { readWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
+import {
+  acquireWriterLock,
+  readWriterLock,
+  writerLockScopeForSession,
+} from "../../../gui/server/writer-lock.js";
 
 describe("invokeToolFromUi", () => {
   const originalEnv = process.env.OPENCANDLE_HOME;
@@ -232,6 +236,83 @@ describe("invokeToolFromUi", () => {
     expect(sentMessages[1]).toMatchObject({ ok: true, requestId: "req-1" });
   });
 
+  it("proxies tool invocations to the target session coordinator", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-proxy-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const currentSessionManager = {
+        getSessionId: () => "current-session",
+        getSessionFile: () => join(dir, "current.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      const targetSessionManager = {
+        getSessionId: () => "target-session",
+        getSessionFile: () => join(dir, "target.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      await acquireWriterLock(writerLockScopeForSession(currentSessionManager), "gui", {
+        pid: process.pid,
+      });
+      await acquireWriterLock(writerLockScopeForSession(targetSessionManager), "tui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const proxiedResult = {
+        toolCallId: "remote-tool-call",
+        result: { content: [{ type: "text", text: "remote quote" }], details: { symbol: "AAPL" } },
+        isError: false,
+      };
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(JSON.stringify({ result: proxiedResult }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+      globalThis.fetch = fetchMock as typeof fetch;
+      const params = Type.Object({
+        symbol: Type.String(),
+      });
+      const tool: AgentTool<typeof params> = {
+        name: "get_stock_quote",
+        label: "Quote",
+        description: "test",
+        parameters: params,
+        async execute() {
+          throw new Error("should proxy before local execution");
+        },
+      };
+      const controller = createToolInvokeController({
+        role: "writer",
+        getSessionManager: () => currentSessionManager,
+        broadcastState: vi.fn(),
+        getTools: () => [tool],
+        resolveSessionManager: async () => targetSessionManager,
+      });
+
+      await expect(
+        controller.handleToolInvoke("get_stock_quote", { symbol: "AAPL" }, "target-session"),
+      ).resolves.toEqual(proxiedResult);
+      expect(fetchMock).toHaveBeenCalledWith(
+        new URL("http://127.0.0.1:25432/api/local-coordinator/tool-invoke"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "x-opencandle-coordinator-secret": "secret",
+          }),
+          body: JSON.stringify({
+            sessionId: "target-session",
+            toolName: "get_stock_quote",
+            args: { symbol: "AAPL" },
+          }),
+        }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it("routes request-scoped tool invocations to the requested session", async () => {
     const sentMessages: unknown[] = [];
