@@ -25,6 +25,7 @@ import {
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
+import { createLocalSessionCoordinator } from "./local-session-coordinator.js";
 import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
 import { createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest } from "./private-api-access.js";
@@ -93,6 +94,7 @@ const runtime = await createAgentSessionRuntime(
 let session = runtime.session;
 const heartbeat = setInterval(() => refreshWriterLock(activeWriterLockScope), 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
+const localSessionCoordinator = createLocalSessionCoordinator();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 quotePoller = createBackgroundQuotePoller({
   getClientCount: () => wsHub.getClientCount(),
@@ -204,6 +206,7 @@ const httpRequestHandler = createHttpRequestHandler({
   modelSetupController,
   sessionActionsController,
   quoteSnapshotStore,
+  localSessionCoordinator,
 });
 
 const server = createServer((req, res) => {

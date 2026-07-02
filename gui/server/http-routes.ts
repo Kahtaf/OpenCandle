@@ -8,6 +8,10 @@ import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
+import type {
+  LocalSessionCoordinator,
+  SessionActionEnvelope,
+} from "./local-session-coordinator.js";
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
@@ -43,6 +47,7 @@ interface GuiHttpRouteOptions {
   modelSetupController: ModelSetupController;
   sessionActionsController: SessionActionsController;
   quoteSnapshotStore: QuoteSnapshotStore;
+  localSessionCoordinator?: LocalSessionCoordinator;
 }
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
@@ -251,7 +256,8 @@ async function handleSseChatRun(
   }
 
   const currentSessionManager = options.getSessionManager();
-  const requestedSessionId = String(asRecord(body).sessionId ?? "").trim();
+  const bodyRecord = asRecord(body);
+  const requestedSessionId = String(bodyRecord.sessionId ?? "").trim();
   const runSessionManager = targetSessionManager ?? currentSessionManager;
   const sessionId = runSessionManager.getSessionId();
   if (!targetSessionManager) {
@@ -269,6 +275,62 @@ async function handleSseChatRun(
     return;
   }
 
+  if (options.localSessionCoordinator) {
+    const action = buildChatRunActionEnvelope(bodyRecord, sessionId);
+    const result = await options.localSessionCoordinator.runSessionAction(action, async () => {
+      await streamAcceptedSseChatRun({
+        res,
+        options,
+        activeRunSessionIds,
+        targetSessionManager,
+        currentSessionManager,
+        runSessionManager,
+        sessionId,
+        prompt,
+      });
+      return { streamed: true };
+    });
+    if (!result.ok) {
+      writeJson(res, { error: result.message, code: result.code }, 409);
+      return;
+    }
+    if (result.duplicate && !res.headersSent) {
+      writeJson(res, { ok: true, duplicate: true });
+    }
+    return;
+  }
+
+  await streamAcceptedSseChatRun({
+    res,
+    options,
+    activeRunSessionIds,
+    targetSessionManager,
+    currentSessionManager,
+    runSessionManager,
+    sessionId,
+    prompt,
+  });
+}
+
+async function streamAcceptedSseChatRun({
+  res,
+  options,
+  activeRunSessionIds,
+  targetSessionManager,
+  currentSessionManager,
+  runSessionManager,
+  sessionId,
+  prompt,
+}: {
+  res: ServerResponse;
+  options: GuiHttpRouteOptions;
+  activeRunSessionIds: Set<string>;
+  targetSessionManager?: SessionManager;
+  currentSessionManager: SessionManager;
+  runSessionManager: SessionManager;
+  sessionId: string;
+  prompt: string;
+}): Promise<void> {
   if (activeRunSessionIds.has(sessionId)) {
     writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
     return;
@@ -460,6 +522,20 @@ export function sessionIdFromRoute(pathname: string, action: "bootstrap" | "runs
   } catch {
     return "";
   }
+}
+
+export function buildChatRunActionEnvelope(
+  body: Record<string, unknown>,
+  sessionId: string,
+): SessionActionEnvelope {
+  const actionId = String(body.actionId ?? "").trim() || `legacy-chat-${Date.now()}`;
+  return {
+    sessionId,
+    actionId,
+    actionType: "chat.prompt",
+    payload: { prompt: String(body.prompt ?? "") },
+    source: "browser",
+  };
 }
 
 async function handleTrustedGuiMutation(

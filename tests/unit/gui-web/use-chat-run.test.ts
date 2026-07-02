@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChatRunRequestBody,
+  createSessionActionId,
   chatRunEndpoint,
   isSessionChangedChatRunError,
 } from "../../../gui/web/src/hooks/useChatRun.jsx";
@@ -18,16 +19,31 @@ describe("chat run request helpers", () => {
   });
 
   it("includes the expected session id when provided", () => {
-    expect(buildChatRunRequestBody("hello", "session-1")).toEqual({
+    expect(buildChatRunRequestBody("hello", "session-1", "action-1")).toEqual({
       prompt: "hello",
       sessionId: "session-1",
+      actionId: "action-1",
     });
   });
 
   it("omits the session id when the caller has none", () => {
-    expect(buildChatRunRequestBody("hello")).toEqual({ prompt: "hello" });
-    expect(buildChatRunRequestBody("hello", "")).toEqual({ prompt: "hello" });
-    expect(buildChatRunRequestBody("hello", "   ")).toEqual({ prompt: "hello" });
+    expect(buildChatRunRequestBody("hello", "", "action-1")).toEqual({
+      prompt: "hello",
+      actionId: "action-1",
+    });
+    expect(buildChatRunRequestBody("hello", "   ", "action-1")).toEqual({
+      prompt: "hello",
+      actionId: "action-1",
+    });
+  });
+
+  it("mints distinct action ids for deliberate run submissions", () => {
+    const first = createSessionActionId("chat");
+    const second = createSessionActionId("chat");
+
+    expect(first).toMatch(/^chat-/);
+    expect(second).toMatch(/^chat-/);
+    expect(second).not.toBe(first);
   });
 
   it("recognizes the session-changed conflict response", () => {

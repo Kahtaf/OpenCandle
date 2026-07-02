@@ -17,9 +17,16 @@ export function chatRunEndpoint(sessionId) {
     : "/api/chat/run";
 }
 
-export function buildChatRunRequestBody(prompt, sessionId) {
+export function createSessionActionId(prefix = "action") {
+  const random =
+    globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${random}`;
+}
+
+export function buildChatRunRequestBody(prompt, sessionId, actionId) {
   const expectedSessionId = normalizeSessionId(sessionId);
-  return expectedSessionId ? { prompt, sessionId: expectedSessionId } : { prompt };
+  const body = { prompt, actionId };
+  return expectedSessionId ? { ...body, sessionId: expectedSessionId } : body;
 }
 
 export function isSessionChangedChatRunError(status, errorBody) {
@@ -47,9 +54,10 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       const key = runStateKey(targetSessionId);
       const currentRunState = runStatesRef.current[key] || "ready";
       if (!trimmed || currentRunState === "connecting" || currentRunState === "streaming") return;
+      const actionId = options.actionId || createSessionActionId("chat");
       setLastRuns((current) => ({
         ...current,
-        [key]: { prompt: trimmed, sessionId: targetSessionId },
+        [key]: { prompt: trimmed, sessionId: targetSessionId, actionId },
       }));
       setRunStateFor(key, "connecting");
       setToast("");
@@ -61,7 +69,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         const response = await fetch(chatRunEndpoint(targetSessionId), {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildChatRunRequestBody(trimmed, targetSessionId)),
+          body: JSON.stringify(buildChatRunRequestBody(trimmed, targetSessionId, actionId)),
           signal: abort.signal,
         });
         if (!response.ok) {
@@ -114,7 +122,12 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
   const retryRun = useCallback(
     (sessionId = activeSessionId) => {
       const lastRun = lastRuns[runStateKey(sessionId)];
-      if (lastRun) void startChatRun(lastRun.prompt, { sessionId: lastRun.sessionId });
+      if (lastRun) {
+        void startChatRun(lastRun.prompt, {
+          sessionId: lastRun.sessionId,
+          actionId: lastRun.actionId,
+        });
+      }
     },
     [activeSessionId, lastRuns, startChatRun],
   );

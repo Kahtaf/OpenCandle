@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import {
+  buildChatRunActionEnvelope,
   buildSessionBootstrapPayload,
   resolveSessionManagerById,
   sessionIdFromRoute,
@@ -161,6 +162,37 @@ describe("session-addressed GUI bootstrap", () => {
     expect(sessionIdFromRoute("/api/sessions/session%20id/bootstrap", "bootstrap")).toBe(
       "session id",
     );
+  });
+
+  it("builds a session-scoped chat action envelope from chat run requests", () => {
+    expect(
+      buildChatRunActionEnvelope(
+        {
+          prompt: "Tell me about AAPL",
+          actionId: "action-1",
+          sessionId: "session-from-body",
+        },
+        "session-from-route",
+      ),
+    ).toEqual({
+      sessionId: "session-from-route",
+      actionId: "action-1",
+      actionType: "chat.prompt",
+      payload: { prompt: "Tell me about AAPL" },
+      source: "browser",
+    });
+  });
+
+  it("mints a legacy chat action id when older clients do not send one", () => {
+    const action = buildChatRunActionEnvelope({ prompt: "hello" }, "session-1");
+
+    expect(action).toMatchObject({
+      sessionId: "session-1",
+      actionType: "chat.prompt",
+      payload: { prompt: "hello" },
+      source: "browser",
+    });
+    expect(action.actionId).toMatch(/^legacy-chat-/);
   });
 });
 
