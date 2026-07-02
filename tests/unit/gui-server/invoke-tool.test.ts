@@ -265,10 +265,20 @@ describe("invokeToolFromUi", () => {
       };
       const fetchMock = vi.fn(
         async () =>
-          new Response(JSON.stringify({ result: proxiedResult }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
+          new Response(
+            JSON.stringify({
+              result: {
+                toolCallId: proxiedResult.toolCallId,
+                content: proxiedResult.result.content,
+                details: proxiedResult.result.details,
+                isError: proxiedResult.isError,
+              },
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
       );
       globalThis.fetch = fetchMock as typeof fetch;
       const params = Type.Object({

@@ -262,17 +262,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       );
       const message = asRecord(ack);
       if (message.ok) {
-        const result = asRecord(message.result);
-        writeJson(res, {
-          result: {
-            toolCallId: result.toolCallId,
-            result: {
-              content: result.content,
-              details: result.details,
-            },
-            isError: Boolean(result.isError),
-          },
-        });
+        writeJson(res, { result: asRecord(message.result) });
       } else {
         writeJson(
           res,

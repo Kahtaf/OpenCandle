@@ -227,11 +227,19 @@ async function proxyToolInvokeToCoordinator(
   } catch {
     return null;
   }
-  const body = (await response.json()) as { error?: string; result?: InvokeToolResult };
-  if (!response.ok || !body.result) {
-    throw new Error(body.error || "OpenCandle is reconnecting to this session.");
+  const body = asRecord(await response.json());
+  const ackResult = asRecord(body.result);
+  if (!response.ok || !ackResult.toolCallId) {
+    throw new Error(String(body.error ?? "OpenCandle is reconnecting to this session."));
   }
-  return body.result;
+  return {
+    toolCallId: String(ackResult.toolCallId),
+    result: {
+      content: Array.isArray(ackResult.content) ? ackResult.content : [],
+      details: ackResult.details,
+    },
+    isError: Boolean(ackResult.isError),
+  };
 }
 
 function sameSessionStorage(current: SessionManager, target: SessionManager): boolean {
