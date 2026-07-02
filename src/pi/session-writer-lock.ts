@@ -46,7 +46,6 @@ export interface SessionLockScopeSource {
 const DEFAULT_STALE_GRACE_MS = 15_000;
 const WRITER_LOCK_PROTOCOL_VERSION = 1;
 const PROCESS_STARTED_AT = new Date(Date.now() - process.uptime() * 1000).toISOString();
-const PENDING_SESSION_ACTION_TTL_MS = 2 * 60 * 1000;
 
 export async function acquireWriterLock(
   scopePath: string,
@@ -274,13 +273,11 @@ function parseAcceptedActionStore(parsed: {
 
 function parsePendingActionRecords(value: unknown): PendingActionRecord[] {
   if (!Array.isArray(value)) return [];
-  const now = Date.now();
   return value
     .map((entry): PendingActionRecord | null => {
       if (!entry || typeof entry !== "object") return null;
       const record = entry as { id?: unknown; pendingAtMs?: unknown };
       if (typeof record.id !== "string" || typeof record.pendingAtMs !== "number") return null;
-      if (now - record.pendingAtMs > PENDING_SESSION_ACTION_TTL_MS) return null;
       return { id: record.id, pendingAtMs: record.pendingAtMs };
     })
     .filter((record): record is PendingActionRecord => record !== null);

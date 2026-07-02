@@ -12,8 +12,6 @@ interface PendingActionRecord {
   pendingAtMs: number;
 }
 
-const pendingSessionActionTtlMs = 2 * 60 * 1000;
-
 export function hasAcceptedSessionAction(
   sessionManager: SessionLockScopeSource,
   actionId: string,
@@ -121,14 +119,12 @@ function writeAcceptedActionStore(storePath: string, store: AcceptedActionStore)
 
 function readPendingActionRecords(value: unknown): PendingActionRecord[] {
   if (!Array.isArray(value)) return [];
-  const now = Date.now();
   return value
     .map((entry): PendingActionRecord | null => {
       if (typeof entry === "string") return null;
       if (!entry || typeof entry !== "object") return null;
       const record = entry as { id?: unknown; pendingAtMs?: unknown };
       if (typeof record.id !== "string" || typeof record.pendingAtMs !== "number") return null;
-      if (now - record.pendingAtMs > pendingSessionActionTtlMs) return null;
       return { id: record.id, pendingAtMs: record.pendingAtMs };
     })
     .filter((entry): entry is PendingActionRecord => entry !== null);
