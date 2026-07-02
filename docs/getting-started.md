@@ -73,7 +73,7 @@ From an installed package:
 opencandle gui
 ```
 
-Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions through a writer/follower lock so only one process mutates a session at a time.
+Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions with the terminal UI. OpenCandle coordinates local browser and terminal surfaces automatically so actions stay attached to the active session.
 
 Good first GUI flow:
 
@@ -83,7 +83,7 @@ Good first GUI flow:
 4. Inspect the tool card or drawer to see what data was used.
 5. Open the provider tab if the answer says a data source is missing.
 
-See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and writer/follower behavior.
+See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and local session coordination.
 
 ## Configure Providers
 

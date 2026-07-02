@@ -73,7 +73,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
 | `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
-| The GUI is open but not updating | Use the terminal session that owns the writer lock, or restart the GUI and reopen `http://127.0.0.1:14567`. |
+| The GUI is open but not updating | Wait for any active run to settle, refresh the browser, or restart the GUI and reopen `http://127.0.0.1:14567`. |
 
 ## Native Dependency Troubleshooting
 
