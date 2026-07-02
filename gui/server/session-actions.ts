@@ -219,6 +219,7 @@ export function createSessionActionsController({
     if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret || lock.pid === process.pid) {
       return false;
     }
+    if (lock.processKind === "tui") return false;
     const endpoint = new URL("/api/local-coordinator/ask-user", lock.coordinatorEndpoint);
     let response: Response;
     try {

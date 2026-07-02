@@ -252,6 +252,70 @@ describe("GUI session actions", () => {
     }
   });
 
+  it("does not proxy ask_user answers to TUI-owned sessions", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const targetManager = SessionManager.create(cwd, sessionDir);
+      mkdirSync(sessionDir, { recursive: true });
+      writeFileSync(
+        targetManager.getSessionFile() ?? "",
+        `${JSON.stringify({
+          type: "session",
+          version: 1,
+          id: targetManager.getSessionId(),
+          timestamp: new Date().toISOString(),
+          cwd,
+        })}\n`,
+      );
+      await acquireWriterLock(writerLockScopeForSession(targetManager), "tui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const fetchMock = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      globalThis.fetch = fetchMock as typeof fetch;
+      const controller = createSessionActionsController({
+        role: "follower",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => currentManager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer: vi.fn(), cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await expect(
+        controller.handleAskUserAnswer("ask-1", "Yes", {
+          actionId: "ask-action-1",
+          sessionId: targetManager.getSessionId(),
+          source: "browser",
+        }),
+      ).rejects.toThrow("OpenCandle is reconnecting to this session.");
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it("proxies ask_user answers for non-current sessions from writer windows", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
