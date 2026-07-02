@@ -1,7 +1,7 @@
 # OpenCandle Codebase Audit
 
 **Date:** 2026-03-29
-**Last reviewed:** 2026-05-23
+**Last reviewed:** 2026-07-02
 **Scope:** Repository review of the financial agent implementation, focusing on correctness, code quality, architecture, UX, and improvement opportunities.
 
 This is an internal audit snapshot, not the public product reference. Statuses below have been updated where the current code clearly contradicts the original March 2026 finding; use the public docs for current command, provider, and tool coverage.
@@ -547,3 +547,19 @@ OpenCandle is a strong prototype, but not yet a trustworthy financial agent. The
 - Multi-analyst orchestration is still prompt sequencing, not isolated workers
 - Browser singleton concurrency risk still present
 - Config access inconsistency (some tools bypass `getConfig()`)
+
+## Status Update (2026-07-02)
+
+The 2026-04-06 open-items list above is retained as a snapshot; most of it has since been resolved:
+
+- Backtest drawdown — fixed: `src/tools/technical/backtest.ts` tracks mark-to-market equity for drawdown.
+- News sentiment and Fear & Greed naming — fixed (the audit body above already marks them FIXED; the tool is labeled as the Crypto Fear & Greed Index from alternative.me).
+- VWAP — output is now labeled "VWAP (cumulative)", so it is no longer misnamed, but it remains a cumulative-window calculation rather than session-anchored VWAP.
+- Portfolio/watchlist/predictions — migrated to the SQLite state layer (`src/tools/portfolio/tracker.ts` uses `initDefaultDatabase`); no hidden JSON files remain.
+- Multi-analyst orchestration — runs on the runtime-v2 `WorkflowRunner` via `buildComprehensiveAnalysisDefinition` in `src/analysts/orchestrator.ts`.
+- Browser singleton — obsolete: `src/infra/browser.ts` no longer exists (Camoufox was removed in v0.7.0; Twitter/Reddit sentiment use external CLIs).
+- Config access — the tools cited in the original finding now go through `getConfig()`.
+
+**Still open:**
+- DCF fallback net-debt formula (`totalLiabilities - totalAssets` in `src/tools/fundamentals/dcf.ts`) is still not the standard total-debt-minus-cash definition.
+- VWAP is cumulative rather than session-anchored (labeled correctly, semantics unchanged).

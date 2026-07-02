@@ -1,5 +1,7 @@
 # OpenCandle Agent Improvement Prompt Suite
 
+> **Historical record (2026-05).** The operative benchmarking process is now `docs/internal/competitive-benchmarking.md`, which requires naturally worded retail-investor prompts and a 0-10 judge rubric; running this suite's fixed prompts verbatim would violate those rules. This file is kept because `docs/internal/competitive-benchmark-history.md` references its prompt IDs.
+
 This is the first checkpoint artifact for improving OpenCandle as a financial agent. It turns realistic user prompts into repeatable eval cases for the existing product eval and competitive benchmark loops.
 
 The goal is not to make OpenCandle win every comparison. The goal is to learn when a finance-native agent with tools, routing, workflows, and trace evidence gives a more useful answer than a generic no-tool agent, and when generic Claude, Codex, or Gemini answer more clearly.
