@@ -1,7 +1,7 @@
 import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, normalize, posix, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Badge, Button, Card, Kbd, OpenCandleLogo } from "@opencandle/ui";
+import { Badge, Button, Card, OpenCandleLogo } from "@opencandle/ui";
 import matter from "gray-matter";
 import { toString as mdastToString } from "mdast-util-to-string";
 import React from "react";
@@ -231,10 +231,6 @@ function sharedHeadTags({ title, description, canonicalUrl, image = socialImage,
   );
 }
 
-// Restores the persisted sidebar-collapsed state before first paint so a
-// collapsed sidebar does not flash open on navigation.
-const sidebarStateScript = `try{if(localStorage.getItem("opencandle-docs-sidebar-collapsed")==="1")document.documentElement.dataset.sidebarCollapsed="true"}catch(e){}`;
-
 function HtmlDocument({
   title,
   description,
@@ -253,10 +249,6 @@ function HtmlDocument({
         <meta name="description" content={description} />
         <meta name="author" content="Kahtaf" />
         <title>{title}</title>
-        <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: Static first-paint state restore generated at build time.
-          dangerouslySetInnerHTML={{ __html: sidebarStateScript }}
-        />
         {sharedHeadTags({ title, description, canonicalUrl, markdownUrl })}
         <link rel="icon" href={`${prefix}assets/logo.svg`} type="image/svg+xml" />
         <link rel="alternate icon" href={`${prefix}favicon.ico`} />
@@ -274,21 +266,37 @@ function HtmlDocument({
   );
 }
 
+// One navigation for the whole site: the same sticky navbar renders on the
+// homepage and every docs page, with the docs tree one hamburger away on
+// mobile. This mirrors the standard docs-site shell (navbar everywhere,
+// sidebar under it on docs pages).
 function SiteHeader({ output = "index.html" }) {
   const prefix = rootPrefix(output);
   return (
     <header className="sticky top-0 z-20 border-border border-b bg-background/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-[1320px] items-center justify-between gap-3 px-4 lg:px-6">
-        <a className="flex items-center gap-2 font-semibold text-sm" href={`${prefix}index.html`}>
+      <div className="mx-auto flex h-14 max-w-[1320px] items-center gap-2 px-4 lg:px-6">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="md:hidden"
+          aria-label="Open navigation"
+          data-drawer-open=""
+        >
+          <MenuIcon />
+        </Button>
+        <a
+          className="flex items-center gap-2 rounded-md font-semibold text-sm tracking-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          href={`${prefix}index.html`}
+        >
           <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-5 w-5" />
           <span>OpenCandle</span>
         </a>
-        <nav className="flex items-center gap-1 text-sm" aria-label="Primary navigation">
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <a href={`${prefix}index.html`}>Home</a>
-          </Button>
+        <nav className="ml-auto flex items-center gap-1 text-sm" aria-label="Primary navigation">
           <Button asChild variant="ghost" size="sm">
             <a href={`${prefix}docs/index.html`}>Docs</a>
+          </Button>
+          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+            <a href={`${prefix}docs/comparisons.html`}>Compare</a>
           </Button>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
@@ -299,6 +307,37 @@ function SiteHeader({ output = "index.html" }) {
         </nav>
       </div>
     </header>
+  );
+}
+
+function SiteFooter({ output = "index.html" }) {
+  const prefix = rootPrefix(output);
+  return (
+    <footer className="border-border border-t">
+      <div className="mx-auto flex max-w-[1320px] flex-col gap-3 px-4 py-8 sm:flex-row sm:items-center sm:justify-between lg:px-6">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <OpenCandleLogo src={`${prefix}assets/logo.svg`} className="h-4 w-4" />
+          <span className="font-medium text-foreground">OpenCandle</span>
+          <span>MIT licensed, read-only research software</span>
+        </div>
+        <nav className="flex items-center gap-4 text-sm" aria-label="Footer">
+          {[
+            ["Docs", `${prefix}docs/index.html`],
+            ["GitHub", "https://github.com/Kahtaf/OpenCandle"],
+            ["npm", "https://www.npmjs.com/package/opencandle"],
+            ["Changelog", "https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md"],
+          ].map(([label, href]) => (
+            <a
+              key={label}
+              href={href}
+              className="rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </footer>
   );
 }
 
@@ -329,25 +368,6 @@ function MenuIcon() {
       <line x1="4" x2="20" y1="6" y2="6" />
       <line x1="4" x2="20" y1="12" y2="12" />
       <line x1="4" x2="20" y1="18" y2="18" />
-    </LucideIcon>
-  );
-}
-
-function PanelLeftIcon() {
-  return (
-    <LucideIcon>
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-    </LucideIcon>
-  );
-}
-
-function PanelLeftOpenIcon() {
-  return (
-    <LucideIcon>
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M9 3v18" />
-      <path d="m14 9 3 3-3 3" />
     </LucideIcon>
   );
 }
@@ -405,104 +425,58 @@ function ResourceLinks() {
   );
 }
 
-function SidebarBrand({ prefix, className = "" }) {
+function DocsNav({ activeOutput }) {
   return (
-    <a
-      href={`${prefix}index.html`}
-      className={`flex min-w-0 items-center gap-2 rounded-md px-1 py-1 font-semibold text-foreground text-sm tracking-tight transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${className}`}
+    <nav
+      aria-label="Documentation"
+      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-3 py-4"
     >
-      <OpenCandleLogo src={`${prefix}assets/logo.svg`} />
-      <span className="truncate">OpenCandle</span>
-    </a>
+      <NavGroups activeOutput={activeOutput} />
+      <ResourceLinks />
+    </nav>
   );
 }
 
-function DocsSidebarBody({ page, prefix, showHeader }) {
+// The mobile bottom drawer holds the same docs tree on every page, homepage
+// included, so navigation is one gesture away site-wide.
+function SiteDrawer({ output }) {
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 px-3 py-3">
-      {showHeader ? (
-        <div className="flex items-center gap-2 px-1">
-          <SidebarBrand prefix={prefix} />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="ml-auto"
-            aria-label="Collapse sidebar"
-            data-sidebar-collapse=""
-          >
-            <PanelLeftIcon />
-          </Button>
-        </div>
-      ) : null}
-      <Button asChild variant="bordered" className="w-full justify-center gap-2">
-        <a href={relativeHref("docs/getting-started.html", page.output)}>Install OpenCandle</a>
-      </Button>
-      <nav
-        aria-label="Documentation"
-        className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2"
+    <div data-docs-drawer="" hidden>
+      <div
+        data-drawer-overlay=""
+        className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px]"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site navigation"
+        data-drawer-panel=""
+        className="fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md"
       >
-        <NavGroups activeOutput={page.output} />
-        <ResourceLinks />
-      </nav>
+        <div
+          className="mx-auto mt-3 mb-2 h-1 w-9 shrink-0 rounded-full bg-hard"
+          aria-hidden="true"
+        />
+        <div className="flex min-h-0 flex-1 flex-col">
+          <DocsNav activeOutput={output} />
+        </div>
+      </div>
     </div>
   );
 }
 
 function DocsShell({ page, children }) {
-  const prefix = rootPrefix(page.output);
   return (
     <>
-      <div className="flex min-h-dvh bg-background">
-        <aside
-          id="docs-sidebar"
-          className="sticky top-0 h-dvh w-[260px] shrink-0 overflow-hidden border-border border-r bg-secondary"
-        >
-          <DocsSidebarBody page={page} prefix={prefix} showHeader />
+      <SiteHeader output={page.output} />
+      <div className="mx-auto flex w-full max-w-[1320px]">
+        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-[260px] shrink-0 overflow-hidden border-border border-r bg-secondary md:block">
+          <DocsNav activeOutput={page.output} />
         </aside>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div
-            data-sidebar-restore=""
-            className="h-12 shrink-0 items-center border-border border-b bg-background px-3"
-          >
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Expand sidebar"
-              data-sidebar-expand=""
-            >
-              <PanelLeftOpenIcon />
-            </Button>
-          </div>
-          <header className="flex h-12 shrink-0 items-center gap-2 border-border border-b bg-background px-2 md:hidden">
-            <Button variant="ghost" size="icon-sm" aria-label="Open navigation" data-drawer-open="">
-              <MenuIcon />
-            </Button>
-            <SidebarBrand prefix={prefix} className="px-1.5 hover:bg-secondary" />
-          </header>
-          {children}
-        </div>
+        <div className="flex min-w-0 flex-1 flex-col">{children}</div>
       </div>
-      <div data-docs-drawer="" hidden>
-        <div
-          data-drawer-overlay=""
-          className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px]"
-        />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Documentation navigation"
-          data-drawer-panel=""
-          className="fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md"
-        >
-          <div
-            className="mx-auto mt-3 mb-2 h-1 w-9 shrink-0 rounded-full bg-hard"
-            aria-hidden="true"
-          />
-          <div className="flex min-h-0 flex-1 flex-col">
-            <DocsSidebarBody page={page} prefix={prefix} showHeader={false} />
-          </div>
-        </div>
-      </div>
+      <SiteFooter output={page.output} />
+      <SiteDrawer output={page.output} />
     </>
   );
 }
@@ -588,135 +562,223 @@ function HomePage({ buildDate, version }) {
       }}
     >
       <SiteHeader />
-      <main className="mx-auto max-w-[1320px] px-4 py-6 lg:px-6">
-        <section>
-          <div className="border-border border-b pb-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h1 className="font-semibold text-2xl text-foreground tracking-[-0.01em]">
-                  Market research that shows its evidence
-                </h1>
-                <p className="mt-1 max-w-2xl text-muted-foreground text-sm">
-                  OpenCandle is an open source financial investigator: a local terminal agent and
-                  browser GUI that gathers real market data before the model writes a word.
-                </p>
-              </div>
-              <div className="hidden items-center gap-2 sm:flex">
-                <Badge variant="outline">Local-first</Badge>
-                <Badge variant="outline">
-                  <a href="https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md">
-                    v{version}
-                  </a>
-                </Badge>
-              </div>
-            </div>
+      <main>
+        <section className="mx-auto max-w-[1100px] px-4 pt-14 pb-10 lg:px-6">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">Local-first</Badge>
+            <Badge variant="outline">
+              <a href="https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md">v{version}</a>
+            </Badge>
           </div>
-          <div className="grid gap-4 pt-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="space-y-4">
-              <Card className="p-4">
-                <p className="text-muted-foreground text-xs uppercase">Prompt</p>
-                <p className="mt-2 font-medium text-lg">
-                  Analyze NVDA with filings, options, sentiment, and macro context.
-                </p>
-                <p className="mt-4 text-muted-foreground text-xs uppercase">
-                  What the answer is built from
-                </p>
-                <ul className="mt-2 space-y-1.5 text-sm">
-                  {[
-                    ["Quote and price history", "Yahoo Finance, with source and timestamp"],
-                    ["Latest 10-Q and 8-K filings", "SEC EDGAR"],
-                    ["Option chain with computed Greeks", "Yahoo Finance + local math"],
-                    ["Rates and inflation backdrop", "FRED, series named in the answer"],
-                    ["Reddit and news sentiment", "or a visible note when a source is unavailable"],
-                  ].map(([evidence, source]) => (
-                    <li key={evidence} className="flex flex-wrap gap-x-2">
-                      <span className="font-medium">{evidence}</span>
-                      <span className="text-muted-foreground">— {source}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-3 border-border border-t pt-3 text-muted-foreground text-sm">
-                  The synthesis names its sources, flags stale or missing data, and separates facts
-                  from judgment — so you can check the trail instead of trusting the prose.
-                </p>
-              </Card>
-              <div className="grid gap-3 md:grid-cols-3">
+          <h1 className="mt-4 max-w-[720px] font-semibold text-3xl text-foreground tracking-tight sm:text-4xl">
+            Market research that shows its evidence
+          </h1>
+          <p className="mt-4 max-w-[640px] text-base text-muted-foreground leading-relaxed">
+            Ask a market question and a general chatbot answers from memory. OpenCandle is an open
+            source agent that runs on your machine and pulls live quotes, filings, options, macro
+            series, and sentiment through typed tools before the model writes a word. Every answer
+            names its sources, timestamps, and gaps.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Button asChild variant="brand" rounded="full">
+              <a href="docs/getting-started.html">Install OpenCandle</a>
+            </Button>
+            <Button asChild variant="bordered">
+              <a href="docs/index.html">Read the docs</a>
+            </Button>
+            <code className="rounded-md border border-border bg-secondary px-3 py-2 font-mono text-foreground text-sm">
+              npx opencandle@latest
+            </code>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="Example answer">
+          <Card className="overflow-hidden shadow-subtle-xs">
+            <div className="border-border border-b px-4 py-3 sm:px-5">
+              <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+                Prompt
+              </p>
+              <p className="mt-1 font-medium text-base sm:text-lg">
+                Analyze NVDA with filings, options, sentiment, and macro context.
+              </p>
+            </div>
+            <div className="px-4 py-3 sm:px-5">
+              <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+                What the answer is built from
+              </p>
+              <ul className="mt-1 divide-y divide-border">
                 {[
-                  ["Tool-first", "Calls typed finance tools before model synthesis."],
-                  ["Inspectable", "Keeps provider timestamps, gaps, and evidence visible."],
-                  ["Local", "Runs on your device with local session and portfolio state."],
-                ].map(([title, copy]) => (
-                  <Card key={title} className="p-4">
-                    <h2 className="font-semibold text-base">{title}</h2>
-                    <p className="mt-2 text-muted-foreground text-sm">{copy}</p>
-                  </Card>
+                  ["Quote and price history", "Yahoo Finance · timestamped"],
+                  ["Latest 10-Q and 8-K filings", "SEC EDGAR"],
+                  ["Option chain with computed Greeks", "Yahoo Finance + local math"],
+                  ["Rates and inflation backdrop", "FRED · series named in the answer"],
+                  ["Reddit and news sentiment", "or a visible gap note when unavailable"],
+                ].map(([evidence, source]) => (
+                  <li
+                    key={evidence}
+                    className="flex flex-col gap-x-4 gap-y-0.5 py-2.5 text-sm sm:flex-row sm:items-baseline sm:justify-between"
+                  >
+                    <span className="font-medium">{evidence}</span>
+                    <span className="font-mono text-muted-foreground text-xs">{source}</span>
+                  </li>
                 ))}
-              </div>
-              <Card className="overflow-hidden">
-                <img
-                  src="assets/gui-screenshot.png"
-                  alt="OpenCandle local GUI showing an evidence-backed market research response"
-                  width="1440"
-                  height="1000"
-                  className="block w-full"
-                  fetchPriority="high"
-                />
+              </ul>
+              <p className="border-border border-t pt-3 text-muted-foreground text-sm">
+                The synthesis separates facts from judgment and flags stale or missing data, so you
+                check the trail instead of trusting the prose.
+              </p>
+            </div>
+          </Card>
+        </section>
+
+        <section className="border-border border-y bg-secondary/50">
+          <div className="mx-auto max-w-[1100px] px-4 py-12 lg:px-6">
+            <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
+              Why not just ask a chatbot?
+            </h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Card className="p-5">
+                <h3 className="font-semibold text-base">A general chatbot</h3>
+                <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
+                  <li>Answers market questions from training data that is months old.</li>
+                  <li>May invent, round, or omit prices, ratios, and filing details.</li>
+                  <li>Keeps its sources invisible, so claims cannot be checked.</li>
+                  <li>Sounds equally confident whether the data is current or stale.</li>
+                </ul>
+              </Card>
+              <Card className="p-5">
+                <h3 className="font-semibold text-base">OpenCandle</h3>
+                <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
+                  <li>Calls live finance tools first: quotes, filings, chains, macro series.</li>
+                  <li>Uses provider numbers as fetched, never guessed.</li>
+                  <li>Names providers and timestamps inside the answer.</li>
+                  <li>States gaps and stale data instead of papering over them.</li>
+                </ul>
               </Card>
             </div>
-            <aside className="space-y-3">
-              <Card className="p-4">
-                <h2 className="font-semibold text-base">Start locally</h2>
-                <div className="mt-3 space-y-2 font-mono text-sm">
-                  <div className="rounded-md bg-secondary px-3 py-2">npx opencandle@latest</div>
-                  <div className="rounded-md bg-secondary px-3 py-2">npx opencandle@latest gui</div>
-                </div>
-                <p className="mt-3 text-muted-foreground text-sm">
-                  Bring your own model key — Anthropic, OpenAI, or Google. Quotes, filings, macro,
-                  and crypto data work with no data-provider keys.
+            <p className="mt-4 text-sm">
+              <a
+                className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                href="docs/comparisons.html"
+              >
+                See the full comparison
+              </a>
+            </p>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[1100px] px-4 py-14 lg:px-6">
+          <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
+            A workbench, not a chat window
+          </h2>
+          <p className="mt-2 max-w-[640px] text-muted-foreground text-sm">
+            The local GUI keeps tool calls, watchlists, portfolios, alerts, and reports next to the
+            conversation, backed by the same sessions as the terminal agent.
+          </p>
+          <Card className="mt-5 overflow-hidden">
+            <img
+              src="assets/gui-screenshot.png"
+              alt="OpenCandle local GUI showing an evidence-backed market research response"
+              width="1440"
+              height="1000"
+              className="block w-full"
+              fetchPriority="high"
+            />
+          </Card>
+        </section>
+
+        <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="For builders">
+          <div className="grid items-start gap-8 md:grid-cols-2">
+            <div>
+              <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
+                Built to be extended
+              </h2>
+              <p className="mt-2 text-muted-foreground text-sm leading-relaxed">
+                Every capability is a typed tool with declared parameters, shared caching, and rate
+                limiting. Add your own data source in one file, or ship it as a separate npm package
+                through the stable add-on API, and the agent calls it like any built-in.
+              </p>
+              <ul className="mt-4 space-y-2 text-sm">
+                {[
+                  ["Build a tool", "docs/build-a-tool.html"],
+                  ["System architecture", "docs/system-architecture.html"],
+                  ["Testing and evals", "docs/testing-and-evals.html"],
+                ].map(([label, href]) => (
+                  <li key={label}>
+                    <a
+                      className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
+                      href={href}
+                    >
+                      {label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <pre className="overflow-x-auto rounded-lg border border-border bg-secondary p-4 font-mono text-xs leading-relaxed">
+              <code>{`import { Type } from "@sinclair/typebox";
+
+const params = Type.Object({
+  symbol: Type.String({ description: "Ticker symbol" }),
+});
+
+export const twitterSentimentTool: AgentTool<typeof params> = {
+  name: "get_twitter_sentiment",
+  label: "Twitter Sentiment",
+  parameters: params,
+  async execute(toolCallId, args) {
+    // fetch via provider, return typed evidence
+    return {
+      content: [{ type: "text", text: "Formatted output" }],
+      details: { sentiment: 0.72, volume: 1234 },
+    };
+  },
+};`}</code>
+            </pre>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="Start locally">
+          <Card className="p-5 sm:p-6">
+            <div className="grid items-start gap-6 md:grid-cols-2">
+              <div>
+                <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
+                  Start locally
+                </h2>
+                <p className="mt-2 text-muted-foreground text-sm">
+                  Bring your own model key from Anthropic, OpenAI, or Google. Quotes, filings,
+                  macro, and crypto data work with no data-provider keys.
                 </p>
                 <p className="mt-2 text-muted-foreground text-xs">
                   MIT licensed · Node.js 22+ · macOS, Windows, Linux
                 </p>
-                <div className="mt-4 flex gap-2">
-                  <Button asChild variant="brand" size="sm" rounded="full">
-                    <a href="docs/getting-started.html">Install</a>
-                  </Button>
-                  <Button asChild variant="bordered" size="sm">
-                    <a href="docs/index.html">Docs</a>
-                  </Button>
+              </div>
+              <div className="space-y-2 font-mono text-sm">
+                <div className="rounded-md border border-border bg-secondary px-3 py-2">
+                  npx opencandle@latest
                 </div>
-              </Card>
-              <Card className="p-4">
-                <h2 className="font-semibold text-base">Evidence trail</h2>
-                <ol className="mt-3 space-y-3 text-sm">
-                  {[
-                    "Classify request",
-                    "Call finance providers",
-                    "Normalize evidence",
-                    "Synthesize with caveats",
-                  ].map((item, index) => (
-                    <li key={item} className="flex gap-2">
-                      <Kbd>{index + 1}</Kbd>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ol>
-              </Card>
-              <Card className="p-4">
-                <h2 className="font-semibold text-base">FAQ</h2>
-                <div className="mt-1 divide-y divide-border">
-                  {faqs.map((faq) => (
-                    <details key={faq.question} className="py-3 text-sm">
-                      <summary className="cursor-pointer font-medium">{faq.question}</summary>
-                      <p className="mt-2 text-muted-foreground">{faq.answer}</p>
-                    </details>
-                  ))}
+                <div className="rounded-md border border-border bg-secondary px-3 py-2">
+                  npx opencandle@latest gui
                 </div>
-              </Card>
-            </aside>
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        <section className="mx-auto max-w-[1100px] px-4 pb-16 lg:px-6" aria-label="FAQ">
+          <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">FAQ</h2>
+          <div className="mt-2 max-w-[720px] divide-y divide-border">
+            {faqs.map((faq) => (
+              <details key={faq.question} className="py-3 text-sm">
+                <summary className="cursor-pointer font-medium">{faq.question}</summary>
+                <p className="mt-2 max-w-[640px] text-muted-foreground">{faq.answer}</p>
+              </details>
+            ))}
           </div>
         </section>
       </main>
+      <SiteFooter />
+      <SiteDrawer output="index.html" />
     </HtmlDocument>
   );
 }

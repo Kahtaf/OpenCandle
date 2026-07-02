@@ -79,6 +79,22 @@ sidebar metrics, labels, badges, and drawer behavior. Its findings:
 6. Mobile table clipping with no scroll affordance → **fixed** with a CSS
    scroll shadow on horizontally scrollable tables.
 
+## v2: unified navigation (user direction, 2026-07-02)
+
+After review, the homepage and docs pages read as two sites with different
+navigation. Reworked to the standard docs-site shell (Tailwind/Vite/shadcn
+pattern): one sticky navbar on every page (wordmark, Docs, Compare, GitHub,
+pill Install, hamburger on mobile), docs sidebar under the navbar on desktop,
+the bottom drawer reachable from the navbar hamburger on all pages including
+the homepage, and a shared footer. The desktop collapse feature from v1 was
+removed: it existed to mimic the app shell, and the unified pattern replaces
+it (popular docs sites do not collapse the docs sidebar). The homepage was
+rebuilt as a narrative landing page: claim-first hero, evidence receipt,
+chatbot contrast, GUI tour, builder section with a typed-tool sample, install
+commands, FAQ. Screenshots: `after/home-desktop-full.png`,
+`after/docs-desktop-unified.png`, `after/home-mobile-unified.png`,
+`after/home-mobile-drawer.png`.
+
 ## Explicitly deferred
 
 - Homepage navbar height stays h-14 (marketing scale; the app has no landing

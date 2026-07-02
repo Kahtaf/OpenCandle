@@ -60,29 +60,8 @@
 }
 
 @layer components {
-  /* Docs app-shell state. The sidebar/drawer markup is prerendered; these
-     rules react to the data attributes toggled by entry-client.jsx. */
-  [data-sidebar-restore] {
-    display: none;
-  }
-
-  /* The sidebar's responsive + collapsed display states live here instead of
-     Tailwind utilities so the collapse toggle does not fight the utility
-     layer's specificity. */
-  #docs-sidebar {
-    display: none;
-  }
-
-  @media (min-width: 768px) {
-    html:not([data-sidebar-collapsed="true"]) #docs-sidebar {
-      display: block;
-    }
-
-    html[data-sidebar-collapsed="true"] [data-sidebar-restore] {
-      display: flex;
-    }
-  }
-
+  /* Mobile drawer state. The drawer markup is prerendered; these rules react
+     to the data attributes toggled by entry-client.jsx. */
   html[data-drawer-open="true"] {
     overflow: hidden;
   }

@@ -4,7 +4,7 @@
 
 ### Changed
 
-- The public docs site now uses the GUI's app-shell navigation: a collapsible sidebar on desktop (collapse state persists across pages) and a bottom drawer behind a hamburger header on mobile, replacing the top navbar and the mobile "Docs navigation" dropdown. Docs prose, tables, and lists follow the GUI's typography and table styling, and the homepage drops its nested-card hero in favor of the shared page-header pattern.
+- The public site now shares one navigation shell: the same sticky navbar on the homepage and every docs page, a docs sidebar under it on desktop, and a bottom drawer behind the navbar hamburger on mobile (replacing the old "Docs navigation" dropdown). The homepage was rebuilt to answer why OpenCandle exists: a claim-first hero with install commands, the evidence receipt behind a sample answer, a chatbot comparison, a GUI tour, and a builder section with a typed-tool code sample. Docs prose, tables, and lists follow the GUI's typography and table styling.
 - The public homepage now leads with the product claim and answers pre-install questions directly: a bring-your-own-model note, the evidence breakdown behind a sample answer, a visible MIT/Node/OS requirements line, a current-version badge, and a ChatGPT-differentiation FAQ.
 - Public docs were consolidated: the standalone ChatGPT and spreadsheet comparison pages merged into one Comparisons page, the benchmarking page merged into Testing and Evals, System Architecture links to the data-sources and configuration pages instead of duplicating their tables, and docs navigation now separates user pages from contributor pages.
 
