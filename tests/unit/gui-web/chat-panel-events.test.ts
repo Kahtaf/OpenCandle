@@ -126,12 +126,12 @@ describe("ChatPanel event transcript rendering", () => {
     expect(cardSource).toContain("sessionId: prompt.sessionId");
   });
 
-  it("disables home sends when a non-owner window cannot create a fresh session", () => {
+  it("keeps home sends available for non-owner sessions that can be proxied", () => {
     const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
 
-    expect(source).toContain("const homeNeedsFreshWriterSession");
-    expect(source).toContain('pathname === "/" && hasGuiSessionContent && gui.role !== "writer"');
-    expect(source).toContain("homeNeedsFreshWriterSession ||");
+    expect(source).not.toContain("homeNeedsFreshWriterSession");
+    expect(source).toContain('canStartFreshHomeSession: gui.role === "writer"');
+    expect(source).toContain("Non-owner windows submit to the active session");
   });
 
   it("keeps non-chat actions unavailable for TUI-owned routed sessions", () => {

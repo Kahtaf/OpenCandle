@@ -114,12 +114,9 @@ export function AppShell() {
       );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const guiEventCount = visibleEvents.length;
-  const homeNeedsFreshWriterSession =
-    pathname === "/" && hasGuiSessionContent && gui.role !== "writer";
   const inputDisabled =
     sessionView.pendingSessionSwitch ||
     sessionView.pendingFreshHomeSession ||
-    homeNeedsFreshWriterSession ||
     !gui.supportsSessionActions;
 
   const openDrawer = useCallback(
@@ -235,9 +232,9 @@ export function AppShell() {
     }, 220);
   }, []);
 
-  // Home sends always run in a fresh session so a stale client can never
-  // append to the previous active session; the server rejects mismatches
-  // with a session_changed 409, retried once against another fresh session.
+  // Writer home sends run in a fresh session so a stale client cannot append to
+  // the previous active session. Non-owner windows submit to the active session
+  // and let the server proxy to the current coordinator when one is available.
   const startRoutedChatRun = useCallback(
     async (prompt) => {
       const target = chatRunSessionTarget({
