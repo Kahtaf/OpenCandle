@@ -95,6 +95,28 @@ commands, FAQ. Screenshots: `after/home-desktop-full.png`,
 `after/docs-desktop-unified.png`, `after/home-mobile-unified.png`,
 `after/home-mobile-drawer.png`.
 
+## Fresh-eyes review of v2 (post-unification)
+
+A second no-context reviewer confirmed both goals: "one site — passes" (same
+navbar component, tokens, and footer verified via DOM on both page types;
+same drawer on homepage and docs) and "the why is instant" for both a retail
+ChatGPT user and a developer above the fold. Its findings, all applied:
+
+1. Navbar had no active-section state → Docs/Comparisons now render ink with
+   `aria-current` on their sections.
+2. Navbar "Compare" vs sidebar "Comparisons" label mismatch → navbar renamed
+   to "Comparisons".
+3. Bring-your-own-model requirement was buried at the bottom → one muted line
+   under the hero CTAs ("Bring your own Anthropic, OpenAI, or Google model
+   key · market data needs no keys").
+4. "through typed tools" in the hero was developer jargon → now "through real
+   market data tools"; "typed" lives in the builder section with the code
+   sample.
+5. H1 ambiguity ("market research") judged acceptable — subhead disambiguates
+   in one sentence. Left as is.
+
+Reviewer screenshots: `fresh-eyes-v2/`.
+
 ## Explicitly deferred
 
 - Homepage navbar height stays h-14 (marketing scale; the app has no landing

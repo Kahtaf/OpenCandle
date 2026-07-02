@@ -272,6 +272,9 @@ function HtmlDocument({
 // sidebar under it on docs pages).
 function SiteHeader({ output = "index.html" }) {
   const prefix = rootPrefix(output);
+  const onComparisons = output === "docs/comparisons.html";
+  const onDocs = output.startsWith("docs/") && !onComparisons;
+  const activeClass = "text-foreground";
   return (
     <header className="sticky top-0 z-20 border-border border-b bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1320px] items-center gap-2 px-4 lg:px-6">
@@ -292,11 +295,23 @@ function SiteHeader({ output = "index.html" }) {
           <span>OpenCandle</span>
         </a>
         <nav className="ml-auto flex items-center gap-1 text-sm" aria-label="Primary navigation">
-          <Button asChild variant="ghost" size="sm">
-            <a href={`${prefix}docs/index.html`}>Docs</a>
+          <Button asChild variant="ghost" size="sm" className={onDocs ? activeClass : undefined}>
+            <a href={`${prefix}docs/index.html`} aria-current={onDocs ? "true" : undefined}>
+              Docs
+            </a>
           </Button>
-          <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-            <a href={`${prefix}docs/comparisons.html`}>Compare</a>
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className={`hidden sm:inline-flex ${onComparisons ? activeClass : ""}`}
+          >
+            <a
+              href={`${prefix}docs/comparisons.html`}
+              aria-current={onComparisons ? "true" : undefined}
+            >
+              Comparisons
+            </a>
           </Button>
           <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
             <a href="https://github.com/Kahtaf/OpenCandle">GitHub</a>
@@ -576,8 +591,8 @@ function HomePage({ buildDate, version }) {
           <p className="mt-4 max-w-[640px] text-base text-muted-foreground leading-relaxed">
             Ask a market question and a general chatbot answers from memory. OpenCandle is an open
             source agent that runs on your machine and pulls live quotes, filings, options, macro
-            series, and sentiment through typed tools before the model writes a word. Every answer
-            names its sources, timestamps, and gaps.
+            series, and sentiment through real market data tools before the model writes a word.
+            Every answer names its sources, timestamps, and gaps.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Button asChild variant="brand" rounded="full">
@@ -590,6 +605,9 @@ function HomePage({ buildDate, version }) {
               npx opencandle@latest
             </code>
           </div>
+          <p className="mt-3 text-muted-foreground text-xs">
+            Bring your own Anthropic, OpenAI, or Google model key · market data needs no keys
+          </p>
         </section>
 
         <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="Example answer">
