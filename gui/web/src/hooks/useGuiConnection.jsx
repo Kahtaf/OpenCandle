@@ -85,8 +85,25 @@ export function buildToolInvokeSocketMessage(payload, currentSessionId = "", tar
   const sessionId = targetSessionId || currentSessionId;
   return {
     type: "tool.invoke",
+    actionId: payload.actionId || createSessionActionId("tool"),
     ...payload,
     ...(sessionId ? { sessionId } : {}),
+  };
+}
+
+export function createSessionActionId(prefix = "action") {
+  const random =
+    globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${random}`;
+}
+
+export function buildSessionActionSocketMessage(type, payload = {}, currentSessionId = "") {
+  const actionPrefix = type.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "action";
+  return {
+    type,
+    ...payload,
+    actionId: payload.actionId || createSessionActionId(actionPrefix),
+    ...(currentSessionId ? { sessionId: currentSessionId } : {}),
   };
 }
 
@@ -358,7 +375,7 @@ export function useGuiConnection() {
         JSON.stringify(
           type === "tool.invoke"
             ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
-            : { type, ...payload },
+            : buildSessionActionSocketMessage(type, payload, currentSessionId),
         ),
       );
       return true;
@@ -376,6 +393,7 @@ export function useGuiConnection() {
       }
 
       const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
+      const actionId = createSessionActionId("tool");
       const timeout = window.setTimeout(() => {
         rejectTimedOutToolInvoke(pendingToolInvokesRef.current, requestId);
       }, 30_000);
@@ -387,7 +405,7 @@ export function useGuiConnection() {
       socket.send(
         JSON.stringify(
           buildToolInvokeSocketMessage(
-            { requestId, toolName, args },
+            { requestId, actionId, toolName, args },
             currentSessionId,
             targetSessionId,
           ),

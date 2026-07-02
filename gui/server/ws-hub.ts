@@ -111,10 +111,18 @@ export function createWsHub({
           await sessionActionsController.handlePrompt(String(data.prompt ?? ""));
           break;
         case "ask_user.answer":
-          await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer);
+          await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer, {
+            actionId: String(data.actionId ?? ""),
+            sessionId: String(data.sessionId ?? ""),
+            source: "browser",
+          });
           break;
         case "ask_user.cancel":
-          await sessionActionsController.handleAskUserCancel(String(data.id ?? ""));
+          await sessionActionsController.handleAskUserCancel(String(data.id ?? ""), {
+            actionId: String(data.actionId ?? ""),
+            sessionId: String(data.sessionId ?? ""),
+            source: "browser",
+          });
           break;
         case "tool.invoke":
           await toolInvokeController.handleToolInvokeMessage(client, data);

@@ -1,5 +1,10 @@
 import { unlink } from "node:fs/promises";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import type {
+  LocalSessionCoordinator,
+  SessionActionEnvelope,
+  SessionActionSource,
+} from "./local-session-coordinator.js";
 import type { ModelSetupState } from "./model-setup.js";
 import { type PromptObservation, selectReplayPrompt } from "./prompt-observation.js";
 import {
@@ -24,8 +29,8 @@ interface SessionActionClient {
 
 export interface SessionActionsController {
   handlePrompt(prompt: string): Promise<void>;
-  handleAskUserAnswer(id: string, value: unknown): Promise<void>;
-  handleAskUserCancel(id: string): Promise<void>;
+  handleAskUserAnswer(id: string, value: unknown, action?: SessionActionMeta): Promise<void>;
+  handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void>;
   handleNewSession(): Promise<void>;
   handleOpenSession(path: string): Promise<void>;
   handleRenameSession(path: string, name: string): Promise<void>;
@@ -44,7 +49,14 @@ export interface SessionActionsControllerOptions {
   sendBoot: (client: SessionActionClient) => void;
   broadcastState: () => void;
   broadcastSessions: () => void;
+  localSessionCoordinator?: LocalSessionCoordinator;
   now?: () => number;
+}
+
+export interface SessionActionMeta {
+  sessionId?: string;
+  actionId?: string;
+  source?: SessionActionSource;
 }
 
 export function createSessionActionsController({
@@ -59,6 +71,7 @@ export function createSessionActionsController({
   sendBoot,
   broadcastState,
   broadcastSessions,
+  localSessionCoordinator,
   now = Date.now,
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
@@ -91,16 +104,24 @@ export function createSessionActionsController({
     broadcastState();
   }
 
-  async function handleAskUserAnswer(id: string, value: unknown): Promise<void> {
+  async function handleAskUserAnswer(
+    id: string,
+    value: unknown,
+    action?: SessionActionMeta,
+  ): Promise<void> {
     ensureWriter();
     const answer = String(value ?? "").trim();
     if (!answer) throw new Error("Answer cannot be empty");
-    if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
+    await runCoordinatedSessionAction("ask_user.answer", { id, answer }, action, async () => {
+      if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
+    });
   }
 
-  async function handleAskUserCancel(id: string): Promise<void> {
+  async function handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void> {
     ensureWriter();
-    if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
+    await runCoordinatedSessionAction("ask_user.cancel", { id }, action, async () => {
+      if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
+    });
   }
 
   async function handleNewSession(): Promise<void> {
@@ -151,6 +172,33 @@ export function createSessionActionsController({
     handleRenameSession,
     handleDeleteSession,
   };
+
+  async function runCoordinatedSessionAction(
+    actionType: SessionActionEnvelope["actionType"],
+    payload: Record<string, unknown>,
+    action: SessionActionMeta | undefined,
+    handler: () => Promise<void> | void,
+  ): Promise<void> {
+    if (!localSessionCoordinator || !action?.actionId) {
+      await handler();
+      return;
+    }
+    const sessionId = action.sessionId?.trim() || getSessionManager().getSessionId();
+    const result = await localSessionCoordinator.runSessionAction(
+      {
+        sessionId,
+        actionId: action.actionId,
+        actionType,
+        payload,
+        source: action.source ?? "gui",
+      },
+      async () => {
+        await handler();
+        return { accepted: true };
+      },
+    );
+    if (!result.ok) throw new Error(result.message);
+  }
 }
 
 export async function promptAndSettle(

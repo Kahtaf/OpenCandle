@@ -7,6 +7,7 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createToolInvokeController, invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
+import { createLocalSessionCoordinator } from "../../../gui/server/local-session-coordinator.js";
 import { readWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 
 describe("invokeToolFromUi", () => {
@@ -176,6 +177,61 @@ describe("invokeToolFromUi", () => {
       },
     });
   });
+
+  it("dedupes retried tool invocation messages by action id", async () => {
+    const sentMessages: unknown[] = [];
+    const broadcastState = vi.fn();
+    const sessionManager = {
+      getSessionId: () => "session-1",
+      appendMessage: vi.fn(),
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "get_stock_quote",
+      label: "Quote",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "AAPL quote" }],
+          details: { symbol: "AAPL", price: 190 },
+        };
+      },
+    };
+    const invokeTool = vi.fn(invokeToolFromUi);
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => sessionManager,
+      broadcastState,
+      getTools: () => [tool],
+      invokeTool,
+      localSessionCoordinator: createLocalSessionCoordinator(),
+    });
+
+    const message = {
+      requestId: "req-1",
+      actionId: "tool-action-1",
+      sessionId: "session-1",
+      toolName: "get_stock_quote",
+      args: { symbol: "AAPL" },
+    };
+    await controller.handleToolInvokeMessage(
+      { send: (sent: unknown) => sentMessages.push(sent) },
+      message,
+    );
+    await controller.handleToolInvokeMessage(
+      { send: (sent: unknown) => sentMessages.push(sent) },
+      message,
+    );
+
+    expect(invokeTool).toHaveBeenCalledOnce();
+    expect(broadcastState).toHaveBeenCalledOnce();
+    expect(sentMessages).toHaveLength(2);
+    expect(sentMessages[1]).toMatchObject({ ok: true, requestId: "req-1" });
+  });
+
 
   it("routes request-scoped tool invocations to the requested session", async () => {
     const sentMessages: unknown[] = [];

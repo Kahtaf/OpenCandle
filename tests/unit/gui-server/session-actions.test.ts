@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
+import { createLocalSessionCoordinator } from "../../../gui/server/local-session-coordinator.js";
 import {
   createSessionActionsController,
   deleteSessionFile,
@@ -130,6 +131,47 @@ describe("GUI session actions", () => {
     await controller.handleRenameSession("/tmp/current-session.jsonl", " Macro watchlist ");
 
     expect(appendSessionInfo).toHaveBeenCalledWith("Macro watchlist");
+  });
+
+  it("dedupes retried ask_user answers by action id", async () => {
+    const answer = vi.fn(() => true);
+    const sessionManager = {
+      getSessionId: () => "session-1",
+    } as unknown as SessionManager;
+    const controller = createSessionActionsController({
+      role: "writer",
+      cwd: "/tmp",
+      sessionDir: "/tmp/sessions",
+      getSession: () => ({}) as AgentSession,
+      getSessionManager: () => sessionManager,
+      getModelSetupState: () => ({
+        requirement: "ready",
+        providers: [],
+        availableModels: [],
+      }),
+      askUserBridge: { answer, cancel: () => true },
+      runtime: {
+        newSession: async () => ({ cancelled: false }),
+        switchSession: async () => ({ cancelled: false }),
+      },
+      sendBoot: vi.fn(),
+      broadcastState: vi.fn(),
+      broadcastSessions: vi.fn(),
+      localSessionCoordinator: createLocalSessionCoordinator(),
+    });
+
+    await controller.handleAskUserAnswer("ask-1", "Yes", {
+      actionId: "ask-action-1",
+      sessionId: "session-1",
+      source: "browser",
+    });
+    await controller.handleAskUserAnswer("ask-1", "Yes", {
+      actionId: "ask-action-1",
+      sessionId: "session-1",
+      source: "browser",
+    });
+
+    expect(answer).toHaveBeenCalledOnce();
   });
 });
 

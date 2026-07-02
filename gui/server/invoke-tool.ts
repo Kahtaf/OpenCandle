@@ -7,6 +7,7 @@ import { getDefaults } from "../../src/memory/tool-defaults.js";
 import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { AskUserHandler } from "../../src/types/index.js";
+import type { LocalSessionCoordinator } from "./local-session-coordinator.js";
 import { buildToolInvokeAckMessage } from "./tool-invoke-ack.js";
 import {
   acquireWriterLock,
@@ -46,6 +47,7 @@ export interface ToolInvokeControllerOptions {
   resolveSessionManager?: (sessionId: string) => Promise<SessionManager | null>;
   broadcastSessionSnapshot?: (sessionManager: SessionManager) => void;
   broadcastSessions?: () => void;
+  localSessionCoordinator?: LocalSessionCoordinator;
 }
 
 export function createToolInvokeController({
@@ -60,6 +62,7 @@ export function createToolInvokeController({
   resolveSessionManager,
   broadcastSessionSnapshot,
   broadcastSessions,
+  localSessionCoordinator,
 }: ToolInvokeControllerOptions): ToolInvokeController {
   async function handleToolInvoke(
     toolName: string,
@@ -120,10 +123,26 @@ export function createToolInvokeController({
     data: Record<string, unknown>,
   ): Promise<void> {
     const requestId = typeof data.requestId === "string" ? data.requestId : "";
+    const actionId = typeof data.actionId === "string" ? data.actionId : "";
     const toolName = String(data.toolName ?? "");
     const sessionId = typeof data.sessionId === "string" ? data.sessionId : "";
     try {
-      const result = await handleToolInvoke(toolName, requestArgs(data.args), sessionId);
+      const invoke = () => handleToolInvoke(toolName, requestArgs(data.args), sessionId);
+      const actionResult =
+        localSessionCoordinator && actionId
+          ? await localSessionCoordinator.runSessionAction(
+              {
+                sessionId: sessionId || safeSessionId(getSessionManager()),
+                actionId,
+                actionType: "tool.invoke",
+                payload: { toolName, args: requestArgs(data.args) },
+                source: "browser",
+              },
+              invoke,
+            )
+          : await invoke().then((result) => ({ ok: true as const, duplicate: false, result }));
+      if (!actionResult.ok) throw new Error(actionResult.message);
+      const result = actionResult.result;
       if (requestId) {
         client.send(buildToolInvokeAckMessage(requestId, toolName, result));
       }

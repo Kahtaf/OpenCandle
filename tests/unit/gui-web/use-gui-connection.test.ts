@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
+  buildSessionActionSocketMessage,
   buildToolInvokeSocketMessage,
   mergeSessionSnapshotMap,
   rejectTimedOutToolInvoke,
@@ -88,12 +89,18 @@ describe("useGuiConnection helpers", () => {
   it("stamps direct tool invocation socket messages with the visible session id", () => {
     expect(
       buildToolInvokeSocketMessage(
-        { requestId: "req-1", toolName: "get_stock_quote", args: { symbol: "NVDA" } },
+        {
+          requestId: "req-1",
+          actionId: "tool-action-1",
+          toolName: "get_stock_quote",
+          args: { symbol: "NVDA" },
+        },
         "session-visible",
       ),
     ).toEqual({
       type: "tool.invoke",
       requestId: "req-1",
+      actionId: "tool-action-1",
       sessionId: "session-visible",
       toolName: "get_stock_quote",
       args: { symbol: "NVDA" },
@@ -108,6 +115,22 @@ describe("useGuiConnection helpers", () => {
     ).toMatchObject({
       requestId: "req-2",
       sessionId: "session-visible-route",
+    });
+  });
+
+  it("stamps ask_user socket messages with action ids and session ids", () => {
+    expect(
+      buildSessionActionSocketMessage(
+        "ask_user.answer",
+        { id: "ask-1", answer: "Yes", actionId: "ask-action-1" },
+        "session-visible",
+      ),
+    ).toEqual({
+      type: "ask_user.answer",
+      id: "ask-1",
+      answer: "Yes",
+      actionId: "ask-action-1",
+      sessionId: "session-visible",
     });
   });
 
