@@ -369,7 +369,12 @@ async function handleSseChatRun(
   const actionId = String(bodyRecord.actionId ?? "").trim();
   const shouldProxyChatRun = proxyAllowed && canProxyChatRunToCoordinator(runSessionManager);
   if (shouldProxyChatRun) {
-    if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
+    if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) {
+      const useCurrentSession =
+        !targetSessionManager || currentSessionManager.getSessionFile() === runSessionManager.getSessionFile();
+      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      return;
+    }
     if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
       writeJson(res, { ok: true, duplicate: true });
       return;
@@ -569,6 +574,7 @@ async function streamAcceptedSseChatRun({
   const recordAcceptedAction = () => {
     if (actionAccepted) return;
     recordAcceptedSessionAction(runSessionManager, actionId);
+    if (useCurrentSession) options.syncCurrentWriterLockScope?.();
     actionAccepted = true;
   };
   const unsubscribeLive = runSession.subscribe((event) => {

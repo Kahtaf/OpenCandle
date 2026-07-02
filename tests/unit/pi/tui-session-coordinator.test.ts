@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -390,6 +390,15 @@ describe("TUI session coordinator", () => {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });
     }
+  });
+
+  it("syncs the writer lock scope when a forwarded prompt is admitted", () => {
+    const source = readFileSync("src/pi/tui-session-coordinator.ts", "utf8");
+    const acceptedStart = source.indexOf("const recordAcceptedAction = () =>");
+    const acceptedBlock = source.slice(acceptedStart, source.indexOf("};", acceptedStart) + 2);
+
+    expect(acceptedBlock).toContain("recordAcceptedSessionAction(sessionManager, actionId)");
+    expect(acceptedBlock).toContain("options.syncWriterLockScope?.()");
   });
 });
 

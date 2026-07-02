@@ -171,6 +171,24 @@ describe("GUI server route guards", () => {
     expect(source).toContain("return isCoordinatorOwnerAlive(lock.pid)");
   });
 
+  it("broadcasts target session snapshots after proxied chat runs", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const proxyStart = source.indexOf("if (shouldProxyChatRun)");
+    const proxyBlock = source.slice(proxyStart, source.indexOf("if (actionId && hasAcceptedSessionAction", proxyStart));
+
+    expect(proxyBlock).toContain("await proxyChatRunToCoordinator");
+    expect(proxyBlock).toContain("broadcastRunSessionSnapshot(options, runSessionManager");
+  });
+
+  it("syncs the current writer lock scope when a chat action is admitted", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const acceptedStart = source.indexOf("const recordAcceptedAction = () =>");
+    const acceptedBlock = source.slice(acceptedStart, source.indexOf("};", acceptedStart) + 2);
+
+    expect(acceptedBlock).toContain("recordAcceptedSessionAction(runSessionManager, actionId)");
+    expect(acceptedBlock).toContain("options.syncCurrentWriterLockScope?.()");
+  });
+
   it("refreshes GUI heartbeats against the migrated canonical session lock scope", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const syncStart = source.indexOf("function syncCurrentWriterLockScope");

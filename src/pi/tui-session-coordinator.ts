@@ -134,6 +134,7 @@ export async function startTuiSessionCoordinatorServer(
       const recordAcceptedAction = () => {
         if (actionAccepted) return;
         recordAcceptedSessionAction(sessionManager, actionId);
+        options.syncWriterLockScope?.();
         acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
         actionAccepted = true;
       };
