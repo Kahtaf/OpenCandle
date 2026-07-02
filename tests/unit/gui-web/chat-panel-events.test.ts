@@ -140,7 +140,10 @@ describe("ChatPanel event transcript rendering", () => {
       'gui.coordination?.ownerKind === "tui" &&\n    gui.role !== "writer"',
     );
     expect(source).toContain("const visibleAskUserPrompts = nonChatActionsUnavailable");
-    expect(source).toContain('gui.setToast("OpenCandle is reconnecting to this session.");');
+    // The unavailable branch must reject (not return a bare false) so awaiting
+    // consumers treat the blocked invocation as a failure instead of a success.
+    expect(source).toContain("return Promise.reject(new Error(message));");
+    expect(source).not.toContain("return false;\n      }\n      return gui.invokeTool(");
   });
 
   it("renders a loading state instead of home suggestions while switching sessions", () => {

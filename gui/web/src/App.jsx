@@ -361,8 +361,9 @@ export function AppShell() {
   const invokeToolForVisibleSession = useCallback(
     (toolName, args) => {
       if (nonChatActionsUnavailable) {
-        gui.setToast("OpenCandle is reconnecting to this session.");
-        return false;
+        const message = "OpenCandle is reconnecting to this session.";
+        gui.setToast(message);
+        return Promise.reject(new Error(message));
       }
       return gui.invokeTool(toolName, args, sessionView.activeSessionId);
     },
