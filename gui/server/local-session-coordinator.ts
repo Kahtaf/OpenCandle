@@ -45,6 +45,7 @@ export function createLocalSessionCoordinator(
   const now = options.now ?? Date.now;
   const dedupeRetentionMs = options.dedupeRetentionMs ?? DEFAULT_DEDUPE_RETENTION_MS;
   const acceptedActions = new Map<string, AcceptedAction>();
+  const activeActions = new Map<string, Promise<unknown>>();
   const activeRunSessions = new Set<string>();
 
   async function runSessionAction<T>(
@@ -55,20 +56,28 @@ export function createLocalSessionCoordinator(
     const actionKey = `${action.sessionId}:${action.actionId}`;
     const accepted = acceptedActions.get(actionKey);
     if (accepted) return { ok: true, duplicate: true, result: accepted.result as T };
+    const active = activeActions.get(actionKey);
+    if (active) return { ok: true, duplicate: true, result: (await active) as T };
 
     if (isRunAdmissionAction(action) && activeRunSessions.has(action.sessionId)) {
       return { ok: false, code: "session_busy", message: BUSY_MESSAGE };
     }
 
     if (isRunAdmissionAction(action)) activeRunSessions.add(action.sessionId);
-    try {
+    const runAction = (async () => {
       const result = await handler(action);
       acceptedActions.set(actionKey, {
         expiresAt: now() + dedupeRetentionMs,
         result,
       });
+      return result;
+    })();
+    activeActions.set(actionKey, runAction);
+    try {
+      const result = await runAction;
       return { ok: true, duplicate: false, result };
     } finally {
+      activeActions.delete(actionKey);
       if (isRunAdmissionAction(action)) activeRunSessions.delete(action.sessionId);
     }
   }

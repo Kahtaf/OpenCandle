@@ -77,6 +77,33 @@ describe("local session coordinator", () => {
     await expect(firstRun).resolves.toMatchObject({ ok: true, duplicate: false });
   });
 
+  it("dedupes a retry while the same action is still in flight", async () => {
+    const coordinator = createLocalSessionCoordinator();
+    let finishFirst!: () => void;
+    const action = chatAction({ actionId: "action-1" });
+    const firstRun = coordinator.runSessionAction(
+      action,
+      () =>
+        new Promise((resolve) => {
+          finishFirst = () => resolve({ accepted: true });
+        }),
+    );
+    const retryRun = coordinator.runSessionAction(action, async () => ({ accepted: false }));
+
+    finishFirst();
+
+    await expect(firstRun).resolves.toEqual({
+      ok: true,
+      duplicate: false,
+      result: { accepted: true },
+    });
+    await expect(retryRun).resolves.toEqual({
+      ok: true,
+      duplicate: true,
+      result: { accepted: true },
+    });
+  });
+
   it("allows independent sessions to run concurrently", async () => {
     const coordinator = createLocalSessionCoordinator();
     const seen: string[] = [];
