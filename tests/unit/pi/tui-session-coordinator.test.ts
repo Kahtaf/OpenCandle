@@ -191,6 +191,58 @@ describe("TUI session coordinator", () => {
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
+
+  it("does not stay busy when a forwarded prompt arrives before runtime startup", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      let ready = false;
+      const server = await startTuiSessionCoordinatorServer({
+        getSession: () => {
+          if (!ready) throw new Error("OpenCandle is still starting this session.");
+          return fakeSession(manager);
+        },
+        getSessionManager: () => manager,
+        getModelUnavailableMessage: () => "Connect an AI model before chat can run.",
+      });
+      servers.push(server);
+
+      const first = await fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": server.secret,
+        },
+        body: JSON.stringify({
+          prompt: "Too early",
+          sessionId: manager.getSessionId(),
+          actionId: "chat-action-1",
+        }),
+      });
+      expect(first.status).toBe(500);
+
+      ready = true;
+      const second = await fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": server.secret,
+        },
+        body: JSON.stringify({
+          prompt: "After startup",
+          sessionId: manager.getSessionId(),
+          actionId: "chat-action-1",
+        }),
+      });
+
+      expect(second.status).toBe(200);
+      expect(await second.text()).toContain("After startup");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function fakeSession(

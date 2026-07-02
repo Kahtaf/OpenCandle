@@ -114,9 +114,13 @@ export async function startTuiSessionCoordinatorServer(
       return;
     }
 
-    acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
     activeRunSessions.add(sessionId);
-    await streamPromptRun(res, prompt, sessionId);
+    try {
+      await streamPromptRun(res, prompt, sessionId);
+      acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
+    } finally {
+      activeRunSessions.delete(sessionId);
+    }
   }
 
   async function streamPromptRun(res: ServerResponse, prompt: string, sessionId: string) {
@@ -161,7 +165,6 @@ export async function startTuiSessionCoordinatorServer(
       const message = error instanceof Error ? error.message : String(error);
       writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
     } finally {
-      activeRunSessions.delete(sessionId);
       res.end();
     }
   }
