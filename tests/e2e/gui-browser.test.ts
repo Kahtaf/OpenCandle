@@ -22,7 +22,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   });
 
   it("loads the app with session history and financial context", async () => {
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
@@ -30,7 +30,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   });
 
   it("renders a stock quote prompt and updates context", async () => {
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
     await page
       .getByLabel("Message OpenCandle")
       .fill("Get the latest quote for NVDA. Show key fields briefly.");
@@ -44,7 +44,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   }, 60_000);
 
   it("renders options, filings, macro, and news tool cards", async () => {
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
 
     await submitPrompt(page, "Show options chain for AAPL");
     await expectVisible(page.getByText("Options chain").first(), 45_000);
@@ -70,7 +70,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
   it("shows chat history on mobile", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
     await page.getByRole("button", { name: "Open sidebar" }).click();
 
     await expectVisible(page.getByRole("dialog", { name: "Sessions" }));
@@ -79,7 +79,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
   it("captures desktop and mobile screenshots", async () => {
     await page.setViewportSize({ width: 1440, height: 960 });
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
     const desktop = await page.screenshot({ fullPage: true });
     expect(desktop.byteLength).toBeGreaterThan(10_000);
 
