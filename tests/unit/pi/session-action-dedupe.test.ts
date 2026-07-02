@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   hasAcceptedSessionAction,
+  hasPendingSessionAction,
   recordAcceptedSessionAction,
+  recordPendingSessionAction,
 } from "../../../src/pi/session-action-dedupe.js";
 import { acquireWriterLock, migrateWriterLockScope } from "../../../src/pi/session-writer-lock.js";
 
@@ -22,6 +24,7 @@ describe("session action dedupe store", () => {
       recordAcceptedSessionAction(sessionManager, "action-1");
 
       expect(hasAcceptedSessionAction(sessionManager, "action-1")).toBe(true);
+      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(false);
       expect(hasAcceptedSessionAction(sessionManager, "action-2")).toBe(false);
       const storePath = `${sessionFile}.accepted-actions.json`;
       expect(existsSync(storePath)).toBe(true);
@@ -44,11 +47,13 @@ describe("session action dedupe store", () => {
         getSessionDir: () => dir,
       };
       await acquireWriterLock(dir, "gui");
+      recordPendingSessionAction(fallbackManager, "pending-action");
       recordAcceptedSessionAction(fallbackManager, "action-1");
 
       expect(migrateWriterLockScope(dir, sessionFile)).toBe(true);
 
       expect(hasAcceptedSessionAction(fileManager, "action-1")).toBe(true);
+      expect(hasPendingSessionAction(fileManager, "pending-action")).toBe(true);
       expect(hasAcceptedSessionAction(fallbackManager, "action-1")).toBe(false);
     } finally {
       await rm(dir, { recursive: true, force: true });

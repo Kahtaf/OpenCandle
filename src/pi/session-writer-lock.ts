@@ -182,32 +182,57 @@ export function migrateWriterLockScope(
 function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string): void {
   const fromPath = acceptedActionStorePath(fromScopePath);
   const toPath = acceptedActionStorePath(toScopePath);
-  let fromActions: string[];
+  let fromActions: { acceptedActionIds: string[]; pendingActionIds: string[] };
   try {
     const parsed = JSON.parse(readFileSync(fromPath, "utf8")) as { acceptedActionIds?: unknown };
-    fromActions = Array.isArray(parsed.acceptedActionIds)
-      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
-      : [];
+    fromActions = parseAcceptedActionStore(parsed);
   } catch {
     return;
   }
-  let toActions: string[] = [];
+  let toActions: { acceptedActionIds: string[]; pendingActionIds: string[] } = {
+    acceptedActionIds: [],
+    pendingActionIds: [],
+  };
   try {
     const parsed = JSON.parse(readFileSync(toPath, "utf8")) as { acceptedActionIds?: unknown };
-    toActions = Array.isArray(parsed.acceptedActionIds)
-      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
-      : [];
+    toActions = parseAcceptedActionStore(parsed);
   } catch {
     // Destination store does not exist yet.
   }
-  const acceptedActionIds = [...new Set([...toActions, ...fromActions])].slice(-500);
+  const acceptedActionIds = [
+    ...new Set([...toActions.acceptedActionIds, ...fromActions.acceptedActionIds]),
+  ].slice(-500);
+  const pendingActionIds = [
+    ...new Set([...toActions.pendingActionIds, ...fromActions.pendingActionIds]),
+  ]
+    .filter((id) => !acceptedActionIds.includes(id))
+    .slice(-500);
   mkdirSync(dirname(toPath), { recursive: true });
-  writeFileSync(toPath, JSON.stringify({ acceptedActionIds }, null, 2), { mode: 0o600 });
+  writeFileSync(toPath, JSON.stringify({ acceptedActionIds, pendingActionIds }, null, 2), {
+    mode: 0o600,
+  });
   try {
     unlinkSync(fromPath);
   } catch {
     // Best effort; destination store now contains the merged accepted action ids.
   }
+}
+
+function parseAcceptedActionStore(parsed: {
+  acceptedActionIds?: unknown;
+  pendingActionIds?: unknown;
+}): {
+  acceptedActionIds: string[];
+  pendingActionIds: string[];
+} {
+  return {
+    acceptedActionIds: Array.isArray(parsed.acceptedActionIds)
+      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
+      : [],
+    pendingActionIds: Array.isArray(parsed.pendingActionIds)
+      ? parsed.pendingActionIds.filter((id): id is string => typeof id === "string")
+      : [],
+  };
 }
 
 function tryCreate(

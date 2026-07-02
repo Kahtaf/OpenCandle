@@ -2,7 +2,12 @@ import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
-import { hasAcceptedSessionAction, recordAcceptedSessionAction } from "./session-action-dedupe.js";
+import {
+  hasAcceptedSessionAction,
+  hasPendingSessionAction,
+  recordAcceptedSessionAction,
+  recordPendingSessionAction,
+} from "./session-action-dedupe.js";
 
 interface TuiSessionCoordinatorOptions {
   getSession: () => AgentSession;
@@ -100,6 +105,10 @@ export async function startTuiSessionCoordinatorServer(
       writeJson(res, { ok: true, duplicate: true });
       return;
     }
+    if (hasPendingSessionAction(sessionManager, actionId)) {
+      writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+      return;
+    }
     const session = options.getSession();
     if (
       activeRunSessions.has(sessionId) ||
@@ -119,8 +128,9 @@ export async function startTuiSessionCoordinatorServer(
 
     activeRunSessions.add(sessionId);
     try {
-      recordAcceptedSessionAction(sessionManager, actionId);
+      recordPendingSessionAction(sessionManager, actionId);
       await streamPromptRun(res, prompt, sessionId);
+      recordAcceptedSessionAction(sessionManager, actionId);
       acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
     } finally {
       activeRunSessions.delete(sessionId);

@@ -6,7 +6,9 @@ import { buildDoctorReport } from "../../src/doctor/report.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import {
   hasAcceptedSessionAction,
+  hasPendingSessionAction,
   recordAcceptedSessionAction,
+  recordPendingSessionAction,
 } from "../../src/pi/session-action-dedupe.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
@@ -371,6 +373,10 @@ async function handleSseChatRun(
       writeJson(res, { ok: true, duplicate: true });
       return;
     }
+    if (actionId && hasPendingSessionAction(runSessionManager, actionId)) {
+      writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+      return;
+    }
     if (shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)) {
       writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
       return;
@@ -378,6 +384,10 @@ async function handleSseChatRun(
   }
   if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
     writeJson(res, { ok: true, duplicate: true });
+    return;
+  }
+  if (actionId && hasPendingSessionAction(runSessionManager, actionId)) {
+    writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
     return;
   }
 
@@ -560,6 +570,7 @@ async function streamAcceptedSseChatRun({
   });
 
   try {
+    recordPendingSessionAction(runSessionManager, actionId);
     const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
     if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
       runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
