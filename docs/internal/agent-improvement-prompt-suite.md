@@ -6,9 +6,9 @@ This is the first checkpoint artifact for improving OpenCandle as a financial ag
 
 The goal is not to make OpenCandle win every comparison. The goal is to learn when a finance-native agent with tools, routing, workflows, and trace evidence gives a more useful answer than a generic no-tool agent, and when generic Claude, Codex, or Gemini answer more clearly.
 
-## Current Harness Surface
+## Harness Surface (as of 2026-05)
 
-Use these existing paths as the authoritative harness surface:
+These were the authoritative harness paths when this suite was written:
 
 - `npm run test:evals:product` runs curated OpenCandle-only product evals from `tests/evals/product/cases.ts`.
 - `npm run test:evals:competitive` runs `tests/scripts/run-competitive-finance-eval.ts`, which compares OpenCandle to Claude, Codex, and Gemini through `acpx`.

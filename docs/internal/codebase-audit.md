@@ -36,7 +36,7 @@ The highest-priority fixes are the options Greeks time handling, DCF net debt lo
 | P1 | SEC filing "direct links" are not direct links | **FIXED** | New `src/tools/fundamentals/sec-filings.ts` added with accession-specific URLs. | Users are told they are getting filing links, but they are not taken to the actual filing document. |
 | P1 | Prediction scoring ignores time horizon and target price | **FIXED** | `src/tools/portfolio/predictions.ts` now implemented with time-aware scoring. | Accuracy metrics are misleading because they do not answer whether the prediction succeeded within its intended window. |
 | P1 | Correlation is calculated by index, not by date | **FIXED** | `src/tools/portfolio/correlation.ts` now includes `alignReturnsByDate()` that joins histories on common dates before computing returns. | Assets with different calendars, missing sessions, or sparse history will produce incorrect correlation numbers. |
-| P1 | Backtest max drawdown is understated | **OPEN** | `src/tools/technical/backtest.ts` — needs review to confirm mark-to-market equity tracking was added. | The reported risk profile can look much safer than the actual path of the strategy. |
+| P1 | Backtest max drawdown is understated | **FIXED** | `src/tools/technical/backtest.ts` now tracks mark-to-market equity for drawdown (verified 2026-07-02). | The reported risk profile can look much safer than the actual path of the strategy. |
 
 ### Detailed Bug Notes
 
@@ -553,7 +553,7 @@ OpenCandle is a strong prototype, but not yet a trustworthy financial agent. The
 The 2026-04-06 open-items list above is retained as a snapshot; most of it has since been resolved:
 
 - Backtest drawdown — fixed: `src/tools/technical/backtest.ts` tracks mark-to-market equity for drawdown.
-- News sentiment and Fear & Greed naming — fixed (the audit body above already marks them FIXED; the tool is labeled as the Crypto Fear & Greed Index from alternative.me).
+- News sentiment and Fear & Greed naming — fixed. The Detailed Bug Notes in the body were updated after the 2026-04-06 snapshot and already mark these FIXED; the tool is labeled as the Crypto Fear & Greed Index from alternative.me.
 - VWAP — output is now labeled "VWAP (cumulative)", so it is no longer misnamed, but it remains a cumulative-window calculation rather than session-anchored VWAP.
 - Portfolio/watchlist/predictions — migrated to the SQLite state layer (`src/tools/portfolio/tracker.ts` uses `initDefaultDatabase`); no hidden JSON files remain.
 - Multi-analyst orchestration — runs on the runtime-v2 `WorkflowRunner` via `buildComprehensiveAnalysisDefinition` in `src/analysts/orchestrator.ts`.
