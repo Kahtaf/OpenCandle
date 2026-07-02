@@ -58,6 +58,24 @@ describe("public site build contract", () => {
     expect(docsHtml).toContain("docs/index.md");
   });
 
+  it("copies docs images into the site and references them from docs pages", async () => {
+    await expect(
+      access(join(root, "website/dist/docs/images/gui-workbench.png")),
+    ).resolves.toBeUndefined();
+
+    const guiQuickstartHtml = await readFile(
+      join(root, "website/dist/docs/gui-quickstart.html"),
+      "utf8",
+    );
+    expect(guiQuickstartHtml).toContain("images/gui-workbench.png");
+
+    const guiQuickstartMd = await readFile(
+      join(root, "website/dist/docs/gui-quickstart.md"),
+      "utf8",
+    );
+    expect(guiQuickstartMd).toContain("https://opencandle.app/docs/images/gui-workbench.png");
+  });
+
   it("renders GitHub-flavored Markdown features through the parser pipeline", async () => {
     const tuiHtml = await readFile(join(root, "website/dist/docs/tui.html"), "utf8");
     const buildToolHtml = await readFile(join(root, "website/dist/docs/build-a-tool.html"), "utf8");

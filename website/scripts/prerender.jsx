@@ -128,6 +128,13 @@ function rewriteLocalHref(href, page, mode) {
     return `https://github.com/Kahtaf/OpenCandle/blob/main/${normalizedPath}${hash}`;
   }
 
+  // Docs assets (images) are copied into dist under the same docs/ path.
+  // Markdown mirrors and llms-full.txt are read from other origins/paths, so
+  // they need the absolute site URL; HTML keeps the relative path.
+  if (mode === "markdown" && normalizedPath.startsWith("docs/")) {
+    return `${absoluteUrl(normalizedPath)}${hash}`;
+  }
+
   return href;
 }
 
@@ -922,6 +929,7 @@ async function copyStaticAssets() {
   await mkdir(join(outDir, "assets"), { recursive: true });
   await copyFile(join(root, "assets/logo.svg"), join(outDir, "assets/logo.svg"));
   await cp(join(root, "website/assets"), join(outDir, "assets"), { recursive: true });
+  await cp(join(root, "docs/images"), join(outDir, "docs/images"), { recursive: true });
   await copyFile(join(root, "website/assets/favicon.ico"), join(outDir, "favicon.ico"));
   await copyFile(join(root, "AGENTS.md"), join(outDir, "AGENTS.md"));
 }

@@ -192,6 +192,13 @@
     margin-top: 0.5rem;
   }
 
+  .docs-content img {
+    display: block;
+    border: 1px solid hsl(var(--tw-border));
+    border-radius: 12px;
+    box-shadow: var(--shadow-subtle-xs);
+  }
+
   .docs-content a {
     color: hsl(var(--tw-foreground));
     font-weight: 500;
