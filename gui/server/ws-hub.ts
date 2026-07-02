@@ -224,7 +224,7 @@ export function createWsHub({
       role,
       lock: publicWriterLock(lock),
       sessionId: getSessionManager().getSessionId(),
-      coordination: coordinationStateFor(getSessionManager().getSessionId(), role),
+      coordination: coordinationStateFor(getSessionManager().getSessionId(), role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -242,7 +242,7 @@ export function createWsHub({
     return {
       role,
       sessionId: getSessionManager().getSessionId(),
-      coordination: coordinationStateFor(getSessionManager().getSessionId(), role),
+      coordination: coordinationStateFor(getSessionManager().getSessionId(), role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -342,7 +342,7 @@ export function createWsHub({
   };
 }
 
-function coordinationStateFor(sessionId: string, role: string) {
+function coordinationStateFor(sessionId: string, role: string, lock: unknown) {
   const status =
     role === "writer"
       ? "ready"
@@ -351,7 +351,12 @@ function coordinationStateFor(sessionId: string, role: string) {
         : role === "disconnected"
           ? "reconnecting"
           : "syncing";
-  return { sessionId, status };
+  const publicLock = asRecord(publicWriterLock(lock));
+  return {
+    sessionId,
+    status,
+    ...(typeof publicLock.processKind === "string" ? { ownerKind: publicLock.processKind } : {}),
+  };
 }
 
 function publicWriterLock(lock: unknown): unknown {
