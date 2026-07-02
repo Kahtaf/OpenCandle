@@ -593,7 +593,7 @@ function HomePage({ buildDate, version }) {
           <div className="border-border border-b pb-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="font-semibold text-2xl text-foreground">
+                <h1 className="font-semibold text-2xl text-foreground tracking-[-0.01em]">
                   Market research that shows its evidence
                 </h1>
                 <p className="mt-1 max-w-2xl text-muted-foreground text-sm">
@@ -678,7 +678,7 @@ function HomePage({ buildDate, version }) {
                   MIT licensed · Node.js 22+ · macOS, Windows, Linux
                 </p>
                 <div className="mt-4 flex gap-2">
-                  <Button asChild variant="brand" size="sm">
+                  <Button asChild variant="brand" size="sm" rounded="full">
                     <a href="docs/getting-started.html">Install</a>
                   </Button>
                   <Button asChild variant="bordered" size="sm">

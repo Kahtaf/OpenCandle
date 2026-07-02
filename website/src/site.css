@@ -149,6 +149,7 @@
   .docs-content h1 {
     margin: 0 0 1rem;
     font-size: 1.75rem;
+    letter-spacing: -0.01em;
   }
 
   .docs-content h2 {
@@ -156,6 +157,7 @@
     padding-top: 0.5rem;
     border-top: 1px solid hsl(var(--tw-border));
     font-size: 1.125rem;
+    letter-spacing: -0.01em;
   }
 
   .docs-content h3 {
@@ -248,6 +250,21 @@
     overflow-x: auto;
     border-collapse: collapse;
     font-size: 0.8125rem;
+    /* Scroll-shadow affordance: an inner shadow marks a horizontally clipped
+       edge and fades out once that edge is fully scrolled into view. */
+    background:
+      linear-gradient(to right, hsl(var(--tw-background)) 30%, transparent),
+      linear-gradient(to right, transparent, hsl(var(--tw-background)) 70%) 100% 0,
+      radial-gradient(farthest-side at 0 50%, hsl(var(--tw-foreground) / 0.16), transparent),
+      radial-gradient(farthest-side at 100% 50%, hsl(var(--tw-foreground) / 0.16), transparent) 100%
+      0;
+    background-repeat: no-repeat;
+    background-size:
+      40px 100%,
+      40px 100%,
+      14px 100%,
+      14px 100%;
+    background-attachment: local, local, scroll, scroll;
   }
 
   .docs-content th,
