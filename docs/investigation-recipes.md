@@ -99,7 +99,7 @@ Find recent SEC filings for AAPL and summarize what each filing type is for.
 
 Expected evidence:
 
-- [SEC EDGAR](https://www.sec.gov/edgar) filing records
+- [SEC EDGAR](https://www.sec.gov/edgar/search/) filing records
 - filing dates, accession links, or available identifiers
 - cautious synthesis that does not overstate what was inspected
 

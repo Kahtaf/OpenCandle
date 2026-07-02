@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Plus, Sparkles } from "lucide-react";
+import { Check, ChevronDown, Plus } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover.jsx";
@@ -11,7 +11,7 @@ const PROVIDER_LABEL = {
   anthropic: "Anthropic",
 };
 
-export function ModelSelector({ modelSetup, send, setToast, disabled }) {
+export function ModelSelector({ modelSetup, role = "writer", send, setToast, disabled }) {
   const [open, setOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
   const availableModels = modelSetup?.availableModels || [];
@@ -107,6 +107,7 @@ export function ModelSelector({ modelSetup, send, setToast, disabled }) {
         open={setupOpen}
         onOpenChange={setSetupOpen}
         modelSetup={modelSetup}
+        role={role}
         send={send}
         setToast={setToast}
       />
@@ -116,7 +117,7 @@ export function ModelSelector({ modelSetup, send, setToast, disabled }) {
 
 function formatModelLabel(value) {
   if (!value) return "";
-  const [provider, ...rest] = value.split("/");
+  const [, ...rest] = value.split("/");
   const modelId = rest.join("/");
   if (!modelId) return value;
   return modelId;

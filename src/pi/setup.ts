@@ -211,10 +211,10 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
 async function runApiKeySetup(ctx: ExtensionContext, provider: ApiKeyProviderId): Promise<boolean> {
   const label = API_KEY_PROVIDER_LABELS[provider];
   ctx.ui.notify(
-    `OpenCandle stores your ${label} API key locally and only sends it to ${label}.`,
+    `OpenCandle stores your ${label} API key locally. After saving it, OpenCandle will select a fast default model when one is available.`,
     "info",
   );
-  const key = await ctx.ui.input(`Paste your ${label} API key for OpenCandle`, "sk-...");
+  const key = await ctx.ui.input(`Paste your ${label} API key`, "API key");
   const trimmed = key?.trim();
   if (!trimmed) {
     ctx.ui.notify("No API key entered.", "warning");
@@ -323,11 +323,11 @@ async function runLlmSetup(
     }
 
     const choice = await ctx.ui.select(
-      "Welcome to OpenCandle — sign in or paste an API key to start chatting",
-      ["Sign in", "Paste API key", "Exit setup"],
+      "Welcome to OpenCandle — connect one AI model to start chatting",
+      ["Sign in with browser", "Paste API key", "Exit setup"],
     );
 
-    if (choice !== "Sign in" && choice !== "Paste API key") {
+    if (choice !== "Sign in with browser" && choice !== "Paste API key") {
       if (mode === "startup") {
         ctx.ui.notify("OpenCandle needs an AI model before chat can start.", "warning");
         ctx.shutdown();
@@ -336,7 +336,7 @@ async function runLlmSetup(
       return "cancelled";
     }
 
-    if (choice === "Sign in") {
+    if (choice === "Sign in with browser") {
       const providerChoice = await selectProviderForLogin(ctx);
       if (!providerChoice) {
         continue;

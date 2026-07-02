@@ -114,13 +114,35 @@ describe("route session state", () => {
     ).toEqual({ mode: "route", sessionId: "session-1" });
   });
 
-  it("targets a fresh session for home sends so they never append to a previous session", () => {
+  it("targets a fresh session for home sends when home shows existing content", () => {
     expect(
       chatRunSessionTarget({
         pathname: "/",
         supportsSessionActions: true,
+        hasCurrentSessionContent: true,
       }),
     ).toEqual({ mode: "fresh" });
+  });
+
+  it("uses the current session for empty home sends", () => {
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: true,
+        hasCurrentSessionContent: false,
+      }),
+    ).toEqual({ mode: "current" });
+  });
+
+  it("uses the current home session when this window cannot create fresh sessions", () => {
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: true,
+        hasCurrentSessionContent: true,
+        canStartFreshHomeSession: false,
+      }),
+    ).toEqual({ mode: "current" });
   });
 
   it("falls back to the unguarded current session when session actions are unavailable", () => {
@@ -132,11 +154,10 @@ describe("route session state", () => {
     ).toEqual({ mode: "current" });
   });
 
-  it("starts a fresh writer session when home is showing an existing transcript", () => {
+  it("starts a fresh session when home is showing an existing transcript and session actions are available", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "",
@@ -146,7 +167,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/sessions/session-with-history",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "",
@@ -156,7 +176,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "session-with-history",
@@ -166,7 +185,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "fresh-session-after-reset",
         entryCount: 2,
         lastResetSessionId: "session-with-history",
@@ -176,7 +194,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "",

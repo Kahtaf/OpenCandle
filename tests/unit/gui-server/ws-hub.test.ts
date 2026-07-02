@@ -4,13 +4,14 @@ import type { IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Duplex } from "node:stream";
-import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackgroundQuoteRefreshes } from "../../../gui/server/background-quotes.js";
 import type { ToolInvokeController } from "../../../gui/server/invoke-tool.js";
 import type { ModelSetupController } from "../../../gui/server/model-setup.js";
 import type { SessionActionsController } from "../../../gui/server/session-actions.js";
 import type { WsClient } from "../../../gui/server/websocket.js";
+import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 import { createWsHub } from "../../../gui/server/ws-hub.js";
 
 describe("GUI WS hub", () => {
@@ -32,6 +33,12 @@ describe("GUI WS hub", () => {
     const onClientCountChanged = vi.fn();
     const hub = createWsHub({
       ...baseHubOptions(),
+      lock: {
+        role: "writer",
+        processKind: "gui",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
       onClientCountChanged,
       acceptWebSocketFn: () => client,
     });
@@ -43,9 +50,12 @@ describe("GUI WS hub", () => {
     expect(client.messages[0]).toMatchObject({
       type: "boot",
       role: "writer",
+      coordination: { sessionId: "session-1", status: "ready", ownerKind: "gui" },
       sessionId: "session-1",
       modelSetup: { requirement: "ready" },
+      lock: { role: "writer", processKind: "gui", coordinatorEndpoint: "http://127.0.0.1:25000" },
     });
+    expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
     expect(client.messages[1]).toMatchObject({
       type: "state.snapshot",
       sessionId: "session-1",
@@ -91,9 +101,109 @@ describe("GUI WS hub", () => {
     await vi.waitFor(() =>
       expect(client.messages).toContainEqual({
         type: "error",
-        message: "Read-only follower mode",
+        message: "OpenCandle is reconnecting to this session.",
       }),
     );
+  });
+
+  it("includes public owner kind in boot and bootstrap coordination state", async () => {
+    const client = createFakeClient();
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "follower",
+      lock: {
+        role: "writer",
+        processKind: "tui",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    const bootstrap = await hub.buildBootstrapPayload();
+
+    expect(client.messages[0]).toMatchObject({
+      type: "boot",
+      role: "follower",
+      coordination: { sessionId: "session-1", status: "syncing", ownerKind: "tui" },
+    });
+    expect(bootstrap).toMatchObject({
+      role: "follower",
+      coordination: { sessionId: "session-1", status: "syncing", ownerKind: "tui" },
+    });
+    expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
+    expect(JSON.stringify(bootstrap)).not.toContain("owner-secret");
+  });
+
+  it("refreshes coordination in state snapshot broadcasts", () => {
+    const client = createFakeClient();
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "follower",
+      lock: {
+        role: "writer",
+        processKind: "tui",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    hub.broadcastState();
+
+    const snapshots = client.messages.filter(
+      (message) => asRecord(message).type === "state.snapshot",
+    );
+    expect(snapshots.length).toBeGreaterThan(0);
+    for (const snapshot of snapshots) {
+      expect(snapshot).toMatchObject({
+        coordination: { sessionId: "session-1", status: "syncing", ownerKind: "tui" },
+      });
+      expect(JSON.stringify(snapshot)).not.toContain("owner-secret");
+    }
+  });
+
+  it("derives boot coordination from the current session lock", async () => {
+    const client = createFakeClient();
+    const sessionManager = SessionManager.create(cwd, sessionDir);
+    await acquireWriterLock(writerLockScopeForSession(sessionManager), "tui", {
+      pid: 999_999,
+      coordinatorEndpoint: "http://127.0.0.1:25000",
+      coordinatorSecret: "owner-secret",
+    });
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "writer",
+      lock: { role: "writer", processKind: "gui", pid: process.pid },
+      getSessionManager: () => sessionManager,
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    const bootstrap = await hub.buildBootstrapPayload();
+
+    expect(client.messages[0]).toMatchObject({
+      type: "boot",
+      role: "writer",
+      sessionId: sessionManager.getSessionId(),
+      coordination: {
+        sessionId: sessionManager.getSessionId(),
+        status: "syncing",
+        ownerKind: "tui",
+      },
+    });
+    expect(bootstrap).toMatchObject({
+      role: "writer",
+      sessionId: sessionManager.getSessionId(),
+      coordination: {
+        sessionId: sessionManager.getSessionId(),
+        status: "syncing",
+        ownerKind: "tui",
+      },
+    });
+    expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
   });
 
   it("broadcasts targeted snapshots without changing the current session payload", () => {

@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const piMocks = vi.hoisted(() => ({
@@ -14,8 +14,10 @@ const piMocks = vi.hoisted(() => ({
   InteractiveMode: vi.fn(),
   continueOpenCandleSession: vi.fn(),
   acquireSessionWriterLock: vi.fn(),
+  migrateWriterLockScope: vi.fn(),
   refreshSessionWriterLock: vi.fn(),
   releaseSessionWriterLock: vi.fn(),
+  startTuiSessionCoordinatorServer: vi.fn(),
   writerLockScopeForSession: vi.fn(),
   remove: vi.fn(),
   removeSourceFromSettings: vi.fn(),
@@ -121,9 +123,14 @@ vi.mock("../../src/pi/session-storage.js", () => ({
 
 vi.mock("../../src/pi/session-writer-lock.js", () => ({
   acquireSessionWriterLock: piMocks.acquireSessionWriterLock,
+  migrateWriterLockScope: piMocks.migrateWriterLockScope,
   refreshSessionWriterLock: piMocks.refreshSessionWriterLock,
   releaseSessionWriterLock: piMocks.releaseSessionWriterLock,
   writerLockScopeForSession: piMocks.writerLockScopeForSession,
+}));
+
+vi.mock("../../src/pi/tui-session-coordinator.js", () => ({
+  startTuiSessionCoordinatorServer: piMocks.startTuiSessionCoordinatorServer,
 }));
 
 const originalArgv = process.argv;
@@ -152,6 +159,12 @@ describe("opencandle package commands", () => {
         acquiredAt: "2026-06-25T12:00:00.000Z",
         lastHeartbeat: "2026-06-25T12:00:00.000Z",
       },
+    });
+    piMocks.migrateWriterLockScope.mockReturnValue(true);
+    piMocks.startTuiSessionCoordinatorServer.mockResolvedValue({
+      endpoint: "http://127.0.0.1:24000",
+      secret: "test-secret",
+      close: vi.fn().mockResolvedValue(undefined),
     });
     piMocks.writerLockScopeForSession.mockReturnValue("/tmp/session.jsonl");
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -268,7 +281,10 @@ describe("opencandle package commands", () => {
     await runCli([]);
 
     expect(piMocks.writerLockScopeForSession).toHaveBeenCalledWith(sessionManager);
-    expect(piMocks.acquireSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl", "tui");
+    expect(piMocks.acquireSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl", "tui", {
+      coordinatorEndpoint: "http://127.0.0.1:24000",
+      coordinatorSecret: "test-secret",
+    });
     expect(run).toHaveBeenCalled();
     expect(piMocks.releaseSessionWriterLock).toHaveBeenCalledWith("/tmp/session.jsonl");
     expect(runtime.dispose).toHaveBeenCalled();
@@ -314,13 +330,112 @@ describe("opencandle package commands", () => {
       1,
       "/tmp/session-a.jsonl",
       "tui",
+      {
+        coordinatorEndpoint: "http://127.0.0.1:24000",
+        coordinatorSecret: "test-secret",
+      },
     );
     expect(piMocks.acquireSessionWriterLock).toHaveBeenNthCalledWith(
       2,
       "/tmp/session-b.jsonl",
       "tui",
+      {
+        coordinatorEndpoint: "http://127.0.0.1:24000",
+        coordinatorSecret: "test-secret",
+      },
     );
     expect(piMocks.releaseSessionWriterLock).toHaveBeenNthCalledWith(1, "/tmp/session-a.jsonl");
     expect(piMocks.releaseSessionWriterLock).toHaveBeenNthCalledWith(2, "/tmp/session-b.jsonl");
+  });
+
+  it("uses neutral syncing language when the TUI cannot coordinate the session", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const close = vi.fn().mockResolvedValue(undefined);
+    piMocks.startTuiSessionCoordinatorServer.mockResolvedValue({
+      endpoint: "http://127.0.0.1:24000",
+      secret: "test-secret",
+      close,
+    });
+    piMocks.acquireSessionWriterLock.mockResolvedValue({
+      role: "follower",
+      lock: {
+        pid: 123,
+        processKind: "gui",
+        acquiredAt: "2026-06-25T12:00:00.000Z",
+        lastHeartbeat: "2026-06-25T12:00:00.000Z",
+      },
+    });
+    piMocks.continueOpenCandleSession.mockReturnValue({
+      getSessionFile: vi.fn(() => "/tmp/session.jsonl"),
+      getSessionDir: vi.fn(() => "/tmp/sessions"),
+    });
+
+    await runCli([]);
+
+    expect(error).toHaveBeenCalledWith(
+      "OpenCandle is syncing this session in another window. Try again shortly.",
+    );
+    expect(close).toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("does not silently succeed for a non-interactive non-owner TUI", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const close = vi.fn().mockResolvedValue(undefined);
+    piMocks.startTuiSessionCoordinatorServer.mockResolvedValue({
+      endpoint: "http://127.0.0.1:24000",
+      secret: "test-secret",
+      close,
+    });
+    piMocks.acquireSessionWriterLock.mockResolvedValue({
+      role: "follower",
+      lock: {
+        pid: 123,
+        processKind: "gui",
+        acquiredAt: "2026-06-25T12:00:00.000Z",
+        lastHeartbeat: "2026-06-25T12:00:00.000Z",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
+    });
+    piMocks.continueOpenCandleSession.mockReturnValue({
+      getSessionId: vi.fn(() => "session-1"),
+      getSessionFile: vi.fn(() => "/tmp/session.jsonl"),
+      getSessionDir: vi.fn(() => "/tmp/sessions"),
+    });
+
+    await runCli([]);
+
+    expect(error).toHaveBeenCalledWith(
+      "OpenCandle is syncing this session in another window. Try again shortly.",
+    );
+    expect(close).toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("prints proxied TUI message content arrays", () => {
+    const source = readFileSync(resolve("src/cli-main.ts"), "utf-8");
+    const helperStart = source.indexOf("function sseEventText");
+    const helperSource = source.slice(helperStart, source.indexOf("await main();", helperStart));
+
+    expect(helperSource).toContain("event.content");
+    expect(helperSource).toContain('part.type === "text"');
+    expect(helperSource).toContain(".map((part) => part.text)");
+  });
+
+  it("fails closed when TUI writer lock scope migration loses ownership", () => {
+    const source = readFileSync(resolve("src/cli-main.ts"), "utf-8");
+    const syncStart = source.indexOf("function syncActiveSessionWriterLockScope");
+    const heartbeatStart = source.indexOf("const writerLockHeartbeat = setInterval", syncStart);
+    const syncBlock = source.slice(syncStart, heartbeatStart);
+    const heartbeatBlock = source.slice(
+      heartbeatStart,
+      source.indexOf("runtime = await createAgentSessionRuntime", heartbeatStart),
+    );
+
+    expect(syncBlock).toContain("migrateWriterLockScope");
+    expect(syncBlock).toContain("activeSessionWriterLockLost = true");
+    expect(syncBlock).toContain("OpenCandle is reconnecting to this session.");
+    expect(heartbeatBlock).toContain("clearInterval(writerLockHeartbeat)");
   });
 });

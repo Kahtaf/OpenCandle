@@ -77,7 +77,7 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 
 OpenCandle stores session history through Pi and keeps OpenCandle user state under `~/.opencandle/` unless `OPENCANDLE_HOME` is set. A session can include normal chat messages, slash-command output, tool results, provider-gap notes, and the always-visible financial disclaimer.
 
-The local GUI reads the same Pi session state. GUI servers coordinate with a writer/follower lock so only one GUI process mutates a session directory at a time. The terminal UI shares the session files but does not acquire the GUI writer lock, so a GUI follower view can briefly lag behind an active terminal session until it refreshes.
+The local GUI reads the same Pi session state as the terminal UI. OpenCandle coordinates local browser and terminal surfaces so prompts and supported session actions are forwarded to the active session owner when needed. If a view is reconnecting or syncing, wait for the current run to settle and retry.
 
 ## CLI vs GUI
 

@@ -56,7 +56,7 @@ export async function invokeMarketStateMutation({
   setPendingMutation,
 }) {
   if (readOnly) {
-    setToast?.("This GUI session is read-only until it reconnects as the writer.", {
+    setToast?.("Saved-state changes are unavailable while OpenCandle reconnects local access.", {
       destructive: true,
     });
     return false;
@@ -887,10 +887,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
 
 function readOnlyMessage(role) {
   if (role === "connecting")
-    return "Connecting to the GUI session: read-only until the writer connection is ready.";
+    return "Connecting to the GUI session. Saved-state changes will resume when local access is ready.";
   if (role === "disconnected")
-    return "Disconnected from the GUI session: read-only until the writer reconnects.";
-  return "Follower mode: read-only. Take over the session to mutate saved state; tables, summaries, and details remain available here.";
+    return "Disconnected from the GUI session. Saved-state changes will resume automatically.";
+  return "Saved-state changes are unavailable in this window while OpenCandle reconnects local access. Tables, summaries, and details remain available.";
 }
 
 export function buildWatchlistRowActions(item, invokeTool) {

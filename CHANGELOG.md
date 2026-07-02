@@ -16,6 +16,11 @@
 - `.env` files no longer override environment variables that are already exported in the shell, matching conventional dotenv precedence.
 - Docs now enumerate the `/connect` provider/category targets and mark one model provider as required instead of listing all model keys as optional.
 - DESIGN.md and DESIGN.json now name `packages/ui` as the normative token/primitive source and match the shipped button, badge, page-width, and typography metrics instead of retired aspirational values.
+- GUI/TUI session coordination now uses authenticated local forwarding, session-scoped action IDs, neutral syncing/unavailable language, and verified Browser screenshots instead of exposing writer/follower ownership to users.
+- GUI model setup now keeps the composer usable for drafting while setup is incomplete and disables model setup controls with neutral availability language when setup changes are unavailable in this window.
+- The GUI now retries a stale session connection as soon as the browser returns to the foreground instead of leaving editing disabled behind the reconnect banner.
+- Pending session action records now keep their original timestamps across store writes, so actions left behind by a crashed writer expire after the retry window instead of blocking resubmission indefinitely.
+- GUI state snapshots now refresh session coordination, so ask-user and tool controls disable promptly when another window takes over the session mid-run instead of waiting for a full reconnect.
 
 ## [0.10.0] - 2026-06-27
 

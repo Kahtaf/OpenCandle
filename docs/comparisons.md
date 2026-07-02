@@ -13,7 +13,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 A general chatbot can explain concepts, organize a thesis, and help write analysis, but it does not automatically call finance tools, track local portfolio state, or show a provider-by-provider evidence trail unless you build that workflow yourself.
 
-OpenCandle uses model providers for synthesis, but the finance workflow starts with explicit tools for quotes, options, filings, macro data, sentiment, fundamentals, crypto data, and portfolio context. A quote answer can show the provider and timestamp; a filing answer can point to [SEC EDGAR](https://www.sec.gov/edgar) results; an options answer can preserve per-share versus per-contract context; a macro answer can name the [FRED](https://fred.stlouisfed.org) series; and a portfolio answer can separate saved local holdings from new user input.
+OpenCandle uses model providers for synthesis, but the finance workflow starts with explicit tools for quotes, options, filings, macro data, sentiment, fundamentals, crypto data, and portfolio context. A quote answer can show the provider and timestamp; a filing answer can point to [SEC EDGAR](https://www.sec.gov/edgar/search/) results; an options answer can preserve per-share versus per-contract context; a macro answer can name the [FRED](https://fred.stlouisfed.org) series; and a portfolio answer can separate saved local holdings from new user input.
 
 | Capability | OpenCandle | General chatbot |
 | --- | --- | --- |

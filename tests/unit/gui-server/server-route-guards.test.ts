@@ -82,6 +82,59 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');
   });
 
+  it("requires local coordinator authorization before accepting proxied chat runs", () => {
+    const routeBlock = routeBlockBefore(
+      'url.pathname === "/api/local-coordinator/chat-run"',
+      "const body = asRecord(await readJsonBody(req));",
+    );
+
+    expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
+  it("requires local coordinator authorization before accepting proxied tool invokes", () => {
+    const routeBlock = routeBlockBefore(
+      'url.pathname === "/api/local-coordinator/tool-invoke"',
+      "const body = asRecord(await readJsonBody(req));",
+    );
+
+    expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
+  it("returns proxied tool results even when the tool result is an error", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"');
+    const routeEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/ask-user"',
+      routeStart,
+    );
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("const result = asRecord(message.result);");
+    expect(routeSource).toContain("if (result.toolCallId)");
+    expect(routeSource).not.toContain("if (message.ok)");
+  });
+
+  it("requires local coordinator authorization before accepting proxied ask_user actions", () => {
+    const routeBlock = routeBlockBefore(
+      'url.pathname === "/api/local-coordinator/ask-user"',
+      "const body = asRecord(await readJsonBody(req));",
+    );
+
+    expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
+  it("authorizes coordinator calls with the coordinator secret instead of browser cookies", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const guardStart = source.indexOf("function allowLocalCoordinatorRequest");
+    const guardEnd = source.indexOf("function privateGuiHeaders", guardStart);
+    const guardSource = source.slice(guardStart, guardEnd);
+
+    expect(guardSource).toContain('req.headers["x-opencandle-coordinator-secret"]');
+    expect(guardSource).not.toContain("isTrustedPrivateApiRequest");
+    expect(guardSource).not.toContain("isLoopbackAddress");
+    expect(guardSource).not.toContain("cookie");
+  });
+
   it("stamps route-created ask_user prompts with the target session id", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const factoryStart = source.indexOf("createSessionForManager:");
@@ -92,6 +145,147 @@ describe("GUI server route guards", () => {
     expect(source.slice(factoryStart, factoryEnd)).toContain(
       "askUserBridge.askForSession(targetSessionManager.getSessionId())",
     );
+  });
+
+  it("migrates current-session writer locks before broadcasting current run snapshots", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const broadcastStart = source.indexOf("function broadcastRunSessionSnapshot");
+    const currentBranch = source.slice(broadcastStart, source.indexOf("} else {", broadcastStart));
+
+    expect(currentBranch).toContain("options.syncCurrentWriterLockScope?.()");
+  });
+
+  it("admits chat runs by target session lock state instead of process startup role", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const handlerStart = source.indexOf("async function handleSseChatRun");
+    const handlerEnd = source.indexOf("async function proxyChatRunToCoordinator", handlerStart);
+    const handlerSource = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerSource).not.toContain('options.role !== "writer"');
+  });
+
+  it("blocks failed chat delivery only while the coordinator owner is still live", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const proxyStart = source.indexOf("const shouldProxyChatRun");
+    const proxyBlock = source.slice(
+      proxyStart,
+      source.indexOf("if (options.localSessionCoordinator)", proxyStart),
+    );
+
+    expect(proxyBlock).toContain(
+      "shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)",
+    );
+    expect(proxyBlock).toContain('"OpenCandle is reconnecting to this session."');
+    const lockSource = readFileSync(resolve("src/pi/session-writer-lock.ts"), "utf-8");
+    expect(lockSource).toContain("return isCoordinatorOwnerAlive(lock.pid)");
+  });
+
+  it("broadcasts target session snapshots after proxied chat runs", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const proxyStart = source.indexOf("if (shouldProxyChatRun)");
+    const proxyBlock = source.slice(
+      proxyStart,
+      source.indexOf("if (actionId && hasAcceptedSessionAction", proxyStart),
+    );
+
+    expect(proxyBlock).toContain("await proxyChatRunToCoordinator");
+    expect(proxyBlock).toContain(
+      "await broadcastFreshRunSessionSnapshot(options, runSessionManager",
+    );
+    expect(source).toContain("SessionManager.open(sessionFile, options.sessionDir, options.cwd)");
+  });
+
+  it("syncs the current writer lock scope when a chat action is admitted", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const acceptedStart = source.indexOf("const recordAcceptedAction = () =>");
+    const acceptedBlock = source.slice(acceptedStart, source.indexOf("};", acceptedStart) + 2);
+
+    expect(acceptedBlock).toContain("recordAcceptedSessionAction(runSessionManager, actionId)");
+    expect(acceptedBlock).toContain("options.syncCurrentWriterLockScope?.()");
+  });
+
+  it("refreshes GUI heartbeats against the migrated canonical session lock scope", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const syncStart = source.indexOf("function syncCurrentWriterLockScope");
+    const heartbeatStart = source.indexOf("const heartbeat = setInterval", syncStart);
+    const heartbeatBlock = source.slice(
+      heartbeatStart,
+      source.indexOf("const backgroundQuoteRefreshes", heartbeatStart),
+    );
+    const syncBlock = source.slice(syncStart, heartbeatStart);
+
+    expect(syncBlock).toContain("migrateWriterLockScope");
+    expect(syncBlock).toContain("currentWriterLockLost = true");
+    expect(syncBlock).toContain("OpenCandle is reconnecting to this session.");
+    expect(heartbeatBlock).toContain("syncCurrentWriterLockScope()");
+    expect(heartbeatBlock).toContain("refreshWriterLock(activeWriterLockScope)");
+    expect(heartbeatBlock).toContain("clearInterval(heartbeat)");
+  });
+
+  it("records chat actions as accepted when the user turn is admitted", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const handlerStart = source.indexOf("async function handleSseChatRun");
+    const handlerEnd = source.indexOf("class SessionActionNotAdmitted", handlerStart);
+    const handlerSource = source.slice(handlerStart, handlerEnd);
+    const subscribeStart = handlerSource.indexOf("const unsubscribeLive = runSession.subscribe");
+    const subscribeBlock = handlerSource.slice(
+      subscribeStart,
+      handlerSource.indexOf("});", subscribeStart) + 3,
+    );
+
+    expect(handlerSource).toContain("const recordAcceptedAction = () =>");
+    expect(subscribeBlock).toContain("observation.userTexts.some");
+    expect(subscribeBlock).toContain("recordAcceptedAction()");
+  });
+
+  it("publishes coordinator endpoints for the configured listener host", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const endpointLineStart = source.indexOf("const localCoordinatorEndpoint");
+    const endpointLine = source.slice(endpointLineStart, source.indexOf("\n", endpointLineStart));
+    const helperStart = source.indexOf("function coordinatorEndpointHost");
+    const helperSource = source.slice(helperStart, source.indexOf("process.once", helperStart));
+
+    expect(endpointLine).toContain("coordinatorEndpointHost(host)");
+    expect(helperSource).toContain('bindHost === "0.0.0.0"');
+    expect(helperSource).toContain('"127.0.0.1"');
+    expect(helperSource).toContain('bindHost === "::"');
+    expect(helperSource).toContain("[::1]");
+  });
+
+  it("uses neutral language when session rebind cannot acquire a writer lock", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const rebindStart = source.indexOf("runtime.setRebindSession");
+    const rebindBlock = source.slice(
+      rebindStart,
+      source.indexOf("const interactiveMode", rebindStart),
+    );
+
+    expect(rebindBlock).toContain("OpenCandle is reconnecting to this session.");
+    expect(rebindBlock).not.toContain("processKind");
+    expect(rebindBlock).not.toContain("pid");
+  });
+
+  it("publishes coordinator metadata for non-current session tool locks", () => {
+    const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
+    const acquireStart = source.indexOf('acquireWriterLock(lockScope, "gui"');
+    const acquireBlock = source.slice(acquireStart, source.indexOf("});", acquireStart) + 3);
+
+    expect(acquireBlock).toContain("coordinatorEndpoint: localCoordinatorEndpoint");
+    expect(acquireBlock).toContain("coordinatorSecret: localCoordinatorSecret");
+  });
+
+  it("records tool actions as accepted once the tool transcript starts", () => {
+    const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
+    const invokeIndex = source.indexOf("result = await invokeTool");
+    const transcriptIndex = source.indexOf("sessionManager.appendMessage(assistant);");
+    const hookIndex = source.indexOf("options.onTranscriptStarted?.();", transcriptIndex);
+
+    expect(invokeIndex).toBeGreaterThan(-1);
+    expect(source.slice(invokeIndex, source.indexOf("});", invokeIndex))).toContain(
+      "onTranscriptStarted: recordAcceptedAction",
+    );
+    expect(transcriptIndex).toBeGreaterThan(-1);
+    expect(hookIndex).toBeGreaterThan(transcriptIndex);
   });
 });
 

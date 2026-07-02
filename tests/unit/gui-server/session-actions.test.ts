@@ -1,14 +1,16 @@
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
+import { createLocalSessionCoordinator } from "../../../gui/server/local-session-coordinator.js";
 import {
   createSessionActionsController,
   deleteSessionFile,
   renameSessionFile,
 } from "../../../gui/server/session-actions.js";
+import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 
 describe("GUI session actions", () => {
   it("renames a Pi session by appending session_info so the TUI session list sees it", async () => {
@@ -130,6 +132,253 @@ describe("GUI session actions", () => {
     await controller.handleRenameSession("/tmp/current-session.jsonl", " Macro watchlist ");
 
     expect(appendSessionInfo).toHaveBeenCalledWith("Macro watchlist");
+  });
+
+  it("dedupes retried ask_user answers by action id", async () => {
+    const answer = vi.fn(() => true);
+    const sessionManager = {
+      getSessionId: () => "session-1",
+    } as unknown as SessionManager;
+    const controller = createSessionActionsController({
+      role: "writer",
+      cwd: "/tmp",
+      sessionDir: "/tmp/sessions",
+      getSession: () => ({}) as AgentSession,
+      getSessionManager: () => sessionManager,
+      getModelSetupState: () => ({
+        requirement: "ready",
+        providers: [],
+        availableModels: [],
+      }),
+      askUserBridge: { answer, cancel: () => true },
+      runtime: {
+        newSession: async () => ({ cancelled: false }),
+        switchSession: async () => ({ cancelled: false }),
+      },
+      sendBoot: vi.fn(),
+      broadcastState: vi.fn(),
+      broadcastSessions: vi.fn(),
+      localSessionCoordinator: createLocalSessionCoordinator(),
+    });
+
+    await controller.handleAskUserAnswer("ask-1", "Yes", {
+      actionId: "ask-action-1",
+      sessionId: "session-1",
+      source: "browser",
+    });
+    await controller.handleAskUserAnswer("ask-1", "Yes", {
+      actionId: "ask-action-1",
+      sessionId: "session-1",
+      source: "browser",
+    });
+
+    expect(answer).toHaveBeenCalledOnce();
+  });
+
+  it("proxies ask_user answers from non-owner GUI windows", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const targetManager = SessionManager.create(cwd, sessionDir);
+      mkdirSync(sessionDir, { recursive: true });
+      writeFileSync(
+        targetManager.getSessionFile() ?? "",
+        `${JSON.stringify({
+          type: "session",
+          version: 1,
+          id: targetManager.getSessionId(),
+          timestamp: new Date().toISOString(),
+          cwd,
+        })}\n`,
+      );
+      await acquireWriterLock(writerLockScopeForSession(targetManager), "gui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const fetchMock = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      globalThis.fetch = fetchMock as typeof fetch;
+      const controller = createSessionActionsController({
+        role: "follower",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => currentManager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer: vi.fn(), cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await controller.handleAskUserAnswer("ask-1", "Yes", {
+        actionId: "ask-action-1",
+        sessionId: targetManager.getSessionId(),
+        source: "browser",
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        new URL("http://127.0.0.1:25432/api/local-coordinator/ask-user"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "x-opencandle-coordinator-secret": "secret",
+          }),
+          body: JSON.stringify({
+            sessionId: targetManager.getSessionId(),
+            actionId: "ask-action-1",
+            actionType: "ask_user.answer",
+            payload: { id: "ask-1", answer: "Yes" },
+          }),
+        }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not proxy ask_user answers to TUI-owned sessions", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const targetManager = SessionManager.create(cwd, sessionDir);
+      mkdirSync(sessionDir, { recursive: true });
+      writeFileSync(
+        targetManager.getSessionFile() ?? "",
+        `${JSON.stringify({
+          type: "session",
+          version: 1,
+          id: targetManager.getSessionId(),
+          timestamp: new Date().toISOString(),
+          cwd,
+        })}\n`,
+      );
+      await acquireWriterLock(writerLockScopeForSession(targetManager), "tui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const fetchMock = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      globalThis.fetch = fetchMock as typeof fetch;
+      const controller = createSessionActionsController({
+        role: "follower",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => currentManager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer: vi.fn(), cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await expect(
+        controller.handleAskUserAnswer("ask-1", "Yes", {
+          actionId: "ask-action-1",
+          sessionId: targetManager.getSessionId(),
+          source: "browser",
+        }),
+      ).rejects.toThrow("OpenCandle is reconnecting to this session.");
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
+  it("proxies ask_user answers for non-current sessions from writer windows", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const targetManager = SessionManager.create(cwd, sessionDir);
+      mkdirSync(sessionDir, { recursive: true });
+      writeFileSync(
+        targetManager.getSessionFile() ?? "",
+        `${JSON.stringify({
+          type: "session",
+          version: 1,
+          id: targetManager.getSessionId(),
+          timestamp: new Date().toISOString(),
+          cwd,
+        })}\n`,
+      );
+      await acquireWriterLock(writerLockScopeForSession(targetManager), "gui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const fetchMock = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      globalThis.fetch = fetchMock as typeof fetch;
+      const answer = vi.fn();
+      const controller = createSessionActionsController({
+        role: "writer",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => currentManager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer, cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await controller.handleAskUserAnswer("ask-1", "Yes", {
+        actionId: "ask-action-1",
+        sessionId: targetManager.getSessionId(),
+        source: "browser",
+      });
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(answer).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
   });
 });
 

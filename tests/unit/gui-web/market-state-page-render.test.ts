@@ -148,7 +148,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("$950.00");
   });
 
-  it("keeps follower mode readable while disabling mutation actions", () => {
+  it("keeps reconnecting market-state pages readable while disabling mutation actions", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
         domain: "alerts",
@@ -159,12 +159,12 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(html).toContain("Follower mode: read-only");
+    expect(html).toContain("Saved-state changes are unavailable");
     expect(html).toContain("Create alert");
     expect(html).toContain("disabled");
   });
 
-  it("keeps connecting and disconnected market-state pages read-only", () => {
+  it("keeps connecting and disconnected market-state mutations unavailable", () => {
     for (const role of ["connecting", "disconnected"]) {
       const html = renderToStaticMarkup(
         React.createElement(MarketStatePage, {
@@ -176,7 +176,7 @@ describe("MarketStatePage rendering", () => {
         }),
       );
 
-      expect(html).toContain("read-only");
+      expect(html).toContain("Saved-state changes");
       expect(html).toContain("disabled");
     }
   });

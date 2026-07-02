@@ -21,6 +21,7 @@ import { projectDashboard } from "./projector.js";
 import type { SessionActionsController } from "./session-actions.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
+import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
 
 interface AskUserBridge {
   getPrompts(): unknown[];
@@ -111,10 +112,18 @@ export function createWsHub({
           await sessionActionsController.handlePrompt(String(data.prompt ?? ""));
           break;
         case "ask_user.answer":
-          await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer);
+          await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer, {
+            actionId: String(data.actionId ?? ""),
+            sessionId: String(data.sessionId ?? ""),
+            source: "browser",
+          });
           break;
         case "ask_user.cancel":
-          await sessionActionsController.handleAskUserCancel(String(data.id ?? ""));
+          await sessionActionsController.handleAskUserCancel(String(data.id ?? ""), {
+            actionId: String(data.actionId ?? ""),
+            sessionId: String(data.sessionId ?? ""),
+            source: "browser",
+          });
           break;
         case "tool.invoke":
           await toolInvokeController.handleToolInvokeMessage(client, data);
@@ -192,7 +201,10 @@ export function createWsHub({
       const errorMessage = error instanceof Error ? error.message : String(error);
       client.send({
         type: "error",
-        message: errorMessage,
+        message:
+          errorMessage === "Read-only follower mode"
+            ? "OpenCandle is reconnecting to this session."
+            : errorMessage,
       });
     }
   }
@@ -208,11 +220,13 @@ export function createWsHub({
 
   function sendBoot(client: WsClient): void {
     const snapshot = buildStateSnapshot();
+    const sessionManager = getSessionManager();
     client.send({
       type: "boot",
       role,
-      lock,
-      sessionId: getSessionManager().getSessionId(),
+      lock: publicWriterLock(lock),
+      sessionId: sessionManager.getSessionId(),
+      coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -227,9 +241,11 @@ export function createWsHub({
   }
 
   async function buildBootstrapPayload(): Promise<Record<string, unknown>> {
+    const sessionManager = getSessionManager();
     return {
       role,
-      sessionId: getSessionManager().getSessionId(),
+      sessionId: sessionManager.getSessionId(),
+      coordination: coordinationStateForSession(sessionManager, role, lock),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -268,6 +284,9 @@ export function createWsHub({
       state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
       entries,
       events: currentChatEvents(entries),
+      // Ownership can change mid-run (e.g. a TUI takes over the session), so
+      // snapshots re-derive coordination instead of relying on boot state.
+      coordination: coordinationStateForSession(sessionManager, role, lock),
     };
   }
 
@@ -327,6 +346,42 @@ export function createWsHub({
     currentChatEvents,
     subscribeToSessionEvents,
   };
+}
+
+function coordinationStateForSession(
+  sessionManager: SessionManager,
+  role: string,
+  fallbackLock: unknown,
+) {
+  let sessionLock: unknown = fallbackLock;
+  try {
+    sessionLock = readWriterLock(writerLockScopeForSession(sessionManager)) ?? fallbackLock;
+  } catch {
+    sessionLock = fallbackLock;
+  }
+  const sessionId = sessionManager.getSessionId();
+  const publicLock = asRecord(publicWriterLock(sessionLock));
+  const ownedByThisProcess = publicLock.pid === process.pid;
+  const status =
+    role === "writer" && (!publicLock.pid || ownedByThisProcess)
+      ? "ready"
+      : role === "connecting"
+        ? "connecting"
+        : role === "disconnected"
+          ? "reconnecting"
+          : "syncing";
+  return {
+    sessionId,
+    status,
+    ...(typeof publicLock.processKind === "string" ? { ownerKind: publicLock.processKind } : {}),
+  };
+}
+
+function publicWriterLock(lock: unknown): unknown {
+  const record = asRecord(lock);
+  if (Object.keys(record).length === 0) return lock;
+  const { coordinatorSecret: _coordinatorSecret, ...publicLock } = record;
+  return publicLock;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

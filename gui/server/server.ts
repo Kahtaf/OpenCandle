@@ -25,6 +25,7 @@ import {
 import { createInitialGuiSessionManager } from "./gui-session-manager.js";
 import { createHttpRequestHandler, resolveSessionManagerById } from "./http-routes.js";
 import { createToolInvokeController } from "./invoke-tool.js";
+import { createLocalSessionCoordinator } from "./local-session-coordinator.js";
 import { buildMarketStateQuoteSnapshot } from "./market-state-api.js";
 import { createModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest } from "./private-api-access.js";
@@ -33,6 +34,7 @@ import { createSessionActionsController } from "./session-actions.js";
 import { createGracefulShutdown } from "./shutdown.js";
 import {
   acquireWriterLock,
+  migrateWriterLockScope,
   refreshWriterLock,
   releaseWriterLock,
   writerLockScopeForSession,
@@ -49,6 +51,8 @@ const automationHeartbeatMs = normalizeAutomationHeartbeatMs(
 );
 const allowRemotePrivateApi = process.env.OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API === "1";
 const privateApiSessionToken = randomBytes(32).toString("base64url");
+const localCoordinatorSecret = randomBytes(32).toString("base64url");
+const localCoordinatorEndpoint = `http://${coordinatorEndpointHost(host)}:${port}`;
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
@@ -60,8 +64,12 @@ const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const initialWriterLockScope = writerLockScopeForSession(sessionManager);
-const lockResult = await acquireWriterLock(initialWriterLockScope, "gui");
+const lockResult = await acquireWriterLock(initialWriterLockScope, "gui", {
+  coordinatorEndpoint: localCoordinatorEndpoint,
+  coordinatorSecret: localCoordinatorSecret,
+});
 let activeWriterLockScope = initialWriterLockScope;
+let currentWriterLockLost = false;
 let wsHub: WsHub;
 let quotePoller: BackgroundQuotePoller;
 const askUserBridge = createAskUserBridge({
@@ -91,8 +99,28 @@ const runtime = await createAgentSessionRuntime(
   { cwd, agentDir, sessionManager },
 );
 let session = runtime.session;
-const heartbeat = setInterval(() => refreshWriterLock(activeWriterLockScope), 5000);
+function syncCurrentWriterLockScope(): void {
+  if (currentWriterLockLost) throw new Error("OpenCandle is reconnecting to this session.");
+  if (lockResult.role !== "writer") return;
+  const nextScope = writerLockScopeForSession(sessionManager);
+  if (nextScope === activeWriterLockScope) return;
+  if (migrateWriterLockScope(activeWriterLockScope, nextScope)) {
+    activeWriterLockScope = nextScope;
+  } else {
+    currentWriterLockLost = true;
+    throw new Error("OpenCandle is reconnecting to this session.");
+  }
+}
+const heartbeat = setInterval(() => {
+  try {
+    syncCurrentWriterLockScope();
+    refreshWriterLock(activeWriterLockScope);
+  } catch {
+    clearInterval(heartbeat);
+  }
+}, 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
+const localSessionCoordinator = createLocalSessionCoordinator();
 const quoteSnapshotStore = new QuoteSnapshotStore(() => buildMarketStateQuoteSnapshot());
 quotePoller = createBackgroundQuotePoller({
   getClientCount: () => wsHub.getClientCount(),
@@ -121,6 +149,10 @@ const toolInvokeController = createToolInvokeController({
   onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
   askUserHandler: askUserBridge.ask,
   askUserHandlerForSessionId: (sessionId) => askUserBridge.askForSession(sessionId),
+  localCoordinatorEndpoint,
+  localCoordinatorSecret,
+  localSessionCoordinator,
+  syncWriterLockScope: syncCurrentWriterLockScope,
   resolveSessionManager: (sessionId) =>
     resolveSessionManagerById(
       { cwd, sessionDir, getSessionManager: () => sessionManager },
@@ -139,6 +171,7 @@ const sessionActionsController = createSessionActionsController({
   sendBoot: (client) => wsHub.sendBoot(client),
   broadcastState: () => wsHub.broadcastState(),
   broadcastSessions: () => wsHub.broadcastSessions(),
+  localSessionCoordinator,
 });
 wsHub = createWsHub({
   role: lockResult.role,
@@ -163,11 +196,12 @@ let unsubscribeSession = wsHub.subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
   const nextWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
   if (lockResult.role === "writer" && nextWriterLockScope !== activeWriterLockScope) {
-    const nextLockResult = await acquireWriterLock(nextWriterLockScope, "gui");
+    const nextLockResult = await acquireWriterLock(nextWriterLockScope, "gui", {
+      coordinatorEndpoint: localCoordinatorEndpoint,
+      coordinatorSecret: localCoordinatorSecret,
+    });
     if (nextLockResult.role !== "writer") {
-      throw new Error(
-        `Session is currently being written by ${nextLockResult.lock.processKind} (pid ${nextLockResult.lock.pid}).`,
-      );
+      throw new Error("OpenCandle is reconnecting to this session.");
     }
     releaseWriterLock(activeWriterLockScope);
     activeWriterLockScope = nextWriterLockScope;
@@ -187,7 +221,10 @@ const httpRequestHandler = createHttpRequestHandler({
   agentDir,
   sessionDir,
   privateApiSessionToken,
+  localCoordinatorEndpoint,
+  localCoordinatorSecret,
   allowRemotePrivateApi,
+  syncCurrentWriterLockScope,
   getSession: () => session,
   getSessionManager: () => sessionManager,
   createSessionForManager: async (targetSessionManager) =>
@@ -203,7 +240,9 @@ const httpRequestHandler = createHttpRequestHandler({
   wsHub,
   modelSetupController,
   sessionActionsController,
+  toolInvokeController,
   quoteSnapshotStore,
+  localSessionCoordinator,
 });
 
 const server = createServer((req, res) => {
@@ -239,6 +278,12 @@ const shutdown = createGracefulShutdown({
   },
   exit: (code) => process.exit(code),
 });
+
+function coordinatorEndpointHost(bindHost: string): string {
+  if (bindHost === "0.0.0.0") return "127.0.0.1";
+  if (bindHost === "::") return "[::1]";
+  return bindHost.includes(":") && !bindHost.startsWith("[") ? `[${bindHost}]` : bindHost;
+}
 
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);

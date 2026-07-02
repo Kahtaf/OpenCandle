@@ -2,13 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
+  buildSessionActionSocketMessage,
   buildToolInvokeSocketMessage,
   mergeSessionSnapshotMap,
   rejectTimedOutToolInvoke,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
+  resolveSnapshotCoordination,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
+  shouldReconnectOnForeground,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
@@ -84,15 +87,36 @@ describe("useGuiConnection helpers", () => {
     );
   });
 
+  it("refreshes coordination from state snapshots for the tracked session", () => {
+    const tuiOwned = { sessionId: "session-1", status: "syncing", ownerKind: "tui" };
+    const guiOwned = { sessionId: "session-1", status: "ready", ownerKind: "gui" };
+    const routed = { sessionId: "session-routed", status: "syncing", ownerKind: "tui" };
+
+    // Mid-run ownership changes for the tracked session must reach the gate.
+    expect(resolveSnapshotCoordination(guiOwned, tuiOwned)).toEqual(tuiOwned);
+    expect(resolveSnapshotCoordination(null, tuiOwned)).toEqual(tuiOwned);
+    // A snapshot for the server's current session must not clobber the
+    // coordination bootstrapped for a different routed session.
+    expect(resolveSnapshotCoordination(routed, guiOwned)).toEqual(routed);
+    // Snapshots without coordination (older servers) leave the state alone.
+    expect(resolveSnapshotCoordination(guiOwned, undefined)).toEqual(guiOwned);
+  });
+
   it("stamps direct tool invocation socket messages with the visible session id", () => {
     expect(
       buildToolInvokeSocketMessage(
-        { requestId: "req-1", toolName: "get_stock_quote", args: { symbol: "NVDA" } },
+        {
+          requestId: "req-1",
+          actionId: "tool-action-1",
+          toolName: "get_stock_quote",
+          args: { symbol: "NVDA" },
+        },
         "session-visible",
       ),
     ).toEqual({
       type: "tool.invoke",
       requestId: "req-1",
+      actionId: "tool-action-1",
       sessionId: "session-visible",
       toolName: "get_stock_quote",
       args: { symbol: "NVDA" },
@@ -110,6 +134,32 @@ describe("useGuiConnection helpers", () => {
     });
   });
 
+  it("stamps ask_user socket messages with action ids and session ids", () => {
+    expect(
+      buildSessionActionSocketMessage(
+        "ask_user.answer",
+        { id: "ask-1", answer: "Yes", actionId: "ask-action-1" },
+        "session-visible",
+      ),
+    ).toEqual({
+      type: "ask_user.answer",
+      id: "ask-1",
+      answer: "Yes",
+      actionId: "ask-action-1",
+      sessionId: "session-visible",
+    });
+    expect(
+      buildSessionActionSocketMessage(
+        "ask_user.answer",
+        { id: "ask-2", answer: "No", actionId: "ask-action-2", sessionId: "prompt-session" },
+        "current-session",
+      ),
+    ).toMatchObject({
+      actionId: "ask-action-2",
+      sessionId: "prompt-session",
+    });
+  });
+
   it("preserves the global writer role while loading a follower historical session", () => {
     expect(resolveBootstrapRole("writer", { role: "follower" }, false)).toBe("writer");
     expect(resolveBootstrapRole("writer", { role: "follower" })).toBe("follower");
@@ -120,6 +170,24 @@ describe("useGuiConnection helpers", () => {
       "writer-session",
     );
     expect(resolveBootstrapSessionId("writer-session", "new-session")).toBe("new-session");
+  });
+
+  it("reconnects on foreground only when the socket is not already active", () => {
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 3 })).toBe(
+      true,
+    );
+    expect(
+      shouldReconnectOnForeground({ documentVisibility: "visible", readyState: undefined }),
+    ).toBe(true);
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 1 })).toBe(
+      false,
+    );
+    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 0 })).toBe(
+      false,
+    );
+    expect(shouldReconnectOnForeground({ documentVisibility: "hidden", readyState: 3 })).toBe(
+      false,
+    );
   });
 
   it("normalizes bootstrap and state snapshot payloads into session snapshots", () => {

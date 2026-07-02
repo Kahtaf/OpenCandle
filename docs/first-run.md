@@ -40,7 +40,7 @@ Compare BTC and ETH over the last month
 What is the latest SEC filing for AAPL?
 ```
 
-[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
+[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
 
 4. Add provider keys only when needed.
 
@@ -75,7 +75,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
 | `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell profile, or in the `.env` file in the launch directory if it is set there. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
-| The GUI is open but not updating | Use the terminal session that owns the writer lock, or restart the GUI and reopen `http://127.0.0.1:14567`. |
+| The GUI is open but not updating | Wait for any active run to settle, refresh the browser, or restart the GUI and reopen `http://127.0.0.1:14567`. |
 
 ## Native Dependency Troubleshooting
 

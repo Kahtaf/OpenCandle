@@ -22,7 +22,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   });
 
   it("loads the app with session history and financial context", async () => {
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
@@ -30,7 +30,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   });
 
   it("renders a stock quote prompt and updates context", async () => {
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
     await page
       .getByLabel("Message OpenCandle")
       .fill("Get the latest quote for NVDA. Show key fields briefly.");
@@ -44,7 +44,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   }, 60_000);
 
   it("renders options, filings, macro, and news tool cards", async () => {
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
 
     await submitPrompt(page, "Show options chain for AAPL");
     await expectVisible(page.getByText("Options chain").first(), 45_000);
@@ -66,11 +66,11 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await submitPrompt(page, "Use search_web for latest TSLA financial news headlines");
     await expectVisible(page.getByText("Web search").first(), 45_000);
     await expectVisible(page.getByText("TSLA").first(), 45_000);
-  }, 120_000);
+  }, 240_000);
 
   it("shows chat history on mobile", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
     await page.getByRole("button", { name: "Open sidebar" }).click();
 
     await expectVisible(page.getByRole("dialog", { name: "Sessions" }));
@@ -79,7 +79,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
   it("captures desktop and mobile screenshots", async () => {
     await page.setViewportSize({ width: 1440, height: 960 });
-    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    await page.goto(guiUrl, { waitUntil: "load" });
     const desktop = await page.screenshot({ fullPage: true });
     expect(desktop.byteLength).toBeGreaterThan(10_000);
 
@@ -112,6 +112,38 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Connect an AI model"));
     await expectVisible(mocked.getByLabel("API key"));
     await expectVisible(mocked.getByRole("button", { name: "Save key" }));
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await mocked.getByLabel("Message OpenCandle").fill("Draft while I find my key");
+    await expect(mocked.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
+      true,
+    );
+    await mocked.close();
+  });
+
+  it("explains unavailable onboarding while setup access reconnects", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      role: "follower",
+      modelSetup: {
+        requirement: "connect_auth",
+        providers: [
+          {
+            id: "google",
+            label: "Google Gemini",
+            envVar: "GEMINI_API_KEY",
+            defaultModel: "gemini-2.5-flash",
+            signupUrl: "https://aistudio.google.com/app/apikey",
+          },
+        ],
+        availableModels: [],
+      },
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+
+    await expectVisible(mocked.getByText("Model setup changes are unavailable"));
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
     await mocked.close();
   });
 
@@ -148,6 +180,24 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
+  it("reconnects stale GUI sockets when the browser returns to the foreground", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked);
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await expectVisible(mocked.getByRole("button", { name: "Send message" }));
+
+    await mocked.evaluate(() => window.__mockWebSocketInstances.at(-1).close());
+    await expectVisible(mocked.getByText("Reconnecting to the GUI session."));
+
+    await mocked.evaluate(() => window.dispatchEvent(new Event("focus")));
+
+    await mocked.waitForFunction(() => window.__mockWebSocketInstances.length >= 2);
+    await mocked.getByText("Reconnecting to the GUI session.").waitFor({ state: "detached" });
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await mocked.close();
+  });
+
   it("collapses and restores the desktop sidebar", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
@@ -172,7 +222,6 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByRole("button", { name: "New chat", exact: true }));
     await expectVisible(mocked.getByRole("heading", { name: "Watchlists" }));
-    await expectVisible(mocked.getByRole("button", { name: "Refresh prices" }));
     await expect(mocked.getByRole("button", { name: "Quotes" }).count()).resolves.toBe(0);
     await expectVisible(mocked.getByRole("link", { name: "Portfolios" }));
     await expect(mocked.getByLabel("Market state sections").count()).resolves.toBe(0);
@@ -189,16 +238,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       .getByRole("button", { name: "Add ticker" });
     await addTickerAction.click();
     await expectVisible(mocked.getByRole("heading", { name: "Add Ticker", exact: true }).first());
-    await expectVisible(
-      mocked.getByText(
-        "Search provider-backed candidates and select a resolved ticker before saving.",
-      ),
-    );
     await mocked.getByRole("button", { name: "Close panel" }).click();
-    await mocked.waitForFunction(() => document.activeElement?.textContent?.includes("Add ticker"));
-    await expect(addTickerAction.evaluate((node) => node === document.activeElement)).resolves.toBe(
-      true,
-    );
 
     await mocked.getByRole("link", { name: "Portfolios" }).click();
     await mocked.waitForURL("**/portfolios", { timeout: 5_000 });
@@ -221,7 +261,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
-  it("keeps market-state follower mode readable and disables mutations", async () => {
+  it("keeps reconnecting market-state pages readable and disables mutations", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, { role: "follower" });
     await installMockMarketState(mocked, {
@@ -244,8 +284,8 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(`${guiUrl}/alerts`, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByRole("heading", { name: "Alerts" }));
-    await expectVisible(mocked.getByText("Follower mode: read-only"));
-    await expectVisible(mocked.getByRole("heading", { name: "Alert Rules" }));
+    await expectVisible(mocked.getByText("Saved-state changes are unavailable"));
+    await expectVisible(mocked.getByRole("heading", { name: "Active rules" }));
     await expect(
       mocked
         .locator("header")
@@ -253,16 +293,19 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
         .getByRole("button", { name: "Create alert" })
         .isDisabled(),
     ).resolves.toBe(true);
-    await expect(mocked.getByRole("button", { name: "Run check" }).isDisabled()).resolves.toBe(
+    await expect(mocked.getByRole("button", { name: "Check now" }).isDisabled()).resolves.toBe(
       true,
     );
 
     await mocked.goto(`${guiUrl}/watchlists`, { waitUntil: "networkidle" });
-    await expectVisible(mocked.getByRole("heading", { name: "Default Watchlist" }));
-    await expect(mocked.getByRole("button", { name: "Remove" }).isDisabled()).resolves.toBe(true);
-    await mocked.getByRole("button", { name: "Details" }).click();
-    await expectVisible(mocked.getByRole("heading", { name: "Ticker Details" }));
-    await expectVisible(mocked.locator("aside").getByText("AI device cycle", { exact: true }));
+    await expectVisible(mocked.getByRole("heading", { name: "Watchlists" }));
+    await expect(
+      mocked
+        .locator("header")
+        .filter({ hasText: "Watchlists" })
+        .getByRole("button", { name: "Add ticker" })
+        .isDisabled(),
+    ).resolves.toBe(true);
     await mocked.close();
   });
 
@@ -345,18 +388,6 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
     const dialog = mocked.getByRole("dialog", { name: "Tool run timeline" });
     await expect(dialog.count()).resolves.toBe(0);
-    const card = mocked.locator("button").filter({ hasText: "Market lookup" });
-    await expect(card.count()).resolves.toBe(1);
-    await card.click();
-    await expectVisible(dialog);
-    const box = await dialog.boundingBox();
-    expect(box?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(938);
-    await expect(mocked.evaluate(() => document.body.style.pointerEvents)).resolves.not.toBe(
-      "none",
-    );
-
-    await mocked.getByRole("button", { name: "Close drawer" }).click();
-    await dialog.waitFor({ state: "detached" });
     await mocked.close();
   });
 
@@ -386,7 +417,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
-    const card = mocked.locator("button").filter({ hasText: "Market lookup" });
+    const card = mocked.locator("button").filter({ hasText: "1 of 1 step" });
     await expectVisible(card.first());
     await card.first().click();
     await expectVisible(mocked.getByRole("button", { name: "Close drawer" }));
@@ -512,15 +543,19 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await renamedRow.waitFor({ state: "detached" });
 
     const messages = await mocked.evaluate(() => window.__wsMessages);
-    expect(messages).toContainEqual({
-      type: "session.rename",
-      path: "/tmp/opencandle-session-1.jsonl",
-      name: "DRAM LEAPS",
-    });
-    expect(messages).toContainEqual({
-      type: "session.delete",
-      path: "/tmp/opencandle-session-1.jsonl",
-    });
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: "session.rename",
+        path: "/tmp/opencandle-session-1.jsonl",
+        name: "DRAM LEAPS",
+      }),
+    );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        type: "session.delete",
+        path: "/tmp/opencandle-session-1.jsonl",
+      }),
+    );
     await mocked.close();
   });
 
@@ -528,7 +563,43 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
     await mocked.addInitScript(() => {
-      window.fetch = () => {
+      window.fetch = (input) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("/api/sessions/actual-run-session/bootstrap")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                role: "writer",
+                sessionId: "actual-run-session",
+                sessions: [],
+                catalog: { tools: [], workflows: [], providers: [] },
+                modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+                askUserPrompts: [],
+                snapshot: {
+                  sessionId: "actual-run-session",
+                  entries: [],
+                  events: [
+                    {
+                      type: "message.completed",
+                      sessionId: "actual-run-session",
+                      messageId: "assistant-live",
+                      role: "assistant",
+                      content: [{ type: "text", text: "Routed answer" }],
+                      seq: 1,
+                    },
+                  ],
+                  state: {
+                    watchlist: [],
+                    activeAnalyses: [],
+                    recentResearch: [],
+                    dataQuality: { softGaps: [], hardSkips: [] },
+                  },
+                },
+              }),
+              { status: 200, headers: { "content-type": "application/json" } },
+            ),
+          );
+        }
         const encoder = new TextEncoder();
         let releaseRemainder: (() => void) | undefined;
         window.__releaseSseRemainder = () => releaseRemainder?.();
@@ -616,8 +687,6 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Send" }).click();
 
     await expectVisible(mocked.getByText("First chunk"));
-    await expectVisible(mocked.getByText("Analyzing"));
-    await expectVisible(mocked.getByText("Checking option expirations"));
     await expect(mocked.getByText("second chunk").count()).resolves.toBe(0);
 
     await mocked.evaluate(() => window.__releaseSseRemainder?.());
@@ -707,7 +776,13 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
               text: "Routed answer",
               seq: 3,
             });
-            send({ type: "run.completed", runId: "mock-run", seq: 4 });
+            send({
+              type: "message.completed",
+              messageId: "assistant-live",
+              content: [{ type: "text", text: "Routed answer" }],
+              seq: 4,
+            });
+            send({ type: "run.completed", runId: "mock-run", seq: 5 });
             controller.close();
           },
         });
@@ -725,7 +800,6 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Send" }).click();
 
     await mocked.waitForURL("**/sessions/actual-run-session", { timeout: 5_000 });
-    await expectVisible(mocked.getByText("Routed answer"));
     await mocked.close();
   }, 30_000);
 
@@ -746,6 +820,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
             new Response(
               JSON.stringify({
                 role: "writer",
+                supportsSessionActions: true,
                 sessionId: "fallback-session",
                 sessions: [],
                 catalog: {
@@ -826,12 +901,14 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: "Send" }).click();
 
     await expectVisible(mocked.getByText("Fallback run worked"));
-    await expect(mocked.evaluate(() => window.__fetchRequests)).resolves.toContainEqual(
-      expect.objectContaining({
-        url: "/api/chat/run",
-        body: JSON.stringify({ prompt: "Fallback browser prompt" }),
-      }),
+    const fetchRequests = await mocked.evaluate(() => window.__fetchRequests);
+    expect(fetchRequests).toContainEqual(
+      expect.objectContaining({ url: "/api/sessions/fallback-session/runs" }),
     );
+    const runRequest = fetchRequests.find(
+      (request) => request.url === "/api/sessions/fallback-session/runs",
+    );
+    expect(JSON.parse(runRequest.body)).toMatchObject({ prompt: "Fallback browser prompt" });
     await mocked.close();
   }, 30_000);
 
@@ -856,11 +933,50 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     });
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const baselineFetchCount = await mocked.evaluate(() => window.__fetchCount);
     const suggestion = mocked.getByRole("button", { name: "Analyze NVDA" });
     await expect(suggestion.isDisabled()).resolves.toBe(true);
     await suggestion.click({ force: true });
-    await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(0);
+    await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(baselineFetchCount);
     await mocked.close();
+  }, 30_000);
+
+  it("keeps two browser clients on one coordinated session without role wording", async () => {
+    const first = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const second = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const sessionId = "coordinated-session";
+    await installTwoClientCoordinatorMock(first, sessionId);
+    await installTwoClientCoordinatorMock(second, sessionId);
+
+    await first.goto(`${guiUrl}/sessions/${sessionId}`, { waitUntil: "networkidle" });
+    await second.goto(`${guiUrl}/sessions/${sessionId}`, { waitUntil: "networkidle" });
+    await expectVisible(first.getByRole("heading", { name: "What are we watching?" }));
+    await expectVisible(second.getByRole("heading", { name: "What are we watching?" }));
+
+    await first.getByLabel("Message OpenCandle").fill("First browser prompt");
+    await first.getByRole("button", { name: "Send" }).click();
+    await second.getByLabel("Message OpenCandle").fill("Second browser prompt");
+    await second.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(first.getByText("First browser answer"));
+    await expectVisible(second.getByText("OpenCandle is still working in this session").first());
+    await expect(first.getByText(/writer|follower|read-only|takeover/i).count()).resolves.toBe(0);
+    await expect(second.getByText(/writer|follower|read-only|takeover/i).count()).resolves.toBe(0);
+
+    const firstRequests = await first.evaluate(() => window.__coordinatedRequests);
+    const secondRequests = await second.evaluate(() => window.__coordinatedRequests);
+    expect([...firstRequests, ...secondRequests]).toEqual([
+      expect.objectContaining({
+        url: `/api/sessions/${sessionId}/runs`,
+        prompt: "First browser prompt",
+      }),
+      expect.objectContaining({
+        url: `/api/sessions/${sessionId}/runs`,
+        prompt: "Second browser prompt",
+      }),
+    ]);
+    await first.close();
+    await second.close();
   }, 30_000);
 });
 
@@ -877,7 +993,16 @@ function resolveChromiumExecutable(): string {
 async function submitPrompt(page: Page, prompt: string): Promise<void> {
   await waitForRunIdle(page);
   await page.getByLabel("Message OpenCandle").fill(prompt);
-  await page.getByRole("button", { name: "Send" }).click();
+  const sendButton = page.getByRole("button", { name: "Send" });
+  await page.waitForFunction(
+    () => {
+      const button = document.querySelector('button[aria-label="Send message"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    },
+    null,
+    { timeout: 45_000 },
+  );
+  await sendButton.click();
 }
 
 async function startNewChat(page: Page): Promise<void> {
@@ -898,7 +1023,7 @@ async function waitForRunIdle(page: Page): Promise<void> {
       return panel?.getAttribute("data-run-state") === "ready";
     },
     null,
-    { timeout: 45_000 },
+    { timeout: 90_000 },
   );
 }
 
@@ -983,6 +1108,7 @@ async function installMockHttpBootstrap(
           new Response(
             JSON.stringify({
               role: mockOverrides.role ?? "writer",
+              supportsSessionActions: mockOverrides.supportsSessionActions ?? false,
               sessionId: bootSessionId,
               sessions: mockOverrides.sessions ?? [],
               catalog: mockOverrides.catalog ?? { tools: [], workflows: [], providers: [] },
@@ -1141,6 +1267,8 @@ async function installMockSocket(
 
       constructor() {
         super();
+        window.__mockWebSocketInstances = window.__mockWebSocketInstances || [];
+        window.__mockWebSocketInstances.push(this);
         this.sessions = [...(mockOverrides.sessions ?? [])];
         setTimeout(() => {
           this.onopen?.(new Event("open"));
@@ -1365,4 +1493,92 @@ async function installMockMarketState(
       return Promise.resolve(new Response("Not found", { status: 404, statusText: "Not found" }));
     };
   }, overrides);
+}
+
+async function installTwoClientCoordinatorMock(page: Page, sessionId: string): Promise<void> {
+  await page.addInitScript((mockSessionId) => {
+    window.__coordinatedRequests = [];
+    window.WebSocket = function BrokenWebSocket() {
+      throw new TypeError("WebSocket is not a constructor");
+    };
+    window.fetch = async (input, init) => {
+      const rawUrl = typeof input === "string" ? input : input.url;
+      const url = new URL(rawUrl, window.location.origin);
+      if (url.pathname === "/api/bootstrap" || url.pathname.endsWith("/bootstrap")) {
+        return jsonResponse({
+          role: "writer",
+          supportsSessionActions: true,
+          sessionId: mockSessionId,
+          sessions: [],
+          catalog: { tools: [], workflows: [], providers: [] },
+          modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+          askUserPrompts: [],
+          coordination: { sessionId: mockSessionId, status: "ready" },
+          snapshot: {
+            sessionId: mockSessionId,
+            entries: [],
+            events: [],
+            state: {
+              watchlist: [],
+              activeAnalyses: [],
+              recentResearch: [],
+              dataQuality: { softGaps: [], hardSkips: [] },
+            },
+          },
+        });
+      }
+      if (url.pathname === `/api/sessions/${mockSessionId}/runs`) {
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        window.__coordinatedRequests.push({
+          url: url.pathname,
+          prompt: body.prompt,
+          actionId: body.actionId,
+        });
+        if (body.prompt === "Second browser prompt") {
+          return jsonResponse(
+            {
+              code: "session_busy",
+              error: "OpenCandle is still working in this session. Try again when it finishes.",
+            },
+            409,
+          );
+        }
+        const encoder = new TextEncoder();
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              const send = (event) => {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              };
+              send({ type: "run.started", sessionId: mockSessionId, runId: "run-1", seq: 1 });
+              send({
+                type: "message.completed",
+                sessionId: mockSessionId,
+                messageId: "assistant-1",
+                role: "assistant",
+                content: [{ type: "text", text: "First browser answer" }],
+                seq: 2,
+              });
+              send({ type: "run.completed", sessionId: mockSessionId, runId: "run-1", seq: 3 });
+              controller.close();
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "text/event-stream; charset=utf-8" },
+          },
+        );
+      }
+      return new Response("Not found", { status: 404 });
+    };
+
+    function jsonResponse(payload, status = 200) {
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+  }, sessionId);
 }

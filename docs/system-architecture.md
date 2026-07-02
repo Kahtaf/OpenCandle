@@ -105,9 +105,31 @@ The model synthesizes after evidence is gathered. It should answer directly, nam
 
 ## GUI Runtime And Local State
 
-The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Only one GUI process writes to a session at a time; followers can view the same state but cannot mutate it. See [GUI Quickstart](./gui-quickstart.md) for the endpoint list and writer/follower behavior.
+The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal surfaces coordinate through authenticated local forwarding, session-scoped action IDs, and stale-lock recovery so supported actions can stay attached to the active session without exposing ownership roles in the UI. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access.
 
-OpenCandle state defaults to `~/.opencandle/`; the state files and their purposes are documented in [Configuration](./configuration.md). Pi owns its own runtime config and session storage separately.
+Useful local endpoints:
+
+- `GET /health` returns whether the process is alive plus diagnostic coordination metadata.
+- `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
+- `GET /api/sessions` lists saved sessions.
+- `GET /api/session/events` returns the current projected chat events.
+- `POST /api/chat/run` streams one chat run.
+- `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
+
+## Local State
+
+OpenCandle state defaults to `~/.opencandle/`; the state files and env overrides are documented in [Configuration](./configuration.md).
+
+Common files:
+
+- `config.json` for provider keys and file-backed settings.
+- `state.db` for memory, workflow state, and durable user market state such as instruments, watchlists, portfolio lots, predictions, alerts, report runs, and import provenance.
+- `sentinel.db` for sentiment trend state.
+- `onboarding.json` for provider setup, snooze, never-ask, and welcome state.
+
+OpenCandle does not treat `watchlist.json`, `portfolio.json`, or `predictions.json` as supported state sources.
+
+Pi owns its own runtime config and session storage separately. OpenCandle should not depend on repo-local `.pi/extensions/` artifacts.
 
 ## Validation
 

@@ -31,10 +31,17 @@ export function routeSessionView({
   };
 }
 
-export function chatRunSessionTarget({ pathname, supportsSessionActions }) {
+export function chatRunSessionTarget({
+  pathname,
+  supportsSessionActions,
+  hasCurrentSessionContent = false,
+  canStartFreshHomeSession = true,
+}) {
   const routeSessionId = sessionIdFromPath(pathname);
   if (routeSessionId) return { mode: "route", sessionId: routeSessionId };
-  if (supportsSessionActions) return { mode: "fresh" };
+  if (supportsSessionActions && canStartFreshHomeSession && hasCurrentSessionContent) {
+    return { mode: "fresh" };
+  }
   return { mode: "current" };
 }
 
@@ -46,7 +53,6 @@ export function hasSessionContent(events) {
 
 export function shouldStartFreshHomeSession({
   pathname,
-  role,
   currentSessionId,
   entryCount,
   lastResetSessionId,
@@ -54,7 +60,6 @@ export function shouldStartFreshHomeSession({
 }) {
   return (
     pathname === "/" &&
-    role === "writer" &&
     canStartFreshHomeSession &&
     Boolean(currentSessionId) &&
     entryCount > 0 &&

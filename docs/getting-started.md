@@ -64,7 +64,7 @@ From an installed package:
 opencandle gui
 ```
 
-Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions through a writer/follower lock so only one process mutates a session at a time.
+Then open `http://127.0.0.1:14567`. The GUI binds locally and shares Pi sessions with the terminal UI. OpenCandle coordinates local browser and terminal surfaces automatically so actions stay attached to the active session.
 
 Good first GUI flow:
 
@@ -74,7 +74,7 @@ Good first GUI flow:
 4. Inspect the tool card or drawer to see what data was used.
 5. Open the provider tab if the answer says a data source is missing.
 
-See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and writer/follower behavior.
+See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and local session coordination.
 
 ## Configure Providers
 
@@ -98,7 +98,7 @@ Data-provider keys, from environment variables or `~/.opencandle/config.json`:
 | `EXA_API_KEY` | No | Exa web search |
 | `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
 
-[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) do not require keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
+[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) do not require keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
 
 Example config:
 

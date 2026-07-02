@@ -28,7 +28,7 @@ Keyless by default:
 - [Yahoo Finance](https://finance.yahoo.com)
 - [TradingView](https://www.tradingview.com) scanner (unofficial, delayed scanner endpoint; used read-only and batch-first)
 - [CoinGecko](https://www.coingecko.com)
-- [SEC EDGAR](https://www.sec.gov/edgar)
+- [SEC EDGAR](https://www.sec.gov/edgar/search/)
 - [DuckDuckGo](https://duckduckgo.com) search
 - [alternative.me crypto Fear & Greed](https://alternative.me/crypto/fear-and-greed-index/)
 
@@ -43,7 +43,7 @@ Optional keys:
 - `FRED_API_KEY` enables [FRED](https://fred.stlouisfed.org) macro series lookups.
 - `BRAVE_API_KEY` enables [Brave](https://brave.com/search/api/) as a web search fallback.
 - `EXA_API_KEY` enables [Exa](https://exa.ai) web search.
-- `FINNHUB_API_KEY` enables [Finnhub](https://finnhub.io) company news in sentiment summaries.
+- `FINNHUB_API_KEY` enables [Finnhub company news](https://finnhub.io/api/v1/news?category=general) in sentiment summaries.
 - Search and social providers can degrade based on available credentials, external-tool availability, local browser login state, and provider health. Reddit sentiment requires `rdt-cli` plus a usable Reddit browser session; Twitter/X sentiment requires `twitter-cli` plus a usable x.com browser session.
 
 ## Caching and Degradation

@@ -1,5 +1,10 @@
 import { unlink } from "node:fs/promises";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import type {
+  LocalSessionCoordinator,
+  SessionActionEnvelope,
+  SessionActionSource,
+} from "./local-session-coordinator.js";
 import type { ModelSetupState } from "./model-setup.js";
 import { type PromptObservation, selectReplayPrompt } from "./prompt-observation.js";
 import {
@@ -7,6 +12,7 @@ import {
   waitForResolvedToolCalls,
   waitForSessionTurnSettlement,
 } from "./session-entry-wait.js";
+import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
 
 interface AskUserBridge {
   answer(id: string, answer: string): boolean;
@@ -24,8 +30,8 @@ interface SessionActionClient {
 
 export interface SessionActionsController {
   handlePrompt(prompt: string): Promise<void>;
-  handleAskUserAnswer(id: string, value: unknown): Promise<void>;
-  handleAskUserCancel(id: string): Promise<void>;
+  handleAskUserAnswer(id: string, value: unknown, action?: SessionActionMeta): Promise<void>;
+  handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void>;
   handleNewSession(): Promise<void>;
   handleOpenSession(path: string): Promise<void>;
   handleRenameSession(path: string, name: string): Promise<void>;
@@ -44,7 +50,15 @@ export interface SessionActionsControllerOptions {
   sendBoot: (client: SessionActionClient) => void;
   broadcastState: () => void;
   broadcastSessions: () => void;
+  localSessionCoordinator?: LocalSessionCoordinator;
   now?: () => number;
+}
+
+export interface SessionActionMeta {
+  sessionId?: string;
+  actionId?: string;
+  source?: SessionActionSource;
+  allowProxy?: boolean;
 }
 
 export function createSessionActionsController({
@@ -59,6 +73,7 @@ export function createSessionActionsController({
   sendBoot,
   broadcastState,
   broadcastSessions,
+  localSessionCoordinator,
   now = Date.now,
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
@@ -91,16 +106,30 @@ export function createSessionActionsController({
     broadcastState();
   }
 
-  async function handleAskUserAnswer(id: string, value: unknown): Promise<void> {
-    ensureWriter();
+  async function handleAskUserAnswer(
+    id: string,
+    value: unknown,
+    action?: SessionActionMeta,
+  ): Promise<void> {
     const answer = String(value ?? "").trim();
     if (!answer) throw new Error("Answer cannot be empty");
-    if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
+    if (shouldProxyAskUserAction(action)) {
+      if (await proxyAskUserAction("ask_user.answer", { id, answer }, action)) return;
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
+    await runCoordinatedSessionAction("ask_user.answer", { id, answer }, action, async () => {
+      if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
+    });
   }
 
-  async function handleAskUserCancel(id: string): Promise<void> {
-    ensureWriter();
-    if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
+  async function handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void> {
+    if (shouldProxyAskUserAction(action)) {
+      if (await proxyAskUserAction("ask_user.cancel", { id }, action)) return;
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
+    await runCoordinatedSessionAction("ask_user.cancel", { id }, action, async () => {
+      if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
+    });
   }
 
   async function handleNewSession(): Promise<void> {
@@ -151,6 +180,86 @@ export function createSessionActionsController({
     handleRenameSession,
     handleDeleteSession,
   };
+
+  async function runCoordinatedSessionAction(
+    actionType: SessionActionEnvelope["actionType"],
+    payload: Record<string, unknown>,
+    action: SessionActionMeta | undefined,
+    handler: () => Promise<void> | void,
+  ): Promise<void> {
+    if (!localSessionCoordinator || !action?.actionId) {
+      await handler();
+      return;
+    }
+    const sessionId = action.sessionId?.trim() || getSessionManager().getSessionId();
+    const result = await localSessionCoordinator.runSessionAction(
+      {
+        sessionId,
+        actionId: action.actionId,
+        actionType,
+        payload,
+        source: action.source ?? "gui",
+      },
+      async () => {
+        await handler();
+        return { accepted: true };
+      },
+    );
+    if (!result.ok) throw new Error(result.message);
+  }
+
+  async function proxyAskUserAction(
+    actionType: "ask_user.answer" | "ask_user.cancel",
+    payload: Record<string, unknown>,
+    action: SessionActionMeta | undefined,
+  ): Promise<boolean> {
+    if (action?.allowProxy === false) return false;
+    const sessionManager = await resolveActionSessionManager(action);
+    const lock = readWriterLock(writerLockScopeForSession(sessionManager));
+    if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret || lock.pid === process.pid) {
+      return false;
+    }
+    if (lock.processKind === "tui") return false;
+    const endpoint = new URL("/api/local-coordinator/ask-user", lock.coordinatorEndpoint);
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+        },
+        body: JSON.stringify({
+          sessionId: action?.sessionId || sessionManager.getSessionId(),
+          actionId: action?.actionId || "",
+          actionType,
+          payload,
+        }),
+      });
+    } catch {
+      return false;
+    }
+    if (response.ok) return true;
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "OpenCandle is reconnecting to this session.");
+  }
+
+  function shouldProxyAskUserAction(action: SessionActionMeta | undefined): boolean {
+    if (role !== "writer") return true;
+    const targetSessionId = action?.sessionId?.trim();
+    return Boolean(targetSessionId && targetSessionId !== getSessionManager().getSessionId());
+  }
+
+  async function resolveActionSessionManager(
+    action: SessionActionMeta | undefined,
+  ): Promise<SessionManager> {
+    const current = getSessionManager();
+    const targetSessionId = action?.sessionId?.trim();
+    if (!targetSessionId || targetSessionId === current.getSessionId()) return current;
+    const sessions = await SessionManager.list(cwd, sessionDir);
+    const match = sessions.find((candidate) => candidate.id === targetSessionId);
+    return match ? SessionManager.open(match.path, sessionDir, cwd) : current;
+  }
 }
 
 export async function promptAndSettle(
