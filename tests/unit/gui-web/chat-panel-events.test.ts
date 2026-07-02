@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -111,6 +113,17 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).toContain("Continue?");
     expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*>Answer yes/);
     expect(html).not.toMatch(/writer|follower|read-only|takeover/i);
+  });
+
+  it("routes ask_user actions through the prompt session id", () => {
+    const source = readFileSync(
+      resolve("gui/web/src/features/chat/ChatPanel.jsx"),
+      "utf-8",
+    );
+    const cardStart = source.indexOf("function AskUserPromptCard");
+    const cardSource = source.slice(cardStart, source.indexOf("return (", cardStart));
+
+    expect(cardSource).toContain("sessionId: prompt.sessionId");
   });
 
   it("renders a loading state instead of home suggestions while switching sessions", () => {

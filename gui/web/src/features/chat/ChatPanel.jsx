@@ -405,11 +405,11 @@ function AskUserPromptCard({ prompt, send }) {
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;
-    send("ask_user.answer", { id: prompt.id, answer: value });
+    send("ask_user.answer", { id: prompt.id, sessionId: prompt.sessionId, answer: value });
     setDraft("");
   };
   const cancel = () => {
-    if (!disabled) send("ask_user.cancel", { id: prompt.id });
+    if (!disabled) send("ask_user.cancel", { id: prompt.id, sessionId: prompt.sessionId });
   };
 
   return (
