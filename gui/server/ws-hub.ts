@@ -222,7 +222,7 @@ export function createWsHub({
     client.send({
       type: "boot",
       role,
-      lock,
+      lock: publicWriterLock(lock),
       sessionId: getSessionManager().getSessionId(),
       coordination: coordinationStateFor(getSessionManager().getSessionId(), role),
       catalog: buildCatalog(),
@@ -352,6 +352,13 @@ function coordinationStateFor(sessionId: string, role: string) {
           ? "reconnecting"
           : "syncing";
   return { sessionId, status };
+}
+
+function publicWriterLock(lock: unknown): unknown {
+  const record = asRecord(lock);
+  if (Object.keys(record).length === 0) return lock;
+  const { coordinatorSecret: _coordinatorSecret, ...publicLock } = record;
+  return publicLock;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

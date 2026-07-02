@@ -32,6 +32,11 @@ describe("GUI WS hub", () => {
     const onClientCountChanged = vi.fn();
     const hub = createWsHub({
       ...baseHubOptions(),
+      lock: {
+        role: "writer",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
       onClientCountChanged,
       acceptWebSocketFn: () => client,
     });
@@ -46,7 +51,9 @@ describe("GUI WS hub", () => {
       coordination: { sessionId: "session-1", status: "ready" },
       sessionId: "session-1",
       modelSetup: { requirement: "ready" },
+      lock: { role: "writer", coordinatorEndpoint: "http://127.0.0.1:25000" },
     });
+    expect(JSON.stringify(client.messages[0])).not.toContain("owner-secret");
     expect(client.messages[1]).toMatchObject({
       type: "state.snapshot",
       sessionId: "session-1",
