@@ -24,7 +24,6 @@ import type {
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
 import {
-  isLoopbackAddress,
   isTrustedPrivateApiRequest,
   privateApiCookieHeader,
 } from "./private-api-access.js";
@@ -850,10 +849,7 @@ function allowLocalCoordinatorRequest(
   res: ServerResponse,
   options: GuiHttpRouteOptions,
 ): boolean {
-  if (
-    isLoopbackAddress(req.socket.remoteAddress) &&
-    req.headers["x-opencandle-coordinator-secret"] === options.localCoordinatorSecret
-  ) {
+  if (req.headers["x-opencandle-coordinator-secret"] === options.localCoordinatorSecret) {
     return true;
   }
   res.writeHead(403, { "content-type": "application/json" });

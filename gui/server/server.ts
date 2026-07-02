@@ -52,7 +52,7 @@ const automationHeartbeatMs = normalizeAutomationHeartbeatMs(
 const allowRemotePrivateApi = process.env.OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API === "1";
 const privateApiSessionToken = randomBytes(32).toString("base64url");
 const localCoordinatorSecret = randomBytes(32).toString("base64url");
-const localCoordinatorEndpoint = `http://127.0.0.1:${port}`;
+const localCoordinatorEndpoint = `http://${coordinatorEndpointHost(host)}:${port}`;
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
@@ -277,6 +277,12 @@ const shutdown = createGracefulShutdown({
   },
   exit: (code) => process.exit(code),
 });
+
+function coordinatorEndpointHost(bindHost: string): string {
+  if (bindHost === "0.0.0.0") return "127.0.0.1";
+  if (bindHost === "::") return "[::1]";
+  return bindHost.includes(":") && !bindHost.startsWith("[") ? `[${bindHost}]` : bindHost;
+}
 
 process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);

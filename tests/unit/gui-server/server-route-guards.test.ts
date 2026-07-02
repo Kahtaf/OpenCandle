@@ -120,15 +120,15 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
   });
 
-  it("does not authorize local coordinator calls with browser cookies alone", () => {
+  it("authorizes coordinator calls with the coordinator secret instead of browser cookies", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const guardStart = source.indexOf("function allowLocalCoordinatorRequest");
     const guardEnd = source.indexOf("function privateGuiHeaders", guardStart);
     const guardSource = source.slice(guardStart, guardEnd);
 
-    expect(guardSource).toContain("isLoopbackAddress(req.socket.remoteAddress)");
     expect(guardSource).toContain('req.headers["x-opencandle-coordinator-secret"]');
     expect(guardSource).not.toContain("isTrustedPrivateApiRequest");
+    expect(guardSource).not.toContain("isLoopbackAddress");
     expect(guardSource).not.toContain("cookie");
   });
 
@@ -205,13 +205,18 @@ describe("GUI server route guards", () => {
     expect(subscribeBlock).toContain("recordAcceptedAction()");
   });
 
-  it("publishes loopback coordinator endpoints even when the GUI binds remotely", () => {
+  it("publishes coordinator endpoints for the configured listener host", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const endpointLineStart = source.indexOf("const localCoordinatorEndpoint");
     const endpointLine = source.slice(endpointLineStart, source.indexOf("\n", endpointLineStart));
+    const helperStart = source.indexOf("function coordinatorEndpointHost");
+    const helperSource = source.slice(helperStart, source.indexOf("process.once", helperStart));
 
-    expect(endpointLine).toContain("127.0.0.1");
-    expect(endpointLine).not.toContain("${host}");
+    expect(endpointLine).toContain("coordinatorEndpointHost(host)");
+    expect(helperSource).toContain('bindHost === "0.0.0.0"');
+    expect(helperSource).toContain('"127.0.0.1"');
+    expect(helperSource).toContain('bindHost === "::"');
+    expect(helperSource).toContain("[::1]");
   });
 
   it("uses neutral language when session rebind cannot acquire a writer lock", () => {

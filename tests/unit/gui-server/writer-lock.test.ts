@@ -295,6 +295,36 @@ describe("writer lock", () => {
     }
   });
 
+  it("treats an existing canonical lock owned by the same process as migrated", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      await acquireWriterLock(dir, "gui", {
+        pid: process.pid,
+        ownerId: "owner-a",
+      });
+      await acquireWriterLock(sessionFile, "gui", {
+        pid: process.pid,
+        ownerId: "owner-a",
+      });
+
+      expect(
+        migrateWriterLockScope(dir, sessionFile, {
+          pid: process.pid,
+          ownerId: "owner-a",
+        }),
+      ).toBe(true);
+
+      expect(readWriterLock(dir)).toBeNull();
+      expect(readWriterLock(sessionFile)).toMatchObject({
+        ownerId: "owner-a",
+        scope: sessionFile,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("migrates locks created with the default owner identity", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
     try {

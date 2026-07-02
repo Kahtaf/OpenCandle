@@ -167,6 +167,15 @@ export function migrateWriterLockScope(
     writeFileSync(fd, JSON.stringify(nextLock, null, 2));
   } catch {
     const destinationLock = readWriterLock(toScopePath);
+    if (destinationLock && isSameLockOwner(destinationLock, identity)) {
+      try {
+        unlinkSync(lockPath(fromScopePath));
+      } catch {
+        // Best effort; destination lock is already authoritative for this owner.
+      }
+      migrateAcceptedActionStore(fromScopePath, toScopePath);
+      return true;
+    }
     if (destinationLock && !isSameLockOwner(destinationLock, identity)) {
       try {
         unlinkSync(lockPath(fromScopePath));
