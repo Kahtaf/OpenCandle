@@ -331,12 +331,22 @@ function NavGroups({ activeOutput }) {
   ));
 }
 
-function HomePage({ buildDate }) {
+function HomePage({ buildDate, version }) {
   const faqs = [
     {
       question: "What is OpenCandle?",
       answer:
         "OpenCandle is an open source financial investigator that runs as a terminal agent and local browser GUI for evidence-first market research.",
+    },
+    {
+      question: "How is this different from asking ChatGPT?",
+      answer:
+        "A general chatbot answers from training data unless you wire up browsing and data feeds yourself. OpenCandle calls typed finance tools first — quotes, filings, options chains, macro series, sentiment — and keeps the provider trail, timestamps, and data gaps visible in the answer.",
+    },
+    {
+      question: "Which model does it use?",
+      answer:
+        "You bring your own model credentials — Anthropic, OpenAI, or Google — through the bundled Pi runtime. Market data is separate: Yahoo Finance, SEC EDGAR, FRED, and CoinGecko work without any data-provider keys.",
     },
     {
       question: "Does OpenCandle place trades?",
@@ -383,6 +393,7 @@ function HomePage({ buildDate }) {
             name: brandName,
             applicationCategory: "FinanceApplication",
             operatingSystem: "macOS, Windows, Linux",
+            softwareVersion: version,
             url: siteUrl,
             codeRepository: "https://github.com/Kahtaf/OpenCandle",
             downloadUrl: "https://www.npmjs.com/package/opencandle",
@@ -406,14 +417,22 @@ function HomePage({ buildDate }) {
           <div className="border-border border-b px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h1 className="font-semibold text-2xl text-foreground">What are we watching?</h1>
+                <h1 className="font-semibold text-2xl text-foreground">
+                  Market research that shows its evidence
+                </h1>
                 <p className="mt-1 max-w-2xl text-muted-foreground text-sm">
-                  Run evidence-first market research from a local terminal agent or browser GUI.
+                  OpenCandle is an open source financial investigator: a local terminal agent and
+                  browser GUI that gathers real market data before the model writes a word.
                 </p>
               </div>
-              <Badge variant="outline" className="hidden sm:inline-flex">
-                Local-first
-              </Badge>
+              <div className="hidden items-center gap-2 sm:flex">
+                <Badge variant="outline">Local-first</Badge>
+                <Badge variant="outline">
+                  <a href="https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md">
+                    v{version}
+                  </a>
+                </Badge>
+              </div>
             </div>
           </div>
           <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_300px]">
@@ -423,13 +442,27 @@ function HomePage({ buildDate }) {
                 <p className="mt-2 font-medium text-lg">
                   Analyze NVDA with filings, options, sentiment, and macro context.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {["Quotes", "SEC filings", "Options", "FRED", "Sentiment"].map((label) => (
-                    <Badge key={label} variant="secondary">
-                      {label}
-                    </Badge>
+                <p className="mt-4 text-muted-foreground text-xs uppercase">
+                  What the answer is built from
+                </p>
+                <ul className="mt-2 space-y-1.5 text-sm">
+                  {[
+                    ["Quote and price history", "Yahoo Finance, with source and timestamp"],
+                    ["Latest 10-Q and 8-K filings", "SEC EDGAR"],
+                    ["Option chain with computed Greeks", "Yahoo Finance + local math"],
+                    ["Rates and inflation backdrop", "FRED, series named in the answer"],
+                    ["Reddit and news sentiment", "or a visible note when a source is unavailable"],
+                  ].map(([evidence, source]) => (
+                    <li key={evidence} className="flex flex-wrap gap-x-2">
+                      <span className="font-medium">{evidence}</span>
+                      <span className="text-muted-foreground">— {source}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
+                <p className="mt-3 border-border border-t pt-3 text-muted-foreground text-sm">
+                  The synthesis names its sources, flags stale or missing data, and separates facts
+                  from judgment — so you can check the trail instead of trusting the prose.
+                </p>
               </Card>
               <div className="grid gap-3 md:grid-cols-3">
                 {[
@@ -461,6 +494,13 @@ function HomePage({ buildDate }) {
                   <div className="rounded-md bg-secondary px-3 py-2">npx opencandle@latest</div>
                   <div className="rounded-md bg-secondary px-3 py-2">npx opencandle@latest gui</div>
                 </div>
+                <p className="mt-3 text-muted-foreground text-sm">
+                  Bring your own model key — Anthropic, OpenAI, or Google. Quotes, filings, macro,
+                  and crypto data work with no data-provider keys.
+                </p>
+                <p className="mt-2 text-muted-foreground text-xs">
+                  MIT licensed · Node.js 22+ · macOS, Windows, Linux
+                </p>
                 <div className="mt-4 flex gap-2">
                   <Button asChild variant="brand" size="sm">
                     <a href="docs/getting-started.html">Install</a>
@@ -695,13 +735,17 @@ async function writeSiteMetadata(pages, buildDate) {
 
 async function build() {
   const buildDate = new Date().toISOString().slice(0, 10);
+  const { version } = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
   await loadManifest();
   await copyStaticAssets();
 
   const loaded = await loadPages();
   sitePages = loaded;
 
-  await writeFile(join(outDir, "index.html"), renderDocument(<HomePage buildDate={buildDate} />));
+  await writeFile(
+    join(outDir, "index.html"),
+    renderDocument(<HomePage buildDate={buildDate} version={version} />),
+  );
   await writeSiteMetadata(loaded, buildDate);
 
   for (const page of loaded) {
