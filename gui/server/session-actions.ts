@@ -113,7 +113,7 @@ export function createSessionActionsController({
   ): Promise<void> {
     const answer = String(value ?? "").trim();
     if (!answer) throw new Error("Answer cannot be empty");
-    if (role !== "writer") {
+    if (shouldProxyAskUserAction(action)) {
       if (await proxyAskUserAction("ask_user.answer", { id, answer }, action)) return;
       throw new Error("OpenCandle is reconnecting to this session.");
     }
@@ -123,7 +123,7 @@ export function createSessionActionsController({
   }
 
   async function handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void> {
-    if (role !== "writer") {
+    if (shouldProxyAskUserAction(action)) {
       if (await proxyAskUserAction("ask_user.cancel", { id }, action)) return;
       throw new Error("OpenCandle is reconnecting to this session.");
     }
@@ -214,7 +214,7 @@ export function createSessionActionsController({
     action: SessionActionMeta | undefined,
   ): Promise<boolean> {
     if (action?.allowProxy === false) return false;
-    const sessionManager = getSessionManager();
+    const sessionManager = await resolveActionSessionManager(action);
     const lock = readWriterLock(writerLockScopeForSession(sessionManager));
     if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret || lock.pid === process.pid) {
       return false;
@@ -241,6 +241,23 @@ export function createSessionActionsController({
     if (response.ok) return true;
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error || "OpenCandle is reconnecting to this session.");
+  }
+
+  function shouldProxyAskUserAction(action: SessionActionMeta | undefined): boolean {
+    if (role !== "writer") return true;
+    const targetSessionId = action?.sessionId?.trim();
+    return Boolean(targetSessionId && targetSessionId !== getSessionManager().getSessionId());
+  }
+
+  async function resolveActionSessionManager(
+    action: SessionActionMeta | undefined,
+  ): Promise<SessionManager> {
+    const current = getSessionManager();
+    const targetSessionId = action?.sessionId?.trim();
+    if (!targetSessionId || targetSessionId === current.getSessionId()) return current;
+    const sessions = await SessionManager.list(cwd, sessionDir);
+    const match = sessions.find((candidate) => candidate.id === targetSessionId);
+    return match ? SessionManager.open(match.path, sessionDir, cwd) : current;
   }
 }
 

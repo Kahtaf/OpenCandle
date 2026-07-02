@@ -41,6 +41,10 @@ export function isSessionChangedChatRunError(status, errorBody) {
   return status === 409 && errorBody?.code === "session_changed";
 }
 
+export function isDuplicateChatRunAck(body) {
+  return body?.ok === true && body?.duplicate === true;
+}
+
 export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart }) {
   const abortsRef = useRef(new Map());
   const runStatesRef = useRef({});
@@ -87,6 +91,13 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
             return { sessionChanged: true };
           }
           throw new Error(error.error || response.statusText);
+        }
+        if (response.headers.get("content-type")?.includes("application/json")) {
+          const body = await response.json().catch(() => null);
+          if (isDuplicateChatRunAck(body)) {
+            setRunStateFor(key, "ready");
+            return { duplicate: true };
+          }
         }
         setRunStateFor(key, "streaming");
         await drainSse(response, (event) => {

@@ -4,6 +4,7 @@ import {
   buildRetryChatRunOptions,
   createSessionActionId,
   chatRunEndpoint,
+  isDuplicateChatRunAck,
   isSessionChangedChatRunError,
 } from "../../../gui/web/src/hooks/useChatRun.jsx";
 
@@ -52,6 +53,12 @@ describe("chat run request helpers", () => {
     expect(isSessionChangedChatRunError(409, { error: "Read-only follower mode" })).toBe(false);
     expect(isSessionChangedChatRunError(400, { code: "session_changed" })).toBe(false);
     expect(isSessionChangedChatRunError(409, null)).toBe(false);
+  });
+
+  it("recognizes duplicate chat run acknowledgements", () => {
+    expect(isDuplicateChatRunAck({ ok: true, duplicate: true })).toBe(true);
+    expect(isDuplicateChatRunAck({ ok: true })).toBe(false);
+    expect(isDuplicateChatRunAck(null)).toBe(false);
   });
 
   it("reuses the prior action id for transport retries", () => {
