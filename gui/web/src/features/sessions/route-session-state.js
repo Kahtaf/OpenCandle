@@ -35,10 +35,13 @@ export function chatRunSessionTarget({
   pathname,
   supportsSessionActions,
   hasCurrentSessionContent = false,
+  canStartFreshHomeSession = true,
 }) {
   const routeSessionId = sessionIdFromPath(pathname);
   if (routeSessionId) return { mode: "route", sessionId: routeSessionId };
-  if (supportsSessionActions && hasCurrentSessionContent) return { mode: "fresh" };
+  if (supportsSessionActions && canStartFreshHomeSession && hasCurrentSessionContent) {
+    return { mode: "fresh" };
+  }
   return { mode: "current" };
 }
 

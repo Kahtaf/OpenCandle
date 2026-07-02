@@ -401,7 +401,7 @@ function SessionLoadingState() {
 function AskUserPromptCard({ prompt, role, send }) {
   const [draft, setDraft] = useState("");
   const pending = prompt.status === "pending";
-  const disabled = !pending;
+  const disabled = !pending || role !== "writer";
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;

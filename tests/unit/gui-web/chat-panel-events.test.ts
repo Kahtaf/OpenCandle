@@ -91,6 +91,28 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Browse tools");
   });
 
+  it("keeps ask_user controls unavailable in non-owner windows", () => {
+    const html = renderChatPanelHtml({
+      role: "follower",
+      askUserPrompts: [
+        {
+          id: "ask-user-1",
+          sessionId: "session-1",
+          question: "Continue?",
+          questionType: "confirm",
+          options: ["Yes", "No"],
+          reason: "",
+          status: "pending",
+          answer: null,
+        },
+      ],
+    });
+
+    expect(html).toContain("Continue?");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Answer yes/);
+    expect(html).not.toMatch(/writer|follower|read-only|takeover/i);
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,

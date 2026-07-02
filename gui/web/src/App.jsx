@@ -98,7 +98,8 @@ export function AppShell() {
     events: visibleEvents,
     runState: chatRun.runState,
     liveBaseEventCount: liveBaseEventCountBySession[activeSessionId] || 0,
-    canStartFreshHomeSession: gui.supportsSessionActions && !search?.messageId,
+    canStartFreshHomeSession:
+      gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
@@ -233,6 +234,7 @@ export function AppShell() {
         pathname,
         supportsSessionActions: gui.supportsSessionActions,
         hasCurrentSessionContent: hasGuiSessionContent,
+        canStartFreshHomeSession: gui.role === "writer",
       });
       if (target.mode === "current") {
         void chatRun.startChatRun(prompt);
@@ -273,6 +275,7 @@ export function AppShell() {
       activeSessionId,
       pathname,
       hasGuiSessionContent,
+      gui.role,
       gui.supportsSessionActions,
       gui.newSession,
       gui.setToast,

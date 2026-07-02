@@ -134,6 +134,17 @@ describe("route session state", () => {
     ).toEqual({ mode: "current" });
   });
 
+  it("uses the current home session when this window cannot create fresh sessions", () => {
+    expect(
+      chatRunSessionTarget({
+        pathname: "/",
+        supportsSessionActions: true,
+        hasCurrentSessionContent: true,
+        canStartFreshHomeSession: false,
+      }),
+    ).toEqual({ mode: "current" });
+  });
+
   it("falls back to the unguarded current session when session actions are unavailable", () => {
     expect(
       chatRunSessionTarget({
