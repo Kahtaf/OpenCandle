@@ -31,12 +31,12 @@
 
 ## 4. GUI UX Language and State
 
-- [ ] 4.1 Replace visible writer/follower/read-only/takeover language in chat, diagnostics, and reconnect banners with neutral syncing/reconnecting/unavailable language.
-- [ ] 4.2 Keep composer controls available while a supported session action can be proxied; show per-action pending/syncing state during submission.
+- [x] 4.1 Replace visible writer/follower/read-only/takeover language in chat, diagnostics, and reconnect banners with neutral syncing/reconnecting/unavailable language.
+- [x] 4.2 Keep composer controls available while a supported session action can be proxied; show per-action pending/syncing state during submission.
 - [ ] 4.3 Disable write controls only when no coordinator can be reached and recovery is unsafe or fails, with retryable local availability messaging.
-- [ ] 4.4 Update unit and browser tests that currently assert follower/read-only text or disabled follower controls.
-- [ ] 4.5 Keep setup mutation controls honestly disabled when global setup coordination is unavailable in this window, using neutral availability language and without introducing setup proxying.
-- [ ] 4.6 Keep market-state mutation controls honestly disabled when saved-state coordination is unavailable in this window, using neutral availability language and without introducing market-state proxying.
+- [x] 4.4 Update unit and browser tests that currently assert follower/read-only text or disabled follower controls.
+- [x] 4.5 Keep setup mutation controls honestly disabled when global setup coordination is unavailable in this window, using neutral availability language and without introducing setup proxying.
+- [x] 4.6 Keep market-state mutation controls honestly disabled when saved-state coordination is unavailable in this window, using neutral availability language and without introducing market-state proxying.
 - [ ] 4.7 Update GUI boot/reconnect/session-switch state so browser controls use per-session coordination state rather than a single process-wide role string.
 
 ## 5. TUI and Multi-Client Verification

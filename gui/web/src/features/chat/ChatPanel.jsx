@@ -102,7 +102,7 @@ export function ChatPanel({
     setAllowToolAutoOpen(false);
   }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const composerDisabled = role === "follower" || inputDisabled;
+  const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
 
   const submit = (value = draft) => {
@@ -118,12 +118,9 @@ export function ChatPanel({
     void startChatRun(prompt);
   };
 
-  const placeholder =
-    role === "follower"
-      ? "Follower mode: take over this session to send"
-      : needsSetup
-        ? "Draft a question, then connect a model to send"
-        : "Ask anything";
+  const placeholder = needsSetup
+    ? "Draft a question, then connect a model to send"
+    : "Ask anything";
 
   return (
     <section
@@ -404,7 +401,7 @@ function SessionLoadingState() {
 function AskUserPromptCard({ prompt, role, send }) {
   const [draft, setDraft] = useState("");
   const pending = prompt.status === "pending";
-  const disabled = role === "follower" || !pending;
+  const disabled = !pending;
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;

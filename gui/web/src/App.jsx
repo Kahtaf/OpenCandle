@@ -106,7 +106,7 @@ export function AppShell() {
   );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const guiEventCount = visibleEvents.length;
-  const inputDisabled = gui.role !== "writer" || sessionView.pendingSessionSwitch;
+  const inputDisabled = sessionView.pendingSessionSwitch || !gui.supportsSessionActions;
 
   const openDrawer = useCallback(
     (drawer) => {
@@ -223,7 +223,7 @@ export function AppShell() {
   }, []);
 
   // Home sends always run in a fresh session so a stale client can never
-  // append to the previous writer session; the server rejects mismatches
+  // append to the previous active session; the server rejects mismatches
   // with a session_changed 409, retried once against another fresh session.
   const startRoutedChatRun = useCallback(
     async (prompt) => {
@@ -460,7 +460,7 @@ function ConnectionStatusBanner({ role }) {
   const message =
     role === "connecting"
       ? "Connecting to the GUI session..."
-      : "Reconnecting to the GUI session. Editing is disabled until the writer reconnects.";
+      : "Reconnecting to the GUI session. Editing will resume automatically.";
   return (
     <div
       className="fixed left-1/2 top-3 z-[90] max-w-[calc(100vw-24px)] -translate-x-1/2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-subtle-md"

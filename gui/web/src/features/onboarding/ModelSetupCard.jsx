@@ -40,7 +40,7 @@ export function ModelSetupDialog({
 }
 
 function ModelSetupHeader({ variant, hasReady, role, requirement }) {
-  const isFollower = role === "follower";
+  const setupUnavailable = role === "follower";
   if (variant === "first-run") {
     return (
       <div className="grid gap-2">
@@ -51,8 +51,8 @@ function ModelSetupHeader({ variant, hasReady, role, requirement }) {
           Connect an AI model
         </h2>
         <p className="m-0 text-sm leading-relaxed text-muted-foreground">
-          {isFollower
-            ? "Another OpenCandle window owns this session, so this browser is read-only. Close the active writer or open that window to finish model setup."
+          {setupUnavailable
+            ? "Model setup is unavailable in this window while OpenCandle reconnects local setup access."
             : requirement === "select_model"
               ? "OpenCandle found model credentials. Choose one model below and chat will be ready."
               : "OpenCandle needs one model before chat can run. Paste a key below or use terminal sign-in, then start chatting from the same window."}
@@ -64,8 +64,8 @@ function ModelSetupHeader({ variant, hasReady, role, requirement }) {
     <div className="grid gap-2">
       <h2 className="m-0 text-2xl font-semibold tracking-tight text-foreground">Connect a model</h2>
       <p className="m-0 text-sm leading-relaxed text-muted-foreground">
-        {isFollower
-          ? "This browser is read-only because another OpenCandle process is the writer."
+        {setupUnavailable
+          ? "Model setup is unavailable in this window while OpenCandle reconnects local setup access."
           : hasReady
             ? "Add or switch the model that powers chat. Keys are saved locally in Pi's auth store."
             : "Paste a Google Gemini, OpenAI, or Anthropic API key. Keys are saved locally in Pi's auth store."}
@@ -87,7 +87,7 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
       return;
     }
     if (setupDisabled) {
-      setToast?.("This browser is read-only. Use the writer window to change model setup.");
+      setToast?.("Model setup is unavailable in this window while OpenCandle reconnects.");
       return;
     }
     setToast?.("Saving model key...");
@@ -99,8 +99,7 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
     <>
       {setupDisabled ? (
         <div className="rounded-md border border-amber-700/30 bg-amber-100/60 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/30 dark:text-amber-200">
-          Setup is locked in follower mode. Stop the other OpenCandle GUI/TUI process, then refresh
-          this page to become the writer.
+          Model setup changes are unavailable in this window while OpenCandle reconnects local setup access.
         </div>
       ) : null}
       {availableModels.length > 0 ? (

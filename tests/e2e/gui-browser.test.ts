@@ -120,7 +120,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
-  it("explains read-only onboarding when another writer owns the session", async () => {
+  it("explains unavailable onboarding while setup access reconnects", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
       role: "follower",
@@ -141,8 +141,8 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
-    await expectVisible(mocked.getByText("Setup is locked in follower mode."));
-    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
+    await expectVisible(mocked.getByText("Model setup changes are unavailable"));
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
     await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
     await mocked.close();
   });
@@ -271,7 +271,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
-  it("keeps market-state follower mode readable and disables mutations", async () => {
+  it("keeps reconnecting market-state pages readable and disables mutations", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, { role: "follower" });
     await installMockMarketState(mocked, {
@@ -294,7 +294,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(`${guiUrl}/alerts`, { waitUntil: "networkidle" });
     await expectVisible(mocked.getByRole("heading", { name: "Alerts" }));
-    await expectVisible(mocked.getByText("Follower mode: read-only"));
+    await expectVisible(mocked.getByText("Saved-state changes are unavailable"));
     await expectVisible(mocked.getByRole("heading", { name: "Alert Rules" }));
     await expect(
       mocked
