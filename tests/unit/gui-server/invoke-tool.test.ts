@@ -182,6 +182,44 @@ describe("invokeToolFromUi", () => {
     });
   });
 
+  it("aborts writer-path tool invocations when the writer lock scope is lost", async () => {
+    const messages: Message[] = [];
+    const sessionManager = {
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "manage_watchlist",
+      label: "Watchlist",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "Added AAPL" }],
+          details: { symbol: "AAPL" },
+        };
+      },
+    };
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => sessionManager,
+      broadcastState: vi.fn(),
+      getTools: () => [tool],
+      syncWriterLockScope: () => {
+        throw new Error("OpenCandle is reconnecting to this session.");
+      },
+    });
+
+    await expect(
+      controller.handleToolInvoke("manage_watchlist", { symbol: "AAPL" }),
+    ).rejects.toThrow("OpenCandle is reconnecting to this session.");
+    expect(messages).toHaveLength(0);
+  });
+
   it("dedupes retried tool invocation messages by action id", async () => {
     const sentMessages: unknown[] = [];
     const broadcastState = vi.fn();

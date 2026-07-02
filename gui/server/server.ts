@@ -152,6 +152,7 @@ const toolInvokeController = createToolInvokeController({
   localCoordinatorEndpoint,
   localCoordinatorSecret,
   localSessionCoordinator,
+  syncWriterLockScope: syncCurrentWriterLockScope,
   resolveSessionManager: (sessionId) =>
     resolveSessionManagerById(
       { cwd, sessionDir, getSessionManager: () => sessionManager },

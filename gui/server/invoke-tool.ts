@@ -59,6 +59,7 @@ export interface ToolInvokeControllerOptions {
   localSessionCoordinator?: LocalSessionCoordinator;
   localCoordinatorEndpoint?: string;
   localCoordinatorSecret?: string;
+  syncWriterLockScope?: () => void;
 }
 
 export function createToolInvokeController({
@@ -76,6 +77,7 @@ export function createToolInvokeController({
   localSessionCoordinator,
   localCoordinatorEndpoint,
   localCoordinatorSecret,
+  syncWriterLockScope,
 }: ToolInvokeControllerOptions): ToolInvokeController {
   async function handleToolInvoke(
     toolName: string,
@@ -125,6 +127,10 @@ export function createToolInvokeController({
     let acquiredLockScope = "";
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
     const needsWriterLock = !useCurrentSession || role !== "writer";
+    // The writer fast path must fail closed like chat runs when this process
+    // lost its lock scope migration, or it can double-write to a session
+    // another process now owns.
+    if (!needsWriterLock) syncWriterLockScope?.();
     if (needsWriterLock) {
       const lockScope = writerLockScopeForSession(runSessionManager);
       const lockResult = await acquireWriterLock(lockScope, "gui", {
