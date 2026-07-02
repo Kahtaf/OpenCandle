@@ -268,8 +268,9 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         },
       );
       const message = asRecord(ack);
-      if (message.ok) {
-        writeJson(res, { result: asRecord(message.result) });
+      const result = asRecord(message.result);
+      if (result.toolCallId) {
+        writeJson(res, { result });
       } else {
         writeJson(
           res,

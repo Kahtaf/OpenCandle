@@ -100,6 +100,17 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
   });
 
+  it("returns proxied tool results even when the tool result is an error", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"');
+    const routeEnd = source.indexOf('url.pathname === "/api/local-coordinator/ask-user"', routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("const result = asRecord(message.result);");
+    expect(routeSource).toContain("if (result.toolCallId)");
+    expect(routeSource).not.toContain("if (message.ok)");
+  });
+
   it("requires local coordinator authorization before accepting proxied ask_user actions", () => {
     const routeBlock = routeBlockBefore(
       'url.pathname === "/api/local-coordinator/ask-user"',
