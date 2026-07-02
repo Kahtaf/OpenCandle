@@ -175,7 +175,39 @@ export function migrateWriterLockScope(
   } catch {
     // Best effort; destination lock is now authoritative for the canonical scope.
   }
+  migrateAcceptedActionStore(fromScopePath, toScopePath);
   return true;
+}
+
+function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string): void {
+  const fromPath = acceptedActionStorePath(fromScopePath);
+  const toPath = acceptedActionStorePath(toScopePath);
+  let fromActions: string[];
+  try {
+    const parsed = JSON.parse(readFileSync(fromPath, "utf8")) as { acceptedActionIds?: unknown };
+    fromActions = Array.isArray(parsed.acceptedActionIds)
+      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    return;
+  }
+  let toActions: string[] = [];
+  try {
+    const parsed = JSON.parse(readFileSync(toPath, "utf8")) as { acceptedActionIds?: unknown };
+    toActions = Array.isArray(parsed.acceptedActionIds)
+      ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
+      : [];
+  } catch {
+    // Destination store does not exist yet.
+  }
+  const acceptedActionIds = [...new Set([...toActions, ...fromActions])].slice(-500);
+  mkdirSync(dirname(toPath), { recursive: true });
+  writeFileSync(toPath, JSON.stringify({ acceptedActionIds }, null, 2), { mode: 0o600 });
+  try {
+    unlinkSync(fromPath);
+  } catch {
+    // Best effort; destination store now contains the merged accepted action ids.
+  }
 }
 
 function tryCreate(
@@ -270,6 +302,12 @@ function defaultOwnerId(pid: number): string {
 
 function lockPath(scopePath: string): string {
   return isFileScope(scopePath) ? `${scopePath}.writer.lock` : join(scopePath, "writer.lock");
+}
+
+function acceptedActionStorePath(scopePath: string): string {
+  return isFileScope(scopePath)
+    ? `${scopePath}.accepted-actions.json`
+    : join(scopePath, "accepted-actions.json");
 }
 
 function isFileScope(scopePath: string): boolean {

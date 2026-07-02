@@ -4,6 +4,10 @@ import { extname, join, resolve } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { buildDoctorReport } from "../../src/doctor/report.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
+import {
+  hasAcceptedSessionAction,
+  recordAcceptedSessionAction,
+} from "../../src/pi/session-action-dedupe.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import { chatRunSessionConflict } from "./chat-run-session.js";
@@ -359,13 +363,22 @@ async function handleSseChatRun(
   }
 
   const proxyAllowed = bodyOverride === undefined;
+  const actionId = String(bodyRecord.actionId ?? "").trim();
   const shouldProxyChatRun = proxyAllowed && canProxyChatRunToCoordinator(runSessionManager);
   if (shouldProxyChatRun) {
     if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
+    if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
+      writeJson(res, { ok: true, duplicate: true });
+      return;
+    }
     if (shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)) {
       writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
       return;
     }
+  }
+  if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
+    writeJson(res, { ok: true, duplicate: true });
+    return;
   }
 
   if (options.localSessionCoordinator) {
@@ -382,6 +395,7 @@ async function handleSseChatRun(
           runSessionManager,
           sessionId,
           prompt,
+          actionId: action.actionId,
         });
         if (!admitted) throw new SessionActionNotAdmitted();
         return { streamed: true };
@@ -409,6 +423,7 @@ async function handleSseChatRun(
     runSessionManager,
     sessionId,
     prompt,
+    actionId,
   });
 }
 
@@ -457,6 +472,7 @@ async function streamAcceptedSseChatRun({
   runSessionManager,
   sessionId,
   prompt,
+  actionId,
 }: {
   res: ServerResponse;
   options: GuiHttpRouteOptions;
@@ -466,6 +482,7 @@ async function streamAcceptedSseChatRun({
   runSessionManager: SessionManager;
   sessionId: string;
   prompt: string;
+  actionId: string;
 }): Promise<boolean> {
   if (activeRunSessionIds.has(sessionId)) {
     writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
@@ -543,6 +560,7 @@ async function streamAcceptedSseChatRun({
   });
 
   try {
+    recordAcceptedSessionAction(runSessionManager, actionId);
     const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
     if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
       runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });

@@ -4,6 +4,10 @@ import type { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
 import { getDefaults } from "../../src/memory/tool-defaults.js";
+import {
+  hasAcceptedSessionAction,
+  recordAcceptedSessionAction,
+} from "../../src/pi/session-action-dedupe.js";
 import { wrapWithDefaults } from "../../src/runtime/tool-defaults-wrapper.js";
 import { getAllTools } from "../../src/tools/index.js";
 import type { AskUserHandler } from "../../src/types/index.js";
@@ -99,9 +103,15 @@ export function createToolInvokeController({
         options.actionId,
       );
       if (proxied) return proxied;
+      if (options.actionId && hasAcceptedSessionAction(runSessionManager, options.actionId)) {
+        throw new Error("OpenCandle already accepted this action in the active session.");
+      }
       if (options.actionId && shouldBlockFailedCoordinatorAction(runSessionManager)) {
         throw new Error("OpenCandle is reconnecting to this session.");
       }
+    }
+    if (options.actionId && hasAcceptedSessionAction(runSessionManager, options.actionId)) {
+      throw new Error("OpenCandle already accepted this action in the active session.");
     }
     let acquiredLockScope = "";
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
@@ -121,6 +131,7 @@ export function createToolInvokeController({
 
     try {
       const runSessionId = safeSessionId(runSessionManager);
+      recordAcceptedSessionAction(runSessionManager, options.actionId ?? "");
       const result = await invokeTool(runSessionManager, tool, args, "ui", {
         askUserHandler:
           runSessionId && askUserHandlerForSessionId

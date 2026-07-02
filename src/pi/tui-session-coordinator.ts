@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { hasAcceptedSessionAction, recordAcceptedSessionAction } from "./session-action-dedupe.js";
 
 interface TuiSessionCoordinatorOptions {
   getSession: () => AgentSession;
@@ -95,7 +96,7 @@ export async function startTuiSessionCoordinatorServer(
 
     pruneExpiredActions();
     const actionKey = `${sessionId}:${actionId}`;
-    if (acceptedActions.has(actionKey)) {
+    if (acceptedActions.has(actionKey) || hasAcceptedSessionAction(sessionManager, actionId)) {
       writeJson(res, { ok: true, duplicate: true });
       return;
     }
@@ -118,6 +119,7 @@ export async function startTuiSessionCoordinatorServer(
 
     activeRunSessions.add(sessionId);
     try {
+      recordAcceptedSessionAction(sessionManager, actionId);
       await streamPromptRun(res, prompt, sessionId);
       acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
     } finally {
