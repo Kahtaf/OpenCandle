@@ -657,6 +657,7 @@ export async function buildSessionBootstrapPayload(
     coordination: {
       sessionId,
       status: roleForSessionBootstrap(options, sessionManager) === "writer" ? "ready" : "syncing",
+      ownerKind: ownerKindForSessionBootstrap(options, sessionManager),
     },
     catalog: buildCatalog(),
     modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
@@ -672,6 +673,14 @@ export async function buildSessionBootstrapPayload(
       }),
     },
   };
+}
+
+function ownerKindForSessionBootstrap(
+  options: Pick<GuiHttpRouteOptions, "getSessionManager" | "role">,
+  sessionManager: SessionManager,
+): string | undefined {
+  if (roleForSessionBootstrap(options, sessionManager) === "writer") return "gui";
+  return readWriterLock(writerLockScopeForSession(sessionManager))?.processKind;
 }
 
 function roleForSessionBootstrap(

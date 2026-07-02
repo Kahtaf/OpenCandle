@@ -103,9 +103,15 @@ export function AppShell() {
   });
   const liveEvents = liveEventsBySession[sessionView.activeSessionId] || [];
   const liveBaseEventCount = liveBaseEventCountBySession[sessionView.activeSessionId] || 0;
-  const visibleAskUserPrompts = gui.askUserPrompts.filter(
-    (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
-  );
+  const nonChatActionsUnavailable =
+    gui.coordination?.sessionId === sessionView.activeSessionId &&
+    gui.coordination?.ownerKind === "tui" &&
+    gui.role !== "writer";
+  const visibleAskUserPrompts = nonChatActionsUnavailable
+    ? []
+    : gui.askUserPrompts.filter(
+        (prompt) => !prompt.sessionId || prompt.sessionId === sessionView.activeSessionId,
+      );
   const hasGuiSessionContent = hasSessionContent(visibleEvents);
   const guiEventCount = visibleEvents.length;
   const homeNeedsFreshWriterSession =
@@ -357,8 +363,14 @@ export function AppShell() {
           : "workflows";
   const marketDomain = domainFromPath(pathname);
   const invokeToolForVisibleSession = useCallback(
-    (toolName, args) => gui.invokeTool(toolName, args, sessionView.activeSessionId),
-    [gui.invokeTool, sessionView.activeSessionId],
+    (toolName, args) => {
+      if (nonChatActionsUnavailable) {
+        gui.setToast("OpenCandle is reconnecting to this session.");
+        return false;
+      }
+      return gui.invokeTool(toolName, args, sessionView.activeSessionId);
+    },
+    [gui.invokeTool, gui.setToast, nonChatActionsUnavailable, sessionView.activeSessionId],
   );
   const scrollAnchorId = search?.messageId || search?.researchId || search?.synthesisId || "";
 

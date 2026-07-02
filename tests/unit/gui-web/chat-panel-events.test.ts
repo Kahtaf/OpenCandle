@@ -134,6 +134,15 @@ describe("ChatPanel event transcript rendering", () => {
     expect(source).toContain("homeNeedsFreshWriterSession ||");
   });
 
+  it("keeps non-chat actions unavailable for TUI-owned routed sessions", () => {
+    const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+
+    expect(source).toContain("const nonChatActionsUnavailable");
+    expect(source).toContain('gui.coordination?.ownerKind === "tui"');
+    expect(source).toContain("const visibleAskUserPrompts = nonChatActionsUnavailable");
+    expect(source).toContain('gui.setToast("OpenCandle is reconnecting to this session.");');
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,
