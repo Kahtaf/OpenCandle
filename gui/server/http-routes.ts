@@ -560,10 +560,10 @@ async function streamAcceptedSseChatRun({
   });
 
   try {
-    recordAcceptedSessionAction(runSessionManager, actionId);
     const modelSetup = buildModelSetupState(runSession.modelRegistry, runSession.model);
     if (!prompt.startsWith("/") && modelSetup.requirement !== "ready") {
       runSessionManager.appendMessage({ role: "user", content: prompt, timestamp: Date.now() });
+      recordAcceptedSessionAction(runSessionManager, actionId);
       const message =
         modelSetup.requirement === "select_model"
           ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
@@ -575,6 +575,7 @@ async function streamAcceptedSseChatRun({
       broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
+      recordAcceptedSessionAction(runSessionManager, actionId);
       broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     }
     seq = liveAdapter.nextSeq();
