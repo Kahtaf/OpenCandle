@@ -137,7 +137,13 @@ export async function startTuiSessionCoordinatorServer(
         acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
         actionAccepted = true;
       };
-      const completed = await streamPromptRun(res, prompt, sessionId, recordAcceptedAction);
+      let completed: boolean;
+      try {
+        completed = await streamPromptRun(res, prompt, sessionId, recordAcceptedAction);
+      } catch (error) {
+        if (!actionAccepted) clearPendingSessionAction(sessionManager, actionId);
+        throw error;
+      }
       if (completed) {
         recordAcceptedAction();
       } else if (!actionAccepted) {
