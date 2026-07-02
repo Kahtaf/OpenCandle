@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- GUI model setup now keeps the composer usable for drafting while setup is incomplete, explains read-only follower mode, and disables model setup controls when another window owns the session.
+- GUI/TUI session coordination now uses authenticated local forwarding, session-scoped action IDs, neutral syncing/unavailable language, and verified Browser screenshots instead of exposing writer/follower ownership to users.
+- GUI model setup now keeps the composer usable for drafting while setup is incomplete and disables model setup controls with neutral availability language when setup changes are unavailable in this window.
 - The GUI now retries a stale session connection as soon as the browser returns to the foreground instead of leaving editing disabled behind the reconnect banner.
 
 ## [0.10.0] - 2026-06-27
