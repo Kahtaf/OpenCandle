@@ -100,12 +100,10 @@ export function createToolInvokeController({
       );
       if (proxied) return proxied;
     }
-    if (role !== "writer") {
-      throw new Error("OpenCandle is reconnecting to this session.");
-    }
     let acquiredLockScope = "";
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
-    if (!useCurrentSession) {
+    const needsWriterLock = !useCurrentSession || role !== "writer";
+    if (needsWriterLock) {
       const lockScope = writerLockScopeForSession(runSessionManager);
       const lockResult = await acquireWriterLock(lockScope, "gui", {
         coordinatorEndpoint: localCoordinatorEndpoint,

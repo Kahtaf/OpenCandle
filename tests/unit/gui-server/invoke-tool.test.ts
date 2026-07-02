@@ -487,6 +487,62 @@ describe("invokeToolFromUi", () => {
     }
   });
 
+  it("lets a follower process invoke tools on an unowned target session", async () => {
+    const currentSessionManager = {
+      getSessionId: () => "current-session",
+      getSessionFile: () => join(openCandleHome, "current-session.jsonl"),
+      appendMessage: vi.fn(),
+    } as unknown as SessionManager;
+    const targetSessionManager = {
+      getSessionId: () => "target-session",
+      getSessionFile: () => join(openCandleHome, "target-session.jsonl"),
+      appendMessage: vi.fn(),
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "get_stock_quote",
+      label: "Quote",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "MSFT quote" }],
+          details: { symbol: "MSFT", price: 420 },
+        };
+      },
+    };
+    const invokeTool = vi.fn(invokeToolFromUi);
+    const broadcastSessionSnapshot = vi.fn();
+    const controller = createToolInvokeController({
+      role: "follower",
+      getSessionManager: () => currentSessionManager,
+      resolveSessionManager: vi.fn(async () => targetSessionManager),
+      broadcastState: vi.fn(),
+      broadcastSessionSnapshot,
+      getTools: () => [tool],
+      invokeTool,
+    });
+
+    await expect(
+      controller.handleToolInvoke("get_stock_quote", { symbol: "MSFT" }, "target-session"),
+    ).resolves.toMatchObject({
+      result: { details: { symbol: "MSFT", price: 420 } },
+      isError: false,
+    });
+
+    expect(invokeTool).toHaveBeenCalledWith(
+      targetSessionManager,
+      tool,
+      { symbol: "MSFT" },
+      "ui",
+      expect.any(Object),
+    );
+    expect(broadcastSessionSnapshot).toHaveBeenCalledWith(targetSessionManager);
+    expect(readWriterLock(writerLockScopeForSession(targetSessionManager))).toBeNull();
+  });
+
   it("passes the GUI ask handler through direct UI tool invocation", async () => {
     const messages: Message[] = [];
     const broadcastState = vi.fn();

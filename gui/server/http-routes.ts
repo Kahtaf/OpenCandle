@@ -363,12 +363,6 @@ async function handleSseChatRun(
     if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
   }
 
-  if (options.role !== "writer") {
-    if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
-    writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
-    return;
-  }
-
   if (options.localSessionCoordinator) {
     const action = buildChatRunActionEnvelope(bodyRecord, sessionId);
     let result: SessionActionResult<{ streamed: boolean }>;
@@ -478,7 +472,8 @@ async function streamAcceptedSseChatRun({
   const useCurrentSession = !targetSessionManager || currentSessionFile === targetSessionFile;
   let acquiredLockScope = "";
   let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
-  if (!useCurrentSession) {
+  const needsWriterLock = !useCurrentSession || options.role !== "writer";
+  if (needsWriterLock) {
     const lockScope = writerLockScopeForSession(runSessionManager);
     const lockResult = await acquireWriterLock(lockScope, "gui", {
       coordinatorEndpoint: options.localCoordinatorEndpoint,

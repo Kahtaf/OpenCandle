@@ -141,6 +141,15 @@ describe("GUI server route guards", () => {
     expect(currentBranch).toContain("options.syncCurrentWriterLockScope?.()");
   });
 
+  it("admits chat runs by target session lock state instead of process startup role", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const handlerStart = source.indexOf("async function handleSseChatRun");
+    const handlerEnd = source.indexOf("async function proxyChatRunToCoordinator", handlerStart);
+    const handlerSource = source.slice(handlerStart, handlerEnd);
+
+    expect(handlerSource).not.toContain('options.role !== "writer"');
+  });
+
   it("refreshes GUI heartbeats against the migrated canonical session lock scope", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const syncStart = source.indexOf("function syncCurrentWriterLockScope");
