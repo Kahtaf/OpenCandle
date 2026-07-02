@@ -91,7 +91,7 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Browse tools");
   });
 
-  it("keeps ask_user controls unavailable in non-owner windows", () => {
+  it("keeps ask_user controls available in non-owner windows for proxying", () => {
     const html = renderChatPanelHtml({
       role: "follower",
       askUserPrompts: [
@@ -109,7 +109,7 @@ describe("ChatPanel event transcript rendering", () => {
     });
 
     expect(html).toContain("Continue?");
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Answer yes/);
+    expect(html).toMatch(/<button(?![^>]*disabled="")[^>]*>Answer yes/);
     expect(html).not.toMatch(/writer|follower|read-only|takeover/i);
   });
 

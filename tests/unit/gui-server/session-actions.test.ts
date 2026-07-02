@@ -10,6 +10,7 @@ import {
   deleteSessionFile,
   renameSessionFile,
 } from "../../../gui/server/session-actions.js";
+import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 
 describe("GUI session actions", () => {
   it("renames a Pi session by appending session_info so the TUI session list sees it", async () => {
@@ -172,6 +173,71 @@ describe("GUI session actions", () => {
     });
 
     expect(answer).toHaveBeenCalledOnce();
+  });
+
+  it("proxies ask_user answers from non-owner GUI windows", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      await acquireWriterLock(writerLockScopeForSession(manager), "gui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      const fetchMock = vi.fn(
+        async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
+      globalThis.fetch = fetchMock as typeof fetch;
+      const controller = createSessionActionsController({
+        role: "follower",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => manager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer: vi.fn(), cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await controller.handleAskUserAnswer("ask-1", "Yes", {
+        actionId: "ask-action-1",
+        sessionId: manager.getSessionId(),
+        source: "browser",
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        new URL("http://127.0.0.1:25432/api/local-coordinator/ask-user"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "x-opencandle-coordinator-secret": "secret",
+          }),
+          body: JSON.stringify({
+            sessionId: manager.getSessionId(),
+            actionId: "ask-action-1",
+            actionType: "ask_user.answer",
+            payload: { id: "ask-1", answer: "Yes" },
+          }),
+        }),
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -83,7 +83,11 @@ export function createToolInvokeController({
     );
     const useCurrentSession = sameSessionStorage(currentSessionManager, runSessionManager);
     const allowProxy = options.allowProxy !== false;
-    if (!useCurrentSession && allowProxy && canProxyToolInvokeToCoordinator(runSessionManager)) {
+    if (
+      allowProxy &&
+      (role !== "writer" || !useCurrentSession) &&
+      canProxyToolInvokeToCoordinator(runSessionManager)
+    ) {
       const proxied = await proxyToolInvokeToCoordinator(
         runSessionManager,
         toolName,

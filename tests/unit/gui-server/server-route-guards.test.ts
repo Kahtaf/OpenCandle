@@ -100,6 +100,15 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
   });
 
+  it("requires local coordinator authorization before accepting proxied ask_user actions", () => {
+    const routeBlock = routeBlockBefore(
+      'url.pathname === "/api/local-coordinator/ask-user"',
+      "const body = asRecord(await readJsonBody(req));",
+    );
+
+    expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
   it("does not authorize local coordinator calls with browser cookies alone", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const guardStart = source.indexOf("function allowLocalCoordinatorRequest");

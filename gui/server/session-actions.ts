@@ -12,6 +12,7 @@ import {
   waitForResolvedToolCalls,
   waitForSessionTurnSettlement,
 } from "./session-entry-wait.js";
+import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
 
 interface AskUserBridge {
   answer(id: string, answer: string): boolean;
@@ -57,6 +58,7 @@ export interface SessionActionMeta {
   sessionId?: string;
   actionId?: string;
   source?: SessionActionSource;
+  allowProxy?: boolean;
 }
 
 export function createSessionActionsController({
@@ -109,16 +111,22 @@ export function createSessionActionsController({
     value: unknown,
     action?: SessionActionMeta,
   ): Promise<void> {
-    ensureWriter();
     const answer = String(value ?? "").trim();
     if (!answer) throw new Error("Answer cannot be empty");
+    if (role !== "writer") {
+      if (await proxyAskUserAction("ask_user.answer", { id, answer }, action)) return;
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
     await runCoordinatedSessionAction("ask_user.answer", { id, answer }, action, async () => {
       if (!askUserBridge.answer(id, answer)) throw new Error("Unknown or resolved question");
     });
   }
 
   async function handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void> {
-    ensureWriter();
+    if (role !== "writer") {
+      if (await proxyAskUserAction("ask_user.cancel", { id }, action)) return;
+      throw new Error("OpenCandle is reconnecting to this session.");
+    }
     await runCoordinatedSessionAction("ask_user.cancel", { id }, action, async () => {
       if (!askUserBridge.cancel(id)) throw new Error("Unknown or resolved question");
     });
@@ -198,6 +206,41 @@ export function createSessionActionsController({
       },
     );
     if (!result.ok) throw new Error(result.message);
+  }
+
+  async function proxyAskUserAction(
+    actionType: "ask_user.answer" | "ask_user.cancel",
+    payload: Record<string, unknown>,
+    action: SessionActionMeta | undefined,
+  ): Promise<boolean> {
+    if (action?.allowProxy === false) return false;
+    const sessionManager = getSessionManager();
+    const lock = readWriterLock(writerLockScopeForSession(sessionManager));
+    if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret || lock.pid === process.pid) {
+      return false;
+    }
+    const endpoint = new URL("/api/local-coordinator/ask-user", lock.coordinatorEndpoint);
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+        },
+        body: JSON.stringify({
+          sessionId: action?.sessionId || sessionManager.getSessionId(),
+          actionId: action?.actionId || "",
+          actionType,
+          payload,
+        }),
+      });
+    } catch {
+      return false;
+    }
+    if (response.ok) return true;
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || "OpenCandle is reconnecting to this session.");
   }
 }
 

@@ -282,6 +282,40 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/local-coordinator/ask-user" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      const payload = asRecord(body.payload);
+      try {
+        const action = {
+          actionId: String(body.actionId ?? ""),
+          sessionId: String(body.sessionId ?? ""),
+          source: "browser" as const,
+          allowProxy: false,
+        };
+        if (body.actionType === "ask_user.answer") {
+          await options.sessionActionsController.handleAskUserAnswer(
+            String(payload.id ?? ""),
+            payload.answer,
+            action,
+          );
+        } else if (body.actionType === "ask_user.cancel") {
+          await options.sessionActionsController.handleAskUserCancel(
+            String(payload.id ?? ""),
+            action,
+          );
+        } else {
+          writeJson(res, { error: "Unknown ask_user action" }, 400);
+          return;
+        }
+        writeJson(res, { ok: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        writeJson(res, { error: message }, 409);
+      }
+      return;
+    }
+
     const runSessionId = sessionIdFromRoute(url.pathname, "runs");
     if (runSessionId && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;

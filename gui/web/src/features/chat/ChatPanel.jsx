@@ -165,7 +165,7 @@ export function ChatPanel({
                 />
               ))}
               {askUserPrompts.map((prompt) => (
-                <AskUserPromptCard key={prompt.id} prompt={prompt} role={role} send={send} />
+                <AskUserPromptCard key={prompt.id} prompt={prompt} send={send} />
               ))}
               {activity ? <AgentActivity activity={activity} /> : null}
               <div ref={transcript.bottomRef} data-chat-bottom-sentinel aria-hidden="true" />
@@ -398,10 +398,10 @@ function SessionLoadingState() {
   );
 }
 
-function AskUserPromptCard({ prompt, role, send }) {
+function AskUserPromptCard({ prompt, send }) {
   const [draft, setDraft] = useState("");
   const pending = prompt.status === "pending";
-  const disabled = !pending || role !== "writer";
+  const disabled = !pending;
   const submit = (answer) => {
     const value = String(answer ?? draft).trim();
     if (!value || disabled) return;
