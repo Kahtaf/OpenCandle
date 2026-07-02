@@ -132,10 +132,10 @@ describe("release readiness automation", () => {
   });
 
   it("rewrites llms-full markdown links to absolute public URLs", () => {
-    const websiteBuild = read("website/build.mjs");
+    const websiteBuild = read("website/scripts/prerender.jsx");
 
     expect(websiteBuild).toContain("function rewriteMarkdownLinksForSite");
-    expect(websiteBuild).toContain("rewriteMarkdownLinksForSite(body.trim(), page)");
+    expect(websiteBuild).toContain("rewriteMarkdownLinksForSite(page.body, page)");
     expect(websiteBuild).toContain("AGENTS.md");
   });
 

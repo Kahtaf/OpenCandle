@@ -5,14 +5,15 @@ description: Run the local OpenCandle browser workbench and understand local ses
 
 # OpenCandle GUI Quickstart
 
-1. Install dependencies from the repo root with `npm install`.
-2. Start the local GUI with `npm run gui` from a checkout, or `opencandle gui` from an installed package.
+![The OpenCandle GUI workbench with a chat thread, tool calls, and market context](./images/gui-workbench.png)
+
+1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
 3. Open `http://127.0.0.1:14567`.
 4. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
 5. Start with a keyless market-data prompt such as `What is AAPL trading at?`, then try `/analyze NVDA` or the empty-state action cards.
 6. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 
-The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or Tailscale access.
+The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or [Tailscale](https://tailscale.com) access.
 
 The GUI shares Pi sessions with the terminal UI and other local browser windows. OpenCandle coordinates those local surfaces behind the scenes so prompts, follow-up answers, and supported tool actions are forwarded to the active session owner when needed. During startup, session switches, or owner recovery, the UI may briefly report that OpenCandle is reconnecting or syncing the session; retry once the current run settles.
 
@@ -23,6 +24,14 @@ curl http://127.0.0.1:14567/health
 ```
 
 `{"ok":true,...}` means the HTTP server is alive. The `role` field is diagnostic metadata for support logs; normal GUI use should not require choosing between process roles.
+
+Other useful local endpoints:
+
+- `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
+- `GET /api/sessions` lists saved sessions.
+- `GET /api/session/events` returns the current projected chat events.
+- `POST /api/chat/run` streams one chat run.
+- `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
 ## Tailscale Access
 

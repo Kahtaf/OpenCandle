@@ -99,7 +99,7 @@ Find recent SEC filings for AAPL and summarize what each filing type is for.
 
 Expected evidence:
 
-- SEC EDGAR filing records
+- [SEC EDGAR](https://www.sec.gov/edgar/search/) filing records
 - filing dates, accession links, or available identifiers
 - cautious synthesis that does not overstate what was inspected
 
@@ -122,7 +122,7 @@ Get the latest fed funds rate and compare it with CPI and unemployment.
 
 Expected evidence:
 
-- FRED series values when `FRED_API_KEY` is configured
+- [FRED](https://fred.stlouisfed.org) series values when `FRED_API_KEY` is configured
 - dates for the reported observations
 - warning if a requested series is missing or unavailable
 
@@ -137,7 +137,7 @@ Give me a sentiment read on AMD across Reddit, Twitter/X, and web results.
 Expected evidence:
 
 - source-specific sentiment records where available
-- web search results through Exa, Brave, or DuckDuckGo fallback
+- web search results through [Exa](https://exa.ai), [Brave](https://brave.com/search/api/), or [DuckDuckGo](https://duckduckgo.com) fallback
 - divergence notes when retail chatter and news context disagree
 - explicit provider/setup warnings
 

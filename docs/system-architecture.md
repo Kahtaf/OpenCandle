@@ -44,7 +44,7 @@ Produce the answer
 
 OpenCandle has two main surfaces.
 
-The terminal UI is the fastest keyboard loop. It supports normal chat, slash commands, model setup, provider connection, and saved Pi sessions.
+The terminal UI is the fastest keyboard loop. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
 
 The local GUI is a browser workbench at `http://127.0.0.1:14567`. It shows chat, session history, provider setup, a tool and workflow catalog, a financial context panel, and visual result cards for market data, options, macro, filings, sentiment, and portfolio facts.
 
@@ -84,20 +84,9 @@ In the GUI, these appear as question cards in the chat. After you answer, OpenCa
 
 ## Tools And Providers
 
-Tools are small finance capabilities. They fetch and format data. They should not invent market facts or make the final investment conclusion.
+Tools are small finance capabilities. They fetch and format data. They should not invent market facts or make the final investment conclusion. Provider helpers add caching, rate limiting, fallback behavior, and degraded-state metadata; if a provider is missing, stale, or unavailable, that shows up in the result instead of being hidden.
 
-| Area | Examples | Providers or source |
-| --- | --- | --- |
-| Market data | quotes, history, ticker lookup, crypto price/history | Yahoo Finance, Alpha Vantage when configured, CoinGecko |
-| Options | option chains, open interest, implied volatility, Greeks | Yahoo Finance plus local calculations |
-| Fundamentals | company overview, financials, earnings, DCF, comparisons | Alpha Vantage |
-| Macro | rates, CPI, GDP, unemployment, fear/greed | FRED, alternative.me |
-| Technical | indicators, moving-average backtests | Local calculations over market history |
-| Sentiment | Reddit, Twitter/X, web/news sentiment, source summaries | `rdt-cli`, `twitter-cli`, local browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
-| Filings | SEC filing search | SEC EDGAR |
-| Portfolio | holdings, watchlists, predictions, risk, correlation | Local state plus market data |
-
-Provider helpers add caching, rate limiting, fallback behavior, and degraded-state metadata. If a provider is missing, stale, or unavailable, that should show up in the result instead of being hidden.
+The full domain-by-domain map of tools and providers lives in [Data Sources](./data-sources.md).
 
 ## Evidence And Answer Quality
 
@@ -114,9 +103,9 @@ Expected behavior:
 
 The model synthesizes after evidence is gathered. It should answer directly, name risks, disclose gaps, and avoid unsupported certainty.
 
-## GUI Runtime
+## GUI Runtime And Local State
 
-The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates.
+The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal surfaces coordinate through authenticated local forwarding, session-scoped action IDs, and stale-lock recovery so supported actions can stay attached to the active session without exposing ownership roles in the UI. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access.
 
 Useful local endpoints:
 
@@ -127,11 +116,9 @@ Useful local endpoints:
 - `POST /api/chat/run` streams one chat run.
 - `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
-Only one local process applies a session action at a time. Browser and terminal surfaces coordinate through authenticated local forwarding, session-scoped action IDs, and stale-lock recovery so supported actions can stay attached to the active session without exposing ownership roles in the UI.
-
 ## Local State
 
-OpenCandle state defaults to `~/.opencandle/`.
+OpenCandle state defaults to `~/.opencandle/`; the state files and env overrides are documented in [Configuration](./configuration.md).
 
 Common files:
 
@@ -154,4 +141,4 @@ OpenCandle uses layered validation:
 - Full-session evals that check whether the agent chose the right investigation path, used relevant tools, disclosed gaps, framed risk, and answered the user directly.
 - Competitive evals that compare OpenCandle against generic agents on realistic finance prompts.
 
-See [Testing and Evals](./testing-and-evals.md) and [Benchmarking](./benchmarking.md).
+See [Testing and Evals](./testing-and-evals.md).

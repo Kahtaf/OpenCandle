@@ -37,6 +37,14 @@ describe("loadEnv", () => {
     expect(process.env.FRED_API_KEY).toBe("fred-456");
   });
 
+  it("does not override variables already exported in the environment", () => {
+    process.env.OPENAI_API_KEY = "shell-key";
+    mockedReadFileSync.mockReturnValue("OPENAI_API_KEY=dotenv-key\nFRED_API_KEY=fred-456");
+    loadEnv();
+    expect(process.env.OPENAI_API_KEY).toBe("shell-key");
+    expect(process.env.FRED_API_KEY).toBe("fred-456");
+  });
+
   it("ignores comment lines", () => {
     mockedReadFileSync.mockReturnValue("# This is a comment\nOPENAI_API_KEY=test-key");
     loadEnv();

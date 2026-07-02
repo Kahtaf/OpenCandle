@@ -1,0 +1,28 @@
+{
+  "name": "@opencandle/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./badge": "./src/badge.jsx",
+    "./badge-variants": "./src/badge-variants.js",
+    "./button": "./src/button.jsx",
+    "./button-variants": "./src/button-variants.js",
+    "./card": "./src/card.jsx",
+    "./input": "./src/input.jsx",
+    "./kbd": "./src/kbd.jsx",
+    "./logo": "./src/logo.jsx",
+    "./styles.css": "./src/styles.css",
+    "./textarea": "./src/textarea.jsx",
+    "./tooltip": "./src/tooltip.jsx",
+    "./utils": "./src/utils.js"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.3.0",
+    "@radix-ui/react-tooltip": "^1.2.10",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "react": "^19.2.7",
+    "tailwind-merge": "^3.6.0"
+  }
+}

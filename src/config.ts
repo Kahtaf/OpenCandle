@@ -95,7 +95,7 @@ export function loadEnv(path = ".env"): void {
     if (eqIndex === -1) continue;
     const key = trimmed.slice(0, eqIndex).trim();
     const value = trimmed.slice(eqIndex + 1).trim();
-    if (key && value) {
+    if (key && value && process.env[key] === undefined) {
       process.env[key] = value;
     }
   }

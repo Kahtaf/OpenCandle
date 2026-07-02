@@ -14,7 +14,9 @@
   "type": "module",
   "workspaces": [
     "gui/server",
-    "gui/web"
+    "gui/web",
+    "packages/ui",
+    "website"
   ],
   "bin": {
     "opencandle": "dist/cli.js"
@@ -86,7 +88,7 @@
     "prestart": "npm run check:node",
     "start": "tsx src/cli.ts",
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
-    "docs:site:build": "node website/build.mjs",
+    "docs:site:build": "npm --workspace @opencandle/website run build",
     "docs:site:serve": "node website/serve.mjs",
     "docs:links:check": "node scripts/check-public-doc-links.mjs",
     "gui": "tsx gui/server/server.ts",

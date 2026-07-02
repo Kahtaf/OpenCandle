@@ -9,7 +9,7 @@ This path assumes you want the fastest successful run: connect one AI model, ask
 
 Model credentials and market-data provider keys are separate. OpenCandle needs a model before chat can start. A keyless market-data prompt means the market data source does not need an OpenCandle provider key; it does not mean the agent can run without model access.
 
-Pi is the bundled local agent runtime that handles model sign-in, model keys, the terminal shell, and saved sessions. OpenCandle uses Pi for that runtime layer and adds the finance-specific tools and GUI.
+[Pi](https://github.com/earendil-works/pi) is the bundled local agent runtime that handles model sign-in, model keys, the terminal shell, and saved sessions. OpenCandle uses Pi for that runtime layer and adds the finance-specific tools and GUI.
 
 ## Five-Minute Path
 
@@ -40,7 +40,7 @@ Compare BTC and ETH over the last month
 What is the latest SEC filing for AAPL?
 ```
 
-Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index work without OpenCandle-specific provider keys. Reddit sentiment uses `rdt-cli` plus your normal Reddit browser session; Twitter/X sentiment uses `twitter-cli` plus your normal x.com browser session.
+[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
 
 4. Add provider keys only when needed.
 
@@ -51,6 +51,8 @@ If an answer says a provider is missing or degraded, follow the suggested `/conn
 /connect economy
 /connect search
 ```
+
+`financials` connects [Alpha Vantage](https://www.alphavantage.co), `economy` connects [FRED](https://fred.stlouisfed.org), and `search` picks between [Brave](https://brave.com/search/api/) and [Exa](https://exa.ai). The full list of `/connect` targets is in [TUI](./tui.md#connect-targets).
 
 ## What Success Looks Like
 
@@ -71,13 +73,13 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | Setup exits before chat starts | Start OpenCandle again and complete model setup. Chat requires a connected model. |
 | No models appear after adding a key | Check that the key matches the selected provider, then rerun `/setup`. |
 | A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
-| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell. Environment variables override `~/.opencandle/config.json`. |
+| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell profile, or in the `.env` file in the launch directory if it is set there. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
 | The GUI is open but not updating | Wait for any active run to settle, refresh the browser, or restart the GUI and reopen `http://127.0.0.1:14567`. |
 
 ## Native Dependency Troubleshooting
 
-OpenCandle stores local state with `better-sqlite3`, which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
+OpenCandle stores local state with [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3), which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
 
 1. Use a supported Node.js version: `>=22.19.0 <27`.
 2. Retry a clean install.

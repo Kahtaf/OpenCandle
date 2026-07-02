@@ -1,6 +1,6 @@
 # Contributing to OpenCandle
 
-OpenCandle is a financial data analysis agent built with TypeScript, Vitest, and Pi. Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.
+OpenCandle is a financial data analysis agent built with [TypeScript](https://www.typescriptlang.org), [Vitest](https://vitest.dev), and [Pi](https://github.com/earendil-works/pi). Contributions should keep the runtime small, the data flow explicit, and the quality bar high enough for a public npm package.
 
 ## Before You Start
 
@@ -38,7 +38,7 @@ Before opening a release-facing PR, run the CI-equivalent local gate:
 npm run release:check
 ```
 
-That gate runs typecheck, Biome CI, unit tests, docs build, package-content validation, packed-install smoke, and public-doc link checks. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials.
+That gate runs typecheck, [Biome](https://biomejs.dev) CI, unit tests, docs build, package-content validation, packed-install smoke, and public-doc link checks. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials.
 
 ## Contribution Rules
 

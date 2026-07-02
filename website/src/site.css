@@ -1,0 +1,269 @@
+@import "tailwindcss";
+@import "@opencandle/ui/styles.css";
+@config "../tailwind.config.cjs";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-width: 320px;
+    background: hsl(var(--tw-background));
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: hsl(var(--tw-background));
+    color: hsl(var(--tw-foreground));
+    -webkit-tap-highlight-color: hsl(var(--tw-foreground) / 0.08);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--tw-foreground));
+    outline-offset: 2px;
+  }
+
+  code {
+    border: 1px solid hsl(var(--tw-border));
+    background: hsl(var(--tw-secondary));
+    color: hsl(var(--tw-foreground));
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+  }
+}
+
+@layer components {
+  /* Mobile drawer state. The drawer markup is prerendered; these rules react
+     to the data attributes toggled by entry-client.jsx. */
+  html[data-drawer-open="true"] {
+    overflow: hidden;
+  }
+
+  [data-docs-drawer]:not([hidden]) [data-drawer-overlay] {
+    animation: drawer-fade-in 200ms ease-out;
+  }
+
+  [data-docs-drawer]:not([hidden]) [data-drawer-panel] {
+    animation: drawer-slide-up 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  [data-docs-drawer][data-closing] [data-drawer-overlay] {
+    opacity: 0;
+    transition: opacity 150ms ease-in;
+  }
+
+  [data-docs-drawer][data-closing] [data-drawer-panel] {
+    transform: translateY(100%);
+    transition: transform 200ms ease-in;
+  }
+
+  @keyframes drawer-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes drawer-slide-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-docs-drawer]:not([hidden]) [data-drawer-overlay],
+    [data-docs-drawer]:not([hidden]) [data-drawer-panel],
+    [data-docs-drawer][data-closing] [data-drawer-overlay],
+    [data-docs-drawer][data-closing] [data-drawer-panel] {
+      animation: none;
+      transition: none;
+    }
+  }
+
+  .docs-content {
+    color: hsl(var(--tw-foreground) / 0.84);
+    font-size: 0.875rem;
+    line-height: 1.75;
+  }
+
+  .docs-content > * + * {
+    margin-top: 1.25rem;
+  }
+
+  .docs-content h1,
+  .docs-content h2,
+  .docs-content h3,
+  .docs-content h4 {
+    color: hsl(var(--tw-foreground));
+    font-weight: 600;
+    line-height: 1.25;
+  }
+
+  .docs-content h1 {
+    margin: 0 0 1rem;
+    font-size: 1.75rem;
+    letter-spacing: -0.01em;
+  }
+
+  .docs-content h2 {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid hsl(var(--tw-border));
+    font-size: 1.125rem;
+    letter-spacing: -0.01em;
+  }
+
+  .docs-content h3 {
+    margin-top: 2rem;
+    font-size: 1rem;
+  }
+
+  .docs-content h4 {
+    margin-top: 1.25rem;
+    font-size: 0.9rem;
+  }
+
+  .docs-content h1 a,
+  .docs-content h2 a,
+  .docs-content h3 a,
+  .docs-content h4 a {
+    text-decoration: none;
+  }
+
+  .docs-content p,
+  .docs-content ul,
+  .docs-content ol,
+  .docs-content blockquote,
+  .docs-content pre,
+  .docs-content table {
+    margin-bottom: 0;
+  }
+
+  .docs-content ul {
+    list-style: disc;
+  }
+
+  .docs-content ol {
+    list-style: decimal;
+  }
+
+  .docs-content ul,
+  .docs-content ol {
+    padding-left: 1.35rem;
+  }
+
+  .docs-content li::marker {
+    color: hsl(var(--tw-muted-foreground));
+  }
+
+  /* GFM task lists carry their own checkboxes; no disc markers on top. */
+  .docs-content ul.contains-task-list {
+    list-style: none;
+    padding-left: 0.25rem;
+  }
+
+  .docs-content li + li {
+    margin-top: 0.5rem;
+  }
+
+  .docs-content img {
+    display: block;
+    border: 1px solid hsl(var(--tw-border));
+    border-radius: 12px;
+    box-shadow: var(--shadow-subtle-xs);
+  }
+
+  .docs-content a {
+    color: hsl(var(--tw-foreground));
+    font-weight: 500;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .docs-content blockquote {
+    border-left: 3px solid hsl(var(--tw-border));
+    color: hsl(var(--tw-muted-foreground));
+    padding-left: 1rem;
+  }
+
+  .docs-content pre {
+    overflow-x: auto;
+    border: 1px solid hsl(var(--tw-border));
+    border-radius: var(--radius);
+    background: hsl(var(--tw-secondary));
+    padding: 1rem;
+  }
+
+  .docs-content pre code {
+    display: block;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    color: hsl(var(--tw-foreground));
+    font-size: 0.78rem;
+    line-height: 1.55;
+  }
+
+  .docs-content table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    /* Scroll-shadow affordance: an inner shadow marks a horizontally clipped
+       edge and fades out once that edge is fully scrolled into view. */
+    background:
+      linear-gradient(to right, hsl(var(--tw-background)) 30%, transparent),
+      linear-gradient(to right, transparent, hsl(var(--tw-background)) 70%) 100% 0,
+      radial-gradient(farthest-side at 0 50%, hsl(var(--tw-foreground) / 0.16), transparent),
+      radial-gradient(farthest-side at 100% 50%, hsl(var(--tw-foreground) / 0.16), transparent) 100%
+      0;
+    background-repeat: no-repeat;
+    background-size:
+      40px 100%,
+      40px 100%,
+      14px 100%,
+      14px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  .docs-content th,
+  .docs-content td {
+    border-bottom: 1px solid hsl(var(--tw-border));
+    padding: 0.625rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .docs-content th {
+    color: hsl(var(--tw-muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+}

@@ -2,8 +2,20 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Public docs now link external resources on first mention per page: data providers (Yahoo Finance, FRED, SEC EDGAR, CoinGecko, TradingView, Alpha Vantage, Brave, Exa, Finnhub, DuckDuckGo, alternative.me), the `rdt-cli` and `twitter-cli` sentiment CLIs, and project tooling such as Pi, Node.js, Vitest, TypeScript, Biome, Typebox, Tailscale, and `better-sqlite3` across the docs pages, CONTRIBUTING, and SECURITY.
+- The public site now shares one navigation shell: the same sticky navbar on the homepage and every docs page, a docs sidebar under it on desktop, and a bottom drawer behind the navbar hamburger on mobile (replacing the old "Docs navigation" dropdown). The homepage was rebuilt to answer why OpenCandle exists: a claim-first hero with install commands, the evidence receipt behind a sample answer, a chatbot comparison, a GUI tour, and a builder section with a typed-tool code sample. Docs prose, tables, and lists follow the GUI's typography and table styling.
+- Docs navigation is now ordered as a first-time visitor's journey (Start here, Guides, Reference, Build, Project) with plain-language labels such as "Why OpenCandle" and "Terminal (TUI)", the docs overview page was condensed into a scannable map, and homepage and docs copy and spacing were tightened for less density. URLs are unchanged.
+- Docs markdown can now embed images from `docs/images/`: the site build copies them, styles them, and rewrites markdown-mirror and llms-full.txt references to absolute URLs. The GUI Quickstart page shows the workbench screenshot as the first example.
+- The public homepage now leads with the product claim and answers pre-install questions directly: a bring-your-own-model note, the evidence breakdown behind a sample answer, a visible MIT/Node/OS requirements line, a current-version badge, and a ChatGPT-differentiation FAQ.
+- Public docs were consolidated: the standalone ChatGPT and spreadsheet comparison pages merged into one Comparisons page, the benchmarking page merged into Testing and Evals, System Architecture links to the data-sources and configuration pages instead of duplicating their tables, and docs navigation now separates user pages from contributor pages.
+
 ### Fixed
 
+- `.env` files no longer override environment variables that are already exported in the shell, matching conventional dotenv precedence.
+- Docs now enumerate the `/connect` provider/category targets and mark one model provider as required instead of listing all model keys as optional.
+- DESIGN.md and DESIGN.json now name `packages/ui` as the normative token/primitive source and match the shipped button, badge, page-width, and typography metrics instead of retired aspirational values.
 - GUI/TUI session coordination now uses authenticated local forwarding, session-scoped action IDs, neutral syncing/unavailable language, and verified Browser screenshots instead of exposing writer/follower ownership to users.
 - GUI model setup now keeps the composer usable for drafting while setup is incomplete and disables model setup controls with neutral availability language when setup changes are unavailable in this window.
 - The GUI now retries a stale session connection as soon as the browser returns to the foreground instead of leaving editing disabled behind the reconnect banner.

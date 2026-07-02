@@ -17,15 +17,15 @@ colors:
 typography:
   display:
     fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
-    fontSize: "4.5rem"
+    fontSize: "1.75rem"
     fontWeight: 600
-    lineHeight: 1.05
-    letterSpacing: "-0.02em"
+    lineHeight: 1.25
+    letterSpacing: "-0.01em"
   headline:
     fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
-    fontSize: "2.75rem"
+    fontSize: "1.5rem"
     fontWeight: 600
-    lineHeight: 1.1
+    lineHeight: 1.25
     letterSpacing: "-0.01em"
   title:
     fontFamily: "Inter, system-ui, -apple-system, Segoe UI, Helvetica Neue, sans-serif"
@@ -62,16 +62,16 @@ spacing:
   md: "16px"
   lg: "24px"
   xl: "36px"
-  page-max: "1240px"
+  page-max: "1320px"
   prose-max: "720px"
 components:
   button-brand:
     backgroundColor: "{colors.brand}"
     textColor: "{colors.paper}"
     typography: "{typography.body}"
-    rounded: "{rounded.full}"
-    height: "36px"
-    padding: "0 16px"
+    rounded: "{rounded.md}"
+    height: "36px desktop, 44px touch"
+    padding: "0 12px"
   button-bordered:
     backgroundColor: "{colors.paper}"
     textColor: "{colors.ink}"
@@ -90,8 +90,8 @@ components:
     backgroundColor: "{colors.zinc-mist}"
     textColor: "{colors.graphite}"
     typography: "{typography.label}"
-    rounded: "{rounded.sm}"
-    height: "22px"
+    rounded: "{rounded.md}"
+    height: "24px"
     padding: "0 8px"
   panel:
     backgroundColor: "{colors.paper}"
@@ -113,7 +113,7 @@ components:
 
 **Creative North Star: "The Research Desk."**
 
-OpenCandle is a quiet, exacting workbench for financial research. The design language is the GUI's: minimal, professional, shadcn-component construction in the spirit of llmchat — white paper, zinc neutrals, one near-black action color, Inter for everything, JetBrains Mono only where data demands alignment. The docs site and homepage follow the GUI, not the other way around; `gui/web/src/styles.css` and `gui/web/src/components/ui/` are the source of truth for tokens and component anatomy.
+OpenCandle is a quiet, exacting workbench for financial research. The design language is the GUI's: minimal, professional, shadcn-component construction in the spirit of llmchat — white paper, zinc neutrals, one near-black action color, Inter for everything, JetBrains Mono only where data demands alignment. The docs site and homepage follow the GUI, not the other way around. The shared workspace `packages/ui` is the source of truth: `packages/ui/src/styles.css` for tokens and `packages/ui/src/` for primitive anatomy, consumed by both the local GUI (`gui/web`) and the public site (`website`).
 
 The system rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, gamified trading-app energy, and terminal cosplay. Color exists to carry meaning — market direction, provider state, data freshness — never decoration. Evidence (real screenshots, real tool output, real numbers) carries the visual story.
 
@@ -122,7 +122,7 @@ The system rejects glossy fintech theater, navy-and-gold finance cliches, purple
 - White surfaces layered with zinc tints before any shadow.
 - One action color: near-black ink. Semantic green/amber/red/blue communicate state only.
 - Inter at every scale; hierarchy from size and weight, never a second display face.
-- Hairline borders, 6–12px radii, pill-shaped primary CTAs.
+- Hairline borders, 8–12px radii; pill shapes reserved for composer actions and page-level primary CTAs.
 - Tabular numerals on all financial figures; signed values accompany every direction color.
 
 ## 2. Colors
@@ -167,10 +167,10 @@ Semantic tints follow the shadcn badge recipe: `color/10` background, `color/30`
 
 ### Hierarchy
 
-- **Display** (600, 4.5rem, 1.05, −0.02em): Homepage hero only.
-- **Headline** (600, 2.75rem, 1.1): Homepage and docs section headings.
+- **Display** (600, 1.75rem, 1.25): Docs page titles — the largest heading on any surface.
+- **Headline** (600, 1.5rem, 1.25): Homepage hero and docs section headings (docs `h2` runs 1.125rem with a top hairline rule).
 - **Title** (600, 1.25rem, 1.2): Page titles (17px in the GUI shell), panel headings at 14px/600.
-- **Body** (400, 0.875rem, 1.5): GUI default. Docs prose runs 1rem with a 65–75ch measure.
+- **Body** (400, 0.875rem, 1.5): GUI default. Docs prose runs 0.875rem at 1.65 line height.
 - **Label** (500, 0.75rem, 0.02em): Column headers, badges, kickers, uppercase section labels in inspectors.
 - **Code** (400, 0.75rem, tabular numerals): Code blocks, lot ledgers, provider IDs.
 
@@ -196,19 +196,20 @@ Tonal layering first, shadows second. Surfaces sit flat with a 1px Hairline bord
 
 ## 5. Components
 
-Components are shadcn/ui constructions (cva variants, Radix primitives where interaction demands it). New GUI components should be composed from `gui/web/src/components/ui/` before anything is hand-rolled; efferd.com shadcn blocks are an approved structural reference.
+Components are shadcn/ui constructions (cva variants, Radix primitives where interaction demands it). Shared runtime-agnostic primitives — logo, button, badge, card, input, textarea, kbd, tooltip — live in `packages/ui/src/` and are consumed by the GUI and the public site. GUI-only interactive components (dialog, popover, sheet, toast, status dots) live in `gui/web/src/components/ui/` and compose the same tokens. New components should be composed from these before anything is hand-rolled; efferd.com shadcn blocks are an approved structural reference.
 
 ### Buttons
 
-- **Shape:** 8px radius default; primary CTAs are pills (9999px).
-- **Brand:** Research Ink background, Paper text, pill shape, 36px height (`hover: opacity 0.9`).
-- **Bordered:** Paper background, Hairline border, Ink text, 32px height (`hover: Zinc Mist`).
+- **Shape:** 8px radius default; the `rounded="full"` pill variant is reserved for composer send actions and page-level primary CTAs.
+- **Sizes:** default 36px on desktop and 44px on touch; `sm` 32px/40px. Heights are responsive, larger on touch.
+- **Brand:** Research Ink background, Paper text (`hover: opacity 0.9`).
+- **Bordered:** Paper background, Hairline border, Ink text (`hover: Zinc Mist`).
 - **Ghost:** No border, Graphite text (`hover: Zinc Mist fill, Ink text`).
 - **Focus:** 2px Ink ring with offset; never a colored glow.
 
 ### Badges
 
-- **Style:** 22px tall, 6px radius, 11–12px medium text. Neutral: Zinc Mist fill + Graphite text. Semantic: `color/10` fill, `color/30` border, full-strength colored text.
+- **Style:** 20–24px tall (`sm`/`md`), 8px radius, 11–12px medium text; the `secondary` variant is a pill. Neutral: Zinc Mist fill + Graphite text. Semantic: `color/10` fill, `color/30` border, full-strength colored text.
 - **Status dots:** 7px circles (green armed, amber degraded, gray paused) always adjacent to a text label.
 
 ### Cards / Containers
@@ -241,8 +242,8 @@ Components are shadcn/ui constructions (cva variants, Radix primitives where int
 
 ### Do:
 
-- **Do** treat `gui/web/src/styles.css` and `gui/web/src/components/ui/` as the normative token and component source.
-- **Do** keep one primary (pill, Research Ink) action per region; everything else bordered or ghost.
+- **Do** treat `packages/ui/src/styles.css` and `packages/ui/src/` as the normative token and primitive source; GUI-only components in `gui/web/src/components/ui/` build on the same tokens.
+- **Do** keep one primary (Research Ink) action per region; everything else bordered or ghost.
 - **Do** show data freshness in plain language ("Updated 2m ago", "Quote 26m old") with Amber Caveat when stale.
 - **Do** use relative, human timestamps in UI surfaces; raw ISO strings belong in tool output only.
 - **Do** layer Paper → Zinc Mist → Zinc Sunk before reaching for shadow.
