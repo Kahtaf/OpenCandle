@@ -993,7 +993,16 @@ function resolveChromiumExecutable(): string {
 async function submitPrompt(page: Page, prompt: string): Promise<void> {
   await waitForRunIdle(page);
   await page.getByLabel("Message OpenCandle").fill(prompt);
-  await page.getByRole("button", { name: "Send" }).click();
+  const sendButton = page.getByRole("button", { name: "Send" });
+  await page.waitForFunction(
+    () => {
+      const button = document.querySelector('button[aria-label="Send message"]');
+      return button instanceof HTMLButtonElement && !button.disabled;
+    },
+    null,
+    { timeout: 45_000 },
+  );
+  await sendButton.click();
 }
 
 async function startNewChat(page: Page): Promise<void> {
