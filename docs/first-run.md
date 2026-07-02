@@ -73,7 +73,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | Setup exits before chat starts | Start OpenCandle again and complete model setup. Chat requires a connected model. |
 | No models appear after adding a key | Check that the key matches the selected provider, then rerun `/setup`. |
 | A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
-| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell, and check for a `.env` file in the launch directory — `.env` values override exported shell variables. Environment variables override `~/.opencandle/config.json`. |
+| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell profile, or in the `.env` file in the launch directory if it is set there. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
 | The GUI is open but not updating | Use the terminal session that owns the writer lock, or restart the GUI and reopen `http://127.0.0.1:14567`. |
 

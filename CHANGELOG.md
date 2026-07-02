@@ -9,7 +9,8 @@
 
 ### Fixed
 
-- Docs now enumerate the `/connect` provider/category targets, warn that `.env` values override exported shell variables, and mark one model provider as required instead of listing all model keys as optional.
+- `.env` files no longer override environment variables that are already exported in the shell, matching conventional dotenv precedence.
+- Docs now enumerate the `/connect` provider/category targets and mark one model provider as required instead of listing all model keys as optional.
 - DESIGN.md and DESIGN.json now name `packages/ui` as the normative token/primitive source and match the shipped button, badge, page-width, and typography metrics instead of retired aspirational values.
 
 ## [0.10.0] - 2026-06-27

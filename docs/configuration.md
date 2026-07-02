@@ -15,14 +15,12 @@ The default OpenCandle home is `~/.opencandle`. Set `OPENCANDLE_HOME` to move us
 
 ## Precedence
 
-Startup calls `loadEnv()` first, so values from `.env` are copied into `process.env`. Runtime config then resolves `process.env` before file config values.
-
-> **Warning: `.env` overrides your shell environment.** Unlike most dotenv loaders, OpenCandle's loader overwrites a key that is already exported in the shell when the same key appears in `.env`. If a credential seems to be ignored, check the `.env` file in the directory you launched from before debugging your shell profile.
+Startup calls `loadEnv()` first, which fills `process.env` from `.env` only for keys that are not already exported in the shell — conventional dotenv behavior. Runtime config then resolves `process.env` before file config values.
 
 Effective precedence:
 
-1. Values from `.env`.
-2. Already-exported process env for keys not set in `.env`.
+1. Already-exported process environment variables.
+2. Values from `.env` for keys not exported in the shell.
 3. `$OPENCANDLE_HOME/config.json`.
 4. Built-in defaults.
 
