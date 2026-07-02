@@ -141,6 +141,12 @@ export function createToolInvokeController({
     try {
       const runSessionId = safeSessionId(runSessionManager);
       recordPendingSessionAction(runSessionManager, options.actionId ?? "");
+      let actionAccepted = false;
+      const recordAcceptedAction = () => {
+        if (actionAccepted) return;
+        recordAcceptedSessionAction(runSessionManager, options.actionId ?? "");
+        actionAccepted = true;
+      };
       let result: InvokeToolResult;
       try {
         result = await invokeTool(runSessionManager, tool, args, "ui", {
@@ -148,12 +154,13 @@ export function createToolInvokeController({
             runSessionId && askUserHandlerForSessionId
               ? askUserHandlerForSessionId(runSessionId)
               : askUserHandler,
+          onTranscriptStarted: recordAcceptedAction,
         });
       } catch (error) {
-        clearPendingSessionAction(runSessionManager, options.actionId ?? "");
+        if (!actionAccepted) clearPendingSessionAction(runSessionManager, options.actionId ?? "");
         throw error;
       }
-      recordAcceptedSessionAction(runSessionManager, options.actionId ?? "");
+      recordAcceptedAction();
       if (!result.isError && marketStateToolMapping(toolName) != null) {
         onMarketStateChanged?.();
       }
@@ -338,7 +345,11 @@ export async function invokeToolFromUi(
   tool: AgentTool<TSchema, unknown>,
   args: Record<string, unknown>,
   source: "ui" | "background" = "ui",
-  options: { askUserHandler?: AskUserHandler; recordTranscript?: boolean } = {},
+  options: {
+    askUserHandler?: AskUserHandler;
+    recordTranscript?: boolean;
+    onTranscriptStarted?: () => void;
+  } = {},
 ): Promise<InvokeToolResult> {
   if (!Value.Check(tool.parameters, args)) {
     const errors = [...Value.Errors(tool.parameters, args)]
@@ -368,6 +379,7 @@ export async function invokeToolFromUi(
   const recordTranscript = options.recordTranscript ?? true;
   if (recordTranscript) {
     sessionManager.appendMessage(assistant);
+    options.onTranscriptStarted?.();
   }
 
   const wrapped = wrapWithDefaults(tool, getDefaults(tool.name));

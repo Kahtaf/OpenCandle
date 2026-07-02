@@ -232,6 +232,20 @@ describe("GUI server route guards", () => {
     expect(acquireBlock).toContain("coordinatorEndpoint: localCoordinatorEndpoint");
     expect(acquireBlock).toContain("coordinatorSecret: localCoordinatorSecret");
   });
+
+  it("records tool actions as accepted once the tool transcript starts", () => {
+    const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
+    const invokeIndex = source.indexOf("result = await invokeTool");
+    const transcriptIndex = source.indexOf("sessionManager.appendMessage(assistant);");
+    const hookIndex = source.indexOf("options.onTranscriptStarted?.();", transcriptIndex);
+
+    expect(invokeIndex).toBeGreaterThan(-1);
+    expect(source.slice(invokeIndex, source.indexOf("});", invokeIndex))).toContain(
+      "onTranscriptStarted: recordAcceptedAction",
+    );
+    expect(transcriptIndex).toBeGreaterThan(-1);
+    expect(hookIndex).toBeGreaterThan(transcriptIndex);
+  });
 });
 
 function routeBlockBefore(route: string, handler: string): string {
