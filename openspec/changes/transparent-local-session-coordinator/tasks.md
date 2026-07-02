@@ -37,7 +37,7 @@
 - [x] 4.4 Update unit and browser tests that currently assert follower/read-only text or disabled follower controls.
 - [x] 4.5 Keep setup mutation controls honestly disabled when global setup coordination is unavailable in this window, using neutral availability language and without introducing setup proxying.
 - [x] 4.6 Keep market-state mutation controls honestly disabled when saved-state coordination is unavailable in this window, using neutral availability language and without introducing market-state proxying.
-- [ ] 4.7 Update GUI boot/reconnect/session-switch state so browser controls use per-session coordination state rather than a single process-wide role string.
+- [x] 4.7 Update GUI boot/reconnect/session-switch state so browser controls use per-session coordination state rather than a single process-wide role string.
 
 ## 5. TUI and Multi-Client Verification
 

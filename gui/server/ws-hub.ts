@@ -221,6 +221,7 @@ export function createWsHub({
       role,
       lock,
       sessionId: getSessionManager().getSessionId(),
+      coordination: coordinationStateFor(getSessionManager().getSessionId(), role),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -238,6 +239,7 @@ export function createWsHub({
     return {
       role,
       sessionId: getSessionManager().getSessionId(),
+      coordination: coordinationStateFor(getSessionManager().getSessionId(), role),
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
@@ -335,6 +337,18 @@ export function createWsHub({
     currentChatEvents,
     subscribeToSessionEvents,
   };
+}
+
+function coordinationStateFor(sessionId: string, role: string) {
+  const status =
+    role === "writer"
+      ? "ready"
+      : role === "connecting"
+        ? "connecting"
+        : role === "disconnected"
+          ? "reconnecting"
+          : "syncing";
+  return { sessionId, status };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

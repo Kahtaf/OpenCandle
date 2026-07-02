@@ -163,7 +163,6 @@ export function AppShell() {
     if (
       !shouldStartFreshHomeSession({
         pathname,
-        role: gui.role,
         currentSessionId: gui.currentSessionId,
         entryCount: hasGuiSessionContent ? guiEventCount : 0,
         lastResetSessionId: homeResetSessionRef.current,
@@ -175,7 +174,6 @@ export function AppShell() {
     void gui.newSession();
   }, [
     pathname,
-    gui.role,
     gui.currentSessionId,
     hasGuiSessionContent,
     guiEventCount,

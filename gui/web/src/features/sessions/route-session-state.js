@@ -46,7 +46,6 @@ export function hasSessionContent(events) {
 
 export function shouldStartFreshHomeSession({
   pathname,
-  role,
   currentSessionId,
   entryCount,
   lastResetSessionId,
@@ -54,7 +53,6 @@ export function shouldStartFreshHomeSession({
 }) {
   return (
     pathname === "/" &&
-    role === "writer" &&
     canStartFreshHomeSession &&
     Boolean(currentSessionId) &&
     entryCount > 0 &&

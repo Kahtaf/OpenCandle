@@ -132,11 +132,10 @@ describe("route session state", () => {
     ).toEqual({ mode: "current" });
   });
 
-  it("starts a fresh writer session when home is showing an existing transcript", () => {
+  it("starts a fresh session when home is showing an existing transcript and session actions are available", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "",
@@ -146,7 +145,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/sessions/session-with-history",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "",
@@ -156,7 +154,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "session-with-history",
@@ -166,7 +163,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "fresh-session-after-reset",
         entryCount: 2,
         lastResetSessionId: "session-with-history",
@@ -176,7 +172,6 @@ describe("route session state", () => {
     expect(
       shouldStartFreshHomeSession({
         pathname: "/",
-        role: "writer",
         currentSessionId: "session-with-history",
         entryCount: 2,
         lastResetSessionId: "",

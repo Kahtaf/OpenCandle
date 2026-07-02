@@ -43,6 +43,7 @@ describe("GUI WS hub", () => {
     expect(client.messages[0]).toMatchObject({
       type: "boot",
       role: "writer",
+      coordination: { sessionId: "session-1", status: "ready" },
       sessionId: "session-1",
       modelSetup: { requirement: "ready" },
     });

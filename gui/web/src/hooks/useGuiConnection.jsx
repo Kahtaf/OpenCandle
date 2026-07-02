@@ -137,6 +137,7 @@ export function useGuiConnection() {
   const [askUserPrompts, setAskUserPrompts] = useState([]);
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
   const [currentSessionId, setCurrentSessionId] = useState("");
+  const [coordination, setCoordination] = useState(null);
   const [modelSetup, setModelSetup] = useState({
     requirement: "unknown",
     providers: [],
@@ -161,6 +162,7 @@ export function useGuiConnection() {
     if (expectedSessionId && responseSessionId !== expectedSessionId) return false;
     const updateVisibleState = options.updateVisibleState !== false;
     setRole((currentRole) => resolveBootstrapRole(currentRole, data, options.updateRole !== false));
+    setCoordination(data.coordination || null);
     setCurrentSessionId((currentSessionId) =>
       resolveBootstrapSessionId(
         currentSessionId,
@@ -238,6 +240,7 @@ export function useGuiConnection() {
           window.clearTimeout(bootTimeout);
           setSupportsSessionActions(true);
           setRole(message.role);
+          setCoordination(message.coordination || null);
           setCurrentSessionId(message.sessionId);
           setAskUserPrompts(message.askUserPrompts || []);
           startTransition(() => {
@@ -465,6 +468,7 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
+      coordination,
       modelSetup,
       supportsSessionActions,
       setToast,
@@ -483,6 +487,7 @@ export function useGuiConnection() {
       askUserPrompts,
       dashboard,
       currentSessionId,
+      coordination,
       modelSetup,
       supportsSessionActions,
       setToast,

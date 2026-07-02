@@ -529,6 +529,10 @@ export async function buildSessionBootstrapPayload(
   return {
     role: roleForSessionBootstrap(options, sessionManager),
     sessionId,
+    coordination: {
+      sessionId,
+      status: roleForSessionBootstrap(options, sessionManager) === "writer" ? "ready" : "syncing",
+    },
     catalog: buildCatalog(),
     modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
     askUserPrompts: Array.isArray(bootstrap.askUserPrompts) ? bootstrap.askUserPrompts : [],
