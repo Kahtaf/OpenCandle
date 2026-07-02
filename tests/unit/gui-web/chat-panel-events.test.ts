@@ -116,10 +116,7 @@ describe("ChatPanel event transcript rendering", () => {
   });
 
   it("routes ask_user actions through the prompt session id", () => {
-    const source = readFileSync(
-      resolve("gui/web/src/features/chat/ChatPanel.jsx"),
-      "utf-8",
-    );
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
     const cardStart = source.indexOf("function AskUserPromptCard");
     const cardSource = source.slice(cardStart, source.indexOf("return (", cardStart));
 

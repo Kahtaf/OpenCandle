@@ -9,8 +9,8 @@ import {
   resolveBootstrapRole,
   resolveBootstrapSessionId,
   sessionSnapshotFromPayload,
-  shouldReconnectOnForeground,
   settlePendingToolInvoke,
+  shouldReconnectOnForeground,
   TOOL_INVOKE_TIMEOUT_MESSAGE,
 } from "../../../gui/web/src/hooks/useGuiConnection.jsx";
 
@@ -160,8 +160,9 @@ describe("useGuiConnection helpers", () => {
     expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 3 })).toBe(
       true,
     );
-    expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: undefined }))
-      .toBe(true);
+    expect(
+      shouldReconnectOnForeground({ documentVisibility: "visible", readyState: undefined }),
+    ).toBe(true);
     expect(shouldReconnectOnForeground({ documentVisibility: "visible", readyState: 1 })).toBe(
       false,
     );

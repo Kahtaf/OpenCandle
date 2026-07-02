@@ -123,7 +123,9 @@ export function DiagnosticsPage({
 
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
           {role === "follower" ? (
-            <StatusBand>Some setup changes are unavailable while OpenCandle reconnects local access.</StatusBand>
+            <StatusBand>
+              Some setup changes are unavailable while OpenCandle reconnects local access.
+            </StatusBand>
           ) : null}
 
           <div className="grid gap-3 md:grid-cols-4">

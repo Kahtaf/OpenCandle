@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { createInterface } from "node:readline/promises";
 import { dirname, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import {
   AuthStorage,
@@ -321,7 +321,10 @@ async function main(): Promise<void> {
   }
 }
 
-async function runFollowerTuiProxy(lock: WriterLock, sessionManager: ReturnType<typeof continueOpenCandleSession>): Promise<boolean> {
+async function runFollowerTuiProxy(
+  lock: WriterLock,
+  sessionManager: ReturnType<typeof continueOpenCandleSession>,
+): Promise<boolean> {
   if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return false;
   if (!process.stdin.isTTY) return false;
 
@@ -340,20 +343,27 @@ async function runFollowerTuiProxy(lock: WriterLock, sessionManager: ReturnType<
   return true;
 }
 
-async function forwardTuiPrompt(lock: WriterLock, sessionId: string, prompt: string): Promise<void> {
+async function forwardTuiPrompt(
+  lock: WriterLock,
+  sessionId: string,
+  prompt: string,
+): Promise<void> {
   if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return;
-  const response = await fetch(new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+  const response = await fetch(
+    new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+      },
+      body: JSON.stringify({
+        prompt,
+        sessionId,
+        actionId: `tui-proxy-${randomUUID()}`,
+      }),
     },
-    body: JSON.stringify({
-      prompt,
-      sessionId,
-      actionId: `tui-proxy-${randomUUID()}`,
-    }),
-  });
+  );
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };
     console.error(body.error || response.statusText);

@@ -99,7 +99,8 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
     <>
       {setupDisabled ? (
         <div className="rounded-md border border-amber-700/30 bg-amber-100/60 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/30 dark:text-amber-200">
-          Model setup changes are unavailable in this window while OpenCandle reconnects local setup access.
+          Model setup changes are unavailable in this window while OpenCandle reconnects local setup
+          access.
         </div>
       ) : null}
       {availableModels.length > 0 ? (

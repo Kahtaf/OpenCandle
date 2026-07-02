@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { writerLockScopeForSession, type SessionLockScopeSource } from "./session-writer-lock.js";
+import { type SessionLockScopeSource, writerLockScopeForSession } from "./session-writer-lock.js";
 
 interface AcceptedActionStore {
   acceptedActionIds: string[];

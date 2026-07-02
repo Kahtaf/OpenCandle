@@ -103,7 +103,10 @@ describe("GUI server route guards", () => {
   it("returns proxied tool results even when the tool result is an error", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"');
-    const routeEnd = source.indexOf('url.pathname === "/api/local-coordinator/ask-user"', routeStart);
+    const routeEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/ask-user"',
+      routeStart,
+    );
     const routeSource = source.slice(routeStart, routeEnd);
 
     expect(routeSource).toContain("const result = asRecord(message.result);");
@@ -164,9 +167,14 @@ describe("GUI server route guards", () => {
   it("blocks failed chat delivery only while the coordinator owner is still live", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const proxyStart = source.indexOf("const shouldProxyChatRun");
-    const proxyBlock = source.slice(proxyStart, source.indexOf("if (options.localSessionCoordinator)", proxyStart));
+    const proxyBlock = source.slice(
+      proxyStart,
+      source.indexOf("if (options.localSessionCoordinator)", proxyStart),
+    );
 
-    expect(proxyBlock).toContain("shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)");
+    expect(proxyBlock).toContain(
+      "shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)",
+    );
     expect(proxyBlock).toContain('"OpenCandle is reconnecting to this session."');
     expect(source).toContain("return isCoordinatorOwnerAlive(lock.pid)");
   });
@@ -174,7 +182,10 @@ describe("GUI server route guards", () => {
   it("broadcasts target session snapshots after proxied chat runs", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const proxyStart = source.indexOf("if (shouldProxyChatRun)");
-    const proxyBlock = source.slice(proxyStart, source.indexOf("if (actionId && hasAcceptedSessionAction", proxyStart));
+    const proxyBlock = source.slice(
+      proxyStart,
+      source.indexOf("if (actionId && hasAcceptedSessionAction", proxyStart),
+    );
 
     expect(proxyBlock).toContain("await proxyChatRunToCoordinator");
     expect(proxyBlock).toContain("broadcastRunSessionSnapshot(options, runSessionManager");
@@ -240,7 +251,10 @@ describe("GUI server route guards", () => {
   it("uses neutral language when session rebind cannot acquire a writer lock", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const rebindStart = source.indexOf("runtime.setRebindSession");
-    const rebindBlock = source.slice(rebindStart, source.indexOf("const interactiveMode", rebindStart));
+    const rebindBlock = source.slice(
+      rebindStart,
+      source.indexOf("const interactiveMode", rebindStart),
+    );
 
     expect(rebindBlock).toContain("OpenCandle is reconnecting to this session.");
     expect(rebindBlock).not.toContain("processKind");

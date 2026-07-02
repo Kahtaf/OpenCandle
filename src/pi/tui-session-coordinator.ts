@@ -107,7 +107,11 @@ export async function startTuiSessionCoordinatorServer(
       return;
     }
     if (hasPendingSessionAction(sessionManager, actionId)) {
-      writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
       return;
     }
     const session = options.getSession();

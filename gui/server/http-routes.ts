@@ -23,10 +23,7 @@ import type {
 } from "./local-session-coordinator.js";
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
-import {
-  isTrustedPrivateApiRequest,
-  privateApiCookieHeader,
-} from "./private-api-access.js";
+import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
@@ -88,7 +85,11 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/session/new" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Session API", options)) return;
       if (options.role !== "writer") {
-        writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+        writeJson(
+          res,
+          { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+          409,
+        );
         return;
       }
       await options.sessionActionsController.handleNewSession();
@@ -371,7 +372,8 @@ async function handleSseChatRun(
   if (shouldProxyChatRun) {
     if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) {
       const useCurrentSession =
-        !targetSessionManager || currentSessionManager.getSessionFile() === runSessionManager.getSessionFile();
+        !targetSessionManager ||
+        currentSessionManager.getSessionFile() === runSessionManager.getSessionFile();
       broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
       return;
     }
@@ -380,11 +382,19 @@ async function handleSseChatRun(
       return;
     }
     if (actionId && hasPendingSessionAction(runSessionManager, actionId)) {
-      writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
       return;
     }
     if (shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)) {
-      writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+      writeJson(
+        res,
+        { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
+        409,
+      );
       return;
     }
   }
