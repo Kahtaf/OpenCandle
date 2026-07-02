@@ -174,6 +174,15 @@ describe("GUI server route guards", () => {
     expect(heartbeatBlock).toContain("refreshWriterLock(activeWriterLockScope)");
   });
 
+  it("publishes loopback coordinator endpoints even when the GUI binds remotely", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const endpointLineStart = source.indexOf("const localCoordinatorEndpoint");
+    const endpointLine = source.slice(endpointLineStart, source.indexOf("\n", endpointLineStart));
+
+    expect(endpointLine).toContain("127.0.0.1");
+    expect(endpointLine).not.toContain("${host}");
+  });
+
   it("publishes coordinator metadata for non-current session tool locks", () => {
     const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
     const acquireStart = source.indexOf('acquireWriterLock(lockScope, "gui"');

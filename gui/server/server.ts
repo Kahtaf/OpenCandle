@@ -52,7 +52,7 @@ const automationHeartbeatMs = normalizeAutomationHeartbeatMs(
 const allowRemotePrivateApi = process.env.OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API === "1";
 const privateApiSessionToken = randomBytes(32).toString("base64url");
 const localCoordinatorSecret = randomBytes(32).toString("base64url");
-const localCoordinatorEndpoint = `http://${host}:${port}`;
+const localCoordinatorEndpoint = `http://127.0.0.1:${port}`;
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
