@@ -20,12 +20,15 @@ export interface WriterLock {
   scope?: string;
   ownerId?: string;
   coordinatorEndpoint?: string;
+  coordinatorSecret?: string;
   recoveryState?: "ambiguous" | "live";
 }
 
 export interface AcquireOptions {
   pid?: number;
   ownerId?: string;
+  coordinatorEndpoint?: string;
+  coordinatorSecret?: string;
   staleGraceMs?: number;
   now?: () => Date;
   isPidAlive?: (pid: number) => boolean;
@@ -169,7 +172,12 @@ export function migrateWriterLockScope(
 function tryCreate(
   scopePath: string,
   processKind: ProcessKind,
-  identity: { pid: number; ownerId?: string },
+  identity: {
+    pid: number;
+    ownerId?: string;
+    coordinatorEndpoint?: string;
+    coordinatorSecret?: string;
+  },
   nowFn: () => Date,
 ): WriterLock | null {
   const now = nowFn().toISOString();
@@ -181,6 +189,8 @@ function tryCreate(
     protocolVersion: WRITER_LOCK_PROTOCOL_VERSION,
     scope: scopePath,
     ...(identity.ownerId ? { ownerId: identity.ownerId } : {}),
+    ...(identity.coordinatorEndpoint ? { coordinatorEndpoint: identity.coordinatorEndpoint } : {}),
+    ...(identity.coordinatorSecret ? { coordinatorSecret: identity.coordinatorSecret } : {}),
   };
   try {
     const fd = openSync(lockPath(scopePath), "wx");
@@ -233,13 +243,20 @@ function isSameLockOwner(
   return !identity.ownerId;
 }
 
-function lockIdentity(options: AcquireOptions): { pid: number; ownerId?: string } {
+function lockIdentity(options: AcquireOptions): {
+  pid: number;
+  ownerId?: string;
+  coordinatorEndpoint?: string;
+  coordinatorSecret?: string;
+} {
   const pid = options.pid ?? process.pid;
   const ownerId =
     options.ownerId === undefined && pid === process.pid ? defaultOwnerId(pid) : options.ownerId;
   return {
     pid,
     ...(ownerId ? { ownerId } : {}),
+    ...(options.coordinatorEndpoint ? { coordinatorEndpoint: options.coordinatorEndpoint } : {}),
+    ...(options.coordinatorSecret ? { coordinatorSecret: options.coordinatorSecret } : {}),
   };
 }
 

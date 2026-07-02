@@ -14,7 +14,11 @@ import type {
 } from "./local-session-coordinator.js";
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
-import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
+import {
+  isLoopbackAddress,
+  isTrustedPrivateApiRequest,
+  privateApiCookieHeader,
+} from "./private-api-access.js";
 import { projectDashboard } from "./projector.js";
 import { createPromptObservation, observePromptEvent } from "./prompt-observation.js";
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
@@ -39,6 +43,8 @@ interface GuiHttpRouteOptions {
   agentDir: string;
   sessionDir: string;
   privateApiSessionToken: string;
+  localCoordinatorEndpoint: string;
+  localCoordinatorSecret: string;
   allowRemotePrivateApi: boolean;
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
@@ -220,6 +226,21 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/local-coordinator/chat-run" && req.method === "POST") {
+      if (!allowLocalCoordinatorRequest(req, res, options)) return;
+      const body = asRecord(await readJsonBody(req));
+      const requestedSessionId = String(body.sessionId ?? "").trim();
+      const sessionManager = requestedSessionId
+        ? await resolveSessionManagerById(options, requestedSessionId)
+        : undefined;
+      if (requestedSessionId && !sessionManager) {
+        writeJson(res, { error: "Unknown saved session" }, 404);
+        return;
+      }
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body);
+      return;
+    }
+
     const runSessionId = sessionIdFromRoute(url.pathname, "runs");
     if (runSessionId && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
@@ -242,13 +263,9 @@ async function handleSseChatRun(
   options: GuiHttpRouteOptions,
   activeRunSessionIds: Set<string>,
   targetSessionManager?: SessionManager,
+  bodyOverride?: Record<string, unknown>,
 ): Promise<void> {
-  if (options.role !== "writer") {
-    writeJson(res, { error: "Read-only follower mode" }, 409);
-    return;
-  }
-
-  const body = await readJsonBody(req);
+  const body = bodyOverride ?? asRecord(await readJsonBody(req));
   const prompt = String(asRecord(body).prompt ?? "").trim();
   if (!prompt) {
     writeJson(res, { error: "prompt is required" }, 400);
@@ -272,6 +289,12 @@ async function handleSseChatRun(
       { error: "Session route and request body disagree", code: "session_changed" },
       409,
     );
+    return;
+  }
+
+  if (options.role !== "writer") {
+    if (await proxyChatRunToCoordinator(res, options, runSessionManager, bodyRecord)) return;
+    writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
     return;
   }
 
@@ -312,6 +335,33 @@ async function handleSseChatRun(
   });
 }
 
+async function proxyChatRunToCoordinator(
+  res: ServerResponse,
+  options: GuiHttpRouteOptions,
+  runSessionManager: SessionManager,
+  body: Record<string, unknown>,
+): Promise<boolean> {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return false;
+  const endpoint = new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint);
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-opencandle-coordinator-secret": lock.coordinatorSecret,
+    },
+    body: JSON.stringify({ ...body, sessionId: runSessionManager.getSessionId() }),
+  });
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  if (response.body) {
+    for await (const chunk of response.body) {
+      res.write(chunk);
+    }
+  }
+  res.end();
+  return true;
+}
+
 async function streamAcceptedSseChatRun({
   res,
   options,
@@ -343,7 +393,10 @@ async function streamAcceptedSseChatRun({
   let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
   if (!useCurrentSession) {
     const lockScope = writerLockScopeForSession(runSessionManager);
-    const lockResult = await acquireWriterLock(lockScope, "gui");
+    const lockResult = await acquireWriterLock(lockScope, "gui", {
+      coordinatorEndpoint: options.localCoordinatorEndpoint,
+      coordinatorSecret: options.localCoordinatorSecret,
+    });
     if (lockResult.role !== "writer") {
       writeJson(res, { error: "Read-only follower mode", lock: lockResult.lock }, 409);
       return;
@@ -604,6 +657,22 @@ function allowTrustedGuiRequest(
       error: `${label} is only available to trusted GUI browser sessions.`,
     }),
   );
+  return false;
+}
+
+function allowLocalCoordinatorRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  options: GuiHttpRouteOptions,
+): boolean {
+  if (
+    isLoopbackAddress(req.socket.remoteAddress) &&
+    req.headers["x-opencandle-coordinator-secret"] === options.localCoordinatorSecret
+  ) {
+    return true;
+  }
+  res.writeHead(403, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: "Local coordinator request was not authorized." }));
   return false;
 }
 

@@ -90,6 +90,23 @@ describe("writer lock", () => {
     }
   });
 
+  it("records the local coordinator endpoint and capability when provided", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
+    try {
+      await acquireWriterLock(dir, "gui", {
+        coordinatorEndpoint: "http://127.0.0.1:14567",
+        coordinatorSecret: "secret-1",
+      });
+
+      expect(readWriterLock(dir)).toMatchObject({
+        coordinatorEndpoint: "http://127.0.0.1:14567",
+        coordinatorSecret: "secret-1",
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("uses the session file as the writer-lock scope for persisted sessions", () => {
     const sessionManager = {
       getSessionFile: () => "/tmp/session-1.jsonl",

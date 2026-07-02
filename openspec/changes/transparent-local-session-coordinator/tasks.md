@@ -12,10 +12,10 @@
 
 ## 2. Authenticated Local Proxy
 
-- [ ] 2.1 Choose and document the coordinator transport before implementation: authenticated loopback HTTP, Unix socket, or Pi-native IPC.
+- [x] 2.1 Choose and document the coordinator transport before implementation: authenticated loopback HTTP, Unix socket, or Pi-native IPC.
 - [ ] 2.2 Add tests proving arbitrary browser pages cannot submit prompts, tool invocations, run controls, or transcript writes to the coordinator.
-- [ ] 2.3 Implement coordinator capability/token generation and validation tied to local coordinator metadata, within the local single-user threat model.
-- [ ] 2.4 Preserve existing trusted browser-session checks before GUI browser actions are forwarded to the coordinator.
+- [x] 2.3 Implement coordinator capability/token generation and validation tied to local coordinator metadata, within the local single-user threat model.
+- [x] 2.4 Preserve existing trusted browser-session checks before GUI browser actions are forwarded to the coordinator.
 - [ ] 2.5 Add tests for forwarding a non-owner GUI prompt to a live local coordinator without exposing writer/follower language.
 - [ ] 2.6 Ensure proxy requests received by non-owner processes fail without forwarding loops and are evaluated per target session.
 

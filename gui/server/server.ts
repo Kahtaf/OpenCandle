@@ -50,6 +50,8 @@ const automationHeartbeatMs = normalizeAutomationHeartbeatMs(
 );
 const allowRemotePrivateApi = process.env.OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API === "1";
 const privateApiSessionToken = randomBytes(32).toString("base64url");
+const localCoordinatorSecret = randomBytes(32).toString("base64url");
+const localCoordinatorEndpoint = `http://${host}:${port}`;
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const webDist = resolve(__dirname, "../web/dist");
 
@@ -61,7 +63,10 @@ const initialSessionManager = createInitialGuiSessionManager(cwd);
 let sessionManager = initialSessionManager;
 const sessionDir = sessionManager.getSessionDir();
 const initialWriterLockScope = writerLockScopeForSession(sessionManager);
-const lockResult = await acquireWriterLock(initialWriterLockScope, "gui");
+const lockResult = await acquireWriterLock(initialWriterLockScope, "gui", {
+  coordinatorEndpoint: localCoordinatorEndpoint,
+  coordinatorSecret: localCoordinatorSecret,
+});
 let activeWriterLockScope = initialWriterLockScope;
 let wsHub: WsHub;
 let quotePoller: BackgroundQuotePoller;
@@ -167,7 +172,10 @@ let unsubscribeSession = wsHub.subscribeToSessionEvents();
 runtime.setRebindSession(async (nextSession) => {
   const nextWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
   if (lockResult.role === "writer" && nextWriterLockScope !== activeWriterLockScope) {
-    const nextLockResult = await acquireWriterLock(nextWriterLockScope, "gui");
+    const nextLockResult = await acquireWriterLock(nextWriterLockScope, "gui", {
+      coordinatorEndpoint: localCoordinatorEndpoint,
+      coordinatorSecret: localCoordinatorSecret,
+    });
     if (nextLockResult.role !== "writer") {
       throw new Error(
         `Session is currently being written by ${nextLockResult.lock.processKind} (pid ${nextLockResult.lock.pid}).`,
@@ -191,6 +199,8 @@ const httpRequestHandler = createHttpRequestHandler({
   agentDir,
   sessionDir,
   privateApiSessionToken,
+  localCoordinatorEndpoint,
+  localCoordinatorSecret,
   allowRemotePrivateApi,
   getSession: () => session,
   getSessionManager: () => sessionManager,

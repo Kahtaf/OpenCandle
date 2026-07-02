@@ -82,6 +82,27 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');
   });
 
+  it("requires local coordinator authorization before accepting proxied chat runs", () => {
+    const routeBlock = routeBlockBefore(
+      'url.pathname === "/api/local-coordinator/chat-run"',
+      "const body = asRecord(await readJsonBody(req));",
+    );
+
+    expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
+  it("does not authorize local coordinator calls with browser cookies alone", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const guardStart = source.indexOf("function allowLocalCoordinatorRequest");
+    const guardEnd = source.indexOf("function privateGuiHeaders", guardStart);
+    const guardSource = source.slice(guardStart, guardEnd);
+
+    expect(guardSource).toContain("isLoopbackAddress(req.socket.remoteAddress)");
+    expect(guardSource).toContain('req.headers["x-opencandle-coordinator-secret"]');
+    expect(guardSource).not.toContain("isTrustedPrivateApiRequest");
+    expect(guardSource).not.toContain("cookie");
+  });
+
   it("stamps route-created ask_user prompts with the target session id", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const factoryStart = source.indexOf("createSessionForManager:");

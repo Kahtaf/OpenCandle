@@ -74,7 +74,7 @@ Alternative considered: keep one process-wide role and hide it with copy changes
 
 TUI participation is not just a UI copy change. If a TUI owns a session and a GUI wants to write to that session, the TUI process must expose a local coordinator listener or Pi-native IPC endpoint that can accept authenticated forwarded session actions. If the TUI is a non-owner surface, it must subscribe to, poll, or otherwise tail the same session transcript so writes accepted by the GUI owner become visible in the TUI.
 
-Implementation may choose authenticated loopback HTTP, Unix socket, or Pi-native IPC, but the chosen transport must support both GUI-owned and TUI-owned topologies before the TUI+GUI verification task can pass. If the implementation cannot provide live TUI transcript updates in the first slice, the proposal must narrow the TUI verification to the concrete topology that is actually supported.
+The initial implementation uses authenticated loopback HTTP for GUI-owned coordinator forwarding: writer lock metadata publishes the owner endpoint and a local coordinator capability, non-owner GUI servers forward supported session actions to that endpoint, and the owner rejects calls that do not include the capability. The transport still must support both GUI-owned and TUI-owned topologies before the TUI+GUI verification task can pass. If the implementation cannot provide live TUI transcript updates in the first slice, the proposal must narrow the TUI verification to the concrete topology that is actually supported.
 
 Alternative considered: verify only GUI-to-GUI coordination and leave TUI to manual use. Rejected because the user-facing problem includes local TUI/GUI overlap.
 
@@ -156,6 +156,5 @@ Rollback is straightforward while the existing lock remains intact: disable prox
 
 ## Open Questions
 
-- Which endpoint transport should implementation use: authenticated loopback HTTP route, Unix socket, or Pi-native IPC? The implementation must choose before coding proxy behavior.
 - What heartbeat interval, stale grace, and action dedupe retention values fit OpenCandle's longest local runs while still recovering crashed owners quickly?
 - Does Pi expose any enforceable stream-write/run-continuation hook that could support stronger fencing in a future change?
