@@ -5,40 +5,38 @@ description: Documentation for the open source financial investigator.
 
 # OpenCandle Docs
 
-OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for gathering market evidence, inspecting tool output, and turning real provider data into research answers.
+OpenCandle is an open source financial investigator: a terminal agent and local browser workbench that fetches real market data before the model writes an answer.
 
-It is built for investors, builders, and researchers who want the speed of an agent without hiding the source data. Tools fetch and format market, macro, options, fundamentals, filings, sentiment, and portfolio data. The model synthesizes after the evidence is gathered.
-
-OpenCandle is read-only research software. It does not place trades, route orders, or provide financial advice.
+It is read-only research software. It does not place trades, route orders, or provide financial advice.
 
 ## How OpenCandle Works
 
-OpenCandle keeps a simple research loop:
+1. You ask a financial question in the terminal or GUI.
+2. OpenCandle classifies the investigation and asks a follow-up only if a missing detail changes the answer.
+3. Tools fetch quotes, filings, options, macro data, and sentiment. Gaps and stale data are surfaced.
+4. The model writes an answer that separates facts from judgment and names the risks.
 
-1. You ask a financial question in the terminal or local GUI.
-2. OpenCandle identifies the kind of investigation: quote lookup, comparison, portfolio review, options strategy, filing check, macro question, sentiment read, education, or state update.
-3. It asks a focused follow-up only when a missing detail changes the answer.
-4. It gathers tool-backed evidence and surfaces provider gaps or stale data.
-5. It writes an answer that separates facts from judgment and names the important risks.
+Pi is the bundled agent runtime (model setup, sessions, terminal shell). OpenCandle adds the finance tools, workflows, providers, and local state on top. No separate Pi install needed.
 
-Pi provides the bundled local agent runtime, model setup, sessions, and terminal shell. You do not need a separate Pi install for normal OpenCandle usage. OpenCandle adds the finance tools, workflows, provider integrations, local finance state, GUI cards, and evaluation harness.
+## Start here
 
-## Using OpenCandle
+- [Why OpenCandle](./comparisons.md): how it compares to chatbots, finance sites, and spreadsheets.
+- [Getting Started](./getting-started.md): requirements, install, provider keys.
+- [First Run](./first-run.md): install to a keyless market answer in five minutes.
+- [GUI Quickstart](./gui-quickstart.md): the local browser workbench.
 
-- [First Run](./first-run.md) for a five-minute path from install to a successful keyless market answer.
-- [Getting Started](./getting-started.md) for requirements, install options, provider keys, and interfaces.
-- [TUI](./tui.md) for terminal usage, slash commands, sessions, and CLI-vs-GUI tradeoffs.
-- [GUI Quickstart](./gui-quickstart.md) for the local browser workbench.
-- [Investigation Recipes](./investigation-recipes.md) for repeatable research paths.
-- [Data Sources](./data-sources.md) for provider coverage, optional keys, and local state.
-- [Configuration](./configuration.md) for env vars, file config, OpenCandle state files, and GUI runtime knobs.
-- [Comparisons](./comparisons.md) for how OpenCandle relates to chatbots, finance sites, spreadsheets, and scripts.
+## Guides and reference
 
-## Contributing
+- [Terminal (TUI)](./tui.md): terminal usage, slash commands, sessions.
+- [Investigation Recipes](./investigation-recipes.md): repeatable research paths.
+- [Data Sources](./data-sources.md): provider coverage and optional keys.
+- [Configuration](./configuration.md): env vars, file config, state files.
 
-- [System Architecture](./system-architecture.md) for how questions become investigations, evidence, and answers.
-- [Build a Tool](./build-a-tool.md) for adding first-party tools or external add-on packages.
-- [Testing and Evals](./testing-and-evals.md) for validating tools, workflows, GUI behavior, full-session quality, and competitive benchmarking.
+## Build on it
+
+- [System Architecture](./system-architecture.md): how questions become investigations and answers.
+- [Build a Tool](./build-a-tool.md): first-party tools and add-on npm packages.
+- [Testing and Evals](./testing-and-evals.md): tests, session quality, benchmarking.
 
 ## What OpenCandle Investigates
 
@@ -54,26 +52,20 @@ Pi provides the bundled local agent runtime, model setup, sessions, and terminal
 
 ## Operating Principles
 
-- Evidence first. OpenCandle should show the data it used and avoid unsupported conclusions.
-- Tools do not analyze. They fetch and format; analyst prompts and the model synthesize.
-- Provider gaps are visible. Missing keys, stale data, and degraded sources should be surfaced.
-- Local state stays local. OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set.
-- Contributions stay testable. Unit tests use fixtures and mocked fetch calls, not live APIs.
+- Evidence first. Show the data used; avoid unsupported conclusions.
+- Tools fetch and format. The model synthesizes.
+- Provider gaps stay visible: missing keys, stale data, degraded sources.
+- Local state stays local, under `~/.opencandle/`.
+- Contributions stay testable: fixtures and mocked fetch, not live APIs.
 
-## When To Use OpenCandle
-
-Use OpenCandle when a question needs current or inspectable financial evidence: quotes, price history, options chains, filings, macro data, sentiment, watchlists, portfolio state, or a visible trail of what data was missing.
-
-OpenCandle can answer pure education questions without unnecessary tools, but it is most differentiated when evidence matters. It is designed for auditable market research, not for pretending every finance question needs a data lookup.
-
-## Common Workflows
+## Try it
 
 ```bash
 opencandle
 opencandle gui
 ```
 
-Inside the agent, start with prompts like:
+First prompts:
 
 ```text
 /analyze NVDA
@@ -83,4 +75,4 @@ Show me TSLA puts with Greeks
 Get the fed funds rate from FRED
 ```
 
-OpenCandle is research software, not a financial advisor. It can gather and organize evidence, but final judgment and risk assessment remain with the user.
+OpenCandle gathers and organizes evidence. Judgment and risk stay with you.

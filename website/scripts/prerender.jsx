@@ -25,19 +25,33 @@ const landingDescription =
   "OpenCandle is an open source financial investigator that gathers quotes, filings, macro data, options, sentiment, and portfolio context in a local CLI or GUI.";
 const socialImage = `${siteUrl}/assets/gui-screenshot.png`;
 
+// Ordered as a first-time visitor's journey: why and how to start, then daily
+// use, then reference, then extending, then project meta. `navLabel` renames a
+// page in the sidebar without touching its title, URL, or markdown.
 const sourcePages = [
-  { source: "docs/index.md", output: "docs/index.html", section: "Docs" },
-  { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Use" },
-  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Use" },
-  { source: "docs/tui.md", output: "docs/tui.html", section: "Use" },
+  {
+    source: "docs/index.md",
+    output: "docs/index.html",
+    section: "Start here",
+    navLabel: "Overview",
+  },
+  {
+    source: "docs/comparisons.md",
+    output: "docs/comparisons.html",
+    section: "Start here",
+    navLabel: "Why OpenCandle",
+  },
+  { source: "docs/getting-started.md", output: "docs/getting-started.html", section: "Start here" },
+  { source: "docs/first-run.md", output: "docs/first-run.html", section: "Start here" },
+  { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Start here" },
+  { source: "docs/tui.md", output: "docs/tui.html", section: "Guides", navLabel: "Terminal (TUI)" },
   {
     source: "docs/investigation-recipes.md",
     output: "docs/investigation-recipes.html",
-    section: "Use",
+    section: "Guides",
   },
-  { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Use" },
-  { source: "docs/configuration.md", output: "docs/configuration.html", section: "Use" },
-  { source: "docs/gui-quickstart.md", output: "docs/gui-quickstart.html", section: "Use" },
+  { source: "docs/data-sources.md", output: "docs/data-sources.html", section: "Reference" },
+  { source: "docs/configuration.md", output: "docs/configuration.html", section: "Reference" },
   {
     source: "docs/system-architecture.md",
     output: "docs/system-architecture.html",
@@ -45,8 +59,12 @@ const sourcePages = [
   },
   { source: "docs/build-a-tool.md", output: "docs/build-a-tool.html", section: "Build" },
   { source: "docs/testing-and-evals.md", output: "docs/testing-and-evals.html", section: "Build" },
-  { source: "docs/comparisons.md", output: "docs/comparisons.html", section: "Compare" },
-  { source: "CONTRIBUTING.md", output: "docs/contributing.html", section: "Project" },
+  {
+    source: "CONTRIBUTING.md",
+    output: "docs/contributing.html",
+    section: "Project",
+    navLabel: "Contributing",
+  },
   { source: "SECURITY.md", output: "docs/security.html", section: "Project" },
 ];
 
@@ -412,7 +430,7 @@ function NavGroups({ activeOutput }) {
           aria-current={page.output === activeOutput ? "page" : undefined}
           className="block rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-tertiary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-[current=page]:bg-tertiary aria-[current=page]:font-medium aria-[current=page]:text-foreground"
         >
-          {page.title}
+          {page.navLabel ?? page.title}
         </a>
       ))}
     </div>
@@ -444,7 +462,7 @@ function DocsNav({ activeOutput }) {
   return (
     <nav
       aria-label="Documentation"
-      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto px-3 py-4"
+      className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto px-3 py-5"
     >
       <NavGroups activeOutput={activeOutput} />
       <ResourceLinks />
@@ -578,23 +596,22 @@ function HomePage({ buildDate, version }) {
     >
       <SiteHeader />
       <main>
-        <section className="mx-auto max-w-[1100px] px-4 pt-14 pb-10 lg:px-6">
+        <section className="mx-auto max-w-[1100px] px-4 pt-16 pb-16 sm:pt-24 lg:px-6">
           <div className="flex items-center gap-2">
             <Badge variant="outline">Local-first</Badge>
             <Badge variant="outline">
               <a href="https://github.com/Kahtaf/OpenCandle/blob/main/CHANGELOG.md">v{version}</a>
             </Badge>
           </div>
-          <h1 className="mt-4 max-w-[720px] font-semibold text-3xl text-foreground tracking-tight sm:text-4xl">
+          <h1 className="mt-5 max-w-[720px] font-semibold text-3xl text-foreground tracking-tight sm:text-4xl">
             Market research that shows its evidence
           </h1>
-          <p className="mt-4 max-w-[640px] text-base text-muted-foreground leading-relaxed">
-            Ask a market question and a general chatbot answers from memory. OpenCandle is an open
-            source agent that runs on your machine and pulls live quotes, filings, options, macro
-            series, and sentiment through real market data tools before the model writes a word.
-            Every answer names its sources, timestamps, and gaps.
+          <p className="mt-5 max-w-[560px] text-base text-muted-foreground leading-relaxed">
+            A chatbot answers market questions from memory. OpenCandle runs on your machine and
+            fetches live quotes, filings, options, macro data, and sentiment first, then answers
+            with sources attached.
           </p>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button asChild variant="brand" rounded="full">
               <a href="docs/getting-started.html">Install OpenCandle</a>
             </Button>
@@ -605,12 +622,12 @@ function HomePage({ buildDate, version }) {
               npx opencandle@latest
             </code>
           </div>
-          <p className="mt-3 text-muted-foreground text-xs">
+          <p className="mt-4 text-muted-foreground text-xs">
             Bring your own Anthropic, OpenAI, or Google model key · market data needs no keys
           </p>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="Example answer">
+        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Example answer">
           <Card className="overflow-hidden shadow-subtle-xs">
             <div className="border-border border-b px-4 py-3 sm:px-5">
               <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
@@ -634,7 +651,7 @@ function HomePage({ buildDate, version }) {
                 ].map(([evidence, source]) => (
                   <li
                     key={evidence}
-                    className="flex flex-col gap-x-4 gap-y-0.5 py-2.5 text-sm sm:flex-row sm:items-baseline sm:justify-between"
+                    className="flex flex-col gap-x-4 gap-y-0.5 py-3 text-sm sm:flex-row sm:items-baseline sm:justify-between"
                   >
                     <span className="font-medium">{evidence}</span>
                     <span className="font-mono text-muted-foreground text-xs">{source}</span>
@@ -642,39 +659,38 @@ function HomePage({ buildDate, version }) {
                 ))}
               </ul>
               <p className="border-border border-t pt-3 text-muted-foreground text-sm">
-                The synthesis separates facts from judgment and flags stale or missing data, so you
-                check the trail instead of trusting the prose.
+                You check the trail instead of trusting the prose.
               </p>
             </div>
           </Card>
         </section>
 
         <section className="border-border border-y bg-secondary/50">
-          <div className="mx-auto max-w-[1100px] px-4 py-12 lg:px-6">
+          <div className="mx-auto max-w-[1100px] px-4 py-16 lg:px-6">
             <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
               Why not just ask a chatbot?
             </h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <Card className="p-5">
+            <div className="mt-6 grid gap-5 md:grid-cols-2">
+              <Card className="p-6">
                 <h3 className="font-semibold text-base">A general chatbot</h3>
-                <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
-                  <li>Answers market questions from training data that is months old.</li>
-                  <li>May invent, round, or omit prices, ratios, and filing details.</li>
-                  <li>Keeps its sources invisible, so claims cannot be checked.</li>
-                  <li>Sounds equally confident whether the data is current or stale.</li>
+                <ul className="mt-4 space-y-3 text-muted-foreground text-sm">
+                  <li>Answers from months-old training data</li>
+                  <li>Invents or omits numbers</li>
+                  <li>No sources to check</li>
+                  <li>Confident even when stale</li>
                 </ul>
               </Card>
-              <Card className="p-5">
+              <Card className="p-6">
                 <h3 className="font-semibold text-base">OpenCandle</h3>
-                <ul className="mt-3 space-y-2 text-muted-foreground text-sm">
-                  <li>Calls live finance tools first: quotes, filings, chains, macro series.</li>
-                  <li>Uses provider numbers as fetched, never guessed.</li>
-                  <li>Names providers and timestamps inside the answer.</li>
-                  <li>States gaps and stale data instead of papering over them.</li>
+                <ul className="mt-4 space-y-3 text-muted-foreground text-sm">
+                  <li>Fetches live data before answering</li>
+                  <li>Uses provider numbers as fetched</li>
+                  <li>Names sources and timestamps</li>
+                  <li>States gaps outright</li>
                 </ul>
               </Card>
             </div>
-            <p className="mt-4 text-sm">
+            <p className="mt-6 text-sm">
               <a
                 className="font-medium text-foreground underline underline-offset-4 hover:text-muted-foreground"
                 href="docs/comparisons.html"
@@ -685,15 +701,15 @@ function HomePage({ buildDate, version }) {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 py-14 lg:px-6">
+        <section className="mx-auto max-w-[1100px] px-4 py-20 lg:px-6">
           <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
             A workbench, not a chat window
           </h2>
-          <p className="mt-2 max-w-[640px] text-muted-foreground text-sm">
-            The local GUI keeps tool calls, watchlists, portfolios, alerts, and reports next to the
-            conversation, backed by the same sessions as the terminal agent.
+          <p className="mt-3 max-w-[560px] text-muted-foreground text-sm">
+            Tool calls, watchlists, portfolios, alerts, and reports sit next to the chat, sharing
+            sessions with the terminal agent.
           </p>
-          <Card className="mt-5 overflow-hidden">
+          <Card className="mt-6 overflow-hidden">
             <img
               src="assets/gui-screenshot.png"
               alt="OpenCandle local GUI showing an evidence-backed market research response"
@@ -705,18 +721,17 @@ function HomePage({ buildDate, version }) {
           </Card>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="For builders">
-          <div className="grid items-start gap-8 md:grid-cols-2">
+        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="For builders">
+          <div className="grid items-start gap-10 md:grid-cols-2">
             <div>
               <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
                 Built to be extended
               </h2>
-              <p className="mt-2 text-muted-foreground text-sm leading-relaxed">
-                Every capability is a typed tool with declared parameters, shared caching, and rate
-                limiting. Add your own data source in one file, or ship it as a separate npm package
-                through the stable add-on API, and the agent calls it like any built-in.
+              <p className="mt-3 text-muted-foreground text-sm leading-relaxed">
+                Every capability is a typed tool: declared parameters, shared caching, rate limits.
+                Add a data source in one file, or ship it as an npm package.
               </p>
-              <ul className="mt-4 space-y-2 text-sm">
+              <ul className="mt-5 space-y-3 text-sm">
                 {[
                   ["Build a tool", "docs/build-a-tool.html"],
                   ["System architecture", "docs/system-architecture.html"],
@@ -756,18 +771,17 @@ export const twitterSentimentTool: AgentTool<typeof params> = {
           </div>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-14 lg:px-6" aria-label="Start locally">
-          <Card className="p-5 sm:p-6">
-            <div className="grid items-start gap-6 md:grid-cols-2">
+        <section className="mx-auto max-w-[1100px] px-4 pb-20 lg:px-6" aria-label="Start locally">
+          <Card className="p-6 sm:p-8">
+            <div className="grid items-start gap-8 md:grid-cols-2">
               <div>
                 <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">
                   Start locally
                 </h2>
-                <p className="mt-2 text-muted-foreground text-sm">
-                  Bring your own model key from Anthropic, OpenAI, or Google. Quotes, filings,
-                  macro, and crypto data work with no data-provider keys.
+                <p className="mt-3 text-muted-foreground text-sm">
+                  Bring a model key from Anthropic, OpenAI, or Google. Market data needs no keys.
                 </p>
-                <p className="mt-2 text-muted-foreground text-xs">
+                <p className="mt-3 text-muted-foreground text-xs">
                   MIT licensed · Node.js 22+ · macOS, Windows, Linux
                 </p>
               </div>
@@ -783,13 +797,15 @@ export const twitterSentimentTool: AgentTool<typeof params> = {
           </Card>
         </section>
 
-        <section className="mx-auto max-w-[1100px] px-4 pb-16 lg:px-6" aria-label="FAQ">
+        <section className="mx-auto max-w-[1100px] px-4 pb-24 lg:px-6" aria-label="FAQ">
           <h2 className="font-semibold text-foreground text-xl tracking-[-0.01em]">FAQ</h2>
-          <div className="mt-2 max-w-[720px] divide-y divide-border">
+          <div className="mt-3 max-w-[720px] divide-y divide-border">
             {faqs.map((faq) => (
-              <details key={faq.question} className="py-3 text-sm">
+              <details key={faq.question} className="py-4 text-sm">
                 <summary className="cursor-pointer font-medium">{faq.question}</summary>
-                <p className="mt-2 max-w-[640px] text-muted-foreground">{faq.answer}</p>
+                <p className="mt-3 max-w-[640px] text-muted-foreground leading-relaxed">
+                  {faq.answer}
+                </p>
               </details>
             ))}
           </div>
@@ -838,9 +854,9 @@ function DocsPage({ page, content, headings, buildDate }) {
       }}
     >
       <DocsShell page={page}>
-        <main className="mx-auto flex w-full max-w-[1100px] gap-10 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto flex w-full max-w-[1100px] gap-12 px-4 py-10 sm:px-6 lg:px-10">
           <article className="min-w-0 max-w-[720px] flex-1">
-            <p className="mb-4 text-muted-foreground text-xs">
+            <p className="mb-6 text-muted-foreground text-xs">
               Last updated <time dateTime={buildDate}>{buildDate}</time>
             </p>
             <div
@@ -851,7 +867,7 @@ function DocsPage({ page, content, headings, buildDate }) {
           </article>
           {toc.length > 0 ? (
             <aside className="hidden w-[200px] shrink-0 xl:block">
-              <div className="sticky top-6 flex flex-col gap-0.5">
+              <div className="sticky top-20 flex flex-col gap-0.5">
                 <SectionLabel>On this page</SectionLabel>
                 <nav className="flex flex-col gap-0.5" aria-label="On this page">
                   {toc.map((heading) => (

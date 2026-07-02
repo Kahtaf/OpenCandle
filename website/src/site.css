@@ -109,11 +109,11 @@
   .docs-content {
     color: hsl(var(--tw-foreground) / 0.84);
     font-size: 0.875rem;
-    line-height: 1.65;
+    line-height: 1.75;
   }
 
   .docs-content > * + * {
-    margin-top: 1rem;
+    margin-top: 1.25rem;
   }
 
   .docs-content h1,
@@ -132,15 +132,15 @@
   }
 
   .docs-content h2 {
-    margin-top: 2rem;
-    padding-top: 0.5rem;
+    margin-top: 3rem;
+    padding-top: 1rem;
     border-top: 1px solid hsl(var(--tw-border));
     font-size: 1.125rem;
     letter-spacing: -0.01em;
   }
 
   .docs-content h3 {
-    margin-top: 1.5rem;
+    margin-top: 2rem;
     font-size: 1rem;
   }
 
@@ -189,7 +189,7 @@
   }
 
   .docs-content li + li {
-    margin-top: 0.375rem;
+    margin-top: 0.5rem;
   }
 
   .docs-content a {

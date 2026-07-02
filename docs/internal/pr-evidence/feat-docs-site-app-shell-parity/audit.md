@@ -117,6 +117,29 @@ ChatGPT user and a developer above the fold. Its findings, all applied:
 
 Reviewer screenshots: `fresh-eyes-v2/`.
 
+## v3: density + docs IA pass (user direction, 2026-07-02)
+
+Both surfaces read dense and word-heavy. Changes:
+
+- **Docs IA reorganized as a first-time visitor's journey** (URLs unchanged,
+  registry-only): Start here (Overview, Why OpenCandle, Getting Started, First
+  Run, GUI Quickstart) → Guides (Terminal (TUI), Investigation Recipes) →
+  Reference (Data Sources, Configuration) → Build → Project → Resources.
+  A `navLabel` field renames sidebar entries without touching page titles;
+  "Comparisons" surfaces as "Why OpenCandle" right after the overview.
+- **Copy tightened**: hero subhead cut from 48 to 30 words, receipt footer to
+  one sentence, chatbot-contrast bullets to fragments, builder/start/workbench
+  paragraphs halved. docs/index.md rewritten as a scannable map (kept the
+  contract-test heading strings).
+- **Breathing room**: hero pt-16/sm:pt-24, section padding 14→16–24 units,
+  docs main py-6→py-10, docs line-height 1.65→1.75, paragraph gaps 1→1.25rem,
+  h2 top margin 2→3rem, sidebar group gap 3→5.
+- **Bug found while spacing**: the TOC's `sticky top-6` pinned it under the
+  sticky navbar on scroll; now `top-20`.
+
+Screenshots: `after/docs-index-v3.png`, `after/home-desktop-v3.png`,
+`after/home-mobile-v3.png`.
+
 ## Explicitly deferred
 
 - Homepage navbar height stays h-14 (marketing scale; the app has no landing
