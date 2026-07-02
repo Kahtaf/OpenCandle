@@ -56,9 +56,33 @@ truth; DESIGN.md/DESIGN.json used as the map. Before screenshots in `before/`.
     theme incl. the old `.site-nav`. Nothing references it (Vite builds
     `src/entry-client.jsx` → `src/site.css`). → Remove in its own commit.
 
+## Fresh-eyes subagent review (post-fix)
+
+A no-context reviewer compared both running sites and confirmed "the two
+sites clearly read as the same product" with matching fonts, palette,
+sidebar metrics, labels, badges, and drawer behavior. Its findings:
+
+1. Hero/aside Install buttons not pill-shaped → **fixed** (rounded full).
+2. Docs buttons 40px vs app 32px → **not reproducible**; measured 32px at
+   1440px (sm buttons are 40px only below the md breakpoint, same as the GUI).
+3. Homepage hero h1 smaller than docs titles → **per DESIGN.md** (docs titles
+   use the display scale 1.75rem, homepage hero the headline scale); the
+   missing -0.01em letter-spacing was real and **fixed**.
+4. Docs nav items lack icons/500 weight of the app's Market State nav →
+   **deferred**: docs pages mirror the GUI's session-list idiom
+   (`history-item.jsx`: icon-less, 400 weight), which is the closer analogue
+   for a list of documents; icons per docs page would be invented semantics.
+5. Docs active nav pill visible vs app's invisible active fill → **deferred**:
+   the GUI itself is split (Market State nav uses bg-secondary = invisible on
+   the secondary sidebar; session items use visible bg-tertiary). Docs follows
+   the session-item treatment, which is the one that actually reads.
+6. Mobile table clipping with no scroll affordance → **fixed** with a CSS
+   scroll shadow on horizontally scrollable tables.
+
 ## Explicitly deferred
 
 - Homepage navbar height stays h-14 (marketing scale; the app has no landing
   navbar to mirror, and DESIGN.md only prescribes the vocabulary, not 48px).
 - Right-rail TOC has no app equivalent; it is kept (docs convention) but
   restyled to the app's label/link vocabulary.
+- Fresh-eyes findings 4 and 5, per above.
