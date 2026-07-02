@@ -18,10 +18,10 @@
       "info": { "role": "semantic", "displayName": "Info Blue", "canonical": "hsl(217 91% 60%)", "tonalRamp": ["#172554", "#1e40af", "#2563eb", "#3c83f6", "#60a5fa", "#93c5fd", "#bfdbfe", "#eff6ff"] }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Homepage hero headline only." },
-      "headline": { "displayName": "Headline", "purpose": "Homepage and docs section headings." },
+      "display": { "displayName": "Display", "purpose": "Docs page titles — the largest heading on any surface." },
+      "headline": { "displayName": "Headline", "purpose": "Homepage hero and docs section headings." },
       "title": { "displayName": "Title", "purpose": "Page titles and panel headings in the GUI shell." },
-      "body": { "displayName": "Body", "purpose": "GUI default copy; docs prose at 1rem with 65-75ch measure." },
+      "body": { "displayName": "Body", "purpose": "GUI default copy; docs prose at 0.875rem and 1.65 line height." },
       "label": { "displayName": "Label", "purpose": "Column headers, badges, kickers, inspector section labels." },
       "code": { "displayName": "Code", "purpose": "Code blocks, lot ledgers, tickers in dense tables; tabular numerals." }
     },
@@ -43,9 +43,9 @@
       "name": "Brand Button",
       "kind": "button",
       "refersTo": "button-brand",
-      "description": "The single committed action per region; pill-shaped near-black CTA.",
+      "description": "The single committed action per region; near-black CTA. 8px radius by default; the pill rounded variant is reserved for composer send actions and page-level primary CTAs.",
       "html": "<button class=\"ds-btn-brand\">Add symbol</button>",
-      "css": ".ds-btn-brand { background: #18181b; color: #ffffff; height: 36px; padding: 0 16px; border: none; border-radius: 9999px; font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; transition: opacity 150ms; } .ds-btn-brand:hover { opacity: 0.9; } .ds-btn-brand:focus-visible { outline: 2px solid #18181b; outline-offset: 2px; }"
+      "css": ".ds-btn-brand { background: #18181b; color: #ffffff; height: 36px; padding: 0 12px; border: none; border-radius: 8px; font-family: Inter, system-ui, sans-serif; font-size: 13px; font-weight: 500; transition: opacity 150ms; } .ds-btn-brand:hover { opacity: 0.9; } .ds-btn-brand:focus-visible { outline: 2px solid #18181b; outline-offset: 2px; }"
     },
     {
       "name": "Bordered Button",
@@ -61,7 +61,7 @@
       "refersTo": "badge",
       "description": "State communication: neutral zinc or semantic color/10 tint with full-strength text.",
       "html": "<span class=\"ds-badge\">recurring</span> <span class=\"ds-badge ds-badge-warn\">Quote 26m old</span> <span class=\"ds-badge ds-badge-ok\">Target hit</span>",
-      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 1px solid transparent; border-radius: 6px; background: #f4f4f5; color: #71717a; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 500; } .ds-badge-warn { background: rgba(220, 132, 9, 0.1); border-color: rgba(220, 132, 9, 0.3); color: #dc8409; } .ds-badge-ok { background: rgba(26, 153, 72, 0.1); border-color: rgba(26, 153, 72, 0.3); color: #1a9948; }"
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 1px solid transparent; border-radius: 8px; background: #f4f4f5; color: #71717a; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 500; } .ds-badge-warn { background: rgba(220, 132, 9, 0.1); border-color: rgba(220, 132, 9, 0.3); color: #dc8409; } .ds-badge-ok { background: rgba(26, 153, 72, 0.1); border-color: rgba(26, 153, 72, 0.3); color: #1a9948; }"
     },
     {
       "name": "Panel Card",
@@ -90,12 +90,12 @@
   ],
   "narrative": {
     "northStar": "The Research Desk",
-    "overview": "OpenCandle is a quiet, exacting workbench for financial research. The design language is the GUI's: minimal, professional, shadcn-component construction in the spirit of llmchat — white paper, zinc neutrals, one near-black action color, Inter for everything, JetBrains Mono only where data demands alignment. The docs site and homepage follow the GUI, not the other way around. The system rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, gamified trading-app energy, and terminal cosplay. Color exists to carry meaning — market direction, provider state, data freshness — never decoration.",
+    "overview": "OpenCandle is a quiet, exacting workbench for financial research. The design language is the GUI's: minimal, professional, shadcn-component construction in the spirit of llmchat — white paper, zinc neutrals, one near-black action color, Inter for everything, JetBrains Mono only where data demands alignment. The docs site and homepage follow the GUI, not the other way around; the shared packages/ui workspace carries the tokens and primitives for both. The system rejects glossy fintech theater, navy-and-gold finance cliches, purple AI gradients, decorative glass, stock-photo polish, gamified trading-app energy, and terminal cosplay. Color exists to carry meaning — market direction, provider state, data freshness — never decoration.",
     "keyCharacteristics": [
       "White surfaces layered with zinc tints before any shadow.",
       "One action color: near-black ink. Semantic green/amber/red/blue communicate state only.",
       "Inter at every scale; hierarchy from size and weight, never a second display face.",
-      "Hairline borders, 6-12px radii, pill-shaped primary CTAs.",
+      "Hairline borders, 8-12px radii; pill shapes reserved for composer actions and page-level primary CTAs.",
       "Tabular numerals on all financial figures; signed values accompany every direction color."
     ],
     "rules": [
@@ -106,8 +106,8 @@
       { "name": "The Neutral Shadow Rule", "body": "Shadow color is neutral near-black at single-digit opacity. Tinted, colored, or glowing shadows are prohibited.", "section": "elevation" }
     ],
     "dos": [
-      "Do treat gui/web/src/styles.css and gui/web/src/components/ui/ as the normative token and component source.",
-      "Do keep one primary (pill, Research Ink) action per region; everything else bordered or ghost.",
+      "Do treat packages/ui/src/styles.css and packages/ui/src/ as the normative token and primitive source; GUI-only components in gui/web/src/components/ui/ build on the same tokens.",
+      "Do keep one primary (Research Ink) action per region; everything else bordered or ghost.",
       "Do show data freshness in plain language (\"Updated 2m ago\", \"Quote 26m old\") with Amber Caveat when stale.",
       "Do use relative, human timestamps in UI surfaces; raw ISO strings belong in tool output only.",
       "Do layer Paper → Zinc Mist → Zinc Sunk before reaching for shadow."
