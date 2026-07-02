@@ -188,7 +188,10 @@ describe("GUI server route guards", () => {
     );
 
     expect(proxyBlock).toContain("await proxyChatRunToCoordinator");
-    expect(proxyBlock).toContain("broadcastRunSessionSnapshot(options, runSessionManager");
+    expect(proxyBlock).toContain(
+      "await broadcastFreshRunSessionSnapshot(options, runSessionManager",
+    );
+    expect(source).toContain("SessionManager.open(sessionFile, options.sessionDir, options.cwd)");
   });
 
   it("syncs the current writer lock scope when a chat action is admitted", () => {

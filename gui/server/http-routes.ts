@@ -374,7 +374,7 @@ async function handleSseChatRun(
       const useCurrentSession =
         !targetSessionManager ||
         currentSessionManager.getSessionFile() === runSessionManager.getSessionFile();
-      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      await broadcastFreshRunSessionSnapshot(options, runSessionManager, useCurrentSession);
       return;
     }
     if (actionId && hasAcceptedSessionAction(runSessionManager, actionId)) {
@@ -613,11 +613,11 @@ async function streamAcceptedSseChatRun({
         source: "gui",
         requirement: modelSetup.requirement,
       });
-      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     } else {
       await promptAndSettle(runSession, prompt, beforeIds, observation);
       recordAcceptedAction();
-      broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     }
     seq = liveAdapter.nextSeq();
     if (seq === liveStartSeq) {
@@ -658,11 +658,11 @@ async function streamAcceptedSseChatRun({
 
 class SessionActionNotAdmitted extends Error {}
 
-function broadcastRunSessionSnapshot(
+async function broadcastRunSessionSnapshot(
   options: GuiHttpRouteOptions,
   sessionManager: SessionManager,
   useCurrentSession: boolean,
-): void {
+): Promise<void> {
   if (useCurrentSession) {
     options.syncCurrentWriterLockScope?.();
     options.wsHub.broadcastState();
@@ -670,6 +670,51 @@ function broadcastRunSessionSnapshot(
     options.wsHub.broadcastSessionSnapshot(sessionManager);
     options.wsHub.broadcastSessions();
   }
+}
+
+async function broadcastFreshRunSessionSnapshot(
+  options: GuiHttpRouteOptions,
+  sessionManager: SessionManager,
+  useCurrentSession: boolean,
+): Promise<void> {
+  const freshSessionManager = await reloadSessionManager(sessionManager, options);
+  if (useCurrentSession) {
+    options.syncCurrentWriterLockScope?.();
+    options.wsHub.broadcast({
+      type: "state.snapshot",
+      ...buildSnapshotPayload(freshSessionManager),
+    });
+  } else {
+    options.wsHub.broadcast({
+      type: "session.snapshot",
+      ...buildSnapshotPayload(freshSessionManager),
+    });
+    options.wsHub.broadcastSessions();
+  }
+}
+
+async function reloadSessionManager(
+  sessionManager: SessionManager,
+  options: Pick<GuiHttpRouteOptions, "sessionDir" | "cwd">,
+): Promise<SessionManager> {
+  const sessionFile = sessionManager.getSessionFile();
+  return sessionFile
+    ? SessionManager.open(sessionFile, options.sessionDir, options.cwd)
+    : sessionManager;
+}
+
+function buildSnapshotPayload(sessionManager: SessionManager): Record<string, unknown> {
+  const sessionId = sessionManager.getSessionId();
+  const entries = sessionManager.getEntries();
+  return {
+    sessionId,
+    state: projectDashboard(entries, sessionId),
+    entries,
+    events: sessionEntriesToChatEvents(entries, {
+      sessionId,
+      title: sessionManager.getSessionName(),
+    }),
+  };
 }
 
 export async function buildSessionBootstrapPayload(
