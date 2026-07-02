@@ -1,14 +1,14 @@
 ## 1. Coordinator Ownership and Recovery
 
-- [ ] 1.1 Add tests for per-session coordinator metadata parsing, heartbeat freshness, endpoint discovery, protocol version, process identity, and startup fallback scope.
-- [ ] 1.2 Extend the existing writer lock metadata to include canonical session id or fallback scope, owner pid, owner process identity discriminator, heartbeat timestamp, endpoint, and protocol version.
+- [x] 1.1 Add tests for per-session coordinator metadata parsing, heartbeat freshness, endpoint discovery, protocol version, process identity, and startup fallback scope.
+- [x] 1.2 Extend the existing writer lock metadata to include canonical session id or fallback scope, owner pid, owner process identity discriminator, heartbeat timestamp, endpoint, and protocol version.
 - [ ] 1.3 Replace the current process-wide GUI writer/follower role with per-session coordinator state in server controllers and browser boot/session-switch state.
-- [ ] 1.4 Change stale recovery so a late heartbeat from a still-live matching owner process does not permit lock stealing.
-- [ ] 1.5 Add recovery tests proving a live delayed owner is not stolen, a dead owner can be recovered, and an ambiguous/reused PID is not auto-stolen.
+- [x] 1.4 Change stale recovery so a late heartbeat from a still-live matching owner process does not permit lock stealing.
+- [x] 1.5 Add recovery tests proving a live delayed owner is not stolen, a dead owner can be recovered, and an ambiguous/reused PID is not auto-stolen.
 - [ ] 1.6 Add a neutral manual recovery path for ambiguous or corrupted ownership metadata that does not expose writer/follower/takeover terminology.
 - [ ] 1.7 Add heartbeat refresh and release behavior for active coordinators, including long-running streams, tool calls, and synthesis.
 - [ ] 1.8 Add verification that a long stream outlives the stale grace window without another process recovering the session.
-- [ ] 1.9 Serialize startup fallback scope to canonical session identity migration so two keys cannot produce two owners for one session.
+- [x] 1.9 Serialize startup fallback scope to canonical session identity migration so two keys cannot produce two owners for one session.
 
 ## 2. Authenticated Local Proxy
 

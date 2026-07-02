@@ -16,11 +16,19 @@ export interface WriterLock {
   processKind: ProcessKind;
   acquiredAt: string;
   lastHeartbeat: string;
+  protocolVersion?: number;
+  scope?: string;
+  ownerId?: string;
+  coordinatorEndpoint?: string;
+  recoveryState?: "ambiguous" | "live";
 }
 
 export interface AcquireOptions {
   pid?: number;
+  ownerId?: string;
   staleGraceMs?: number;
+  now?: () => Date;
+  isPidAlive?: (pid: number) => boolean;
 }
 
 export type AcquireResult =
@@ -33,6 +41,8 @@ export interface SessionLockScopeSource {
 }
 
 const DEFAULT_STALE_GRACE_MS = 15_000;
+const WRITER_LOCK_PROTOCOL_VERSION = 1;
+const PROCESS_STARTED_AT = new Date(Date.now() - process.uptime() * 1000).toISOString();
 
 export async function acquireWriterLock(
   scopePath: string,
@@ -40,21 +50,27 @@ export async function acquireWriterLock(
   options: AcquireOptions = {},
 ): Promise<AcquireResult> {
   mkdirSync(dirname(lockPath(scopePath)), { recursive: true });
-  const pid = options.pid ?? process.pid;
+  const identity = lockIdentity(options);
   const staleGraceMs = options.staleGraceMs ?? DEFAULT_STALE_GRACE_MS;
+  const pidAlive = options.isPidAlive ?? isPidAlive;
+  const now = options.now ?? (() => new Date());
 
-  const created = tryCreate(scopePath, processKind, pid);
+  const created = tryCreate(scopePath, processKind, identity, now);
   if (created) return { role: "writer", lock: created };
 
   const existing = readWriterLock(scopePath);
-  if (existing && isLockCurrent(existing, staleGraceMs)) {
-    return { role: "follower", lock: existing };
+  if (existing) {
+    const status = classifyLock(existing, staleGraceMs, pidAlive);
+    if (status !== "recoverable") return { role: "follower", lock: withRecoveryState(existing, status) };
   }
 
   await sleep(staleGraceMs);
   const afterGrace = readWriterLock(scopePath);
-  if (afterGrace && isLockCurrent(afterGrace, staleGraceMs)) {
-    return { role: "follower", lock: afterGrace };
+  if (afterGrace) {
+    const status = classifyLock(afterGrace, staleGraceMs, pidAlive);
+    if (status !== "recoverable") {
+      return { role: "follower", lock: withRecoveryState(afterGrace, status) };
+    }
   }
 
   try {
@@ -63,7 +79,7 @@ export async function acquireWriterLock(
     // Missing or concurrently removed is fine; the next create decides ownership.
   }
 
-  const recovered = tryCreate(scopePath, processKind, pid);
+  const recovered = tryCreate(scopePath, processKind, identity, now);
   if (recovered) return { role: "writer", lock: recovered };
 
   const current = readWriterLock(scopePath) ?? afterGrace ?? existing;
@@ -79,18 +95,32 @@ export function readWriterLock(scopePath: string): WriterLock | null {
   }
 }
 
-export function refreshWriterLock(scopePath: string, pid = process.pid): void {
+export function refreshWriterLock(
+  scopePath: string,
+  holder: number | { pid?: number; ownerId?: string; now?: () => Date } = process.pid,
+): void {
+  const identity =
+    typeof holder === "number"
+      ? { pid: holder, ownerId: holder === process.pid ? defaultOwnerId(holder) : undefined }
+      : { pid: holder.pid ?? process.pid, ownerId: holder.ownerId, now: holder.now };
   const lock = readWriterLock(scopePath);
-  if (!lock || lock.pid !== pid) return;
+  if (!lock || !isSameLockOwner(lock, identity)) return;
   writeFileSync(
     lockPath(scopePath),
-    JSON.stringify({ ...lock, lastHeartbeat: new Date().toISOString() }, null, 2),
+    JSON.stringify({ ...lock, lastHeartbeat: (identity.now?.() ?? new Date()).toISOString() }, null, 2),
   );
 }
 
-export function releaseWriterLock(scopePath: string, pid = process.pid): void {
+export function releaseWriterLock(
+  scopePath: string,
+  holder: number | { pid?: number; ownerId?: string } = process.pid,
+): void {
+  const identity =
+    typeof holder === "number"
+      ? { pid: holder, ownerId: holder === process.pid ? defaultOwnerId(holder) : undefined }
+      : { pid: holder.pid ?? process.pid, ownerId: holder.ownerId };
   const lock = readWriterLock(scopePath);
-  if (!lock || lock.pid !== pid) return;
+  if (!lock || !isSameLockOwner(lock, identity)) return;
   try {
     unlinkSync(lockPath(scopePath));
   } catch {
@@ -106,9 +136,52 @@ export function writerLockScopeForSession(sessionManager: SessionLockScopeSource
   return sessionManager.getSessionFile() ?? sessionManager.getSessionDir();
 }
 
-function tryCreate(scopePath: string, processKind: ProcessKind, pid: number): WriterLock | null {
-  const now = new Date().toISOString();
-  const lock: WriterLock = { pid, processKind, acquiredAt: now, lastHeartbeat: now };
+export function migrateWriterLockScope(
+  fromScopePath: string,
+  toScopePath: string,
+  holder: { pid?: number; ownerId?: string } = {},
+): boolean {
+  if (fromScopePath === toScopePath) return true;
+  const identity = { pid: holder.pid ?? process.pid, ownerId: holder.ownerId };
+  const lock = readWriterLock(fromScopePath);
+  if (!lock || !isSameLockOwner(lock, identity)) return false;
+
+  mkdirSync(dirname(lockPath(toScopePath)), { recursive: true });
+  const nextLock = { ...lock, scope: toScopePath };
+  let fd: number | undefined;
+  try {
+    fd = openSync(lockPath(toScopePath), "wx");
+    writeFileSync(fd, JSON.stringify(nextLock, null, 2));
+  } catch {
+    return false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+
+  try {
+    unlinkSync(lockPath(fromScopePath));
+  } catch {
+    // Best effort; destination lock is now authoritative for the canonical scope.
+  }
+  return true;
+}
+
+function tryCreate(
+  scopePath: string,
+  processKind: ProcessKind,
+  identity: { pid: number; ownerId?: string },
+  nowFn: () => Date,
+): WriterLock | null {
+  const now = nowFn().toISOString();
+  const lock: WriterLock = {
+    pid: identity.pid,
+    processKind,
+    acquiredAt: now,
+    lastHeartbeat: now,
+    protocolVersion: WRITER_LOCK_PROTOCOL_VERSION,
+    scope: scopePath,
+    ...(identity.ownerId ? { ownerId: identity.ownerId } : {}),
+  };
   try {
     const fd = openSync(lockPath(scopePath), "wx");
     try {
@@ -131,11 +204,47 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
-function isLockCurrent(lock: WriterLock, staleGraceMs: number): boolean {
+function classifyLock(
+  lock: WriterLock,
+  staleGraceMs: number,
+  pidAlive: (pid: number) => boolean,
+): "current" | "ambiguous" | "recoverable" {
   const heartbeat = Date.parse(lock.lastHeartbeat);
-  return (
-    isPidAlive(lock.pid) && Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs
-  );
+  const hasFreshHeartbeat = Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs;
+  if (!pidAlive(lock.pid)) return "recoverable";
+  if (hasFreshHeartbeat) return "current";
+  return lock.ownerId ? "current" : "ambiguous";
+}
+
+function withRecoveryState(
+  lock: WriterLock,
+  status: "current" | "ambiguous",
+): WriterLock {
+  if (status === "current") return { ...lock, recoveryState: "live" };
+  return { ...lock, recoveryState: "ambiguous" };
+}
+
+function isSameLockOwner(
+  lock: WriterLock,
+  identity: { pid: number; ownerId?: string },
+): boolean {
+  if (lock.pid !== identity.pid) return false;
+  if (lock.ownerId) return lock.ownerId === identity.ownerId;
+  return !identity.ownerId;
+}
+
+function lockIdentity(options: AcquireOptions): { pid: number; ownerId?: string } {
+  const pid = options.pid ?? process.pid;
+  const ownerId =
+    options.ownerId === undefined && pid === process.pid ? defaultOwnerId(pid) : options.ownerId;
+  return {
+    pid,
+    ...(ownerId ? { ownerId } : {}),
+  };
+}
+
+function defaultOwnerId(pid: number): string {
+  return `${pid}:${process.ppid}:${PROCESS_STARTED_AT}`;
 }
 
 function lockPath(scopePath: string): string {
