@@ -269,19 +269,17 @@ function parseAcceptedActionStore(parsed: {
     : [];
   const pending = parsePendingActionRecords(parsed.pendingActionIds);
   return {
-    acceptedActionIds: [...new Set([...acceptedActionIds, ...pending.staleActionIds])],
+    acceptedActionIds,
     pendingActions: pending.activeRecords,
   };
 }
 
 function parsePendingActionRecords(value: unknown): {
   activeRecords: PendingActionRecord[];
-  staleActionIds: string[];
 } {
-  if (!Array.isArray(value)) return { activeRecords: [], staleActionIds: [] };
+  if (!Array.isArray(value)) return { activeRecords: [] };
   const now = Date.now();
   const activeRecords: PendingActionRecord[] = [];
-  const staleActionIds: string[] = [];
   for (const entry of value) {
     const record = (() => {
       if (!entry || typeof entry !== "object") return null;
@@ -290,13 +288,9 @@ function parsePendingActionRecords(value: unknown): {
       return { id: pending.id, pendingAtMs: pending.pendingAtMs };
     })();
     if (!record) continue;
-    if (now - record.pendingAtMs > PENDING_SESSION_ACTION_TTL_MS) {
-      staleActionIds.push(record.id);
-    } else {
-      activeRecords.push(record);
-    }
+    if (now - record.pendingAtMs <= PENDING_SESSION_ACTION_TTL_MS) activeRecords.push(record);
   }
-  return { activeRecords, staleActionIds };
+  return { activeRecords };
 }
 
 function tryCreate(

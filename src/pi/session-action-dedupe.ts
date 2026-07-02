@@ -93,7 +93,7 @@ function readAcceptedActionStore(sessionManager: SessionLockScopeSource): Accept
       ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
       : [];
     return {
-      acceptedActionIds: [...new Set([...acceptedActionIds, ...pendingRecords.staleActionIds])],
+      acceptedActionIds,
       pendingActionIds: pendingRecords.activeRecords.map((record) => record.id),
     };
   } catch {
@@ -122,12 +122,10 @@ function writeAcceptedActionStore(storePath: string, store: AcceptedActionStore)
 
 function readPendingActionRecords(value: unknown): {
   activeRecords: PendingActionRecord[];
-  staleActionIds: string[];
 } {
-  if (!Array.isArray(value)) return { activeRecords: [], staleActionIds: [] };
+  if (!Array.isArray(value)) return { activeRecords: [] };
   const now = Date.now();
   const activeRecords: PendingActionRecord[] = [];
-  const staleActionIds: string[] = [];
   for (const entry of value) {
     const record = (() => {
       if (typeof entry === "string") return null;
@@ -137,13 +135,9 @@ function readPendingActionRecords(value: unknown): {
       return { id: pending.id, pendingAtMs: pending.pendingAtMs };
     })();
     if (!record) continue;
-    if (now - record.pendingAtMs > pendingSessionActionTtlMs) {
-      staleActionIds.push(record.id);
-    } else {
-      activeRecords.push(record);
-    }
+    if (now - record.pendingAtMs <= pendingSessionActionTtlMs) activeRecords.push(record);
   }
-  return { activeRecords, staleActionIds };
+  return { activeRecords };
 }
 
 function acceptedActionStorePath(sessionManager: SessionLockScopeSource): string {
