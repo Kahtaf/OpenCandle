@@ -13,6 +13,7 @@ import {
   InteractiveMode,
   initTheme,
   ModelRegistry,
+  SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { loadEnv } from "./config.js";
@@ -230,7 +231,7 @@ async function main(): Promise<void> {
   });
   if (sessionWriterLock.role !== "writer") {
     await tuiCoordinator.close();
-    if (await runFollowerTuiProxy(sessionWriterLock.lock, sessionManager)) return;
+    if (await runFollowerTuiProxy(sessionWriterLock.lock, sessionManager, cwd)) return;
     console.error("OpenCandle is syncing this session in another window. Try again shortly.");
     process.exitCode = 1;
     return;
@@ -324,11 +325,13 @@ async function main(): Promise<void> {
 async function runFollowerTuiProxy(
   lock: WriterLock,
   sessionManager: ReturnType<typeof continueOpenCandleSession>,
+  cwd: string,
 ): Promise<boolean> {
   if (!lock.coordinatorEndpoint || !lock.coordinatorSecret) return false;
   if (!process.stdin.isTTY) return false;
 
   const input = createInterface({ input: process.stdin, output: process.stdout });
+  const stopFollowing = startFollowerTranscriptPrinter(sessionManager, cwd);
   try {
     console.log("Connected to the active OpenCandle session. Type /exit to close.");
     while (true) {
@@ -338,9 +341,65 @@ async function runFollowerTuiProxy(
       await forwardTuiPrompt(lock, sessionManager.getSessionId(), prompt);
     }
   } finally {
+    stopFollowing();
     input.close();
   }
   return true;
+}
+
+function startFollowerTranscriptPrinter(
+  sessionManager: ReturnType<typeof continueOpenCandleSession>,
+  cwd: string,
+): () => void {
+  const sessionFile = sessionManager.getSessionFile();
+  if (!sessionFile) return () => {};
+  const seenEntryIds = new Set(
+    sessionManager
+      .getEntries()
+      .map((entry) => entryId(entry))
+      .filter((id): id is string => Boolean(id)),
+  );
+  let polling = false;
+  const poll = () => {
+    if (polling) return;
+    polling = true;
+    try {
+      const freshSession = SessionManager.open(sessionFile, sessionManager.getSessionDir(), cwd);
+      for (const entry of freshSession.getEntries()) {
+        const id = entryId(entry);
+        if (!id || seenEntryIds.has(id)) continue;
+        seenEntryIds.add(id);
+        const text = followerEntryText(entry);
+        if (text) process.stdout.write(`\n${text}\n`);
+      }
+    } catch {
+      // The owner may be rotating the session file; the next poll will catch up.
+    } finally {
+      polling = false;
+    }
+  };
+  const interval = setInterval(poll, 1000);
+  return () => clearInterval(interval);
+}
+
+function entryId(entry: unknown): string | null {
+  const record = asRecord(entry);
+  return typeof record.id === "string" ? record.id : null;
+}
+
+function followerEntryText(entry: unknown): string {
+  const record = asRecord(entry);
+  if (record.type === "message") {
+    const message = asRecord(record.message);
+    const role = typeof message.role === "string" ? message.role : "message";
+    const text = contentText(message.content);
+    return text ? `${role}: ${text}` : "";
+  }
+  if (record.type === "custom") {
+    const text = contentText(record.message ?? record.text ?? record.content);
+    return text ? `system: ${text}` : "";
+  }
+  return "";
 }
 
 async function forwardTuiPrompt(
@@ -418,10 +477,22 @@ function sseEventText(event: {
   content?: Array<{ type?: string; text?: string }>;
 }): string {
   if (event.text) return event.text;
-  return (event.content ?? [])
+  return contentText(event.content);
+}
+
+function contentText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
     .filter((part) => part.type === "text" && part.text)
     .map((part) => part.text)
     .join("");
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 await main();
