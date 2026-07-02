@@ -41,6 +41,42 @@ describe("TUI session coordinator", () => {
     }
   });
 
+  it("returns a syncing response when the writer lock scope cannot be synced", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      const server = await startTuiSessionCoordinatorServer({
+        getSession: () => fakeSession(manager),
+        getSessionManager: () => manager,
+        getModelUnavailableMessage: () => null,
+        syncWriterLockScope: () => {
+          throw new Error("OpenCandle is reconnecting to this session.");
+        },
+      });
+      servers.push(server);
+
+      const response = await fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": server.secret,
+        },
+        body: JSON.stringify({
+          prompt: "hello",
+          sessionId: manager.getSessionId(),
+          actionId: "chat-action-sync-lost",
+        }),
+      });
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ code: "syncing" });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it("accepts an authorized forwarded prompt and streams the canonical transcript", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));
@@ -328,7 +364,8 @@ describe("TUI session coordinator", () => {
           actionId: "chat-action-1",
         }),
       });
-      expect(first.status).toBe(500);
+      expect(first.status).toBe(409);
+      await expect(first.json()).resolves.toMatchObject({ code: "session_starting" });
 
       ready = true;
       const second = await fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {

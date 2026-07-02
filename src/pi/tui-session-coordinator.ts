@@ -98,7 +98,13 @@ export async function startTuiSessionCoordinatorServer(
       );
       return;
     }
-    options.syncWriterLockScope?.();
+    try {
+      options.syncWriterLockScope?.();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeJson(res, { error: message, code: "syncing" }, 409);
+      return;
+    }
 
     pruneExpiredActions();
     const actionKey = `${sessionId}:${actionId}`;
@@ -114,7 +120,14 @@ export async function startTuiSessionCoordinatorServer(
       );
       return;
     }
-    const session = options.getSession();
+    let session: AgentSession;
+    try {
+      session = options.getSession();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      writeJson(res, { error: message, code: "session_starting" }, 409);
+      return;
+    }
     if (
       activeRunSessions.has(sessionId) ||
       session.isStreaming ||
