@@ -92,7 +92,7 @@ describe("GUI WS hub", () => {
     await vi.waitFor(() =>
       expect(client.messages).toContainEqual({
         type: "error",
-        message: "Read-only follower mode",
+        message: "OpenCandle is reconnecting to this session.",
       }),
     );
   });

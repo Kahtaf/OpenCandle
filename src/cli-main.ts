@@ -219,6 +219,7 @@ async function main(): Promise<void> {
       }
       return null;
     },
+    syncWriterLockScope: () => syncActiveSessionWriterLockScope(),
   });
   const sessionWriterLock = await acquireSessionWriterLock(sessionWriterLockScope, "tui", {
     coordinatorEndpoint: tuiCoordinator.endpoint,
@@ -270,10 +271,12 @@ async function main(): Promise<void> {
       },
       { cwd, agentDir, sessionManager },
     );
+    syncActiveSessionWriterLockScope();
     runtime.setRebindSession(async (nextSession) => {
       const nextSessionWriterLockScope = writerLockScopeForSession(nextSession.sessionManager);
       if (nextSessionWriterLockScope === activeSessionWriterLockScope) {
         activeSessionManager = nextSession.sessionManager;
+        syncActiveSessionWriterLockScope();
         return;
       }
       const nextSessionWriterLock = await acquireSessionWriterLock(

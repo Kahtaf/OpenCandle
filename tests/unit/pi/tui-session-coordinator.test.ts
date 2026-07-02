@@ -243,6 +243,46 @@ describe("TUI session coordinator", () => {
       await rm(sessionDir, { recursive: true, force: true });
     }
   });
+
+  it("syncs the writer lock scope before accepting a forwarded prompt", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      const syncWriterLockScope = vi.fn();
+      const prompt = vi.fn(async () => {
+        expect(syncWriterLockScope).toHaveBeenCalled();
+      });
+      const server = await startTuiSessionCoordinatorServer({
+        getSession: () => fakeSession(manager, prompt),
+        getSessionManager: () => manager,
+        getModelUnavailableMessage: () => null,
+        syncWriterLockScope,
+      });
+      servers.push(server);
+
+      const response = await fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-opencandle-coordinator-secret": server.secret,
+        },
+        body: JSON.stringify({
+          prompt: "Sync before prompt",
+          sessionId: manager.getSessionId(),
+          actionId: "chat-action-1",
+        }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(syncWriterLockScope.mock.invocationCallOrder[0]).toBeLessThan(
+        prompt.mock.invocationCallOrder[0],
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function fakeSession(

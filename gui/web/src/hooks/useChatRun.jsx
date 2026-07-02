@@ -29,6 +29,14 @@ export function buildChatRunRequestBody(prompt, sessionId, actionId) {
   return expectedSessionId ? { ...body, sessionId: expectedSessionId } : body;
 }
 
+export function buildRetryChatRunOptions(lastRun) {
+  if (!lastRun) return null;
+  return {
+    sessionId: lastRun.sessionId,
+    ...(lastRun.actionId ? { actionId: lastRun.actionId } : {}),
+  };
+}
+
 export function isSessionChangedChatRunError(status, errorBody) {
   return status === 409 && errorBody?.code === "session_changed";
 }
@@ -84,6 +92,10 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         await drainSse(response, (event) => {
           onEvent?.(event, targetSessionId);
           if (event.type === "run.failed") {
+            setLastRuns((current) => ({
+              ...current,
+              [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "" },
+            }));
             setRunStateFor(key, "failed");
             setToast(event.error?.message || "Run failed");
           }
@@ -122,12 +134,8 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
   const retryRun = useCallback(
     (sessionId = activeSessionId) => {
       const lastRun = lastRuns[runStateKey(sessionId)];
-      if (lastRun) {
-        void startChatRun(lastRun.prompt, {
-          sessionId: lastRun.sessionId,
-          actionId: lastRun.actionId,
-        });
-      }
+      const retryOptions = buildRetryChatRunOptions(lastRun);
+      if (lastRun && retryOptions) void startChatRun(lastRun.prompt, retryOptions);
     },
     [activeSessionId, lastRuns, startChatRun],
   );

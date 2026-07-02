@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChatRunRequestBody,
+  buildRetryChatRunOptions,
   createSessionActionId,
   chatRunEndpoint,
   isSessionChangedChatRunError,
@@ -51,5 +52,25 @@ describe("chat run request helpers", () => {
     expect(isSessionChangedChatRunError(409, { error: "Read-only follower mode" })).toBe(false);
     expect(isSessionChangedChatRunError(400, { code: "session_changed" })).toBe(false);
     expect(isSessionChangedChatRunError(409, null)).toBe(false);
+  });
+
+  it("reuses the prior action id for transport retries", () => {
+    expect(
+      buildRetryChatRunOptions({
+        prompt: "hello",
+        sessionId: "session-1",
+        actionId: "chat-action-1",
+      }),
+    ).toEqual({ sessionId: "session-1", actionId: "chat-action-1" });
+  });
+
+  it("omits cleared action ids for deliberate failed-run retries", () => {
+    expect(
+      buildRetryChatRunOptions({
+        prompt: "hello",
+        sessionId: "session-1",
+        actionId: "",
+      }),
+    ).toEqual({ sessionId: "session-1" });
   });
 });

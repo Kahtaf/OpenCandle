@@ -82,7 +82,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/session/new" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Session API", options)) return;
       if (options.role !== "writer") {
-        writeJson(res, { error: "Read-only follower mode" }, 409);
+        writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
         return;
       }
       await options.sessionActionsController.handleNewSession();
@@ -359,8 +359,13 @@ async function handleSseChatRun(
   }
 
   const proxyAllowed = bodyOverride === undefined;
-  if (proxyAllowed && canProxyChatRunToCoordinator(runSessionManager)) {
+  const shouldProxyChatRun = proxyAllowed && canProxyChatRunToCoordinator(runSessionManager);
+  if (shouldProxyChatRun) {
     if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) return;
+    if (shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)) {
+      writeJson(res, { error: "OpenCandle is reconnecting to this session.", code: "syncing" }, 409);
+      return;
+    }
   }
 
   if (options.localSessionCoordinator) {
@@ -685,6 +690,29 @@ export function buildChatRunActionEnvelope(
   };
 }
 
+function hasClientActionId(body: Record<string, unknown>): boolean {
+  return typeof body.actionId === "string" && body.actionId.trim().length > 0;
+}
+
+function shouldBlockFailedCoordinatorAction(
+  runSessionManager: SessionManager,
+  body: Record<string, unknown>,
+): boolean {
+  if (!hasClientActionId(body)) return false;
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!lock || lock.pid === process.pid) return false;
+  return isCoordinatorOwnerAlive(lock.pid);
+}
+
+function isCoordinatorOwnerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 async function handleTrustedGuiMutation(
   req: IncomingMessage,
   res: ServerResponse,
@@ -696,7 +724,15 @@ async function handleTrustedGuiMutation(
     writeJson(res, await options.wsHub.buildBootstrapPayload());
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    writeJson(res, { error: message }, message === "Read-only follower mode" ? 409 : 400);
+    const coordinationError = message === "Read-only follower mode";
+    writeJson(
+      res,
+      {
+        error: coordinationError ? "OpenCandle is reconnecting to this session." : message,
+        ...(coordinationError ? { code: "syncing" } : {}),
+      },
+      coordinationError ? 409 : 400,
+    );
   }
 }
 

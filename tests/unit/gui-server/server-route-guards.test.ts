@@ -150,6 +150,16 @@ describe("GUI server route guards", () => {
     expect(handlerSource).not.toContain('options.role !== "writer"');
   });
 
+  it("blocks failed chat delivery only while the coordinator owner is still live", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const proxyStart = source.indexOf("const shouldProxyChatRun");
+    const proxyBlock = source.slice(proxyStart, source.indexOf("if (options.localSessionCoordinator)", proxyStart));
+
+    expect(proxyBlock).toContain("shouldBlockFailedCoordinatorAction(runSessionManager, bodyRecord)");
+    expect(proxyBlock).toContain('"OpenCandle is reconnecting to this session."');
+    expect(source).toContain("return isCoordinatorOwnerAlive(lock.pid)");
+  });
+
   it("refreshes GUI heartbeats against the migrated canonical session lock scope", () => {
     const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
     const syncStart = source.indexOf("function syncCurrentWriterLockScope");

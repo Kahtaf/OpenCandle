@@ -7,6 +7,7 @@ interface TuiSessionCoordinatorOptions {
   getSession: () => AgentSession;
   getSessionManager: () => SessionManager;
   getModelUnavailableMessage: () => string | null;
+  syncWriterLockScope?: () => void;
   now?: () => number;
 }
 
@@ -90,6 +91,7 @@ export async function startTuiSessionCoordinatorServer(
       );
       return;
     }
+    options.syncWriterLockScope?.();
 
     pruneExpiredActions();
     const actionKey = `${sessionId}:${actionId}`;
@@ -124,6 +126,7 @@ export async function startTuiSessionCoordinatorServer(
   }
 
   async function streamPromptRun(res: ServerResponse, prompt: string, sessionId: string) {
+    options.syncWriterLockScope?.();
     const session = options.getSession();
     const sessionManager = options.getSessionManager();
     const beforeEntries = sessionManager.getEntries();
@@ -143,6 +146,7 @@ export async function startTuiSessionCoordinatorServer(
       const modelUnavailableMessage = options.getModelUnavailableMessage();
       if (!prompt.startsWith("/") && modelUnavailableMessage) {
         sessionManager.appendMessage({ role: "user", content: prompt, timestamp: now() });
+        options.syncWriterLockScope?.();
         sessionManager.appendCustomMessageEntry(
           "opencandle-model-setup",
           modelUnavailableMessage,
@@ -153,6 +157,7 @@ export async function startTuiSessionCoordinatorServer(
         );
       } else {
         await session.prompt(prompt);
+        options.syncWriterLockScope?.();
         await waitForTurnSettlement(session);
       }
       const newEntries = sessionManager.getEntries().slice(beforeCount);

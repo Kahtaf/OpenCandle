@@ -327,6 +327,68 @@ describe("invokeToolFromUi", () => {
     }
   });
 
+  it("recovers a dead coordinator lock after tool delivery fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-proxy-failed-"));
+    const originalFetch = globalThis.fetch;
+    try {
+      const currentSessionManager = {
+        getSessionId: () => "current-session",
+        getSessionFile: () => join(dir, "current.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      const targetSessionManager = {
+        getSessionId: () => "target-session",
+        getSessionFile: () => join(dir, "target.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      await acquireWriterLock(writerLockScopeForSession(targetSessionManager), "gui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+      globalThis.fetch = vi.fn(async () => {
+        throw new Error("owner is gone");
+      }) as typeof fetch;
+      const params = Type.Object({
+        symbol: Type.String(),
+      });
+      const tool: AgentTool<typeof params> = {
+        name: "get_stock_quote",
+        label: "Quote",
+        description: "test",
+        parameters: params,
+        async execute() {
+          return {
+            content: [{ type: "text", text: "AAPL quote" }],
+            details: { symbol: "AAPL", price: 190 },
+          };
+        },
+      };
+      const invokeTool = vi.fn(invokeToolFromUi);
+      const controller = createToolInvokeController({
+        role: "follower",
+        getSessionManager: () => currentSessionManager,
+        broadcastState: vi.fn(),
+        getTools: () => [tool],
+        resolveSessionManager: async () => targetSessionManager,
+        invokeTool,
+      });
+
+      await expect(
+        controller.handleToolInvoke("get_stock_quote", { symbol: "AAPL" }, "target-session", {
+          actionId: "tool-action-1",
+        }),
+      ).resolves.toMatchObject({
+        result: { details: { symbol: "AAPL", price: 190 } },
+        isError: false,
+      });
+      expect(invokeTool).toHaveBeenCalledOnce();
+    } finally {
+      globalThis.fetch = originalFetch;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 25_000);
+
   it("does not advertise direct tool proxying for TUI coordinators until they support it", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-proxy-"));
     try {

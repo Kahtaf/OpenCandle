@@ -200,7 +200,10 @@ export function createWsHub({
       const errorMessage = error instanceof Error ? error.message : String(error);
       client.send({
         type: "error",
-        message: errorMessage,
+        message:
+          errorMessage === "Read-only follower mode"
+            ? "OpenCandle is reconnecting to this session."
+            : errorMessage,
       });
     }
   }

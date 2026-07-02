@@ -87,11 +87,11 @@ export function createToolInvokeController({
     );
     const useCurrentSession = sameSessionStorage(currentSessionManager, runSessionManager);
     const allowProxy = options.allowProxy !== false;
-    if (
+    const shouldProxyToolInvoke =
       allowProxy &&
       (role !== "writer" || !useCurrentSession) &&
-      canProxyToolInvokeToCoordinator(runSessionManager)
-    ) {
+      canProxyToolInvokeToCoordinator(runSessionManager);
+    if (shouldProxyToolInvoke) {
       const proxied = await proxyToolInvokeToCoordinator(
         runSessionManager,
         toolName,
@@ -99,6 +99,9 @@ export function createToolInvokeController({
         options.actionId,
       );
       if (proxied) return proxied;
+      if (options.actionId && shouldBlockFailedCoordinatorAction(runSessionManager)) {
+        throw new Error("OpenCandle is reconnecting to this session.");
+      }
     }
     let acquiredLockScope = "";
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
@@ -203,6 +206,21 @@ export function canProxyToolInvokeToCoordinator(runSessionManager: SessionManage
       lock.coordinatorSecret &&
       lock.pid !== process.pid,
   );
+}
+
+function shouldBlockFailedCoordinatorAction(runSessionManager: SessionManager): boolean {
+  const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
+  if (!lock || lock.pid === process.pid) return false;
+  return isCoordinatorOwnerAlive(lock.pid);
+}
+
+function isCoordinatorOwnerAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 async function proxyToolInvokeToCoordinator(
