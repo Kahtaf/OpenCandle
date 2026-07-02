@@ -626,7 +626,7 @@ async function streamAcceptedSseChatRun({
     }
     writeSse(res, { type: "run.completed", runId, sessionId, seq });
   } catch (error) {
-    clearPendingSessionAction(runSessionManager, actionId);
+    if (!actionAccepted) clearPendingSessionAction(runSessionManager, actionId);
     seq = liveAdapter.nextSeq();
     const message = error instanceof Error ? error.message : String(error);
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
@@ -638,7 +638,7 @@ async function streamAcceptedSseChatRun({
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     res.end();
   }
-  return true;
+  return actionAccepted;
 }
 
 class SessionActionNotAdmitted extends Error {}

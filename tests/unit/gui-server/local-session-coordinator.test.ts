@@ -50,6 +50,8 @@ describe("local session coordinator", () => {
     const source = readHttpRouteSource();
 
     expect(source).toContain("if (!admitted) throw new SessionActionNotAdmitted();");
+    expect(source).toContain("if (!actionAccepted) clearPendingSessionAction");
+    expect(source).toContain("return actionAccepted;");
   });
 
   it("returns a neutral busy result for a second active run action instead of queueing", async () => {
