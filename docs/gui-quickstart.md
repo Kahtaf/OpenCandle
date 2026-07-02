@@ -5,8 +5,7 @@ description: Run the local OpenCandle browser workbench and understand writer/fo
 
 # OpenCandle GUI Quickstart
 
-1. Install dependencies from the repo root with `npm install`.
-2. Start the local GUI with `npm run gui` from a checkout, or `opencandle gui` from an installed package.
+1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
 3. Open `http://127.0.0.1:14567`.
 4. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
 5. Start with a keyless market-data prompt such as `What is AAPL trading at?`, then try `/analyze NVDA` or the empty-state action cards.

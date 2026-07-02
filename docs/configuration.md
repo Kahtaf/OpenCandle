@@ -15,7 +15,9 @@ The default OpenCandle home is `~/.opencandle`. Set `OPENCANDLE_HOME` to move us
 
 ## Precedence
 
-Startup calls `loadEnv()` first, so values from `.env` are copied into `process.env`. The loader overwrites an existing key if the same key is already exported in the shell. Runtime config then resolves `process.env` before file config values.
+Startup calls `loadEnv()` first, so values from `.env` are copied into `process.env`. Runtime config then resolves `process.env` before file config values.
+
+> **Warning: `.env` overrides your shell environment.** Unlike most dotenv loaders, OpenCandle's loader overwrites a key that is already exported in the shell when the same key appears in `.env`. If a credential seems to be ignored, check the `.env` file in the directory you launched from before debugging your shell profile.
 
 Effective precedence:
 
@@ -99,7 +101,7 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | `sentinel.db` | Sentiment trend store. |
 | `logs/` | Reserved OpenCandle log directory. |
 
-Watchlists, portfolios, and predictions are not loaded from `watchlist.json`, `portfolio.json`, or `predictions.json`. Those filenames are intentionally unsupported state sources; OpenCandle uses `state.db` for durable market state.
+Durable market state — watchlists, portfolios, predictions, alerts — lives only in `state.db`. There is no JSON-file alternative for that state.
 
 Pi runtime config and sessions remain separate under Pi's own agent directory. OpenCandle does not move Pi state into `$OPENCANDLE_HOME`.
 

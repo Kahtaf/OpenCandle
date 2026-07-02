@@ -48,19 +48,14 @@ Optional keys:
 
 ## Caching and Degradation
 
-External provider calls should use OpenCandle's shared cache and rate limiter. When a provider fails, tools should prefer a clear degraded response over pretending the data is fresh.
-
-Expected behavior:
+External provider calls go through OpenCandle's shared cache and rate limiter. When a provider fails, tools return a clear degraded response instead of pretending the data is fresh:
 
 - Fresh data is returned when the provider succeeds.
-- Stale cache can be used when the provider is temporarily unavailable.
+- Stale cache can be used when the provider is temporarily unavailable, and is labeled as stale.
 - Missing credentials are reported as setup gaps.
 - Circuit breakers avoid repeatedly calling failing providers.
-- Unit tests mock provider responses with fixtures.
 
-TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens. Single-security quotes, history, options, and company analysis should still use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
-
-The TradingView scanner implementation reimplements request grammar and decoding discipline in TypeScript rather than copying source. Reference projects used for protocol cross-checking include `himself65/finance-skills`, `shner-elmo/TradingView-Screener`, `deepentropy/tvscreener`, `Fynnius/TradingView.Screener`, and `ryar001/tradingview-screener-wrapper`; confirm upstream licenses before adapting non-trivial source.
+TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens; single-security quotes, history, options, and company analysis use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
 
 ## Local State
 

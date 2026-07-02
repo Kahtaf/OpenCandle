@@ -38,18 +38,9 @@ npm start
 
 On Windows Command Prompt, use `copy .env.example .env` instead of `cp .env.example .env`. OpenCandle stores local state in `~/.opencandle` on macOS/Linux and `%USERPROFILE%\.opencandle` on Windows unless `OPENCANDLE_HOME` is set.
 
-## Native Dependency Troubleshooting
-
-OpenCandle uses `better-sqlite3`, a native dependency, for local state. Most installs use a prebuilt binary automatically. If install or startup fails with a native module, ABI, or `node-gyp` error:
-
-1. Confirm your Node.js version matches the supported range above.
-2. Retry from a clean install by removing `node_modules` and running `npm install` again.
-3. Run `npm rebuild better-sqlite3` after changing Node versions.
-4. Install your platform build tools if npm falls back to compiling native modules.
-
 On first run, OpenCandle walks through model setup. You can rerun setup later from inside the agent with `/setup`.
 
-For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures.
+For the fastest successful path, follow [First Run](./first-run.md). It shows a keyless first prompt, what success looks like, and how to handle common setup failures — including native `better-sqlite3` install errors.
 
 ## Choose Your Interface
 
@@ -87,13 +78,20 @@ See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tail
 
 ## Configure Providers
 
-Model credentials are handled by Pi. OpenCandle-specific provider keys can come from environment variables or `~/.opencandle/config.json`.
+Model credentials and data-provider keys are separate. OpenCandle needs one model provider before chat can start; every data-provider key is optional.
+
+Model credentials, handled by Pi (sign-in or one of these keys):
 
 | Key | Required | Used for |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | No | Google models through Pi |
-| `OPENAI_API_KEY` | No | OpenAI models through Pi |
-| `ANTHROPIC_API_KEY` | No | Anthropic models through Pi |
+| `ANTHROPIC_API_KEY` | One model provider required | Anthropic models through Pi |
+| `OPENAI_API_KEY` | One model provider required | OpenAI models through Pi |
+| `GEMINI_API_KEY` | One model provider required | Google models through Pi |
+
+Data-provider keys, from environment variables or `~/.opencandle/config.json`:
+
+| Key | Required | Used for |
+| --- | --- | --- |
 | `ALPHA_VANTAGE_API_KEY` | No | Fundamentals, earnings, financial statements |
 | `FRED_API_KEY` | No | Macro series such as rates, CPI, GDP, unemployment |
 | `BRAVE_API_KEY` | No | Brave web search fallback |
@@ -143,14 +141,4 @@ Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
 
 OpenCandle should tell you when a provider is unavailable, a key is missing, or a result is degraded. Treat those warnings as part of the answer.
 
-For slash commands, session behavior, and CLI-vs-GUI tradeoffs, see [TUI](./tui.md).
-
-## Validate a Checkout
-
-```bash
-npm test
-npm run gui:web:build
-npm run docs:site:build
-```
-
-Use `npm run test:e2e` and `npm run test:e2e:providers` only when you intentionally want tests that hit live providers.
+For slash commands, session behavior, and CLI-vs-GUI tradeoffs, see [TUI](./tui.md). Contributors validating a source checkout should follow [Testing and Evals](./testing-and-evals.md).

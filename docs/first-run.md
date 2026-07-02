@@ -52,6 +52,8 @@ If an answer says a provider is missing or degraded, follow the suggested `/conn
 /connect search
 ```
 
+`financials` connects Alpha Vantage, `economy` connects FRED, and `search` picks between Brave and Exa. The full list of `/connect` targets is in [TUI](./tui.md#connect-targets).
+
 ## What Success Looks Like
 
 A good first answer should show that OpenCandle gathered evidence before synthesizing. For a quote prompt, expect a current price, daily move, timestamp or source context, and any caveats about availability. For a comparison prompt, expect per-asset data plus a short synthesis. If a provider was unavailable, the answer should say what was missing instead of pretending the data was complete.
@@ -71,7 +73,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | Setup exits before chat starts | Start OpenCandle again and complete model setup. Chat requires a connected model. |
 | No models appear after adding a key | Check that the key matches the selected provider, then rerun `/setup`. |
 | A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
-| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell. Environment variables override `~/.opencandle/config.json`. |
+| `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell, and check for a `.env` file in the launch directory — `.env` values override exported shell variables. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
 | The GUI is open but not updating | Use the terminal session that owns the writer lock, or restart the GUI and reopen `http://127.0.0.1:14567`. |
 

@@ -55,8 +55,21 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 | `/setup` | Re-run AI model setup. Use this when chat cannot start, auth changed, or you want a different setup path. |
 | `/login` | Sign in to a model provider through Pi when supported by your local Pi install. |
 | `/model` | Switch between models that are already available through Pi. |
-| `/connect` | Connect OpenCandle data providers such as Alpha Vantage, FRED, Finnhub, Brave, or Exa. Run it bare for a picker, or pass a provider/category such as `/connect economy`. |
+| `/connect` | Connect OpenCandle data providers. Run it bare for a picker, or pass a provider name or category (below). |
 | `/analyze <ticker>` | Run the multi-analyst stock workflow for one ticker, for example `/analyze NVDA`. |
+
+### `/connect` Targets
+
+`/connect` accepts a provider name, a friendly alias, or a category. Categories with more than one provider open a sub-picker.
+
+| Target | Provider(s) | Unlocks |
+| --- | --- | --- |
+| `financials`, `fundamentals`, `alphavantage` | Alpha Vantage | Fundamentals, earnings, financial statements, DCF, comps |
+| `economy`, `macro`, `fred` | FRED | Macro series: rates, CPI, GDP, unemployment |
+| `news`, `finnhub` | Finnhub | Company news in sentiment summaries |
+| `search` (category), `brave`, `exa` | Brave Search, Exa | Expanded web search beyond keyless DuckDuckGo |
+| `yahoo`, `market-data` | Yahoo Finance | Keyless; listed for diagnostics |
+| `reddit`, `twitter` / `x` | Reddit, X/Twitter | Sentiment via `rdt-cli` / `twitter-cli` browser sessions |
 
 `/setup` and `/model` are about the AI model. `/connect` is about market-data providers. Keeping those separate makes setup easier to debug.
 
@@ -64,7 +77,7 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 
 OpenCandle stores session history through Pi and keeps OpenCandle user state under `~/.opencandle/` unless `OPENCANDLE_HOME` is set. A session can include normal chat messages, slash-command output, tool results, provider-gap notes, and the always-visible financial disclaimer.
 
-The local GUI reads the same Pi session state. GUI servers coordinate with a writer/follower lock so only one GUI process mutates a session directory at a time. The terminal UI shares the session files, but it does not acquire the GUI writer lock. If two views disagree, keep using the one that is actively accepting new messages and refresh the other.
+The local GUI reads the same Pi session state. GUI servers coordinate with a writer/follower lock so only one GUI process mutates a session directory at a time. The terminal UI shares the session files but does not acquire the GUI writer lock, so a GUI follower view can briefly lag behind an active terminal session until it refreshes.
 
 ## CLI vs GUI
 
