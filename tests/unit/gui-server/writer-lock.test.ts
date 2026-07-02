@@ -265,6 +265,36 @@ describe("writer lock", () => {
     }
   });
 
+  it("releases the fallback lock when canonical migration loses the destination race", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      await acquireWriterLock(dir, "gui", {
+        pid: process.pid,
+        ownerId: "owner-a",
+      });
+      await acquireWriterLock(sessionFile, "tui", {
+        pid: 999_999,
+        ownerId: "owner-b",
+      });
+
+      expect(
+        migrateWriterLockScope(dir, sessionFile, {
+          pid: process.pid,
+          ownerId: "owner-a",
+        }),
+      ).toBe(false);
+
+      expect(readWriterLock(dir)).toBeNull();
+      expect(readWriterLock(sessionFile)).toMatchObject({
+        ownerId: "owner-b",
+        scope: sessionFile,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("migrates locks created with the default owner identity", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
     try {

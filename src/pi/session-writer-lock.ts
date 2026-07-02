@@ -165,6 +165,14 @@ export function migrateWriterLockScope(
     fd = openSync(lockPath(toScopePath), "wx", 0o600);
     writeFileSync(fd, JSON.stringify(nextLock, null, 2));
   } catch {
+    const destinationLock = readWriterLock(toScopePath);
+    if (destinationLock && !isSameLockOwner(destinationLock, identity)) {
+      try {
+        unlinkSync(lockPath(fromScopePath));
+      } catch {
+        // The canonical lock is already owned elsewhere; do not keep refreshing fallback.
+      }
+    }
     return false;
   } finally {
     if (fd !== undefined) closeSync(fd);
