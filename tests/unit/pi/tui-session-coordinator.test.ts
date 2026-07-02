@@ -206,6 +206,65 @@ describe("TUI session coordinator", () => {
     }
   });
 
+  it("dedupes forwarded prompts that fail after the user turn is admitted", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));
+    try {
+      const manager = SessionManager.create(cwd, sessionDir);
+      const subscribers: Array<(event: unknown) => void> = [];
+      const prompt = vi.fn(async (value: string) => {
+        for (const subscriber of subscribers) {
+          subscriber({ type: "message_start", message: { role: "user", content: value } });
+        }
+        throw new Error("failed after admission");
+      });
+      const session = {
+        ...fakeSession(manager, prompt),
+        subscribe(handler: (event: unknown) => void) {
+          subscribers.push(handler);
+          return () => {
+            const index = subscribers.indexOf(handler);
+            if (index >= 0) subscribers.splice(index, 1);
+          };
+        },
+      } as ReturnType<typeof fakeSession> & {
+        subscribe(handler: (event: unknown) => void): () => void;
+      };
+      const server = await startTuiSessionCoordinatorServer({
+        getSession: () => session,
+        getSessionManager: () => manager,
+        getModelUnavailableMessage: () => null,
+      });
+      servers.push(server);
+
+      const request = () =>
+        fetch(`${server.endpoint}/api/local-coordinator/chat-run`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencandle-coordinator-secret": server.secret,
+          },
+          body: JSON.stringify({
+            prompt: "Admitted once",
+            sessionId: manager.getSessionId(),
+            actionId: "chat-action-1",
+          }),
+        });
+
+      const failed = await request();
+      expect(failed.status).toBe(200);
+      expect(await failed.text()).toContain('"type":"run.failed"');
+
+      const retried = await request();
+      expect(retried.status).toBe(200);
+      await expect(retried.json()).resolves.toMatchObject({ duplicate: true });
+      expect(prompt).toHaveBeenCalledOnce();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects forwarded prompts while the TUI session is already streaming", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-tui-coordinator-sessions-"));

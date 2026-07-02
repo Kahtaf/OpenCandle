@@ -236,16 +236,25 @@ async function main(): Promise<void> {
     return;
   }
   let activeSessionWriterLockScope = sessionWriterLockScope;
+  let activeSessionWriterLockLost = false;
   function syncActiveSessionWriterLockScope(): void {
+    if (activeSessionWriterLockLost) throw new Error("OpenCandle is reconnecting to this session.");
     const nextScope = writerLockScopeForSession(activeSessionManager);
     if (nextScope === activeSessionWriterLockScope) return;
     if (migrateWriterLockScope(activeSessionWriterLockScope, nextScope)) {
       activeSessionWriterLockScope = nextScope;
+    } else {
+      activeSessionWriterLockLost = true;
+      throw new Error("OpenCandle is reconnecting to this session.");
     }
   }
   const writerLockHeartbeat = setInterval(() => {
-    syncActiveSessionWriterLockScope();
-    refreshSessionWriterLock(activeSessionWriterLockScope);
+    try {
+      syncActiveSessionWriterLockScope();
+      refreshSessionWriterLock(activeSessionWriterLockScope);
+    } catch {
+      clearInterval(writerLockHeartbeat);
+    }
   }, 5000);
 
   try {

@@ -179,10 +179,30 @@ describe("GUI server route guards", () => {
       heartbeatStart,
       source.indexOf("const backgroundQuoteRefreshes", heartbeatStart),
     );
+    const syncBlock = source.slice(syncStart, heartbeatStart);
 
-    expect(source.slice(syncStart, heartbeatStart)).toContain("migrateWriterLockScope");
+    expect(syncBlock).toContain("migrateWriterLockScope");
+    expect(syncBlock).toContain("currentWriterLockLost = true");
+    expect(syncBlock).toContain("OpenCandle is reconnecting to this session.");
     expect(heartbeatBlock).toContain("syncCurrentWriterLockScope()");
     expect(heartbeatBlock).toContain("refreshWriterLock(activeWriterLockScope)");
+    expect(heartbeatBlock).toContain("clearInterval(heartbeat)");
+  });
+
+  it("records chat actions as accepted when the user turn is admitted", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const handlerStart = source.indexOf("async function handleSseChatRun");
+    const handlerEnd = source.indexOf("class SessionActionNotAdmitted", handlerStart);
+    const handlerSource = source.slice(handlerStart, handlerEnd);
+    const subscribeStart = handlerSource.indexOf("const unsubscribeLive = runSession.subscribe");
+    const subscribeBlock = handlerSource.slice(
+      subscribeStart,
+      handlerSource.indexOf("});", subscribeStart) + 3,
+    );
+
+    expect(handlerSource).toContain("const recordAcceptedAction = () =>");
+    expect(subscribeBlock).toContain("observation.userTexts.some");
+    expect(subscribeBlock).toContain("recordAcceptedAction()");
   });
 
   it("publishes loopback coordinator endpoints even when the GUI binds remotely", () => {

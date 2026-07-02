@@ -69,6 +69,7 @@ const lockResult = await acquireWriterLock(initialWriterLockScope, "gui", {
   coordinatorSecret: localCoordinatorSecret,
 });
 let activeWriterLockScope = initialWriterLockScope;
+let currentWriterLockLost = false;
 let wsHub: WsHub;
 let quotePoller: BackgroundQuotePoller;
 const askUserBridge = createAskUserBridge({
@@ -99,16 +100,24 @@ const runtime = await createAgentSessionRuntime(
 );
 let session = runtime.session;
 function syncCurrentWriterLockScope(): void {
+  if (currentWriterLockLost) throw new Error("OpenCandle is reconnecting to this session.");
   if (lockResult.role !== "writer") return;
   const nextScope = writerLockScopeForSession(sessionManager);
   if (nextScope === activeWriterLockScope) return;
   if (migrateWriterLockScope(activeWriterLockScope, nextScope)) {
     activeWriterLockScope = nextScope;
+  } else {
+    currentWriterLockLost = true;
+    throw new Error("OpenCandle is reconnecting to this session.");
   }
 }
 const heartbeat = setInterval(() => {
-  syncCurrentWriterLockScope();
-  refreshWriterLock(activeWriterLockScope);
+  try {
+    syncCurrentWriterLockScope();
+    refreshWriterLock(activeWriterLockScope);
+  } catch {
+    clearInterval(heartbeat);
+  }
 }, 5000);
 const backgroundQuoteRefreshes = new BackgroundQuoteRefreshes();
 const localSessionCoordinator = createLocalSessionCoordinator();

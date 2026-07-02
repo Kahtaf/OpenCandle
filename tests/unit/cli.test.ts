@@ -422,4 +422,20 @@ describe("opencandle package commands", () => {
     expect(helperSource).toContain('part.type === "text"');
     expect(helperSource).toContain(".map((part) => part.text)");
   });
+
+  it("fails closed when TUI writer lock scope migration loses ownership", () => {
+    const source = readFileSync(resolve("src/cli-main.ts"), "utf-8");
+    const syncStart = source.indexOf("function syncActiveSessionWriterLockScope");
+    const heartbeatStart = source.indexOf("const writerLockHeartbeat = setInterval", syncStart);
+    const syncBlock = source.slice(syncStart, heartbeatStart);
+    const heartbeatBlock = source.slice(
+      heartbeatStart,
+      source.indexOf("runtime = await createAgentSessionRuntime", heartbeatStart),
+    );
+
+    expect(syncBlock).toContain("migrateWriterLockScope");
+    expect(syncBlock).toContain("activeSessionWriterLockLost = true");
+    expect(syncBlock).toContain("OpenCandle is reconnecting to this session.");
+    expect(heartbeatBlock).toContain("clearInterval(writerLockHeartbeat)");
+  });
 });

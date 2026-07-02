@@ -130,11 +130,17 @@ export async function startTuiSessionCoordinatorServer(
     activeRunSessions.add(sessionId);
     try {
       recordPendingSessionAction(sessionManager, actionId);
-      const completed = await streamPromptRun(res, prompt, sessionId);
-      if (completed) {
+      let actionAccepted = false;
+      const recordAcceptedAction = () => {
+        if (actionAccepted) return;
         recordAcceptedSessionAction(sessionManager, actionId);
         acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
-      } else {
+        actionAccepted = true;
+      };
+      const completed = await streamPromptRun(res, prompt, sessionId, recordAcceptedAction);
+      if (completed) {
+        recordAcceptedAction();
+      } else if (!actionAccepted) {
         clearPendingSessionAction(sessionManager, actionId);
       }
     } finally {
@@ -146,6 +152,7 @@ export async function startTuiSessionCoordinatorServer(
     res: ServerResponse,
     prompt: string,
     sessionId: string,
+    onPromptAdmitted: () => void,
   ): Promise<boolean> {
     options.syncWriterLockScope?.();
     const session = options.getSession();
@@ -167,6 +174,7 @@ export async function startTuiSessionCoordinatorServer(
       const modelUnavailableMessage = options.getModelUnavailableMessage();
       if (!prompt.startsWith("/") && modelUnavailableMessage) {
         sessionManager.appendMessage({ role: "user", content: prompt, timestamp: now() });
+        onPromptAdmitted();
         options.syncWriterLockScope?.();
         sessionManager.appendCustomMessageEntry(
           "opencandle-model-setup",
@@ -177,9 +185,14 @@ export async function startTuiSessionCoordinatorServer(
           },
         );
       } else {
-        await session.prompt(prompt);
-        options.syncWriterLockScope?.();
-        await waitForTurnSettlement(session);
+        const unsubscribe = subscribeToPromptAdmission(session, prompt, onPromptAdmitted);
+        try {
+          await session.prompt(prompt);
+          options.syncWriterLockScope?.();
+          await waitForTurnSettlement(session);
+        } finally {
+          unsubscribe?.();
+        }
       }
       const newEntries = sessionManager.getEntries().slice(beforeCount);
       for (const event of entriesToChatEvents(newEntries, sessionId, seq)) {
@@ -202,6 +215,25 @@ export async function startTuiSessionCoordinatorServer(
     for (const [actionKey, accepted] of acceptedActions) {
       if (accepted.expiresAt <= currentTime) acceptedActions.delete(actionKey);
     }
+  }
+
+  function subscribeToPromptAdmission(
+    session: AgentSession,
+    prompt: string,
+    onPromptAdmitted: () => void,
+  ): (() => void) | undefined {
+    if (prompt.startsWith("/")) return undefined;
+    const maybeSession = session as AgentSession & {
+      subscribe?: (handler: (event: unknown) => void) => () => void;
+    };
+    if (typeof maybeSession.subscribe !== "function") return undefined;
+    return maybeSession.subscribe((event) => {
+      const record = asRecord(event);
+      if (record.type !== "message_start") return;
+      const message = asRecord(record.message);
+      if (message.role !== "user") return;
+      if (messageTextFromContent(message.content).trim() === prompt.trim()) onPromptAdmitted();
+    });
   }
 }
 
@@ -252,6 +284,18 @@ function normalizeContent(content: unknown): Array<Record<string, unknown>> {
   const record = asRecord(content);
   if (typeof record.text === "string") return [{ type: "text", text: record.text }];
   return [];
+}
+
+function messageTextFromContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) =>
+      typeof part === "object" && part !== null && "text" in part && typeof part.text === "string"
+        ? part.text
+        : "",
+    )
+    .join("");
 }
 
 function writeJson(res: ServerResponse, value: unknown, status = 200): void {
