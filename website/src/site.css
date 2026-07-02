@@ -177,9 +177,27 @@
     margin-bottom: 0;
   }
 
+  .docs-content ul {
+    list-style: disc;
+  }
+
+  .docs-content ol {
+    list-style: decimal;
+  }
+
   .docs-content ul,
   .docs-content ol {
     padding-left: 1.35rem;
+  }
+
+  .docs-content li::marker {
+    color: hsl(var(--tw-muted-foreground));
+  }
+
+  /* GFM task lists carry their own checkboxes; no disc markers on top. */
+  .docs-content ul.contains-task-list {
+    list-style: none;
+    padding-left: 0.25rem;
   }
 
   .docs-content li + li {
@@ -227,15 +245,15 @@
 
   .docs-content th,
   .docs-content td {
-    border: 1px solid hsl(var(--tw-border));
-    padding: 0.5rem 0.625rem;
+    border-bottom: 1px solid hsl(var(--tw-border));
+    padding: 0.625rem;
     text-align: left;
     vertical-align: top;
   }
 
   .docs-content th {
-    background: hsl(var(--tw-secondary));
-    color: hsl(var(--tw-foreground));
-    font-weight: 600;
+    color: hsl(var(--tw-muted-foreground));
+    font-size: 0.75rem;
+    font-weight: 500;
   }
 }
