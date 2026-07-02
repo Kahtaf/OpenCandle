@@ -176,7 +176,8 @@ export function AppShell() {
         currentSessionId: gui.currentSessionId,
         entryCount: hasGuiSessionContent ? guiEventCount : 0,
         lastResetSessionId: homeResetSessionRef.current,
-        canStartFreshHomeSession: gui.role === "writer" && gui.supportsSessionActions,
+        canStartFreshHomeSession:
+          gui.role === "writer" && gui.supportsSessionActions && !search?.messageId,
       })
     )
       return;
@@ -190,6 +191,7 @@ export function AppShell() {
     gui.newSession,
     gui.role,
     gui.supportsSessionActions,
+    search?.messageId,
   ]);
 
   useEffect(() => {
