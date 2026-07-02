@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   createLocalSessionCoordinator,
@@ -28,14 +29,38 @@ describe("local session coordinator", () => {
     expect(handler).toHaveBeenCalledTimes(2);
   });
 
+  it("does not dedupe a session action whose handler rejects before admission", async () => {
+    const coordinator = createLocalSessionCoordinator();
+    const handler = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("not admitted"))
+      .mockResolvedValueOnce({ accepted: true });
+    const action = chatAction({ actionId: "action-1" });
+
+    await expect(coordinator.runSessionAction(action, handler)).rejects.toThrow("not admitted");
+    await expect(coordinator.runSessionAction(action, handler)).resolves.toEqual({
+      ok: true,
+      duplicate: false,
+      result: { accepted: true },
+    });
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("routes failed chat admission through a non-deduping sentinel", () => {
+    const source = readHttpRouteSource();
+
+    expect(source).toContain("if (!admitted) throw new SessionActionNotAdmitted();");
+  });
+
   it("returns a neutral busy result for a second active run action instead of queueing", async () => {
     const coordinator = createLocalSessionCoordinator();
     let finishFirst!: () => void;
     const firstRun = coordinator.runSessionAction(
       chatAction({ actionId: "action-1" }),
-      () => new Promise((resolve) => {
-        finishFirst = () => resolve({ accepted: true });
-      }),
+      () =>
+        new Promise((resolve) => {
+          finishFirst = () => resolve({ accepted: true });
+        }),
     );
 
     const secondRun = await coordinator.runSessionAction(
@@ -96,4 +121,8 @@ function chatAction(overrides: Partial<SessionActionEnvelope> = {}): SessionActi
     source: "gui",
     ...overrides,
   };
+}
+
+function readHttpRouteSource(): string {
+  return readFileSync("gui/server/http-routes.ts", "utf8");
 }

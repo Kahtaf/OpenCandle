@@ -11,6 +11,7 @@ import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import type {
   LocalSessionCoordinator,
   SessionActionEnvelope,
+  SessionActionResult,
 } from "./local-session-coordinator.js";
 import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
@@ -305,19 +306,26 @@ async function handleSseChatRun(
 
   if (options.localSessionCoordinator) {
     const action = buildChatRunActionEnvelope(bodyRecord, sessionId);
-    const result = await options.localSessionCoordinator.runSessionAction(action, async () => {
-      await streamAcceptedSseChatRun({
-        res,
-        options,
-        activeRunSessionIds,
-        targetSessionManager,
-        currentSessionManager,
-        runSessionManager,
-        sessionId,
-        prompt,
+    let result: SessionActionResult<{ streamed: boolean }>;
+    try {
+      result = await options.localSessionCoordinator.runSessionAction(action, async () => {
+        const admitted = await streamAcceptedSseChatRun({
+          res,
+          options,
+          activeRunSessionIds,
+          targetSessionManager,
+          currentSessionManager,
+          runSessionManager,
+          sessionId,
+          prompt,
+        });
+        if (!admitted) throw new SessionActionNotAdmitted();
+        return { streamed: true };
       });
-      return { streamed: true };
-    });
+    } catch (error) {
+      if (error instanceof SessionActionNotAdmitted) return;
+      throw error;
+    }
     if (!result.ok) {
       writeJson(res, { error: result.message, code: result.code }, 409);
       return;
@@ -394,10 +402,10 @@ async function streamAcceptedSseChatRun({
   runSessionManager: SessionManager;
   sessionId: string;
   prompt: string;
-}): Promise<void> {
+}): Promise<boolean> {
   if (activeRunSessionIds.has(sessionId)) {
     writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
-    return;
+    return false;
   }
 
   const currentSessionFile = currentSessionManager.getSessionFile();
@@ -417,7 +425,7 @@ async function streamAcceptedSseChatRun({
         { error: "OpenCandle is reconnecting to this session.", code: "syncing" },
         409,
       );
-      return;
+      return false;
     }
     acquiredLockScope = lockScope;
     lockHeartbeat = setInterval(() => refreshWriterLock(lockScope), 5000);
@@ -435,7 +443,7 @@ async function streamAcceptedSseChatRun({
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     const message = error instanceof Error ? error.message : String(error);
     writeJson(res, { error: message }, 500);
-    return;
+    return false;
   }
 
   res.writeHead(200, {
@@ -519,7 +527,10 @@ async function streamAcceptedSseChatRun({
     if (acquiredLockScope) releaseWriterLock(acquiredLockScope);
     res.end();
   }
+  return true;
 }
+
+class SessionActionNotAdmitted extends Error {}
 
 function broadcastRunSessionSnapshot(
   options: GuiHttpRouteOptions,

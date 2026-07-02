@@ -188,6 +188,37 @@ describe("writer lock", () => {
     }
   });
 
+  it("treats stale locks from an unverified live pid as ambiguous instead of current", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
+    try {
+      const first = await acquireWriterLock(dir, "gui", {
+        pid: 123_456,
+        ownerId: "123456:old-process-start",
+        staleGraceMs: 1,
+      });
+      expect(first.role).toBe("writer");
+      writeFileSync(
+        join(dir, "writer.lock"),
+        JSON.stringify({
+          ...first.lock,
+          lastHeartbeat: new Date(Date.now() - 60_000).toISOString(),
+        }),
+      );
+
+      const second = await acquireWriterLock(dir, "tui", {
+        pid: process.pid,
+        staleGraceMs: 1,
+        isPidAlive: (pid) => pid === 123_456,
+      });
+
+      expect(second.role).toBe("follower");
+      expect(second.lock.recoveryState).toBe("ambiguous");
+      expect(readWriterLock(dir)?.processKind).toBe("gui");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("refreshes only locks held by the same owner identity", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-lock-"));
     try {

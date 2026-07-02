@@ -228,7 +228,8 @@ function classifyLock(
   const hasFreshHeartbeat = Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs;
   if (!pidAlive(lock.pid)) return "recoverable";
   if (hasFreshHeartbeat) return "current";
-  return lock.ownerId ? "current" : "ambiguous";
+  if (lock.pid === process.pid && lock.ownerId === defaultOwnerId(process.pid)) return "current";
+  return "ambiguous";
 }
 
 function withRecoveryState(lock: WriterLock, status: "current" | "ambiguous"): WriterLock {
