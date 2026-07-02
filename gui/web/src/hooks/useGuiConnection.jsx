@@ -120,6 +120,15 @@ export function resolveBootstrapSessionId(
   return updateSession ? responseSessionId : currentSessionId;
 }
 
+export function resolveSnapshotCoordination(current, coordination) {
+  if (!coordination) return current;
+  // Only refresh coordination we are already tracking for that session;
+  // a snapshot for the server's current session must not clobber the
+  // coordination bootstrapped for a different routed session.
+  if (!current || current.sessionId === coordination.sessionId) return coordination;
+  return current;
+}
+
 export function shouldReconnectOnForeground({ documentVisibility, readyState }) {
   if (documentVisibility && documentVisibility !== "visible") return false;
   return readyState !== 0 && readyState !== 1;
@@ -270,6 +279,7 @@ export function useGuiConnection() {
           const nextSnapshot = sessionSnapshotFromPayload(message);
           setEntries(nextSnapshot?.entries || []);
           setCurrentSessionId(message.sessionId || "");
+          setCoordination((current) => resolveSnapshotCoordination(current, message.coordination));
           if (nextSnapshot) {
             setSessionSnapshots((current) => mergeSessionSnapshotMap(current, message));
           }

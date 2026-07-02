@@ -136,6 +136,35 @@ describe("GUI WS hub", () => {
     expect(JSON.stringify(bootstrap)).not.toContain("owner-secret");
   });
 
+  it("refreshes coordination in state snapshot broadcasts", () => {
+    const client = createFakeClient();
+    const hub = createWsHub({
+      ...baseHubOptions(),
+      role: "follower",
+      lock: {
+        role: "writer",
+        processKind: "tui",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
+      acceptWebSocketFn: () => client,
+    });
+
+    hub.handleUpgrade({ url: "/ws" } as IncomingMessage, { destroy: vi.fn() } as unknown as Duplex);
+    hub.broadcastState();
+
+    const snapshots = client.messages.filter(
+      (message) => asRecord(message).type === "state.snapshot",
+    );
+    expect(snapshots.length).toBeGreaterThan(0);
+    for (const snapshot of snapshots) {
+      expect(snapshot).toMatchObject({
+        coordination: { sessionId: "session-1", status: "syncing", ownerKind: "tui" },
+      });
+      expect(JSON.stringify(snapshot)).not.toContain("owner-secret");
+    }
+  });
+
   it("derives boot coordination from the current session lock", async () => {
     const client = createFakeClient();
     const sessionManager = SessionManager.create(cwd, sessionDir);

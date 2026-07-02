@@ -8,6 +8,7 @@ import {
   rejectTimedOutToolInvoke,
   resolveBootstrapRole,
   resolveBootstrapSessionId,
+  resolveSnapshotCoordination,
   sessionSnapshotFromPayload,
   settlePendingToolInvoke,
   shouldReconnectOnForeground,
@@ -84,6 +85,21 @@ describe("useGuiConnection helpers", () => {
     expect(buildHttpFallbackMessageRequest("tool.invoke", { toolName: "get_stock_quote" })).toBe(
       null,
     );
+  });
+
+  it("refreshes coordination from state snapshots for the tracked session", () => {
+    const tuiOwned = { sessionId: "session-1", status: "syncing", ownerKind: "tui" };
+    const guiOwned = { sessionId: "session-1", status: "ready", ownerKind: "gui" };
+    const routed = { sessionId: "session-routed", status: "syncing", ownerKind: "tui" };
+
+    // Mid-run ownership changes for the tracked session must reach the gate.
+    expect(resolveSnapshotCoordination(guiOwned, tuiOwned)).toEqual(tuiOwned);
+    expect(resolveSnapshotCoordination(null, tuiOwned)).toEqual(tuiOwned);
+    // A snapshot for the server's current session must not clobber the
+    // coordination bootstrapped for a different routed session.
+    expect(resolveSnapshotCoordination(routed, guiOwned)).toEqual(routed);
+    // Snapshots without coordination (older servers) leave the state alone.
+    expect(resolveSnapshotCoordination(guiOwned, undefined)).toEqual(guiOwned);
   });
 
   it("stamps direct tool invocation socket messages with the visible session id", () => {

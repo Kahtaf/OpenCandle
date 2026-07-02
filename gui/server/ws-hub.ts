@@ -284,6 +284,9 @@ export function createWsHub({
       state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
       entries,
       events: currentChatEvents(entries),
+      // Ownership can change mid-run (e.g. a TUI takes over the session), so
+      // snapshots re-derive coordination instead of relying on boot state.
+      coordination: coordinationStateForSession(sessionManager, role, lock),
     };
   }
 
