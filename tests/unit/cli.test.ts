@@ -1,6 +1,6 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const piMocks = vi.hoisted(() => ({
@@ -377,5 +377,49 @@ describe("opencandle package commands", () => {
     );
     expect(close).toHaveBeenCalled();
     expect(process.exitCode).toBe(1);
+  });
+
+  it("keeps a non-owner TUI alive when the owner advertises a coordinator", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const close = vi.fn().mockResolvedValue(undefined);
+    piMocks.startTuiSessionCoordinatorServer.mockResolvedValue({
+      endpoint: "http://127.0.0.1:24000",
+      secret: "test-secret",
+      close,
+    });
+    piMocks.acquireSessionWriterLock.mockResolvedValue({
+      role: "follower",
+      lock: {
+        pid: 123,
+        processKind: "gui",
+        acquiredAt: "2026-06-25T12:00:00.000Z",
+        lastHeartbeat: "2026-06-25T12:00:00.000Z",
+        coordinatorEndpoint: "http://127.0.0.1:25000",
+        coordinatorSecret: "owner-secret",
+      },
+    });
+    piMocks.continueOpenCandleSession.mockReturnValue({
+      getSessionId: vi.fn(() => "session-1"),
+      getSessionFile: vi.fn(() => "/tmp/session.jsonl"),
+      getSessionDir: vi.fn(() => "/tmp/sessions"),
+    });
+
+    await runCli([]);
+
+    expect(error).not.toHaveBeenCalledWith(
+      "OpenCandle is syncing this session in another window. Try again shortly.",
+    );
+    expect(close).toHaveBeenCalled();
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("prints proxied TUI message content arrays", () => {
+    const source = readFileSync(resolve("src/cli-main.ts"), "utf-8");
+    const helperStart = source.indexOf("function sseEventText");
+    const helperSource = source.slice(helperStart, source.indexOf("await main();", helperStart));
+
+    expect(helperSource).toContain("event.content");
+    expect(helperSource).toContain('part.type === "text"');
+    expect(helperSource).toContain(".map((part) => part.text)");
   });
 });
