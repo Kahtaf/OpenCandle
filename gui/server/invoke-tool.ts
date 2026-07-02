@@ -32,7 +32,7 @@ export interface ToolInvokeController {
     toolName: string,
     args: Record<string, unknown>,
     sessionId?: string,
-    options?: { allowProxy?: boolean },
+    options?: { actionId?: string; allowProxy?: boolean },
   ): Promise<InvokeToolResult>;
   handleToolInvokeMessage(client: ToolInvokeClient, data: Record<string, unknown>): Promise<void>;
 }
@@ -70,7 +70,7 @@ export function createToolInvokeController({
     toolName: string,
     args: Record<string, unknown>,
     sessionId = "",
-    options: { allowProxy?: boolean } = {},
+    options: { actionId?: string; allowProxy?: boolean } = {},
   ): Promise<InvokeToolResult> {
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
@@ -84,7 +84,12 @@ export function createToolInvokeController({
     const useCurrentSession = sameSessionStorage(currentSessionManager, runSessionManager);
     const allowProxy = options.allowProxy !== false;
     if (!useCurrentSession && allowProxy && canProxyToolInvokeToCoordinator(runSessionManager)) {
-      const proxied = await proxyToolInvokeToCoordinator(runSessionManager, toolName, args);
+      const proxied = await proxyToolInvokeToCoordinator(
+        runSessionManager,
+        toolName,
+        args,
+        options.actionId,
+      );
       if (proxied) return proxied;
     }
     if (role !== "writer") {
@@ -134,8 +139,10 @@ export function createToolInvokeController({
     const actionId = typeof data.actionId === "string" ? data.actionId : "";
     const toolName = String(data.toolName ?? "");
     const sessionId = typeof data.sessionId === "string" ? data.sessionId : "";
+    const allowProxy = data.allowProxy !== false;
     try {
-      const invoke = () => handleToolInvoke(toolName, requestArgs(data.args), sessionId);
+      const invoke = () =>
+        handleToolInvoke(toolName, requestArgs(data.args), sessionId, { actionId, allowProxy });
       const actionResult =
         localSessionCoordinator && actionId
           ? await localSessionCoordinator.runSessionAction(
@@ -181,13 +188,19 @@ export function canProxyToolInvokeToCoordinator(runSessionManager: SessionManage
     return false;
   }
   const lock = readWriterLock(lockScope);
-  return Boolean(lock?.coordinatorEndpoint && lock.coordinatorSecret && lock.pid !== process.pid);
+  return Boolean(
+    lock?.processKind === "gui" &&
+      lock.coordinatorEndpoint &&
+      lock.coordinatorSecret &&
+      lock.pid !== process.pid,
+  );
 }
 
 async function proxyToolInvokeToCoordinator(
   runSessionManager: SessionManager,
   toolName: string,
   args: Record<string, unknown>,
+  actionId = "",
 ): Promise<InvokeToolResult | null> {
   const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
   if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return null;
@@ -202,6 +215,7 @@ async function proxyToolInvokeToCoordinator(
       },
       body: JSON.stringify({
         sessionId: safeSessionId(runSessionManager),
+        actionId,
         toolName,
         args,
       }),

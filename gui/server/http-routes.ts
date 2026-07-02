@@ -247,17 +247,37 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/local-coordinator/tool-invoke" && req.method === "POST") {
       if (!allowLocalCoordinatorRequest(req, res, options)) return;
       const body = asRecord(await readJsonBody(req));
-      try {
-        const result = await options.toolInvokeController.handleToolInvoke(
-          String(body.toolName ?? ""),
-          asRecord(body.args),
-          String(body.sessionId ?? ""),
-          { allowProxy: false },
+      let ack: unknown;
+      await options.toolInvokeController.handleToolInvokeMessage(
+        { send: (message) => (ack = message) },
+        {
+          requestId: "local-coordinator-tool",
+          actionId: String(body.actionId ?? ""),
+          sessionId: String(body.sessionId ?? ""),
+          toolName: String(body.toolName ?? ""),
+          args: asRecord(body.args),
+          allowProxy: false,
+        },
+      );
+      const message = asRecord(ack);
+      if (message.ok) {
+        const result = asRecord(message.result);
+        writeJson(res, {
+          result: {
+            toolCallId: result.toolCallId,
+            result: {
+              content: result.content,
+              details: result.details,
+            },
+            isError: Boolean(result.isError),
+          },
+        });
+      } else {
+        writeJson(
+          res,
+          { error: String(asRecord(message.error).message ?? "Tool invocation failed") },
+          409,
         );
-        writeJson(res, { result });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        writeJson(res, { error: message }, 409);
       }
       return;
     }

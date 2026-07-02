@@ -253,7 +253,7 @@ describe("invokeToolFromUi", () => {
       await acquireWriterLock(writerLockScopeForSession(currentSessionManager), "gui", {
         pid: process.pid,
       });
-      await acquireWriterLock(writerLockScopeForSession(targetSessionManager), "tui", {
+      await acquireWriterLock(writerLockScopeForSession(targetSessionManager), "gui", {
         pid: 999_999,
         coordinatorEndpoint: "http://127.0.0.1:25432",
         coordinatorSecret: "secret",
@@ -292,7 +292,9 @@ describe("invokeToolFromUi", () => {
       });
 
       await expect(
-        controller.handleToolInvoke("get_stock_quote", { symbol: "AAPL" }, "target-session"),
+        controller.handleToolInvoke("get_stock_quote", { symbol: "AAPL" }, "target-session", {
+          actionId: "tool-action-1",
+        }),
       ).resolves.toEqual(proxiedResult);
       expect(fetchMock).toHaveBeenCalledWith(
         new URL("http://127.0.0.1:25432/api/local-coordinator/tool-invoke"),
@@ -303,6 +305,7 @@ describe("invokeToolFromUi", () => {
           }),
           body: JSON.stringify({
             sessionId: "target-session",
+            actionId: "tool-action-1",
             toolName: "get_stock_quote",
             args: { symbol: "AAPL" },
           }),
@@ -310,6 +313,29 @@ describe("invokeToolFromUi", () => {
       );
     } finally {
       globalThis.fetch = originalFetch;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not advertise direct tool proxying for TUI coordinators until they support it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-proxy-"));
+    try {
+      const targetSessionManager = {
+        getSessionId: () => "target-session",
+        getSessionFile: () => join(dir, "target.jsonl"),
+        appendMessage: vi.fn(),
+      } as unknown as SessionManager;
+      await acquireWriterLock(writerLockScopeForSession(targetSessionManager), "tui", {
+        pid: 999_999,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+      });
+
+      const { canProxyToolInvokeToCoordinator } = await import(
+        "../../../gui/server/invoke-tool.js"
+      );
+      expect(canProxyToolInvokeToCoordinator(targetSessionManager)).toBe(false);
+    } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
