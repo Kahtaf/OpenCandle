@@ -455,7 +455,7 @@ function DocsShell({ page, children }) {
       <div className="flex min-h-dvh bg-background">
         <aside
           id="docs-sidebar"
-          className="sticky top-0 hidden h-dvh w-[260px] shrink-0 overflow-hidden border-border border-r bg-secondary"
+          className="sticky top-0 h-dvh w-[260px] shrink-0 overflow-hidden border-border border-r bg-secondary"
         >
           <DocsSidebarBody page={page} prefix={prefix} showHeader />
         </aside>

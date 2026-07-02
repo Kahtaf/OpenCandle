@@ -66,6 +66,13 @@
     display: none;
   }
 
+  /* The sidebar's responsive + collapsed display states live here instead of
+     Tailwind utilities so the collapse toggle does not fight the utility
+     layer's specificity. */
+  #docs-sidebar {
+    display: none;
+  }
+
   @media (min-width: 768px) {
     html:not([data-sidebar-collapsed="true"]) #docs-sidebar {
       display: block;
