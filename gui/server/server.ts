@@ -140,6 +140,8 @@ const toolInvokeController = createToolInvokeController({
   onMarketStateChanged: () => quoteSnapshotStore.invalidate(),
   askUserHandler: askUserBridge.ask,
   askUserHandlerForSessionId: (sessionId) => askUserBridge.askForSession(sessionId),
+  localCoordinatorEndpoint,
+  localCoordinatorSecret,
   localSessionCoordinator,
   resolveSessionManager: (sessionId) =>
     resolveSessionManagerById(

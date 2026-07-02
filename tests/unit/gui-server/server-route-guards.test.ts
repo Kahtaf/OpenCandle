@@ -154,6 +154,15 @@ describe("GUI server route guards", () => {
     expect(heartbeatBlock).toContain("syncCurrentWriterLockScope()");
     expect(heartbeatBlock).toContain("refreshWriterLock(activeWriterLockScope)");
   });
+
+  it("publishes coordinator metadata for non-current session tool locks", () => {
+    const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
+    const acquireStart = source.indexOf('acquireWriterLock(lockScope, "gui"');
+    const acquireBlock = source.slice(acquireStart, source.indexOf("});", acquireStart) + 3);
+
+    expect(acquireBlock).toContain("coordinatorEndpoint: localCoordinatorEndpoint");
+    expect(acquireBlock).toContain("coordinatorSecret: localCoordinatorSecret");
+  });
 });
 
 function routeBlockBefore(route: string, handler: string): string {

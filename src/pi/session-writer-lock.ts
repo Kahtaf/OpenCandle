@@ -150,7 +150,11 @@ export function migrateWriterLockScope(
   holder: { pid?: number; ownerId?: string } = {},
 ): boolean {
   if (fromScopePath === toScopePath) return true;
-  const identity = { pid: holder.pid ?? process.pid, ownerId: holder.ownerId };
+  const pid = holder.pid ?? process.pid;
+  const identity = {
+    pid,
+    ownerId: holder.ownerId ?? (pid === process.pid ? defaultOwnerId(pid) : undefined),
+  };
   const lock = readWriterLock(fromScopePath);
   if (!lock || !isSameLockOwner(lock, identity)) return false;
 

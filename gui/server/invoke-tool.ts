@@ -50,6 +50,8 @@ export interface ToolInvokeControllerOptions {
   broadcastSessionSnapshot?: (sessionManager: SessionManager) => void;
   broadcastSessions?: () => void;
   localSessionCoordinator?: LocalSessionCoordinator;
+  localCoordinatorEndpoint?: string;
+  localCoordinatorSecret?: string;
 }
 
 export function createToolInvokeController({
@@ -65,6 +67,8 @@ export function createToolInvokeController({
   broadcastSessionSnapshot,
   broadcastSessions,
   localSessionCoordinator,
+  localCoordinatorEndpoint,
+  localCoordinatorSecret,
 }: ToolInvokeControllerOptions): ToolInvokeController {
   async function handleToolInvoke(
     toolName: string,
@@ -103,7 +107,10 @@ export function createToolInvokeController({
     let lockHeartbeat: ReturnType<typeof setInterval> | undefined;
     if (!useCurrentSession) {
       const lockScope = writerLockScopeForSession(runSessionManager);
-      const lockResult = await acquireWriterLock(lockScope, "gui");
+      const lockResult = await acquireWriterLock(lockScope, "gui", {
+        coordinatorEndpoint: localCoordinatorEndpoint,
+        coordinatorSecret: localCoordinatorSecret,
+      });
       if (lockResult.role !== "writer") {
         throw new Error("OpenCandle is reconnecting to this session.");
       }
