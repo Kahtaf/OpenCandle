@@ -113,6 +113,31 @@ describe("session action dedupe store", () => {
     }
   });
 
+  it("keeps original pending timestamps across unrelated store writes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T00:00:00.000Z"));
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-action-dedupe-restamp-"));
+    try {
+      const sessionFile = join(dir, "session.jsonl");
+      const sessionManager = {
+        getSessionFile: () => sessionFile,
+        getSessionDir: () => dir,
+      };
+
+      recordPendingSessionAction(sessionManager, "action-1");
+
+      vi.setSystemTime(new Date("2026-07-01T00:01:30.000Z"));
+      recordPendingSessionAction(sessionManager, "action-2");
+      recordAcceptedSessionAction(sessionManager, "action-2");
+
+      vi.setSystemTime(new Date("2026-07-01T00:02:30.000Z"));
+      expect(hasPendingSessionAction(sessionManager, "action-1")).toBe(false);
+      expect(hasAcceptedSessionAction(sessionManager, "action-1")).toBe(false);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("ignores legacy string pending ids without blocking retries forever", async () => {
     const dir = mkdtempSync(join(tmpdir(), "opencandle-action-dedupe-legacy-"));
     try {

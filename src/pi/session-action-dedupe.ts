@@ -4,7 +4,7 @@ import { type SessionLockScopeSource, writerLockScopeForSession } from "./sessio
 
 interface AcceptedActionStore {
   acceptedActionIds: string[];
-  pendingActionIds: string[];
+  pendingActions: PendingActionRecord[];
 }
 
 interface PendingActionRecord {
@@ -29,7 +29,9 @@ export function hasPendingSessionAction(
 ): boolean {
   const normalizedActionId = actionId.trim();
   if (!normalizedActionId) return false;
-  return readAcceptedActionStore(sessionManager).pendingActionIds.includes(normalizedActionId);
+  return readAcceptedActionStore(sessionManager).pendingActions.some(
+    (record) => record.id === normalizedActionId,
+  );
 }
 
 export function recordPendingSessionAction(
@@ -41,10 +43,13 @@ export function recordPendingSessionAction(
   const storePath = acceptedActionStorePath(sessionManager);
   if (!storePath) return;
   const store = readAcceptedActionStore(sessionManager);
-  if (store.pendingActionIds.includes(normalizedActionId)) return;
+  if (store.pendingActions.some((record) => record.id === normalizedActionId)) return;
   writeAcceptedActionStore(storePath, {
     acceptedActionIds: store.acceptedActionIds,
-    pendingActionIds: [...store.pendingActionIds.slice(-499), normalizedActionId],
+    pendingActions: [
+      ...store.pendingActions.slice(-499),
+      { id: normalizedActionId, pendingAtMs: Date.now() },
+    ],
   });
 }
 
@@ -57,10 +62,10 @@ export function clearPendingSessionAction(
   const storePath = acceptedActionStorePath(sessionManager);
   if (!storePath) return;
   const store = readAcceptedActionStore(sessionManager);
-  if (!store.pendingActionIds.includes(normalizedActionId)) return;
+  if (!store.pendingActions.some((record) => record.id === normalizedActionId)) return;
   writeAcceptedActionStore(storePath, {
     acceptedActionIds: store.acceptedActionIds,
-    pendingActionIds: store.pendingActionIds.filter((id) => id !== normalizedActionId),
+    pendingActions: store.pendingActions.filter((record) => record.id !== normalizedActionId),
   });
 }
 
@@ -76,14 +81,14 @@ export function recordAcceptedSessionAction(
   if (store.acceptedActionIds.includes(normalizedActionId)) return;
   writeAcceptedActionStore(storePath, {
     acceptedActionIds: [...store.acceptedActionIds.slice(-499), normalizedActionId],
-    pendingActionIds: store.pendingActionIds.filter((id) => id !== normalizedActionId),
+    pendingActions: store.pendingActions.filter((record) => record.id !== normalizedActionId),
   });
 }
 
 function readAcceptedActionStore(sessionManager: SessionLockScopeSource): AcceptedActionStore {
   try {
     const storePath = acceptedActionStorePath(sessionManager);
-    if (!storePath) return { acceptedActionIds: [], pendingActionIds: [] };
+    if (!storePath) return { acceptedActionIds: [], pendingActions: [] };
     const parsed = JSON.parse(readFileSync(storePath, "utf8")) as {
       acceptedActionIds?: unknown;
       pendingActionIds?: unknown;
@@ -94,10 +99,10 @@ function readAcceptedActionStore(sessionManager: SessionLockScopeSource): Accept
       : [];
     return {
       acceptedActionIds,
-      pendingActionIds: pendingRecords.activeRecords.map((record) => record.id),
+      pendingActions: pendingRecords.activeRecords,
     };
   } catch {
-    return { acceptedActionIds: [], pendingActionIds: [] };
+    return { acceptedActionIds: [], pendingActions: [] };
   }
 }
 
@@ -108,10 +113,7 @@ function writeAcceptedActionStore(storePath: string, store: AcceptedActionStore)
     JSON.stringify(
       {
         acceptedActionIds: store.acceptedActionIds,
-        pendingActionIds: store.pendingActionIds.map((id) => ({
-          id,
-          pendingAtMs: Date.now(),
-        })),
+        pendingActionIds: store.pendingActions,
       },
       null,
       2,
