@@ -84,6 +84,6 @@ describe("public site build contract", () => {
 
     expect(homeHtml).not.toContain("hero-grid");
     expect(homeHtml).not.toContain("float-tile");
-    expect(homeHtml).toContain("What are we watching?");
+    expect(homeHtml).toContain("Market research that shows its evidence");
   });
 });
