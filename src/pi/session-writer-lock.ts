@@ -46,6 +46,7 @@ export interface SessionLockScopeSource {
 const DEFAULT_STALE_GRACE_MS = 15_000;
 const WRITER_LOCK_PROTOCOL_VERSION = 1;
 const PROCESS_STARTED_AT = new Date(Date.now() - process.uptime() * 1000).toISOString();
+const PENDING_SESSION_ACTION_TTL_MS = 2 * 60 * 1000;
 
 export async function acquireWriterLock(
   scopePath: string,
@@ -190,16 +191,16 @@ export function migrateWriterLockScope(
 function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string): void {
   const fromPath = acceptedActionStorePath(fromScopePath);
   const toPath = acceptedActionStorePath(toScopePath);
-  let fromActions: { acceptedActionIds: string[]; pendingActionIds: string[] };
+  let fromActions: AcceptedActionStore;
   try {
     const parsed = JSON.parse(readFileSync(fromPath, "utf8")) as { acceptedActionIds?: unknown };
     fromActions = parseAcceptedActionStore(parsed);
   } catch {
     return;
   }
-  let toActions: { acceptedActionIds: string[]; pendingActionIds: string[] } = {
+  let toActions: AcceptedActionStore = {
     acceptedActionIds: [],
-    pendingActionIds: [],
+    pendingActions: [],
   };
   try {
     const parsed = JSON.parse(readFileSync(toPath, "utf8")) as { acceptedActionIds?: unknown };
@@ -210,15 +211,29 @@ function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string):
   const acceptedActionIds = [
     ...new Set([...toActions.acceptedActionIds, ...fromActions.acceptedActionIds]),
   ].slice(-500);
-  const pendingActionIds = [
-    ...new Set([...toActions.pendingActionIds, ...fromActions.pendingActionIds]),
-  ]
-    .filter((id) => !acceptedActionIds.includes(id))
-    .slice(-500);
+  const pendingActionsById = new Map<string, PendingActionRecord>();
+  for (const action of [...toActions.pendingActions, ...fromActions.pendingActions]) {
+    if (!acceptedActionIds.includes(action.id)) pendingActionsById.set(action.id, action);
+  }
+  const pendingActions = [...pendingActionsById.values()].slice(-500);
   mkdirSync(dirname(toPath), { recursive: true });
-  writeFileSync(toPath, JSON.stringify({ acceptedActionIds, pendingActionIds }, null, 2), {
-    mode: 0o600,
-  });
+  writeFileSync(
+    toPath,
+    JSON.stringify(
+      {
+        acceptedActionIds,
+        pendingActionIds: pendingActions.map((action) => ({
+          id: action.id,
+          pendingAtMs: action.pendingAtMs,
+        })),
+      },
+      null,
+      2,
+    ),
+    {
+      mode: 0o600,
+    },
+  );
   try {
     unlinkSync(fromPath);
   } catch {
@@ -226,21 +241,40 @@ function migrateAcceptedActionStore(fromScopePath: string, toScopePath: string):
   }
 }
 
+interface PendingActionRecord {
+  id: string;
+  pendingAtMs: number;
+}
+
+interface AcceptedActionStore {
+  acceptedActionIds: string[];
+  pendingActions: PendingActionRecord[];
+}
+
 function parseAcceptedActionStore(parsed: {
   acceptedActionIds?: unknown;
   pendingActionIds?: unknown;
-}): {
-  acceptedActionIds: string[];
-  pendingActionIds: string[];
-} {
+}): AcceptedActionStore {
   return {
     acceptedActionIds: Array.isArray(parsed.acceptedActionIds)
       ? parsed.acceptedActionIds.filter((id): id is string => typeof id === "string")
       : [],
-    pendingActionIds: Array.isArray(parsed.pendingActionIds)
-      ? parsed.pendingActionIds.filter((id): id is string => typeof id === "string")
-      : [],
+    pendingActions: parsePendingActionRecords(parsed.pendingActionIds),
   };
+}
+
+function parsePendingActionRecords(value: unknown): PendingActionRecord[] {
+  if (!Array.isArray(value)) return [];
+  const now = Date.now();
+  return value
+    .map((entry): PendingActionRecord | null => {
+      if (!entry || typeof entry !== "object") return null;
+      const record = entry as { id?: unknown; pendingAtMs?: unknown };
+      if (typeof record.id !== "string" || typeof record.pendingAtMs !== "number") return null;
+      if (now - record.pendingAtMs > PENDING_SESSION_ACTION_TTL_MS) return null;
+      return { id: record.id, pendingAtMs: record.pendingAtMs };
+    })
+    .filter((record): record is PendingActionRecord => record !== null);
 }
 
 function tryCreate(
