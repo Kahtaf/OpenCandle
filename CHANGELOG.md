@@ -4,6 +4,7 @@
 
 ### Changed
 
+- README and System Architecture docs now include the OpenCandle architecture diagram, with editable Excalidraw source and transparent PNG assets checked into the repo.
 - Public docs now link external resources on first mention per page: data providers (Yahoo Finance, FRED, SEC EDGAR, CoinGecko, TradingView, Alpha Vantage, Brave, Exa, Finnhub, DuckDuckGo, alternative.me), the `rdt-cli` and `twitter-cli` sentiment CLIs, and project tooling such as Pi, Node.js, Vitest, TypeScript, Biome, Typebox, Tailscale, and `better-sqlite3` across the docs pages, CONTRIBUTING, and SECURITY.
 - The public site now shares one navigation shell: the same sticky navbar on the homepage and every docs page, a docs sidebar under it on desktop, and a bottom drawer behind the navbar hamburger on mobile (replacing the old "Docs navigation" dropdown). The homepage was rebuilt to answer why OpenCandle exists: a claim-first hero with install commands, the evidence receipt behind a sample answer, a chatbot comparison, a GUI tour, and a builder section with a typed-tool code sample. Docs prose, tables, and lists follow the GUI's typography and table styling.
 - Docs navigation is now ordered as a first-time visitor's journey (Start here, Guides, Reference, Build, Project) with plain-language labels such as "Why OpenCandle" and "Terminal (TUI)", the docs overview page was condensed into a scannable map, and homepage and docs copy and spacing were tightened for less density. URLs are unchanged.
