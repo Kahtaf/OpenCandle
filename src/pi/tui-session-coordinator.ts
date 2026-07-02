@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { AddressInfo } from "node:net";
 import type { AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
+  clearPendingSessionAction,
   hasAcceptedSessionAction,
   hasPendingSessionAction,
   recordAcceptedSessionAction,
@@ -129,15 +130,23 @@ export async function startTuiSessionCoordinatorServer(
     activeRunSessions.add(sessionId);
     try {
       recordPendingSessionAction(sessionManager, actionId);
-      await streamPromptRun(res, prompt, sessionId);
-      recordAcceptedSessionAction(sessionManager, actionId);
-      acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
+      const completed = await streamPromptRun(res, prompt, sessionId);
+      if (completed) {
+        recordAcceptedSessionAction(sessionManager, actionId);
+        acceptedActions.set(actionKey, { expiresAt: now() + DEDUPE_RETENTION_MS });
+      } else {
+        clearPendingSessionAction(sessionManager, actionId);
+      }
     } finally {
       activeRunSessions.delete(sessionId);
     }
   }
 
-  async function streamPromptRun(res: ServerResponse, prompt: string, sessionId: string) {
+  async function streamPromptRun(
+    res: ServerResponse,
+    prompt: string,
+    sessionId: string,
+  ): Promise<boolean> {
     options.syncWriterLockScope?.();
     const session = options.getSession();
     const sessionManager = options.getSessionManager();
@@ -178,9 +187,11 @@ export async function startTuiSessionCoordinatorServer(
         seq = event.seq + 1;
       }
       writeSse(res, { type: "run.completed", runId, sessionId, seq });
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
+      return false;
     } finally {
       res.end();
     }
