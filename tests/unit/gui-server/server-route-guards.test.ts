@@ -183,6 +183,16 @@ describe("GUI server route guards", () => {
     expect(endpointLine).not.toContain("${host}");
   });
 
+  it("uses neutral language when session rebind cannot acquire a writer lock", () => {
+    const source = readFileSync(resolve("gui/server/server.ts"), "utf-8");
+    const rebindStart = source.indexOf("runtime.setRebindSession");
+    const rebindBlock = source.slice(rebindStart, source.indexOf("const interactiveMode", rebindStart));
+
+    expect(rebindBlock).toContain("OpenCandle is reconnecting to this session.");
+    expect(rebindBlock).not.toContain("processKind");
+    expect(rebindBlock).not.toContain("pid");
+  });
+
   it("publishes coordinator metadata for non-current session tool locks", () => {
     const source = readFileSync(resolve("gui/server/invoke-tool.ts"), "utf-8");
     const acquireStart = source.indexOf('acquireWriterLock(lockScope, "gui"');

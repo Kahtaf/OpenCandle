@@ -191,9 +191,7 @@ runtime.setRebindSession(async (nextSession) => {
       coordinatorSecret: localCoordinatorSecret,
     });
     if (nextLockResult.role !== "writer") {
-      throw new Error(
-        `Session is currently being written by ${nextLockResult.lock.processKind} (pid ${nextLockResult.lock.pid}).`,
-      );
+      throw new Error("OpenCandle is reconnecting to this session.");
     }
     releaseWriterLock(activeWriterLockScope);
     activeWriterLockScope = nextWriterLockScope;
