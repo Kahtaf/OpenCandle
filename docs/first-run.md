@@ -9,7 +9,7 @@ This path assumes you want the fastest successful run: connect one AI model, ask
 
 Model credentials and market-data provider keys are separate. OpenCandle needs a model before chat can start. A keyless market-data prompt means the market data source does not need an OpenCandle provider key; it does not mean the agent can run without model access.
 
-Pi is the bundled local agent runtime that handles model sign-in, model keys, the terminal shell, and saved sessions. OpenCandle uses Pi for that runtime layer and adds the finance-specific tools and GUI.
+[Pi](https://github.com/earendil-works/pi) is the bundled local agent runtime that handles model sign-in, model keys, the terminal shell, and saved sessions. OpenCandle uses Pi for that runtime layer and adds the finance-specific tools and GUI.
 
 ## Five-Minute Path
 
@@ -40,7 +40,7 @@ Compare BTC and ETH over the last month
 What is the latest SEC filing for AAPL?
 ```
 
-Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index work without OpenCandle-specific provider keys. Reddit sentiment uses `rdt-cli` plus your normal Reddit browser session; Twitter/X sentiment uses `twitter-cli` plus your normal x.com browser session.
+[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
 
 4. Add provider keys only when needed.
 
@@ -52,7 +52,7 @@ If an answer says a provider is missing or degraded, follow the suggested `/conn
 /connect search
 ```
 
-`financials` connects Alpha Vantage, `economy` connects FRED, and `search` picks between Brave and Exa. The full list of `/connect` targets is in [TUI](./tui.md#connect-targets).
+`financials` connects [Alpha Vantage](https://www.alphavantage.co), `economy` connects [FRED](https://fred.stlouisfed.org), and `search` picks between [Brave](https://brave.com/search/api/) and [Exa](https://exa.ai). The full list of `/connect` targets is in [TUI](./tui.md#connect-targets).
 
 ## What Success Looks Like
 
@@ -79,7 +79,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 
 ## Native Dependency Troubleshooting
 
-OpenCandle stores local state with `better-sqlite3`, which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
+OpenCandle stores local state with [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3), which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
 
 1. Use a supported Node.js version: `>=22.19.0 <27`.
 2. Retry a clean install.

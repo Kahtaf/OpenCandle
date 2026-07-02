@@ -7,7 +7,7 @@ description: Use the OpenCandle terminal interface, slash commands, sessions, an
 
 The terminal UI is the main OpenCandle agent experience. It runs chat, setup, slash commands, tool calls, and session state in one place.
 
-OpenCandle runs on Pi, the local agent runtime that provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle contributes the finance-specific tools, workflows, prompts, and local state.
+OpenCandle runs on [Pi](https://github.com/earendil-works/pi), the local agent runtime that provides the terminal UI, model auth, session storage, slash commands, and extension hooks. OpenCandle contributes the finance-specific tools, workflows, prompts, and local state.
 
 Start it with:
 

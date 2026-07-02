@@ -25,25 +25,25 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 
 Keyless by default:
 
-- Yahoo Finance
-- TradingView scanner (unofficial, delayed scanner endpoint; used read-only and batch-first)
-- CoinGecko
-- SEC EDGAR
-- DuckDuckGo search
-- alternative.me crypto Fear & Greed
+- [Yahoo Finance](https://finance.yahoo.com)
+- [TradingView](https://www.tradingview.com) scanner (unofficial, delayed scanner endpoint; used read-only and batch-first)
+- [CoinGecko](https://www.coingecko.com)
+- [SEC EDGAR](https://www.sec.gov/edgar)
+- [DuckDuckGo](https://duckduckgo.com) search
+- [alternative.me crypto Fear & Greed](https://alternative.me/crypto/fear-and-greed-index/)
 
 External local tools:
 
-- Reddit sentiment uses `rdt-cli` and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
-- Twitter/X sentiment uses `twitter-cli` and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
+- Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
+- Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
 
 Optional keys:
 
-- `ALPHA_VANTAGE_API_KEY` expands fundamentals, earnings, financial statements, DCF, and company comparison coverage.
-- `FRED_API_KEY` enables macro series lookups.
-- `BRAVE_API_KEY` enables Brave as a web search fallback.
-- `EXA_API_KEY` enables Exa web search.
-- `FINNHUB_API_KEY` enables Finnhub company news in sentiment summaries.
+- `ALPHA_VANTAGE_API_KEY` expands fundamentals, earnings, financial statements, DCF, and company comparison coverage through [Alpha Vantage](https://www.alphavantage.co).
+- `FRED_API_KEY` enables [FRED](https://fred.stlouisfed.org) macro series lookups.
+- `BRAVE_API_KEY` enables [Brave](https://brave.com/search/api/) as a web search fallback.
+- `EXA_API_KEY` enables [Exa](https://exa.ai) web search.
+- `FINNHUB_API_KEY` enables [Finnhub](https://finnhub.io) company news in sentiment summaries.
 - Search and social providers can degrade based on available credentials, external-tool availability, local browser login state, and provider health. Reddit sentiment requires `rdt-cli` plus a usable Reddit browser session; Twitter/X sentiment requires `twitter-cli` plus a usable x.com browser session.
 
 ## Caching and Degradation

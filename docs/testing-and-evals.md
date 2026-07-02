@@ -22,7 +22,7 @@ npm run gui:web:build
 npm run docs:site:build
 ```
 
-`npm test` runs the Vitest suite. Unit tests should be fixture-backed and should not call live APIs.
+`npm test` runs the [Vitest](https://vitest.dev) suite. Unit tests should be fixture-backed and should not call live APIs.
 
 For release-facing changes, run the same local gate that release and publish paths use:
 
@@ -123,7 +123,7 @@ Each run writes a timestamped `*_product-evals.json` report under `tests/evals/r
 
 The competitive benchmark answers a product question: when does a finance-native agent with market tools and traceable evidence produce a more useful answer than a generic agent answering without tools? It is not meant to prove OpenCandle always wins — generic agents can be stronger on concise education or clean synthesis when live data is unnecessary, and those losses are useful signal.
 
-Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude, Codex, and Gemini baselines run as generic no-tool agents through `acpx`, an Agent Client Protocol runner bundled in the repo; unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
+Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude, Codex, and Gemini baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 
 ```bash
 npm run test:evals:competitive

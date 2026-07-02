@@ -44,7 +44,7 @@ Produce the answer
 
 OpenCandle has two main surfaces.
 
-The terminal UI is the fastest keyboard loop. It supports normal chat, slash commands, model setup, provider connection, and saved Pi sessions.
+The terminal UI is the fastest keyboard loop. It supports normal chat, slash commands, model setup, provider connection, and saved [Pi](https://github.com/earendil-works/pi) sessions.
 
 The local GUI is a browser workbench at `http://127.0.0.1:14567`. It shows chat, session history, provider setup, a tool and workflow catalog, a financial context panel, and visual result cards for market data, options, macro, filings, sentiment, and portfolio facts.
 

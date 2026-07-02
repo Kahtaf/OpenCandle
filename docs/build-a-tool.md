@@ -20,7 +20,7 @@ For a working reference, see `src/tools/sentiment/reddit-sentiment.ts`.
 
 ## The Tool Contract
 
-Every tool is an `AgentTool` with Typebox parameters:
+Every tool is an `AgentTool` with [Typebox](https://github.com/sinclairzx81/typebox) parameters:
 
 ```ts
 import { Type } from "@sinclair/typebox";
@@ -215,7 +215,7 @@ Save fixture JSON in `tests/fixtures/<provider>/` so tests are deterministic.
 
 The stable package surface for add-ons is `opencandle/tool-kit` plus documented TypeScript types. Other exported subpaths such as `opencandle/providers`, `opencandle/tools`, `opencandle/workflows`, and `opencandle/infra` are available for first-party integration and experimentation, but they can change more often until the project documents a narrower API reference for them.
 
-If your tool has heavy dependencies or needs separate maintenance, you can ship it as a standalone npm package instead. It's a Pi extension that imports from `opencandle/tool-kit`:
+If your tool has heavy dependencies or needs separate maintenance, you can ship it as a standalone npm package instead. It's a [Pi](https://github.com/earendil-works/pi) extension that imports from `opencandle/tool-kit`:
 
 ```ts
 // extension.ts in your separate package
