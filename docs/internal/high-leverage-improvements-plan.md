@@ -26,6 +26,7 @@
 3. Ask-first areas from AGENTS.md still apply: `src/pi/`, system prompt, analyst orchestration *prompts*, memory SQLite schema. Where an item below authorizes touching one (e.g. I4's v9 migration), that authorization is scoped to exactly what the item says.
 4. Done means: `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; new behavior covered by tests named in the item; a short `NOTES.md` in the PR (or PR description) mapping each claimed behavior to the test that proves it; runtime evidence (below) committed under `docs/internal/pr-evidence/<branch-name>/` — never `/tmp` (ephemeral evidence has already rotted once in this repo's history).
 5. Runtime evidence by surface: agent-behavior changes → a harness `trace.json` of the target scenario; GUI changes → screenshots at 1440x960 and 390x844 plus the browser-suite log; coordinator/lock changes → the convergence smoke output; schema changes → migration-test output against a real pre-upgrade fixture DB.
+6. **E2E-first evidence policy (2026-07-03):** executor environments are provisioned with model/provider credentials, and live end-to-end runs are EXPECTED, not optional. Runtime evidence must come from a real credentialed run (harness trace, live eval, real browser) — never from mocks alone. Unit suites stay mock-based per AGENTS.md (no live calls in `npm test`), but every item's "done" includes its live evidence. If your environment lacks the needed credential, STOP and request it from the maintainer; do not substitute a mocked run and do not mark the item done. Cost discipline: run the targeted live scenario for your item, not whole live suites repeatedly.
 
 ## Sequencing
 
@@ -174,8 +175,8 @@ Same prompt through `runOpenCandleSession` (TUI path) and through the GUI server
 Keep the generated 5-prompt benchmark for discovery; add a FROZEN panel rerun per release from the historical loss classes: portfolio-review-not-builder; "1-2 weeks" DTE preservation; protective-put-not-bullish-call; unknown-ticker-no-dead-end; hedge sizing with share count. Assert via `finalAnswerHardAssertions` in the prompt-policy manifest so literals stay out of production prompts. Frozen + cached baselines = trend line.
 
 ### Also in I5:
-- Author the 4–9 router fixtures from archived task 4.7's candidate list (multi-symbol compare with prior context; fallback-from-general-qa shift; preference ECHO that must NOT become a `preference_update`; router misclassification recovery). Update `BASELINE.json` count.
-- If cleanup WP2 was blocked on credentials: run `npm run eval:router-live` in a credentialed environment and archive the output to `tests/fixtures/router/eval-baselines/<date>.txt`.
+- Author the 4–9 router fixtures from archived task 4.7's candidate list (multi-symbol compare with prior context; fallback-from-general-qa shift; preference ECHO that must NOT become a `preference_update`; router misclassification recovery). Update `BASELINE.json` count, and run `npm run eval:router-live` after adding fixtures so the archived baseline in `tests/fixtures/router/eval-baselines/` covers the grown set (cleanup WP2 archives the pre-growth baseline; this refreshes it).
+- Establish the live-eval cadence: `eval:router-live`, `test:evals` (always tier), and `test:evals:product` run per release as part of release preparation (documented in the release checklist), with the E7 frozen competitive panel. Live suites are not in per-PR CI, but they are not optional at release time.
 
 **Reviewer verification for all of I5:** every case has explicit assertions on trace evidence (no vibes-only rubrics in deterministic suites); failed-against-current-behavior cases are flagged findings, not silently weakened; no live calls in deterministic suites; prompt-debt-guard still green.
 
