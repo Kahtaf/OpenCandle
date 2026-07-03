@@ -7,6 +7,22 @@ import { computeRSI, computeSMA } from "./indicators.js";
 
 export type Strategy = "sma_crossover" | "sma_50_200_crossover" | "rsi_mean_reversion";
 
+/** Flat per-side transaction cost assumption, in basis points. */
+export const DEFAULT_COST_BPS = 5;
+
+/** What this simulator deliberately does not model. Rendered in tool output. */
+export const BACKTEST_LIMITATIONS = [
+  "Fills are simulated at the next bar's open after a signal; intrabar moves and gaps beyond that open are not modeled",
+  "Only a flat per-side cost is applied — no slippage model, spreads, or market impact",
+  "Dividends, taxes, and financing costs are excluded",
+  "Liquidity is assumed unlimited at the fill price",
+];
+
+export interface BacktestOptions {
+  /** Flat per-side cost in basis points applied to every fill. */
+  costBps?: number;
+}
+
 export interface BacktestResult {
   strategy: string;
   totalReturn: number;
@@ -15,133 +31,129 @@ export interface BacktestResult {
   wins: number;
   winRate: number;
   maxDrawdown: number;
+  costBpsPerSide: number;
+  /** Signal generated on the final bar that has no next open to fill at. */
+  pendingSignal: { type: "buy" | "sell"; date: string } | null;
   tradeLog: Array<{ type: "buy" | "sell"; date: string; price: number; pnl?: number }>;
 }
 
-export function runBacktest(bars: OHLCV[], strategy: Strategy): BacktestResult {
-  const closes = bars.map((b) => b.close);
+type Signal = "enter" | "exit" | null;
 
-  if (strategy === "sma_crossover") {
-    return backtestSMACrossover(bars, closes, 20, 50, strategy);
+export function runBacktest(
+  bars: OHLCV[],
+  strategy: Strategy,
+  options?: BacktestOptions,
+): BacktestResult {
+  const closes = bars.map((b) => b.close);
+  const costBps = options?.costBps ?? DEFAULT_COST_BPS;
+
+  if (strategy === "sma_crossover" || strategy === "sma_50_200_crossover") {
+    const [shortWindow, longWindow] = strategy === "sma_crossover" ? [20, 50] : [50, 200];
+    const shortSma = computeSMA(closes, shortWindow);
+    const longSma = computeSMA(closes, longWindow);
+    if (longSma.length === 0) {
+      return emptyResult(strategy, closes, costBps);
+    }
+    const signalAt = (barIdx: number): Signal => {
+      const sShort = shortSma[barIdx - (shortWindow - 1)];
+      const sLong = longSma[barIdx - (longWindow - 1)];
+      if (sShort > sLong) return "enter";
+      if (sShort < sLong) return "exit";
+      return null;
+    };
+    return simulate(bars, closes, signalAt, longWindow - 1, strategy, costBps);
   }
-  if (strategy === "sma_50_200_crossover") {
-    return backtestSMACrossover(bars, closes, 50, 200, strategy);
+
+  const rsi = computeRSI(closes, 14);
+  if (rsi.length === 0) {
+    return emptyResult("rsi_mean_reversion", closes, costBps);
   }
-  return backtestRSIMeanReversion(bars, closes);
+  const rsiOffset = 14;
+  const signalAt = (barIdx: number): Signal => {
+    const r = rsi[barIdx - rsiOffset];
+    if (r < 30) return "enter";
+    if (r > 70) return "exit";
+    return null;
+  };
+  return simulate(bars, closes, signalAt, rsiOffset, "rsi_mean_reversion", costBps);
 }
 
-function backtestSMACrossover(
+// Shared fill engine: a signal computed from bar N's close fills at bar N+1's
+// open (no same-bar lookahead), with a flat per-side cost on every fill. A
+// signal on the final bar is reported as pending instead of a phantom trade.
+function simulate(
   bars: OHLCV[],
   closes: number[],
-  shortWindow: number,
-  longWindow: number,
+  signalAt: (barIdx: number) => Signal,
+  startIdx: number,
   strategyName: Strategy,
+  costBps: number,
 ): BacktestResult {
-  const shortSma = computeSMA(closes, shortWindow);
-  const longSma = computeSMA(closes, longWindow);
-
-  if (longSma.length === 0) {
-    return emptyResult(strategyName, closes);
-  }
-
-  const shortOffset = shortWindow - 1;
-  const longOffset = longWindow - 1;
-
+  const cost = costBps / 10_000;
   let position = false;
-  let entryPrice = 0;
+  let entryFill = 0;
+  let pendingAction: Signal = null;
+  let pendingSignal: BacktestResult["pendingSignal"] = null;
   const tradeLog: BacktestResult["tradeLog"] = [];
   let equity = 1.0;
   let peak = 1.0;
   let maxDd = 0;
 
-  for (let i = 0; i < longSma.length; i++) {
-    const barIdx = i + longOffset;
-    const shortSmaIdx = i + (longOffset - shortOffset);
-    const sShort = shortSma[shortSmaIdx];
-    const sLong = longSma[i];
-    const price = closes[barIdx];
+  for (let i = startIdx; i < bars.length; i++) {
+    // Execute the previous bar's signal at this bar's open.
+    if (pendingAction === "enter" && !position) {
+      const fillPrice = bars[i].open;
+      if (fillPrice > 0) {
+        position = true;
+        entryFill = fillPrice * (1 + cost);
+        tradeLog.push({ type: "buy", date: bars[i].date, price: fillPrice });
+      }
+    } else if (pendingAction === "exit" && position) {
+      const fillPrice = bars[i].open;
+      if (fillPrice > 0 && entryFill > 0) {
+        const pnl = (fillPrice * (1 - cost) - entryFill) / entryFill;
+        equity *= 1 + pnl;
+        tradeLog.push({ type: "sell", date: bars[i].date, price: fillPrice, pnl });
+        position = false;
+      }
+    }
+    pendingAction = null;
 
-    if (!position && sShort > sLong && price > 0) {
-      // Buy signal
-      position = true;
-      entryPrice = price;
-      tradeLog.push({ type: "buy", date: bars[barIdx].date, price });
-    } else if (position && sShort < sLong) {
-      // Sell signal
-      const pnl = (price - entryPrice) / entryPrice;
-      equity *= 1 + pnl;
-      tradeLog.push({ type: "sell", date: bars[barIdx].date, price, pnl });
-      position = false;
+    // Evaluate the signal at this bar's close.
+    const signal = signalAt(i);
+    if ((signal === "enter" && !position) || (signal === "exit" && position)) {
+      if (i + 1 >= bars.length) {
+        pendingSignal = { type: signal === "enter" ? "buy" : "sell", date: bars[i].date };
+      } else {
+        pendingAction = signal;
+      }
     }
 
-    // Track mark-to-market equity for accurate drawdown
-    const currentEquity = position ? equity * (1 + (price - entryPrice) / entryPrice) : equity;
+    // Track mark-to-market equity for accurate drawdown.
+    const price = closes[i];
+    const currentEquity =
+      position && entryFill > 0 && price > 0 ? equity * (1 + (price - entryFill) / entryFill) : equity;
     if (currentEquity > peak) peak = currentEquity;
     const dd = (peak - currentEquity) / peak;
     if (dd > maxDd) maxDd = dd;
   }
 
-  // Close open position at end
-  if (position) {
+  // Close any open position at the final close for reporting.
+  if (position && entryFill > 0) {
     const lastPrice = closes[closes.length - 1];
-    const pnl = (lastPrice - entryPrice) / entryPrice;
-    equity *= 1 + pnl;
-    tradeLog.push({ type: "sell", date: bars[bars.length - 1].date, price: lastPrice, pnl });
-  }
-
-  return buildResult(strategyName, equity - 1, closes, tradeLog, maxDd);
-}
-
-function backtestRSIMeanReversion(bars: OHLCV[], closes: number[]): BacktestResult {
-  const rsi = computeRSI(closes, 14);
-
-  if (rsi.length === 0) {
-    return emptyResult("rsi_mean_reversion", closes);
-  }
-
-  // RSI starts at index 14 (after 14 periods of data)
-  const rsiOffset = 14;
-  let position = false;
-  let entryPrice = 0;
-  const tradeLog: BacktestResult["tradeLog"] = [];
-  let equity = 1.0;
-  let peak = 1.0;
-  let maxDd = 0;
-
-  for (let i = 0; i < rsi.length; i++) {
-    const barIdx = i + rsiOffset;
-    const r = rsi[i];
-    const price = closes[barIdx];
-
-    if (!position && r < 30 && price > 0) {
-      // RSI oversold → buy
-      position = true;
-      entryPrice = price;
-      tradeLog.push({ type: "buy", date: bars[barIdx].date, price });
-    } else if (position && r > 70) {
-      // RSI overbought → sell
-      const pnl = (price - entryPrice) / entryPrice;
+    if (lastPrice > 0) {
+      const pnl = (lastPrice * (1 - cost) - entryFill) / entryFill;
       equity *= 1 + pnl;
-      tradeLog.push({ type: "sell", date: bars[barIdx].date, price, pnl });
-      position = false;
+      tradeLog.push({
+        type: "sell",
+        date: bars[bars.length - 1].date,
+        price: lastPrice,
+        pnl,
+      });
     }
-
-    // Track mark-to-market equity for accurate drawdown
-    const currentEquity = position ? equity * (1 + (price - entryPrice) / entryPrice) : equity;
-    if (currentEquity > peak) peak = currentEquity;
-    const dd = (peak - currentEquity) / peak;
-    if (dd > maxDd) maxDd = dd;
   }
 
-  // Close open position at end
-  if (position) {
-    const lastPrice = closes[closes.length - 1];
-    const pnl = (lastPrice - entryPrice) / entryPrice;
-    equity *= 1 + pnl;
-    tradeLog.push({ type: "sell", date: bars[bars.length - 1].date, price: lastPrice, pnl });
-  }
-
-  return buildResult("rsi_mean_reversion", equity - 1, closes, tradeLog, maxDd);
+  return buildResult(strategyName, equity - 1, closes, tradeLog, maxDd, costBps, pendingSignal);
 }
 
 function buildResult(
@@ -150,6 +162,8 @@ function buildResult(
   closes: number[],
   tradeLog: BacktestResult["tradeLog"],
   maxDrawdown: number,
+  costBpsPerSide: number,
+  pendingSignal: BacktestResult["pendingSignal"],
 ): BacktestResult {
   const sellTrades = tradeLog.filter((t) => t.type === "sell" && t.pnl != null);
   const wins = sellTrades.filter((t) => t.pnl! > 0).length;
@@ -164,11 +178,13 @@ function buildResult(
     wins,
     winRate: sellTrades.length > 0 ? wins / sellTrades.length : 0,
     maxDrawdown,
+    costBpsPerSide,
+    pendingSignal,
     tradeLog,
   };
 }
 
-function emptyResult(strategy: string, closes: number[]): BacktestResult {
+function emptyResult(strategy: string, closes: number[], costBpsPerSide: number): BacktestResult {
   return {
     strategy,
     totalReturn: 0,
@@ -178,6 +194,8 @@ function emptyResult(strategy: string, closes: number[]): BacktestResult {
     wins: 0,
     winRate: 0,
     maxDrawdown: 0,
+    costBpsPerSide,
+    pendingSignal: null,
     tradeLog: [],
   };
 }
@@ -200,13 +218,20 @@ const params = Type.Object({
       description: "Historical period to backtest: 1y, 2y, 5y. Default: 2y",
     }),
   ),
+  cost_bps: Type.Optional(
+    Type.Number({
+      minimum: 0,
+      maximum: 100,
+      description: `Flat per-side transaction cost in basis points applied to every fill. Default: ${DEFAULT_COST_BPS}`,
+    }),
+  ),
 });
 
 export const backtestTool: AgentTool<typeof params> = {
   name: "backtest_strategy",
   label: "Backtest Strategy",
   description:
-    "Backtest a simple trading strategy against historical data. Supported strategies: SMA crossover (SMA20/SMA50), standard long-term SMA crossover (SMA50/SMA200), and RSI mean-reversion (buy <30, sell >70). Returns total return, win rate, max drawdown, and comparison to buy-and-hold.",
+    "Replay a simple trading strategy against historical daily bars. Signals fill at the next bar's open with a flat per-side cost assumption; dividends, taxes, slippage beyond that cost, and liquidity are not modeled. Supported strategies: SMA crossover (SMA20/SMA50), standard long-term SMA crossover (SMA50/SMA200), and RSI mean-reversion (buy <30, sell >70). Returns total return, win rate, max drawdown, and comparison to buy-and-hold.",
   parameters: params,
   async execute(_toolCallId, args) {
     const symbol = args.symbol.toUpperCase();
@@ -235,22 +260,33 @@ export const backtestTool: AgentTool<typeof params> = {
       };
     }
 
-    const result = runBacktest(bars, args.strategy);
+    const costBps = args.cost_bps ?? DEFAULT_COST_BPS;
+    const result = runBacktest(bars, args.strategy, { costBps });
 
     const outperformance = result.totalReturn - result.buyAndHoldReturn;
     const lines = [
       `**${symbol} Backtest: ${strategyLabel(args.strategy)}** (${bars[0].date} to ${bars[bars.length - 1].date}, ${bars.length} days)`,
       ``,
-      `Strategy Return: ${(result.totalReturn * 100).toFixed(2)}%`,
-      `Buy & Hold Return: ${(result.buyAndHoldReturn * 100).toFixed(2)}%`,
+      `Strategy Return (net of costs): ${(result.totalReturn * 100).toFixed(2)}%`,
+      `Buy & Hold Return (gross): ${(result.buyAndHoldReturn * 100).toFixed(2)}%`,
       `Outperformance: ${outperformance >= 0 ? "+" : ""}${(outperformance * 100).toFixed(2)}%`,
       ``,
       `Trades: ${result.trades} | Wins: ${result.wins} | Win Rate: ${(result.winRate * 100).toFixed(0)}%`,
       `Max Drawdown: ${(result.maxDrawdown * 100).toFixed(2)}%`,
       ``,
+      `Execution assumptions: signals fill at the next bar's open with a flat cost of ${costBps} bps per side.`,
+      ...(result.pendingSignal
+        ? [
+            `Note: a ${result.pendingSignal.type} signal fired on the final bar (${result.pendingSignal.date}) and is pending — it has no next open to fill at and is not counted as a trade.`,
+          ]
+        : []),
+      ``,
       result.totalReturn > result.buyAndHoldReturn
-        ? `Strategy outperformed buy-and-hold by ${(outperformance * 100).toFixed(2)}%.`
-        : `Buy-and-hold outperformed the strategy by ${(-outperformance * 100).toFixed(2)}%.`,
+        ? `In this simulation the strategy outperformed buy-and-hold by ${(outperformance * 100).toFixed(2)}%.`
+        : `In this simulation buy-and-hold outperformed the strategy by ${(-outperformance * 100).toFixed(2)}%.`,
+      ``,
+      `Limitations — this is a strategy replay, not an execution simulation:`,
+      ...BACKTEST_LIMITATIONS.map((limit) => `- ${limit}`),
     ];
 
     return {

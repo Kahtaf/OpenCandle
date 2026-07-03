@@ -52,11 +52,11 @@
 
 ## 7. Backtest Realism
 
-- [ ] 7.1 Thread bar opens through the shared fill loop; fill signals at next bar's open across all three strategies (`backtest.ts:64-90` and RSI/50-200 variants); report final-bar signals as pending unfilled
-- [ ] 7.2 Add a flat per-side cost parameter (default 5 bps, overridable) deducted on every fill; state the assumed rate in output
-- [ ] 7.3 Add a limitations block to output (no dividends, taxes, slippage beyond flat cost, liquidity, intrabar modeling)
-- [ ] 7.4 Update `tests/unit/tools/backtest.test.ts`; check faithfulness/routing eval fixtures still pass (re-baseline only if a scorer pins numbers)
-- [ ] 7.5 Run `npm test`; CHANGELOG
+- [x] 7.1 Unified the three strategies into one shared fill engine: signals from bar N's close fill at bar N+1's open; final-bar signals reported as `pendingSignal` instead of phantom trades (forced liquidation of a still-open position remains at the final close, labeled)
+- [x] 7.2 Added flat per-side cost (default 5 bps, `cost_bps` tool param 0-100) deducted on every fill; assumed rate stated in output; `costBpsPerSide` in details
+- [x] 7.3 Added `BACKTEST_LIMITATIONS` block to output (dividends, taxes, slippage beyond flat cost, liquidity, intrabar)
+- [x] 7.4 Updated `tests/unit/tools/backtest.test.ts` (next-open fills, pending final-bar signal, cost application, limitations content); eval fixtures assert tool selection/metric presence, not exact returns — no re-baseline needed
+- [x] 7.5 Ran `npm test`; verified live via TUI harness ("Backtest an SMA crossover on SPY over 2 years" → backtest_strategy with net-of-cost output); CHANGELOG
 
 ## 8. Reports Reframing
 

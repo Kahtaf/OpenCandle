@@ -1,12 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { type BacktestResult, runBacktest } from "../../../src/tools/technical/backtest.js";
+import {
+  BACKTEST_LIMITATIONS,
+  type BacktestResult,
+  DEFAULT_COST_BPS,
+  runBacktest,
+} from "../../../src/tools/technical/backtest.js";
+import { computeSMA } from "../../../src/tools/technical/indicators.js";
 import type { OHLCV } from "../../../src/types/market.js";
 
-// Generate deterministic uptrending bars
+// Generate deterministic uptrending bars. Opens are deliberately offset from
+// closes so fill-price assertions can tell them apart.
 function makeUptrend(days: number): OHLCV[] {
   return Array.from({ length: days }, (_, i) => ({
     date: `2024-01-${String(i + 1).padStart(2, "0")}`,
-    open: 100 + i * 0.5,
+    open: 100 + i * 0.5 + 0.2,
     high: 101 + i * 0.5,
     low: 99 + i * 0.5,
     close: 100 + i * 0.5,
@@ -145,6 +152,92 @@ describe("runBacktest", () => {
     // Position should still be open at end (force-closed)
     // Max drawdown should reflect the ~15% unrealized loss
     expect(result.maxDrawdown).toBeGreaterThan(0.05);
+  });
+
+  it("fills signals at the next bar's open, not the signal bar's close", () => {
+    const bars = makeUptrend(120);
+    const result = runBacktest(bars, "sma_crossover", { costBps: 0 });
+    const openByDate = new Map(bars.map((bar) => [bar.date, bar.open]));
+    const lastDate = bars[bars.length - 1].date;
+    expect(result.tradeLog.length).toBeGreaterThan(0);
+    for (const trade of result.tradeLog) {
+      // The forced liquidation of a still-open position reports at the final
+      // close; every signal-driven fill must use its bar's open.
+      if (trade.type === "sell" && trade.date === lastDate) continue;
+      expect(trade.price).toBeCloseTo(openByDate.get(trade.date) ?? Number.NaN, 6);
+    }
+  });
+
+  it("reports a final-bar entry signal as pending instead of a phantom trade", () => {
+    // Downtrend then rally, sliced so the SMA20>SMA50 cross lands exactly on
+    // the last bar — there is no next open to fill at.
+    const raw: OHLCV[] = [];
+    for (let i = 0; i < 60; i++) {
+      const price = 200 - i * 1.5;
+      raw.push({
+        date: `d${i}`,
+        open: price,
+        high: price + 1,
+        low: price - 1,
+        close: price,
+        volume: 1_000_000,
+      });
+    }
+    for (let i = 0; i < 60; i++) {
+      const price = 110 + i * 2;
+      raw.push({
+        date: `u${i}`,
+        open: price,
+        high: price + 1,
+        low: price - 1,
+        close: price,
+        volume: 1_000_000,
+      });
+    }
+    const closes = raw.map((bar) => bar.close);
+    const sma20 = computeSMA(closes, 20);
+    const sma50 = computeSMA(closes, 50);
+    let crossIdx = -1;
+    for (let barIdx = 49; barIdx < raw.length; barIdx++) {
+      if (sma20[barIdx - 19] > sma50[barIdx - 49]) {
+        crossIdx = barIdx;
+        break;
+      }
+    }
+    expect(crossIdx).toBeGreaterThan(49);
+
+    const bars = raw.slice(0, crossIdx + 1);
+    const result = runBacktest(bars, "sma_crossover", { costBps: 0 });
+
+    expect(result.trades).toBe(0);
+    expect(result.tradeLog).toHaveLength(0);
+    expect(result.pendingSignal).toEqual({ type: "buy", date: bars[bars.length - 1].date });
+    expect(result.totalReturn).toBe(0);
+  });
+
+  it("applies a flat per-side cost to every fill", () => {
+    const bars = makeOscillating(200);
+    const gross = runBacktest(bars, "rsi_mean_reversion", { costBps: 0 });
+    const net = runBacktest(bars, "rsi_mean_reversion", { costBps: 50 });
+
+    expect(gross.trades).toBeGreaterThan(0);
+    expect(net.trades).toBe(gross.trades);
+    expect(net.totalReturn).toBeLessThan(gross.totalReturn);
+    expect(net.costBpsPerSide).toBe(50);
+    expect(gross.costBpsPerSide).toBe(0);
+  });
+
+  it("defaults to the documented flat cost", () => {
+    const result = runBacktest(makeUptrend(120), "sma_crossover");
+    expect(result.costBpsPerSide).toBe(DEFAULT_COST_BPS);
+    expect(DEFAULT_COST_BPS).toBeGreaterThan(0);
+  });
+
+  it("documents excluded effects in the limitations list", () => {
+    const joined = BACKTEST_LIMITATIONS.join(" ").toLowerCase();
+    for (const term of ["dividend", "tax", "slippage", "liquidity", "intrabar"]) {
+      expect(joined).toContain(term);
+    }
   });
 
   it("does not emit NaN or Infinity for zero-close history", () => {
