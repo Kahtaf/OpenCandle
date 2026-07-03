@@ -676,9 +676,9 @@ function ProviderBuilder({ provider, send, setToast }) {
 }
 
 function ApiKeyProviderBuilder({ provider, send, setToast }) {
-  const providerStateKey = `${provider.id}:${provider.apiKey || ""}`;
+  const providerStateKey = `${provider.id}:${provider.status || ""}`;
   const [lastProviderStateKey, setLastProviderStateKey] = useState(providerStateKey);
-  const [apiKey, setApiKey] = useState(provider.apiKey || "");
+  const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const status = providerStatus(provider);
   const envBlocked = status === "env";
@@ -687,7 +687,7 @@ function ApiKeyProviderBuilder({ provider, send, setToast }) {
 
   if (lastProviderStateKey !== providerStateKey) {
     setLastProviderStateKey(providerStateKey);
-    setApiKey(provider.apiKey || "");
+    setApiKey("");
     setShowApiKey(false);
   }
 
@@ -783,7 +783,7 @@ function ApiKeyProviderBuilder({ provider, send, setToast }) {
           {envBlocked
             ? `Currently set via ${provider.envVar}. Unset that variable to manage the key here.`
             : status === "file"
-              ? `Saved to ~/.opencandle/config.json. Paste a new key to replace.`
+              ? `Saved to ~/.opencandle/config.json${provider.maskedKeyHint ? ` (${provider.maskedKeyHint})` : ""}. Paste a new key to replace.`
               : provider.instructionsHint || "Saved to ~/.opencandle/config.json."}
         </p>
       </div>

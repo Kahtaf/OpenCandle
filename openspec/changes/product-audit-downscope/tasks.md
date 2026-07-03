@@ -1,9 +1,9 @@
 ## 1. GUI Credential Redaction (land first)
 
-- [ ] 1.1 Replace `apiKey: credential.value` in the catalog payload with `configured` status + masked hint (`gui/server/tool-metadata.ts:77-89`); keep `source`/`envVar`/signup metadata
-- [ ] 1.2 Rework the provider form to a configured-state + replace-only empty input; remove key prefill (`CatalogOverlay.jsx:679-690, 754, 777`); keep the `provider.save_api_key` save path
-- [ ] 1.3 Update GUI server/web tests asserting the old payload shape; add a test that the payload never contains the raw key
-- [ ] 1.4 Run `npm test`, update CHANGELOG (Fixed/security)
+- [x] 1.1 Replace `apiKey: credential.value` in the catalog payload with `configured` status + masked hint (`gui/server/tool-metadata.ts:77-89`); keep `source`/`envVar`/signup metadata
+- [x] 1.2 Rework the provider form to a configured-state + replace-only empty input; remove key prefill (`CatalogOverlay.jsx:679-690, 754, 777`); keep the `provider.save_api_key` save path
+- [x] 1.3 Update GUI server/web tests asserting the old payload shape; add a test that the payload never contains the raw key
+- [x] 1.4 Run `npm test`, update CHANGELOG (Fixed/security)
 
 ## 2. Predictions Removal
 

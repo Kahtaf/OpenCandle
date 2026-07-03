@@ -75,12 +75,14 @@ function serializeProvider(provider: ProviderDescriptor, onboardingState: Onboar
   };
 
   if (isApiKeyProvider(provider)) {
+    // Never serialize the credential value: this payload reaches the browser DOM.
     const credential = getCredential(provider.id);
     const source = credential.source;
     return {
       ...common,
       source,
-      apiKey: credential.value,
+      configured: source !== "absent",
+      maskedKeyHint: credential.value ? `…${credential.value.slice(-4)}` : undefined,
       status: source,
       signupUrl: provider.signupUrl,
       freeTier: provider.freeTier,
