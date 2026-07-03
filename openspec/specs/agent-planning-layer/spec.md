@@ -638,20 +638,26 @@ The planning layer SHALL support a replacement-active `backtest_review` slice fo
 
 ### Requirement: Stateful Tracking Policy Migration
 
-The planning layer SHALL support a replacement-active `stateful_tracking_update` slice for watchlist, portfolio tracking, and prediction state turns.
+The planning layer SHALL support a replacement-active `stateful_tracking_update` slice for watchlist, portfolio tracking, alert, and report state turns. Prediction recording and checking are not part of the stateful tracking scope.
 
-#### Scenario: Prediction record prompt uses stateful tracking policy
+#### Scenario: Watchlist mutation prompt uses stateful tracking policy
 
-- **WHEN** the user asks to record a prediction
+- **WHEN** the user asks to add, remove, or update a watchlist item, portfolio lot, alert rule, or report template
 - **THEN** the planner selects `stateful_tracking_update`
 - **AND** the route remains an agent task with the `watchlist_or_tracking` workflow label
 - **AND** the answer contract requires state update confirmation rather than a market recommendation
 
 #### Scenario: Stateful policy preserves tool-owned persistence
 
-- **WHEN** a watchlist or prediction turn mutates state
+- **WHEN** a watchlist, portfolio, alert, or report turn mutates state
 - **THEN** the appropriate tool owns the persisted change
 - **AND** the final answer confirms the persisted symbol/action/parameters without inventing missing values
+
+#### Scenario: Prediction prompts are not offered a tracking tool
+
+- **WHEN** the user asks to record or track a prediction
+- **THEN** the policy scope offers no prediction tool
+- **AND** the answer explains that prediction tracking is not supported rather than simulating a persisted record
 
 ### Requirement: Concept Education Sub-Policies
 
@@ -786,3 +792,4 @@ The planning layer SHALL expose observe-only semantic answer contract checks for
 - **WHEN** the harness records planning telemetry
 - **THEN** semantic structured check results and failures appear alongside existing structured checks
 - **AND** missing semantic obligations can be tracked as parity gaps before active answer enforcement
+

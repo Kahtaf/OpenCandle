@@ -84,8 +84,9 @@ OpenCandle's GUI SHALL expose durable market-state domains through persistent na
 #### Scenario: Navigation exposes market-state domains
 
 - **WHEN** the GUI is open
-- **THEN** the user can navigate to Watchlists, Portfolios, Alerts, Reports, and Predictions areas
+- **THEN** the user can navigate to Watchlists, Portfolios, Alerts, and Reports areas
 - **AND** those areas read from SQLite-backed market state rather than session-only projection state
+- **AND** no Predictions area is present in navigation or routes
 
 #### Scenario: Watchlists page manages saved watchlists
 
@@ -113,7 +114,7 @@ OpenCandle's GUI SHALL expose durable market-state domains through persistent na
 
 #### Scenario: Dashboard links to durable pages
 
-- **WHEN** the dashboard displays watchlist, portfolio, alert, report, or prediction summary data
+- **WHEN** the dashboard displays watchlist, portfolio, alert, or report summary data
 - **THEN** relevant rows link to the durable management page for that domain
 - **AND** dashboard projection is not the only editing surface
 
@@ -125,7 +126,7 @@ OpenCandle's TUI SHALL expose workflows equivalent to the GUI market-state pages
 
 - **WHEN** a user works only in the TUI
 - **THEN** they can list, add, remove, update, and check watchlist and portfolio state where supported by V1
-- **AND** they can record/check predictions, run manual alert checks, and run daily reports where supported by V1
+- **AND** they can run manual alert checks and daily reports where supported by V1
 
 #### Scenario: TUI can address a specific portfolio lot
 
@@ -177,7 +178,7 @@ OpenCandle SHALL record GUI-originated market-state mutations in the active sess
 #### Scenario: Transcript does not become source of truth
 
 - **WHEN** session entries and SQLite market state disagree
-- **THEN** SQLite market state is authoritative for saved watchlists, portfolios, predictions, alerts, and report configuration
+- **THEN** SQLite market state is authoritative for saved watchlists, portfolios, alerts, and report configuration
 - **AND** the transcript is treated as conversation and audit context only
 
 ### Requirement: Existing Stateful Tracking Route Remains Valid
@@ -190,8 +191,9 @@ OpenCandle SHALL preserve the stateful tracking planner behavior while changing 
 - **THEN** the planner may continue to select the stateful tracking task family
 - **AND** the selected tool persists via SQLite-backed market state
 
-#### Scenario: Prediction update still confirms state mutation
+#### Scenario: Stateful tracking covers watchlist, portfolio, alert, and report state only
 
-- **WHEN** a user asks OpenCandle to record a prediction
-- **THEN** the final answer confirms the persisted symbol, direction, and relevant parameters
-- **AND** it does not turn the mutation confirmation into an unsupported market recommendation
+- **WHEN** a user asks OpenCandle to record or check a prediction
+- **THEN** the stateful tracking route does not offer a prediction tool
+- **AND** OpenCandle explains that prediction tracking is not a supported feature rather than fabricating a tracking result
+
