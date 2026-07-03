@@ -471,7 +471,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
-  it("prefills provider config keys masked and can reveal them", async () => {
+  it("shows configured providers with a masked hint and a replace-only key input", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {
       catalog: {
@@ -482,8 +482,9 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
             id: "fred",
             displayName: "FRED",
             source: "file",
-            status: "Configured",
-            apiKey: "fred-file-key",
+            status: "file",
+            configured: true,
+            maskedKeyHint: "…-key",
             envVar: "FRED_API_KEY",
             unlocks: ["interest rates"],
             fallbackDescription: null,
@@ -499,14 +500,17 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.getByRole("button", { name: /Providers/ }).click();
     await mocked.getByRole("button", { name: /FRED/ }).click();
 
+    // The saved secret never reaches the DOM: the input starts empty and the
+    // configured state is communicated with a masked hint instead.
     const input = mocked.getByRole("textbox", { name: "API key" });
-    await expect(input.inputValue()).resolves.toBe("fred-file-key");
+    await expect(input.inputValue()).resolves.toBe("");
     await expect(input.getAttribute("type")).resolves.toBe("password");
+    await expectVisible(mocked.getByText("Configured").first());
+    await expectVisible(mocked.getByText(/…-key/).first());
+    await expectVisible(mocked.getByRole("button", { name: "Replace key" }));
 
-    await mocked.getByRole("button", { name: "Show API key" }).click();
-    await expect(input.getAttribute("type")).resolves.toBe("text");
-    await mocked.getByRole("button", { name: "Hide API key" }).click();
-    await expect(input.getAttribute("type")).resolves.toBe("password");
+    const pageContent = await mocked.content();
+    expect(pageContent).not.toContain("fred-file-key");
     await mocked.close();
   });
 

@@ -79,5 +79,5 @@
 
 ## 11. Wrap-Up
 
-- [ ] 11.1 Full gate: `npm test`, typecheck, `npm run build`, GUI browser smoke, prompt-debt guard (`npx vitest run tests/unit/prompts/prompt-debt-guard.test.ts`)
-- [ ] 11.2 Verify CHANGELOG captures all BREAKING items (predictions + table drop, rules mode, debate flag); run `graphify update .`
+- [x] 11.1 Full gate passed: `npm test` (218 files / 2277 tests), `npx tsc --noEmit`, `npm run build`, GUI browser smoke (23/23 against a live GUI server, with the old key-prefill browser test rewritten to assert redaction), prompt-debt guard, docs-site build + link check
+- [x] 11.2 CHANGELOG carries all three BREAKING items (predictions + table drop, rules mode, debate flag); ran `graphify update .`
