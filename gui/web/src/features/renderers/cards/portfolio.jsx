@@ -248,57 +248,6 @@ export function WatchlistCard({ message, header, text }) {
   );
 }
 
-export function PredictionCard({ message, header, text }) {
-  const d = extractDetails(message);
-  const predictions = Array.isArray(d?.predictions) ? d.predictions : Array.isArray(d) ? d : null;
-  if (!predictions || predictions.length === 0) {
-    return (
-      <ToolCard>
-        {header}
-        <PlainOutput text={text} />
-      </ToolCard>
-    );
-  }
-  return (
-    <ToolCard>
-      {header}
-      <ul className="grid gap-2">
-        {predictions.slice(0, 6).map((p, i) => (
-          <li key={p.id || i} className="rounded-md border border-border px-3 py-2">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-mono text-sm font-medium text-foreground">
-                {p.symbol || p.ticker || `#${i + 1}`}
-              </span>
-              {p.targetPrice ? (
-                <span className="text-sm tabular-nums text-foreground">
-                  target {formatPrice(p.targetPrice)}
-                </span>
-              ) : null}
-              {p.outcome ? (
-                <Badge
-                  variant={
-                    p.outcome === "hit"
-                      ? "success"
-                      : p.outcome === "miss"
-                        ? "destructive"
-                        : "outline"
-                  }
-                >
-                  {p.outcome}
-                </Badge>
-              ) : null}
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              {p.thesis ? <span className="line-clamp-1">{p.thesis}</span> : null}
-              {p.createdAt ? <span>· {formatDateShort(p.createdAt)}</span> : null}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </ToolCard>
-  );
-}
-
 export function SECFilingsCard({ message, header, text }) {
   const d = extractDetails(message);
   const filings = Array.isArray(d?.filings)

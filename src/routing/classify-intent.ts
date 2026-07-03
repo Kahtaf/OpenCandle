@@ -136,9 +136,9 @@ const RULES: Rule[] = [
       return hasOptionKeywordsInText(lower) && entities.symbols.length >= 1;
     },
   },
-  // Stateful portfolio/watchlist/alert/prediction mutations must not be
-  // mistaken for compare or portfolio-construction workflows just because a
-  // cost basis, target, or currency token is present.
+  // Stateful portfolio/watchlist/alert mutations must not be mistaken for
+  // compare or portfolio-construction workflows just because a cost basis,
+  // target, or currency token is present.
   {
     workflow: "watchlist_or_tracking",
     confidence: 0.95,
@@ -184,7 +184,6 @@ const RULES: Rule[] = [
       const lower = input.toLowerCase();
       return (
         /\bwatchlist\b/.test(lower) ||
-        /\bprediction/i.test(lower) ||
         /\bshow\s+my\s+portfolio\b/.test(lower) ||
         /\bmy\s+portfolio\b/.test(lower) ||
         /\btrack\b/.test(lower)
@@ -314,7 +313,7 @@ function isStatefulTrackingRequest(input: string): boolean {
       lower,
     );
   const hasStateObject =
-    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(
+    /\b(?:watchlist|portfolio|holding|holdings|position|positions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(
       lower,
     );
   const hasPortfolioLotShape =

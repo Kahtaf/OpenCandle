@@ -48,7 +48,7 @@ It is read-only research software. It does not place trades, route orders, or pr
 | Macro | FRED series, rates, inflation, GDP, unemployment, crypto Fear & Greed |
 | Sentiment | Reddit via `rdt-cli`, Twitter/X via `twitter-cli`, web search, and cross-source sentiment summaries |
 | Filings | SEC EDGAR filing search |
-| Portfolio | Watchlists, holdings, correlation, prediction tracking, risk analysis |
+| Portfolio | Watchlists, holdings, correlation, risk analysis |
 
 ## Operating Principles
 

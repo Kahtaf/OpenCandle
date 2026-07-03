@@ -29,7 +29,6 @@ export const TOOL_BUNDLE_TOOLS: Record<ToolBundleName, readonly string[]> = {
     "analyze_holdings_overlap",
     "track_portfolio",
     "manage_watchlist",
-    "track_prediction",
     "manage_alerts",
     "daily_watchlist_report",
     "manage_notifications",

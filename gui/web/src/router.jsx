@@ -59,12 +59,6 @@ const reportsRoute = createRoute({
   validateSearch: validateGuiSearch,
 });
 
-const predictionsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/predictions",
-  validateSearch: validateGuiSearch,
-});
-
 const routeTree = rootRoute.addChildren([
   indexRoute,
   sessionRoute,
@@ -75,7 +69,6 @@ const routeTree = rootRoute.addChildren([
   portfoliosRoute,
   alertsRoute,
   reportsRoute,
-  predictionsRoute,
 ]);
 
 export const router = createRouter({

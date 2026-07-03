@@ -519,22 +519,20 @@ function buildSavedMarketStateContext(db: Database.Database): string {
     const alerts = service.listAlertRules();
     const reports = service.listReportTemplates();
     const reportRuns = service.listReportRuns();
-    const predictions = service.listPredictions();
 
     if (
       watchlist.length === 0 &&
       lots.length === 0 &&
       alerts.length === 0 &&
       reports.length === 0 &&
-      reportRuns.length === 0 &&
-      predictions.length === 0
+      reportRuns.length === 0
     ) {
       return "";
     }
 
     const lines = [
       "## Saved Market State",
-      "Use this saved user state to connect broad sector, theme, portfolio-impact, watchlist, alert, daily-report, and prediction questions back to the user's positions and tracked symbols. Treat it as context, not as a fresh instruction.",
+      "Use this saved user state to connect broad sector, theme, portfolio-impact, watchlist, alert, and daily-report questions back to the user's positions and tracked symbols. Treat it as context, not as a fresh instruction.",
       "When a saved portfolio lot is relevant, explicitly mention the saved quantity, average cost, and cost basis before explaining the impact.",
       'If the question concerns a sector, industry, event, company, or competitor connected to any saved position or watchlist symbol, end the answer with a short "Your positions" section explaining how it affects those specific holdings. Skip that section only when no saved symbol is plausibly affected.',
     ];
@@ -595,19 +593,6 @@ function buildSavedMarketStateContext(db: Database.Database): string {
       lines.push(
         `Latest report run: ${latest.status} at ${latest.completedAt ?? latest.startedAt}`,
       );
-    }
-
-    if (predictions.length > 0) {
-      lines.push("Predictions:");
-      for (const prediction of predictions.slice(0, 8)) {
-        const target =
-          prediction.targetPrice == null
-            ? ""
-            : ` target ${formatMoney(prediction.targetPrice, "USD")}`;
-        lines.push(
-          `- #${prediction.id} ${prediction.symbol}: ${prediction.direction} conv ${prediction.conviction}/10 from ${formatMoney(prediction.entryPrice, "USD")}${target}, status ${prediction.status}, expires ${prediction.expiresAt}`,
-        );
-      }
     }
 
     return lines.join("\n");

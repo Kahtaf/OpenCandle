@@ -152,7 +152,6 @@ function MarketStateNav({ currentPath }) {
     { to: "/portfolios", label: "Portfolios", icon: BriefcaseBusiness },
     { to: "/alerts", label: "Alerts", icon: Bell },
     { to: "/reports", label: "Reports", icon: FileText },
-    { to: "/predictions", label: "Predictions", icon: TrendingUp },
     { to: "/diagnostics", label: "Diagnostics", icon: ClipboardCheck },
   ];
   return (

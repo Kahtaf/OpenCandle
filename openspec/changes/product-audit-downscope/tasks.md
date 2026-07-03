@@ -7,18 +7,18 @@
 
 ## 2. Predictions Removal
 
-- [ ] 2.1 Delete `src/tools/portfolio/predictions.ts`; remove registrations (`src/tools/index.ts:23,56,94`) and the `track_prediction` entry in `src/routing/route-manifest.ts:32`; update `src/tools/AGENTS.md`
-- [ ] 2.2 Remove prediction types/methods from `MarketStateService` (`src/market-state/service.ts` — `PredictionDirection`, `PredictionStatus`, `PredictionRecord`, `PredictionRow`, `recordPrediction`, `listPredictions`, `updatePredictionOutcome`, `getPrediction`, `mapPrediction`)
-- [ ] 2.3 Add SQLite v8 migration dropping `prediction_records`; remove the CREATE TABLE (`src/memory/sqlite.ts:181-196`) and resetSchema drop line (`:544`); bump `CURRENT_SCHEMA_VERSION` to 8
-- [ ] 2.4 Delete GUI surfaces: `PredictionsPage.jsx`, `prediction-view-model.js`, `PredictionCard` (`renderers/cards/portfolio.jsx:251-266`, registry entry `cards/index.jsx:15,69`, `tool-icon.jsx:74`)
-- [ ] 2.5 Remove nav/routes: `router.jsx:62-64,78`, `App.jsx:502`, `SessionHistory.jsx:155`, `FinancialContextPanel.jsx:24`; remove predictions panel/form/title from `MarketStatePage.jsx:13,38-41,212-213,345-360,930`
-- [ ] 2.6 Surgical GUI edits: remove "Open prediction" inspector section from `WatchlistPage.jsx:8,178-179,276-289`; remove `predictions` from `useMarketState.jsx:7` default state; strip prediction branches from `gui/server/market-state-api.ts:12,54-55,89,112-118,227-248,254` and `gui/server/invoke-tool.ts:452-453`
-- [ ] 2.7 Remove routing triggers: prediction terms from `classify-intent.ts:139,187,306-317`, `router.ts:662`, `router-prompt.ts:22`; verify `planning.ts` has no `track_prediction` references
-- [ ] 2.8 Remove prompt context: predictions block from `session-coordinator.ts:522-608`; `track_prediction` lines from `policy-cards.ts:144`, `context-builder.ts:294`, `system-prompt.ts:22`
-- [ ] 2.9 Trim eval/benchmark seeding: `predictions` from `competitive-finance.ts:28-31,43,64-75,94-97,328` and `run-competitive-finance-eval.ts:109-111,269,570,599`
-- [ ] 2.10 Delete `tests/unit/tools/predictions.test.ts` and `tests/unit/gui-web/prediction-view-model.test.ts`; surgically update prediction assertions in shared tests (service, market-state-api, session-coordinator, quote-snapshot-store, market-state-page-render, use-market-state, market-state-parity, classify-intent, planning, context-builder, policy-cards, system-prompt, e2e tools/gui-browser/cli, prompt-policy-assertions, prompt-to-policy-baseline, baseline.json, opencandle-runner)
-- [ ] 2.11 Guard against over-deletion: leave watchlist `thesis` column, analyst `conviction`/`thesis` outputs, `filing_thesis_review` policy, and `oc-superiority-scorecard` untouched
-- [ ] 2.12 Update docs/README mentions of predictions; run `npm test` + typecheck; CHANGELOG (BREAKING removal incl. table drop); run `graphify update .`
+- [x] 2.1 Delete `src/tools/portfolio/predictions.ts`; remove registrations (`src/tools/index.ts:23,56,94`) and the `track_prediction` entry in `src/routing/route-manifest.ts:32`; update `src/tools/AGENTS.md`
+- [x] 2.2 Remove prediction types/methods from `MarketStateService` (`src/market-state/service.ts` — `PredictionDirection`, `PredictionStatus`, `PredictionRecord`, `PredictionRow`, `recordPrediction`, `listPredictions`, `updatePredictionOutcome`, `getPrediction`, `mapPrediction`)
+- [x] 2.3 Add SQLite v8 migration dropping `prediction_records`; remove the CREATE TABLE (`src/memory/sqlite.ts:181-196`); bump `CURRENT_SCHEMA_VERSION` to 8 (resetSchema drop line kept deliberately so foreign-schema resets clean legacy tables)
+- [x] 2.4 Delete GUI surfaces: `PredictionsPage.jsx`, `prediction-view-model.js`, `PredictionCard` (`renderers/cards/portfolio.jsx:251-266`, registry entry `cards/index.jsx:15,69`, `tool-icon.jsx:74`)
+- [x] 2.5 Remove nav/routes: `router.jsx:62-64,78`, `App.jsx:502`, `SessionHistory.jsx:155`, `FinancialContextPanel.jsx:24`; remove predictions panel/form/title from `MarketStatePage.jsx:13,38-41,212-213,345-360,930`
+- [x] 2.6 Surgical GUI edits: remove "Open prediction" inspector section from `WatchlistPage.jsx:8,178-179,276-289`; remove `predictions` from `useMarketState.jsx:7` default state; strip prediction branches from `gui/server/market-state-api.ts:12,54-55,89,112-118,227-248,254` and `gui/server/invoke-tool.ts:452-453`
+- [x] 2.7 Remove routing triggers: prediction terms from `classify-intent.ts:139,187,306-317`, `router.ts:662`, `router-prompt.ts:22`; verify `planning.ts` has no `track_prediction` references
+- [x] 2.8 Remove prompt context: predictions block from `session-coordinator.ts:522-608`; `track_prediction` lines from `policy-cards.ts:144`, `context-builder.ts:294`, `system-prompt.ts:22`
+- [x] 2.9 Trim eval/benchmark seeding: `predictions` from `competitive-finance.ts` and `run-competitive-finance-eval.ts`; removed the `stateful-prediction-record` entry from the prompt-to-policy migration manifest and updated the parity ledger row
+- [x] 2.10 Delete `tests/unit/tools/predictions.test.ts` and `tests/unit/gui-web/prediction-view-model.test.ts`; surgically update prediction assertions in shared tests (service, market-state-api, sqlite, session-coordinator, quote-snapshot-store, market-state-page-render, use-market-state, market-state-parity, classify-intent, planning, context-builder, policy-cards, e2e tools/gui-browser/cli, prompt-policy-assertions, e2e-integration, tool-schema-guardrails, prompt snapshots)
+- [x] 2.11 Guard against over-deletion: leave watchlist `thesis` column, analyst `conviction`/`thesis` outputs, `filing_thesis_review` policy, and `oc-superiority-scorecard` untouched
+- [x] 2.12 Update docs/README mentions of predictions; run `npm test` + typecheck; CHANGELOG (BREAKING removal incl. table drop); run `graphify update .`
 
 ## 3. Catalog Schema Generation (includes predict_returns deletion)
 

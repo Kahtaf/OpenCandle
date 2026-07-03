@@ -659,7 +659,7 @@ function isStatefulTrackingRequest(text: string): boolean {
       lower,
     );
   const hasStateObject =
-    /\b(?:watchlist|portfolio|holding|holdings|position|positions|prediction|predictions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(
+    /\b(?:watchlist|portfolio|holding|holdings|position|positions|alert|alerts|daily\s+report|watchlist\s+report|report\s+history)\b/.test(
       lower,
     );
   const hasPortfolioLotShape =

@@ -499,6 +499,5 @@ function domainFromPath(pathname) {
   if (pathname === "/portfolios") return "portfolios";
   if (pathname === "/alerts") return "alerts";
   if (pathname === "/reports") return "reports";
-  if (pathname === "/predictions") return "predictions";
   return "";
 }

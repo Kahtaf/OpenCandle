@@ -180,29 +180,6 @@ async function run() {
     },
   );
 
-  // --- 7. Predictions ---
-  await test(
-    "Record prediction",
-    "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days",
-    (text, tools) => {
-      assert(tools.includes("track_prediction"), `expected track_prediction, got: ${tools}`);
-      assert(
-        text.includes("AAPL") || text.includes("bullish") || text.includes("Recorded"),
-        "should confirm prediction recorded",
-      );
-    },
-  );
-
-  await test("Check predictions", "Check my prediction scorecard", (text, tools) => {
-    assert(tools.includes("track_prediction"), `expected track_prediction, got: ${tools}`);
-    assert(
-      text.toLowerCase().includes("hit rate") ||
-        text.toLowerCase().includes("scorecard") ||
-        text.includes("prediction"),
-      "should show hit rate",
-    );
-  });
-
   // --- 8. DCF (if Alpha Vantage key available) ---
   if (config.alphaVantageApiKey) {
     await test("DCF valuation", "Run a DCF valuation on AAPL", (text, tools) => {

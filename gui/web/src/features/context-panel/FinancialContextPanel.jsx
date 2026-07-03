@@ -21,7 +21,6 @@ const MARKET_STATE_LINKS = [
   { path: "/portfolios", label: "Portfolios" },
   { path: "/alerts", label: "Alerts" },
   { path: "/reports", label: "Reports" },
-  { path: "/predictions", label: "Predictions" },
 ];
 
 export function FinancialContextDrawer({

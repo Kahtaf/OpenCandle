@@ -12,7 +12,6 @@ import { OptionsChainCard } from "./options.jsx";
 import {
   CorrelationCard,
   PortfolioCard,
-  PredictionCard,
   RiskCard,
   SECFilingsCard,
   WatchlistCard,
@@ -66,7 +65,6 @@ const RENDERERS = new Map([
   ["analyze_risk", { category: "Risk", Component: RiskCard }],
   ["analyze_correlation", { category: "Correlation", Component: CorrelationCard }],
   ["manage_watchlist", { category: "Watchlist", Component: WatchlistCard }],
-  ["track_prediction", { category: "Predictions", Component: PredictionCard }],
 ]);
 
 export function rendererFor(toolName) {

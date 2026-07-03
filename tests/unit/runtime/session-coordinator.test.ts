@@ -476,7 +476,7 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     }
   });
 
-  it("includes portfolio, watchlist, alerts, reports, and predictions in prompt context", () => {
+  it("includes portfolio, watchlist, alerts, and reports in prompt context", () => {
     openCandleHome = mkdtempSync(join(tmpdir(), "opencandle-market-state-context-"));
     process.env.OPENCANDLE_HOME = openCandleHome;
 
@@ -528,14 +528,6 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
       summary: { symbols: ["ASTS"] },
       errors: [],
     });
-    service.recordPrediction({
-      instrument: asts,
-      direction: "bullish",
-      conviction: 8,
-      entryPrice: 30,
-      targetPrice: 60,
-      timeframeDays: 60,
-    });
     db.close();
 
     const coord = new SessionCoordinator();
@@ -555,7 +547,6 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     expect(prompt).toContain("target $55.00");
     expect(prompt).toContain("price_crosses_above");
     expect(prompt).toContain("Morning watchlist");
-    expect(prompt).toContain("bullish conv 8/10");
     expect(prompt).toContain("space, satellite");
   });
 

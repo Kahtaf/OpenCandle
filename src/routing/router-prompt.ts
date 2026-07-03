@@ -19,7 +19,7 @@ function renderCatalog(): string {
     compare_assets: "user asks to compare two or more symbols (vs / versus / which is better)",
     single_asset_analysis:
       "user asks for a full analysis / deep dive / 'is X attractive' on ONE symbol",
-    watchlist_or_tracking: "user manages or asks about their saved watchlist / prediction history",
+    watchlist_or_tracking: "user manages or asks about their saved watchlist or tracked positions",
     general_finance_qa:
       "definitional / conceptual questions plus broad market structure, sector, industry, monetary policy, and emerging markets research",
   };

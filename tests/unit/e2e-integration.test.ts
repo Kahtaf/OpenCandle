@@ -404,10 +404,6 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(classification.entities.symbols).toEqual(["SPY", "QQQ"]);
     });
 
-    it("'how are my predictions doing?' → watchlist_or_tracking", () => {
-      const classification = classifyIntent("how are my predictions doing?");
-      expect(classification.workflow).toBe("watchlist_or_tracking");
-    });
   });
 
   // -----------------------------------------------------------------------

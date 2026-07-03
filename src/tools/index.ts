@@ -20,7 +20,6 @@ import { correlationTool } from "./portfolio/correlation.js";
 import { dailyReportTool } from "./portfolio/daily-report.js";
 import { holdingsOverlapTool } from "./portfolio/holdings-overlap.js";
 import { notificationsTool } from "./portfolio/notifications.js";
-import { predictionsTool } from "./portfolio/predictions.js";
 import { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 import { portfolioTrackerTool } from "./portfolio/tracker.js";
 import { watchlistTool } from "./portfolio/watchlist.js";
@@ -53,7 +52,6 @@ export { correlationTool } from "./portfolio/correlation.js";
 export { dailyReportTool } from "./portfolio/daily-report.js";
 export { holdingsOverlapTool } from "./portfolio/holdings-overlap.js";
 export { notificationsTool } from "./portfolio/notifications.js";
-export { predictionsTool } from "./portfolio/predictions.js";
 export { riskAnalysisTool } from "./portfolio/risk-analysis.js";
 export { portfolioTrackerTool } from "./portfolio/tracker.js";
 export { watchlistTool } from "./portfolio/watchlist.js";
@@ -91,7 +89,6 @@ export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): 
     watchlistTool,
     correlationTool,
     holdingsOverlapTool,
-    predictionsTool,
     alertsTool,
     dailyReportTool,
     notificationsTool,

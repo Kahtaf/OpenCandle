@@ -1457,7 +1457,6 @@ async function installMockMarketState(
     const emptyMarketState = {
       watchlist: [],
       portfolio: [],
-      predictions: [],
       alerts: [],
       alertEvents: [],
       alertCheckRuns: [],

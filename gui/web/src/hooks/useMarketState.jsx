@@ -4,7 +4,6 @@ const EMPTY_MARKET_STATE = {
   instruments: [],
   watchlist: [],
   portfolio: [],
-  predictions: [],
   alerts: [],
   alertEvents: [],
   alertCheckRuns: [],

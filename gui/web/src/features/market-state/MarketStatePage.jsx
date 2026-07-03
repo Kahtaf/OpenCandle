@@ -10,7 +10,6 @@ import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.js
 import { AlertsPage } from "./AlertsPage.jsx";
 import { quoteFreshness } from "./format.js";
 import { PortfolioPage } from "./PortfolioPage.jsx";
-import { PredictionsPage } from "./PredictionsPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
 import { Badge, StatusBand } from "./shared.jsx";
 import { WatchlistPage } from "./WatchlistPage.jsx";
@@ -34,11 +33,6 @@ const PAGE_META = {
   reports: {
     title: "Reports",
     primaryLabel: "Generate today",
-  },
-  predictions: {
-    title: "Predictions",
-    primaryLabel: "Record prediction",
-    primaryPanel: "thesis-record",
   },
 };
 
@@ -209,15 +203,6 @@ export function MarketStatePage({
                   invokeTool={invokeTool}
                 />
               ) : null}
-              {activeId === "predictions" ? (
-                <PredictionsPage
-                  state={state}
-                  filter={filter}
-                  readOnly={readOnly || mutationPending}
-                  openPanel={openPanel}
-                  invokeTool={invokeTool}
-                />
-              ) : null}
             </div>
             {panel ? (
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
@@ -325,42 +310,6 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
   if (panel.type === "report-configure") {
     return (
       <ReportScheduleForm disabled={readOnly} invokeTool={invokeTool} closePanel={closePanel} />
-    );
-  }
-
-  if (panel.type === "thesis-record") {
-    return (
-      <SymbolActionPanel
-        key={panel.type}
-        disabled={readOnly}
-        fields={[
-          {
-            name: "direction",
-            label: "Direction",
-            type: "select",
-            options: ["bullish", "bearish", "neutral"],
-            defaultValue: "bullish",
-            required: true,
-          },
-          { name: "conviction", label: "Conviction (1–10)", type: "number", required: true },
-          { name: "entry_price", label: "Entry price", type: "number", required: true },
-          { name: "target_price", label: "Target price", type: "number" },
-          { name: "timeframe_days", label: "Days until expiry", type: "number" },
-        ]}
-        onSubmit={async (values) => {
-          const saved = await invokeTool("track_prediction", {
-            action: "record",
-            symbol: values.symbol,
-            direction: values.direction || "bullish",
-            conviction: Number(values.conviction),
-            entry_price: Number(values.entry_price),
-            target_price: numberOrUndefined(values.target_price),
-            timeframe_days: numberOrUndefined(values.timeframe_days),
-          });
-          if (saved) closePanel();
-          return saved;
-        }}
-      />
     );
   }
 
@@ -927,7 +876,6 @@ function panelTitle(type) {
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",
     "report-configure": "Configure Report",
-    "thesis-record": "Record Prediction",
   };
   return titles[type] || "Details";
 }

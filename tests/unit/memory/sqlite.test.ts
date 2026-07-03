@@ -63,7 +63,7 @@ describe("initDatabase", () => {
     expect(tables).toContain("watchlist_items");
     expect(tables).toContain("portfolios");
     expect(tables).toContain("portfolio_lots");
-    expect(tables).toContain("prediction_records");
+    expect(tables).not.toContain("prediction_records");
     expect(tables).toContain("alert_rules");
     expect(tables).toContain("alert_events");
     expect(tables).toContain("alert_check_runs");
@@ -80,8 +80,8 @@ describe("initDatabase", () => {
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 7", () => {
-    expect(getSchemaVersion(db)).toBe(7);
+  it("sets schema version to 8", () => {
+    expect(getSchemaVersion(db)).toBe(8);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -209,7 +209,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(7);
+    expect(getSchemaVersion(resetDb)).toBe(8);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
@@ -322,7 +322,7 @@ describe("v2 → v3 additive migration", () => {
     // Run the migration.
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(7);
+    expect(getSchemaVersion(migrated)).toBe(8);
 
     // (a) zero row loss
     const prefCount = (
@@ -426,10 +426,10 @@ describe("v4 → v5 market-state migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(7);
+    expect(getSchemaVersion(migrated)).toBe(8);
     expect(getTableNames(migrated)).toContain("watchlist_items");
     expect(getTableNames(migrated)).toContain("portfolio_lots");
-    expect(getTableNames(migrated)).toContain("prediction_records");
+    expect(getTableNames(migrated)).not.toContain("prediction_records");
 
     const prefCount = (
       migrated.prepare("SELECT COUNT(*) AS n FROM user_preferences").get() as { n: number }
@@ -650,11 +650,12 @@ describe("v5 → v6 import provenance migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(7);
+    expect(getSchemaVersion(migrated)).toBe(8);
     expect(rowCount(migrated, "instruments")).toBe(1);
     expect(rowCount(migrated, "watchlist_items")).toBe(1);
     expect(rowCount(migrated, "portfolio_lots")).toBe(1);
-    expect(rowCount(migrated, "prediction_records")).toBe(1);
+    // v8 drops prediction_records as the predictions-feature removal.
+    expect(getTableNames(migrated)).not.toContain("prediction_records");
     expect(rowCount(migrated, "alert_rules")).toBe(1);
     expect(rowCount(migrated, "alert_events")).toBe(1);
     expect(rowCount(migrated, "report_templates")).toBe(1);
@@ -715,7 +716,7 @@ describe("v5 → v6 import provenance migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(7);
+    expect(getSchemaVersion(migrated)).toBe(8);
 
     const cols = (migrated.pragma("table_info(import_rows)") as Array<{ name: string }>).map(
       (c) => c.name,
@@ -859,7 +860,7 @@ describe("v6 → v7 local automation migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(7);
+    expect(getSchemaVersion(migrated)).toBe(8);
     expect(getTableNames(migrated)).toContain("automation_runner_leases");
     expect(getTableNames(migrated)).toContain("alert_check_runs");
     expect(getTableNames(migrated)).toContain("notification_events");

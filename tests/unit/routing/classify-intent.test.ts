@@ -222,11 +222,6 @@ describe("classifyIntent", () => {
       expect(result.tier).toBe("rule");
     });
 
-    it("matches 'how are my predictions doing?'", () => {
-      const result = classifyIntent("how are my predictions doing?");
-      expect(result.workflow).toBe("watchlist_or_tracking");
-    });
-
     it("matches 'show my portfolio'", () => {
       const result = classifyIntent("show my portfolio");
       expect(result.workflow).toBe("watchlist_or_tracking");

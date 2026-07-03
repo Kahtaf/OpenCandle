@@ -25,14 +25,6 @@ export interface SeededMarketStateFixture {
     avgCost: number;
   }>;
   watchlist: Array<{ symbol: string; name: string; targetPrice?: number; thesis?: string }>;
-  predictions: Array<{
-    symbol: string;
-    direction: "bullish" | "bearish";
-    conviction: number;
-    entryPrice: number;
-    targetPrice: number;
-    timeframeDays: number;
-  }>;
 }
 
 /**
@@ -61,16 +53,6 @@ export const COMPETITIVE_STATE_FIXTURE: SeededMarketStateFixture = {
     },
     { symbol: "JPM", name: "JPMorgan Chase & Co.", thesis: "rate-cycle beneficiary" },
   ],
-  predictions: [
-    {
-      symbol: "AAPL",
-      direction: "bullish",
-      conviction: 7,
-      entryPrice: 180,
-      targetPrice: 210,
-      timeframeDays: 120,
-    },
-  ],
 };
 
 export function buildSavedStateSummary(fixture: SeededMarketStateFixture): string {
@@ -90,12 +72,6 @@ export function buildSavedStateSummary(fixture: SeededMarketStateFixture): strin
       .filter(Boolean)
       .join("; ");
     lines.push(`- ${item.symbol} (${item.name})${parts ? ` — ${parts}` : ""}`);
-  }
-  lines.push("Open predictions:");
-  for (const prediction of fixture.predictions) {
-    lines.push(
-      `- ${prediction.symbol} ${prediction.direction} to $${prediction.targetPrice.toFixed(2)} (conviction ${prediction.conviction}/10, entry $${prediction.entryPrice.toFixed(2)}, ${prediction.timeframeDays}d)`,
-    );
   }
   return lines.join("\n");
 }
@@ -325,7 +301,7 @@ ${
     ? `Saved state for this user (both agents had access to these facts):
 ${input.savedStateSummary}
 
-When the prompt concerns the user's own portfolio, watchlist, or predictions, verify each answer against this saved state: penalize answers that ignore it, misquote quantities or cost basis, or invent holdings. Reward answers that connect the question to the specific saved positions.
+When the prompt concerns the user's own portfolio or watchlist, verify each answer against this saved state: penalize answers that ignore it, misquote quantities or cost basis, or invent holdings. Reward answers that connect the question to the specific saved positions.
 
 `
     : ""

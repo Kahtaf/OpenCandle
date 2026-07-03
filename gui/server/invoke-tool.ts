@@ -449,8 +449,6 @@ function marketStateToolMapping(toolName: string): { domain: string; targetType:
       return { domain: "watchlist", targetType: "watchlist_item" };
     case "track_portfolio":
       return { domain: "portfolio", targetType: "portfolio_lot" };
-    case "track_prediction":
-      return { domain: "predictions", targetType: "prediction" };
     case "manage_alerts":
       return { domain: "alerts", targetType: "alert_rule" };
     case "daily_watchlist_report":

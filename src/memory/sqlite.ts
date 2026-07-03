@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { ensureOpenCandleHomeDir, getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -177,23 +177,6 @@ const CURRENT_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_portfolio_lots_source_lot
     ON portfolio_lots(source, source_lot_id)
     WHERE source IS NOT NULL AND source_lot_id IS NOT NULL;
-
-  CREATE TABLE IF NOT EXISTS prediction_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    instrument_id INTEGER NOT NULL,
-    direction TEXT NOT NULL,
-    conviction REAL NOT NULL,
-    entry_price REAL NOT NULL,
-    target_price REAL,
-    opened_at TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    status TEXT NOT NULL,
-    resolved_at TEXT,
-    result_json TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
-  );
 
   CREATE TABLE IF NOT EXISTS alert_rules (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -380,14 +363,21 @@ function ensureCurrentSchema(db: Database.Database): void {
     return;
   }
 
+  if (currentVersion === 7) {
+    migrateV7ToV8(db);
+    return;
+  }
+
   if (currentVersion === 6) {
     migrateV6ToV7(db);
+    migrateV7ToV8(db);
     return;
   }
 
   if (currentVersion === 5) {
     migrateV5ToV6(db);
     migrateV6ToV7(db);
+    migrateV7ToV8(db);
     return;
   }
 
@@ -395,6 +385,7 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV4ToV5(db);
     migrateV5ToV6(db);
     migrateV6ToV7(db);
+    migrateV7ToV8(db);
     return;
   }
 
@@ -403,16 +394,19 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV4ToV5(db);
     migrateV5ToV6(db);
     migrateV6ToV7(db);
+    migrateV7ToV8(db);
     return;
   }
 
-  // Additive v2 → v3 → v4 → v5 → v6 migration without dropping data.
+  // Additive v2 → v3 → ... → v7 migration without dropping data (v8 drops
+  // prediction_records as the explicit removal of the predictions feature).
   if (currentVersion === 2) {
     migrateV2ToV3(db);
     migrateV3ToV4(db);
     migrateV4ToV5(db);
     migrateV5ToV6(db);
     migrateV6ToV7(db);
+    migrateV7ToV8(db);
     return;
   }
 
@@ -485,6 +479,16 @@ function migrateV6ToV7(db: Database.Database): void {
     db.exec("UPDATE alert_events SET observed_at = triggered_at WHERE observed_at IS NULL");
   }
 
+  db.exec(CURRENT_SCHEMA);
+
+  db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(7);
+}
+
+function migrateV7ToV8(db: Database.Database): void {
+  // Predictions feature removal: dropping prediction_records is the explicit,
+  // documented destructive step for this table; all other rows are preserved.
+  db.exec("DROP TABLE IF EXISTS prediction_records");
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();

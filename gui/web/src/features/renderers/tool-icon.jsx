@@ -71,7 +71,6 @@ const TOOL_META = {
   analyze_risk: { icon: AlertTriangle, label: "Risk analysis", group: "portfolio" },
   analyze_correlation: { icon: Network, label: "Correlation", group: "portfolio" },
   manage_watchlist: { icon: ListChecks, label: "Watchlist", group: "portfolio" },
-  track_prediction: { icon: Target, label: "Predictions", group: "portfolio" },
 
   // Interaction
   ask_user: { icon: CircleHelp, label: "Question", group: "interaction" },
