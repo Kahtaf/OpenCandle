@@ -26,17 +26,28 @@ describe("GUI tool metadata catalog", () => {
     rmSync(openCandleHome, { recursive: true, force: true });
   });
 
-  it("includes configured provider keys so the local GUI can render them masked", () => {
+  it("serializes configured providers as status plus masked hint, never the raw key", () => {
     vi.spyOn(configModule, "loadFileConfig").mockReturnValue({
       providers: { fred: { apiKey: "fred-file-key" } },
     });
 
-    const fred = buildCatalog().providers.find((provider) => provider.id === "fred");
+    const catalog = buildCatalog();
+    const fred = catalog.providers.find((provider) => provider.id === "fred");
 
     expect(fred).toMatchObject({
       source: "file",
-      apiKey: "fred-file-key",
+      configured: true,
+      maskedKeyHint: "…-key",
     });
+    expect(fred).not.toHaveProperty("apiKey");
+    expect(JSON.stringify(catalog)).not.toContain("fred-file-key");
+  });
+
+  it("marks unconfigured API-key providers as not configured without a hint", () => {
+    const fred = buildCatalog().providers.find((provider) => provider.id === "fred");
+
+    expect(fred).toMatchObject({ source: "absent", configured: false });
+    expect(fred?.maskedKeyHint).toBeUndefined();
   });
 
   it("serializes non-key providers without API-key setup fields", () => {

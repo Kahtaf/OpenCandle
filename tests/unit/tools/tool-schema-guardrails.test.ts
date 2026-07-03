@@ -5,7 +5,6 @@ import { stockHistoryTool } from "../../../src/tools/market/stock-history.js";
 import { optionChainTool } from "../../../src/tools/options/option-chain.js";
 import { alertsTool } from "../../../src/tools/portfolio/alerts.js";
 import { correlationTool } from "../../../src/tools/portfolio/correlation.js";
-import { predictionsTool } from "../../../src/tools/portfolio/predictions.js";
 import { riskAnalysisTool } from "../../../src/tools/portfolio/risk-analysis.js";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { backtestTool } from "../../../src/tools/technical/backtest.js";
@@ -87,37 +86,6 @@ describe("tool schema guardrails", () => {
         action: "update",
         lot_id: 1,
         shares: 1,
-      }),
-    ).toBe(true);
-  });
-
-  it("bounds prediction numeric fields", () => {
-    expect(
-      Value.Check(predictionsTool.parameters, {
-        action: "record",
-        symbol: "AAPL",
-        direction: "bullish",
-        conviction: 0,
-        entry_price: 100,
-      }),
-    ).toBe(false);
-    expect(
-      Value.Check(predictionsTool.parameters, {
-        action: "record",
-        symbol: "AAPL",
-        direction: "bullish",
-        conviction: 11,
-        entry_price: 100,
-      }),
-    ).toBe(false);
-    expect(
-      Value.Check(predictionsTool.parameters, {
-        action: "record",
-        symbol: "AAPL",
-        direction: "bullish",
-        conviction: 5,
-        entry_price: 100,
-        timeframe_days: 30,
       }),
     ).toBe(true);
   });

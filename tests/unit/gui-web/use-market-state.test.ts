@@ -6,7 +6,6 @@ describe("mergeMarketStateSnapshot", () => {
     const current = {
       watchlist: [],
       portfolio: [],
-      predictions: [],
       alerts: [],
       alertEvents: [],
       reportTemplates: [],
@@ -20,7 +19,6 @@ describe("mergeMarketStateSnapshot", () => {
     const next = mergeMarketStateSnapshot(current, {
       watchlist: [{ id: 1, symbol: "AAPL" }],
       portfolio: [],
-      predictions: [],
       alerts: [],
       alertEvents: [],
       reportTemplates: [],

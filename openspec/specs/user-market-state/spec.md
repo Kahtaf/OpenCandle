@@ -1,11 +1,11 @@
 # user-market-state Specification
 
 ## Purpose
-Defines durable SQLite-backed user market state for instruments, watchlists, portfolios, predictions, alerts, reports, aliases, and provenance.
+Defines durable SQLite-backed user market state for instruments, watchlists, portfolios, alerts, reports, aliases, and provenance.
 ## Requirements
 ### Requirement: User Market State Uses SQLite
 
-OpenCandle SHALL persist user watchlists, portfolios, portfolio lots, prediction records, instruments, and instrument aliases in `~/.opencandle/state.db`.
+OpenCandle SHALL persist user watchlists, portfolios, portfolio lots, instruments, and instrument aliases in `~/.opencandle/state.db`.
 
 #### Scenario: Watchlist state is read from SQLite
 
@@ -18,12 +18,6 @@ OpenCandle SHALL persist user watchlists, portfolios, portfolio lots, prediction
 - **WHEN** a user asks to view their portfolio
 - **THEN** OpenCandle reads portfolio rows and lots from `state.db`
 - **AND** it does not treat `portfolio.json` as authoritative state
-
-#### Scenario: Prediction state is read from SQLite
-
-- **WHEN** a user asks to record or check tracked predictions
-- **THEN** OpenCandle reads and writes prediction records in `state.db`
-- **AND** it does not treat `predictions.json` as authoritative state
 
 ### Requirement: Default Watchlist and Portfolio Are Extensible
 
@@ -96,12 +90,12 @@ OpenCandle SHALL store normalized instruments separately from source-specific sy
 
 ### Requirement: JSON Market State Is Not Supported
 
-OpenCandle SHALL NOT support JSON files as market-state sources for watchlists, portfolios, or predictions.
+OpenCandle SHALL NOT support JSON files as market-state sources for watchlists or portfolios, and SHALL ignore legacy prediction JSON files because prediction tracking is unsupported.
 
 #### Scenario: JSON files are ignored as state
 
-- **WHEN** `watchlist.json`, `portfolio.json`, or `predictions.json` exists under `~/.opencandle/`
-- **THEN** OpenCandle reads market state from SQLite
+- **WHEN** `watchlist.json`, `portfolio.json`, or legacy `predictions.json` exists under `~/.opencandle/`
+- **THEN** OpenCandle reads supported market state from SQLite
 - **AND** it does not import, merge, or trust those JSON files
 
 #### Scenario: Initialization is idempotent
@@ -117,7 +111,7 @@ OpenCandle SHALL treat user market state as durable after this feature ships.
 #### Scenario: Additive schema upgrade preserves rows
 
 - **WHEN** a later schema version adds market-state tables, columns, or indexes
-- **THEN** OpenCandle preserves existing user-authored watchlists, portfolios, prediction records, alert rules, report templates, and import provenance rows
+- **THEN** OpenCandle preserves existing user-authored watchlists, portfolios, alert rules, report templates, and import provenance rows
 - **AND** it migrates shape additively where possible rather than dropping market-state tables
 
 #### Scenario: Destructive reset requires explicit opt-in
@@ -125,6 +119,12 @@ OpenCandle SHALL treat user market state as durable after this feature ships.
 - **WHEN** a schema reset would delete user-authored market-state rows after V1 ships
 - **THEN** OpenCandle requires explicit developer or user opt-in
 - **AND** it does not perform the reset as a silent compatibility fallback
+
+#### Scenario: Prediction records are dropped at v8
+
+- **WHEN** a database at schema version 7 or earlier migrates to version 8
+- **THEN** the migration drops the `prediction_records` table as the explicit, documented removal of the predictions feature
+- **AND** all other user-authored market-state rows are preserved unchanged
 
 ### Requirement: Instrument Search Supports Add Flows
 
@@ -207,7 +207,7 @@ OpenCandle SHALL define foreign-key behavior for market-state rows.
 
 #### Scenario: Referenced instruments are protected
 
-- **WHEN** an instrument is referenced by watchlist items, portfolio lots, prediction records, alert rules, or import history
+- **WHEN** an instrument is referenced by watchlist items, portfolio lots, alert rules, or import history
 - **THEN** OpenCandle prevents deleting the instrument unless dependent state is removed first
 
 ### Requirement: Market State Writes Are Transactional Across Surfaces
@@ -228,59 +228,7 @@ OpenCandle SHALL use SQLite transactions as the concurrency boundary for normal 
 
 #### Scenario: Same-row concurrent edits return committed state
 
-- **WHEN** two surfaces update the same watchlist item, portfolio lot, prediction record, alert rule, or report template near the same time
+- **WHEN** two surfaces update the same watchlist item, portfolio lot, alert rule, or report template near the same time
 - **THEN** each mutation is committed transactionally with an updated timestamp or equivalent change marker
 - **AND** callers receive or can refetch the committed row after the write
 - **AND** later reads show the final SQLite-committed state rather than stale local form state
-
-### Requirement: Prediction Lifecycle Is Explicit
-
-OpenCandle SHALL represent prediction status and check behavior consistently across TUI and GUI.
-
-#### Scenario: Prediction is recorded open
-
-- **WHEN** a user records a prediction
-- **THEN** OpenCandle stores the instrument, direction, conviction, entry price, opened time, expiration time, and optional target price
-- **AND** the prediction starts with status `open`
-
-#### Scenario: Prediction check evaluates open records
-
-- **WHEN** a user checks predictions
-- **THEN** OpenCandle compares each open prediction against current quote data when available
-- **AND** it reports unresolved predictions without fabricating results when quote data is unavailable
-
-#### Scenario: Quote-unavailable prediction remains retryable
-
-- **WHEN** a prediction check cannot obtain current quote data for an open prediction
-- **THEN** OpenCandle reports a data gap for that prediction
-- **AND** it leaves the prediction `open` with no resolved timestamp or final result so a later check can retry it
-
-#### Scenario: Stale or zero-filled prediction quote remains retryable
-
-- **WHEN** a prediction check receives stale cached quote data or a zero-filled quote payload
-- **THEN** OpenCandle treats that quote as unavailable for prediction scoring
-- **AND** it leaves the prediction `open` with no resolved timestamp or final result
-
-#### Scenario: Expired prediction is marked explicitly
-
-- **WHEN** an open prediction is past its expiration time during a check
-- **THEN** OpenCandle marks it `expired` or `resolved` according to the defined prediction outcome policy only when current quote data is available
-- **AND** stores result metadata needed to explain the outcome later
-
-#### Scenario: Resolved prediction history remains visible
-
-- **WHEN** all tracked predictions have already been resolved and the user checks predictions again
-- **THEN** OpenCandle reports the durable historical scorecard from stored result metadata
-- **AND** it does not replace the scorecard with an empty "no open predictions" result
-
-#### Scenario: Expired prediction with missing quote remains open
-
-- **WHEN** an open prediction is past its expiration time during a check but current quote data is unavailable
-- **THEN** OpenCandle reports the unavailable quote as a data gap
-- **AND** it does not mark the prediction `expired` until a later check can evaluate it with market data
-
-#### Scenario: Prediction can be cancelled without outcome
-
-- **WHEN** a user cancels a prediction before resolution
-- **THEN** OpenCandle marks it `cancelled`
-- **AND** it excludes the record from hit-rate calculations unless the user explicitly asks for cancelled history

@@ -17,25 +17,18 @@ export interface DailyWatchlistReport {
   dataGaps: string[];
 }
 
-export function getOrCreateDefaultWatchlistReportTemplate(
+// Returns the configured default-watchlist morning template if one exists.
+// Manual report runs must never create a schedule template as a side effect;
+// only the explicit configure flow stores schedule intent.
+export function findDefaultWatchlistReportTemplate(
   service: MarketStateService,
-): ReportTemplateRecord {
-  const existing = service
+): ReportTemplateRecord | undefined {
+  return service
     .listReportTemplates()
     .find(
       (template) =>
         template.reportType === "watchlist_daily" && targetsDefaultWatchlist(template.configJson),
     );
-  if (existing) return existing;
-  return service.createReportTemplate({
-    name: "Morning watchlist",
-    reportType: "watchlist_daily",
-    cadence: "daily",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    localTime: "08:00",
-    config: { targets: { default_watchlist: true } },
-    enabled: true,
-  });
 }
 
 export async function recordDailyWatchlistReportRun(
@@ -128,9 +121,6 @@ export async function generateDailyWatchlistReport(
     ``,
     `Recent alerts`,
     `  ${service.listAlertEvents().length} recorded alert event(s).`,
-    ``,
-    `Technical snapshot`,
-    `  Deferred unless quote/history data is available through a later section builder.`,
     ``,
     `Data gaps`,
     ...dataGapLines,

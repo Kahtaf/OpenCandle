@@ -27,5 +27,5 @@ OpenCandle SHALL record GUI-originated market-state mutations in the explicitly 
 #### Scenario: Transcript does not become source of truth
 
 - **WHEN** session entries and SQLite market state disagree
-- **THEN** SQLite market state is authoritative for saved watchlists, portfolios, predictions, alerts, and report configuration
+- **THEN** SQLite market state is authoritative for saved watchlists, portfolios, alerts, and report configuration
 - **AND** transcript entries are audit/context evidence for a specific target session, not the primary market-state store

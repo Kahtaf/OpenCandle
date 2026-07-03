@@ -1,7 +1,7 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import {
-  getOrCreateDefaultWatchlistReportTemplate,
+  findDefaultWatchlistReportTemplate,
   nextDailyReportRunAt,
   recordDailyWatchlistReportRun,
   targetsDefaultWatchlist,
@@ -84,14 +84,20 @@ export const dailyReportTool: AgentTool<typeof params> = {
         return { content: [{ type: "text", text: lines.join("\n") }], details: runs };
       }
 
-      const template = getOrCreateDefaultWatchlistReportTemplate(service);
+      // Manual runs link to the configured schedule when one exists but never
+      // create a template as a side effect — generation must not imply a
+      // schedule the user did not set up.
+      const template = findDefaultWatchlistReportTemplate(service);
       const { report, run } = await recordDailyWatchlistReportRun(service, {
-        templateId: template.id,
+        templateId: template?.id ?? null,
         triggerType: "manual",
       });
       await deliverPendingNotifications(service);
+      const text = template
+        ? report.text
+        : `${report.text}\n\n(Unscheduled manual run — use the configure action to set up a morning report that runs while OpenCandle is open.)`;
       return {
-        content: [{ type: "text", text: report.text }],
+        content: [{ type: "text", text }],
         details: run,
       };
     } finally {

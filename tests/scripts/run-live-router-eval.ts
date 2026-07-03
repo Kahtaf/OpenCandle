@@ -46,8 +46,12 @@ function loadFixtures(): Array<{ name: string; data: RouterFixture }> {
     }));
 }
 
-function stripReasoning(out: RouterOutput): Omit<RouterOutput, "reasoning"> {
-  const { reasoning: _r, ...rest } = out;
+// Diff the routing contract only. `reasoning` is model prose. `diagnostics`
+// are internal post-processing correction traces: a model that emits the
+// correct routeKind directly never triggers the corrections that the
+// fixture-recording model needed, so they cannot be compared across models.
+function stripNonContract(out: RouterOutput): Omit<RouterOutput, "reasoning" | "diagnostics"> {
+  const { reasoning: _r, diagnostics: _d, ...rest } = out;
   return rest;
 }
 
@@ -117,7 +121,10 @@ async function main(): Promise<void> {
     const elapsed = Date.now() - start;
     latencies.push(elapsed);
 
-    const diffs = shallowDiff(stripReasoning(data.expectedRouterOutput), stripReasoning(result));
+    const diffs = shallowDiff(
+      stripNonContract(data.expectedRouterOutput),
+      stripNonContract(result),
+    );
     if (diffs.length === 0) {
       pass += 1;
       console.log(`PASS ${name} (${elapsed}ms)`);

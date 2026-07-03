@@ -9,8 +9,16 @@ export function defaultValuesFor(fields) {
 export function validateRequired(fields, values) {
   const issues = [];
   for (const field of fields) {
-    if (!field.required) continue;
     const value = values[field.name];
+    if (field.parse === "json" && typeof value === "string" && value.trim() !== "") {
+      try {
+        JSON.parse(value);
+      } catch {
+        issues.push(`${field.label} must be valid JSON.`);
+      }
+    }
+
+    if (!field.required) continue;
     if (value == null || value === "") {
       issues.push(`${field.label} is required.`);
       continue;

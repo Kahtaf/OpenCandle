@@ -132,11 +132,11 @@ See [Configuration](./configuration.md) for the complete env var list, config pr
 
 ```text
 What is AAPL trading at?
-Run /analyze NVDA
 Compare BTC and ETH over the last month
 Show MSFT puts with Greeks
 Get CPI from FRED
 Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
+Run /analyze NVDA when you want deep research — a multi-analyst debate that takes a few minutes
 ```
 
 OpenCandle should tell you when a provider is unavailable, a key is missing, or a result is degraded. Treat those warnings as part of the answer.

@@ -595,19 +595,9 @@ async function seedEvalMarketState(home: string): Promise<void> {
       thesis: item.thesis,
     });
   }
-  for (const prediction of COMPETITIVE_STATE_FIXTURE.predictions) {
-    service.recordPrediction({
-      instrument: instrument(prediction.symbol, prediction.symbol, "equity"),
-      direction: prediction.direction,
-      conviction: prediction.conviction,
-      entryPrice: prediction.entryPrice,
-      targetPrice: prediction.targetPrice,
-      timeframeDays: prediction.timeframeDays,
-    });
-  }
   db.close();
   console.log(
-    `Seeded eval market state into ${home} (${COMPETITIVE_STATE_FIXTURE.lots.length} lots, ${COMPETITIVE_STATE_FIXTURE.watchlist.length} watchlist, ${COMPETITIVE_STATE_FIXTURE.predictions.length} predictions)`,
+    `Seeded eval market state into ${home} (${COMPETITIVE_STATE_FIXTURE.lots.length} lots, ${COMPETITIVE_STATE_FIXTURE.watchlist.length} watchlist)`,
   );
 }
 

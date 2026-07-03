@@ -3,9 +3,8 @@ import { useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
-import { quoteFreshness, shortDateLabel } from "./format.js";
+import { quoteFreshness } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
-import { predictionProgress } from "./prediction-view-model.js";
 import {
   Badge,
   ConfirmButton,
@@ -175,10 +174,6 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
       ),
     [state.alerts, state.alertEvents, state.instruments, item.instrumentId],
   );
-  const openPredictions = (state.predictions ?? []).filter(
-    (prediction) => prediction.symbol === item.symbol && prediction.status === "open",
-  );
-
   return (
     <aside
       className="rounded-xl border border-border bg-card shadow-subtle-xs xl:sticky xl:top-4"
@@ -273,30 +268,6 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
         </Button>
       </InspectorSection>
 
-      {openPredictions.length > 0 ? (
-        <InspectorSection title="Open prediction">
-          {openPredictions.map((prediction) => {
-            const progress = predictionProgress({
-              direction: prediction.direction,
-              entryPrice: prediction.entryPrice,
-              targetPrice: prediction.targetPrice,
-              currentPrice: quote?.status === "ok" ? quote.price : null,
-            });
-            return (
-              <div key={prediction.id} className="flex items-baseline justify-between text-[13px]">
-                <span className="text-muted-foreground">
-                  {capitalize(prediction.direction)} to {moneyOrDash(prediction.targetPrice)} by{" "}
-                  {relativeDateLabel(prediction.expiresAt)}
-                </span>
-                <span className="tabular-nums">
-                  {progress ? `${Math.round(progress.percent)}% there` : "—"}
-                </span>
-              </div>
-            );
-          })}
-        </InspectorSection>
-      ) : null}
-
       <div className="flex gap-2 p-4">
         <Button
           type="button"
@@ -368,12 +339,4 @@ function InspectorSection({ title, children }) {
       {children}
     </section>
   );
-}
-
-function capitalize(value) {
-  return typeof value === "string" && value ? value[0].toUpperCase() + value.slice(1) : value;
-}
-
-function relativeDateLabel(iso) {
-  return shortDateLabel(iso) || "—";
 }

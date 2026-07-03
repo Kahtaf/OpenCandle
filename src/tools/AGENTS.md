@@ -10,7 +10,7 @@ src/tools/
 ├── options/       # Options chains, Greeks computation
 ├── macro/         # FRED economic data, fear & greed index
 ├── sentiment/     # Reddit sentiment, news sentiment
-├── portfolio/     # Tracker, risk analysis, watchlist, correlation, predictions
+├── portfolio/     # Tracker, risk analysis, watchlist, correlation
 ├── market/        # Stock quotes, history, crypto, ticker search
 └── index.ts       # getAllTools() registry — add new tools here
 ```

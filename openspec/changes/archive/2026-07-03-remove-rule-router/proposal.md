@@ -1,3 +1,5 @@
+> **Superseded:** implemented by `product-audit-downscope` (2026-07-03), which flips the default to the LLM router, removes the rules-mode dispatch path, and keeps `classifyWithLegacyRules` as the router's deterministic failure-recovery safety net. Spec deltas live in that change; this proposal is archived without applying its own delta.
+
 ## Why
 
 The deterministic rules router remains the default while the LLM router acceptance gate is incomplete. Once the LLM router has passed the live fixture, latency, and cost gate for a release window, keeping two primary routing paths creates duplicated behavior and makes disambiguation/tool-scope bugs harder to reason about.

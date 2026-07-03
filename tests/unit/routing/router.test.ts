@@ -83,6 +83,88 @@ describe("validateRouterOutput", () => {
     expect(out.entities.shareQuantity).toBe(200);
   });
 
+  it("canonicalizes camelCase slot keys to snake_case", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        route: "workflow",
+        workflow: "portfolio_builder",
+        entities: { symbols: [] },
+        slots: {
+          budget: { value: 10000, source: "user", confidence: "high" },
+          timeHorizon: { value: "3y", source: "user", confidence: "high" },
+          riskProfile: { value: "aggressive", source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.slots.time_horizon).toEqual({ value: "3y", source: "user", confidence: "high" });
+    expect(out.slots.risk_profile?.value).toBe("aggressive");
+    expect(out.slots.timeHorizon).toBeUndefined();
+    expect(out.slots.riskProfile).toBeUndefined();
+  });
+
+  it("canonicalizes a one-element symbols slot to symbol for symbol workflows", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["TSLA"] },
+        slots: {
+          symbols: { value: ["TSLA"], source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.slots.symbol).toEqual({ value: "TSLA", source: "user", confidence: "high" });
+    expect(out.slots.symbols).toBeUndefined();
+  });
+
+  it("keeps multi-element symbols slots intact for symbol workflows", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        routeKind: "agent_task",
+        route: "fallback",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["TSLA", "F"] },
+        slots: {
+          symbols: { value: ["TSLA", "F"], source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.slots.symbols?.value).toEqual(["TSLA", "F"]);
+    expect(out.slots.symbol).toBeUndefined();
+  });
+
+  it("wraps a scalar symbol slot into symbols for compare workflows", () => {
+    const out = validateRouterOutput(
+      JSON.stringify({
+        route: "workflow",
+        workflow: "compare_assets",
+        entities: { symbols: ["KO"] },
+        slots: {
+          symbol: { value: "KO", source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: ["symbols"],
+        reasoning: "x",
+      }),
+    );
+
+    expect(out.slots.symbols?.value).toEqual(["KO"]);
+    expect(out.slots.symbol).toBeUndefined();
+  });
+
   it("rejects invalid route", () => {
     expect(() =>
       validateRouterOutput(

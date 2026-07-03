@@ -1,8 +1,6 @@
 import type Database from "better-sqlite3";
 
 export type AssetType = "equity" | "etf" | "fund" | "crypto" | "index" | "option" | "unknown";
-export type PredictionDirection = "bullish" | "bearish" | "neutral";
-export type PredictionStatus = "open" | "resolved" | "expired" | "cancelled";
 export type AlertScopeType = "instrument" | "watchlist" | "portfolio";
 
 export interface InstrumentInput {
@@ -96,23 +94,6 @@ export interface PortfolioLotRecord {
   sourceLotId: string | null;
   sourceRowId: string | null;
   sourceMetadata: unknown;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PredictionRecord {
-  id: number;
-  instrumentId: number;
-  symbol: string;
-  direction: PredictionDirection;
-  conviction: number;
-  entryPrice: number;
-  targetPrice: number | null;
-  openedAt: string;
-  expiresAt: string;
-  status: PredictionStatus;
-  resolvedAt: string | null;
-  resultJson: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -333,23 +314,6 @@ type PortfolioLotRow = {
   source_lot_id: string | null;
   source_row_id: string | null;
   source_metadata_json: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type PredictionRow = {
-  id: number;
-  instrument_id: number;
-  symbol: string;
-  direction: PredictionDirection;
-  conviction: number;
-  entry_price: number;
-  target_price: number | null;
-  opened_at: string;
-  expires_at: string;
-  status: PredictionStatus;
-  resolved_at: string | null;
-  result_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -875,75 +839,6 @@ export class MarketStateService {
       const updated = this.updatePortfolioLot(row.id, params);
       return updated == null ? [] : [updated];
     });
-  }
-
-  recordPrediction(params: {
-    instrument: InstrumentInput;
-    direction: PredictionDirection;
-    conviction: number;
-    entryPrice: number;
-    targetPrice?: number;
-    timeframeDays: number;
-    now?: Date;
-  }): PredictionRecord {
-    const tx = this.db.transaction(() => {
-      const instrument = this.upsertInstrument(params.instrument);
-      const opened = params.now ?? new Date();
-      const expires = new Date(opened);
-      expires.setDate(expires.getDate() + params.timeframeDays);
-      const nowIso = opened.toISOString();
-      const result = this.db
-        .prepare(
-          `INSERT INTO prediction_records (
-             instrument_id, direction, conviction, entry_price, target_price,
-             opened_at, expires_at, status, created_at, updated_at
-           )
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
-        )
-        .run(
-          instrument.id,
-          params.direction,
-          params.conviction,
-          params.entryPrice,
-          params.targetPrice ?? null,
-          nowIso,
-          expires.toISOString(),
-          nowIso,
-          nowIso,
-        );
-      return Number(result.lastInsertRowid);
-    });
-
-    return this.getPrediction(tx());
-  }
-
-  listPredictions(): PredictionRecord[] {
-    const rows = this.db
-      .prepare(
-        `SELECT pr.*, i.symbol
-         FROM prediction_records pr
-         JOIN instruments i ON i.id = pr.instrument_id
-         ORDER BY pr.opened_at, pr.id`,
-      )
-      .all() as PredictionRow[];
-    return rows.map(mapPrediction);
-  }
-
-  updatePredictionOutcome(params: {
-    id: number;
-    status: Exclude<PredictionStatus, "open">;
-    resolvedAt: string;
-    result: unknown;
-  }): PredictionRecord {
-    const now = new Date().toISOString();
-    this.db
-      .prepare(
-        `UPDATE prediction_records
-         SET status = ?, resolved_at = ?, result_json = ?, updated_at = ?
-         WHERE id = ?`,
-      )
-      .run(params.status, params.resolvedAt, JSON.stringify(params.result), now, params.id);
-    return this.getPrediction(params.id);
   }
 
   createAlertRule(params: {
@@ -1998,18 +1893,6 @@ export class MarketStateService {
     return row == null ? null : mapPortfolioLot(row);
   }
 
-  private getPrediction(id: number): PredictionRecord {
-    const row = this.db
-      .prepare(
-        `SELECT pr.*, i.symbol
-         FROM prediction_records pr
-         JOIN instruments i ON i.id = pr.instrument_id
-         WHERE pr.id = ?`,
-      )
-      .get(id) as PredictionRow;
-    return mapPrediction(row);
-  }
-
   getAlertRule(id: number): AlertRuleRecord {
     const row = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(id) as AlertRuleRow;
     return mapAlertRule(row);
@@ -2113,25 +1996,6 @@ function mapPortfolioLot(row: PortfolioLotRow): PortfolioLotRecord {
     sourceLotId: row.source_lot_id,
     sourceRowId: row.source_row_id,
     sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function mapPrediction(row: PredictionRow): PredictionRecord {
-  return {
-    id: row.id,
-    instrumentId: row.instrument_id,
-    symbol: row.symbol,
-    direction: row.direction,
-    conviction: row.conviction,
-    entryPrice: row.entry_price,
-    targetPrice: row.target_price,
-    openedAt: row.opened_at,
-    expiresAt: row.expires_at,
-    status: row.status,
-    resolvedAt: row.resolved_at,
-    resultJson: row.result_json,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -148,34 +148,11 @@ Additionally check:
 
 Output: VALIDATED if all checks pass, or list specific corrections needed.`;
 
-const SYNTHESIS_PROMPT_NO_DEBATE = (symbol: string) =>
-  `**[Synthesis]** You have received five analyst signals above for ${symbol}. Tally the SIGNAL votes (BUY/HOLD/SELL) and weight them by CONVICTION scores. Then provide:
-1. **Vote Tally**: X BUY, Y HOLD, Z SELL — weighted average conviction
-2. **Verdict**: Buy, Hold, or Sell — based on the signal consensus
-3. **Key thesis** in 2-3 sentences
-4. **Bull case** — what could go right
-5. **Bear case** — what could go wrong
-6. **Key levels** — entry, stop-loss, and target prices
-7. **Position sizing recommendation** based on risk profile
-
-Be direct and actionable. This is your final word on ${symbol}.`;
-
-const VALIDATION_PROMPT_NO_DEBATE = (symbol: string) =>
-  `**[Validation Check]** Review your complete analysis of ${symbol} above. For each specific number you cited (price, P/E, revenue, RSI, intrinsic value, etc.), verify it matches the tool output data you received. Flag any inconsistencies. If you stated a number without fetching it first, call that out as UNVERIFIED. Output: VALIDATED if all numbers check out, or list specific corrections needed.`;
-
 export function getInitialAnalysisPrompt(symbol: string): string {
   return `Begin comprehensive analysis of ${symbol}. Start by getting the current stock quote.`;
 }
 
-export interface ComprehensiveAnalysisOptions {
-  debate?: boolean;
-}
-
-export function buildComprehensiveAnalysisDefinition(
-  symbol: string,
-  options?: ComprehensiveAnalysisOptions,
-): WorkflowDefinition {
-  const debate = options?.debate ?? true;
+export function buildComprehensiveAnalysisDefinition(symbol: string): WorkflowDefinition {
   const roles: AnalystRole[] = ["valuation", "momentum", "options", "contrarian", "risk"];
 
   const analystOutputs = roles.map((r) => `${r}_signal`);
@@ -193,45 +170,27 @@ export function buildComprehensiveAnalysisDefinition(
     ),
   ];
 
-  if (debate) {
-    return {
-      workflowType: "comprehensive_analysis",
-      steps: [
-        ...analystSteps,
-        promptStep("debate_bull", "Bull researcher case", buildBullPrompt(symbol), {
-          requiredInputs: analystOutputs,
-          expectedOutputs: ["bull_thesis"],
-        }),
-        promptStep("debate_bear", "Bear researcher case", buildBearPrompt(symbol), {
-          requiredInputs: [...analystOutputs, "bull_thesis"],
-          expectedOutputs: ["bear_thesis"],
-        }),
-        promptStep("debate_rebuttal", "Bull rebuttal (self-gating)", buildRebuttalPrompt(symbol), {
-          requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis"],
-          expectedOutputs: ["rebuttal"],
-        }),
-        promptStep("synthesis", "Resolve the debate", buildSynthesisPrompt(symbol), {
-          requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis", "rebuttal"],
-          expectedOutputs: ["verdict"],
-        }),
-        promptStep("validation", "Validate cited numbers", VALIDATION_PROMPT_DEBATE(symbol), {
-          skippable: true,
-          requiredInputs: ["verdict"],
-          expectedOutputs: ["validation_result"],
-        }),
-      ],
-    };
-  }
-
   return {
     workflowType: "comprehensive_analysis",
     steps: [
       ...analystSteps,
-      promptStep("synthesis", "Synthesize analyst signals", SYNTHESIS_PROMPT_NO_DEBATE(symbol), {
+      promptStep("debate_bull", "Bull researcher case", buildBullPrompt(symbol), {
         requiredInputs: analystOutputs,
+        expectedOutputs: ["bull_thesis"],
+      }),
+      promptStep("debate_bear", "Bear researcher case", buildBearPrompt(symbol), {
+        requiredInputs: [...analystOutputs, "bull_thesis"],
+        expectedOutputs: ["bear_thesis"],
+      }),
+      promptStep("debate_rebuttal", "Bull rebuttal (self-gating)", buildRebuttalPrompt(symbol), {
+        requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis"],
+        expectedOutputs: ["rebuttal"],
+      }),
+      promptStep("synthesis", "Resolve the debate", buildSynthesisPrompt(symbol), {
+        requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis", "rebuttal"],
         expectedOutputs: ["verdict"],
       }),
-      promptStep("validation", "Validate cited numbers", VALIDATION_PROMPT_NO_DEBATE(symbol), {
+      promptStep("validation", "Validate cited numbers", VALIDATION_PROMPT_DEBATE(symbol), {
         skippable: true,
         requiredInputs: ["verdict"],
         expectedOutputs: ["validation_result"],

@@ -8,9 +8,8 @@
  *     `turn_end` on every final assistant turn)
  *   - For a workflow-dispatching prompt (portfolio builder), at least one
  *     `opencandle-workflow` entry is present
- *   - If router mode is active (default, or OPENCANDLE_ROUTER_MODE=llm), at
- *     least one `opencandle-router` entry is present — router-specific
- *     assertions are skipped under OPENCANDLE_ROUTER_MODE=rules.
+ *   - At least one `opencandle-router` entry is present (the LLM router is
+ *     the only production routing path).
  *
  * Requires one of GOOGLE_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY in the
  * environment. Skips with a clear notice otherwise (the drain logic itself is
@@ -135,19 +134,14 @@ record("final assistant response emits at least one opencandle-disclaimer entry"
   );
 });
 
-if (process.env.OPENCANDLE_ROUTER_MODE !== "rules") {
-  record("router mode emits at least one opencandle-router entry", () => {
-    const entries = workflowTrace.customEntries ?? [];
-    const router = entries.filter((e) => e.customType === "opencandle-router");
-    assert(
-      router.length >= 1,
-      `expected >=1 opencandle-router entry when OPENCANDLE_ROUTER_MODE is unset or llm, ` +
-        `got ${router.length}.`,
-    );
-  });
-} else {
-  console.log("  (skipping opencandle-router assertion — OPENCANDLE_ROUTER_MODE is 'rules')");
-}
+record("router mode emits at least one opencandle-router entry", () => {
+  const entries = workflowTrace.customEntries ?? [];
+  const router = entries.filter((e) => e.customType === "opencandle-router");
+  assert(
+    router.length >= 1,
+    `expected >=1 opencandle-router entry from the LLM router, got ${router.length}.`,
+  );
+});
 
 // -----------------------------------------------------------------------------
 // Summary

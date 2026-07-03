@@ -24,7 +24,7 @@ Effective precedence:
 3. `$OPENCANDLE_HOME/config.json`.
 4. Built-in defaults.
 
-For provider API keys and `OPENCANDLE_DEBATE`, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, and developer diagnostic switches are env-only.
+For provider API keys, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, and developer diagnostic switches are env-only.
 
 ## Environment Variables
 
@@ -41,7 +41,6 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `EXA_API_KEY` | unset | Exa search. Overrides `providers.exa.apiKey`. |
 | `FINNHUB_API_KEY` | unset | Finnhub company news for sentiment summaries. Overrides `providers.finnhub.apiKey`. |
 | `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config and local state. |
-| `OPENCANDLE_DEBATE` | `true` | Enables adversarial bull/bear debate for comprehensive analysis. Set `false` or `0` to disable. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
 | `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API` | unset | Allow the GUI's private market-state API to accept cookie-authenticated requests from non-loopback peers. Set `1` only together with an intentional `OPENCANDLE_GUI_HOST` network bind. |
 | `OPENCANDLE_GUI_PORT` | `14567` | GUI HTTP/WebSocket port. |
@@ -57,7 +56,7 @@ These settings are for debugging request understanding and tool availability. Ke
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENCANDLE_ROUTER_MODE` | `rules` | Advanced request-understanding mode. Set `llm` to opt into the LLM router during development or eval runs. Invalid values fail startup config loading. |
+| `OPENCANDLE_ROUTER_MODE` | `llm` | Request-understanding mode. The LLM router is the only production routing path; the removed `rules` value and any other value fail startup config loading. |
 | `OPENCANDLE_TOOL_SCOPE_MODE` | `observe` | Tool-scope diagnostic mode. `observe` records selected bundles and active-tool candidates; `enforce` applies Pi active tools for each turn. Invalid values fail startup config loading. |
 | `OPENCANDLE_PLANNING_MIGRATION_STATUSES` | unset | Comma-separated planning rollout overrides in `task_family=status` form, for example `single_asset_decision=dual_run,asset_compare=observe_only`. Invalid entries fail startup config loading. |
 | `OPENCANDLE_AUTOMATION_HEARTBEAT_MS` | `60000` | GUI automation heartbeat interval in milliseconds. Values below `5000` or invalid values fall back to the default. |
@@ -75,7 +74,6 @@ These settings are for debugging request understanding and tool availability. Ke
     "exa": { "apiKey": "..." },
     "finnhub": { "apiKey": "..." }
   },
-  "debate": true,
   "sentiment": {
     "retentionDays": 30,
     "defaultSubreddits": ["wallstreetbets", "stocks", "investing", "options"],
@@ -95,11 +93,11 @@ All paths below are rooted at `$OPENCANDLE_HOME`:
 | --- | --- |
 | `config.json` | OpenCandle provider config and file-backed settings. |
 | `onboarding.json` | Provider setup, snooze, never-ask, and welcome state. |
-| `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, prediction records, alert rules/events, report history, and import provenance. |
+| `state.db` | SQLite store for memory/workflow rows plus user market state: instruments, aliases, watchlists, portfolio lots, alert rules/events, report history, and import provenance. |
 | `sentinel.db` | Sentiment trend store. |
 | `logs/` | Reserved OpenCandle log directory. |
 
-Durable market state — watchlists, portfolios, predictions, alerts — lives only in `state.db`. There is no JSON-file alternative for that state.
+Durable market state — watchlists, portfolios, alerts — lives only in `state.db`. There is no JSON-file alternative for that state.
 
 Pi runtime config and sessions remain separate under Pi's own agent directory. OpenCandle does not move Pi state into `$OPENCANDLE_HOME`.
 

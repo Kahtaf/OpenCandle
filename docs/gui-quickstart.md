@@ -10,7 +10,7 @@ description: Run the local OpenCandle browser workbench and understand local ses
 1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
 3. Open `http://127.0.0.1:14567`.
 4. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
-5. Start with a keyless market-data prompt such as `What is AAPL trading at?`, then try `/analyze NVDA` or the empty-state action cards.
+5. Start with a keyless market-data prompt such as `What is AAPL trading at?` or the empty-state action cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
 6. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or [Tailscale](https://tailscale.com) access.

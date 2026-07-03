@@ -64,24 +64,26 @@ describe("dailyReportTool", () => {
     expect(result.content[0].text).toContain("Quote freshness");
     expect(result.content[0].text).toContain("Major movers");
     expect(result.content[0].text).toContain("Recent alerts");
-    expect(result.content[0].text).toContain("Technical snapshot");
+    // Unbuilt sections are omitted entirely — no placeholder scaffolding text.
+    expect(result.content[0].text).not.toContain("Technical snapshot");
+    expect(result.content[0].text).not.toContain("Deferred unless");
     expect(result.content[0].text).toContain("Data gaps");
     expect(result.details).toMatchObject({ status: "completed" });
-    expect(result.details.templateId).toEqual(expect.any(Number));
+    // No template exists → the manual run must not create one as a side effect.
+    expect(result.details.templateId).toBeNull();
 
     const history = await dailyReportTool.execute("test", { action: "history" });
     expect(history.content[0].text).toContain("completed");
 
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
-    const [template] = service.listReportTemplates();
+    const templates = service.listReportTemplates();
     const [run] = service.listReportRuns();
     const [notification] = service.listNotificationEvents();
     db.close();
 
-    expect(template.reportType).toBe("watchlist_daily");
-    expect(template.lastRunAt).toBe(run.startedAt);
-    expect(run.templateId).toBe(template.id);
+    expect(templates).toHaveLength(0);
+    expect(run.templateId).toBeNull();
     expect(run.triggerType).toBe("manual");
     expect(run.summaryJson).toMatchObject({
       text: expect.stringContaining("Daily Watchlist Report"),

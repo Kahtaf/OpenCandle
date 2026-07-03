@@ -9,7 +9,6 @@ export interface MarketStateSnapshot {
   instruments: Array<NonNullable<ReturnType<MarketStateService["getInstrument"]>>>;
   watchlist: ReturnType<MarketStateService["listWatchlistItems"]>;
   portfolio: ReturnType<MarketStateService["listPortfolioLots"]>;
-  predictions: ReturnType<MarketStateService["listPredictions"]>;
   alerts: ReturnType<MarketStateService["listAlertRules"]>;
   alertEvents: ReturnType<MarketStateService["listAlertEvents"]>;
   alertCheckRuns: ReturnType<MarketStateService["listAlertCheckRuns"]>;
@@ -51,17 +50,6 @@ export interface MarketStateQuoteSnapshot {
     stale?: boolean;
     reason?: string;
   }>;
-  predictionQuotes: Array<{
-    predictionId: number;
-    instrumentId: number;
-    symbol: string;
-    status: "ok" | "unavailable";
-    currentPrice?: number;
-    changePercent?: number;
-    fetchedAt?: string;
-    stale?: boolean;
-    reason?: string;
-  }>;
   portfolioSummary: {
     baseCurrency: string;
     totalValue: number;
@@ -86,7 +74,6 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
         .filter((instrument) => instrument != null),
       watchlist: service.listWatchlistItems(),
       portfolio: service.listPortfolioLots(),
-      predictions: service.listPredictions(),
       alerts,
       alertEvents: service.listAlertEvents(),
       alertCheckRuns: service.listAlertCheckRuns(),
@@ -109,13 +96,8 @@ export async function buildMarketStateQuoteSnapshot(
   try {
     const watchlist = service.listWatchlistItems();
     const portfolio = service.listPortfolioLots();
-    const predictions = service.listPredictions();
     const symbols = [
-      ...new Set([
-        ...watchlist.map((item) => item.symbol),
-        ...portfolio.map((lot) => lot.symbol),
-        ...predictions.map((prediction) => prediction.symbol),
-      ]),
+      ...new Set([...watchlist.map((item) => item.symbol), ...portfolio.map((lot) => lot.symbol)]),
     ];
     const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>();
     for (const symbol of symbols) {
@@ -224,34 +206,10 @@ export async function buildMarketStateQuoteSnapshot(
         currency: quote.currency,
         reason: quote.reason ?? "quote unavailable",
       }));
-    const predictionQuotes = predictions.map((prediction) => {
-      const quote = quoteMap.get(prediction.symbol);
-      if (quote == null || quote.status === "unavailable") {
-        return {
-          predictionId: prediction.id,
-          instrumentId: prediction.instrumentId,
-          symbol: prediction.symbol,
-          status: "unavailable" as const,
-          reason: quote?.reason ?? "quote unavailable",
-        };
-      }
-      return {
-        predictionId: prediction.id,
-        instrumentId: prediction.instrumentId,
-        symbol: prediction.symbol,
-        status: "ok" as const,
-        currentPrice: quote.price,
-        changePercent: quote.changePercent,
-        fetchedAt: quote.fetchedAt,
-        stale: quote.stale,
-      };
-    });
-
     return {
       generatedAt,
       watchlistQuotes,
       portfolioQuotes: portfolioQuotesWithAllocation,
-      predictionQuotes,
       portfolioSummary: {
         baseCurrency,
         totalValue,

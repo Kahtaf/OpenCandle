@@ -45,6 +45,14 @@ export function computeDCF(params: DCFParams): DCFResult {
     sharesOutstanding,
   } = params;
 
+  // Gordon Growth requires discount > terminal growth; a non-positive spread
+  // divides by zero or flips the terminal value's sign.
+  if (discountRate <= terminalGrowth) {
+    throw new Error(
+      `Gordon Growth constraint violated: terminal growth (${(terminalGrowth * 100).toFixed(1)}%) must be below the discount rate (${(discountRate * 100).toFixed(1)}%).`,
+    );
+  }
+
   // Project future cash flows (mid-year convention: discount at year-0.5)
   const projectedCashFlows: Array<{ year: number; fcf: number; presentValue: number }> = [];
   for (let y = 1; y <= years; y++) {
@@ -152,12 +160,11 @@ function computeDCFSimple(
   return (sumPV + pvTV - debt) / shares;
 }
 
-export function computeNetDebt(f: FinancialStatement): number {
+export function computeNetDebt(f: FinancialStatement): number | null {
   if (f.totalDebt != null && f.cashAndEquivalents != null) {
     return f.totalDebt - f.cashAndEquivalents;
   }
-  // Fallback: totalLiabilities - totalAssets (negative means net cash position)
-  return f.totalLiabilities - f.totalAssets;
+  return null;
 }
 
 const params = Type.Object({
@@ -243,10 +250,45 @@ export const dcfTool: AgentTool<typeof params> = {
 
       const discountRate = args.discount_rate ?? 0.1;
       const terminalGrowth = args.terminal_growth ?? 0.03;
+      if (discountRate <= terminalGrowth) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ Invalid DCF assumptions for ${symbol}: terminal growth (${(terminalGrowth * 100).toFixed(1)}%) must be below the discount rate (${(discountRate * 100).toFixed(1)}%) for the Gordon Growth terminal value to be meaningful. Lower terminal_growth or raise discount_rate.`,
+            },
+          ],
+          details: null,
+        };
+      }
+
       const years = args.projection_years ?? 5;
-      const marketCap = overview?.marketCap ?? 0;
-      const sharesOutstanding = quote.price > 0 && marketCap > 0 ? marketCap / quote.price : 1;
-      const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
+      // Prefer the overview market cap; fall back to the quote's market cap.
+      // Never substitute a placeholder share count — a fabricated
+      // per-share value is worse than an honest refusal.
+      const marketCap =
+        overview?.marketCap && overview.marketCap > 0
+          ? overview.marketCap
+          : quote.marketCap > 0
+            ? quote.marketCap
+            : 0;
+      if (quote.price <= 0 || marketCap <= 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ Cannot compute a per-share DCF for ${symbol}: shares outstanding cannot be derived because ${quote.price <= 0 ? "the current quote price is unavailable" : "market capitalization is unavailable from the overview and quote providers"}. Per-share intrinsic value requires a real share count.`,
+            },
+          ],
+          details: null,
+        };
+      }
+      const sharesOutstanding = marketCap / quote.price;
+      // Signed on purpose: net cash (negative net debt) adds to equity value.
+      // Omit the adjustment if debt/cash fields are missing; assets minus
+      // liabilities is book equity, not a net-cash proxy.
+      const computedNetDebt = financials[0] ? computeNetDebt(financials[0]) : null;
+      const netDebt = computedNetDebt ?? 0;
 
       const result = computeDCF({
         freeCashFlow: latestFCF,
@@ -254,9 +296,14 @@ export const dcfTool: AgentTool<typeof params> = {
         discountRate,
         terminalGrowth,
         years,
-        netDebt: Math.max(0, netDebt),
+        netDebt,
         sharesOutstanding,
       });
+      if (computedNetDebt == null) {
+        result.warnings.push(
+          "Net debt adjustment omitted because total debt and cash equivalents were unavailable.",
+        );
+      }
 
       const marginOfSafety = (result.intrinsicValue - quote.price) / result.intrinsicValue;
       const upside = (result.intrinsicValue - quote.price) / quote.price;
@@ -286,6 +333,9 @@ export const dcfTool: AgentTool<typeof params> = {
         ``,
         `**Sensitivity Table** (Intrinsic Value at different Growth/Discount rates)`,
         ...formatSensitivityTable(result.sensitivityTable),
+        ...(result.warnings.length > 0
+          ? ["", "**Warnings**", ...result.warnings.map((warning) => `- ${warning}`)]
+          : []),
       ];
 
       return {

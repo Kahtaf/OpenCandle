@@ -31,9 +31,10 @@ describe("get_stock_quote tool", () => {
     const result = await stockQuoteTool.execute("call-1", { symbol: "AAPL" });
     const text = result.content[0];
     expect(text.type).toBe("text");
-    expect((text as any).text).toContain("AAPL");
-    expect((text as any).text).toContain("178.72");
-    expect((text as any).text).toContain("52W Range");
+    if (text.type !== "text") throw new Error("expected text content");
+    expect(text.text).toContain("AAPL");
+    expect(text.text).toContain("178.72");
+    expect(text.text).toContain("52W Range");
   });
 
   it("returns StockQuote in details", async () => {
@@ -66,8 +67,10 @@ describe("get_stock_quote tool", () => {
     const result = await stockQuoteTool.execute("call-4", { symbol: "XXFAKEXX" });
 
     expect(result.content[0].type).toBe("text");
-    expect((result.content[0] as any).text).toContain("Stock quote unavailable for XXFAKEXX");
-    expect((result.content[0] as any).text).toContain("Invalid symbol XXFAKEXX for yahoo");
+    const text = result.content[0];
+    if (text.type !== "text") throw new Error("expected text content");
+    expect(text.text).toContain("Stock quote unavailable for XXFAKEXX");
+    expect(text.text).toContain("Invalid symbol XXFAKEXX for yahoo");
     expect(result.details).toBeNull();
   });
 });

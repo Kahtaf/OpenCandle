@@ -442,7 +442,7 @@ describe("PromptContextBuilder", () => {
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({
       resolvedTurnContext: {
-        userInput: "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days.",
+        userInput: "Add AAPL to my watchlist with a $248 target.",
         priorTurns: [],
         routeKind: "agent_task",
         legacyRoute: "fallback",
@@ -451,7 +451,7 @@ describe("PromptContextBuilder", () => {
         slots: {},
         missingRequired: [],
         toolBundles: ["core_market", "clarification"],
-        activeToolNames: ["track_prediction"],
+        activeToolNames: ["manage_watchlist"],
         memoryQueryPlan: {
           routeKind: "agent_task",
           workflow: "watchlist_or_tracking",
@@ -483,7 +483,7 @@ describe("PromptContextBuilder", () => {
     expect(result).toContain("Route kind: agent_task");
     expect(result).toContain("Tool bundles: core_market, clarification");
     expect(result).toContain("Stateful Tracking Update Policy");
-    expect(result).toContain("track_prediction");
+    expect(result).toContain("manage_watchlist");
     expect(result).toContain("Confirm the persisted state update");
     expect(result).not.toContain("Portfolio Review Policy");
     expect(result).not.toContain("Single Asset Decision Policy");

@@ -15,7 +15,6 @@ import { computeComps } from "../../src/tools/fundamentals/comps.js";
 import { computeDCF } from "../../src/tools/fundamentals/dcf.js";
 import { getAllTools } from "../../src/tools/index.js";
 import { computeCorrelation } from "../../src/tools/portfolio/correlation.js";
-import { checkPredictions, type Prediction } from "../../src/tools/portfolio/predictions.js";
 import { runBacktest } from "../../src/tools/technical/backtest.js";
 import { computeOBV, computeVWAP } from "../../src/tools/technical/indicators.js";
 
@@ -474,88 +473,6 @@ async function run() {
     }
     const r = computeCorrelation(returns, returns);
     assert(Math.abs(r - 1.0) < 0.0001, `self-correlation should be 1.0, got ${r}`);
-  });
-
-  // ============================
-  // 11. Predictions
-  // ============================
-  console.log("\n11. Prediction Tracking:");
-  await test("track_prediction: record → check → accuracy", async () => {
-    const tool = getTool("track_prediction");
-
-    // Record a bullish prediction on AAPL
-    let r = await tool.execute("e2e", {
-      action: "record",
-      symbol: "AAPL",
-      direction: "bullish",
-      conviction: 8,
-      entry_price: 100,
-      timeframe_days: 30,
-    });
-    assert(r.content[0].text.includes("AAPL"), "record missing AAPL");
-    assert(r.content[0].text.includes("bullish"), "record missing direction");
-
-    // Record a bearish prediction on MSFT
-    r = await tool.execute("e2e", {
-      action: "record",
-      symbol: "MSFT",
-      direction: "bearish",
-      conviction: 5,
-      entry_price: 100,
-      timeframe_days: 30,
-    });
-
-    // Check — AAPL is almost certainly > $100, MSFT is almost certainly > $100
-    // So bullish AAPL = correct, bearish MSFT = wrong
-    r = await tool.execute("e2e", { action: "check" });
-    assert(r.content[0].text.includes("Scorecard"), "check missing Scorecard");
-    assert(r.content[0].text.includes("Hit Rate"), "check missing Hit Rate");
-    assert(r.details.total === 2, `expected 2 predictions, got ${r.details.total}`);
-  });
-
-  await test("track_prediction: record validation", async () => {
-    const tool = getTool("track_prediction");
-    try {
-      await tool.execute("e2e", { action: "record" }); // Missing required fields
-      throw new Error("expected validation error");
-    } catch (err: any) {
-      assert(
-        err.message.includes("symbol, direction, conviction, and entry_price are required"),
-        `unexpected validation message: ${err.message}`,
-      );
-    }
-  });
-
-  await test("checkPredictions pure function accuracy", async () => {
-    const preds: Prediction[] = [
-      {
-        symbol: "X",
-        direction: "bullish",
-        conviction: 10,
-        entryPrice: 100,
-        date: "2026-01-01",
-        expiresAt: "2026-02-01",
-        timeframeDays: 30,
-      },
-      {
-        symbol: "Y",
-        direction: "bearish",
-        conviction: 5,
-        entryPrice: 100,
-        date: "2026-01-01",
-        expiresAt: "2026-02-01",
-        timeframeDays: 30,
-      },
-    ];
-    const prices = new Map([
-      ["X", 120],
-      ["Y", 80],
-    ]); // Both correct
-    const result = checkPredictions(preds, prices);
-    assert(result.total === 2, "total should be 2");
-    assert(result.correct === 2, "both should be correct");
-    assert(result.hitRate === 1.0, `hitRate should be 1.0, got ${result.hitRate}`);
-    assert(result.weightedHitRate === 1.0, `weighted should be 1.0, got ${result.weightedHitRate}`);
   });
 
   // ============================

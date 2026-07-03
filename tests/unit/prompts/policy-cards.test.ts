@@ -471,7 +471,7 @@ describe("policy cards", () => {
 
     const rendered = renderPolicyCardForPlanning(statefulPlanning);
     expect(rendered).toContain("Stateful Tracking Update Policy");
-    expect(rendered).toContain("track_prediction");
+    expect(rendered).toContain("track_portfolio");
     expect(rendered).toContain("manage_watchlist");
     expect(rendered).toContain("Confirm the persisted state update");
     expect(rendered).toContain("Do not turn a state update into a buy/sell recommendation");

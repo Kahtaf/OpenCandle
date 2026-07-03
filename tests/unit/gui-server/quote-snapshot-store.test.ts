@@ -7,7 +7,6 @@ function snapshot(generatedAt: string): MarketStateQuoteSnapshot {
     generatedAt,
     watchlistQuotes: [],
     portfolioQuotes: [],
-    predictionQuotes: [],
     portfolioSummary: {
       baseCurrency: "USD",
       totalValue: 0,

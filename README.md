@@ -78,13 +78,13 @@ For a five-minute path from install to a successful answer, see [First Run](http
 ## Example Prompts
 
 ```text
-/analyze NVDA
 What is AAPL trading at?
 Compare MSFT and GOOGL using price, fundamentals, and sentiment
 Show me TSLA puts with Greeks
 Get the fed funds rate from FRED
 Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
 Run risk analysis on SPY
+/analyze NVDA   # deep research: multi-analyst debate, takes a few minutes
 ```
 
 Useful slash commands:
@@ -94,7 +94,7 @@ Useful slash commands:
 /login
 /model
 /connect
-/analyze AAPL
+/analyze AAPL   # deep research: multi-analyst debate, takes a few minutes
 ```
 
 Health diagnostics run from your shell:
@@ -120,7 +120,7 @@ The GUI also has a Diagnostics page at `/diagnostics` with the same health repor
 | Technical | Indicators and strategy backtests | Local calculations over market history |
 | Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
-| Portfolio | Watchlists, holdings, prediction tracking, correlation, risk | Local state plus market data |
+| Portfolio | Watchlists, holdings, correlation, risk | Local state plus market data |
 
 Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Reddit sentiment requires `rdt-cli` (`uv tool install rdt-cli`) plus an active Reddit session in your normal browser. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
 
@@ -186,7 +186,7 @@ src/
 |-- routing/      Request understanding, entity extraction, slot resolution
 |-- workflows/    WorkflowDefinition builders
 |-- runtime/      Session coordinator, workflow runner, runtime context
-|-- market-state/ Durable watchlists, portfolios, predictions, alerts, reports
+|-- market-state/ Durable watchlists, portfolios, alerts, reports
 |-- memory/       SQLite-backed state and retrieval
 |-- sentiment/    Cross-source sentiment pipeline, scoring, adapters, trends
 |-- analysts/     Multi-analyst orchestration

@@ -8,7 +8,6 @@ import { invokeToolFromUi } from "../../../gui/server/invoke-tool.js";
 import { buildMarketStateSnapshot } from "../../../gui/server/market-state-api.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
-import { predictionsTool } from "../../../src/tools/portfolio/predictions.js";
 import { portfolioTrackerTool } from "../../../src/tools/portfolio/tracker.js";
 import { watchlistTool } from "../../../src/tools/portfolio/watchlist.js";
 import type { StockQuote } from "../../../src/types/market.js";
@@ -66,32 +65,17 @@ describe("market-state GUI/TUI parity", () => {
       avg_cost: 150,
     });
 
-    await invokeToolFromUi(
-      sessionManager,
-      predictionsTool,
-      {
-        action: "record",
-        symbol: "AAPL",
-        direction: "bullish",
-        conviction: 8,
-        entry_price: 180,
-        timeframe_days: 30,
-      },
-      "ui",
-    );
-
     const db = initDefaultDatabase();
     const snapshot = buildMarketStateSnapshot(db);
     db.close();
 
     expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
     expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
-    expect(snapshot.predictions.map((prediction) => prediction.symbol)).toEqual(["AAPL"]);
     expect(
       messages.some(
         (message) =>
           message.role === "toolResult" &&
-          message.toolName === "track_prediction" &&
+          message.toolName === "manage_watchlist" &&
           message.details?.stateChange?.source === "ui" &&
           typeof message.details.stateChange.targetId === "number" &&
           typeof message.details.stateChange.instrumentId === "number",

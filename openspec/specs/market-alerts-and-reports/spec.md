@@ -132,13 +132,14 @@ OpenCandle SHALL NOT require a background heartbeat for V1 manual alert checks, 
 
 ### Requirement: Daily Reports Are Durable Templates and Runs
 
-OpenCandle SHALL store daily report templates and report run history in SQLite.
+OpenCandle SHALL store daily report templates and report run history in SQLite. Manual report generation SHALL NOT create or imply an active schedule.
 
 #### Scenario: Default watchlist morning report is configured
 
-- **WHEN** a user enables a morning report for the default watchlist
+- **WHEN** a user explicitly asks to set up a morning report for the default watchlist
 - **THEN** OpenCandle stores a report template with cadence, timezone, intended local run time, and configuration containing `targets.default_watchlist = true`
 - **AND** the template can target the default watchlist without hardcoding a single-watchlist schema
+- **AND** the surface states that the schedule is stored intent and will run automatically only once background scheduling ships
 
 #### Scenario: Report schedule preserves user-local intent
 
@@ -156,14 +157,19 @@ OpenCandle SHALL store daily report templates and report run history in SQLite.
 
 - **WHEN** OpenCandle generates a daily report
 - **THEN** it records a report run with start time, completion time, status, summary metadata, and any error metadata
-- **AND** the run references the configured default watchlist report template when one exists
-- **AND** the template records the run time as its latest run
+- **AND** the run references an existing configured report template when one matches, or records as an unscheduled manual run otherwise
 
 #### Scenario: Report generator can run manually
 
 - **WHEN** a user explicitly requests a daily report
 - **THEN** OpenCandle can generate the report from current watchlist state and available providers
 - **AND** the result does not require a background scheduler to exist
+
+#### Scenario: Manual generation does not create a schedule
+
+- **WHEN** a user generates a report manually and no report template exists
+- **THEN** OpenCandle records the run without creating an enabled schedule template as a side effect
+- **AND** no surface presents the report as scheduled when no scheduler will run it
 
 ### Requirement: Watchlist Target And Stop Fields Are Not V1 Background Alerts
 
@@ -174,3 +180,4 @@ OpenCandle SHALL treat watchlist target and stop prices as display/manual-check 
 - **WHEN** a watchlist item has a target price or stop price
 - **THEN** OpenCandle may display those fields and use them in explicit watchlist checks
 - **AND** it does not create background alert events for those fields unless a corresponding enabled alert rule exists
+

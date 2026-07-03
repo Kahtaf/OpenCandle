@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING**: The predictions feature was removed entirely — the `track_prediction` tool, the GUI Predictions page and navigation, prediction quote snapshots, prediction routing/prompt context, and the SQLite `prediction_records` table (dropped by the v8 schema migration; all other saved market state is preserved).
+- **BREAKING**: The `OPENCANDLE_DEBATE` flag and `debate` config key were removed; comprehensive analysis (`/analyze`) always runs the adversarial bull/bear debate steps. A still-set flag is ignored rather than failing startup.
+- **BREAKING**: The deterministic rules router is no longer a production routing path. The LLM router is now the default and only mode; `OPENCANDLE_ROUTER_MODE=rules` fails startup with migration guidance. Deterministic safety nets (acronym disambiguation, symbol preflight, compare clarification aborts, router validation-failure recovery) remain active on LLM router output.
+
+### Changed
+
+- `/analyze` is now positioned as the deep-research option instead of the first suggested prompt: GUI empty-state cards, the README, and docs first-prompt lists lead with fast keyless prompts and label the multi-analyst debate as a longer run.
+- The router post-processor now canonicalizes camelCase slot keys to snake_case and converts one-element `symbols` slots to the scalar `symbol` slot (and vice versa) per the workflow manifest, reducing routing drift on non-Claude router models. The live router eval now diffs the routing contract only, excluding recording-model-specific internal diagnostics.
+
 ### Changed
 
 - README and System Architecture docs now include the OpenCandle architecture diagram, with editable Excalidraw source and transparent PNG assets checked into the repo.
@@ -14,6 +25,12 @@
 
 ### Fixed
 
+- GUI catalog tool forms now render nullable numeric schema fields, such as watchlist target and stop prices, as numeric controls instead of sending them as strings.
+- Daily watchlist reports no longer ship internal scaffolding text: the placeholder "Technical snapshot … deferred" section is omitted until a real section builder exists, and manual report runs no longer auto-create an enabled morning schedule template as a side effect — schedules are stored only through the explicit configure flow and run while OpenCandle is open.
+- `backtest_strategy` no longer fills trades at the same close used to compute the signal: signals now fill at the next bar's open, a flat per-side cost (default 5 bps, `cost_bps` parameter) applies to every fill, final-bar signals are reported as pending instead of phantom trades, and the output states its execution assumptions and limitations (no dividends, taxes, slippage model, or liquidity modeling).
+- `compute_dcf` no longer emits fabricated per-share values: it refuses with an explicit message when shares outstanding cannot be derived (instead of assuming 1 share), passes net debt through signed so cash-rich companies get their net cash added to equity value (instead of clamping to zero), and rejects terminal growth at or above the discount rate before computing (with a Yahoo quote market-cap fallback when the Alpha Vantage overview is unavailable). A TUI harness e2e (`npm run test:e2e:harness-dcf`) drives a natural DCF prompt end to end.
+- The GUI catalog payload no longer serializes saved provider API keys to the browser; configured providers report status plus a masked hint, and the provider form offers a replace-only key input instead of prefilling the saved secret into the DOM.
+- GUI catalog tool forms are now generated from each tool's served parameter schema instead of a hand-written form map, removing stale entries for renamed tools (`calculate_dcf`, `manage_portfolio`, `watchlist`) and an orphaned `predict_returns` form that had no backend tool.
 - `.env` files no longer override environment variables that are already exported in the shell, matching conventional dotenv precedence.
 - Docs now enumerate the `/connect` provider/category targets and mark one model provider as required instead of listing all model keys as optional.
 - DESIGN.md and DESIGN.json now name `packages/ui` as the normative token/primitive source and match the shipped button, badge, page-width, and typography metrics instead of retired aspirational values.

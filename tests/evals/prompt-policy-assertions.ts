@@ -449,16 +449,6 @@ function evaluateManifestAssertion(
   if (lowerAssertion.includes("costs/slippage")) {
     return requiredTerms(/costs?|slippage/);
   }
-  if (lowerAssertion.includes("track_prediction")) {
-    return {
-      passed: tools.includes("track_prediction"),
-      reason: "expected track_prediction tool call",
-      deterministic: true,
-    };
-  }
-  if (lowerAssertion.includes("confirms aapl")) {
-    return requiredTerms(/\baapl\b/, /bullish/, /entry/, /conviction/, /30[- ]?day|thirty[- ]day/);
-  }
   if (lowerAssertion.includes("does not turn the state update into a buy/sell recommendation")) {
     return forbids(/\b(?:buy|sell|avoid)\b/);
   }

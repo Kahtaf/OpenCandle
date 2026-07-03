@@ -19,7 +19,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
 | Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, DuckDuckGo, Brave, Exa |
 | Filings | `get_sec_filings` | SEC EDGAR |
-| Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `track_prediction` | Local state plus market providers |
+| Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation` | Local state plus market providers |
 
 ## Keyed and Keyless Sources
 

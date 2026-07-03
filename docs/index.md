@@ -48,7 +48,7 @@ It is read-only research software. It does not place trades, route orders, or pr
 | Macro | FRED series, rates, inflation, GDP, unemployment, crypto Fear & Greed |
 | Sentiment | Reddit via `rdt-cli`, Twitter/X via `twitter-cli`, web search, and cross-source sentiment summaries |
 | Filings | SEC EDGAR filing search |
-| Portfolio | Watchlists, holdings, correlation, prediction tracking, risk analysis |
+| Portfolio | Watchlists, holdings, correlation, risk analysis |
 
 ## Operating Principles
 
@@ -68,11 +68,11 @@ opencandle gui
 First prompts:
 
 ```text
-/analyze NVDA
 What is AAPL trading at?
 Compare MSFT and GOOGL using price, fundamentals, and sentiment
 Show me TSLA puts with Greeks
 Get the fed funds rate from FRED
+/analyze NVDA   # deep research: multi-analyst debate, takes a few minutes
 ```
 
 OpenCandle gathers and organizes evidence. Judgment and risk stay with you.

@@ -914,7 +914,7 @@ describe("planning layer", () => {
     const planning = buildPlanningEnvelope(
       {
         ...input,
-        text: "Record a bullish prediction on AAPL at $248 with conviction 8 for 30 days.",
+        text: "Add AAPL to my watchlist with a $248 target.",
       },
       {
         ...compareOutput,
