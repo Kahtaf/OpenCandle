@@ -44,11 +44,11 @@
 
 ## 6. DCF Hardening
 
-- [ ] 6.1 Refuse per-share output when market cap or positive quote price is unavailable (replace `sharesOutstanding = ... : 1` at `dcf.ts:248`), mirroring the negative-FCF refusal shape
-- [ ] 6.2 Pass net debt through signed (remove `Math.max(0, netDebt)` at `dcf.ts:257`); net cash adds to equity value
-- [ ] 6.3 Validate `discountRate > terminalGrowth` before the main computation (`dcf.ts:58`); return a Gordon Growth validation error otherwise
-- [ ] 6.4 Extend `tests/unit/tools/dcf.test.ts` for all three guards; add a TUI harness test driving "Run a DCF on AAPL" end to end asserting a `compute_dcf` call and an intrinsic-value or explicit-refusal answer
-- [ ] 6.5 Run `npm test`; CHANGELOG
+- [x] 6.1 Refuse per-share output when market cap or positive quote price is unavailable (replaced the `sharesOutstanding = 1` fallback; added Yahoo quote market-cap fallback before refusing)
+- [x] 6.2 Pass net debt through signed (removed `Math.max(0, netDebt)`); net cash adds to equity value
+- [x] 6.3 Validate `discountRate > terminalGrowth` in `computeDCF` (throws) and in the tool (clean refusal message) before computing
+- [x] 6.4 Extended `tests/unit/tools/dcf.test.ts` for all three guards (mocked providers); added `tests/e2e/harness-dcf.test.ts` + `npm run test:e2e:harness-dcf` driving "Run a DCF on AAPL" through the TUI harness — run live (passed via the honest-refusal path; Alpha Vantage free-tier daily cap was hit, pre-existing unavailability handling)
+- [x] 6.5 Run `npm test`; CHANGELOG
 
 ## 7. Backtest Realism
 

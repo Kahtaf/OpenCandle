@@ -1,6 +1,31 @@
-import { describe, expect, it } from "vitest";
-import { computeDCF, computeNetDebt } from "../../../src/tools/fundamentals/dcf.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
+import { getFinancials, getOverview } from "../../../src/providers/alpha-vantage.js";
+import { getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
+
+vi.mock("../../../src/config.js", () => ({
+  getConfig: () => ({ alphaVantageApiKey: "test-key" }),
+}));
+vi.mock("../../../src/onboarding/tool-helpers.js", () => ({
+  withCredentialCheck: (_id: string, fn: () => unknown) => fn(),
+}));
+vi.mock("../../../src/providers/wrap-provider.js", () => ({
+  wrapProvider: async (_name: string, fn: () => Promise<unknown>) => {
+    try {
+      return { status: "ok", data: await fn() };
+    } catch (err) {
+      return { status: "unavailable", reason: err instanceof Error ? err.message : String(err) };
+    }
+  },
+}));
+vi.mock("../../../src/providers/alpha-vantage.js", () => ({
+  getOverview: vi.fn(),
+  getFinancials: vi.fn(),
+}));
+vi.mock("../../../src/providers/yahoo-finance.js", () => ({
+  getQuote: vi.fn(),
+}));
 
 describe("computeDCF", () => {
   const baseParams = {
@@ -125,6 +150,97 @@ describe("computeDCF", () => {
     const fcfY1 = baseParams.freeCashFlow * (1 + baseParams.growthRate);
     const pvMidYear = fcfY1 / (1 + baseParams.discountRate) ** 0.5;
     expect(result.projectedCashFlows[0].presentValue).toBeCloseTo(pvMidYear, 0);
+  });
+
+  it("rejects a terminal growth rate at or above the discount rate", () => {
+    expect(() => computeDCF({ ...baseParams, terminalGrowth: baseParams.discountRate })).toThrow(
+      /Gordon Growth|terminal growth/i,
+    );
+    expect(() => computeDCF({ ...baseParams, terminalGrowth: 0.12 })).toThrow(
+      /Gordon Growth|terminal growth/i,
+    );
+  });
+
+  it("adds net cash to equity value instead of clamping it away", () => {
+    const netCash = computeDCF({ ...baseParams, netDebt: -500_000_000 });
+    const neutral = computeDCF({ ...baseParams, netDebt: 0 });
+    expect(netCash.intrinsicValue).toBeCloseTo(
+      neutral.intrinsicValue + 500_000_000 / baseParams.sharesOutstanding,
+      2,
+    );
+  });
+});
+
+describe("compute_dcf tool guards", () => {
+  const statement: FinancialStatement = {
+    fiscalDate: "2025-09-30",
+    revenue: 400e9,
+    grossProfit: 180e9,
+    operatingIncome: 120e9,
+    netIncome: 100e9,
+    eps: 6.5,
+    totalAssets: 365e9,
+    totalLiabilities: 308e9,
+    totalEquity: 57e9,
+    operatingCashFlow: 120e9,
+    freeCashFlow: 100e9,
+    totalDebt: 30e9,
+    cashAndEquivalents: 90e9,
+  };
+  const quote = {
+    symbol: "AAPL",
+    price: 200,
+    change: 0,
+    changePercent: 0,
+    open: 200,
+    high: 200,
+    low: 200,
+    previousClose: 200,
+    volume: 1_000,
+    marketCap: 0,
+    pe: null,
+    week52High: 210,
+    week52Low: 150,
+    timestamp: 0,
+    currency: "USD",
+  };
+
+  beforeEach(() => {
+    vi.mocked(getFinancials).mockResolvedValue([statement]);
+    vi.mocked(getQuote).mockResolvedValue(quote);
+  });
+
+  it("refuses per-share output when shares outstanding cannot be derived", async () => {
+    vi.mocked(getOverview).mockResolvedValue({ marketCap: 0 } as never);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.content[0].text).toMatch(/cannot compute|shares outstanding/i);
+    expect(result.content[0].text).not.toContain("Intrinsic Value:");
+    expect(result.details).toBeNull();
+  });
+
+  it("uses signed net debt so net cash raises the intrinsic value", async () => {
+    vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    // statement has 30B debt vs 90B cash → net cash of 60B must be added.
+    expect(result.details?.netDebt).toBe(-60e9);
+  });
+
+  it("rejects an invalid terminal spread before computing", async () => {
+    vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
+
+    const result = await dcfTool.execute("t", {
+      symbol: "AAPL",
+      discount_rate: 0.03,
+      terminal_growth: 0.05,
+    });
+
+    expect(result.content[0].text).toMatch(/terminal growth.*discount rate|Gordon Growth/i);
+    expect(result.content[0].text).not.toContain("Intrinsic Value:");
+    expect(result.details).toBeNull();
   });
 });
 

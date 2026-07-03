@@ -45,6 +45,14 @@ export function computeDCF(params: DCFParams): DCFResult {
     sharesOutstanding,
   } = params;
 
+  // Gordon Growth requires discount > terminal growth; a non-positive spread
+  // divides by zero or flips the terminal value's sign.
+  if (discountRate <= terminalGrowth) {
+    throw new Error(
+      `Gordon Growth constraint violated: terminal growth (${(terminalGrowth * 100).toFixed(1)}%) must be below the discount rate (${(discountRate * 100).toFixed(1)}%).`,
+    );
+  }
+
   // Project future cash flows (mid-year convention: discount at year-0.5)
   const projectedCashFlows: Array<{ year: number; fcf: number; presentValue: number }> = [];
   for (let y = 1; y <= years; y++) {
@@ -243,9 +251,41 @@ export const dcfTool: AgentTool<typeof params> = {
 
       const discountRate = args.discount_rate ?? 0.1;
       const terminalGrowth = args.terminal_growth ?? 0.03;
+      if (discountRate <= terminalGrowth) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ Invalid DCF assumptions for ${symbol}: terminal growth (${(terminalGrowth * 100).toFixed(1)}%) must be below the discount rate (${(discountRate * 100).toFixed(1)}%) for the Gordon Growth terminal value to be meaningful. Lower terminal_growth or raise discount_rate.`,
+            },
+          ],
+          details: null,
+        };
+      }
+
       const years = args.projection_years ?? 5;
-      const marketCap = overview?.marketCap ?? 0;
-      const sharesOutstanding = quote.price > 0 && marketCap > 0 ? marketCap / quote.price : 1;
+      // Prefer the overview market cap; fall back to the quote's market cap.
+      // Never substitute a placeholder share count — a fabricated
+      // per-share value is worse than an honest refusal.
+      const marketCap =
+        overview?.marketCap && overview.marketCap > 0
+          ? overview.marketCap
+          : quote.marketCap > 0
+            ? quote.marketCap
+            : 0;
+      if (quote.price <= 0 || marketCap <= 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ Cannot compute a per-share DCF for ${symbol}: shares outstanding cannot be derived because ${quote.price <= 0 ? "the current quote price is unavailable" : "market capitalization is unavailable from the overview and quote providers"}. Per-share intrinsic value requires a real share count.`,
+            },
+          ],
+          details: null,
+        };
+      }
+      const sharesOutstanding = marketCap / quote.price;
+      // Signed on purpose: net cash (negative net debt) adds to equity value.
       const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
 
       const result = computeDCF({
@@ -254,7 +294,7 @@ export const dcfTool: AgentTool<typeof params> = {
         discountRate,
         terminalGrowth,
         years,
-        netDebt: Math.max(0, netDebt),
+        netDebt,
         sharesOutstanding,
       });
 

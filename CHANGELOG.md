@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- `compute_dcf` no longer emits fabricated per-share values: it refuses with an explicit message when shares outstanding cannot be derived (instead of assuming 1 share), passes net debt through signed so cash-rich companies get their net cash added to equity value (instead of clamping to zero), and rejects terminal growth at or above the discount rate before computing (with a Yahoo quote market-cap fallback when the Alpha Vantage overview is unavailable). A TUI harness e2e (`npm run test:e2e:harness-dcf`) drives a natural DCF prompt end to end.
 - The GUI catalog payload no longer serializes saved provider API keys to the browser; configured providers report status plus a masked hint, and the provider form offers a replace-only key input instead of prefilling the saved secret into the DOM.
 - GUI catalog tool forms are now generated from each tool's served parameter schema instead of a hand-written form map, removing stale entries for renamed tools (`calculate_dcf`, `manage_portfolio`, `watchlist`) and an orphaned `predict_returns` form that had no backend tool.
 - `.env` files no longer override environment variables that are already exported in the shell, matching conventional dotenv precedence.
