@@ -19,6 +19,7 @@
 ### Fixed
 
 - The GUI catalog payload no longer serializes saved provider API keys to the browser; configured providers report status plus a masked hint, and the provider form offers a replace-only key input instead of prefilling the saved secret into the DOM.
+- GUI catalog tool forms are now generated from each tool's served parameter schema instead of a hand-written form map, removing stale entries for renamed tools (`calculate_dcf`, `manage_portfolio`, `watchlist`) and an orphaned `predict_returns` form that had no backend tool.
 - `.env` files no longer override environment variables that are already exported in the shell, matching conventional dotenv precedence.
 - Docs now enumerate the `/connect` provider/category targets and mark one model provider as required instead of listing all model keys as optional.
 - DESIGN.md and DESIGN.json now name `packages/ui` as the normative token/primitive source and match the shipped button, badge, page-width, and typography metrics instead of retired aspirational values.

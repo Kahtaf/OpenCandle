@@ -22,10 +22,10 @@
 
 ## 3. Catalog Schema Generation (includes predict_returns deletion)
 
-- [ ] 3.1 Build a JSON-schema→form-field mapper from served tool `parameters` (types, required, enums, defaults, descriptions), upgrading the `deriveGenericSchema` path in `CatalogOverlay.jsx:597`
-- [ ] 3.2 Delete the handwritten `TOOL_SCHEMAS` map in `tool-schemas.js` (removes stale `calculate_dcf`, `manage_portfolio`, `watchlist` and orphan `predict_returns:347-358`); keep a thin presentation-overrides map validated against catalog tool names
-- [ ] 3.3 Add a test that every overrides key matches a served tool name (prevents future drift); verify complex tools (screen_stocks, manage_alerts, track_portfolio) render usable forms
-- [ ] 3.4 Run GUI unit + browser smoke tests; CHANGELOG
+- [x] 3.1 Build a JSON-schema→form-field mapper from served tool `parameters` (types, required, enums, defaults, descriptions), upgrading the `deriveGenericSchema` path in `CatalogOverlay.jsx:597` (new `schema-form.js` with csv/json coercion for array/object params)
+- [x] 3.2 Delete the handwritten `TOOL_SCHEMAS` map in `tool-schemas.js` (removes stale `calculate_dcf`, `manage_portfolio`, `watchlist` and orphan `predict_returns:347-358`); keep a thin presentation-overrides map validated against catalog tool names (`tool-form-overrides.js`)
+- [x] 3.3 Add a test that every overrides key matches a served tool name (prevents future drift); verify complex tools (screen_stocks, manage_alerts, track_portfolio) render usable forms
+- [x] 3.4 Run GUI unit + browser smoke tests; CHANGELOG
 
 ## 4. Router Consolidation (absorbs remove-rule-router)
 

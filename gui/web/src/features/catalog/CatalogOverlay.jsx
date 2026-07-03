@@ -23,7 +23,8 @@ import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { cn } from "../../lib/utils.js";
 import { FieldRenderer } from "./field-renderer.jsx";
 import { defaultValuesFor, validateRequired } from "./field-utils.js";
-import { DOMAIN_LABELS, schemaForTool } from "./tool-schemas.js";
+import { coerceFieldValue, fieldsForTool } from "./schema-form.js";
+import { DOMAIN_LABELS } from "./tool-form-overrides.js";
 import { schemaForWorkflow } from "./workflow-schemas.js";
 
 const TABS = [
@@ -594,7 +595,7 @@ function ToolBuilder({
   lookupSymbol,
   sessionId,
 }) {
-  const schema = useMemo(() => schemaForTool(tool.name) ?? deriveGenericSchema(tool), [tool]);
+  const schema = useMemo(() => fieldsForTool(tool), [tool]);
   const [values, setValues] = useState(() => defaultValuesFor(schema));
   const setField = useCallback(
     (name, value) => setValues((prev) => ({ ...prev, [name]: value })),
@@ -602,7 +603,7 @@ function ToolBuilder({
   );
   const issues = validateRequired(schema, values);
 
-  const cleanArgs = useMemo(() => stripEmpty(values), [values]);
+  const cleanArgs = useMemo(() => stripEmpty(coerceValues(schema, values)), [schema, values]);
   const promptText = useMemo(
     () => `Use ${tool.name}${formatArgsForPrompt(cleanArgs)}`,
     [tool, cleanArgs],
@@ -988,23 +989,12 @@ function prettyToolName(name) {
     .replace(/_/g, " ");
 }
 
-function deriveGenericSchema(tool) {
-  const props = tool.parameters?.properties || {};
-  return Object.entries(props).map(([name, schema]) => {
-    const description = String(schema.description || "");
-    return {
-      name,
-      kind: schema.type === "number" ? "text" : schema.type === "boolean" ? "select" : "text",
-      label: friendlyLabel(name),
-      placeholder: schema.examples?.[0],
-      helper: description.length > 80 ? `${description.slice(0, 80)}…` : description,
-      required: tool.parameters?.required?.includes?.(name) ?? false,
-    };
-  });
-}
-
-function friendlyLabel(name) {
-  return name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function coerceValues(fields, values) {
+  const out = {};
+  for (const field of fields) {
+    out[field.name] = coerceFieldValue(field, values[field.name]);
+  }
+  return out;
 }
 
 function stripEmpty(values) {
