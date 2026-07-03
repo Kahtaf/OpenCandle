@@ -9,6 +9,8 @@ OpenCandle is a local financial research workbench. You ask a question in the te
 
 It is not an automated trading system and it is not a financial advisor. It is research software built to make the evidence path inspectable.
 
+![OpenCandle architecture diagram showing how a prompt flows through OpenCandle internals, a configured AI model, evidence trace, saved market state, and external data sources.](./images/opencandle-architecture.png)
+
 ## The Everyday Flow
 
 ```text

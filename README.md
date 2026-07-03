@@ -165,6 +165,8 @@ npm run gui
 
 ## How It Fits Together
 
+![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](assets/opencandle-architecture.png)
+
 ```text
 User prompt
   -> routing and slot resolution
