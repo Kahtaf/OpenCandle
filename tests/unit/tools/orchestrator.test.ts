@@ -197,7 +197,7 @@ describe("validation prompt", () => {
 });
 
 describe("buildComprehensiveAnalysisDefinition", () => {
-  it("returns exactly 11 steps in correct order (debate on)", () => {
+  it("always returns 11 steps including the debate sequence", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
     expect(def.steps).toHaveLength(11);
     expect(def.steps.map((s) => s.stepType)).toEqual([
@@ -213,28 +213,6 @@ describe("buildComprehensiveAnalysisDefinition", () => {
       "synthesis",
       "validation",
     ]);
-  });
-
-  it("returns exactly 8 steps without debate steps (debate off)", () => {
-    const def = buildComprehensiveAnalysisDefinition("AAPL", { debate: false });
-    expect(def.steps).toHaveLength(8);
-    expect(def.steps.map((s) => s.stepType)).toEqual([
-      "initial_fetch",
-      "analyst_valuation",
-      "analyst_momentum",
-      "analyst_options",
-      "analyst_contrarian",
-      "analyst_risk",
-      "synthesis",
-      "validation",
-    ]);
-  });
-
-  it("debate-off synthesis uses non-debate prompt", () => {
-    const def = buildComprehensiveAnalysisDefinition("AAPL", { debate: false });
-    const synthesis = def.steps.find((s) => s.stepType === "synthesis")!;
-    expect(synthesis.prompt).not.toContain("RESOLVE THE DEBATE");
-    expect(synthesis.prompt).toContain("Tally the SIGNAL votes");
   });
 
   it("debate steps are not skippable", () => {
@@ -253,14 +231,13 @@ describe("buildComprehensiveAnalysisDefinition", () => {
   });
 });
 
-describe("comprehensive analysis follow-up prompts with debate toggle", () => {
-  it("queues 7 follow-ups with debate off (5 analysts + synthesis + validation)", () => {
-    const calls = buildComprehensiveAnalysisDefinition("AAPL", { debate: false })
+describe("comprehensive analysis follow-up prompts", () => {
+  it("queues 10 follow-ups (5 analysts + 3 debate + synthesis + validation)", () => {
+    const calls = buildComprehensiveAnalysisDefinition("AAPL")
       .steps.slice(1)
       .map((step) => step.prompt);
-    expect(calls).toHaveLength(7);
-    expect(calls[5]).toContain("[Synthesis]");
-    expect(calls[5]).not.toContain("RESOLVE THE DEBATE");
-    expect(calls[6]).toContain("[Validation");
+    expect(calls).toHaveLength(10);
+    expect(calls[8]).toContain("RESOLVE THE DEBATE");
+    expect(calls[9]).toContain("[Validation");
   });
 });

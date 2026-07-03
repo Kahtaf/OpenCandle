@@ -24,7 +24,7 @@ Effective precedence:
 3. `$OPENCANDLE_HOME/config.json`.
 4. Built-in defaults.
 
-For provider API keys and `OPENCANDLE_DEBATE`, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, and developer diagnostic switches are env-only.
+For provider API keys, env wins over JSON config. `OPENCANDLE_HOME`, `OPENCANDLE_GUI_HOST`, `OPENCANDLE_GUI_PORT`, and developer diagnostic switches are env-only.
 
 ## Environment Variables
 
@@ -41,7 +41,6 @@ Most users only need model credentials, optional data-provider keys, the OpenCan
 | `EXA_API_KEY` | unset | Exa search. Overrides `providers.exa.apiKey`. |
 | `FINNHUB_API_KEY` | unset | Finnhub company news for sentiment summaries. Overrides `providers.finnhub.apiKey`. |
 | `OPENCANDLE_HOME` | `~/.opencandle` | Directory for OpenCandle config and local state. |
-| `OPENCANDLE_DEBATE` | `true` | Enables adversarial bull/bear debate for comprehensive analysis. Set `false` or `0` to disable. |
 | `OPENCANDLE_GUI_HOST` | `127.0.0.1` | GUI bind host. Set `0.0.0.0` only when you intentionally want LAN/Tailscale access. |
 | `OPENCANDLE_GUI_ALLOW_REMOTE_PRIVATE_API` | unset | Allow the GUI's private market-state API to accept cookie-authenticated requests from non-loopback peers. Set `1` only together with an intentional `OPENCANDLE_GUI_HOST` network bind. |
 | `OPENCANDLE_GUI_PORT` | `14567` | GUI HTTP/WebSocket port. |
@@ -75,7 +74,6 @@ These settings are for debugging request understanding and tool availability. Ke
     "exa": { "apiKey": "..." },
     "finnhub": { "apiKey": "..." }
   },
-  "debate": true,
   "sentiment": {
     "retentionDays": 30,
     "defaultSubreddits": ["wallstreetbets", "stocks", "investing", "options"],

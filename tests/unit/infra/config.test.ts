@@ -95,7 +95,6 @@ describe("loadConfig", () => {
     const config = loadConfig();
     expect(config.alphaVantageApiKey).toBeUndefined();
     expect(config.fredApiKey).toBeUndefined();
-    expect(config.debate).toBe(true);
     expect(config.sentiment).toBeDefined();
   });
 
@@ -244,36 +243,16 @@ describe("loadConfig", () => {
     });
   });
 
-  it("debate defaults to true when not set", () => {
-    delete process.env.OPENCANDLE_DEBATE;
-    mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT");
-    });
-    const config = loadConfig();
-    expect(config.debate).toBe(true);
-  });
-
-  it("debate reads from OPENCANDLE_DEBATE env var", () => {
+  it("ignores the retired OPENCANDLE_DEBATE flag and legacy debate file key", () => {
     process.env.OPENCANDLE_DEBATE = "false";
-    mockedExistsSync.mockReturnValue(false);
-    mockedReadFileSync.mockImplementation(() => {
-      throw new Error("ENOENT");
-    });
-    const config = loadConfig();
-    expect(config.debate).toBe(false);
-    delete process.env.OPENCANDLE_DEBATE;
-  });
-
-  it("debate reads from file config", () => {
-    delete process.env.OPENCANDLE_DEBATE;
     mockedExistsSync.mockImplementation((path) => path === configPath);
     mockedReadFileSync.mockImplementation((path) => {
       if (path === configPath) return JSON.stringify({ debate: false });
       throw new Error("ENOENT");
     });
     const config = loadConfig();
-    expect(config.debate).toBe(false);
+    expect("debate" in config).toBe(false);
+    delete process.env.OPENCANDLE_DEBATE;
   });
 
   it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is unset", () => {

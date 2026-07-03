@@ -115,9 +115,7 @@ export default function openCandleExtension(
         ctx.ui.notify("Usage: /analyze <ticker>", "warning");
         return;
       }
-      const definition = buildComprehensiveAnalysisDefinition(symbol, {
-        debate: getConfig().debate,
-      });
+      const definition = buildComprehensiveAnalysisDefinition(symbol);
       coordinator.executeWorkflow(pi, definition, ctx);
     },
   });
@@ -676,12 +674,10 @@ export default function openCandleExtension(
     if (event.source === "extension") return;
     coordinator.clearTickerValidationCache();
 
-    // Check for comprehensive analysis pattern — same in both modes.
+    // Check for comprehensive analysis pattern before routing.
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
-      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol, {
-        debate: getConfig().debate,
-      });
+      const definition = buildComprehensiveAnalysisDefinition(analysis.symbol);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };

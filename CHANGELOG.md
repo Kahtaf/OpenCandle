@@ -5,6 +5,7 @@
 ### Removed
 
 - **BREAKING**: The predictions feature was removed entirely — the `track_prediction` tool, the GUI Predictions page and navigation, prediction quote snapshots, prediction routing/prompt context, and the SQLite `prediction_records` table (dropped by the v8 schema migration; all other saved market state is preserved).
+- **BREAKING**: The `OPENCANDLE_DEBATE` flag and `debate` config key were removed; comprehensive analysis (`/analyze`) always runs the adversarial bull/bear debate steps. A still-set flag is ignored rather than failing startup.
 - **BREAKING**: The deterministic rules router is no longer a production routing path. The LLM router is now the default and only mode; `OPENCANDLE_ROUTER_MODE=rules` fails startup with migration guidance. Deterministic safety nets (acronym disambiguation, symbol preflight, compare clarification aborts, router validation-failure recovery) remain active on LLM router output.
 
 ### Changed

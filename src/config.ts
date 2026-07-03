@@ -24,8 +24,6 @@ export interface Config {
   braveApiKey?: string;
   exaApiKey?: string;
   finnhubApiKey?: string;
-  /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
-  debate?: boolean;
   /**
    * Intent-router mode. The LLM router is the only production routing path;
    * `OPENCANDLE_ROUTER_MODE` accepts only `"llm"` (or unset). The removed
@@ -65,8 +63,6 @@ export interface OpenCandleFileConfig {
       apiKey?: string;
     };
   };
-  /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
-  debate?: boolean;
   sentiment?: {
     retentionDays?: number;
     defaultSubreddits?: string[];
@@ -192,7 +188,6 @@ function isPlanningBehaviorMode(value: string | undefined): value is PlanningBeh
 }
 
 function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
-  const debateEnv = process.env.OPENCANDLE_DEBATE;
   const fileSentiment = fileConfig.sentiment;
   return {
     alphaVantageApiKey:
@@ -201,10 +196,6 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
-    debate:
-      debateEnv !== undefined
-        ? debateEnv !== "false" && debateEnv !== "0"
-        : (fileConfig.debate ?? true),
     routerMode: resolveRouterMode(),
     toolScopeMode: resolveToolScopeMode(),
     planningMigrationStatuses: resolvePlanningMigrationStatuses(),

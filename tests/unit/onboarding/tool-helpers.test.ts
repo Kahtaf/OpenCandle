@@ -10,7 +10,6 @@ const EMPTY_CONFIG = {
   braveApiKey: undefined,
   exaApiKey: undefined,
   finnhubApiKey: undefined,
-  debate: true,
   sentiment: undefined,
 };
 

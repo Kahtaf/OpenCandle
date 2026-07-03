@@ -38,9 +38,9 @@
 
 ## 5. Debate Fold-In
 
-- [ ] 5.1 Remove `OPENCANDLE_DEBATE` resolution (`src/config.ts:194,203-206`) — ignore the env var if set; remove the `debate` config field and the option from `buildComprehensiveAnalysisDefinition` (`opencandle-extension.ts:686`)
-- [ ] 5.2 Delete the no-debate branch and prompts (`orchestrator.ts:196-240` conditional, `SYNTHESIS_PROMPT_NO_DEBATE`, `VALIDATION_PROMPT_NO_DEBATE`)
-- [ ] 5.3 Update config/orchestrator/onboarding/eval tests referencing the flag; remove `docs/configuration.md:44` row; CHANGELOG (BREAKING: flag removed, debate always on)
+- [x] 5.1 Remove `OPENCANDLE_DEBATE` resolution — env var is ignored if set; removed the `debate` config field and the option from `buildComprehensiveAnalysisDefinition`
+- [x] 5.2 Delete the no-debate branch and prompts (`SYNTHESIS_PROMPT_NO_DEBATE`, `VALIDATION_PROMPT_NO_DEBATE`)
+- [x] 5.3 Update config/orchestrator/onboarding tests; remove `docs/configuration.md` rows; CHANGELOG (BREAKING: flag removed, debate always on)
 
 ## 6. DCF Hardening
 
