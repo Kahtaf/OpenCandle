@@ -5,6 +5,7 @@
 ### Fixed
 
 - GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
+- Session-entry wait tests now use deterministic timers for async workflow settlement, removing a Node 24 CI timing flake.
 
 ## [0.11.0] - 2026-07-03
 
