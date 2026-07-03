@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
+- Session-entry wait tests now use deterministic timers for async workflow settlement, removing a Node 24 CI timing flake.
+
+## [0.11.0] - 2026-07-03
+
 ### Removed
 
 - **BREAKING**: The predictions feature was removed entirely — the `track_prediction` tool, the GUI Predictions page and navigation, prediction quote snapshots, prediction routing/prompt context, and the SQLite `prediction_records` table (dropped by the v8 schema migration; all other saved market state is preserved).
