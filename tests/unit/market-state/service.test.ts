@@ -373,5 +373,4 @@ describe("MarketStateService", () => {
       })?.id,
     ).toBe(item.instrumentId);
   });
-
 });

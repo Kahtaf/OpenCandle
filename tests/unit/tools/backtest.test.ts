@@ -55,6 +55,7 @@ describe("runBacktest", () => {
     expect(result).toHaveProperty("totalReturn");
     expect(result).toHaveProperty("buyAndHoldReturn");
     expect(result).toHaveProperty("trades");
+    expect(result).toHaveProperty("forcedClosures");
     expect(result).toHaveProperty("winRate");
     expect(result).toHaveProperty("maxDrawdown");
     expect(result.strategy).toBe("sma_crossover");
@@ -210,9 +211,77 @@ describe("runBacktest", () => {
     const result = runBacktest(bars, "sma_crossover", { costBps: 0 });
 
     expect(result.trades).toBe(0);
+    expect(result.forcedClosures).toBe(0);
     expect(result.tradeLog).toHaveLength(0);
     expect(result.pendingSignal).toEqual({ type: "buy", date: bars[bars.length - 1].date });
     expect(result.totalReturn).toBe(0);
+  });
+
+  it("does not count a final-bar exit signal as a filled trade", () => {
+    const raw: OHLCV[] = [];
+    for (let i = 0; i < 60; i++) {
+      const price = 200 - i * 1.5;
+      raw.push({
+        date: `d${i}`,
+        open: price,
+        high: price + 1,
+        low: price - 1,
+        close: price,
+        volume: 1_000_000,
+      });
+    }
+    for (let i = 0; i < 80; i++) {
+      const price = 110 + i * 2;
+      raw.push({
+        date: `u${i}`,
+        open: price,
+        high: price + 1,
+        low: price - 1,
+        close: price,
+        volume: 1_000_000,
+      });
+    }
+    for (let i = 0; i < 80; i++) {
+      const price = 270 - i * 2;
+      raw.push({
+        date: `r${i}`,
+        open: price,
+        high: price + 1,
+        low: price - 1,
+        close: price,
+        volume: 1_000_000,
+      });
+    }
+
+    const closes = raw.map((bar) => bar.close);
+    const sma20 = computeSMA(closes, 20);
+    const sma50 = computeSMA(closes, 50);
+    let entered = false;
+    let exitIdx = -1;
+    for (let barIdx = 49; barIdx < raw.length; barIdx++) {
+      const bullish = sma20[barIdx - 19] > sma50[barIdx - 49];
+      if (!entered && bullish) {
+        entered = true;
+        continue;
+      }
+      if (entered && !bullish) {
+        exitIdx = barIdx;
+        break;
+      }
+    }
+    expect(exitIdx).toBeGreaterThan(49);
+
+    const bars = raw.slice(0, exitIdx + 1);
+    const result = runBacktest(bars, "sma_crossover", { costBps: 0 });
+    const forcedSells = result.tradeLog.filter((trade) => trade.type === "sell" && trade.forced);
+    const signalSells = result.tradeLog.filter((trade) => trade.type === "sell" && !trade.forced);
+
+    expect(result.pendingSignal).toEqual({ type: "sell", date: bars[bars.length - 1].date });
+    expect(result.trades).toBe(0);
+    expect(result.forcedClosures).toBe(1);
+    expect(signalSells).toHaveLength(0);
+    expect(forcedSells).toHaveLength(1);
+    expect(result.totalReturn).not.toBe(0);
   });
 
   it("applies a flat per-side cost to every fill", () => {

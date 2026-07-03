@@ -40,7 +40,8 @@ export function coerceFieldValue(field, value) {
   return value;
 }
 
-function deriveField(name, schema, required) {
+function deriveField(name, rawSchema, required) {
+  const schema = unwrapNullableSchema(rawSchema);
   const base = {
     name,
     label: friendlyLabel(name),
@@ -52,9 +53,13 @@ function deriveField(name, schema, required) {
 
   const options = enumOptions(schema);
   if (options) {
+    const kind = options.length <= SEGMENTED_MAX_OPTIONS ? "segmented" : "select";
     return {
       ...base,
-      kind: options.length <= SEGMENTED_MAX_OPTIONS ? "segmented" : "select",
+      kind,
+      ...(kind === "select" && schema.default === undefined
+        ? { placeholder: required ? `Select ${base.label}` : "Use tool default" }
+        : {}),
       options,
     };
   }
@@ -71,6 +76,13 @@ function deriveField(name, schema, required) {
   }
 
   if (schema.type === "number" || schema.type === "integer") {
+    if (isDecimalRateField(name, schema)) {
+      return {
+        ...base,
+        kind: "percent",
+        step: 0.5,
+      };
+    }
     return {
       ...base,
       kind: "number-chips",
@@ -122,6 +134,26 @@ function deriveField(name, schema, required) {
   return { ...base, kind: "text" };
 }
 
+function unwrapNullableSchema(schema) {
+  const variants = Array.isArray(schema.anyOf)
+    ? schema.anyOf
+    : Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : null;
+  if (!variants) return schema;
+
+  const nonNullVariants = variants.filter((variant) => variant?.type !== "null");
+  if (nonNullVariants.length !== 1 || nonNullVariants.length === variants.length) return schema;
+
+  const [nonNullSchema] = nonNullVariants;
+  return {
+    ...nonNullSchema,
+    description: schema.description ?? nonNullSchema.description,
+    examples: schema.examples ?? nonNullSchema.examples,
+    default: schema.default ?? nonNullSchema.default,
+  };
+}
+
 // Typebox Type.Union of literals emits `anyOf: [{const, type}]`; plain JSON
 // schema enums emit `enum: [...]`. Both become {value, label} option lists.
 function enumOptions(schema) {
@@ -136,6 +168,11 @@ function enumOptions(schema) {
 
 function optionLabel(value) {
   return String(value).replace(/_/g, " ");
+}
+
+function isDecimalRateField(name, schema) {
+  const description = String(schema.description || "");
+  return /rate|growth/i.test(name) && /decimal|0\.\d+\s+for\s+\d+%/i.test(description);
 }
 
 function friendlyLabel(name) {

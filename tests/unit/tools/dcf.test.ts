@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
 import { getFinancials, getOverview } from "../../../src/providers/alpha-vantage.js";
 import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 
 vi.mock("../../../src/config.js", () => ({
@@ -229,6 +229,25 @@ describe("compute_dcf tool guards", () => {
     expect(result.details?.netDebt).toBe(-60e9);
   });
 
+  it("omits net debt adjustment when debt and cash fields are unavailable", async () => {
+    vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
+    vi.mocked(getFinancials).mockResolvedValue([
+      {
+        ...statement,
+        totalDebt: undefined,
+        cashAndEquivalents: undefined,
+      },
+    ]);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.details?.netDebt).toBe(0);
+    expect(result.details?.warnings).toContain(
+      "Net debt adjustment omitted because total debt and cash equivalents were unavailable.",
+    );
+    expect(result.content[0].text).toMatch(/Net debt adjustment omitted/i);
+  });
+
   it("rejects an invalid terminal spread before computing", async () => {
     vi.mocked(getOverview).mockResolvedValue({ marketCap: 3_000e9 } as never);
 
@@ -268,10 +287,8 @@ describe("computeNetDebt", () => {
     expect(computeNetDebt(statement)).toBeCloseTo(81e9, -6);
   });
 
-  it("falls back to totalLiabilities - totalAssets when debt/cash fields are missing", () => {
-    const netDebt = computeNetDebt(baseStatement);
-    // totalLiabilities - totalAssets = 308B - 365B = -57B (net cash position)
-    expect(netDebt).toBeCloseTo(308e9 - 365e9, -6);
+  it("returns null when debt/cash fields are missing", () => {
+    expect(computeNetDebt(baseStatement)).toBeNull();
   });
 
   it("does NOT return zero for a company with significant debt", () => {

@@ -1007,14 +1007,19 @@ function stripEmpty(values) {
   return out;
 }
 
-function formatArgsForPrompt(args) {
+export function formatArgsForPrompt(args) {
   const entries = Object.entries(args);
   if (entries.length === 0) return "";
   return ` with ${entries.map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}`;
 }
 
 function formatValue(value) {
-  if (Array.isArray(value)) return value.join(",");
+  if (Array.isArray(value)) {
+    if (value.some((item) => item != null && typeof item === "object"))
+      return JSON.stringify(value);
+    return value.join(",");
+  }
+  if (value != null && typeof value === "object") return JSON.stringify(value);
   if (typeof value === "string" && value.includes(" ")) return JSON.stringify(value);
   return String(value);
 }

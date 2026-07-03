@@ -22,7 +22,6 @@ import {
   PieChart,
   Receipt,
   Search,
-  Target,
   TrendingUp,
   Wrench,
 } from "lucide-react";

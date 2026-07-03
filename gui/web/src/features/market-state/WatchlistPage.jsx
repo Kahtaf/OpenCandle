@@ -340,4 +340,3 @@ function InspectorSection({ title, children }) {
     </section>
   );
 }
-

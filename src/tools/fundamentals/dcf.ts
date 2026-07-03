@@ -160,12 +160,11 @@ function computeDCFSimple(
   return (sumPV + pvTV - debt) / shares;
 }
 
-export function computeNetDebt(f: FinancialStatement): number {
+export function computeNetDebt(f: FinancialStatement): number | null {
   if (f.totalDebt != null && f.cashAndEquivalents != null) {
     return f.totalDebt - f.cashAndEquivalents;
   }
-  // Fallback: totalLiabilities - totalAssets (negative means net cash position)
-  return f.totalLiabilities - f.totalAssets;
+  return null;
 }
 
 const params = Type.Object({
@@ -286,7 +285,10 @@ export const dcfTool: AgentTool<typeof params> = {
       }
       const sharesOutstanding = marketCap / quote.price;
       // Signed on purpose: net cash (negative net debt) adds to equity value.
-      const netDebt = financials[0] ? computeNetDebt(financials[0]) : 0;
+      // Omit the adjustment if debt/cash fields are missing; assets minus
+      // liabilities is book equity, not a net-cash proxy.
+      const computedNetDebt = financials[0] ? computeNetDebt(financials[0]) : null;
+      const netDebt = computedNetDebt ?? 0;
 
       const result = computeDCF({
         freeCashFlow: latestFCF,
@@ -297,6 +299,11 @@ export const dcfTool: AgentTool<typeof params> = {
         netDebt,
         sharesOutstanding,
       });
+      if (computedNetDebt == null) {
+        result.warnings.push(
+          "Net debt adjustment omitted because total debt and cash equivalents were unavailable.",
+        );
+      }
 
       const marginOfSafety = (result.intrinsicValue - quote.price) / result.intrinsicValue;
       const upside = (result.intrinsicValue - quote.price) / quote.price;
@@ -326,6 +333,9 @@ export const dcfTool: AgentTool<typeof params> = {
         ``,
         `**Sensitivity Table** (Intrinsic Value at different Growth/Discount rates)`,
         ...formatSensitivityTable(result.sensitivityTable),
+        ...(result.warnings.length > 0
+          ? ["", "**Warnings**", ...result.warnings.map((warning) => `- ${warning}`)]
+          : []),
       ];
 
       return {

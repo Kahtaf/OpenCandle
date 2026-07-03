@@ -8,7 +8,6 @@ import {
   PanelLeft,
   Plus,
   Search,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";

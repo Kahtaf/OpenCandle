@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- GUI catalog tool forms now render nullable numeric schema fields, such as watchlist target and stop prices, as numeric controls instead of sending them as strings.
 - Daily watchlist reports no longer ship internal scaffolding text: the placeholder "Technical snapshot … deferred" section is omitted until a real section builder exists, and manual report runs no longer auto-create an enabled morning schedule template as a side effect — schedules are stored only through the explicit configure flow and run while OpenCandle is open.
 - `backtest_strategy` no longer fills trades at the same close used to compute the signal: signals now fill at the next bar's open, a flat per-side cost (default 5 bps, `cost_bps` parameter) applies to every fill, final-bar signals are reported as pending instead of phantom trades, and the output states its execution assumptions and limitations (no dividends, taxes, slippage model, or liquidity modeling).
 - `compute_dcf` no longer emits fabricated per-share values: it refuses with an explicit message when shares outstanding cannot be derived (instead of assuming 1 share), passes net debt through signed so cash-rich companies get their net cash added to equity value (instead of clamping to zero), and rejects terminal growth at or above the discount rate before computing (with a Yahoo quote market-cap fallback when the Alpha Vantage overview is unavailable). A TUI harness e2e (`npm run test:e2e:harness-dcf`) drives a natural DCF prompt end to end.

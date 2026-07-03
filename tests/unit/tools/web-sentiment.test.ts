@@ -65,6 +65,7 @@ describe("get_web_sentiment tool", () => {
     const providerResult: ProviderResult<WebSearchEnvelope> = {
       status: "ok",
       data: successEnvelope,
+      timestamp: "2026-04-11T08:00:00Z",
     };
     mockedSearchWeb.mockResolvedValue(providerResult);
 
@@ -81,8 +82,9 @@ describe("get_web_sentiment tool", () => {
     const providerResult: ProviderResult<WebSearchEnvelope> = {
       status: "unavailable",
       reason: "rate limited",
+      provider: "ddg",
     };
-    mockedSearchWeb.mockResolvedValue(providerResult as any);
+    mockedSearchWeb.mockResolvedValue(providerResult);
 
     const result = await webSentimentTool.execute("call-2", { query: "AAPL" });
     expect(result.content[0].text).toContain("unavailable");
@@ -91,6 +93,7 @@ describe("get_web_sentiment tool", () => {
   it("marks and escapes untrusted result text and does not link unsafe URLs", async () => {
     const providerResult: ProviderResult<WebSearchEnvelope> = {
       status: "ok",
+      timestamp: "2026-04-11T08:00:00Z",
       data: {
         ...successEnvelope,
         results: [

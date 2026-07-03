@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { validateRequired } from "../../../gui/web/src/features/catalog/field-utils.js";
 import {
   coerceFieldValue,
   fieldsForTool,
@@ -34,6 +35,21 @@ describe("schema-derived catalog forms", () => {
     );
   });
 
+  it("gives optional select fields an explicit default placeholder", () => {
+    const fields = fieldsForTool(toolByName("get_stock_history"));
+    const range = fields.find((field) => field.name === "range");
+    const interval = fields.find((field) => field.name === "interval");
+
+    expect(range?.kind).toBe("select");
+    expect(range?.required).toBe(false);
+    expect(range?.default).toBeUndefined();
+    expect(range?.placeholder).toBe("Use tool default");
+    expect(interval?.kind).toBe("select");
+    expect(interval?.required).toBe(false);
+    expect(interval?.default).toBeUndefined();
+    expect(interval?.placeholder).toBe("Use tool default");
+  });
+
   it("maps symbol and symbols params to symbol inputs with bounds", () => {
     const quote = fieldsForTool(toolByName("get_stock_quote"));
     expect(quote.find((field) => field.name === "symbol")?.kind).toBe("symbol");
@@ -52,6 +68,28 @@ describe("schema-derived catalog forms", () => {
     expect(limit?.max).toBeLessThanOrEqual(1000);
   });
 
+  it("maps decimal rate params to percent inputs", () => {
+    const fields = fieldsForTool(toolByName("compute_dcf"));
+    const growthRate = fields.find((field) => field.name === "growth_rate");
+    const discountRate = fields.find((field) => field.name === "discount_rate");
+    const terminalGrowth = fields.find((field) => field.name === "terminal_growth");
+    const projectionYears = fields.find((field) => field.name === "projection_years");
+
+    expect(growthRate?.kind).toBe("percent");
+    expect(discountRate?.kind).toBe("percent");
+    expect(terminalGrowth?.kind).toBe("percent");
+    expect(projectionYears?.kind).toBe("number-chips");
+  });
+
+  it("maps nullable numeric params to number inputs", () => {
+    const fields = fieldsForTool(toolByName("manage_watchlist"));
+    const targetPrice = fields.find((field) => field.name === "target_price");
+    const stopPrice = fields.find((field) => field.name === "stop_price");
+
+    expect(targetPrice?.kind).toBe("number-chips");
+    expect(stopPrice?.kind).toBe("number-chips");
+  });
+
   it("marks required fields from the served schema", () => {
     const fields = fieldsForTool(toolByName("get_stock_quote"));
     expect(fields.find((field) => field.name === "symbol")?.required).toBe(true);
@@ -68,6 +106,19 @@ describe("schema-derived catalog forms", () => {
     expect(coerceFieldValue({ parse: "json" }, "not json")).toBeUndefined();
     expect(coerceFieldValue({}, "AAPL")).toBe("AAPL");
     expect(coerceFieldValue({}, "")).toBeUndefined();
+  });
+
+  it("blocks invalid JSON before optional complex fields are stripped", () => {
+    const fields = fieldsForTool(toolByName("screen_stocks"));
+    const filter = fields.find((field) => field.name === "filter");
+
+    expect(filter?.parse).toBe("json");
+    expect(validateRequired(fields, { filter: "[not json" })).toEqual([
+      "Filter must be valid JSON.",
+    ]);
+    expect(validateRequired(fields, { filter: '[{"field":"market_cap","op":"greater"}]' })).toEqual(
+      [],
+    );
   });
 
   it("applies presentation overrides onto derived fields", () => {

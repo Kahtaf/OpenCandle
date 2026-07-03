@@ -97,10 +97,7 @@ export async function buildMarketStateQuoteSnapshot(
     const watchlist = service.listWatchlistItems();
     const portfolio = service.listPortfolioLots();
     const symbols = [
-      ...new Set([
-        ...watchlist.map((item) => item.symbol),
-        ...portfolio.map((lot) => lot.symbol),
-      ]),
+      ...new Set([...watchlist.map((item) => item.symbol), ...portfolio.map((lot) => lot.symbol)]),
     ];
     const quoteMap = new Map<string, Awaited<ReturnType<typeof fetchQuoteSnapshot>>>();
     for (const symbol of symbols) {

@@ -938,7 +938,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
     const baselineFetchCount = await mocked.evaluate(() => window.__fetchCount);
-    const suggestion = mocked.getByRole("button", { name: "Analyze NVDA" });
+    const suggestion = mocked.getByRole("button", { name: "What is NVDA trading at?" });
     await expect(suggestion.isDisabled()).resolves.toBe(true);
     await suggestion.click({ force: true });
     await expect(mocked.evaluate(() => window.__fetchCount)).resolves.toBe(baselineFetchCount);

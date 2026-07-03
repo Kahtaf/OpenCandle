@@ -403,7 +403,6 @@ describe("E2E integration: full orchestration pipeline", () => {
       expect(classification.workflow).toBe("compare_assets");
       expect(classification.entities.symbols).toEqual(["SPY", "QQQ"]);
     });
-
   });
 
   // -----------------------------------------------------------------------

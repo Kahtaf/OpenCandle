@@ -1,11 +1,11 @@
 # user-market-state Specification
 
 ## Purpose
-Defines durable SQLite-backed user market state for instruments, watchlists, portfolios, predictions, alerts, reports, aliases, and provenance.
+Defines durable SQLite-backed user market state for instruments, watchlists, portfolios, alerts, reports, aliases, and provenance.
 ## Requirements
 ### Requirement: User Market State Uses SQLite
 
-OpenCandle SHALL persist user watchlists, portfolios, portfolio lots, prediction records, instruments, and instrument aliases in `~/.opencandle/state.db`.
+OpenCandle SHALL persist user watchlists, portfolios, portfolio lots, instruments, and instrument aliases in `~/.opencandle/state.db`.
 
 #### Scenario: Watchlist state is read from SQLite
 
@@ -18,12 +18,6 @@ OpenCandle SHALL persist user watchlists, portfolios, portfolio lots, prediction
 - **WHEN** a user asks to view their portfolio
 - **THEN** OpenCandle reads portfolio rows and lots from `state.db`
 - **AND** it does not treat `portfolio.json` as authoritative state
-
-#### Scenario: Prediction state is read from SQLite
-
-- **WHEN** a user asks to record or check tracked predictions
-- **THEN** OpenCandle reads and writes prediction records in `state.db`
-- **AND** it does not treat `predictions.json` as authoritative state
 
 ### Requirement: Default Watchlist and Portfolio Are Extensible
 
@@ -96,12 +90,12 @@ OpenCandle SHALL store normalized instruments separately from source-specific sy
 
 ### Requirement: JSON Market State Is Not Supported
 
-OpenCandle SHALL NOT support JSON files as market-state sources for watchlists, portfolios, or predictions.
+OpenCandle SHALL NOT support JSON files as market-state sources for watchlists or portfolios, and SHALL ignore legacy prediction JSON files because prediction tracking is unsupported.
 
 #### Scenario: JSON files are ignored as state
 
-- **WHEN** `watchlist.json`, `portfolio.json`, or `predictions.json` exists under `~/.opencandle/`
-- **THEN** OpenCandle reads market state from SQLite
+- **WHEN** `watchlist.json`, `portfolio.json`, or legacy `predictions.json` exists under `~/.opencandle/`
+- **THEN** OpenCandle reads supported market state from SQLite
 - **AND** it does not import, merge, or trust those JSON files
 
 #### Scenario: Initialization is idempotent
@@ -238,4 +232,3 @@ OpenCandle SHALL use SQLite transactions as the concurrency boundary for normal 
 - **THEN** each mutation is committed transactionally with an updated timestamp or equivalent change marker
 - **AND** callers receive or can refetch the committed row after the write
 - **AND** later reads show the final SQLite-committed state rather than stale local form state
-

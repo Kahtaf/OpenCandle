@@ -1,16 +1,16 @@
 # stateful-market-surfaces Specification
 
 ## Purpose
-Defines chat and GUI surfaces for saved watchlists, portfolios, predictions, alerts, reports, and prompt context derived from market state.
+Defines chat and GUI surfaces for saved watchlists, portfolios, alerts, reports, and prompt context derived from market state.
 ## Requirements
 ### Requirement: TUI and GUI Share Market State Services
 
-OpenCandle SHALL expose one shared market-state service for watchlist, portfolio, and prediction mutations, and both TUI tools and GUI actions SHALL use that service.
+OpenCandle SHALL expose one shared market-state service for watchlist and portfolio mutations, and both TUI tools and GUI actions SHALL use that service.
 
 #### Scenario: Saved market state is prompt-scoped
 
 - **WHEN** OpenCandle builds the prompt for a pass-through or unrelated non-finance turn
-- **THEN** it SHALL NOT inject saved watchlist, portfolio, alert, report, or prediction state into the model context
+- **THEN** it SHALL NOT inject saved watchlist, portfolio, alert, or report state into the model context
 - **AND** saved market state may be injected only for finance or market-state route context where it can be relevant to the user request
 
 #### Scenario: TUI-created watchlist item appears in GUI
@@ -31,15 +31,9 @@ OpenCandle SHALL expose one shared market-state service for watchlist, portfolio
 - **THEN** both surfaces read the lot from the same portfolio table
 - **AND** computed portfolio summaries use the same persisted quantities and costs
 
-#### Scenario: Prediction parity uses the same rows
-
-- **WHEN** a prediction record is created from either surface
-- **THEN** both surfaces read the prediction from the same prediction table
-- **AND** prediction check summaries use the same persisted record
-
 #### Scenario: GUI reflects TUI changes without restart
 
-- **WHEN** a user mutates watchlist, portfolio, prediction, alert, or report state through the TUI while the GUI is open
+- **WHEN** a user mutates watchlist, portfolio, alert, or report state through the TUI while the GUI is open
 - **THEN** the GUI refreshes, polls, or invalidates its market-state read model so the durable page can show the SQLite-backed change without restarting the GUI
 - **AND** any stale row state is visibly refreshed before the user performs a conflicting edit
 
@@ -57,7 +51,7 @@ OpenCandle SHALL expose one shared market-state service for watchlist, portfolio
 
 #### Scenario: TUI reflects GUI changes on next read
 
-- **WHEN** a user mutates watchlist, portfolio, prediction, alert, or report state through the GUI
+- **WHEN** a user mutates watchlist, portfolio, alert, or report state through the GUI
 - **THEN** the next TUI or agent-tool read obtains the row from SQLite
 - **AND** it does not rely on cached tool-local JSON or an earlier session projection
 
@@ -196,4 +190,3 @@ OpenCandle SHALL preserve the stateful tracking planner behavior while changing 
 - **WHEN** a user asks OpenCandle to record or check a prediction
 - **THEN** the stateful tracking route does not offer a prediction tool
 - **AND** OpenCandle explains that prediction tracking is not a supported feature rather than fabricating a tracking result
-

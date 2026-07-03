@@ -48,5 +48,5 @@ OpenCandle SHALL include durable market-state tools in the routed tool bundles t
 #### Scenario: Core market bundle contains alert and report tools
 
 - **WHEN** routed tool-scope enforcement selects the core market bundle for a finance or market-state request
-- **THEN** `manage_alerts` and `daily_watchlist_report` SHALL be active alongside watchlist, portfolio, and prediction tools
+- **THEN** `manage_alerts` and `daily_watchlist_report` SHALL be active alongside watchlist and portfolio tools
 - **AND** tool-call enforcement SHALL NOT block alert creation/checking or daily report runs for routed market-state prompts

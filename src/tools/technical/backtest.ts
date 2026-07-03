@@ -23,18 +23,27 @@ export interface BacktestOptions {
   costBps?: number;
 }
 
+export interface BacktestTrade {
+  type: "buy" | "sell";
+  date: string;
+  price: number;
+  pnl?: number;
+  forced?: boolean;
+}
+
 export interface BacktestResult {
   strategy: string;
   totalReturn: number;
   buyAndHoldReturn: number;
   trades: number;
+  forcedClosures: number;
   wins: number;
   winRate: number;
   maxDrawdown: number;
   costBpsPerSide: number;
   /** Signal generated on the final bar that has no next open to fill at. */
   pendingSignal: { type: "buy" | "sell"; date: string } | null;
-  tradeLog: Array<{ type: "buy" | "sell"; date: string; price: number; pnl?: number }>;
+  tradeLog: BacktestTrade[];
 }
 
 type Signal = "enter" | "exit" | null;
@@ -132,7 +141,9 @@ function simulate(
     // Track mark-to-market equity for accurate drawdown.
     const price = closes[i];
     const currentEquity =
-      position && entryFill > 0 && price > 0 ? equity * (1 + (price - entryFill) / entryFill) : equity;
+      position && entryFill > 0 && price > 0
+        ? equity * (1 + (price - entryFill) / entryFill)
+        : equity;
     if (currentEquity > peak) peak = currentEquity;
     const dd = (peak - currentEquity) / peak;
     if (dd > maxDd) maxDd = dd;
@@ -149,6 +160,7 @@ function simulate(
         date: bars[bars.length - 1].date,
         price: lastPrice,
         pnl,
+        forced: true,
       });
     }
   }
@@ -165,8 +177,12 @@ function buildResult(
   costBpsPerSide: number,
   pendingSignal: BacktestResult["pendingSignal"],
 ): BacktestResult {
-  const sellTrades = tradeLog.filter((t) => t.type === "sell" && t.pnl != null);
-  const wins = sellTrades.filter((t) => t.pnl! > 0).length;
+  const sellTrades = tradeLog.filter(
+    (t): t is BacktestTrade & { type: "sell"; pnl: number } =>
+      t.type === "sell" && t.pnl != null && !t.forced,
+  );
+  const forcedClosures = tradeLog.filter((t) => t.type === "sell" && t.forced).length;
+  const wins = sellTrades.filter((t) => t.pnl > 0).length;
   const buyAndHoldReturn =
     closes.length > 1 && closes[0] > 0 ? (closes[closes.length - 1] - closes[0]) / closes[0] : 0;
 
@@ -175,6 +191,7 @@ function buildResult(
     totalReturn,
     buyAndHoldReturn,
     trades: sellTrades.length,
+    forcedClosures,
     wins,
     winRate: sellTrades.length > 0 ? wins / sellTrades.length : 0,
     maxDrawdown,
@@ -191,6 +208,7 @@ function emptyResult(strategy: string, closes: number[], costBpsPerSide: number)
     buyAndHoldReturn:
       closes.length > 1 && closes[0] > 0 ? (closes[closes.length - 1] - closes[0]) / closes[0] : 0,
     trades: 0,
+    forcedClosures: 0,
     wins: 0,
     winRate: 0,
     maxDrawdown: 0,
@@ -271,13 +289,18 @@ export const backtestTool: AgentTool<typeof params> = {
       `Buy & Hold Return (gross): ${(result.buyAndHoldReturn * 100).toFixed(2)}%`,
       `Outperformance: ${outperformance >= 0 ? "+" : ""}${(outperformance * 100).toFixed(2)}%`,
       ``,
-      `Trades: ${result.trades} | Wins: ${result.wins} | Win Rate: ${(result.winRate * 100).toFixed(0)}%`,
+      `Signal Trades: ${result.trades} | Forced Closures: ${result.forcedClosures} | Wins: ${result.wins} | Win Rate: ${(result.winRate * 100).toFixed(0)}%`,
       `Max Drawdown: ${(result.maxDrawdown * 100).toFixed(2)}%`,
       ``,
       `Execution assumptions: signals fill at the next bar's open with a flat cost of ${costBps} bps per side.`,
       ...(result.pendingSignal
         ? [
-            `Note: a ${result.pendingSignal.type} signal fired on the final bar (${result.pendingSignal.date}) and is pending — it has no next open to fill at and is not counted as a trade.`,
+            `Note: a ${result.pendingSignal.type} signal fired on the final bar (${result.pendingSignal.date}) and is pending — it has no next open to fill at and is not counted as a signal trade.`,
+          ]
+        : []),
+      ...(result.forcedClosures > 0
+        ? [
+            `Note: ${result.forcedClosures} open position${result.forcedClosures === 1 ? " was" : "s were"} liquidated at the final close for return reporting; forced closures are not counted as signal trades.`,
           ]
         : []),
       ``,

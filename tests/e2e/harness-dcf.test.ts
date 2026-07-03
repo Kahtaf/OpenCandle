@@ -75,5 +75,7 @@ assert(
   `expected an intrinsic value with assumptions or an explicit refusal naming the missing input; got: ${trace.text?.slice(0, 400)}`,
 );
 
-console.log(`  ✓ compute_dcf called; final answer ${reportsValue ? "reports intrinsic value" : "refuses explicitly"}`);
+console.log(
+  `  ✓ compute_dcf called; final answer ${reportsValue ? "reports intrinsic value" : "refuses explicitly"}`,
+);
 console.log("harness-dcf e2e passed.");
