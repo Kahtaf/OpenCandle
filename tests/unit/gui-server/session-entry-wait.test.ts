@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   findUnresolvedToolCalls,
   waitForEntryCount,
   waitForNewEntryId,
   waitForSessionTurnSettlement,
 } from "../../../gui/server/session-entry-wait.js";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("waitForEntryCount", () => {
   it("waits until the entry count advances past the previous count", async () => {
@@ -47,7 +51,11 @@ describe("waitForEntryCount", () => {
 
 describe("waitForSessionTurnSettlement", () => {
   it("waits through an async workflow-dispatched turn before returning", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
     let isStreaming = false;
+    let resolvedAt: number | undefined;
     setTimeout(() => {
       isStreaming = true;
     }, 5);
@@ -55,14 +63,21 @@ describe("waitForSessionTurnSettlement", () => {
       isStreaming = false;
     }, 20);
 
-    const started = Date.now();
-    await waitForSessionTurnSettlement(() => ({ isStreaming, pendingMessageCount: 0 }), {
+    const settled = waitForSessionTurnSettlement(() => ({ isStreaming, pendingMessageCount: 0 }), {
       timeoutMs: 100,
       intervalMs: 1,
       idleGraceMs: 10,
+    }).then(() => {
+      resolvedAt = Date.now();
     });
 
-    expect(Date.now() - started).toBeGreaterThanOrEqual(28);
+    await vi.advanceTimersByTimeAsync(29);
+    expect(resolvedAt).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(1);
+    await settled;
+
+    expect(resolvedAt).toBe(30);
   });
 
   it("waits until queued follow-ups clear and the session remains idle", async () => {
