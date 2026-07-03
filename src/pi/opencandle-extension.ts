@@ -25,15 +25,12 @@ import { formatPreflightDropAnnotation, preflightSymbols } from "../prompts/symb
 import { buildAssumptionsBlockFromRouter } from "../prompts/workflow-prompts.js";
 import {
   buildResolvedTurnContext,
-  classifyWithLegacyRules,
   createPiAiRouterClient,
-  hasFinanceSignals,
   resolveOptionsScreenerSlots,
   resolvePortfolioSlots,
   route as routeLlm,
 } from "../routing/index.js";
 import type { RouterInputContext, RouterLlmClient, RouterOutput } from "../routing/router-types.js";
-import { disambiguateSymbols } from "../routing/symbol-disambiguator.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import type {
   CompareAssetsSlots,
@@ -674,7 +671,7 @@ export default function openCandleExtension(
     return undefined;
   });
 
-  // Input handling — branches on OPENCANDLE_ROUTER_MODE.
+  // Input handling — the LLM router is the single production routing path.
   pi.on("input", async (event, ctx) => {
     if (event.source === "extension") return;
     coordinator.clearTickerValidationCache();
@@ -690,228 +687,12 @@ export default function openCandleExtension(
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
-    const mode = getConfig().routerMode;
-    if (mode === "llm") {
-      const dispatched = await handleLlmRouterTurn(event.text, ctx);
-      // Dispatched a workflow → the original user turn is now represented by
-      // the workflow's queued prompts; tell Pi not to also forward it.
-      // Fallback path (no dispatch) → let Pi pass the user turn through to the
-      // main agent, which will run under the router-supplied fallback context.
-      return dispatched || undefined;
-    }
-
-    // --- explicit legacy rules mode (`OPENCANDLE_ROUTER_MODE=rules`) ---
-    // Extract and persist user preferences (legacy regex path)
-    coordinator.extractAndStorePreferences(event.text);
-    const storage = coordinator.getStorage();
-    const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
-
-    // Classify intent
-    let classification = classifyWithLegacyRules(event.text);
-    const ruleModeDisambiguation = disambiguateRulesModeSymbols(
-      event.text,
-      classification.entities.symbols,
-    );
-    appendSymbolDropEntries(ruleModeDisambiguation.dropped, "rules");
-    classification = {
-      ...classification,
-      entities: {
-        ...classification.entities,
-        symbols: ruleModeDisambiguation.kept,
-      },
-    };
-    if (
-      isComparePrompt(event.text) &&
-      ruleModeDisambiguation.dropped.length > 0 &&
-      classification.entities.symbols.length < 2
-    ) {
-      pi.appendEntry("opencandle-workflow-aborted", {
-        reason: "symbol-disambiguation-insufficient-symbols",
-        dropped: ruleModeDisambiguation.dropped,
-        validSymbols: classification.entities.symbols,
-      });
-      const base = coordinator.buildRouterContextBase(ctx.sessionManager);
-      const output: RouterOutput = {
-        routeKind: "clarification",
-        route: "fallback",
-        workflow: "compare_assets",
-        entities: classification.entities,
-        slots: {},
-        preference_updates: [],
-        missing_required: ["symbols"],
-        tool_bundles: ["clarification"],
-        diagnostics: ruleModeDisambiguation.dropped.map((drop) => ({
-          code: "symbol_dropped",
-          message: `${drop.token} dropped: ${drop.reason}`,
-          details: {
-            token: drop.token,
-            reason: drop.reason,
-            signalsChecked: drop.signalsChecked,
-            source: "rules",
-          },
-        })),
-        reasoning: "rules-mode acronym disambiguation left fewer than two symbols for comparison",
-      };
-      const resolvedTurnContext = buildResolvedTurnContext({ text: event.text, ...base }, output, {
-        availableToolNames: safeGetAllToolNames(),
-        planning: {
-          migrationStatuses: getConfig().planningMigrationStatuses,
-        },
-      });
-      coordinator.setPendingResolvedTurnContext({
-        ...resolvedTurnContext,
-        diagnostics: [
-          ...resolvedTurnContext.diagnostics,
-          {
-            code: "compare_workflow_aborted",
-            message:
-              "compare workflow needs at least two validated symbols after acronym disambiguation",
-          },
-        ],
-      });
-      coordinator.setPendingFallbackContext({
-        assumptionsBlock: [
-          "Assumptions Context:",
-          classification.entities.symbols.length > 0
-            ? `  valid symbols: ${classification.entities.symbols.join(", ")} (user)`
-            : "  valid symbols: (none)",
-          `  dropped ambiguous ticker-like tokens: ${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")} (no positive ticker signal)`,
-        ].join("\n"),
-        missingRequired: ["symbols"],
-        extraContext:
-          "Dropped ambiguous ticker-like tokens: " +
-          `${ruleModeDisambiguation.dropped.map((d) => d.token).join(", ")}. ` +
-          "Ask the user which ticker symbols they want compared before calling comparison tools.",
-      });
-      applyRouteToolScope(resolvedTurnContext);
-      return undefined;
-    }
-
-    if (classification.workflow === "portfolio_builder") {
-      const resolution = resolvePortfolioSlots(classification.entities, workflowPrefs);
-      coordinator.recordWorkflowRun(
-        "portfolio_builder",
-        classification.entities,
-        resolution.resolved,
-        resolution.defaultsUsed,
-      );
-      pi.appendEntry("opencandle-workflow", {
-        workflow: "portfolio_builder",
-        entities: classification.entities,
-        resolved: resolution.resolved,
-      });
-      const definition = buildPortfolioWorkflowDefinition(resolution);
-      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-      if (prompt) markOriginalInput(event.text);
-      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
-    }
-
-    if (classification.workflow === "options_screener") {
-      const resolution = resolveOptionsScreenerSlots(classification.entities, workflowPrefs);
-      if (resolution.missingRequired.length === 0) {
-        coordinator.recordWorkflowRun(
-          "options_screener",
-          classification.entities,
-          resolution.resolved,
-          resolution.defaultsUsed,
-        );
-        pi.appendEntry("opencandle-workflow", {
-          workflow: "options_screener",
-          entities: classification.entities,
-          resolved: resolution.resolved,
-        });
-        const definition = buildOptionsScreenerWorkflowDefinition(resolution);
-        const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-        if (prompt) markOriginalInput(event.text);
-        return prompt ? { action: "transform", text: prompt } : { action: "handled" };
-      }
-    }
-
-    if (
-      classification.workflow === "compare_assets" &&
-      classification.entities.symbols.length >= 2
-    ) {
-      const resolution: SlotResolution<CompareAssetsSlots> = {
-        resolved: {
-          symbols: classification.entities.symbols,
-          metrics: classification.entities.compareMetrics,
-          timeHorizon: classification.entities.timeHorizon,
-          budget: classification.entities.budget,
-          assetScope: classification.entities.assetScope,
-        },
-        sources: {
-          symbols: "user",
-          ...(classification.entities.timeHorizon ? { timeHorizon: "user" as const } : {}),
-          ...(classification.entities.compareMetrics ? { metrics: "user" as const } : {}),
-          ...(classification.entities.budget !== undefined ? { budget: "user" as const } : {}),
-          ...(classification.entities.assetScope ? { assetScope: "user" as const } : {}),
-        },
-        defaultsUsed: [],
-        missingRequired: [],
-      };
-      coordinator.recordWorkflowRun(
-        "compare_assets",
-        classification.entities,
-        resolution.resolved,
-        resolution.defaultsUsed,
-      );
-      pi.appendEntry("opencandle-workflow", {
-        workflow: "compare_assets",
-        symbols: classification.entities.symbols,
-      });
-      const preflight = await preflightCompareResolution(resolution);
-      if (!preflight) {
-        coordinator.recordWorkflowRun(
-          "fallback",
-          classification.entities,
-          resolution.resolved,
-          [],
-          "clarification",
-        );
-        coordinator.setPendingFallbackContext({
-          assumptionsBlock: [
-            "Assumptions Context:",
-            `  original symbols: ${classification.entities.symbols.join(", ")} (user)`,
-          ].join("\n"),
-          missingRequired: ["symbols"],
-          extraContext:
-            "Compare workflow aborted because ticker preflight left fewer than two valid symbols. Ask the user to clarify the intended tickers before calling comparison tools.",
-        });
-        return undefined;
-      }
-      const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
-      applyPreflightAnnotation(definition, preflight.dropped);
-      const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-      if (prompt) markOriginalInput(event.text);
-      return prompt ? { action: "transform", text: prompt } : { action: "handled" };
-    }
-
-    // Rules-mode finance fallback: no workflow dispatched, but the turn is
-    // finance-shaped (classified finance intent, extracted symbols, or finance
-    // vocabulary). Record the fallback turn and stash a fallback context so
-    // the system prompt carries saved market state for this turn; non-finance
-    // prompts stay untouched.
-    const isFinanceFallback =
-      classification.workflow !== "unclassified" ||
-      classification.entities.symbols.length > 0 ||
-      hasFinanceSignals(event.text);
-    if (isFinanceFallback) {
-      coordinator.recordWorkflowRun("fallback", classification.entities, {}, [], "agent_task");
-      coordinator.setPendingFallbackContext({
-        assumptionsBlock: "",
-        missingRequired: [],
-        extraContext:
-          classification.entities.symbols.length > 0
-            ? `Rules-router extracted symbols: ${classification.entities.symbols.join(", ")}.`
-            : undefined,
-      });
-      pi.appendEntry("opencandle-fallback-context", {
-        mode: "rules",
-        classifiedWorkflow: classification.workflow,
-        symbols: classification.entities.symbols,
-      });
-    }
-    return undefined;
+    const dispatched = await handleLlmRouterTurn(event.text, ctx);
+    // Dispatched a workflow → the original user turn is now represented by
+    // the workflow's queued prompts; tell Pi not to also forward it.
+    // Fallback path (no dispatch) → let Pi pass the user turn through to the
+    // main agent, which will run under the router-supplied fallback context.
+    return dispatched || undefined;
   });
 
   /**
@@ -1206,36 +987,6 @@ export default function openCandleExtension(
     }
   }
 
-  function disambiguateRulesModeSymbols(
-    text: string,
-    extractedSymbols: string[],
-  ): {
-    kept: string[];
-    dropped: Array<{ token: string; reason: string; signalsChecked: string[] }>;
-  } {
-    const candidates = mergeSymbols(extractedSymbols, rawTickerLikeTokens(text));
-    const disambiguated = disambiguateSymbols(candidates, text);
-    return {
-      kept: disambiguated.kept.filter((symbol) => extractedSymbols.includes(symbol)),
-      dropped: disambiguated.dropped,
-    };
-  }
-
-  function rawTickerLikeTokens(text: string): string[] {
-    const tokens: string[] = [];
-    for (const match of text.matchAll(/\$?([A-Za-z]{1,5})\b/g)) {
-      const raw = match[1];
-      if (raw !== raw.toUpperCase()) continue;
-      const token = raw.toUpperCase();
-      if (!tokens.includes(token)) tokens.push(token);
-    }
-    return tokens;
-  }
-
-  function isComparePrompt(text: string): boolean {
-    return /\b(?:compare|vs\.?|versus|which\s+is\s+better)\b/i.test(text);
-  }
-
   async function preflightCompareResolution(
     resolution: SlotResolution<CompareAssetsSlots>,
   ): Promise<{
@@ -1436,8 +1187,8 @@ export default function openCandleExtension(
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
   ): RouterLlmClient | null {
     // `ctx.model` is the currently selected pi-ai model. When unset (no auth
-    // configured yet), we skip the router and the main agent will run with
-    // its default unrouted flow (legacy rules path is the safer default).
+    // configured yet), we skip the router and the main agent runs with its
+    // default unrouted flow for the turn.
     const model = (ctx as { model?: unknown }).model;
     if (!model) return null;
     // biome-ignore lint/suspicious/noExplicitAny: Pi typings keep Model generic

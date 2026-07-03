@@ -115,7 +115,7 @@ function comprehensiveAnalysisPrompts(symbol: string): string[] {
 
 describe("opencandle extension", () => {
   beforeEach(() => {
-    vi.stubEnv("OPENCANDLE_ROUTER_MODE", "rules");
+    vi.stubEnv("OPENCANDLE_ROUTER_MODE", "");
     resetConfigCache();
     vi.useFakeTimers();
   });
@@ -225,66 +225,6 @@ describe("opencandle extension", () => {
     expect(markerCall?.[1]).toEqual({ original: "analyze NVDA" });
   });
 
-  it("carries a finance fallback context for rules-mode theme prompts without tickers", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api);
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      hasPendingMessages: () => false,
-      ui: { notify: vi.fn() },
-    };
-
-    await inputHandler!(
-      {
-        type: "input",
-        text: "Thoughts on the SpaceX IPO today? Worth getting exposure?",
-        source: "interactive",
-      },
-      ctx,
-    );
-    const result = await beforeStartHandler!(
-      {
-        type: "before_agent_start",
-        prompt: "Thoughts on the SpaceX IPO today?",
-        systemPrompt: "BASE",
-      },
-      {},
-    );
-
-    expect(result.systemPrompt).toContain("## Fallback Playbook");
-  });
-
-  it("does not carry a finance fallback context for non-finance rules-mode prompts", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api);
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const beforeStartHandler = fake.handlers.get("before_agent_start")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      hasPendingMessages: () => false,
-      ui: { notify: vi.fn() },
-    };
-
-    await inputHandler!(
-      { type: "input", text: "write me a poem about autumn leaves", source: "interactive" },
-      ctx,
-    );
-    const result = await beforeStartHandler!(
-      {
-        type: "before_agent_start",
-        prompt: "write me a poem about autumn leaves",
-        systemPrompt: "BASE",
-      },
-      {},
-    );
-
-    expect(result.systemPrompt).not.toContain("## Fallback Playbook");
-  });
-
   it("appends the OpenCandle system prompt before agent start", async () => {
     const fake = createFakeApi();
     openCandleExtension(fake.api);
@@ -306,101 +246,6 @@ describe("opencandle extension", () => {
     expect(result.systemPrompt.toLowerCase()).toContain("analyst");
     expect(result.systemPrompt.toLowerCase()).toContain("invalidation");
     expect(result.systemPrompt).not.toMatch(/\bnot financial advice\b/i);
-  });
-
-  it("routes portfolio-builder prompts through the deterministic workflow", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api);
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      ui: { notify: vi.fn() },
-    };
-
-    const result = await inputHandler!(
-      {
-        type: "input",
-        text: "Build me a diversified ETF portfolio with $10000 for a balanced risk profile.",
-        source: "interactive",
-      },
-      ctx,
-    );
-
-    const prompt = firstWorkflowPrompt(
-      buildPortfolioWorkflowDefinition(
-        resolvePortfolioSlots({
-          symbols: [],
-          budget: 10_000,
-          riskProfile: "balanced",
-          assetScope: "etf_focused",
-        }),
-      ),
-    );
-
-    expect(result).toEqual({ action: "transform", text: prompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
-  });
-
-  it("routes options-screening prompts through the deterministic workflow", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api);
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      ui: { notify: vi.fn() },
-    };
-
-    const result = await inputHandler!(
-      {
-        type: "input",
-        text: "Screen bullish AAPL call options around 30 to 45 DTE with good liquidity.",
-        source: "interactive",
-      },
-      ctx,
-    );
-
-    const prompt = firstWorkflowPrompt(
-      buildOptionsScreenerWorkflowDefinition(
-        resolveOptionsScreenerSlots({
-          symbols: ["AAPL"],
-          direction: "bullish",
-          dteHint: "30 to 45 DTE",
-        }),
-      ),
-    );
-
-    expect(result).toEqual({ action: "transform", text: prompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
-  });
-
-  it("routes compare prompts through the deterministic workflow", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api, { symbolSearch: exactSymbolSearch(["AAPL", "MSFT"]) });
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      ui: { notify: vi.fn() },
-    };
-
-    const result = await inputHandler!(
-      { type: "input", text: "Compare AAPL and MSFT side by side.", source: "interactive" },
-      ctx,
-    );
-
-    const prompt = firstWorkflowPrompt(
-      buildCompareAssetsWorkflowDefinition({
-        resolved: { symbols: ["AAPL", "MSFT"] },
-        sources: { symbols: "user" },
-        defaultsUsed: [],
-        missingRequired: [],
-      }),
-    );
-
-    expect(result).toEqual({ action: "transform", text: prompt });
-    expect(fake.sendUserMessage).not.toHaveBeenCalledWith(prompt);
   });
 
   it("records a per-turn disclaimer entry (non-LLM-context) on final assistant turns", async () => {
@@ -492,39 +337,31 @@ describe("opencandle extension", () => {
       expect(result.systemPrompt).toContain("OpenCandle");
     });
 
-    it("extracts preferences from user input and passes them to slot resolvers", async () => {
+    it("records workflow runs after router dispatch", async () => {
       const fake = createFakeApi();
-      openCandleExtension(fake.api);
+      const workflowOutput = {
+        route: "workflow",
+        workflow: "portfolio_builder",
+        entities: { symbols: [], budget: 10_000 },
+        slots: {
+          budget: { value: 10_000, source: "user", confidence: "high" },
+        },
+        preference_updates: [],
+        missing_required: [],
+        reasoning: "",
+      };
+      openCandleExtension(fake.api, {
+        routerLlmClient: { complete: async () => JSON.stringify(workflowOutput) },
+      });
       await initMemory(fake);
 
       const inputHandler = fake.handlers.get("input")?.[0];
-      const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
-
-      // Turn 1: state preference
-      await inputHandler!(
-        { type: "input", text: "I'm conservative and prefer ETFs", source: "interactive" },
-        ctx,
-      );
-
-      // Turn 2: portfolio request — should use stored preference
-      const result = await inputHandler!(
-        { type: "input", text: "invest $10k", source: "interactive" },
-        ctx,
-      );
-
-      expect(result).toEqual(expect.objectContaining({ action: "transform" }));
-      // The prompt should use conservative from preference, not balanced default
-      expect(result.text).toContain("conservative");
-      expect(result.text).not.toContain("balanced [DEFAULT]");
-    });
-
-    it("records workflow runs after dispatch", async () => {
-      const fake = createFakeApi();
-      openCandleExtension(fake.api);
-      await initMemory(fake);
-
-      const inputHandler = fake.handlers.get("input")?.[0];
-      const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: { getBranch: () => [], getSessionId: () => "sid" },
+      };
 
       await inputHandler!(
         { type: "input", text: "invest $10k in balanced portfolio", source: "interactive" },
@@ -538,14 +375,31 @@ describe("opencandle extension", () => {
       );
     });
 
-    it("injects memory context into system prompt after preferences are stored", async () => {
+    it("injects memory context into system prompt after router preference writes", async () => {
       const fake = createFakeApi();
-      openCandleExtension(fake.api);
+      const fallbackOutput = {
+        route: "fallback",
+        entities: { symbols: [] },
+        slots: {},
+        preference_updates: [
+          { key: "risk_profile", value: "conservative", confidence: "high", source: "inferred" },
+        ],
+        missing_required: [],
+        reasoning: "",
+      };
+      openCandleExtension(fake.api, {
+        routerLlmClient: { complete: async () => JSON.stringify(fallbackOutput) },
+      });
       await initMemory(fake);
 
-      // Store a preference via input
+      // Store a preference via a routed turn
       const inputHandler = fake.handlers.get("input")?.[0];
-      const ctx = { isIdle: () => true, ui: { notify: vi.fn() } };
+      const ctx = {
+        isIdle: () => true,
+        ui: { notify: vi.fn() },
+        model: { id: "m" },
+        sessionManager: { getBranch: () => [], getSessionId: () => "sid" },
+      };
       await inputHandler!({ type: "input", text: "I'm conservative", source: "interactive" }, ctx);
 
       // Check system prompt includes the preference
@@ -598,102 +452,6 @@ describe("opencandle extension", () => {
     expect(calls).not.toContain(comprehensiveAnalysisPrompts("NVDA")[1]);
     // The AAPL follow-ups should proceed
     expect(calls).toContain(comprehensiveAnalysisPrompts("AAPL")[1]);
-  });
-
-  it("clarifies rules-mode compare prompts when acronym drops leave too few symbols", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api, { symbolSearch: exactSymbolSearch(["ASTS"]) });
-
-    const sessionStart = fake.handlers.get("session_start")?.[0];
-    await sessionStart!(
-      { type: "session_start" },
-      { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
-    );
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      ui: { notify: vi.fn() },
-      sessionManager: { getBranch: () => [], getSessionId: () => "sid" },
-    };
-
-    const result = await inputHandler!(
-      { type: "input", text: "Compare these assets: IV, ASTS", source: "interactive" },
-      ctx,
-    );
-
-    expect(result).toBeUndefined();
-
-    const symbolDrop = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => c[0] === "opencandle-symbol-dropped",
-    );
-    expect(symbolDrop).toBeDefined();
-    expect(symbolDrop![1]).toMatchObject({
-      token: "IV",
-      reason: "no positive ticker signal",
-      source: "rules",
-    });
-
-    const aborted = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => c[0] === "opencandle-workflow-aborted",
-    );
-    expect(aborted).toBeDefined();
-    expect(aborted![1]).toMatchObject({
-      reason: "symbol-disambiguation-insufficient-symbols",
-      validSymbols: ["ASTS"],
-    });
-
-    const beforeAgentStart = fake.handlers.get("before_agent_start")?.[0];
-    const promptResult = await beforeAgentStart!(
-      { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
-      {},
-    );
-    expect(promptResult.systemPrompt).toContain("Clarification Playbook");
-    expect(promptResult.systemPrompt).toContain("ask_user");
-    expect(promptResult.systemPrompt).toContain("Dropped ambiguous ticker-like tokens: IV");
-  });
-
-  it("clarifies rules-mode compare prompts when ticker preflight leaves too few valid symbols", async () => {
-    const fake = createFakeApi();
-    openCandleExtension(fake.api, { symbolSearch: exactSymbolSearch(["AAPL"]) });
-
-    const sessionStart = fake.handlers.get("session_start")?.[0];
-    await sessionStart!(
-      { type: "session_start" },
-      { hasUI: false, sessionManager: { getSessionId: () => "sid" }, ui: { notify: vi.fn() } },
-    );
-
-    const inputHandler = fake.handlers.get("input")?.[0];
-    const ctx = {
-      isIdle: () => true,
-      ui: { notify: vi.fn() },
-      sessionManager: { getBranch: () => [], getSessionId: () => "sid" },
-    };
-
-    const result = await inputHandler!(
-      { type: "input", text: "Compare AAPL and ZZZZ", source: "interactive" },
-      ctx,
-    );
-
-    expect(result).toBeUndefined();
-    const aborted = (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.find(
-      (c) => c[0] === "opencandle-workflow-aborted",
-    );
-    expect(aborted).toBeDefined();
-    expect(aborted![1]).toMatchObject({
-      reason: "preflight-insufficient-symbols",
-    });
-
-    const beforeAgentStart = fake.handlers.get("before_agent_start")?.[0];
-    const promptResult = await beforeAgentStart!(
-      { type: "before_agent_start", prompt: "test", systemPrompt: "BASE" },
-      {},
-    );
-    expect(promptResult.systemPrompt).toContain("Fallback Playbook");
-    expect(promptResult.systemPrompt).toContain("ask_user");
-    expect(promptResult.systemPrompt).toContain(
-      "ticker preflight left fewer than two valid symbols",
-    );
   });
 
   describe("llm router mode dispatch signal", () => {

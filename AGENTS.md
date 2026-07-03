@@ -89,7 +89,7 @@ export const cache = new Cache();
 - Tests mock `globalThis.fetch` with fixture JSON. No live API calls in unit tests.
 
 ## ENV FLAGS
-- `OPENCANDLE_ROUTER_MODE` defaults to `rules`. Set `OPENCANDLE_ROUTER_MODE=llm` to opt into the LLM router while the live router acceptance gate is incomplete.
+- The LLM router is the only production routing path. `OPENCANDLE_ROUTER_MODE` accepts only `llm` (or unset); the removed `rules` value fails startup with migration guidance.
 
 ## BOUNDARIES
 

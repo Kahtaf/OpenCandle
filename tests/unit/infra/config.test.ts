@@ -276,34 +276,33 @@ describe("loadConfig", () => {
     expect(config.debate).toBe(false);
   });
 
-  it("routerMode defaults to rules when OPENCANDLE_ROUTER_MODE is unset", () => {
+  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is unset", () => {
     delete process.env.OPENCANDLE_ROUTER_MODE;
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
     });
     const config = loadConfig();
-    expect(config.routerMode).toBe("rules");
+    expect(config.routerMode).toBe("llm");
   });
 
-  it("routerMode defaults to rules when OPENCANDLE_ROUTER_MODE is blank", () => {
+  it("routerMode defaults to llm when OPENCANDLE_ROUTER_MODE is blank", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "";
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
     });
     const config = loadConfig();
-    expect(config.routerMode).toBe("rules");
+    expect(config.routerMode).toBe("llm");
   });
 
-  it("routerMode can use rules when OPENCANDLE_ROUTER_MODE is rules", () => {
+  it("routerMode fails fast with migration guidance when set to rules", () => {
     process.env.OPENCANDLE_ROUTER_MODE = "rules";
     mockedExistsSync.mockReturnValue(false);
     mockedReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
     });
-    const config = loadConfig();
-    expect(config.routerMode).toBe("rules");
+    expect(() => loadConfig()).toThrowError(/OPENCANDLE_ROUTER_MODE="rules" was removed/);
   });
 
   it("routerMode rejects invalid OPENCANDLE_ROUTER_MODE values", () => {
@@ -313,7 +312,7 @@ describe("loadConfig", () => {
       throw new Error("ENOENT");
     });
     expect(() => loadConfig()).toThrowError(
-      'Invalid OPENCANDLE_ROUTER_MODE="regex". Allowed values: "rules" (default) or "llm".',
+      'Invalid OPENCANDLE_ROUTER_MODE="regex". Allowed value: "llm" (default).',
     );
   });
 

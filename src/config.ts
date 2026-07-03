@@ -14,7 +14,7 @@ export interface SentimentConfig {
   maxNotableClaims?: number;
 }
 
-export type RouterMode = "rules" | "llm";
+export type RouterMode = "llm";
 export type ToolScopeMode = "observe" | "enforce";
 export type PlanningMigrationStatuses = Partial<Record<TaskFamily, PlanningBehaviorMode>>;
 
@@ -27,10 +27,9 @@ export interface Config {
   /** Enable adversarial bull/bear debate in comprehensive analysis. Default: true. */
   debate?: boolean;
   /**
-   * Intent-router mode. `"rules"` (default) uses the deterministic rule
-   * router (`classifyIntent` + `extractPreferences`). `"llm"` opts into the
-   * LLM router ahead of prompt assembly. Controlled by
-   * `OPENCANDLE_ROUTER_MODE`.
+   * Intent-router mode. The LLM router is the only production routing path;
+   * `OPENCANDLE_ROUTER_MODE` accepts only `"llm"` (or unset). The removed
+   * `"rules"` value fails startup with migration guidance.
    */
   routerMode: RouterMode;
   /**
@@ -141,11 +140,13 @@ const PLANNING_BEHAVIOR_MODES = [
 
 function resolveRouterMode(): RouterMode {
   const raw = process.env.OPENCANDLE_ROUTER_MODE;
-  if (raw === undefined || raw === "") return "rules";
-  if (raw === "rules" || raw === "llm") return raw;
-  throw new Error(
-    `Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed values: "rules" (default) or "llm".`,
-  );
+  if (raw === undefined || raw === "" || raw === "llm") return "llm";
+  if (raw === "rules") {
+    throw new Error(
+      'OPENCANDLE_ROUTER_MODE="rules" was removed: the deterministic rules router is no longer a production routing path. Unset OPENCANDLE_ROUTER_MODE to use the LLM router.',
+    );
+  }
+  throw new Error(`Invalid OPENCANDLE_ROUTER_MODE="${raw}". Allowed value: "llm" (default).`);
 }
 
 function resolveToolScopeMode(): ToolScopeMode {

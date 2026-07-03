@@ -18,7 +18,7 @@ const DEFAULT_EMPTY_CONFIG = {
   exaApiKey: undefined,
   finnhubApiKey: undefined,
   debate: true,
-  routerMode: "rules",
+  routerMode: "llm",
   toolScopeMode: "observe",
   sentiment: undefined,
 } satisfies Config;

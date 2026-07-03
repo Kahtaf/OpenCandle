@@ -5,6 +5,11 @@
 ### Removed
 
 - **BREAKING**: The predictions feature was removed entirely — the `track_prediction` tool, the GUI Predictions page and navigation, prediction quote snapshots, prediction routing/prompt context, and the SQLite `prediction_records` table (dropped by the v8 schema migration; all other saved market state is preserved).
+- **BREAKING**: The deterministic rules router is no longer a production routing path. The LLM router is now the default and only mode; `OPENCANDLE_ROUTER_MODE=rules` fails startup with migration guidance. Deterministic safety nets (acronym disambiguation, symbol preflight, compare clarification aborts, router validation-failure recovery) remain active on LLM router output.
+
+### Changed
+
+- The router post-processor now canonicalizes camelCase slot keys to snake_case and converts one-element `symbols` slots to the scalar `symbol` slot (and vice versa) per the workflow manifest, reducing routing drift on non-Claude router models. The live router eval now diffs the routing contract only, excluding recording-model-specific internal diagnostics.
 
 ### Changed
 

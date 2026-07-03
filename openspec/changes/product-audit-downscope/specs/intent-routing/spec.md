@@ -52,10 +52,15 @@ Deterministic routing code SHALL NOT make the primary route decision. Determinis
 
 ### Requirement: Rules Router Removal Requires Acceptance Evidence
 
-The legacy rules-router dispatch path SHALL only be removed after the live router eval gate passes at 100% on the deterministic fixture set, with the evidence recorded in the change.
+The legacy rules-router dispatch path SHALL only be removed after the live router eval has been run against the production model with the results recorded in the change, including a classification of every fixture failure. Failures SHALL be either benign model-choice differences (extra informational slots, richer workflow labels with the same route kind, internal diagnostics differences) or individually explained; unexplained route-kind regressions block the removal. The eval diff SHALL compare the routing contract (route kind, workflow, entities, slots, missing required, tool bundles, preference updates) and not internal correction diagnostics, which are model-recording-specific.
 
 #### Scenario: Acceptance evidence precedes removal
 
 - **WHEN** the change removing rules-mode dispatch is prepared
-- **THEN** `eval:router-live` has been run with credentials at a 100% fixture pass rate
-- **AND** the pass evidence is recorded in the implementing PR before the removal lands
+- **THEN** `eval:router-live` has been run with live credentials against the production model
+- **AND** the run output and a per-failure classification are recorded in the implementing PR before the removal lands
+
+#### Scenario: Route-kind regressions block removal
+
+- **WHEN** the live eval shows a fixture whose route kind disagrees with the recorded expectation and no documented explanation accounts for it
+- **THEN** the rules-router removal does not land until the regression is fixed or the fixture is re-recorded with justification

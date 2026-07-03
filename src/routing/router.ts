@@ -12,6 +12,7 @@ import {
   legacyRouteForRouteKind,
   routeKindFromLegacyRoute,
   selectToolBundles,
+  workflowRequiredSlots,
 } from "./route-manifest.js";
 import { buildRouterPrompt } from "./router-prompt.js";
 import type {
@@ -127,7 +128,7 @@ export function validateRouterOutput(raw: string): RouterOutput {
   }
 
   const entities = validateEntities(obj.entities);
-  const slots = validateSlots(obj.slots);
+  const slots = canonicalizeSymbolSlots(workflow, validateSlots(obj.slots));
   const preference_updates = validatePreferenceUpdates(obj.preference_updates);
   const missing_required = rawMissingRequired;
   const tool_bundles = validateToolBundles(obj.tool_bundles);
@@ -816,13 +817,48 @@ function validateSlots(raw: unknown): Record<string, RouterSlot> {
     if (!VALID_CONFIDENCE.has(s.confidence as string)) {
       throw new Error(`slot ${key} has invalid confidence: ${JSON.stringify(s.confidence)}`);
     }
-    out[key] = {
+    const canonicalKey = canonicalSlotKey(key);
+    out[canonicalKey] = {
       value: s.value,
       source: s.source as RouterSlot["source"],
       confidence: s.confidence as RouterSlot["confidence"],
     };
   }
   return out;
+}
+
+// The slot contract uses snake_case keys; non-Claude router models sometimes
+// emit camelCase (timeHorizon, riskProfile). Canonicalize deterministically so
+// downstream slot resolution and missing-required checks match.
+function canonicalSlotKey(key: string): string {
+  return key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+}
+
+// Models also drift between scalar `symbol` and one-element `symbols` slot
+// shapes. Canonicalize toward the workflow's manifest-declared required slot
+// name when the conversion is unambiguous.
+function canonicalizeSymbolSlots(
+  workflow: RouterOutput["workflow"],
+  slots: Record<string, RouterSlot>,
+): Record<string, RouterSlot> {
+  if (!workflow) return slots;
+  const required = workflowRequiredSlots(workflow);
+  const next = { ...slots };
+  if (required.includes("symbol") && next.symbol == null && next.symbols != null) {
+    const value = next.symbols.value;
+    if (Array.isArray(value) && value.length === 1) {
+      next.symbol = { ...next.symbols, value: value[0] };
+      delete next.symbols;
+    }
+  }
+  if (required.includes("symbols") && next.symbols == null && next.symbol != null) {
+    const value = next.symbol.value;
+    if (typeof value === "string" && value.length > 0) {
+      next.symbols = { ...next.symbol, value: [value] };
+      delete next.symbol;
+    }
+  }
+  return next;
 }
 
 function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {
