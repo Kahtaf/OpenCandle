@@ -16,6 +16,7 @@
   - I5 → one branch per suite, `feat/eval-<suite>` (e.g. `feat/eval-provider-outage` for E3, `feat/eval-multi-turn` for E1, `feat/eval-release-gate-gui-smoke` for the E6 gate PR)
   - I6 → moved to cleanup WP7 (`feat/openspec-wp7-coordinator-verification`, PRs into the integration branch, not `main`)
   - I7 → `feat/gui-session-scoped-actions`
+  - I9 → `feat/router-gemini-contract`
 - **Dependency on the cleanup branch:** OpenSpec changes are consolidated on `feat/openspec-backlog-cleanup` (see the companion cleanup plan's Branching & PR policy). I4 and I7 implement specs delivered by that branch (WP6 and WP4.2), so they must branch from `main` only AFTER `feat/openspec-backlog-cleanup` has merged to `main` — never from the integration branch itself.
 - Do not stack item branches on each other. Where sequencing exists (I2 → I3, I1 → E1/E2/E4/E5), the downstream branch starts only after the upstream PR merges to `main`.
 
@@ -26,7 +27,7 @@
 3. Ask-first areas from AGENTS.md still apply: `src/pi/`, system prompt, analyst orchestration *prompts*, memory SQLite schema. Where an item below authorizes touching one (e.g. I4's v9 migration), that authorization is scoped to exactly what the item says.
 4. Done means: `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; new behavior covered by tests named in the item; a short `NOTES.md` in the PR (or PR description) mapping each claimed behavior to the test that proves it; runtime evidence (below) committed under `docs/internal/pr-evidence/<branch-name>/` — never `/tmp` (ephemeral evidence has already rotted once in this repo's history).
 5. Runtime evidence by surface: agent-behavior changes → a harness `trace.json` of the target scenario; GUI changes → screenshots at 1440x960 and 390x844 plus the browser-suite log; coordinator/lock changes → the convergence smoke output; schema changes → migration-test output against a real pre-upgrade fixture DB.
-6. **E2E-first evidence policy (2026-07-03):** executor environments are provisioned with model/provider credentials, and live end-to-end runs are EXPECTED, not optional. Runtime evidence must come from a real credentialed run (harness trace, live eval, real browser) — never from mocks alone. Unit suites stay mock-based per AGENTS.md (no live calls in `npm test`), but every item's "done" includes its live evidence. If your environment lacks the needed credential, STOP and request it from the maintainer; do not substitute a mocked run and do not mark the item done. Cost discipline: run the targeted live scenario for your item, not whole live suites repeatedly.
+6. **E2E-first evidence policy (2026-07-03):** executor environments are provisioned with model/provider credentials, and live end-to-end runs are EXPECTED, not optional. **Auth model:** Claude access goes through Pi's sign-in auth (`~/.pi/agent/` auth storage — the same path production uses via `ctx.model`), NOT a raw `ANTHROPIC_API_KEY`; provider keys for data APIs and `GEMINI_API_KEY` come from `.env`. acpx is an agent transport, used ONLY for competitive-benchmark generic-agent baselines — never as a model transport for router or harness evals. Runtime evidence must come from a real credentialed run (harness trace, live eval, real browser) — never from mocks alone. Unit suites stay mock-based per AGENTS.md (no live calls in `npm test`), but every item's "done" includes its live evidence. If your environment lacks the needed credential, STOP and request it from the maintainer; do not substitute a mocked run and do not mark the item done. Cost discipline: run the targeted live scenario for your item, not whole live suites repeatedly.
 
 ## Sequencing
 
@@ -36,9 +37,10 @@ I2 evidence capture ──→ I3 deterministic synthesis + validation ──→ 
 WP6 spec merge ──→ I4 /forget ──→ I5 eval E4
 WP4.2 spec merge ──→ I7 session-scoped action cleanup
 I5 evals E3/E6/E7 need nothing else; E3 can start immediately
+I9 Gemini router-contract hardening — independent (uses the archived 2026-07-03 baseline); can start immediately
 ```
 
-Parallel-safe from day one: I1, I2, I5(E3). Everything else has exactly one parent. (Coordinator verification closeout, formerly I6, moved to cleanup plan WP7 so the coordinator change archives on the integration branch.)
+Parallel-safe from day one: I1, I2, I5(E3), I9. Everything else has exactly one parent. (Coordinator verification closeout, formerly I6, moved to cleanup plan WP7 so the coordinator change archives on the integration branch.)
 
 ---
 
@@ -221,6 +223,22 @@ Coordinator verification closeout (the 1.8 long-stream test, auto-retry pinning 
 Write the OpenSpec proposal for phases 2–4 only after phase-1 trace data shows the validator's real-world false-positive rate.
 
 ---
+
+## I9 — Gemini router-contract hardening
+
+**Why:** Production routing follows the user's selected Pi model (`resolveRouterLlmClient` uses `ctx.model`), so Gemini is already a live router model for Gemini users — and the archived baseline `tests/fixtures/router/eval-baselines/2026-07-03-gemini-2.5-flash.txt` shows **9/26 pass (34.6%)** on the routing contract. The 0.11.0 post-processor canonicalization (camelCase→snake_case, symbols↔symbol conversion) reduced non-Claude drift but clearly not enough. This item makes the contract hold on `gemini-2.5-flash` at >= 90%.
+
+**Scope (in order):**
+1. **Triage the 17 archived failures** into three classes, recorded in a table in the PR: (a) contract-shape drift the post-processor should canonicalize (e.g. symbols appearing in `slots` where the fixture expects them absent), (b) real misroutes (e.g. fixture 022: `CPI` survived slot-level acronym filtering and drove a `compare_assets` dispatch — a known triage lead), (c) fixture over-specificity (expected output encodes recording-model-internal choices that the contract diff should exempt, like `tool_bundles` ordering).
+2. **Fix class (b) in the deterministic layer** — `src/routing/router.ts` post-processing / `symbol-disambiguator` — never in prompts. The CPI lead suggests slot-level acronym filtering has a gap on outputs where the model routes directly to a workflow; extend the existing slot-sanitization path (CHANGELOG 0.6.0-era: "LLM-router acronym drops now also filter router slot symbols").
+3. **Fix class (a) via canonicalization** in the same post-processor, and class (c) via the eval's `stripNonContract` diff policy in `tests/scripts/run-live-router-eval.ts` — with a one-line justification per exemption; exemptions that would mask real misroutes are rejected.
+4. **Re-run and archive** a fresh `gemini-2.5-flash` baseline; target >= 90% pass. Also re-run the deterministic fixture suite (`npm test`) — post-processor changes must not break the 26 mocked fixtures.
+
+**Files:** `src/routing/router.ts`, `src/routing/symbol-disambiguator.ts`, `tests/scripts/run-live-router-eval.ts`, `tests/unit/routing/`, new fixture variants if triage demands them. **Out of scope:** router prompt text (`src/routing/router-prompt.ts` instruction content — hard gate), workflow manifests, changing fixture `expectedRouterOutput` to match wrong behavior.
+
+**Likely wrong:** "fixing" failures by widening `stripNonContract` until everything passes (each exemption needs a justification the reviewer will audit); editing fixtures to match Gemini output without classifying first; touching the router prompt; regressing Claude-family behavior (if a Pi-auth Claude baseline exists from cleanup WP2, re-run it after changes and attach both).
+
+**Reviewer verification:** audit the triage table against the archived baseline line-by-line for at least the 5 acronym fixtures (019–025); confirm fixture 022's fix is deterministic-layer; diff `stripNonContract` exemptions against the justification list; require both fresh baselines committed.
 
 ## Do NOT spend implementation-agent budget on
 
