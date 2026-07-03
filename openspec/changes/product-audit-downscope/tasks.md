@@ -1,0 +1,83 @@
+## 1. GUI Credential Redaction (land first)
+
+- [ ] 1.1 Replace `apiKey: credential.value` in the catalog payload with `configured` status + masked hint (`gui/server/tool-metadata.ts:77-89`); keep `source`/`envVar`/signup metadata
+- [ ] 1.2 Rework the provider form to a configured-state + replace-only empty input; remove key prefill (`CatalogOverlay.jsx:679-690, 754, 777`); keep the `provider.save_api_key` save path
+- [ ] 1.3 Update GUI server/web tests asserting the old payload shape; add a test that the payload never contains the raw key
+- [ ] 1.4 Run `npm test`, update CHANGELOG (Fixed/security)
+
+## 2. Predictions Removal
+
+- [ ] 2.1 Delete `src/tools/portfolio/predictions.ts`; remove registrations (`src/tools/index.ts:23,56,94`) and the `track_prediction` entry in `src/routing/route-manifest.ts:32`; update `src/tools/AGENTS.md`
+- [ ] 2.2 Remove prediction types/methods from `MarketStateService` (`src/market-state/service.ts` — `PredictionDirection`, `PredictionStatus`, `PredictionRecord`, `PredictionRow`, `recordPrediction`, `listPredictions`, `updatePredictionOutcome`, `getPrediction`, `mapPrediction`)
+- [ ] 2.3 Add SQLite v8 migration dropping `prediction_records`; remove the CREATE TABLE (`src/memory/sqlite.ts:181-196`) and resetSchema drop line (`:544`); bump `CURRENT_SCHEMA_VERSION` to 8
+- [ ] 2.4 Delete GUI surfaces: `PredictionsPage.jsx`, `prediction-view-model.js`, `PredictionCard` (`renderers/cards/portfolio.jsx:251-266`, registry entry `cards/index.jsx:15,69`, `tool-icon.jsx:74`)
+- [ ] 2.5 Remove nav/routes: `router.jsx:62-64,78`, `App.jsx:502`, `SessionHistory.jsx:155`, `FinancialContextPanel.jsx:24`; remove predictions panel/form/title from `MarketStatePage.jsx:13,38-41,212-213,345-360,930`
+- [ ] 2.6 Surgical GUI edits: remove "Open prediction" inspector section from `WatchlistPage.jsx:8,178-179,276-289`; remove `predictions` from `useMarketState.jsx:7` default state; strip prediction branches from `gui/server/market-state-api.ts:12,54-55,89,112-118,227-248,254` and `gui/server/invoke-tool.ts:452-453`
+- [ ] 2.7 Remove routing triggers: prediction terms from `classify-intent.ts:139,187,306-317`, `router.ts:662`, `router-prompt.ts:22`; verify `planning.ts` has no `track_prediction` references
+- [ ] 2.8 Remove prompt context: predictions block from `session-coordinator.ts:522-608`; `track_prediction` lines from `policy-cards.ts:144`, `context-builder.ts:294`, `system-prompt.ts:22`
+- [ ] 2.9 Trim eval/benchmark seeding: `predictions` from `competitive-finance.ts:28-31,43,64-75,94-97,328` and `run-competitive-finance-eval.ts:109-111,269,570,599`
+- [ ] 2.10 Delete `tests/unit/tools/predictions.test.ts` and `tests/unit/gui-web/prediction-view-model.test.ts`; surgically update prediction assertions in shared tests (service, market-state-api, session-coordinator, quote-snapshot-store, market-state-page-render, use-market-state, market-state-parity, classify-intent, planning, context-builder, policy-cards, system-prompt, e2e tools/gui-browser/cli, prompt-policy-assertions, prompt-to-policy-baseline, baseline.json, opencandle-runner)
+- [ ] 2.11 Guard against over-deletion: leave watchlist `thesis` column, analyst `conviction`/`thesis` outputs, `filing_thesis_review` policy, and `oc-superiority-scorecard` untouched
+- [ ] 2.12 Update docs/README mentions of predictions; run `npm test` + typecheck; CHANGELOG (BREAKING removal incl. table drop); run `graphify update .`
+
+## 3. Catalog Schema Generation (includes predict_returns deletion)
+
+- [ ] 3.1 Build a JSON-schema→form-field mapper from served tool `parameters` (types, required, enums, defaults, descriptions), upgrading the `deriveGenericSchema` path in `CatalogOverlay.jsx:597`
+- [ ] 3.2 Delete the handwritten `TOOL_SCHEMAS` map in `tool-schemas.js` (removes stale `calculate_dcf`, `manage_portfolio`, `watchlist` and orphan `predict_returns:347-358`); keep a thin presentation-overrides map validated against catalog tool names
+- [ ] 3.3 Add a test that every overrides key matches a served tool name (prevents future drift); verify complex tools (screen_stocks, manage_alerts, track_portfolio) render usable forms
+- [ ] 3.4 Run GUI unit + browser smoke tests; CHANGELOG
+
+## 4. Router Consolidation (absorbs remove-rule-router)
+
+- [ ] 4.1 Run `npm run eval:router-live` with credentials; record 100% fixture pass evidence in the PR (acceptance gate per intent-routing spec)
+- [ ] 4.2 Flip `resolveRouterMode()` default to `llm`; make `rules` fail fast with a migration message (`src/config.ts:142-149`)
+- [ ] 4.3 Remove the rules dispatch branch from `src/pi/opencandle-extension.ts:703+` and delete `src/routing/legacy-rule-router.ts`; keep deterministic post-processing safety nets (acronym disambiguation, symbol preflight, compare-abort clarification, provider/tool validation) active on LLM output
+- [ ] 4.4 Update config/extension/routing tests and fixtures; remove rules-mode-only tests; update `AGENTS.md:92` and `docs/configuration.md:60`
+- [ ] 4.5 Archive `openspec/changes/remove-rule-router/` as superseded by this change
+- [ ] 4.6 Run `npm test` + router evals; CHANGELOG (BREAKING: `rules` mode removed)
+
+## 5. Debate Fold-In
+
+- [ ] 5.1 Remove `OPENCANDLE_DEBATE` resolution (`src/config.ts:194,203-206`) — ignore the env var if set; remove the `debate` config field and the option from `buildComprehensiveAnalysisDefinition` (`opencandle-extension.ts:686`)
+- [ ] 5.2 Delete the no-debate branch and prompts (`orchestrator.ts:196-240` conditional, `SYNTHESIS_PROMPT_NO_DEBATE`, `VALIDATION_PROMPT_NO_DEBATE`)
+- [ ] 5.3 Update config/orchestrator/onboarding/eval tests referencing the flag; remove `docs/configuration.md:44` row; CHANGELOG (BREAKING: flag removed, debate always on)
+
+## 6. DCF Hardening
+
+- [ ] 6.1 Refuse per-share output when market cap or positive quote price is unavailable (replace `sharesOutstanding = ... : 1` at `dcf.ts:248`), mirroring the negative-FCF refusal shape
+- [ ] 6.2 Pass net debt through signed (remove `Math.max(0, netDebt)` at `dcf.ts:257`); net cash adds to equity value
+- [ ] 6.3 Validate `discountRate > terminalGrowth` before the main computation (`dcf.ts:58`); return a Gordon Growth validation error otherwise
+- [ ] 6.4 Extend `tests/unit/tools/dcf.test.ts` for all three guards; add a TUI harness test driving "Run a DCF on AAPL" end to end asserting a `compute_dcf` call and an intrinsic-value or explicit-refusal answer
+- [ ] 6.5 Run `npm test`; CHANGELOG
+
+## 7. Backtest Realism
+
+- [ ] 7.1 Thread bar opens through the shared fill loop; fill signals at next bar's open across all three strategies (`backtest.ts:64-90` and RSI/50-200 variants); report final-bar signals as pending unfilled
+- [ ] 7.2 Add a flat per-side cost parameter (default 5 bps, overridable) deducted on every fill; state the assumed rate in output
+- [ ] 7.3 Add a limitations block to output (no dividends, taxes, slippage beyond flat cost, liquidity, intrabar modeling)
+- [ ] 7.4 Update `tests/unit/tools/backtest.test.ts`; check faithfulness/routing eval fixtures still pass (re-baseline only if a scorer pins numbers)
+- [ ] 7.5 Run `npm test`; CHANGELOG
+
+## 8. Reports Reframing
+
+- [ ] 8.1 Remove the Technical snapshot placeholder section from the generator (`daily-report.ts:132-133`); omit unbuilt sections entirely
+- [ ] 8.2 Stop auto-creating an enabled template on manual runs: manual generation records an unscheduled run when no template exists; `getOrCreateDefaultWatchlistReportTemplate` only runs from an explicit setup flow that labels stored schedules as inert until scheduling ships (`daily-report.ts:20-59`)
+- [ ] 8.3 GUI Reports page: primary action "Generate digest" + history; remove cadence/time-picker as active scheduling controls
+- [ ] 8.4 Update daily-report/report-surface tests; run `npm test`; CHANGELOG
+
+## 9. /analyze Repositioning (copy-only)
+
+- [ ] 9.1 Reorder GUI empty-state suggestions to lead with keyless prompts; label `/analyze` as deep research with a longer-run expectation (`prompt-suggestions.jsx:6`)
+- [ ] 9.2 Reorder README example prompts (`README.md:81,97`) and docs first-prompt lists (`docs/index.md:71`, `docs/getting-started.md:135`, `docs/gui-quickstart.md:13`) with the same framing; `docs/first-run.md` already correct
+- [ ] 9.3 Run docs-site build/link checks
+
+## 10. Sentiment End-to-End Verification (no code change unless it fails)
+
+- [ ] 10.1 Run `npm run test:e2e:providers` with live `rdt`/`twitter` sessions; run `opencandle doctor` and confirm both sentiment providers report ready
+- [ ] 10.2 Drive one live TUI session each for `get_reddit_sentiment` and `get_twitter_sentiment` (plus an aggregate summary prompt); record results
+- [ ] 10.3 File follow-up issues/fixes only for what the pass surfaces
+
+## 11. Wrap-Up
+
+- [ ] 11.1 Full gate: `npm test`, typecheck, `npm run build`, GUI browser smoke, prompt-debt guard (`npx vitest run tests/unit/prompts/prompt-debt-guard.test.ts`)
+- [ ] 11.2 Verify CHANGELOG captures all BREAKING items (predictions + table drop, rules mode, debate flag); run `graphify update .`
