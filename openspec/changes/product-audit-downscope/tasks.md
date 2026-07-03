@@ -60,10 +60,10 @@
 
 ## 8. Reports Reframing
 
-- [ ] 8.1 Remove the Technical snapshot placeholder section from the generator (`daily-report.ts:132-133`); omit unbuilt sections entirely
-- [ ] 8.2 Stop auto-creating an enabled template on manual runs: manual generation records an unscheduled run when no template exists; `getOrCreateDefaultWatchlistReportTemplate` only runs from an explicit setup flow that labels stored schedules as inert until scheduling ships (`daily-report.ts:20-59`)
-- [ ] 8.3 GUI Reports page: primary action "Generate digest" + history; remove cadence/time-picker as active scheduling controls
-- [ ] 8.4 Update daily-report/report-surface tests; run `npm test`; CHANGELOG
+- [x] 8.1 Remove the Technical snapshot placeholder section from the generator; unbuilt sections omitted entirely
+- [x] 8.2 Stop auto-creating an enabled template on manual runs: `getOrCreateDefaultWatchlistReportTemplate` replaced by `findDefaultWatchlistReportTemplate`; manual runs link to a configured template when one exists, otherwise record an unscheduled run with a note pointing to the configure flow
+- [x] 8.3 GUI Reports page: no change needed — the `opencandle monitor`/writer automation service actually runs configured schedules while OpenCandle is open (same model as alerts, which the audit closed as correct), and the existing schedule form copy already states "runs daily while OpenCandle is open"; spec delta amended to the honest while-open framing instead of removing the pickers
+- [x] 8.4 Updated daily-report tests (placeholder absent, no side-effect template, manual runs link to configured templates); ran `npm test`; CHANGELOG
 
 ## 9. /analyze Repositioning (copy-only)
 

@@ -2,7 +2,7 @@
 
 ### Requirement: Daily Report Has A Stable User-Facing Shape
 
-OpenCandle SHALL generate daily reports with a predictable content contract and SHALL present report generation as an on-demand digest until background scheduling and channel delivery exist.
+OpenCandle SHALL generate daily reports with a predictable content contract, and report surfaces SHALL describe scheduling honestly: configured schedules run while an OpenCandle writer or monitor process is active, and manual generation never implies a schedule.
 
 #### Scenario: Watchlist daily report includes expected sections
 
@@ -28,11 +28,11 @@ OpenCandle SHALL generate daily reports with a predictable content contract and 
 - **THEN** the result is shown immediately in that surface
 - **AND** the Reports page and later TUI report history can show the saved report run status and summary metadata
 
-#### Scenario: Report surface presents as on-demand digest
+#### Scenario: Report surface separates on-demand generation from schedule intent
 
-- **WHEN** a user views the Reports surface before background scheduling and channel delivery ship
-- **THEN** the primary action is generating a digest now, with run history
-- **AND** cadence or run-time pickers are not presented as active scheduling controls
+- **WHEN** a user views the Reports surface
+- **THEN** generating a report now is a first-class action with run history
+- **AND** schedule configuration is an explicit separate flow whose copy states that scheduled runs execute while OpenCandle is open (matching the alerts monitoring model)
 
 ### Requirement: Chat And Pages Stay In Sync For Users
 
