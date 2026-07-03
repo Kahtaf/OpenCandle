@@ -636,6 +636,18 @@ def is_test_path(path: str) -> bool:
     return path.startswith("tests/") or ".test." in path or ".spec." in path
 
 
+def has_unguarded_route_block(lines: list[str]) -> bool:
+    # Guard checks are scoped per route block (route line up to the next route
+    # line), so a guarded sibling route or a stray "trusted" mention elsewhere
+    # in the file cannot mute the signal for an unguarded route.
+    route_indexes = [index for index, line in enumerate(lines) if GUI_ROUTE_RE.search(line)]
+    for position, start in enumerate(route_indexes):
+        end = route_indexes[position + 1] if position + 1 < len(route_indexes) else len(lines)
+        if not any(GUI_GUARD_RE.search(line) for line in lines[start:end]):
+            return True
+    return False
+
+
 def diff_signals(changed_paths: set[str], added_by_file: dict[str, list[str]]) -> list[dict[str, Any]]:
     signals: list[dict[str, Any]] = []
 
@@ -646,7 +658,7 @@ def diff_signals(changed_paths: set[str], added_by_file: dict[str, list[str]]) -
     for path, lines in added_by_file.items():
         if not (path.startswith("gui/server/") and path.endswith(".ts")) or is_test_path(path):
             continue
-        if any(GUI_ROUTE_RE.search(line) for line in lines) and not any(GUI_GUARD_RE.search(line) for line in lines):
+        if has_unguarded_route_block(lines):
             unguarded_routes.append(path)
     if unguarded_routes:
         add_signal(

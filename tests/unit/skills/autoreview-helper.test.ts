@@ -589,9 +589,14 @@ print("ok")
     const guardLine = opts.suppressed
       ? "  if (!isTrustedPrivateApiRequest(req)) return deny();\n"
       : "";
+    // The unsuppressed variant pairs a guarded route with an unguarded one:
+    // guard text elsewhere in the file must not mute the per-route signal.
+    const guardedSibling = opts.suppressed
+      ? ""
+      : 'app.get("/api/safe", (req, res) => {\n  if (!isTrustedPrivateApiRequest(req)) return deny();\n  res.json({ ok: true });\n});\n';
     writeFileSync(
       join(base, "gui", "server", "http-routes.ts"),
-      `app.get("/api/things", (req, res) => {\n${guardLine}  res.json([]);\n});\n`,
+      `${guardedSibling}app.get("/api/things", (req, res) => {\n${guardLine}  res.json([]);\n});\n`,
     );
     writeFileSync(join(base, "src", "memory", "sqlite.ts"), "const CURRENT_SCHEMA_VERSION = 9;\n");
     const infraLine = opts.suppressed
