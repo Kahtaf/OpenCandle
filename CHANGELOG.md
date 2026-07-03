@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
 - GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
 - Session-entry wait tests now use deterministic timers for async workflow settlement, removing a Node 24 CI timing flake.
 
@@ -19,9 +20,7 @@
 
 - `/analyze` is now positioned as the deep-research option instead of the first suggested prompt: GUI empty-state cards, the README, and docs first-prompt lists lead with fast keyless prompts and label the multi-analyst debate as a longer run.
 - The router post-processor now canonicalizes camelCase slot keys to snake_case and converts one-element `symbols` slots to the scalar `symbol` slot (and vice versa) per the workflow manifest, reducing routing drift on non-Claude router models. The live router eval now diffs the routing contract only, excluding recording-model-specific internal diagnostics.
-
-### Changed
-
+- The repo-local autoreview pipeline was hardened: over-budget diffs now split into per-file review batches instead of silently truncating, out-of-scope reviewer findings and truncation notices now appear in the report and JSON output instead of stderr only, deterministic diff signals flag recurring regression classes (unguarded GUI routes, direct provider fetches, sqlite schema bumps without migration tests, prompt/routing changes without fixtures, missing changelog) as advisories the reviewer must confirm or dismiss, the OpenCandle checklist gained diff-triggered path-to-invariant checks mined from the fix history, engine binaries resolve through hardened PATH lookup that refuses repo-local executables, every reviewer prompt carries an anti-scope-creep review policy, React Doctor is pinned to 0.6.2 with diff-scoped scanning, `npm run review:pr` now also gates on `biome ci`, and the calibration harness gained a GUI trust-boundary fixture pair.
 - README and System Architecture docs now include the OpenCandle architecture diagram, with editable Excalidraw source and transparent PNG assets checked into the repo.
 - Public docs now link external resources on first mention per page: data providers (Yahoo Finance, FRED, SEC EDGAR, CoinGecko, TradingView, Alpha Vantage, Brave, Exa, Finnhub, DuckDuckGo, alternative.me), the `rdt-cli` and `twitter-cli` sentiment CLIs, and project tooling such as Pi, Node.js, Vitest, TypeScript, Biome, Typebox, Tailscale, and `better-sqlite3` across the docs pages, CONTRIBUTING, and SECURITY.
 - The public site now shares one navigation shell: the same sticky navbar on the homepage and every docs page, a docs sidebar under it on desktop, and a bottom drawer behind the navbar hamburger on mobile (replacing the old "Docs navigation" dropdown). The homepage was rebuilt to answer why OpenCandle exists: a claim-first hero with install commands, the evidence receipt behind a sample answer, a chatbot comparison, a GUI tour, and a builder section with a typed-tool code sample. Docs prose, tables, and lists follow the GUI's typography and table styling.
@@ -32,6 +31,7 @@
 
 ### Fixed
 
+- Docs pages that were merged away in the docs consolidation (`/docs/benchmarking.html`, `/docs/opencandle-vs-chatgpt.html`, `/docs/opencandle-vs-spreadsheets.html`) now serve noindex redirect stubs pointing at their new sections instead of returning 404 for previously published links, with matching markdown-mirror pointers.
 - GUI catalog tool forms now render nullable numeric schema fields, such as watchlist target and stop prices, as numeric controls instead of sending them as strings.
 - Daily watchlist reports no longer ship internal scaffolding text: the placeholder "Technical snapshot … deferred" section is omitted until a real section builder exists, and manual report runs no longer auto-create an enabled morning schedule template as a side effect — schedules are stored only through the explicit configure flow and run while OpenCandle is open.
 - `backtest_strategy` no longer fills trades at the same close used to compute the signal: signals now fill at the next bar's open, a flat per-side cost (default 5 bps, `cost_bps` parameter) applies to every fill, final-bar signals are reported as pending instead of phantom trades, and the output states its execution assumptions and limitations (no dividends, taxes, slippage model, or liquidity modeling).

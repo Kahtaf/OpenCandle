@@ -114,7 +114,7 @@
     "test:evals:competitive": "tsx tests/scripts/run-competitive-finance-eval.ts",
     "test:packed-install": "node scripts/packed-install-smoke.mjs",
     "eval:competitive:analyze": "tsx tests/scripts/analyze-competitive-finance-report.ts",
-    "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx vitest run\"",
+    "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx biome ci . && npx vitest run\"",
     "package:contents:check": "node scripts/check-package-contents.mjs",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",

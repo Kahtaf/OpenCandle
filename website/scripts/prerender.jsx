@@ -68,6 +68,21 @@ const sourcePages = [
   { source: "SECURITY.md", output: "docs/security.html", section: "Project" },
 ];
 
+// Previously published URLs whose pages were merged into consolidated docs.
+// A static host cannot serve real redirects, so each old URL gets a stub that
+// canonicalizes and refreshes to its new home.
+const legacyRedirects = [
+  { from: "docs/benchmarking.html", to: "docs/testing-and-evals.html#competitive-benchmarking" },
+  {
+    from: "docs/opencandle-vs-chatgpt.html",
+    to: "docs/comparisons.html#opencandle-vs-chatgpt-and-general-chatbots",
+  },
+  {
+    from: "docs/opencandle-vs-spreadsheets.html",
+    to: "docs/comparisons.html#opencandle-vs-spreadsheets",
+  },
+];
+
 const sourceToOutput = new Map(sourcePages.map((page) => [page.source, page.output]));
 const basenameToOutput = new Map(
   sourcePages.map((page) => [page.source.split("/").at(-1), page.output]),
@@ -976,6 +991,37 @@ ${sections.join("\n\n---\n\n")}
 `;
 }
 
+function renderRedirectDocument(targetUrl) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="robots" content="noindex" />
+<link rel="canonical" href="${targetUrl}" />
+<meta http-equiv="refresh" content="0; url=${targetUrl}" />
+<title>Redirecting</title>
+</head>
+<body>
+<p>This page has moved to <a href="${targetUrl}">${targetUrl}</a>.</p>
+</body>
+</html>
+`;
+}
+
+async function writeLegacyRedirects() {
+  for (const { from, to } of legacyRedirects) {
+    const targetUrl = `${siteUrl}/${to}`;
+    const filePath = join(outDir, from);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, renderRedirectDocument(targetUrl));
+    const markdownTarget = `${siteUrl}/${markdownOutput(to.split("#")[0])}`;
+    await writeFile(
+      join(outDir, markdownOutput(from)),
+      `Moved: this page now lives at ${markdownTarget}\n`,
+    );
+  }
+}
+
 async function writeSiteMetadata(pages, buildDate) {
   await writeFile(join(outDir, "llms.txt"), renderLlmsTxt(pages, buildDate));
   await writeFile(join(outDir, "llms-full.txt"), renderLlmsFullTxt(pages, buildDate));
@@ -1008,6 +1054,7 @@ async function build() {
     renderDocument(<HomePage buildDate={buildDate} version={version} />),
   );
   await writeSiteMetadata(loaded, buildDate);
+  await writeLegacyRedirects();
 
   for (const page of loaded) {
     const { html, headings } = await renderMarkdown(page.body, page);

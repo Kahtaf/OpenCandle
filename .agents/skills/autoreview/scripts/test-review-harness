@@ -3,11 +3,14 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: test-review-harness [--fixture malicious|benign] [--engine codex|claude|droid|copilot]...
+Usage: test-review-harness [--fixture malicious|benign|gui-route-unguarded|gui-route-guarded] [--engine codex|claude|droid|copilot]...
 
-Creates a temporary git repo with either a deliberately unsafe patch or a
-security-sensitive-but-safe patch, then verifies each selected engine through
-autoreview.
+Creates a temporary git repo with a calibration patch, then verifies each
+selected engine through autoreview:
+  malicious            unsafe patch that must produce findings
+  benign               security-sensitive-but-safe patch that must come back clean
+  gui-route-unguarded  new private-API route without the trusted-session guard; must be flagged
+  gui-route-guarded    new private-API route with the guard enforced; must come back clean
 Default engines: codex, claude.
 EOF
 }
@@ -36,7 +39,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$fixture" in
-  malicious|benign) ;;
+  malicious|benign|gui-route-unguarded|gui-route-guarded) ;;
   *)
     usage >&2
     exit 2
@@ -55,6 +58,102 @@ cd "$repo"
 git init --quiet
 git config user.name "Review Fixture"
 git config user.email "review-fixture@example.com"
+
+if [[ "$fixture" == gui-route-unguarded || "$fixture" == gui-route-guarded ]]; then
+  mkdir -p gui/server
+  cat > gui/server/private-api-access.ts <<'EOF'
+export function isTrustedPrivateApiRequest(req: Request): boolean {
+  return Boolean((req as { trustedSession?: boolean }).trustedSession);
+}
+EOF
+  cat > gui/server/portfolio-store.ts <<'EOF'
+const lots = new Map<string, unknown>();
+
+export function removePortfolioLot(lotId: string): void {
+  lots.delete(lotId);
+}
+EOF
+  cat > gui/server/http-routes.ts <<'EOF'
+import { isTrustedPrivateApiRequest } from "./private-api-access.js";
+
+export function registerRoutes(app: AppRouter): void {
+  app.get("/api/state", (req: Request, res: Response) => {
+    if (!isTrustedPrivateApiRequest(req)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    res.json({ ok: true });
+  });
+}
+EOF
+  git add gui/server/http-routes.ts gui/server/private-api-access.ts gui/server/portfolio-store.ts
+  git commit --quiet -m "initial guarded route"
+
+  if [[ "$fixture" == gui-route-unguarded ]]; then
+    cat > gui/server/http-routes.ts <<'EOF'
+import { removePortfolioLot } from "./portfolio-store.js";
+import { isTrustedPrivateApiRequest } from "./private-api-access.js";
+
+export function registerRoutes(app: AppRouter): void {
+  app.get("/api/state", (req: Request, res: Response) => {
+    if (!isTrustedPrivateApiRequest(req)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.post("/api/portfolio/remove", (req: Request, res: Response) => {
+    removePortfolioLot(String(req.body.lotId));
+    res.json({ ok: true });
+  });
+}
+EOF
+  else
+    cat > gui/server/http-routes.ts <<'EOF'
+import { removePortfolioLot } from "./portfolio-store.js";
+import { isTrustedPrivateApiRequest } from "./private-api-access.js";
+
+export function registerRoutes(app: AppRouter): void {
+  app.get("/api/state", (req: Request, res: Response) => {
+    if (!isTrustedPrivateApiRequest(req)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.post("/api/portfolio/remove", (req: Request, res: Response) => {
+    if (!isTrustedPrivateApiRequest(req)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    removePortfolioLot(String(req.body.lotId));
+    res.json({ ok: true });
+  });
+}
+EOF
+  fi
+
+  gui_prompt="Calibration fixture for this repo's trust-boundary rule: every private /api route in gui/server must call isTrustedPrivateApiRequest and reject untrusted callers before doing any work. Review the patch against that rule and report only actionable defects from the diff."
+  for engine in "${engines[@]}"; do
+    echo "== $engine =="
+    if [[ "$fixture" == gui-route-unguarded ]]; then
+      "$script_dir/autoreview" \
+        --mode local \
+        --engine "$engine" \
+        --prompt "$gui_prompt" \
+        --require-finding "trust" \
+        --expect-findings
+    else
+      "$script_dir/autoreview" \
+        --mode local \
+        --engine "$engine" \
+        --prompt "$gui_prompt Do not flag the new route merely for being auth-adjacent; it enforces the same guard as the existing route."
+    fi
+  done
+  exit 0
+fi
 
 if [[ "$fixture" == malicious ]]; then
   cat > app.js <<'EOF'
