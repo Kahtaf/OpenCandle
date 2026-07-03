@@ -755,14 +755,45 @@ def react_doctor_base(repo: Path, target: str, target_ref: str | None, commit_re
     return parents[0] if parents else None
 
 
+def react_doctor_head_ref(target: str, commit_ref: str, head_ref: str) -> str:
+    if target == "commit":
+        return commit_ref
+    if target == "range":
+        return head_ref
+    return "HEAD"
+
+
+def is_checked_out_ref(repo: Path, ref: str) -> bool:
+    head = git(repo, "rev-parse", "HEAD", check=False).strip()
+    target = git(repo, "rev-parse", ref, check=False).strip()
+    return bool(head and target and head == target)
+
+
 def react_doctor_evidence(
-    repo: Path, changed_paths: set[str], args: argparse.Namespace, base_ref: str | None
+    repo: Path,
+    changed_paths: set[str],
+    args: argparse.Namespace,
+    base_ref: str | None,
+    head_ref: str,
 ) -> tuple[str, int]:
     if args.react_doctor == "off":
         return "", 0
     gui_paths = changed_gui_react_paths(changed_paths)
     if not gui_paths:
         return "", 0
+    if not is_checked_out_ref(repo, head_ref):
+        evidence_payload = {
+            "status": "skipped",
+            "reason": "review head is not the checked-out HEAD",
+            "headRef": head_ref,
+            "changedGuiReactFiles": gui_paths,
+            "note": (
+                "React Doctor changed-scope compares --base against the current checkout. "
+                "Skipping prevents commit/range reviews of older heads from failing on unrelated later GUI changes."
+            ),
+        }
+        print(f"react-doctor: skipped (review head {head_ref} is not checked out)")
+        return "# React Doctor\n" + json.dumps(evidence_payload, indent=2), 0
 
     cmd = [
         resolve_command("npx", repo),
@@ -1809,7 +1840,11 @@ def main() -> int:
         bundles = plan_batches(header, segments, args.batch_budget)
     changed_paths = review_paths(repo, target, target_ref, args.commit, args.head)
     react_doctor, react_doctor_status = react_doctor_evidence(
-        repo, changed_paths, args, react_doctor_base(repo, target, target_ref, args.commit)
+        repo,
+        changed_paths,
+        args,
+        react_doctor_base(repo, target, target_ref, args.commit),
+        react_doctor_head_ref(target, args.commit, args.head),
     )
     signals: list[dict[str, Any]] = []
     if args.diff_signals == "auto":

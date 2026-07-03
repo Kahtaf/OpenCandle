@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
 - GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
 - Session-entry wait tests now use deterministic timers for async workflow settlement, removing a Node 24 CI timing flake.
 

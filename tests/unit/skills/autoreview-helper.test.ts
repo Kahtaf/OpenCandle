@@ -1,13 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -174,7 +166,8 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
     mkdirSync(safeBin);
     for (const tool of ["git", "python3"]) {
       const real = execFileSync("which", [tool], { encoding: "utf8" }).trim();
-      symlinkSync(real, join(safeBin, tool));
+      writeFileSync(join(safeBin, tool), `#!/bin/sh\nexec "${real}" "$@"\n`);
+      chmodSync(join(safeBin, tool), 0o755);
     }
     git(repoDir, "init", "--quiet");
     git(repoDir, "checkout", "--quiet", "-B", "main");
@@ -194,7 +187,7 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
       {
         cwd: repoDir,
         encoding: "utf8",
-        env: { ...process.env, PATH: `${repoDir}:${safeBin}` },
+        env: { ...process.env, PATH: `${repoDir}:${safeBin}:/bin:/usr/bin` },
       },
     );
 
@@ -739,6 +732,126 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
     expect(result.stderr).not.toContain("engine failed");
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain("pre-check signals");
+  });
+
+  function reactDoctorSkipFakeCodex(repoDir: string, expectedHead: string): string {
+    const fakeCodex = join(repoDir, "fake-codex.js");
+    writeFileSync(
+      fakeCodex,
+      `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+const outputIndex = args.indexOf("--output-last-message");
+const outputPath = args[outputIndex + 1];
+const stdin = fs.readFileSync(0, "utf8");
+if (!stdin.includes("# React Doctor")) {
+  throw new Error("React Doctor evidence missing");
+}
+if (!stdin.includes('"status": "skipped"')) {
+  throw new Error("React Doctor skip status missing");
+}
+if (!stdin.includes('"headRef": "${expectedHead}"')) {
+  throw new Error("React Doctor skip head ref missing");
+}
+const report = {
+  findings: [],
+  overall_correctness: "patch is correct",
+  overall_explanation: "Fake reviewer accepted skipped React Doctor evidence.",
+  overall_confidence: 0.9
+};
+fs.writeFileSync(outputPath, JSON.stringify(report));
+`,
+    );
+    chmodSync(fakeCodex, 0o755);
+    return fakeCodex;
+  }
+
+  function fakeFailingNpx(repoDir: string): string {
+    const fakeNpx = join(repoDir, "npx");
+    writeFileSync(fakeNpx, "#!/bin/sh\necho react doctor should have been skipped >&2\nexit 99\n");
+    chmodSync(fakeNpx, 0o755);
+    return fakeNpx;
+  }
+
+  it("skips React Doctor for range reviews whose head is not checked out", () => {
+    dir = mkdtempSync(join(tmpdir(), "autoreview-react-range-skip-"));
+    git(dir, "init", "--quiet");
+    git(dir, "checkout", "--quiet", "-B", "main");
+    git(dir, "config", "user.name", "Autoreview Test");
+    git(dir, "config", "user.email", "autoreview-test@example.com");
+    mkdirSync(join(dir, "gui/web/src"), { recursive: true });
+    writeFileSync(join(dir, "gui/web/src/App.jsx"), "export function App() { return null; }\n");
+    git(dir, "add", "gui/web/src/App.jsx");
+    git(dir, "commit", "--quiet", "-m", "initial gui");
+    const base = git(dir, "rev-parse", "HEAD");
+
+    writeFileSync(
+      join(dir, "gui/web/src/App.jsx"),
+      "export function App() { return <main>changed</main>; }\n",
+    );
+    git(dir, "commit", "--quiet", "-am", "change gui");
+    const reviewedHead = git(dir, "rev-parse", "HEAD");
+
+    writeFileSync(join(dir, "README.md"), "later unrelated checkout change\n");
+    git(dir, "add", "README.md");
+    git(dir, "commit", "--quiet", "-m", "later unrelated change");
+
+    const fakeCodex = reactDoctorSkipFakeCodex(dir, reviewedHead);
+    fakeFailingNpx(dir);
+    const result = spawnSync(
+      helperPath,
+      [
+        "--mode",
+        "range",
+        "--base",
+        base,
+        "--head",
+        reviewedHead,
+        "--codex-bin",
+        fakeCodex,
+        "--no-web-search",
+      ],
+      { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${dir}:${process.env.PATH}` } },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("react-doctor: skipped");
+    expect(result.stderr).not.toContain("react doctor should have been skipped");
+  });
+
+  it("skips React Doctor for commit reviews whose commit is not checked out", () => {
+    dir = mkdtempSync(join(tmpdir(), "autoreview-react-commit-skip-"));
+    git(dir, "init", "--quiet");
+    git(dir, "checkout", "--quiet", "-B", "main");
+    git(dir, "config", "user.name", "Autoreview Test");
+    git(dir, "config", "user.email", "autoreview-test@example.com");
+    mkdirSync(join(dir, "gui/web/src"), { recursive: true });
+    writeFileSync(join(dir, "gui/web/src/App.jsx"), "export function App() { return null; }\n");
+    git(dir, "add", "gui/web/src/App.jsx");
+    git(dir, "commit", "--quiet", "-m", "initial gui");
+
+    writeFileSync(
+      join(dir, "gui/web/src/App.jsx"),
+      "export function App() { return <main>changed</main>; }\n",
+    );
+    git(dir, "commit", "--quiet", "-am", "change gui");
+    const reviewedCommit = git(dir, "rev-parse", "HEAD");
+
+    writeFileSync(join(dir, "README.md"), "later unrelated checkout change\n");
+    git(dir, "add", "README.md");
+    git(dir, "commit", "--quiet", "-m", "later unrelated change");
+
+    const fakeCodex = reactDoctorSkipFakeCodex(dir, reviewedCommit);
+    fakeFailingNpx(dir);
+    const result = spawnSync(
+      helperPath,
+      ["--mode", "commit", "--commit", reviewedCommit, "--codex-bin", fakeCodex, "--no-web-search"],
+      { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${dir}:${process.env.PATH}` } },
+    );
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("react-doctor: skipped");
+    expect(result.stderr).not.toContain("react doctor should have been skipped");
   });
 
   it("fails forced branch review when the worktree has uncommitted changes", () => {
