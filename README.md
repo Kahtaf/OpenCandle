@@ -78,13 +78,13 @@ For a five-minute path from install to a successful answer, see [First Run](http
 ## Example Prompts
 
 ```text
-/analyze NVDA
 What is AAPL trading at?
 Compare MSFT and GOOGL using price, fundamentals, and sentiment
 Show me TSLA puts with Greeks
 Get the fed funds rate from FRED
 Add 100 shares of NVDA at 120 to my portfolio, then show my portfolio
 Run risk analysis on SPY
+/analyze NVDA   # deep research: multi-analyst debate, takes a few minutes
 ```
 
 Useful slash commands:
@@ -94,7 +94,7 @@ Useful slash commands:
 /login
 /model
 /connect
-/analyze AAPL
+/analyze AAPL   # deep research: multi-analyst debate, takes a few minutes
 ```
 
 Health diagnostics run from your shell:

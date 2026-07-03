@@ -2,11 +2,13 @@ import { BookOpen } from "lucide-react";
 import { Button } from "../ui/button.jsx";
 import { Kbd } from "../ui/kbd.jsx";
 
+// Fast, keyless prompts lead; /analyze is the deep-research option and is
+// labeled as the longer multi-analyst run it is.
 const DEFAULT_PROMPTS = [
-  ["Analyze NVDA", "/analyze NVDA"],
-  ["Build portfolio", "Build me a portfolio for long-term growth"],
-  ["Options chain for NVDA", "Show options chain for NVDA"],
+  ["What is NVDA trading at?", "What is NVDA trading at?"],
   ["Compare NVDA and AMD", "Compare NVDA and AMD using latest quotes."],
+  ["Options chain for NVDA", "Show options chain for NVDA"],
+  ["Deep research: NVDA (multi-analyst, takes a few minutes)", "/analyze NVDA"],
 ];
 
 export function EmptyThread({

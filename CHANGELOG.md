@@ -10,6 +10,7 @@
 
 ### Changed
 
+- `/analyze` is now positioned as the deep-research option instead of the first suggested prompt: GUI empty-state cards, the README, and docs first-prompt lists lead with fast keyless prompts and label the multi-analyst debate as a longer run.
 - The router post-processor now canonicalizes camelCase slot keys to snake_case and converts one-element `symbols` slots to the scalar `symbol` slot (and vice versa) per the workflow manifest, reducing routing drift on non-Claude router models. The live router eval now diffs the routing contract only, excluding recording-model-specific internal diagnostics.
 
 ### Changed

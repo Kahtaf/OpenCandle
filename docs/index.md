@@ -68,11 +68,11 @@ opencandle gui
 First prompts:
 
 ```text
-/analyze NVDA
 What is AAPL trading at?
 Compare MSFT and GOOGL using price, fundamentals, and sentiment
 Show me TSLA puts with Greeks
 Get the fed funds rate from FRED
+/analyze NVDA   # deep research: multi-analyst debate, takes a few minutes
 ```
 
 OpenCandle gathers and organizes evidence. Judgment and risk stay with you.

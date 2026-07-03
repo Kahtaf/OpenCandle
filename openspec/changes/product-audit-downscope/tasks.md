@@ -67,9 +67,9 @@
 
 ## 9. /analyze Repositioning (copy-only)
 
-- [ ] 9.1 Reorder GUI empty-state suggestions to lead with keyless prompts; label `/analyze` as deep research with a longer-run expectation (`prompt-suggestions.jsx:6`)
-- [ ] 9.2 Reorder README example prompts (`README.md:81,97`) and docs first-prompt lists (`docs/index.md:71`, `docs/getting-started.md:135`, `docs/gui-quickstart.md:13`) with the same framing; `docs/first-run.md` already correct
-- [ ] 9.3 Run docs-site build/link checks
+- [x] 9.1 Reorder GUI empty-state suggestions to lead with keyless prompts; label `/analyze` as deep research with a longer-run expectation (`prompt-suggestions.jsx`)
+- [x] 9.2 Reorder README example prompts and docs first-prompt lists (`docs/index.md`, `docs/getting-started.md`, `docs/gui-quickstart.md`) with the same framing; `docs/first-run.md` already correct
+- [x] 9.3 Run docs-site build/link checks (14 pages built, 34 external links checked)
 
 ## 10. Sentiment End-to-End Verification (no code change unless it fails)
 
