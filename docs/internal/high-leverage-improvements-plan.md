@@ -14,7 +14,7 @@
   - I3 → `feat/deterministic-synthesis-validation`
   - I4 → `feat/forget-command`
   - I5 → one branch per suite, `feat/eval-<suite>` (e.g. `feat/eval-provider-outage` for E3, `feat/eval-multi-turn` for E1, `feat/eval-release-gate-gui-smoke` for the E6 gate PR)
-  - I6 → `feat/coordinator-verification-closeout`
+  - I6 → moved to cleanup WP7 (`feat/openspec-wp7-coordinator-verification`, PRs into the integration branch, not `main`)
   - I7 → `feat/gui-session-scoped-actions`
 - **Dependency on the cleanup branch:** OpenSpec changes are consolidated on `feat/openspec-backlog-cleanup` (see the companion cleanup plan's Branching & PR policy). I4 and I7 implement specs delivered by that branch (WP6 and WP4.2), so they must branch from `main` only AFTER `feat/openspec-backlog-cleanup` has merged to `main` — never from the integration branch itself.
 - Do not stack item branches on each other. Where sequencing exists (I2 → I3, I1 → E1/E2/E4/E5), the downstream branch starts only after the upstream PR merges to `main`.
@@ -34,11 +34,10 @@ I1 harness multi-prompt ──→ I5 evals E1/E2/E5 ──→ (E4 also needs I4)
 I2 evidence capture ──→ I3 deterministic synthesis + validation ──→ I8 receipts (phase 2+)
 WP6 spec merge ──→ I4 /forget ──→ I5 eval E4
 WP4.2 spec merge ──→ I7 session-scoped action cleanup
-I6 coordinator closeout (independent; before or parallel with I7)
 I5 evals E3/E6/E7 need nothing else; E3 can start immediately
 ```
 
-Parallel-safe from day one: I1, I2, I6, I5(E3). Everything else has exactly one parent.
+Parallel-safe from day one: I1, I2, I5(E3). Everything else has exactly one parent. (Coordinator verification closeout, formerly I6, moved to cleanup plan WP7 so the coordinator change archives on the integration branch.)
 
 ---
 
@@ -122,6 +121,7 @@ Parallel-safe from day one: I1, I2, I6, I5(E3). Everything else has exactly one 
 - Matcher: ticker mode (word-boundary, case-insensitive, `$`-stripped) vs phrase mode (case-insensitive substring), with the spec's decision table as unit tests.
 - Four suppression surfaces: `buildPriorTurns` exclusion; read-time filtering of structured memory in prompt-context assembly; market-state summary filtering in the prompt-context builder; compaction-summary exclusion from priorTurns.
 - `/forget <topic>`, `/forget` (list), and the undo command per spec; confirmation must not echo matched text.
+- **Closeout:** the completing PR checks off the change's tasks.md against the delivered tests/evidence and **archives the `forget-command` change** (`openspec validate --strict` first), so no separate archival PR is needed.
 
 **Files:** `src/pi/opencandle-extension.ts` (command registration — the one authorized `src/pi/` touch), `src/runtime/session-coordinator.ts` (`buildPriorTurns`), `src/memory/` (table, migration, matcher module), `src/prompts/context-builder.ts` (market-state + memory filtering). **Out of scope:** GUI transcript/chat rendering, session-entry deletion, deleting any market-state or memory rows, router internals.
 
@@ -181,19 +181,9 @@ Keep the generated 5-prompt benchmark for discovery; add a FROZEN panel rerun pe
 
 ---
 
-## I6 — Coordinator verification closeout (independent; unblocks archiving the coordinator change)
+## I6 — MOVED to cleanup plan WP7
 
-**Why:** The shipped `transparent-local-session-coordinator` left its safety-critical verifications unchecked: 1.8 (a long-running stream must outlive the stale-grace window without another process stealing the session), 5.4 (scripted TUI+GUI convergence smoke), 6.4 (its own "run the smoke before marking complete" gate). Cleanup WP5 resolves 3.4 by decision (auto-retry across owner recovery stays disabled) — that decision needs a pinning test.
-
-**Scope:**
-1. **1.8 test:** deterministic-timer test (the repo just fixed a Node 24 flake by moving session-entry wait tests to fake timers — follow that pattern, no real sleeps): writer holds the lock, heartbeats stall past `DEFAULT_STALE_GRACE_MS` while the owning process is alive and streaming; assert a second process treats it as temporarily unreachable and does NOT steal; then simulate true death (PID gone) and assert recovery proceeds.
-2. **Auto-retry-disabled pinning test:** after simulated owner recovery, a previously-accepted action is NOT automatically resubmitted; the non-owner surface exposes a retryable error instead.
-3. **5.4 convergence smoke:** scripted flow — GUI server owns a session, browser sends a prompt, TUI opens the same session afterward (per the WP5-narrowed topology) and renders the converged transcript. Automate what's automatable (server + HTTP + reading the session file); document the manual TUI step precisely if full automation isn't feasible, and commit the run log as evidence.
-4. Check off 1.8/5.4/6.4 in the change's tasks.md with pointers to the tests/evidence; the change becomes archive-ready (archival itself is trivial, do it in the same PR).
-
-**Files:** `tests/unit/pi/` (or wherever `session-writer-lock` tests live), `tests/unit/gui-server/`, possibly a new `tests/e2e/` script for the smoke. **Out of scope:** changing lock semantics, grace constants, or coordinator behavior — if a test reveals a real defect, report it as a finding; do not adjust constants to make tests pass.
-
-**Likely wrong:** real-time sleeps (flaky — use fake timers); "verifying" 1.8 by shortening the grace window; a smoke that only exercises the GUI-owns topology in-process without a genuinely separate follower.
+Coordinator verification closeout (the 1.8 long-stream test, auto-retry pinning test, 5.4 convergence smoke, and archival of `transparent-local-session-coordinator`) now lives in `docs/internal/openspec-backlog-cleanup-plan.md` **WP7**, on branch `feat/openspec-wp7-coordinator-verification` PRing into the integration branch — so the coordinator change archives together with the rest of the backlog cleanup. The item number I6 is retired to keep cross-references in both docs stable; nothing else renumbers.
 
 ---
 
@@ -206,6 +196,8 @@ Keep the generated 5-prompt benchmark for discovery; add a FROZEN panel rerun pe
 **Files:** `gui/server/http-routes.ts`, `gui/server/session-actions.ts`, `gui/server/local-session-coordinator.ts` (consumption only, not envelope semantics), `gui/web/src/` call sites, tests. **Out of scope:** lock/envelope format changes (coordinator owns them), follower/takeover UX, queued same-session prompts, market-state mutation coordination (explicitly deferred by the coordinator change).
 
 **Tests:** GUI-server unit tests for scoped stop/retry/ask_user against a non-focused session; a two-session concurrent browser test in `tests/e2e/gui-browser.test.ts`; grep-level assertion (a real test, e.g. route-table snapshot) that no mutation route resolves an implicit active session.
+
+**Closeout:** the completing PR checks off the change's tasks.md and **archives the `gui-session-scoped-action-cleanup` change** (`openspec validate --strict` first) — with I4's archival, this takes the active OpenSpec backlog to zero.
 
 **Runtime evidence:** browser screenshots/log of two sessions running concurrently with a stop issued to the background one; TUI resume transcript.
 

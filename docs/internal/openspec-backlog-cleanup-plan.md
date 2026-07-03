@@ -3,7 +3,7 @@
 **Date:** 2026-07-03
 **Status of decisions:** Final. Product owner confirmed the three open product questions on 2026-07-03 (see "Product decisions" below). Everything else was decided by the architecture review; do not re-litigate decisions here — execute them. If you hit a genuine contradiction between this plan and the repo, STOP and report; do not improvise.
 
-**Audience:** an implementation agent executing spec/document edits and archival. This plan involves **no production code changes** and **no feature implementation**. If you find yourself editing anything under `src/`, `gui/`, or `tests/` (other than reading), you have left the scope of this plan.
+**Audience:** an implementation agent executing spec/document edits, archival, and — in WP7 only — test code. This plan involves **no production code changes** and **no feature implementation**: WP7 authorizes new *test* files to close verification gates, nothing more. Outside WP7, if you find yourself editing anything under `src/`, `gui/`, or `tests/` (other than reading), you have left the scope of this plan. Feature implementation for the two changes that survive this cleanup (`forget-command`, `gui-session-scoped-action-cleanup`) is owned by `docs/internal/high-leverage-improvements-plan.md` items I4 and I7, whose completing PRs also archive those changes — so the backlog reaches zero active changes at the end of that plan, not this one.
 
 ---
 
@@ -19,8 +19,9 @@ All cleanup work funnels through a single integration branch so one branch conta
   - `feat/openspec-wp4-gui-concurrent-rebaseline`
   - `feat/openspec-wp5-coordinator-closeout`
   - `feat/openspec-wp6-forget-spec`
+  - `feat/openspec-wp7-coordinator-verification`
 - **PR target:** every WP PR targets `feat/openspec-backlog-cleanup`, NOT `main`. Merge PRs in WP order (see the table at the end); after each merge, later in-flight WP branches rebase onto the updated integration branch before review.
-- **Final step:** after WP6 merges, one PR from `feat/openspec-backlog-cleanup` → `main` delivers all OpenSpec updates together. Its description links each WP PR and includes the aggregate `openspec validate --strict` output.
+- **Final step:** after WP7 merges, one PR from `feat/openspec-backlog-cleanup` → `main` delivers all OpenSpec updates together. Its description links each WP PR and includes the aggregate `openspec validate --strict` output.
 - Note: `npm run review:pr` auto-detects the PR base via `gh`, so it will review WP diffs against the integration branch correctly — run it per WP PR as usual.
 
 ## Ground rules
@@ -89,7 +90,7 @@ This is the highest-priority spec-integrity fix: the change's `intent-routing` d
    - Record pass-rate and p50/p95 latency in the design.md addendum. If pass-rate < 90%, per-fixture triage is OUT of your scope: record the failures verbatim in the addendum and flag the PR description with "ROUTER BASELINE BELOW GATE — needs triage" so the reviewer escalates. Do not edit fixtures to make them pass.
    - If no credential is available: STOP at this sub-step, mark tasks 1.1–1.3 with "blocked: requires credentialed environment; see docs/internal/high-leverage-improvements-plan.md item I5" and continue with sub-step 4. Say so prominently in the PR description.
 4. **Evidence paths.** Tasks in section 8 reference `/tmp/...` trace paths that no longer exist. Add a one-line note to `tasks.md` section 8 that the runtime evidence was ephemeral and the durable equivalents are the unit/fixture suites (name the specific test files covering IV-drop, zero-quote, preflight behaviors — find them under `tests/unit/routing/` and `tests/unit/providers/` by grepping for `symbol-disambiguator`, `InvalidSymbolError`, `preflight`).
-5. Validate strictly. **Archive only if step 3 produced a baseline at or above the gate, or the reviewer explicitly approves archiving with the gap recorded.** Otherwise leave active with only section 1 open and everything else reconciled.
+5. Validate strictly, then **archive unconditionally** — including when step 3 was blocked on credentials or scored below the gate. Rationale (decided): the promotion already shipped in 0.11.0, so keeping this change active adds no safety; what matters is that the design.md addendum records the truth (baseline result, or "never run — blocked") and that the outstanding baseline obligation is owned by `docs/internal/high-leverage-improvements-plan.md` item I5. If below gate or blocked, the PR description must carry the "ROUTER BASELINE BELOW GATE" / "blocked: no credentials" flag prominently.
 
 ---
 
@@ -135,17 +136,17 @@ Reference the coordinator change's `local-session-coordination` spec as the auth
 
 ## WP5 — Spec closeout edits for `transparent-local-session-coordinator`
 
-Do NOT archive this change. The open verification tasks (1.8 long-stream-survives-grace, 5.4 TUI+GUI convergence smoke, 6.4 gate) involve writing tests and are owned by `docs/internal/high-leverage-improvements-plan.md` item I6. This package does only the spec/document edits:
+Do NOT archive this change in this package. The open verification tasks (1.8 long-stream-survives-grace, 5.4 TUI+GUI convergence smoke, 6.4 gate) involve writing tests and are owned by WP7 below, which archives the change once they land. This package does only the spec/document edits:
 
 1. **Codify the implemented constants.** Read the actual values from code and write them into `design.md` as the resolution of its open question ("What heartbeat interval, stale grace, and action dedupe retention values..."):
    - Stale grace: `DEFAULT_STALE_GRACE_MS` in `src/pi/session-writer-lock.ts` (expected 15s — verify).
    - Heartbeat interval: find the writer heartbeat timer (same file or `gui/server/` writer-lock service).
    - Action dedupe retention: `gui/server/local-session-coordinator.ts` (expected 10 minutes — verify).
    State the derived invariant explicitly: dedupe retention must be >= the retry/recovery horizon, and with auto-retry-after-recovery disabled (see next point) the current values satisfy it.
-2. **Resolve task 3.4 by decision, not implementation.** The decision: automatic retry across owner recovery stays DISABLED in v1; durable action-id persistence is deferred until someone actually wants auto-retry. Edit the spec scenario ("Accepted action may be retried after owner recovery...") to state the shipped behavior plainly: after owner recovery, non-owner surfaces surface a retryable error to the user; they do not auto-retry. Move task 3.4 to the Deferred section with the decision recorded. (A test asserting auto-retry is absent belongs to improvements item I6.)
+2. **Resolve task 3.4 by decision, not implementation.** The decision: automatic retry across owner recovery stays DISABLED in v1; durable action-id persistence is deferred until someone actually wants auto-retry. Edit the spec scenario ("Accepted action may be retried after owner recovery...") to state the shipped behavior plainly: after owner recovery, non-owner surfaces surface a retryable error to the user; they do not auto-retry. Move task 3.4 to the Deferred section with the decision recorded. (A test asserting auto-retry is absent belongs to WP7.)
 3. **Narrow the TUI-follower requirement.** Task 5.3 (TUI tailing of GUI-owned sessions) is unimplemented; the design says the spec must be narrowed to the supported topology. Edit the `local-session-coordination` spec's GUI-owned-topology scenario to what is actually supported today (verify in code: the TUI can open the session after the GUI releases it / can it read while GUI owns it? — read `src/pi/session-writer-lock.ts` follower behavior and state exactly that). Keep live TUI tailing as an explicit deferred follow-up bullet.
-4. Leave tasks 1.8, 5.4, 6.4 unchecked. Add a pointer note on 6.4: "Verification owned by docs/internal/high-leverage-improvements-plan.md item I6; this change must not be archived until I6 lands."
-5. Validate strictly. Do not archive.
+4. Leave tasks 1.8, 5.4, 6.4 unchecked. Add a pointer note on 6.4: "Verification owned by WP7 of docs/internal/openspec-backlog-cleanup-plan.md; this change must not be archived until WP7 lands."
+5. Validate strictly. Do not archive (WP7 does).
 
 ---
 
@@ -194,6 +195,19 @@ Keep implementation out: this WP delivers only the rewritten change directory, v
 
 ---
 
+## WP7 — Coordinator verification tests + archive `transparent-local-session-coordinator`
+
+**The only package in this plan that writes code — test code only, no production changes.** Depends on WP5 (spec closeout merged into the integration branch). If any test below reveals a real defect in lock/coordinator behavior, that is a FINDING to report in the PR — do NOT change production code, constants, or grace windows to make tests pass.
+
+1. **1.8 test — long stream survives stale grace.** Deterministic-timer test (the repo recently fixed a Node 24 flake by moving session-entry wait tests to fake timers — follow that pattern; no real sleeps): a writer holds the lock and its heartbeats stall past `DEFAULT_STALE_GRACE_MS` while the owning process is still alive (matching PID + process-identity discriminator); assert a second process treats the session as temporarily unreachable and does NOT steal the lock. Then simulate true death (PID gone / identity mismatch) and assert recovery proceeds. Place alongside the existing `session-writer-lock` tests.
+2. **Auto-retry-disabled pinning test.** Per WP5's 3.4 decision: after simulated owner recovery, a previously-accepted action is NOT automatically resubmitted; the non-owner surface exposes a retryable error instead. Place with the `local-session-coordinator` tests under `tests/unit/gui-server/`.
+3. **5.4 convergence smoke.** Scripted flow for the WP5-narrowed topology: GUI server owns a session, a prompt is sent via the coordinator path, then the TUI-side reader accesses the same session and the transcripts converge. Automate what is automatable (server + HTTP + reading the session file); if a step genuinely requires a human at the TUI, document that step precisely in the change's tasks.md and commit the run log as evidence under `docs/internal/pr-evidence/openspec-wp7/`.
+4. **Close out and archive.** Check off tasks 1.8, 5.4, and 6.4 in the change's tasks.md with pointers to the tests/evidence. Run `openspec validate --strict`, then archive the change. (Its deltas were already reconciled by WP5, so archival is safe.)
+
+**Likely wrong:** real-time sleeps; "verifying" 1.8 by shortening the grace window in the test setup below the production constant; a smoke whose "second process" is the same process; checking off 6.4 without the smoke evidence committed.
+
+---
+
 ## Order, PRs, and reporting
 
 | PR | Package | Risk | Depends on |
@@ -204,8 +218,11 @@ Keep implementation out: this WP delivers only the rewritten change directory, v
 | 4 | WP4 gui-concurrent re-baseline + slim change | medium (delta rewriting) | WP1 |
 | 5 | WP5 coordinator spec closeout | low | — |
 | 6 | WP6 forget-command spec rewrite | medium (new spec authoring) | WP1 (router-context archived; its spec statements about /forget become baseline) |
+| 7 | WP7 coordinator verification tests + archive | medium (test code) | WP5 |
 
 Each PR description must state: what was archived/edited, the `openspec validate --strict` output, and — for WP2 — the router baseline result or the explicit "blocked: no credentials" flag.
+
+**End state after the integration branch merges to `main`:** six of the seven previously-active changes are archived (`consolidate-public-site-design-system`, `router-context-and-observability`, `production-router-and-tool-hardening`, `refine-gui-market-state-ux`, `gui-concurrent-session-runtime`, `transparent-local-session-coordinator`). Exactly **two** active changes remain, both intentionally kept: `forget-command` (rewritten by WP6) and `gui-session-scoped-action-cleanup` (newly created by WP4.2). Their implementations are improvements-plan items I4 and I7, whose completing PRs archive them — taking the active backlog to zero.
 
 **What you are likely to get wrong (checked by the reviewer):**
 - Letting stale deltas reach `openspec/specs/` during archival (WP2/WP3/WP4 exist to prevent exactly this — re-read rule 4).
