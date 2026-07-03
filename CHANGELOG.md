@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
+
 ## [0.11.0] - 2026-07-03
 
 ### Removed
