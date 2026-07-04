@@ -248,7 +248,7 @@ A zero-result options-chain response is defined as one where the upstream `resul
 
 #### Scenario: Direct Yahoo tool callers surface unavailable
 
-- **WHEN** a watchlist check, portfolio view, alert check, daily report run, or prediction check calls Yahoo through `wrapProvider` for an invalid zero-result symbol
+- **WHEN** a watchlist check, portfolio view, alert check, or daily report run calls Yahoo through `wrapProvider` for an invalid zero-result symbol
 - **THEN** the tool output includes an unavailable/data-gap status for that symbol
 - **AND** no tool result uses zero-filled quote values as valid market data
 
