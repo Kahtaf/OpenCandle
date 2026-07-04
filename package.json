@@ -155,7 +155,6 @@
     "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
-    "vitest": "^4.1.9",
-    "vitest-evals": "^0.14.0"
+    "vitest": "^4.1.9"
   }
 }

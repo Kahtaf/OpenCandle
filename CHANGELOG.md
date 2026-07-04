@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- Eval suite registration works again: `registerEvalSuite` now uses plain Vitest `describe`/`it` with the repo's own scoring and thresholds, replacing the `vitest-evals` `describeEval` shim whose 0.14 API change made every eval suite (including the always tier and the E2 saved-market-state opt-in) throw `define is not a function` at collection time. The unused `vitest-evals` dependency was removed.
 - Gemini router-contract evals now stabilize known drift cases with deterministic post-processing for macro-acronym comparisons, profile-backed risk slots, conversational risk preference updates, and locally marked acronym tickers.
 - GUI chat runs now reject the legacy active-session mutation route, require explicit session/action IDs for chat, ask-user, and tool actions, and expose a session-scoped stop control so one session can be stopped without interrupting another.
 - Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
