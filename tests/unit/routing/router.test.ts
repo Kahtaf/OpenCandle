@@ -1548,6 +1548,36 @@ describe("route()", () => {
     );
   });
 
+  // Historical loss class: "1-2 weeks DTE preservation". The held-symbol
+  // correction re-derives dteHint from deterministic extraction; a same-day
+  // catalyst mention must not collapse an explicit "1-2 weeks out" request
+  // into event_week/0-7 days anywhere in the postprocess.
+  it("preserves an explicit 1-2 week DTE through catalyst-driven covered-call correction", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"], dteHint: "1-2 weeks" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "covered call on owned DRAM around NVDA catalyst",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.heldSymbol).toBe("DRAM");
+    expect(result.entities.dteHint).toBe("1-2 weeks");
+    expect(result.slots.dte_target?.value).toBe("7_to_14_days");
+  });
+
   it("keeps covered-call education and suitability prompts out of options workflow dispatch", async () => {
     const result = await route(
       {

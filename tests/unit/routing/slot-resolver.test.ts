@@ -175,7 +175,7 @@ describe("resolveOptionsScreenerSlots", () => {
   });
 
   it("maps natural short-dated router hints to 7_to_14_days", () => {
-    for (const dteHint of ["1-2 weeks", "one to two weeks", "1 or 2 weeks out"]) {
+    for (const dteHint of ["1-2 weeks", "one to two weeks", "1 or 2 weeks out", "one-two weeks"]) {
       const result = resolveOptionsScreenerSlots({
         symbols: ["MSFT"],
         direction: "bullish",

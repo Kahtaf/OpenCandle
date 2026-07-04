@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- Explicit week-range DTE requests such as "a covered call 1-2 weeks out" now survive same-day catalyst mentions: deterministic DTE-hint extraction checks the user's stated week range before inferring `event_week` from "earnings are today", so options routing no longer collapses a requested 1-2 week horizon into a 0-7 day event-week horizon (the frozen competitive panel's "1-2 weeks DTE preservation" loss class, caught live by its hard assertion).
 - The competitive Codex baseline default model id is now `gpt-5.3-codex-spark`, matching what the current codex ACP agent advertises; the old reasoning-suffixed `gpt-5.3-codex-spark[medium]` id was rejected at preflight ("did not advertise that model"), silently skipping the Codex baseline. `OPENCANDLE_COMPETITIVE_CODEX_MODEL` still overrides.
 - The competitive eval script now resolves the judge/OpenCandle model from provider env keys (for example `GEMINI_API_KEY` in `.env`) when Pi AuthStorage has no stored credential, by seeding the env key as a runtime AuthStorage override; previously the run aborted with "No API key available" before any baseline ran because Pi's ModelRegistry skips env-key fallback. Production auth paths are unchanged.
 - The frozen competitive eval script no longer crashes with a `completeSimple` ReferenceError at the first judge call (after a live OpenCandle session had already run); a unit-level typecheck guard now catches eval-script type errors that `tsc --noEmit` misses because tests are excluded from the repo typecheck.

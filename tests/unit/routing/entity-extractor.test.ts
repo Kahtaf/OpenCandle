@@ -250,6 +250,23 @@ describe("extractEntities", () => {
       expect(result.dteHint).toBe("leaps");
     });
 
+    // Historical loss class: "1-2 weeks DTE preservation". A same-day
+    // catalyst mention ("earnings are today") must not override the user's
+    // explicit week-range DTE request into event_week/0-7 days.
+    it("prefers an explicit week-range DTE over catalyst event-week inference", () => {
+      const result = extractEntities(
+        "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?",
+      );
+      expect(result.dteHint).toBe("1-2 weeks");
+    });
+
+    it("extracts spelled-out and dashed week ranges", () => {
+      expect(extractEntities("covered call one to two weeks out on AAPL").dteHint).toBe(
+        "one-two weeks",
+      );
+      expect(extractEntities("puts 2–3 weeks out, earnings tonight").dteHint).toBe("2-3 weeks");
+    });
+
     it("returns undefined when no DTE hint", () => {
       const result = extractEntities("MSFT calls");
       expect(result.dteHint).toBeUndefined();
