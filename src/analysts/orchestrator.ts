@@ -131,9 +131,11 @@ export function buildAnalystVoteTallyBlock(outputs: AnalystOutput[]): string | n
 - BUY+SELL split: ${split ? "yes" : "no"}`;
 }
 
-export function buildSynthesisPrompt(symbol: string, tallyBlock?: string): string {
-  const structuredFacts = tallyBlock ? `${tallyBlock}\n\n` : "";
-  return `${structuredFacts}**[Synthesis]** You have received five analyst signals with conviction scores for ${symbol}, a bull case arguing FOR the position, and a bear case arguing AGAINST.
+export function buildSynthesisPrompt(symbol: string): string {
+  // The runtime tally block is injected at dispatch time by
+  // SessionCoordinator.prepareWorkflowPrompt, where parsed analyst outputs
+  // exist; this builder runs at workflow-definition time and stays static.
+  return `**[Synthesis]** You have received five analyst signals with conviction scores for ${symbol}, a bull case arguing FOR the position, and a bear case arguing AGAINST.
 If a bull rebuttal with concessions appears above (not a line starting with "REBUTTAL SKIPPED"), treat the concessions as validated risks that must be addressed.
 
 Your job is NOT to average opinions. Your job is to RESOLVE THE DEBATE.

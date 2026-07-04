@@ -670,7 +670,7 @@ export class SessionCoordinator {
     const mismatches = checkNumberMatch(
       validationInput.evidence,
       validationInput.toolResults,
-    ).filter((entry) => entry.message.includes("mismatch"));
+    ).filter((entry) => entry.type === "failure");
     const passed = mismatches.length === 0;
     const payload = {
       passed,

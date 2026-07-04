@@ -187,7 +187,7 @@ export class RuntimeValidator {
 export function checkNumberMatch(
   evidence: EvidenceRecord[],
   toolResults: Map<string, number>,
-): ValidationEntry[] {
+): Array<ValidationEntry & { type: "pass" | "failure" }> {
   const results: (ValidationEntry & { type: "pass" | "failure" })[] = [];
   for (const record of evidence) {
     if (typeof record.value !== "number") continue;

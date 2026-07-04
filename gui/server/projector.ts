@@ -74,8 +74,10 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
     }
 
     if (entry.type === "custom" && entry.customType === "opencandle-analyst-step") {
+      // debate_* stages share this entry type but are not analysts.
+      const stage = stringValue(asRecord(entry.data).stage) ?? "";
       const active = state.activeAnalyses[state.activeAnalyses.length - 1];
-      if (active) {
+      if (active && stage.startsWith("analyst_")) {
         const nextDone = active.analystsDone + 1;
         active.analystsDone =
           active.analystsTotal > 0 ? Math.min(nextDone, active.analystsTotal) : nextDone;

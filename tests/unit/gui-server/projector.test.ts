@@ -117,6 +117,38 @@ describe("projectDashboard", () => {
     });
   });
 
+  it("does not count debate stages toward analystsDone", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "analyst_valuation",
+        role: "valuation",
+        parsed: true,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "debate_bull",
+        side: "bull",
+        parsed: true,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "debate_rebuttal",
+        side: "bull",
+        parsed: true,
+      }),
+    ]);
+
+    // debate_* entries share the analyst-step entry type but are not
+    // analysts; counting them can report 5/5 from 3 analysts + 2 debates.
+    expect(state.activeAnalyses[0]).toMatchObject({
+      analystsTotal: 5,
+      analystsDone: 1,
+    });
+  });
+
   it("projects turn gaps and credential-required hard skips into data quality", () => {
     const state = projectDashboard([
       customEntry("opencandle-turn-gap", {
