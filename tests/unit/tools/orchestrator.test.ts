@@ -187,7 +187,9 @@ describe("buildSynthesisPrompt", () => {
 describe("validation prompt", () => {
   it("includes debate-specific checks", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
-    const validationStep = def.steps.find((s) => s.stepType === "validation")!;
+    const validationStep = def.steps.find((s) => s.stepType === "validation");
+    expect(validationStep).toBeDefined();
+    if (!validationStep) throw new Error("validation step missing");
     expect(validationStep.prompt).toContain("bull");
     expect(validationStep.prompt).toContain("bear");
     expect(validationStep.prompt).toContain("concessions");
@@ -215,18 +217,22 @@ describe("buildComprehensiveAnalysisDefinition", () => {
     ]);
   });
 
-  it("debate steps are not skippable", () => {
+  it("only the rebuttal debate step is skippable for programmatic consensus gating", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
     const debateSteps = def.steps.filter((s) => s.stepType.startsWith("debate_"));
     expect(debateSteps).toHaveLength(3);
-    for (const step of debateSteps) {
-      expect(step.skippable).toBe(false);
-    }
+    expect(debateSteps.map((step) => [step.stepType, step.skippable])).toEqual([
+      ["debate_bull", false],
+      ["debate_bear", false],
+      ["debate_rebuttal", true],
+    ]);
   });
 
   it("synthesis step is not skippable", () => {
     const def = buildComprehensiveAnalysisDefinition("AAPL");
-    const synthesis = def.steps.find((s) => s.stepType === "synthesis")!;
+    const synthesis = def.steps.find((s) => s.stepType === "synthesis");
+    expect(synthesis).toBeDefined();
+    if (!synthesis) throw new Error("synthesis step missing");
     expect(synthesis.skippable).toBe(false);
   });
 });

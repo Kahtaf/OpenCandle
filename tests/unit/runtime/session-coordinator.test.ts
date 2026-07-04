@@ -296,6 +296,57 @@ function debateWorkflowDefinition(): WorkflowDefinition {
   };
 }
 
+function deterministicWorkflowDefinition(): WorkflowDefinition {
+  const analystStep = (stepType: string, prompt: string): WorkflowDefinition["steps"][number] => ({
+    stepType,
+    description: stepType,
+    prompt,
+    skippable: true,
+    requiredInputs: [],
+    expectedOutputs: [],
+  });
+
+  return {
+    workflowType: "comprehensive_analysis",
+    steps: [
+      analystStep("analyst_valuation", "valuation prompt"),
+      analystStep("analyst_momentum", "momentum prompt"),
+      {
+        stepType: "debate_bull",
+        description: "bull debate step",
+        prompt: "bull prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+      {
+        stepType: "debate_bear",
+        description: "bear debate step",
+        prompt: "bear prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+      {
+        stepType: "debate_rebuttal",
+        description: "rebuttal step",
+        prompt: "rebuttal prompt",
+        skippable: true,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+      {
+        stepType: "synthesis",
+        description: "synthesis step",
+        prompt: "synthesis prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
 function fakeQueueContext(isIdle: () => boolean, entries: SessionEntry[] = []) {
   return {
     isIdle,
@@ -633,6 +684,207 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       parsed: true,
       evidenceCount: 0,
       evidence: [],
+    });
+  });
+
+  it("injects a computed vote tally into synthesis when at least two analysts parse", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const responses = [
+      "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Growth supports upside.",
+      "Momentum work.\nSIGNAL: SELL\nCONVICTION: 6\nTHESIS: Price action is weakening.",
+      "BULL THESIS: Upside remains plausible.\nKEY RISK TO THIS THESIS: Support breaks.",
+      "BEAR THESIS: Downside evidence is stronger.\nWHAT WOULD CHANGE MY MIND: Breakout above resistance.",
+      "CONCESSIONS: - Momentum is weak.\nREMAINING CONVICTION: 6",
+      "VERDICT: HOLD\nCONFIDENCE: 5\nDEBATE WINNER: BEAR\nREVERSAL CONDITION: Close above resistance.",
+    ];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        const response = responses.shift() ?? "";
+        setTimeout(() => entries.push(assistantTextEntry(response)), 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      deterministicWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    const sentPrompts = (pi.sendUserMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([prompt]) => prompt as string,
+    );
+    const synthesisPrompt = sentPrompts.find((prompt) => prompt.includes("synthesis prompt"));
+    expect(synthesisPrompt).toContain("## Deterministic Analyst Vote Tally");
+    expect(synthesisPrompt).toContain("- BUY: 1");
+    expect(synthesisPrompt).toContain("- HOLD: 0");
+    expect(synthesisPrompt).toContain("- SELL: 1");
+    expect(synthesisPrompt).toContain("- Weighted average conviction: 7");
+    expect(synthesisPrompt).toContain("- Computed verdict: BUY");
+    expect(synthesisPrompt).toContain("synthesis prompt");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "tally_injected",
+      tallyBlock: expect.stringContaining("## Deterministic Analyst Vote Tally"),
+      parsedAnalystCount: 2,
+    });
+  });
+
+  it("skips tally injection and records tally_skipped when fewer than two analysts parse", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        const response = prompt.includes("revise")
+          ? "Still no structured footer."
+          : prompt === "valuation prompt"
+            ? "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Growth supports upside."
+            : prompt === "momentum prompt"
+              ? "No structured footer."
+              : prompt === "bull prompt"
+                ? "BULL THESIS: Upside remains plausible.\nKEY RISK TO THIS THESIS: Support breaks."
+                : prompt === "bear prompt"
+                  ? "BEAR THESIS: Downside evidence is stronger.\nWHAT WOULD CHANGE MY MIND: Breakout above resistance."
+                  : "VERDICT: HOLD\nCONFIDENCE: 5\nDEBATE WINNER: BEAR\nREVERSAL CONDITION: Close above resistance.";
+        setTimeout(() => entries.push(assistantTextEntry(response)), 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      deterministicWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(1400);
+
+    const sentPrompts = (pi.sendUserMessage as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([prompt]) => prompt as string,
+    );
+    const synthesisPrompt = sentPrompts.find((prompt) => prompt.includes("synthesis prompt"));
+    expect(synthesisPrompt).toBe("synthesis prompt");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "tally_skipped",
+      reason: "fewer_than_2_parsed_analysts",
+      parsedAnalystCount: 1,
+    });
+  });
+
+  it("skips rebuttal programmatically when parsed analysts do not include a BUY and SELL split", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const responses = [
+      "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Growth supports upside.",
+      "Momentum work.\nSIGNAL: HOLD\nCONVICTION: 6\nTHESIS: Price action is balanced.",
+      "BULL THESIS: Upside remains plausible.\nKEY RISK TO THIS THESIS: Support breaks.",
+      "BEAR THESIS: Risks remain.\nWHAT WOULD CHANGE MY MIND: Breakout above resistance.",
+      "VERDICT: BUY\nCONFIDENCE: 6\nDEBATE WINNER: BULL\nREVERSAL CONDITION: Support breaks.",
+    ];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        const response = responses.shift() ?? "";
+        setTimeout(() => entries.push(assistantTextEntry(response)), 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      deterministicWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(1200);
+
+    expect(pi.sendUserMessage).not.toHaveBeenCalledWith("rebuttal prompt");
+    const run = coord.getRunner().getActiveRun();
+    expect(run?.steps.find((step) => step.stepType === "debate_rebuttal")?.status).toBe("skipped");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "step_skipped",
+      stepType: "debate_rebuttal",
+      reason: "analyst_consensus",
+    });
+  });
+
+  it("emits observe-only validation after synthesis with mismatches and skipped unparsed analysts", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    type Handler = (event: never) => void;
+    const handlers = new Map<string, Handler[]>();
+    const emit = (name: string, event: unknown) => {
+      for (const handler of handlers.get(name) ?? []) {
+        handler(event as never);
+      }
+    };
+    const pi = {
+      on: vi.fn((name: string, handler: Handler) => {
+        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+      }),
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        const response = prompt.includes("revise")
+          ? "Still no structured footer."
+          : prompt === "valuation prompt"
+            ? "Valuation work. The price is 100.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Growth supports upside."
+            : prompt === "momentum prompt"
+              ? "No structured footer."
+              : prompt === "bull prompt"
+                ? "BULL THESIS: Upside remains plausible.\nKEY RISK TO THIS THESIS: Support breaks."
+                : prompt === "bear prompt"
+                  ? "BEAR THESIS: Downside evidence is stronger.\nWHAT WOULD CHANGE MY MIND: Breakout above resistance."
+                  : "VERDICT: BUY\nCONFIDENCE: 6\nDEBATE WINNER: BULL\nREVERSAL CONDITION: Support breaks.";
+        setTimeout(() => {
+          if (prompt === "valuation prompt") {
+            emit("tool_execution_start", {
+              toolCallId: "tc-price",
+              toolName: "seed_validation",
+              args: {},
+            });
+            emit("tool_execution_end", {
+              toolCallId: "tc-price",
+              toolName: "seed_validation",
+              result: { price: 101 },
+              isError: false,
+            });
+          }
+          entries.push(assistantTextEntry(response));
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      deterministicWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(1400);
+
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-validation", {
+      passed: false,
+      mismatches: [
+        expect.objectContaining({
+          evidenceLabel: "seed_validation.price",
+          message: expect.stringContaining("mismatch"),
+        }),
+      ],
+      skipped_unparsed: ["analyst_momentum"],
+    });
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "validation_failed",
+      mismatches: expect.any(Array),
+      skipped_unparsed: ["analyst_momentum"],
     });
   });
 });

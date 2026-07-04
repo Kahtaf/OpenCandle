@@ -5,6 +5,9 @@
 ### Added
 
 - Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
+- Added opt-in known-fail E2 saved market-state fidelity eval coverage for seeded portfolio rate-exposure and SPY cost-basis prompts, including trace assertions for saved-state route context, portfolio-review routing, and fixture value reuse.
+- Added a live, usually-tier E1 multi-turn coreference eval for prior-turn ticker carryover and saved-portfolio holding references, currently marked known-fail/opt-in with committed trace evidence for the saved-state AMD resolution gap.
+- Added opt-in E5 ask-instead-of-guess product evals for ambiguous calls/bank prompts and resolvable prior-turn twins, with committed live findings for current over-guessing and over-asking behavior.
 - Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
 
 ### Changed
@@ -13,6 +16,7 @@
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and keeps chat disabled until setup is ready.
 - Harness sessions now support sequential `prompts` with per-prompt trace boundaries while preserving single-`prompt` behavior, and the IPC harness can `send` follow-up prompts into an existing session.
 - Comprehensive-analysis workflow steps now capture observe-only tool evidence, parse structured analyst/debate outputs into step records, emit `opencandle-analyst-step` trace entries, and let the GUI projector count analyst progress from those entries without changing analyst prompt templates.
+- Comprehensive-analysis synthesis now receives an additive deterministic analyst vote tally when at least two analyst outputs parse, skips consensus rebuttals programmatically, and emits observe-only validation trace entries after synthesis without enforcing or rewriting the answer.
 - Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
 
 ### Fixed

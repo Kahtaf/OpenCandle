@@ -160,11 +160,16 @@ describe("opencandle extension", () => {
     await vi.runAllTimersAsync();
 
     const prompts = comprehensiveAnalysisPrompts("NVDA");
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length);
-    for (const [index, prompt] of prompts.entries()) {
-      if (index === 0) continue;
+    const sentPrompts = prompts.filter((_, index) => index !== 8);
+    expect(fake.sendUserMessage).toHaveBeenCalledTimes(sentPrompts.length);
+    for (const [index, prompt] of sentPrompts.entries()) {
       expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
     }
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "step_skipped",
+      stepType: "debate_rebuttal",
+      reason: "analyst_consensus",
+    });
   });
 
   it("intercepts natural-language analyze input and queues the same prompt sequence", async () => {
@@ -194,12 +199,17 @@ describe("opencandle extension", () => {
     expect(result).toEqual({ action: "transform", text: prompts[0] });
 
     await vi.runAllTimersAsync();
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length - 1);
-    for (const [index, prompt] of prompts.entries()) {
-      if (index === 0) continue;
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index, prompt);
+    const sentFollowUps = prompts.filter((_, index) => index !== 0 && index !== 8);
+    expect(fake.sendUserMessage).toHaveBeenCalledTimes(sentFollowUps.length);
+    for (const [index, prompt] of sentFollowUps.entries()) {
+      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
     }
     expect(ctx.ui.notify).not.toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "step_skipped",
+      stepType: "debate_rebuttal",
+      reason: "analyst_consensus",
+    });
   });
 
   it("records the original user text when a workflow transform replaces the turn", async () => {

@@ -18,6 +18,10 @@ export interface ProductEvalDimension {
   forbiddenPatterns?: RegExp[];
   requiredToolNames?: string[];
   forbiddenToolNames?: string[];
+  expectedAskUserCount?: number;
+  askUserQuestionPatterns?: RegExp[];
+  requiredResolvedSymbols?: string[];
+  forbiddenResolvedSymbols?: string[];
   mandatory?: boolean;
   weight?: number;
 }
@@ -33,8 +37,13 @@ export interface ProductEvalCase {
   id: string;
   templateId: string;
   family: PromptFamily;
+  tier?: "default" | "opt-in";
   prompt: string;
+  prompts?: string[];
   answers?: string[];
+  setup?: {
+    marketStateFixture?: "e5_two_option_positions";
+  };
   assertions?: {
     expectedWorkflow?: WorkflowType;
     requiredTools?: string[];

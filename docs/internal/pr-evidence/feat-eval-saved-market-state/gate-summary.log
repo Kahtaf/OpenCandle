@@ -1,0 +1,20 @@
+Focused checks run during implementation:
+
+- npx vitest run tests/unit/evals/competitive-finance.test.ts
+  - Initial red: seedOpenCandleHomeMarketState was missing.
+  - Green after eval-runner seeding support.
+- npx vitest run tests/unit/evals/competitive-finance.test.ts tests/unit/evals/scorers.test.ts
+  - Passed: 2 files, 61 tests.
+- npx vitest run --config vitest.config.evals.ts tests/evals/cases/saved-market-state.eval.ts
+  - Passed as skipped: 1 skipped suite / 1 skipped marker.
+- EVAL_TIER=usually OPENCANDLE_EVAL_KNOWN_FAIL_E2=1 npx vitest run --config vitest.config.evals.ts tests/evals/cases/saved-market-state.eval.ts --reporter=verbose
+  - Blocked before cases by vitest-evals registration error: TypeError: define is not a function.
+- Live harness traces collected with tests/harness/cli.ts using a seeded OPENCANDLE_HOME.
+- npx tsc --noEmit
+  - Passed.
+- npx biome ci .
+  - Passed with existing non-fatal warnings.
+- npm test
+  - Passed: 222 files, 2330 tests passed, 2 skipped.
+- graphify update .
+  - Passed; graphify-out graph/report updated.

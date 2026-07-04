@@ -6,6 +6,7 @@ import {
   scoreDataFaithfulness,
 } from "../../evals/scorers/data-faithfulness.js";
 import { scoreRiskDisclosure } from "../../evals/scorers/risk-disclosure.js";
+import { scoreSavedMarketStateFidelity } from "../../evals/scorers/saved-market-state-fidelity.js";
 import { scoreToolArguments } from "../../evals/scorers/tool-arguments.js";
 import { scoreToolSelection } from "../../evals/scorers/tool-selection.js";
 import { scoreWorkflowClassification } from "../../evals/scorers/workflow-classification.js";
@@ -269,5 +270,90 @@ describe("scoreRiskDisclosure", () => {
     const result = scoreRiskDisclosure(trace, [/carry\s+risk/i]);
     expect(result.passed).toBe(true);
     expect(result.score).toBe(1.0);
+  });
+});
+
+describe("scoreSavedMarketStateFidelity", () => {
+  it("passes when route context carries saved state, avoids portfolio_builder, and final text quotes fixture values", () => {
+    const trace = makeTrace({
+      classification: {
+        workflow: "general_finance_qa",
+        confidence: 0.9,
+        tier: "llm",
+        entities: { symbols: ["SPY", "AAPL", "XLE"] },
+      },
+      router: {
+        routeKind: "agent_task",
+        legacyRoute: "fallback",
+        workflow: "general_finance_qa",
+      },
+      planning: {
+        structuredCheckIds: [],
+        workspacePlaceholderIds: [],
+        artifactPlaceholderIds: [],
+        artifactContractIds: [],
+        capabilityGapIds: [],
+        evidenceRecords: [],
+        structuredCheckResults: [],
+        structuredCheckFailures: [],
+        retryEligibility: { eligible: false, activeRetryAllowed: false, reasons: [] },
+        taskFamily: "portfolio_review",
+      },
+      customEntries: [
+        {
+          customType: "opencandle-route-context",
+          timestamp: "2026-07-04T00:00:00.000Z",
+          data: {
+            savedMarketStateSummary:
+              "Portfolio lots:\n- SPY: 60 @ $480.00, cost basis $28800.00\n- AAPL: 40 @ $175.00\n- XLE: 100 @ $85.00",
+          },
+        },
+      ],
+      text: "Your SPY lot is 60 shares at $480.00, for a $28,800.00 cost basis.",
+    });
+
+    const result = scoreSavedMarketStateFidelity(trace, {
+      requiredSummarySymbols: ["SPY", "AAPL", "XLE"],
+      requiredSummaryValues: ["$480", "$175", "$85"],
+      requiredFinalValues: ["60", "$480", "$28,800"],
+      forbiddenWorkflow: "portfolio_builder",
+      expectedTaskFamily: "portfolio_review",
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1);
+  });
+
+  it("fails with specific messages when saved-state evidence or fixture values are missing", () => {
+    const trace = makeTrace({
+      classification: {
+        workflow: "portfolio_builder",
+        confidence: 0.9,
+        tier: "llm",
+        entities: { symbols: [] },
+      },
+      text: "I can build a new portfolio.",
+      customEntries: [
+        {
+          customType: "opencandle-route-context",
+          timestamp: "2026-07-04T00:00:00.000Z",
+          data: { routeKind: "workflow_dispatch" },
+        },
+      ],
+    });
+
+    const result = scoreSavedMarketStateFidelity(trace, {
+      requiredSummarySymbols: ["SPY"],
+      requiredSummaryValues: ["60", "$480"],
+      requiredFinalValues: ["$480"],
+      forbiddenWorkflow: "portfolio_builder",
+      expectedTaskFamily: "portfolio_review",
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.message).toContain("forbidden workflow portfolio_builder");
+    expect(result.message).toContain("saved-state summary missing SPY");
+    expect(result.message).toContain("saved-state summary missing 60");
+    expect(result.message).toContain("final text missing $480");
   });
 });
