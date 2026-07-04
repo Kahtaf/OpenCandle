@@ -7,7 +7,7 @@
 - [x] 1.5 Add recovery tests proving a live delayed owner is not stolen, a dead owner can be recovered, and an ambiguous/reused PID is not auto-stolen.
 - [x] 1.6 Add a neutral manual recovery path for ambiguous or corrupted ownership metadata that does not expose writer/follower/takeover terminology.
 - [x] 1.7 Add heartbeat refresh and release behavior for active coordinators, including long-running streams, tool calls, and synthesis.
-- [ ] 1.8 Add verification that a long stream outlives the stale grace window without another process recovering the session.
+- [x] 1.8 Add verification that a long stream outlives the stale grace window without another process recovering the session. Verified 2026-07-03 by `tests/unit/gui-server/writer-lock-stale-grace.test.ts`, which uses fake timers, the production 15s stale grace, a live stalled owner, and then a definitive dead-owner recovery.
 - [x] 1.9 Serialize startup fallback scope to canonical session identity migration so two keys cannot produce two owners for one session.
 
 ## 2. Authenticated Local Proxy
@@ -43,7 +43,7 @@
 - [x] 5.1 Add GUI browser regression coverage for two browser tabs submitting through one coordinator without exposing writer/follower wording.
 - [x] 5.2 Add TUI coordinator listener or chosen IPC support so a GUI Browser client can forward supported session actions to a TUI-owned session.
 - [ ] 5.3 Add full TUI transcript subscription, polling, or tailing so a non-owner TUI can render session updates accepted by a GUI owner outside the v1 interactive follower proxy. Note 2026-07-03: v1 supports an interactive TTY follower proxy that forwards prompts to a GUI owner and polls the persisted session file; broader live-following remains deferred.
-- [ ] 5.4 Add a scripted TUI plus GUI smoke that opens the same session in TUI and in the GUI Browser, sends a message from each supported topology, and verifies both surfaces converge on the same transcript.
+- [x] 5.4 Add a scripted TUI plus GUI smoke that opens the same session in TUI and in the GUI Browser, sends a message from each supported topology, and verifies both surfaces converge on the same transcript. Verified 2026-07-03 by `tests/unit/gui-server/coordinator-convergence-smoke.test.ts`; run log committed at `docs/internal/pr-evidence/openspec-wp7/convergence-smoke.log`. The automated smoke covers the WP5-narrowed GUI-owned topology by sending through the GUI coordinator HTTP path and reading the same session file from a separate Node process using the Pi session layer.
 - [x] 5.5 Add a multi-agent/client smoke where two automated GUI clients submit messages and the coordinator serializes admitted actions into one canonical transcript while returning busy/retry for non-admissible concurrent prompts.
 - [x] 5.6 Add stale-owner recovery verification where one owner process exits, another recovers, and the old dead-owner lock does not block the new surface.
 - [x] 5.7 Add delayed-live-owner verification where one owner stops heartbeating but remains alive, another surface attempts a write, and OpenCandle shows syncing rather than creating a competing writer.
@@ -55,7 +55,7 @@
 - [x] 6.1 Run `npm test`.
 - [x] 6.2 Run `npx tsc --noEmit`.
 - [x] 6.3 Run targeted GUI browser tests with the Browser-visible GUI session.
-- [ ] 6.4 Run the TUI plus GUI Browser smoke from task 5.4 before marking implementation complete. Verification owned by WP7 of docs/internal/openspec-backlog-cleanup-plan.md; this change must not be archived until WP7 lands.
+- [x] 6.4 Run the TUI plus GUI Browser smoke from task 5.4 before marking implementation complete. Completed 2026-07-03 by `tests/unit/gui-server/coordinator-convergence-smoke.test.ts` with evidence in `docs/internal/pr-evidence/openspec-wp7/convergence-smoke.log`.
 - [x] 6.5 Update `CHANGELOG.md` under `[Unreleased]`.
 - [x] 6.6 Run `graphify update .` after implementation changes.
 
