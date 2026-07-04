@@ -16,6 +16,7 @@ import { join } from "node:path";
 import {
   type Api,
   completeSimple,
+  getEnvApiKey,
   getModel,
   type Model,
   registerBuiltInApiProviders,
@@ -46,6 +47,7 @@ import {
   type GeneratedFinancePrompt,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
@@ -734,7 +736,17 @@ async function resolveModelWithAuth(
   missingAuthMessage: string,
 ): Promise<ResolvedModel> {
   const model = resolveModel(provider, modelId);
-  const requestAuth = await modelRegistry.getApiKeyAndHeaders(model);
+  // ModelRegistry.getApiKeyAndHeaders skips env-key fallback, so seed
+  // provider env keys (e.g. GEMINI_API_KEY) as runtime AuthStorage
+  // overrides when the registry has no stored credential. The override
+  // also reaches the OpenCandle session runner sharing this AuthStorage.
+  const requestAuth = await resolveRequestAuthWithEnvApiKeyFallback({
+    provider: model.provider,
+    resolveRequestAuth: () => modelRegistry.getApiKeyAndHeaders(model),
+    getEnvApiKey: (modelProvider) => getEnvApiKey(modelProvider),
+    setRuntimeApiKey: (modelProvider, apiKey) =>
+      authStorage.setRuntimeApiKey(modelProvider, apiKey),
+  });
   if (!requestAuth.ok) {
     throw new Error(`${requestAuth.error}\n${missingAuthMessage}`);
   }

@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MarketStateService } from "../../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import {
@@ -25,6 +25,7 @@ import {
   frozenCompetitivePanelFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
@@ -773,5 +774,71 @@ describe("competitive finance benchmarking", () => {
     expect(
       competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "0" }),
     ).toBe(60_000);
+  });
+
+  // Pi's ModelRegistry.getApiKeyAndHeaders resolves AuthStorage credentials
+  // with includeFallback: false, so an exported GEMINI_API_KEY never reaches
+  // the judge/OpenCandle model resolution even though the rest of the repo
+  // (TUI harness, router live eval) works from env keys. The eval script
+  // seeds the env key as a runtime override and re-resolves.
+  describe("resolveRequestAuthWithEnvApiKeyFallback", () => {
+    it("keeps registry auth untouched when an api key is already resolved", async () => {
+      const setRuntimeApiKey = vi.fn();
+      const resolveRequestAuth = vi.fn(async () => ({ ok: true as const, apiKey: "stored-key" }));
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "google",
+        resolveRequestAuth,
+        getEnvApiKey: () => "env-key",
+        setRuntimeApiKey,
+      });
+      expect(result).toEqual({ ok: true, apiKey: "stored-key" });
+      expect(resolveRequestAuth).toHaveBeenCalledTimes(1);
+      expect(setRuntimeApiKey).not.toHaveBeenCalled();
+    });
+
+    it("seeds the env api key as a runtime override and re-resolves when the registry has none", async () => {
+      const runtimeKeys = new Map<string, string>();
+      const resolveRequestAuth = vi.fn(async () =>
+        runtimeKeys.has("google")
+          ? { ok: true as const, apiKey: runtimeKeys.get("google") }
+          : { ok: true as const, apiKey: undefined },
+      );
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "google",
+        resolveRequestAuth,
+        getEnvApiKey: (provider) => (provider === "google" ? "env-gemini-key" : undefined),
+        setRuntimeApiKey: (provider, apiKey) => runtimeKeys.set(provider, apiKey),
+      });
+      expect(result).toEqual({ ok: true, apiKey: "env-gemini-key" });
+      expect(resolveRequestAuth).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries through the env key when the registry resolution itself fails", async () => {
+      const runtimeKeys = new Map<string, string>();
+      const resolveRequestAuth = vi.fn(async () =>
+        runtimeKeys.has("google")
+          ? { ok: true as const, apiKey: runtimeKeys.get("google") }
+          : { ok: false as const, error: "no auth configured" },
+      );
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "google",
+        resolveRequestAuth,
+        getEnvApiKey: () => "env-gemini-key",
+        setRuntimeApiKey: (provider, apiKey) => runtimeKeys.set(provider, apiKey),
+      });
+      expect(result).toEqual({ ok: true, apiKey: "env-gemini-key" });
+    });
+
+    it("returns the original resolution when no env key exists", async () => {
+      const setRuntimeApiKey = vi.fn();
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "anthropic",
+        resolveRequestAuth: async () => ({ ok: false as const, error: "no auth configured" }),
+        getEnvApiKey: () => undefined,
+        setRuntimeApiKey,
+      });
+      expect(result).toEqual({ ok: false, error: "no auth configured" });
+      expect(setRuntimeApiKey).not.toHaveBeenCalled();
+    });
   });
 });

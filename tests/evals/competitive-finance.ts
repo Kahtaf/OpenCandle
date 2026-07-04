@@ -710,6 +710,33 @@ export function shouldRetryCompetitiveModelCall(
   );
 }
 
+/**
+ * Pi's ModelRegistry.getApiKeyAndHeaders resolves AuthStorage credentials
+ * with includeFallback: false, so provider env keys (for example
+ * GEMINI_API_KEY for google) are never consulted. The competitive eval runs
+ * in environments where .env is the only credential source, so when the
+ * registry resolves no API key, seed the env key as a runtime AuthStorage
+ * override and re-resolve. The runtime override has top priority in
+ * AuthStorage, so the same key also reaches the OpenCandle session runner
+ * that shares the AuthStorage instance. Test-harness-only behavior; the
+ * production auth path is unchanged.
+ */
+export async function resolveRequestAuthWithEnvApiKeyFallback<
+  T extends { ok: boolean; apiKey?: string },
+>(options: {
+  provider: string;
+  resolveRequestAuth: () => Promise<T>;
+  getEnvApiKey: (provider: string) => string | undefined;
+  setRuntimeApiKey: (provider: string, apiKey: string) => void;
+}): Promise<T> {
+  const initial = await options.resolveRequestAuth();
+  if (initial.ok && initial.apiKey) return initial;
+  const envKey = options.getEnvApiKey(options.provider);
+  if (!envKey) return initial;
+  options.setRuntimeApiKey(options.provider, envKey);
+  return options.resolveRequestAuth();
+}
+
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {
   if (!isRecord(item)) throw new Error(`Generated prompt ${index + 1} must be an object`);
   const complexity = stringValue(item.complexity);
