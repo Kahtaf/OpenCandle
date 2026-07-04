@@ -158,6 +158,11 @@ function evaluateManifestAssertion(
     reason: `registered qualitative assertion; not enforced with brittle keyword matching (${terms.map(String).join(", ")})`,
     deterministic: false,
   });
+  const requires = (...terms: RegExp[]) => ({
+    passed: terms.every((term) => term.test(text)),
+    reason: `expected final answer to include: ${terms.map(String).join(", ")}`,
+    deterministic: true,
+  });
   const forbids = (...terms: RegExp[]) => ({
     passed: terms.every((term) => !term.test(text)),
     reason: `expected final answer not to include: ${terms.map(String).join(", ")}`,
@@ -351,37 +356,43 @@ function evaluateManifestAssertion(
     return requiredTerms(/6\.8\s*%|6\.8 percent/, /default|would|practical/);
   }
   if (lowerAssertion.includes("uses dram as the covered-call underlying")) {
-    return requiredTerms(/\bdram\b/);
+    return requires(/\bdram\b/);
   }
   if (lowerAssertion.includes("preserves nvda as catalyst context")) {
-    return requiredTerms(/\bnvda\b/, /catalyst|context|earnings|event/);
+    return requires(/\bnvda\b/, /catalyst|context|earnings|event/);
   }
   if (lowerAssertion.includes("cost basis and event-week dte")) {
-    return requiredTerms(/cost basis/, /event[- ]week|DTE|days? to expiration/);
+    return requires(/cost basis/, /event[- ]week|dte|days? to expiration/);
+  }
+  if (lowerAssertion.includes("preserves requested 1-2 week dte")) {
+    return requires(/1\s*[-–]\s*2|one\s+to\s+two|two[- ]week|weekly/, /dte|expiry|expiration/);
   }
   if (lowerAssertion.includes("covered-call assignment")) {
     return requiredTerms(/assignment/, /downside/, /opportunity cost|capped upside/);
   }
   if (lowerAssertion.includes("uses amd as protective-put underlying")) {
-    return requiredTerms(/\bamd\b/);
+    return requires(/\bamd\b/);
+  }
+  if (lowerAssertion.includes("uses aapl as protective-put underlying")) {
+    return requires(/\baapl\b/);
   }
   if (lowerAssertion.includes("200-share hedge quantity")) {
-    return requiredTerms(/200/, /month|DTE|days? to expiration/);
+    return requires(/200/, /month|dte|days? to expiration/);
+  }
+  if (lowerAssertion.includes("does not convert protective put request into a bullish call")) {
+    return forbids(/bullish call|bull call|call spread|covered call/);
+  }
+  if (lowerAssertion.includes("sizes hedge from 450 shares")) {
+    return requires(/450/, /\b4\b|four/, /50|residual|unhedged|round/);
   }
   if (lowerAssertion.includes("hedge floor, premium")) {
-    return requiredTerms(
-      /hedge floor|floor/,
-      /premium/,
-      /delta|theta|greeks?/,
-      /liquidity/,
-      /risk/,
-    );
+    return requires(/hedge floor|floor/, /premium/, /delta|theta|greeks?/, /liquidity/, /risk/);
   }
   if (
     lowerAssertion.includes("bottom-line portfolio risk/reward") ||
     lowerAssertion.includes("bottom-line structural portfolio read")
   ) {
-    return requiredTerms(/bottom line/, /portfolio/, /risk|reward|structural/);
+    return requires(/bottom line/, /portfolio/, /risk|reward|structural/);
   }
   if (lowerAssertion.includes("current macro evidence")) {
     return requiredTerms(

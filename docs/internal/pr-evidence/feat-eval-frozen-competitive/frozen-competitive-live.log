@@ -1,0 +1,14 @@
+
+> opencandle@0.11.0 test:evals:competitive:frozen
+> OPENCANDLE_COMPETITIVE_PANEL=frozen tsx tests/scripts/run-competitive-finance-eval.ts
+
+/Users/kahtaf/Documents/workspace/oc-eval-frozen-competitive/tests/scripts/run-competitive-finance-eval.ts:693
+    throw new Error(
+          ^
+
+Error: No API key available for google/gemini-2.5-flash.
+Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.
+    at resolveModelWithAuth (/Users/kahtaf/Documents/workspace/oc-eval-frozen-competitive/tests/scripts/run-competitive-finance-eval.ts:693:11)
+    at async <anonymous> (/Users/kahtaf/Documents/workspace/oc-eval-frozen-competitive/tests/scripts/run-competitive-finance-eval.ts:122:20)
+
+Node.js v22.23.0

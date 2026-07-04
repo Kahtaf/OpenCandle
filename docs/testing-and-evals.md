@@ -73,6 +73,7 @@ npm run test:evals:usually
 npm run eval:router-live
 npm run test:evals:product
 npm run test:evals:competitive
+npm run test:evals:competitive:frozen
 ```
 
 | Command | What it runs | When to use it |
@@ -82,6 +83,7 @@ npm run test:evals:competitive
 | `npm run eval:router-live` | `tests/scripts/run-live-router-eval.ts` against request-understanding fixtures with a live model | Opt-in task-selection quality check. Requires live model credentials and compares live output to fixture expectations. |
 | `npm run test:evals:product` | `tests/scripts/run-product-evals.ts` | Full-session product evals over curated finance prompts, using the OpenCandle harness and rubric-style dimensions. |
 | `npm run test:evals:competitive` | `tests/scripts/run-competitive-finance-eval.ts` | Competitive finance benchmark against generic no-tool Claude, Codex, and Gemini baselines. See [Competitive Benchmarking](#competitive-benchmarking). |
+| `npm run test:evals:competitive:frozen` | `tests/scripts/run-competitive-finance-eval.ts` with `OPENCANDLE_COMPETITIVE_PANEL=frozen` | Per-release frozen competitive panel over historical loss classes, using exact prompt text and cached competitor baselines when available. Not part of per-PR CI. |
 
 Eval reports are written under `tests/evals/runs/` when a runner produces a JSON report. Treat those run files as local evidence, not committed documentation.
 
@@ -131,9 +133,18 @@ npm run test:evals:competitive
 
 The runner generates (or accepts) finance prompts, runs each through OpenCandle and the baselines, judges usefulness, correctness, evidence, clarity, and uncertainty handling with a configured judge model, and writes a timestamped `*_competitive-finance.json` report under `tests/evals/runs/`.
 
+For release preparation, rerun the frozen competitive panel:
+
+```bash
+npm run test:evals:competitive:frozen
+```
+
+The frozen panel keeps generated prompt discovery separate from regression tracking. It covers portfolio-review-not-builder, requested DTE preservation, protective-put-not-bullish-call, unknown-ticker-no-dead-end, and hedge sizing with share count. Its hard assertions live in `docs/internal/prompt-to-policy-migration-manifest.json` so benchmark literals stay out of production prompts.
+
 Useful knobs (all optional):
 
 - `COMPETITIVE_PROMPT_COUNT` / `COMPETITIVE_PROMPT_SEED`: size and reproducibility of the generated prompt set.
+- `OPENCANDLE_COMPETITIVE_PANEL=frozen`: rerun the fixed historical-loss panel instead of generating prompts.
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
 - `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
 - `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides, timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls.
