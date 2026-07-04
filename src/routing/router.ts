@@ -253,6 +253,30 @@ export function postProcessRouterOutput(
         diagnostics,
       };
     }
+
+    // Prior-turn symbols merged into the slot (by the model or by the sync
+    // above) must not claim user provenance: the user typed only what is in
+    // this turn's text, and the Assumptions block renders slot sources.
+    // preference/memory/default sources legitimately reference out-of-text
+    // symbols and are left alone.
+    if (symbolsSlotClaimsPriorTurnUserProvenance(next.slots, text, inputContext?.priorTurns)) {
+      diagnostics.push({
+        code: "symbols_slot_provenance_prior_context",
+        message:
+          "compare symbols slot includes symbols absent from the user text; source downgraded from user to prior_context",
+      });
+      next = {
+        ...next,
+        slots: {
+          ...next.slots,
+          symbols: {
+            ...next.slots.symbols,
+            source: "prior_context",
+          },
+        },
+        diagnostics,
+      };
+    }
   }
 
   const profileRiskProfile = readProfileString(inputContext?.profileSnapshot, "risk_profile");
@@ -989,6 +1013,26 @@ function syncSymbolListSlot(
       value: symbols,
     },
   };
+}
+
+function symbolsSlotClaimsPriorTurnUserProvenance(
+  slots: Record<string, RouterSlot>,
+  text: string,
+  priorTurns: RouterInputContext["priorTurns"] | undefined,
+): boolean {
+  const slot = slots.symbols;
+  if (!slot || slot.source !== "user" || !Array.isArray(slot.value)) return false;
+  if (!priorTurns || priorTurns.length === 0) return false;
+  const priorText = priorTurns.map((turn) => turn.text).join("\n");
+  // A symbol absent from this turn's text but present in prior turns is a
+  // carryover, not a user-typed value. Symbols absent from both (e.g. tickers
+  // resolved from company names in the current text) are left alone.
+  return slot.value.some(
+    (symbol) =>
+      typeof symbol === "string" &&
+      symbolPosition(text, symbol) === Number.MAX_SAFE_INTEGER &&
+      symbolPosition(priorText, symbol) !== Number.MAX_SAFE_INTEGER,
+  );
 }
 
 function removeSymbolSlots(slots: Record<string, RouterSlot>): Record<string, RouterSlot> {

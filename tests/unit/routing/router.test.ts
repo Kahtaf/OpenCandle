@@ -693,6 +693,103 @@ describe("route()", () => {
 
     expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
     expect(result.slots.symbols?.value).toEqual(["KO", "IV", "PEP"]);
+    // Every synced symbol appears in the user's text, so user provenance holds.
+    expect(result.slots.symbols?.source).toBe("user");
+  });
+
+  it("labels synced compare symbol slots prior_context when merged symbols are absent from the text", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare those with SPY over the last year",
+        priorTurns: [
+          { role: "user", text: "I'm deciding between NVDA and AMD for a semiconductor position." },
+          { role: "assistant", text: "NVDA and AMD are the two semiconductor names in scope." },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["NVDA", "AMD", "SPY"] },
+          slots: {
+            symbols: { value: ["SPY"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "NVDA and AMD carried from prior turns",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["SPY", "NVDA", "AMD"]);
+    expect(result.slots.symbols?.value).toEqual(["SPY", "NVDA", "AMD"]);
+    // NVDA/AMD never appear in this turn's text; claiming the user specified
+    // them corrupts the Assumptions block and ask-vs-guess provenance.
+    expect(result.slots.symbols?.source).toBe("prior_context");
+    expect(result.diagnostics.map((d) => d.code)).toContain(
+      "symbols_slot_provenance_prior_context",
+    );
+  });
+
+  it("downgrades user provenance on already-ordered compare slots with prior-turn symbols", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare those with SPY over the last year",
+        priorTurns: [
+          { role: "user", text: "I'm deciding between NVDA and AMD for a semiconductor position." },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["SPY", "NVDA", "AMD"] },
+          slots: {
+            symbols: { value: ["SPY", "NVDA", "AMD"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "already in text order; no sync fires",
+        }),
+      ),
+    );
+
+    expect(result.slots.symbols?.source).toBe("prior_context");
+  });
+
+  it("keeps preference-sourced compare slots untouched when symbols are absent from text", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare my usual etfs over the last year",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["VOO", "VTI"] },
+          slots: {
+            symbols: { value: ["VOO", "VTI"], source: "preference", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "symbols from saved preferences",
+        }),
+      ),
+    );
+
+    expect(result.slots.symbols?.source).toBe("preference");
   });
 
   it("corrects macro data prompts misread as ticker comparisons", async () => {

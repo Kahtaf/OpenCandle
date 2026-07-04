@@ -30,7 +30,7 @@
           "NVDA",
           "AMD"
         ],
-        "source": "user",
+        "source": "prior_context",
         "confidence": "high"
       },
       "time_horizon": {
@@ -51,6 +51,10 @@
       {
         "code": "compare_symbols_canonicalized",
         "message": "compare symbols restored from deterministic extraction and ordered by user text"
+      },
+      {
+        "code": "symbols_slot_provenance_prior_context",
+        "message": "compare symbols slot includes symbols absent from the user text; source downgraded from user to prior_context"
       }
     ],
     "reasoning": "compare verb plus prior turn resolves 'those' to NVDA and AMD; current turn adds SPY and a one-year horizon"
