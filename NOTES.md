@@ -73,3 +73,22 @@ Branch: `feat/eval-provider-outage`
 - Different sessions can run concurrently while same-session action exclusion remains: `tests/unit/gui-server/local-session-coordinator.test.ts` and `tests/e2e/gui-browser.test.ts`.
 - GUI-created sessions remain TUI-continuable without SQLite schema or Pi session format changes: `tests/unit/gui-server/session-resume.test.ts` and `docs/internal/pr-evidence/feat-gui-session-scoped-actions/tui-resume-transcript.md`.
 - Browser runtime evidence for two concurrent sessions with a stop targeting the background session is in `docs/internal/pr-evidence/feat-gui-session-scoped-actions/browser-concurrent-stop-log.json` plus desktop/mobile screenshots.
+
+# I1 Harness Multi-Prompt Notes
+
+## Behavior-to-test mapping
+
+- `runOpenCandleSession({ prompts })` sends prompts sequentially, waits for each prompt to settle, accumulates custom entries, and tags turns/tool calls/custom entries with `promptIndex`.
+  - Covered by `tests/unit/harness/opencandle-runner.test.ts` test `runs multiple prompts sequentially and tags trace entries by prompt index`.
+  - Live evidence: `docs/internal/pr-evidence/feat-harness-multi-prompt/trace.json` and `summary.json`.
+- Existing `runOpenCandleSession({ prompt })` callers keep the original single-prompt shape: no `prompts` array and no prompt-index tags unless multi-prompt mode is explicitly used.
+  - Covered by `tests/unit/harness/opencandle-runner.test.ts` test `keeps single prompt traces in the original one-prompt shape`.
+  - Covered transitively by existing eval/product callers that still pass `prompt`.
+- IPC `send --ipc <dir> --prompt <text>` moves a completed or waiting session back to `running`, dispatches a follow-up prompt into the same live session, and the trace accumulates across sends.
+  - Covered by `tests/unit/harness/ipc.test.ts` test `writePromptRequest moves a completed session back to running for send`.
+  - Live evidence: `docs/internal/pr-evidence/feat-harness-multi-prompt/harness.log`, `trace.json`, and `summary.json`.
+
+## Gate notes
+
+- `npm run test:evals -- -t "no-tool"` remains blocked before cases execute by the existing `vitest-evals` loader failure: `TypeError: define is not a function`.
+- Full `npx biome ci .` passed with existing repository warnings.

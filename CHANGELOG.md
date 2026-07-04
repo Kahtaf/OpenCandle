@@ -10,6 +10,7 @@
 
 - Expanded the deterministic router fixture corpus with archived task 4.7 coverage for prior-context comparisons, general-QA follow-up shifts, preference echoes that must not write preferences, and historical misclassification recovery cases.
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and keeps chat disabled until setup is ready.
+- Harness sessions now support sequential `prompts` with per-prompt trace boundaries while preserving single-`prompt` behavior, and the IPC harness can `send` follow-up prompts into an existing session.
 - Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
 
 ### Fixed

@@ -14,6 +14,10 @@ export interface Question {
   reason?: string;
 }
 
+export interface PromptRequest {
+  prompt: string;
+}
+
 export class IpcChannel {
   constructor(private dir: string) {}
 
@@ -42,6 +46,11 @@ export class IpcChannel {
           cleanup();
           const raw = readFileSync(answerPath, "utf-8");
           resolve(JSON.parse(raw) as { value: string });
+          return true;
+        }
+        if (existsSync(join(this.dir, "prompt-request.json"))) {
+          cleanup();
+          resolve(null);
           return true;
         }
         return false;
@@ -76,6 +85,15 @@ export class IpcChannel {
   writeTrace(trace: AgentTrace): void {
     writeFileSync(join(this.dir, "trace.json"), JSON.stringify(trace, null, 2), "utf-8");
     this.setStatus("done");
+  }
+
+  /** Consume a pending follow-up prompt request, if one exists. */
+  readPromptRequest(): PromptRequest | null {
+    const p = join(this.dir, "prompt-request.json");
+    if (!existsSync(p)) return null;
+    const request = JSON.parse(readFileSync(p, "utf-8")) as PromptRequest;
+    rmSync(p, { force: true });
+    return request;
   }
 
   /** Write error.txt and set status=error. */
@@ -113,6 +131,13 @@ export class IpcChannel {
     const tmp = join(dir, "answer.json.tmp");
     writeFileSync(tmp, JSON.stringify({ value }), "utf-8");
     renameSync(tmp, join(dir, "answer.json"));
+  }
+
+  static writePromptRequest(dir: string, prompt: string): void {
+    const tmp = join(dir, "prompt-request.json.tmp");
+    writeFileSync(tmp, JSON.stringify({ prompt }, null, 2), "utf-8");
+    renameSync(tmp, join(dir, "prompt-request.json"));
+    new IpcChannel(dir).setStatus("running");
   }
 
   static readTrace(dir: string): AgentTrace | null {
