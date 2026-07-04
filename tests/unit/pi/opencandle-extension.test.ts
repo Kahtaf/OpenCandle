@@ -159,17 +159,18 @@ describe("opencandle extension", () => {
 
     await vi.runAllTimersAsync();
 
+    // This fake yields no assistant text, so every structured step re-prompts
+    // once (interleaved "revise" messages) and, with zero parsed analysts,
+    // the rebuttal runs instead of being skipped as false consensus.
     const prompts = comprehensiveAnalysisPrompts("NVDA");
-    const sentPrompts = prompts.filter((_, index) => index !== 8);
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(sentPrompts.length);
-    for (const [index, prompt] of sentPrompts.entries()) {
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
-    }
-    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
-      eventType: "step_skipped",
-      stepType: "debate_rebuttal",
-      reason: "analyst_consensus",
-    });
+    const canonicalCalls = (fake.sendUserMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([prompt]) => prompt as string)
+      .filter((prompt) => prompts.includes(prompt));
+    expect(canonicalCalls).toEqual(prompts);
+    expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-event",
+      expect.objectContaining({ eventType: "step_skipped", stepType: "debate_rebuttal" }),
+    );
   });
 
   it("intercepts natural-language analyze input and queues the same prompt sequence", async () => {
@@ -199,17 +200,19 @@ describe("opencandle extension", () => {
     expect(result).toEqual({ action: "transform", text: prompts[0] });
 
     await vi.runAllTimersAsync();
-    const sentFollowUps = prompts.filter((_, index) => index !== 0 && index !== 8);
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(sentFollowUps.length);
-    for (const [index, prompt] of sentFollowUps.entries()) {
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
-    }
+    // Same all-unparsed degradation semantics as the /analyze command test:
+    // canonical follow-up prompts arrive in order with revise re-prompts
+    // interleaved, and the rebuttal is dispatched (no consensus to gate on).
+    const sentFollowUps = prompts.filter((_, index) => index !== 0);
+    const canonicalCalls = (fake.sendUserMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([prompt]) => prompt as string)
+      .filter((prompt) => sentFollowUps.includes(prompt));
+    expect(canonicalCalls).toEqual(sentFollowUps);
     expect(ctx.ui.notify).not.toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
-    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
-      eventType: "step_skipped",
-      stepType: "debate_rebuttal",
-      reason: "analyst_consensus",
-    });
+    expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-event",
+      expect.objectContaining({ eventType: "step_skipped", stepType: "debate_rebuttal" }),
+    );
   });
 
   it("records the original user text when a workflow transform replaces the turn", async () => {

@@ -646,6 +646,118 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     });
   });
 
+  it("treats an empty analyst response as a parse failure with re-prompt and entry", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => {
+          entries.push(assistantTextEntry(""));
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      analystWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(800);
+    const run = coord.getRunner().getActiveRun();
+
+    // Empty text is a parse failure, not an invisible non-event: one
+    // re-prompt, then a parsed:false entry so the projector and
+    // skipped_unparsed accounting can see the step.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(run?.steps[0].status).toBe("completed");
+    expect(run?.stepOutputs.get(0)?.parsed).toBe(false);
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-analyst-step",
+      expect.objectContaining({ stage: "analyst_valuation", parsed: false }),
+    );
+  });
+
+  it("rejects out-of-range conviction instead of recording a fabricated default", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => {
+          entries.push(
+            assistantTextEntry("Sure of it.\nSIGNAL: BUY\nCONVICTION: 15\nTHESIS: Overconfident."),
+          );
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      analystWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(800);
+    const run = coord.getRunner().getActiveRun();
+
+    // CONVICTION: 15 is outside the 1-10 contract; parseAnalystOutput would
+    // silently default it to 5, fabricating a conviction that feeds the
+    // weighted tally. The step must take the parse-failure path instead.
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(run?.stepOutputs.get(0)?.parsed).toBe(false);
+    expect(pi.appendEntry).toHaveBeenCalledWith(
+      "opencandle-analyst-step",
+      expect.objectContaining({ stage: "analyst_valuation", parsed: false }),
+    );
+  });
+
+  it("runs the rebuttal when fewer than two analysts parsed (no trustworthy consensus)", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        const response = prompt.includes("revise")
+          ? "Still no structured footer."
+          : prompt.includes("bull prompt")
+            ? "BULL THESIS: Upside remains plausible.\nKEY RISK TO THIS THESIS: Support breaks."
+            : prompt.includes("bear prompt")
+              ? "BEAR THESIS: Downside evidence is stronger.\nWHAT WOULD CHANGE MY MIND: Breakout above resistance."
+              : prompt.includes("rebuttal prompt")
+                ? "CONCESSIONS: - Momentum is weak.\nREMAINING CONVICTION: 6"
+                : prompt.includes("synthesis prompt")
+                  ? "VERDICT: HOLD\nCONFIDENCE: 5\nDEBATE WINNER: BEAR\nREVERSAL CONDITION: Close above resistance."
+                  : "No structured footer.";
+        setTimeout(() => entries.push(assistantTextEntry(response)), 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      deterministicWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(2000);
+    const run = coord.getRunner().getActiveRun();
+
+    // Degradation rule: with zero/one parsed analyst there is no consensus
+    // signal to gate on; the rebuttal must run exactly as the status quo,
+    // not be skipped because isAnalystSplit([]) is false.
+    expect(pi.sendUserMessage).toHaveBeenCalledWith("rebuttal prompt");
+    expect(run?.steps.find((step) => step.stepType === "debate_rebuttal")?.status).toBe(
+      "completed",
+    );
+  });
+
   it("stores parsed debate output and appends an analyst-step entry", async () => {
     vi.useFakeTimers();
     const coord = new SessionCoordinator();

@@ -515,7 +515,6 @@ export class SessionCoordinator {
 
           if (
             isStructuredAnalystStep(step.stepType) &&
-            rawText.length > 0 &&
             !hasStructuredContract(step.stepType, rawText)
           ) {
             pi.sendUserMessage(
@@ -723,6 +722,10 @@ function collectParsedAnalystOutputs(run: WorkflowRun | null): AnalystOutput[] {
 function shouldSkipRebuttal(run: WorkflowRun | null, stepType: string): boolean {
   if (stepType !== "debate_rebuttal") return false;
   const parsedAnalysts = collectParsedAnalystOutputs(run);
+  // Degradation rule: with fewer than two parsed analyst outputs there is no
+  // trustworthy consensus signal to gate on — run the rebuttal exactly as the
+  // status quo instead of skipping because isAnalystSplit([]) is false.
+  if (parsedAnalysts.length < 2) return false;
   return !isAnalystSplit(parsedAnalysts);
 }
 
@@ -887,9 +890,15 @@ function isStructuredAnalystStep(stepType: string): boolean {
 
 function hasStructuredContract(stepType: string, text: string): boolean {
   if (stepType.startsWith("analyst_")) {
+    // The conviction range check must match extractConviction's 1-10
+    // contract: parseAnalystOutput silently defaults out-of-range values to
+    // 5, so accepting them here would record a fabricated conviction.
+    const conviction = text.match(/CONVICTION:\s*(\d+)/i);
+    const convictionInRange =
+      conviction !== null && Number(conviction[1]) >= 1 && Number(conviction[1]) <= 10;
     return (
       /SIGNAL:\s*(BUY|HOLD|SELL)/i.test(text) &&
-      /CONVICTION:\s*(\d+)/i.test(text) &&
+      convictionInRange &&
       /THESIS:\s*(.+)/i.test(text)
     );
   }
@@ -914,7 +923,6 @@ function attachStructuredOutput(pi: ExtensionAPI, output: ReturnType<typeof prom
   if (!isStructuredAnalystStep(output.stepType)) return output;
 
   const rawText = output.rawText ?? "";
-  if (rawText.length === 0) return output;
   const evidence = summarizeStepEvidence(output.evidence);
   const evidenceCount = output.evidence.length;
   if (!hasStructuredContract(output.stepType, rawText)) {
