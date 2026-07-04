@@ -584,6 +584,43 @@ describe("competitive finance benchmarking", () => {
     expect(findCachedCompetitorAnswer(cache, "Different prompt.", "claude")).toBeNull();
   });
 
+  // A crashed baseline records a failure-placeholder answer with `error`
+  // set; reusing it from cache would freeze the failure into every later
+  // run instead of retrying the baseline live (or skipping it honestly at
+  // preflight).
+  it("does not reuse failed baseline answers from the cache", () => {
+    const cache = [
+      {
+        path: "/repo/tests/evals/runs/old_competitive-finance.json",
+        report: {
+          results: [
+            {
+              prompt: {
+                id: "macro",
+                prompt: "Evaluate a 60/40 portfolio.",
+                topic: "macro",
+                complexity: "complex",
+                evaluationFocus: "Original neutral focus.",
+              },
+              competitorAnswers: [
+                {
+                  id: "claude",
+                  label: "Claude",
+                  provider: "acpx/claude",
+                  model: "subscription",
+                  answer: "Claude baseline failed before answering: monthly spend limit",
+                  error: "monthly spend limit",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    expect(findCachedCompetitorAnswer(cache, "Evaluate a 60/40 portfolio.", "claude")).toBeNull();
+  });
+
   it("finds cached prompt metadata so reruns keep the original judge focus", () => {
     const cache = [
       {

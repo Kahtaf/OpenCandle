@@ -440,7 +440,11 @@ export function findCachedCompetitorAnswer(
       const prompt = promptFromResult(result);
       if (prompt?.prompt !== promptText) continue;
       const answers = competitorAnswersFromResult(result);
-      const answer = answers.find((candidate) => candidate.id === competitorId);
+      // Failed baselines record a failure-placeholder answer with `error`
+      // set; only clean answers are reusable — a crashed baseline must be
+      // retried live (or skipped at preflight) on later runs, not frozen
+      // into the cache.
+      const answer = answers.find((candidate) => candidate.id === competitorId && !candidate.error);
       if (!answer) continue;
       return {
         ...answer,
