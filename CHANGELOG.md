@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added opt-in E5 ask-instead-of-guess product evals for ambiguous calls/bank prompts and resolvable prior-turn twins, with committed live findings for current over-guessing and over-asking behavior.
 - Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
 
 ### Changed

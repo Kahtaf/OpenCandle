@@ -314,6 +314,99 @@ describe("product eval scoring", () => {
     );
   });
 
+  it("scores E5 ambiguous cases with exactly one focused ask_user and no guessed symbol", () => {
+    const ambiguousCallsCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "ask-vs-guess-ambiguous-sell-my-calls",
+    );
+    if (!ambiguousCallsCase) throw new Error("missing E5 ambiguous calls eval case");
+
+    const result = scoreProductEvalCase(
+      ambiguousCallsCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "options_screener",
+          entities: { symbols: [] },
+        },
+        askUserTranscript: [
+          { question: "Which call position do you mean: NVDA or AMD?", answer: "the NVDA calls" },
+        ],
+        text: "Which call position should I evaluate? Selling calls can lock in gains but carries timing risk.",
+      }),
+    );
+
+    expect(
+      result.dimensions.find((dimension) => dimension.id === "ask_instead_of_guess"),
+    ).toMatchObject({
+      passed: true,
+    });
+    expect(
+      result.dimensions.find((dimension) => dimension.id === "ambiguous_calls_no_guess"),
+    ).toMatchObject({ passed: true });
+  });
+
+  it("fails E5 ambiguous cases when the agent over-asks or guesses a seeded option symbol", () => {
+    const ambiguousCallsCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "ask-vs-guess-ambiguous-sell-my-calls",
+    );
+    if (!ambiguousCallsCase) throw new Error("missing E5 ambiguous calls eval case");
+
+    const result = scoreProductEvalCase(
+      ambiguousCallsCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+        },
+        askUserTranscript: [
+          { question: "Which calls?", answer: "NVDA" },
+          { question: "What expiry?", answer: "January" },
+        ],
+        toolCalls: [{ name: "get_option_chain", args: { symbol: "NVDA" } }],
+        text: "I will assume you meant NVDA calls.",
+      }),
+    );
+
+    expect(
+      result.dimensions.find((dimension) => dimension.id === "ask_instead_of_guess"),
+    ).toMatchObject({ passed: false });
+    expect(
+      result.dimensions.find((dimension) => dimension.id === "ambiguous_calls_no_guess"),
+    ).toMatchObject({ passed: false });
+  });
+
+  it("scores E5 resolvable twins with zero ask_user and correct prior-turn symbol resolution", () => {
+    const resolvableBanksCase = PRODUCT_EVAL_CASES.find(
+      (evalCase) => evalCase.id === "ask-vs-guess-prior-turn-compare-the-banks",
+    );
+    if (!resolvableBanksCase) throw new Error("missing E5 resolvable banks eval case");
+
+    const result = scoreProductEvalCase(
+      resolvableBanksCase,
+      makeTrace({
+        classification: {
+          ...makeTrace().classification,
+          workflow: "compare_assets",
+          entities: { symbols: ["JPM", "BAC"] },
+        },
+        askUserTranscript: [],
+        toolCalls: [
+          { name: "get_stock_quote", args: { symbol: "JPM" } },
+          { name: "get_stock_quote", args: { symbol: "BAC" } },
+        ],
+        text: "Compare JPM and BAC directly. Both carry rate, credit, deposit beta, and recession downside risks.",
+      }),
+    );
+
+    expect(
+      result.dimensions.find((dimension) => dimension.id === "no_unneeded_clarification"),
+    ).toMatchObject({ passed: true });
+    expect(
+      result.dimensions.find((dimension) => dimension.id === "prior_turn_banks_resolution"),
+    ).toMatchObject({ passed: true });
+  });
+
   it("maps failed product eval reports to a failing process exit code", () => {
     expect(productEvalExitCode({ failed: 0 })).toBe(0);
     expect(productEvalExitCode({ failed: 1 })).toBe(1);
@@ -346,5 +439,27 @@ describe("product eval cases", () => {
     );
     expect(compareCases.map((evalCase) => evalCase.prompt).join("\n")).toMatch(/AAPL|SPY|BTC/i);
     expect(compareCases.map((evalCase) => evalCase.prompt).join("\n")).toMatch(/MSFT|QQQ|GLD/i);
+  });
+
+  it("defines E5 ask-vs-guess cases as paired ambiguous and resolvable twins", () => {
+    const e5Cases = PRODUCT_EVAL_CASES.filter((evalCase) =>
+      evalCase.id.startsWith("ask-vs-guess-"),
+    );
+
+    expect(e5Cases.map((evalCase) => evalCase.id).sort()).toEqual([
+      "ask-vs-guess-ambiguous-compare-the-banks",
+      "ask-vs-guess-ambiguous-sell-my-calls",
+      "ask-vs-guess-prior-turn-compare-the-banks",
+      "ask-vs-guess-prior-turn-sell-my-calls",
+    ]);
+    expect(e5Cases.every((evalCase) => evalCase.tier === "opt-in")).toBe(true);
+    expect(
+      e5Cases.filter((evalCase) => evalCase.prompts && evalCase.prompts.length > 1),
+    ).toHaveLength(2);
+    expect(
+      e5Cases.filter(
+        (evalCase) => evalCase.setup?.marketStateFixture === "e5_two_option_positions",
+      ),
+    ).toHaveLength(2);
   });
 });
