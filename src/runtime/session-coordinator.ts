@@ -38,6 +38,7 @@ import {
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
+import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
@@ -754,59 +755,6 @@ function collectValidationInput(run: WorkflowRun | null): {
   }
 
   return { evidence, toolResults, skippedUnparsed };
-}
-
-function collectToolNumbers(record: EvidenceRecord, toolResults: Map<string, number>): void {
-  if (!isPlainObject(record.value)) return;
-  const tool = typeof record.value.tool === "string" ? record.value.tool : undefined;
-  const digest = isPlainObject(record.value.resultDigest) ? record.value.resultDigest : undefined;
-  const preview = typeof digest?.preview === "string" ? digest.preview : undefined;
-  if (!tool || !preview) return;
-  const parsed = parseMaybeJson(preview);
-  if (!parsed) return;
-  for (const [path, value] of flattenNumericValues(parsed)) {
-    toolResults.set(`${tool}.${path}`, value);
-  }
-}
-
-function extractNumericClaims(text: string, toolResults: Map<string, number>): EvidenceRecord[] {
-  const records: EvidenceRecord[] = [];
-  const lower = text.toLowerCase();
-  for (const [label] of toolResults) {
-    const metric = label.split(".").at(-1);
-    if (!metric || !lower.includes(metric.toLowerCase())) continue;
-    const pattern = new RegExp(`${escapeRegex(metric)}[^\\d-]*(-?\\d+(?:\\.\\d+)?)`, "i");
-    const match = text.match(pattern);
-    if (!match) continue;
-    const value = Number(match[1]);
-    if (!Number.isFinite(value)) continue;
-    records.push({
-      label,
-      value,
-      provenance: { source: "computed" },
-    });
-  }
-  return records;
-}
-
-function flattenNumericValues(
-  value: Record<string, unknown>,
-  prefix = "",
-): Array<[string, number]> {
-  const values: Array<[string, number]> = [];
-  for (const [key, item] of Object.entries(value)) {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (typeof item === "number" && Number.isFinite(item)) {
-      values.push([path, item]);
-    } else if (isPlainObject(item)) {
-      values.push(...flattenNumericValues(item, path));
-    }
-  }
-  return values;
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function toolEvidenceRecord(input: {
