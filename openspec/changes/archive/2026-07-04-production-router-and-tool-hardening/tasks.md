@@ -1,8 +1,8 @@
 ## 1. Establish LLM router baseline (gating evidence)
 
-- [ ] 1.1 Run `npm run eval:router-live` with `ANTHROPIC_API_KEY` present against the current 26-fixture suite. Record per-fixture pass/fail, latency p50/p95, and total cost. Save the run output to `tests/fixtures/router/eval-baselines/<date>.txt`. Note: local runs without `ANTHROPIC_API_KEY` are inadmissible and require keeping or reverting the default to `rules`.
-- [ ] 1.2 For each failing fixture from 1.1, classify: (a) router defect — open a sub-task to fix; (b) fixture defect — record the corrected expected output with rationale in a PR comment; (c) accepted known-failure — document in `BASELINE.json` with reason. The acceptance gate (≥90% pass) is computed after this triage.
-- [ ] 1.3 Decide per-prompt: is 1500 ms p95 achievable on `claude-haiku-4-5`? If not, document in design.md "Risks / Trade-offs" and either widen the budget or pick a faster model.
+- [ ] 1.1 [superseded by the product-audit-downscope classified-evidence gate — see design addendum] Run `npm run eval:router-live` with `ANTHROPIC_API_KEY` present against the current 26-fixture suite. Record per-fixture pass/fail, latency p50/p95, and total cost. Save the run output to `tests/fixtures/router/eval-baselines/<date>.txt`. Note: local runs without `ANTHROPIC_API_KEY` are inadmissible and require keeping or reverting the default to `rules`.
+- [ ] 1.2 [superseded by the product-audit-downscope classified-evidence gate — see design addendum] For each failing fixture from 1.1, classify: (a) router defect — open a sub-task to fix; (b) fixture defect — record the corrected expected output with rationale in a PR comment; (c) accepted known-failure — document in `BASELINE.json` with reason. The acceptance gate (≥90% pass) is computed after this triage.
+- [ ] 1.3 [superseded by the product-audit-downscope classified-evidence gate — see design addendum] Decide per-prompt: is 1500 ms p95 achievable on `claude-haiku-4-5`? If not, document in design.md "Risks / Trade-offs" and either widen the budget or pick a faster model.
 
 ## 2. Acronym disambiguation post-filter
 
@@ -64,6 +64,8 @@
 - [x] 7.4 Update `CHANGELOG.md` (Unreleased): one-line entry crediting the verified LLM-router default and the silent-zero/disambiguation safety nets, or noting that the default was reverted if the gate failed.
 
 ## 8. Live verification (real-runtime, gating per CLAUDE.md §5)
+
+Note 2026-07-03: the `/tmp/.../trace.json` runtime evidence paths below were ephemeral; durable equivalents are the unit/fixture suites covering IV-drop (`tests/unit/routing/symbol-disambiguator.test.ts`), zero-quote invalid-symbol handling (`tests/unit/providers/yahoo-finance.test.ts`), and preflight behavior (`tests/unit/prompts/symbol-preflight.test.ts`, plus dispatch coverage in `tests/unit/pi/opencandle-extension.test.ts`).
 
 - [x] 8.1 Start the dev agent locally with default config. Run the IV-as-vol scenario from the original session. Confirm: (a) "Compare these assets: IV, ASTS" results in IV being dropped with an annotated `customEntries` entry; (b) `get_stock_quote("IV")` returns "⚠ Stock quote unavailable" if IV reaches the quote tool; (c) the agent does not produce a comparison verdict against `$0.00`. Evidence: `/tmp/oc-hardening-iv-jMxjB0/trace.json` and `/tmp/oc-hardening-cashtag2-h1h7Or/trace.json`.
 - [x] 8.2 Run positive-control scenarios: "compare $IV with $TICK" and "compare KO, the IV ticker, and PEP". Confirm IV survives the disambiguator and is treated as a ticker. Evidence: `/tmp/oc-hardening-compare-cashtag-TdPXig/trace.json` and `/tmp/oc-hardening-positive-ZEG5YB/trace.json` show IV entered workflow symbols before resolver preflight dropped it as an unavailable ticker; `/tmp/oc-hardening-cashtag2-h1h7Or/trace.json` shows `$IV` reached `get_stock_quote`.
