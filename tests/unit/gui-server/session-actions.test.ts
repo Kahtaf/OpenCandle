@@ -175,6 +175,84 @@ describe("GUI session actions", () => {
     expect(answer).toHaveBeenCalledOnce();
   });
 
+  it("requires coordinated ask_user answers to name their target session", async () => {
+    const answer = vi.fn(() => true);
+    const sessionManager = {
+      getSessionId: () => "session-1",
+    } as unknown as SessionManager;
+    const controller = createSessionActionsController({
+      role: "writer",
+      cwd: "/tmp",
+      sessionDir: "/tmp/sessions",
+      getSession: () => ({}) as AgentSession,
+      getSessionManager: () => sessionManager,
+      getModelSetupState: () => ({
+        requirement: "ready",
+        providers: [],
+        availableModels: [],
+      }),
+      askUserBridge: { answer, cancel: () => true },
+      runtime: {
+        newSession: async () => ({ cancelled: false }),
+        switchSession: async () => ({ cancelled: false }),
+      },
+      sendBoot: vi.fn(),
+      broadcastState: vi.fn(),
+      broadcastSessions: vi.fn(),
+      localSessionCoordinator: createLocalSessionCoordinator(),
+    });
+
+    await expect(
+      controller.handleAskUserAnswer("ask-1", "Yes", {
+        actionId: "ask-action-1",
+        source: "browser",
+      }),
+    ).rejects.toThrow("sessionId is required");
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it("rejects ask_user actions for unknown non-current sessions instead of falling back", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const answer = vi.fn();
+      const controller = createSessionActionsController({
+        role: "writer",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => currentManager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer, cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await expect(
+        controller.handleAskUserAnswer("ask-1", "Yes", {
+          actionId: "ask-action-1",
+          sessionId: "missing-session",
+          source: "browser",
+        }),
+      ).rejects.toThrow("Unknown saved session");
+      expect(answer).not.toHaveBeenCalled();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
+  });
+
   it("proxies ask_user answers from non-owner GUI windows", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
