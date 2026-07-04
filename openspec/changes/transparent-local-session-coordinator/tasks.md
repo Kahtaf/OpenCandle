@@ -24,7 +24,6 @@
 - [x] 3.1 Define a session action envelope with `sessionId`, `actionId`, action type, payload, and source surface.
 - [x] 3.2 Add action-id dedupe tests for session prompts, direct tool invocation, run controls, and `ask_user` answers/cancels.
 - [x] 3.3 Implement coordinator-side dedupe for accepted session action IDs with retention at least as long as the retry/recovery horizon selected in implementation.
-- [ ] 3.4 Persist action IDs in transcript metadata, a durable per-session action store, or an equivalent tested mechanism before enabling automatic retry across owner recovery.
 - [x] 3.5 Update GUI write call sites to reuse action IDs only for retries of the same user action and mint fresh IDs for intentional repeats.
 - [x] 3.6 Update TUI chat write call sites to use the same action envelope after GUI proxying is stable.
 - [x] 3.7 Return a neutral busy/retry state for a second prompt submitted while a session run is active, rather than silently queueing or starting a competing run.
@@ -43,7 +42,7 @@
 
 - [x] 5.1 Add GUI browser regression coverage for two browser tabs submitting through one coordinator without exposing writer/follower wording.
 - [x] 5.2 Add TUI coordinator listener or chosen IPC support so a GUI Browser client can forward supported session actions to a TUI-owned session.
-- [ ] 5.3 Add TUI transcript subscription, polling, or tailing so a non-owner TUI can render session updates accepted by a GUI owner.
+- [ ] 5.3 Add full TUI transcript subscription, polling, or tailing so a non-owner TUI can render session updates accepted by a GUI owner outside the v1 interactive follower proxy. Note 2026-07-03: v1 supports an interactive TTY follower proxy that forwards prompts to a GUI owner and polls the persisted session file; broader live-following remains deferred.
 - [ ] 5.4 Add a scripted TUI plus GUI smoke that opens the same session in TUI and in the GUI Browser, sends a message from each supported topology, and verifies both surfaces converge on the same transcript.
 - [x] 5.5 Add a multi-agent/client smoke where two automated GUI clients submit messages and the coordinator serializes admitted actions into one canonical transcript while returning busy/retry for non-admissible concurrent prompts.
 - [x] 5.6 Add stale-owner recovery verification where one owner process exits, another recovers, and the old dead-owner lock does not block the new surface.
@@ -56,11 +55,11 @@
 - [x] 6.1 Run `npm test`.
 - [x] 6.2 Run `npx tsc --noEmit`.
 - [x] 6.3 Run targeted GUI browser tests with the Browser-visible GUI session.
-- [ ] 6.4 Run the TUI plus GUI Browser smoke from task 5.4 before marking implementation complete.
+- [ ] 6.4 Run the TUI plus GUI Browser smoke from task 5.4 before marking implementation complete. Verification owned by WP7 of docs/internal/openspec-backlog-cleanup-plan.md; this change must not be archived until WP7 lands.
 - [x] 6.5 Update `CHANGELOG.md` under `[Unreleased]`.
 - [x] 6.6 Run `graphify update .` after implementation changes.
 
 ## Deferred Follow-Up
 
-- [ ] Persist accepted action IDs across coordinator owner recovery before enabling automatic replay of actions with unknown acceptance status.
+- [ ] 3.4 decision, recorded 2026-07-03: automatic retry across owner recovery stays disabled in v1. Persist accepted action IDs across coordinator owner recovery only if automatic replay of actions with unknown acceptance status is intentionally enabled later.
 - [ ] Add full non-owner TUI transcript tailing for GUI-owned sessions; this implementation verifies TUI-owned forwarding and harness execution, but the TUI still needs a dedicated read-only/live-following mode.

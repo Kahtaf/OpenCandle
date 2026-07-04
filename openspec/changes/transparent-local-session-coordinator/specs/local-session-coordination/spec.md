@@ -34,7 +34,7 @@ OpenCandle SHALL evaluate local ownership per target session and SHALL NOT recov
 #### Scenario: Owner process is gone
 - **WHEN** the recorded owner process identity is no longer alive or the owner is otherwise definitively abandoned
 - **THEN** OpenCandle may recover ownership for that target session
-- **AND** retries the pending session action once under the recovered owner
+- **AND** the original surface receives a retryable syncing or reconnecting result instead of automatically replaying an action whose acceptance status is unknown
 
 #### Scenario: Owner PID is reused or abandonment is ambiguous
 - **WHEN** OpenCandle cannot prove the recorded owner process identity is the original live owner or a definitively abandoned owner
@@ -103,10 +103,11 @@ OpenCandle SHALL attach stable action identifiers to supported session mutating 
 - **THEN** the coordinator applies it at most once for that session
 - **AND** returns or broadcasts the accepted result for that action
 
-#### Scenario: Accepted action may be retried after owner recovery
+#### Scenario: Accepted action is not automatically retried after owner recovery
 - **WHEN** a dead-owner recovery may retry an action whose prior acceptance status is unknown
-- **THEN** OpenCandle uses transcript metadata, durable per-session action records, or an equivalent tested mechanism to avoid duplicating an already accepted action
-- **AND** it does not automatically retry the action if duplicate prevention cannot be guaranteed
+- **THEN** OpenCandle surfaces a retryable error to the non-owner surface
+- **AND** it does not automatically retry the action across owner recovery in v1
+- **AND** durable action-id persistence remains deferred until automatic retry across owner recovery is intentionally enabled
 
 #### Scenario: User intentionally repeats an action
 - **WHEN** the user deliberately submits the same prompt text again as a new action
@@ -139,10 +140,12 @@ OpenCandle SHALL describe coordination failures and recovery using user-facing c
 ### Requirement: Cross-Surface Verification Contract
 OpenCandle SHALL verify transparent local coordination with real GUI and TUI surfaces, including Browser-driven GUI checks and multiple clients submitting messages.
 
-#### Scenario: GUI and TUI stay synchronized
-- **WHEN** a TUI session and GUI browser view are open for the same local session
-- **THEN** messages submitted from either surface appear in the other surface after synchronization
-- **AND** neither surface exposes writer/follower terminology during the successful flow
+#### Scenario: GUI and TUI use the supported v1 topology
+- **WHEN** a TUI-owned session and GUI browser view target the same local session
+- **THEN** the GUI can forward supported session actions through the TUI owner endpoint and observe the accepted transcript update after synchronization
+- **AND** when a GUI-owned persisted session is joined from an interactive TUI with coordinator metadata, the TUI can forward prompts through the GUI owner and poll the session file for transcript updates
+- **AND** a non-interactive non-owner TUI reports neutral syncing language instead of silently tailing or writing directly
+- **AND** neither surface exposes writer/follower terminology during the supported successful flow
 
 #### Scenario: TUI owns the session coordinator
 - **WHEN** a TUI owns the target session and a GUI Browser client submits a supported session action
@@ -150,9 +153,10 @@ OpenCandle SHALL verify transparent local coordination with real GUI and TUI sur
 - **AND** the GUI observes the accepted transcript update after synchronization
 
 #### Scenario: GUI owns the session coordinator
-- **WHEN** the GUI owns the target session and the TUI is also viewing that session
-- **THEN** the TUI receives, tails, polls, or otherwise renders transcript updates accepted by the GUI owner
-- **AND** the TUI does not require a separate competing writer to stay in sync
+- **WHEN** the GUI owns the target persisted session and an interactive TUI opens the same session while coordinator metadata is available
+- **THEN** the TUI forwards prompts to the GUI owner rather than acquiring a competing writer lock
+- **AND** the TUI polls the persisted session file for new transcript entries
+- **AND** broader live TUI tailing outside this interactive follower proxy remains deferred
 
 #### Scenario: Multiple agents submit through GUI clients
 - **WHEN** two automated agents or browser clients submit messages through local GUI clients for the same session

@@ -74,7 +74,7 @@ Alternative considered: keep one process-wide role and hide it with copy changes
 
 TUI participation is not just a UI copy change. If a TUI owns a session and a GUI wants to write to that session, the TUI process must expose a local coordinator listener or Pi-native IPC endpoint that can accept authenticated forwarded session actions. If the TUI is a non-owner surface, it must subscribe to, poll, or otherwise tail the same session transcript so writes accepted by the GUI owner become visible in the TUI.
 
-The initial implementation uses authenticated loopback HTTP for GUI-owned coordinator forwarding: writer lock metadata publishes the owner endpoint and a local coordinator capability, non-owner GUI servers forward supported session actions to that endpoint, and the owner rejects calls that do not include the capability. The transport still must support both GUI-owned and TUI-owned topologies before the TUI+GUI verification task can pass. If the implementation cannot provide live TUI transcript updates in the first slice, the proposal must narrow the TUI verification to the concrete topology that is actually supported.
+The initial implementation uses authenticated loopback HTTP for GUI-owned and TUI-owned coordinator forwarding: writer lock metadata publishes the owner endpoint and a local coordinator capability, non-owner surfaces forward supported session actions to that endpoint, and the owner rejects calls that do not include the capability. TUI-owned sessions expose a loopback `/api/local-coordinator/chat-run` endpoint. GUI-owned sessions can be joined by an interactive TUI only when the writer lock includes coordinator metadata and stdin is a TTY; that follower proxy forwards prompts through the owner and polls the persisted session file for transcript updates. Non-interactive non-owner TUI runs fail closed with neutral syncing language. The full TUI+GUI verification task remains open until WP7 validates this concrete topology.
 
 Alternative considered: verify only GUI-to-GUI coordination and leave TUI to manual use. Rejected because the user-facing problem includes local TUI/GUI overlap.
 
@@ -156,5 +156,9 @@ Rollback is straightforward while the existing lock remains intact: disable prox
 
 ## Open Questions
 
-- What heartbeat interval, stale grace, and action dedupe retention values fit OpenCandle's longest local runs while still recovering crashed owners quickly?
 - Does Pi expose any enforceable stream-write/run-continuation hook that could support stronger fencing in a future change?
+
+## Resolution of Open Questions
+
+- **Heartbeat, stale grace, and action dedupe retention:** resolved as implemented. Writer lock stale grace is `DEFAULT_STALE_GRACE_MS = 15_000` in `src/pi/session-writer-lock.ts`. GUI and TUI writer-lock heartbeats refresh every 5,000 ms during active ownership and transient acquired locks. Coordinator accepted-action dedupe retention is 10 minutes (`DEFAULT_DEDUPE_RETENTION_MS = 10 * 60 * 1000` in `gui/server/local-session-coordinator.ts`, mirrored by the TUI coordinator). The invariant is that dedupe retention must be greater than or equal to the retry/recovery horizon. Because automatic retry across owner recovery remains disabled in v1, the current 10-minute retention is sufficient for in-owner reconnect/proxy retries and same-owner duplicate suppression.
+- **Future fencing hook:** unresolved for a future change. No stronger Pi stream-write fencing is claimed by this change.
