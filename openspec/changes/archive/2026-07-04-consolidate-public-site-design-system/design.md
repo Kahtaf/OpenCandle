@@ -143,3 +143,9 @@ Rollback strategy:
 
 - Should the static site ship any client-side hydration for interactive mobile navigation, or keep navigation fully CSS/HTML?
 - Should syntax highlighting be added in the first implementation slice or deferred until after parser migration parity?
+
+## Resolution of open questions
+
+- Mobile navigation shipped as prerendered drawer markup plus a small `website/src/entry-client.jsx` enhancement script that toggles the drawer, focus, overlay close, and Escape close behavior. The site does not hydrate a React nav drawer, and docs content/navigation links remain present in the generated HTML.
+- Shiki was deferred from the first slice and remains deferred; no active OpenSpec change currently tracks static syntax highlighting.
+- The old `website/build.mjs` markdown pipeline was removed. Searches under `website/` found no remaining `stripFrontmatter`, `inlineMarkdown`, or `renderTable` helpers.

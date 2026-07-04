@@ -39,6 +39,8 @@ The router SHALL receive the last 5 user/assistant turns of conversation history
 - **WHEN** an assistant message entry contains only tool-call content blocks and no text block
 - **THEN** that entry contributes nothing to `priorTurns` (it is dropped by the empty-text filter), and the neighboring text-bearing turns retain their positions in the window
 
+## ADDED Requirements
+
 ### Requirement: Prior-Turn Shape
 
 Each prior-turn entry SHALL be a `{ role: "user" | "assistant", text: string }` object. The `text` field SHALL contain the concatenated text content of the message. The router prompt renderer SHALL clip each turn's text to a fixed character limit and strip newlines to bound prompt growth. Assistant tool-call summaries SHALL NOT be included in v1.
