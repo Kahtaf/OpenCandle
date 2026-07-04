@@ -1,0 +1,69 @@
+{
+  "input": "should I sell calls against my AMD shares for the next 1-2 weeks?",
+  "priorTurns": [],
+  "profileSnapshot": {
+    "portfolio_positions": [
+      {
+        "symbol": "AMD",
+        "quantity": 100
+      }
+    ]
+  },
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "options_screener",
+    "entities": {
+      "symbols": [
+        "AMD"
+      ],
+      "heldSymbol": "AMD",
+      "shareQuantity": 100,
+      "dteHint": "1-2 weeks",
+      "optionStrategy": "covered_call",
+      "direction": "bullish"
+    },
+    "slots": {
+      "symbol": {
+        "value": "AMD",
+        "source": "user",
+        "confidence": "high"
+      },
+      "strategy": {
+        "value": "covered_call",
+        "source": "user",
+        "confidence": "high"
+      },
+      "time_horizon": {
+        "value": "1-2 weeks",
+        "source": "user",
+        "confidence": "high"
+      },
+      "dte_target": {
+        "value": "7_to_14_days",
+        "source": "user",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "options",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "dte_slot_filled_from_extraction",
+        "message": "dte_target slot filled from deterministic horizon extraction"
+      }
+    ],
+    "reasoning": "covered-call language against owned AMD shares should route to options_screener while preserving the 1-2 week DTE phrase"
+  },
+  "tags": [
+    "misclassification-recovery",
+    "options-position",
+    "dte-preservation"
+  ]
+}

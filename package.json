@@ -105,6 +105,7 @@
     "test:e2e:credential-soft-fallback": "tsx tests/e2e/credential-soft-fallback.test.ts",
     "test:e2e:credential-per-workflow-cap": "tsx tests/e2e/credential-per-workflow-cap.test.ts",
     "test:gui:browser": "OPENCANDLE_GUI_BROWSER=1 vitest run --config vitest.config.gui.ts",
+    "test:gui:release-smoke": "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --config vitest.config.gui-release.ts",
     "test:e2e:providers": "tsx tests/e2e/providers.test.ts",
     "test:e2e:harness-dcf": "tsx tests/e2e/harness-dcf.test.ts",
     "test:evals": "vitest run --config vitest.config.evals.ts",
@@ -112,6 +113,7 @@
     "test:evals:usually": "EVAL_TIER=usually vitest run --config vitest.config.evals.ts",
     "test:evals:product": "tsx tests/scripts/run-product-evals.ts",
     "test:evals:competitive": "tsx tests/scripts/run-competitive-finance-eval.ts",
+    "test:evals:competitive:frozen": "OPENCANDLE_COMPETITIVE_PANEL=frozen tsx tests/scripts/run-competitive-finance-eval.ts",
     "test:packed-install": "node scripts/packed-install-smoke.mjs",
     "eval:competitive:analyze": "tsx tests/scripts/analyze-competitive-finance-report.ts",
     "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx biome ci . && npx vitest run\"",
@@ -122,7 +124,7 @@
     "version:set": "npm version",
     "prepublishOnly": "npm run release:check",
     "publish:dry": "npm run release:check && npm publish --access public --dry-run",
-    "release:check": "npx tsc --noEmit && npx biome ci . && npm test && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
+    "release:check": "npx tsc --noEmit && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major"
@@ -153,7 +155,6 @@
     "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
-    "vitest": "^4.1.9",
-    "vitest-evals": "^0.14.0"
+    "vitest": "^4.1.9"
   }
 }

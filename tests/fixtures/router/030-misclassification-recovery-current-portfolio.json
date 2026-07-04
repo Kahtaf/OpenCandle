@@ -1,0 +1,51 @@
+{
+  "input": "does my current portfolio look too exposed if rates stay high?",
+  "priorTurns": [],
+  "profileSnapshot": {
+    "risk_profile": "moderate",
+    "saved_portfolio_symbols": [
+      "SPY",
+      "TLT",
+      "AMD"
+    ]
+  },
+  "expectedRouterOutput": {
+    "routeKind": "agent_task",
+    "route": "fallback",
+    "workflow": "general_finance_qa",
+    "entities": {
+      "symbols": [
+        "SPY",
+        "TLT",
+        "AMD"
+      ],
+      "compareMetrics": [
+        "interest_rates"
+      ],
+      "riskProfile": "moderate"
+    },
+    "slots": {
+      "risk_profile": {
+        "value": "moderate",
+        "source": "preference",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "asks for a review of an existing current portfolio under a rates scenario, not construction of a new portfolio"
+  },
+  "tags": [
+    "misclassification-recovery",
+    "portfolio-review-not-builder",
+    "saved-state"
+  ]
+}

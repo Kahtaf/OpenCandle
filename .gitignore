@@ -13,3 +13,6 @@ website/dist/
 validation-output/
 dogfood-output/
 design-inspo/
+
+# PR runtime evidence stays machine-local; durable decision records go in docs/internal/ as markdown
+docs/internal/pr-evidence/

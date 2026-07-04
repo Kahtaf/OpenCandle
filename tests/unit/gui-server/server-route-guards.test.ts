@@ -55,13 +55,19 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain(guard);
   });
 
-  it("requires trusted GUI requests before starting chat runs", () => {
-    const routeBlock = routeBlockBefore(
-      'url.pathname === "/api/chat/run"',
-      "await handleSseChatRun(req, res, options, activeRunSessionIds);",
+  it("returns 410 for the legacy active-session chat run route", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/chat/run"');
+    const routeEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/chat-run"',
+      routeStart,
     );
+    const routeBlock = source.slice(routeStart, routeEnd);
 
     expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');
+    expect(routeBlock).toContain("writeJson(");
+    expect(routeBlock).toContain("410");
+    expect(routeBlock).not.toContain("handleSseChatRun");
   });
 
   it("requires trusted GUI requests before session-addressed bootstrap", () => {
@@ -82,6 +88,16 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Chat run API", options)');
   });
 
+  it("requires session-addressed chat runs to carry a client action id", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('sessionIdFromRoute(url.pathname, "runs")');
+    const routeEnd = source.indexOf("serveStaticAsset", routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("requireSessionActionFields");
+    expect(sessionActionFieldHelperSource()).toContain('"actionId is required"');
+  });
+
   it("requires local coordinator authorization before accepting proxied chat runs", () => {
     const routeBlock = routeBlockBefore(
       'url.pathname === "/api/local-coordinator/chat-run"',
@@ -91,6 +107,20 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
   });
 
+  it("requires local coordinator chat runs to carry session and action ids", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/chat-run"');
+    const routeEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/tool-invoke"',
+      routeStart,
+    );
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("requireSessionActionFields");
+    expect(sessionActionFieldHelperSource()).toContain('"sessionId is required"');
+    expect(sessionActionFieldHelperSource()).toContain('"actionId is required"');
+  });
+
   it("requires local coordinator authorization before accepting proxied tool invokes", () => {
     const routeBlock = routeBlockBefore(
       'url.pathname === "/api/local-coordinator/tool-invoke"',
@@ -98,6 +128,20 @@ describe("GUI server route guards", () => {
     );
 
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
+  it("requires proxied tool invokes to carry session and action ids", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"');
+    const routeEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/ask-user"',
+      routeStart,
+    );
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("requireSessionActionFields");
+    expect(sessionActionFieldHelperSource()).toContain('"sessionId is required"');
+    expect(sessionActionFieldHelperSource()).toContain('"actionId is required"');
   });
 
   it("returns proxied tool results even when the tool result is an error", () => {
@@ -121,6 +165,35 @@ describe("GUI server route guards", () => {
     );
 
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
+  });
+
+  it("requires proxied ask_user actions to carry session and action ids", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/ask-user"');
+    const routeEnd = source.indexOf('sessionIdFromRoute(url.pathname, "runs")', routeStart);
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("requireSessionActionFields");
+    expect(sessionActionFieldHelperSource()).toContain('"sessionId is required"');
+    expect(sessionActionFieldHelperSource()).toContain('"actionId is required"');
+  });
+
+  it("keeps mutation routes from resolving the active session implicitly", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const legacyStart = source.indexOf('url.pathname === "/api/chat/run"');
+    const legacyEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/chat-run"',
+      legacyStart,
+    );
+    const legacyRoute = source.slice(legacyStart, legacyEnd);
+    const coordinatorStart = source.indexOf('url.pathname === "/api/local-coordinator/chat-run"');
+    const coordinatorEnd = source.indexOf("serveStaticAsset", coordinatorStart);
+    const mutationRoutes = source.slice(coordinatorStart, coordinatorEnd);
+
+    expect(legacyRoute).not.toContain("handleSseChatRun");
+    expect(mutationRoutes).not.toContain("requestedSessionId ? await resolveSessionManagerById");
+    expect(mutationRoutes).not.toContain("sessionId || safeSessionId");
+    expect(mutationRoutes).not.toContain("sessionId || getSessionManager");
   });
 
   it("authorizes coordinator calls with the coordinator secret instead of browser cookies", () => {
@@ -180,6 +253,48 @@ describe("GUI server route guards", () => {
     expect(lockSource).toContain("return isCoordinatorOwnerAlive(lock.pid)");
   });
 
+  it("keeps the model-setup gate on the session-addressed chat-run path", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const sseStart = source.indexOf("async function streamAcceptedSseChatRun");
+
+    // The legacy controller handlePrompt carried this gate; after its
+    // removal the SSE chat-run path is the only owner: a not-ready model
+    // must record the user message plus an opencandle-model-setup entry
+    // instead of prompting the model.
+    const sseBlock = source.slice(sseStart);
+    expect(sseBlock).toContain('modelSetup.requirement !== "ready"');
+    expect(sseBlock).toContain('appendCustomMessageEntry("opencandle-model-setup"');
+    const wsSource = readFileSync(resolve("gui/server/ws-hub.ts"), "utf-8");
+    expect(wsSource).not.toContain("handlePrompt");
+    expect(wsSource).toContain("Legacy active-session chat prompts are no longer supported");
+  });
+
+  it("keeps proxy forwarding reachable from the browser runs route but not the proxy target", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+
+    // Regression guard: proxy allowance was once inferred from
+    // `bodyOverride === undefined`, and when every caller began passing a
+    // body the cross-process forwarding path went silently dead — browsers
+    // got endless 409 "reconnecting" against sessions owned by another
+    // process. The browser-facing runs route must allow proxying; the
+    // local-coordinator endpoint (the proxy target) must not, or it loops.
+    expect(source).not.toContain("bodyOverride === undefined");
+    const runsRoute = source.slice(
+      source.indexOf('sessionIdFromRoute(url.pathname, "runs")'),
+      source.indexOf("serveStaticAsset(url.pathname, res, options)"),
+    );
+    expect(runsRoute).toContain(
+      "handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, true)",
+    );
+    const coordinatorRoute = source.slice(
+      source.indexOf('url.pathname === "/api/local-coordinator/chat-run"'),
+      source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"'),
+    );
+    expect(coordinatorRoute).toContain(
+      "handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, false)",
+    );
+  });
+
   it("broadcasts target session snapshots after proxied chat runs", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const proxyStart = source.indexOf("if (shouldProxyChatRun)");
@@ -202,6 +317,12 @@ describe("GUI server route guards", () => {
 
     expect(acceptedBlock).toContain("recordAcceptedSessionAction(runSessionManager, actionId)");
     expect(acceptedBlock).toContain("options.syncCurrentWriterLockScope?.()");
+  });
+
+  it("does not mint legacy chat action ids on the server", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+
+    expect(source).not.toContain("legacy-chat-");
   });
 
   it("refreshes GUI heartbeats against the migrated canonical session lock scope", () => {
@@ -298,4 +419,15 @@ function routeBlockBefore(route: string, handler: string): string {
   expect(handlerStart).toBeGreaterThan(routeStart);
 
   return source.slice(routeStart, handlerStart);
+}
+
+function sessionActionFieldHelperSource(): string {
+  const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+  const helperStart = source.indexOf("function requireSessionActionFields");
+  const helperEnd = source.indexOf("function shouldBlockFailedCoordinatorAction", helperStart);
+
+  expect(helperStart).toBeGreaterThan(-1);
+  expect(helperEnd).toBeGreaterThan(helperStart);
+
+  return source.slice(helperStart, helperEnd);
 }

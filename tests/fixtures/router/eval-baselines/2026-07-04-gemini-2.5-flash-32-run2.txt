@@ -1,0 +1,56 @@
+
+> opencandle@0.11.0 eval:router-live
+> tsx tests/scripts/run-live-router-eval.ts
+
+Running live router eval against 32 fixtures with model=gemini-2.5-flash...
+
+PASS 001-portfolio-builder-aggressive.json (2147ms)
+PASS 002-portfolio-builder-diversified.json (2076ms)
+PASS 003-options-screener-calls.json (2189ms)
+PASS 004-options-missing-symbol.json (2096ms)
+PASS 005-compare-assets.json (1990ms)
+PASS 006-fallback-entry-levels.json (1876ms)
+PASS 007-fallback-data-fetch.json (2043ms)
+PASS 008-single-asset-analysis.json (1811ms)
+PASS 009-general-qa.json (2613ms)
+PASS 010-preference-from-memory.json (1695ms)
+PASS 011-fallback-missing-symbol.json (2189ms)
+FAIL 012-preference-write-etf.json (1781ms)
+  .slots.asset_scope: expected "etf_focused", got undefined
+  .preference_updates.0: expected {"key":"asset_scope","value":"etf_focused","confidence":"high","source":"inferred"}, got undefined
+PASS 013-coreference-price.json (2271ms)
+PASS 014-carried-budget.json (1869ms)
+PASS 015-topic-shift.json (2110ms)
+PASS 016-ticker-correction.json (1839ms)
+PASS 017-pref-conflict.json (1615ms)
+FAIL 018-dollar-phrase.json (2099ms)
+  .entities.symbols.1: expected "SPY", got undefined
+PASS 019-iv-as-volatility.json (1879ms)
+PASS 020-sec-as-regulator.json (2073ms)
+PASS 021-fed-as-bank.json (1897ms)
+PASS 022-cpi-as-metric.json (1715ms)
+PASS 023-iv-with-positive-signal.json (1756ms)
+PASS 024-iv-bare-list-dropped.json (1915ms)
+PASS 025-iv-local-ticker-phrase.json (1593ms)
+PASS 026-pass-through-non-finance.json (1884ms)
+PASS 027-compare-prior-context.json (1808ms)
+PASS 028-general-qa-to-analysis-shift.json (1817ms)
+PASS 029-preference-echo-not-update.json (2012ms)
+FAIL 030-misclassification-recovery-current-portfolio.json (1738ms)
+  .entities.symbols.0: expected "SPY", got undefined
+  .entities.symbols.1: expected "TLT", got undefined
+  .entities.symbols.2: expected "AMD", got undefined
+  .entities.riskProfile: expected "moderate", got undefined
+  .slots.risk_profile: expected "moderate", got undefined
+  .tool_bundles.3: expected "sec", got undefined
+  .tool_bundles.4: expected "sentiment", got undefined
+FAIL 031-misclassification-recovery-options-position.json (1998ms)
+  .entities.shareQuantity: expected 100, got undefined
+  .entities.timeHorizon: expected undefined, got "short"
+  .slots.strategy: expected "covered_call", got undefined
+PASS 032-compare-recovery-from-company-names.json (2357ms)
+
+--- Summary ---
+pass: 28/32 (passRate=0.875)
+latency p50=1915ms p95=2357ms
+failures: 012-preference-write-etf.json, 018-dollar-phrase.json, 030-misclassification-recovery-current-portfolio.json, 031-misclassification-recovery-options-position.json

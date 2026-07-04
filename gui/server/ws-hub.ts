@@ -109,8 +109,11 @@ export function createWsHub({
     try {
       switch (data.type) {
         case "chat.prompt":
-          await sessionActionsController.handlePrompt(String(data.prompt ?? ""));
-          break;
+          // Legacy implicit-active-session mutation; parity with the HTTP
+          // route's 410. Chat runs go through the session-addressed API.
+          throw new Error(
+            "Legacy active-session chat prompts are no longer supported. Use the session-addressed chat-run API.",
+          );
         case "ask_user.answer":
           await sessionActionsController.handleAskUserAnswer(String(data.id ?? ""), data.answer, {
             actionId: String(data.actionId ?? ""),

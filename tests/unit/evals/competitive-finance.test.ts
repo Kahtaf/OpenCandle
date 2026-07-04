@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import {
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
@@ -12,20 +17,61 @@ import {
   competitivePreflightTimeoutMs,
   competitiveReportAnalysisPath,
   extractUsableAnswerFromCliFailure,
+  FROZEN_COMPETITIVE_PANEL,
   findCachedCompetitorAnswer,
   findCachedPromptMetadata,
   fixedPromptFromEnv,
   formatCompetitiveReportAnalysisMarkdown,
+  frozenCompetitivePanelFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../../evals/competitive-finance.js";
+import { seedOpenCandleHomeMarketState } from "../../evals/runner.js";
 import type { EvalTrace } from "../../evals/types.js";
 
 describe("competitive finance benchmarking", () => {
+  it("seeds the competitive saved-state fixture into a harness OPENCANDLE_HOME", () => {
+    const originalHome = process.env.OPENCANDLE_HOME;
+    const home = mkdtempSync(join(tmpdir(), "oc-competitive-state-"));
+    process.env.OPENCANDLE_HOME = home;
+
+    try {
+      seedOpenCandleHomeMarketState(COMPETITIVE_STATE_FIXTURE);
+
+      const db = initDefaultDatabase();
+      try {
+        const service = new MarketStateService(db);
+        expect(service.listPortfolioLots()).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ symbol: "SPY", quantity: 60, avgCost: 480 }),
+            expect.objectContaining({ symbol: "AAPL", quantity: 40, avgCost: 175 }),
+            expect.objectContaining({ symbol: "XLE", quantity: 100, avgCost: 85 }),
+          ]),
+        );
+        expect(service.listWatchlistItems()).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ symbol: "MSFT", targetPrice: 420 }),
+            expect.objectContaining({ symbol: "JPM", thesis: "rate-cycle beneficiary" }),
+          ]),
+        );
+      } finally {
+        db.close();
+      }
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.OPENCANDLE_HOME;
+      } else {
+        process.env.OPENCANDLE_HOME = originalHome;
+      }
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("generates broad finance prompts without assuming OpenCandle should win", () => {
     const prompt = buildPromptGenerationPrompt({
       count: 4,
@@ -463,6 +509,40 @@ describe("competitive finance benchmarking", () => {
     });
   });
 
+  it("defines a frozen competitive panel from historical loss classes", () => {
+    const manifest = JSON.parse(
+      readFileSync("docs/internal/prompt-to-policy-migration-manifest.json", "utf-8"),
+    ) as {
+      prompts: Array<{ id: string; expected: { finalAnswerHardAssertions?: string[] } }>;
+    };
+    const promptsById = new Map(manifest.prompts.map((prompt) => [prompt.id, prompt]));
+
+    expect(frozenCompetitivePanelFromEnv({})).toBeNull();
+    expect(frozenCompetitivePanelFromEnv({ OPENCANDLE_COMPETITIVE_PANEL: "frozen" })).toStrictEqual(
+      FROZEN_COMPETITIVE_PANEL,
+    );
+    expect(FROZEN_COMPETITIVE_PANEL).toHaveLength(5);
+    expect(FROZEN_COMPETITIVE_PANEL.map((prompt) => prompt.lossClass)).toEqual([
+      "portfolio-review-not-builder",
+      "1-2 weeks DTE preservation",
+      "protective-put-not-bullish-call",
+      "unknown-ticker-no-dead-end",
+      "hedge sizing with share count",
+    ]);
+    expect(new Set(FROZEN_COMPETITIVE_PANEL.map((prompt) => prompt.prompt)).size).toBe(5);
+    expect(
+      FROZEN_COMPETITIVE_PANEL.every((prompt) => prompt.promptPolicyManifestId.length > 0),
+    ).toBe(true);
+    for (const prompt of FROZEN_COMPETITIVE_PANEL) {
+      expect(
+        promptsById.get(prompt.promptPolicyManifestId)?.expected.finalAnswerHardAssertions,
+      ).toBeDefined();
+      expect(
+        promptsById.get(prompt.promptPolicyManifestId)?.expected.finalAnswerHardAssertions?.length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
   it("finds cached competitor answers by exact prompt text and competitor id", () => {
     const cache = [
       {
@@ -502,6 +582,43 @@ describe("competitive finance benchmarking", () => {
     });
     expect(findCachedCompetitorAnswer(cache, "Evaluate a 60/40 portfolio.", "codex")).toBeNull();
     expect(findCachedCompetitorAnswer(cache, "Different prompt.", "claude")).toBeNull();
+  });
+
+  // A crashed baseline records a failure-placeholder answer with `error`
+  // set; reusing it from cache would freeze the failure into every later
+  // run instead of retrying the baseline live (or skipping it honestly at
+  // preflight).
+  it("does not reuse failed baseline answers from the cache", () => {
+    const cache = [
+      {
+        path: "/repo/tests/evals/runs/old_competitive-finance.json",
+        report: {
+          results: [
+            {
+              prompt: {
+                id: "macro",
+                prompt: "Evaluate a 60/40 portfolio.",
+                topic: "macro",
+                complexity: "complex",
+                evaluationFocus: "Original neutral focus.",
+              },
+              competitorAnswers: [
+                {
+                  id: "claude",
+                  label: "Claude",
+                  provider: "acpx/claude",
+                  model: "subscription",
+                  answer: "Claude baseline failed before answering: monthly spend limit",
+                  error: "monthly spend limit",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ];
+
+    expect(findCachedCompetitorAnswer(cache, "Evaluate a 60/40 portfolio.", "claude")).toBeNull();
   });
 
   it("finds cached prompt metadata so reruns keep the original judge focus", () => {
@@ -667,7 +784,12 @@ describe("competitive finance benchmarking", () => {
   });
 
   it("uses the ACP-advertised Codex model id by default", () => {
-    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark[medium]");
+    // The current codex ACP agent advertises plain model ids
+    // (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark); the old
+    // reasoning-suffixed "gpt-5.3-codex-spark[medium]" id is rejected with
+    // "did not advertise that model", which made the codex baseline fail
+    // preflight and get skipped.
+    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark");
     expect(
       selectCompetitiveCodexModel({
         OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",
@@ -694,5 +816,71 @@ describe("competitive finance benchmarking", () => {
     expect(
       competitivePreflightTimeoutMs({ OPENCANDLE_COMPETITIVE_PREFLIGHT_TIMEOUT_MS: "0" }),
     ).toBe(60_000);
+  });
+
+  // Pi's ModelRegistry.getApiKeyAndHeaders resolves AuthStorage credentials
+  // with includeFallback: false, so an exported GEMINI_API_KEY never reaches
+  // the judge/OpenCandle model resolution even though the rest of the repo
+  // (TUI harness, router live eval) works from env keys. The eval script
+  // seeds the env key as a runtime override and re-resolves.
+  describe("resolveRequestAuthWithEnvApiKeyFallback", () => {
+    it("keeps registry auth untouched when an api key is already resolved", async () => {
+      const setRuntimeApiKey = vi.fn();
+      const resolveRequestAuth = vi.fn(async () => ({ ok: true as const, apiKey: "stored-key" }));
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "google",
+        resolveRequestAuth,
+        getEnvApiKey: () => "env-key",
+        setRuntimeApiKey,
+      });
+      expect(result).toEqual({ ok: true, apiKey: "stored-key" });
+      expect(resolveRequestAuth).toHaveBeenCalledTimes(1);
+      expect(setRuntimeApiKey).not.toHaveBeenCalled();
+    });
+
+    it("seeds the env api key as a runtime override and re-resolves when the registry has none", async () => {
+      const runtimeKeys = new Map<string, string>();
+      const resolveRequestAuth = vi.fn(async () =>
+        runtimeKeys.has("google")
+          ? { ok: true as const, apiKey: runtimeKeys.get("google") }
+          : { ok: true as const, apiKey: undefined },
+      );
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "google",
+        resolveRequestAuth,
+        getEnvApiKey: (provider) => (provider === "google" ? "env-gemini-key" : undefined),
+        setRuntimeApiKey: (provider, apiKey) => runtimeKeys.set(provider, apiKey),
+      });
+      expect(result).toEqual({ ok: true, apiKey: "env-gemini-key" });
+      expect(resolveRequestAuth).toHaveBeenCalledTimes(2);
+    });
+
+    it("retries through the env key when the registry resolution itself fails", async () => {
+      const runtimeKeys = new Map<string, string>();
+      const resolveRequestAuth = vi.fn(async () =>
+        runtimeKeys.has("google")
+          ? { ok: true as const, apiKey: runtimeKeys.get("google") }
+          : { ok: false as const, error: "no auth configured" },
+      );
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "google",
+        resolveRequestAuth,
+        getEnvApiKey: () => "env-gemini-key",
+        setRuntimeApiKey: (provider, apiKey) => runtimeKeys.set(provider, apiKey),
+      });
+      expect(result).toEqual({ ok: true, apiKey: "env-gemini-key" });
+    });
+
+    it("returns the original resolution when no env key exists", async () => {
+      const setRuntimeApiKey = vi.fn();
+      const result = await resolveRequestAuthWithEnvApiKeyFallback({
+        provider: "anthropic",
+        resolveRequestAuth: async () => ({ ok: false as const, error: "no auth configured" }),
+        getEnvApiKey: () => undefined,
+        setRuntimeApiKey,
+      });
+      expect(result).toEqual({ ok: false, error: "no auth configured" });
+      expect(setRuntimeApiKey).not.toHaveBeenCalled();
+    });
   });
 });

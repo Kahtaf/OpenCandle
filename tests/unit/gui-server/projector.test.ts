@@ -88,6 +88,116 @@ describe("projectDashboard", () => {
     ]);
   });
 
+  it("tracks /analyze comprehensive-analysis workflow entries in the dashboard", () => {
+    const running = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+    ]);
+
+    expect(running.activeAnalyses).toMatchObject([
+      {
+        workflow: "comprehensive_analysis",
+        symbol: "NVDA",
+        analystsTotal: 5,
+        analystsDone: 0,
+      },
+    ]);
+
+    const completed = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+      messageEntry({
+        role: "assistant",
+        content: [{ type: "text", text: "Done" }],
+        api: "openai-responses",
+        provider: "openai",
+        model: "test",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: Date.now(),
+      }),
+    ]);
+
+    expect(completed.activeAnalyses).toEqual([]);
+    expect(completed.recentResearch).toMatchObject([
+      { workflow: "comprehensive_analysis", symbol: "NVDA" },
+    ]);
+  });
+
+  it("counts completed analyst steps from opencandle analyst-step entries", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "analyst_valuation",
+        role: "valuation",
+        signal: "BUY",
+        conviction: 8,
+        parsed: true,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "analyst_momentum",
+        role: "momentum",
+        parsed: false,
+      }),
+    ]);
+
+    expect(state.activeAnalyses[0]).toMatchObject({
+      workflow: "comprehensive_analysis",
+      symbol: "NVDA",
+      analystsTotal: 5,
+      analystsDone: 2,
+    });
+  });
+
+  it("does not count debate stages toward analystsDone", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "analyst_valuation",
+        role: "valuation",
+        parsed: true,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "debate_bull",
+        side: "bull",
+        parsed: true,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "debate_rebuttal",
+        side: "bull",
+        parsed: true,
+      }),
+    ]);
+
+    // debate_* entries share the analyst-step entry type but are not
+    // analysts; counting them can report 5/5 from 3 analysts + 2 debates.
+    expect(state.activeAnalyses[0]).toMatchObject({
+      analystsTotal: 5,
+      analystsDone: 1,
+    });
+  });
+
   it("projects turn gaps and credential-required hard skips into data quality", () => {
     const state = projectDashboard([
       customEntry("opencandle-turn-gap", {

@@ -1,4 +1,4 @@
-import { ArrowUp, BarChart3, Plus } from "lucide-react";
+import { ArrowUp, BarChart3, Plus, Square } from "lucide-react";
 import { ModelSelector } from "../../features/chat/model-selector.jsx";
 import { Button } from "../ui/button.jsx";
 import { Textarea } from "../ui/textarea.jsx";
@@ -10,7 +10,9 @@ export function ChatComposer({
   setupBlocked,
   placeholder,
   canSend,
+  canStop = false,
   onSubmit,
+  onStop,
   onOpenCatalog,
   onOpenContext,
   modelSetup,
@@ -83,15 +85,21 @@ export function ChatComposer({
           </div>
           <div className="ml-auto">
             <Button
-              variant={canSend ? "brand" : "secondary"}
+              variant={canStop ? "secondary" : canSend ? "brand" : "secondary"}
               size="icon-sm"
               rounded="full"
-              tooltip={setupBlocked ? "Connect a model to send" : "Send message"}
-              aria-label="Send message"
-              onClick={onSubmit}
-              disabled={!canSend}
+              tooltip={
+                canStop
+                  ? "Stop response"
+                  : setupBlocked
+                    ? "Connect a model to send"
+                    : "Send message"
+              }
+              aria-label={canStop ? "Stop response" : "Send message"}
+              onClick={canStop ? onStop : onSubmit}
+              disabled={canStop ? false : !canSend}
             >
-              <ArrowUp />
+              {canStop ? <Square /> : <ArrowUp />}
             </Button>
           </div>
         </div>

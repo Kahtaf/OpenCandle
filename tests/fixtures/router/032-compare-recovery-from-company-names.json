@@ -1,0 +1,45 @@
+{
+  "input": "compare Microsoft and Google on valuation and growth",
+  "priorTurns": [],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "MSFT",
+        "GOOGL"
+      ],
+      "compareMetrics": [
+        "valuation",
+        "growth"
+      ]
+    },
+    "slots": {
+      "symbols": {
+        "value": [
+          "MSFT",
+          "GOOGL"
+        ],
+        "source": "user",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "company-name comparison resolves to ticker symbols and compare_assets instead of a generic explainer"
+  },
+  "tags": [
+    "compare_assets",
+    "misclassification-recovery",
+    "company-name-resolution"
+  ]
+}

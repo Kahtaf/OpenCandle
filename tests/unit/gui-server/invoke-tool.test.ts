@@ -35,6 +35,7 @@ describe("invokeToolFromUi", () => {
   it("appends normalized market-state mutation metadata for UI tool results", async () => {
     const messages: Message[] = [];
     const sessionManager = {
+      getSessionId: () => "session-1",
       appendMessage(message: Message) {
         messages.push(message);
       },
@@ -136,6 +137,7 @@ describe("invokeToolFromUi", () => {
     const sentMessages: unknown[] = [];
     const broadcastState = vi.fn();
     const sessionManager = {
+      getSessionId: () => "session-1",
       appendMessage(message: Message) {
         messages.push(message);
       },
@@ -164,7 +166,13 @@ describe("invokeToolFromUi", () => {
 
     await controller.handleToolInvokeMessage(
       { send: (message: unknown) => sentMessages.push(message) },
-      { requestId: "req-1", toolName: "get_stock_quote", args: { symbol: "AAPL" } },
+      {
+        requestId: "req-1",
+        sessionId: "session-1",
+        actionId: "tool-action-1",
+        toolName: "get_stock_quote",
+        args: { symbol: "AAPL" },
+      },
     );
 
     expect(messages).toHaveLength(2);
@@ -451,17 +459,18 @@ describe("invokeToolFromUi", () => {
   });
 
   it("routes request-scoped tool invocations to the requested session", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "opencandle-gui-tool-route-"));
     const sentMessages: unknown[] = [];
     const broadcastState = vi.fn();
     const targetSessionSnapshot = vi.fn();
     const currentSessionManager = {
       getSessionId: () => "current-session",
-      getSessionFile: () => "/tmp/current-session.jsonl",
+      getSessionFile: () => join(dir, "current-session.jsonl"),
       appendMessage: vi.fn(),
     } as unknown as SessionManager;
     const targetSessionManager = {
       getSessionId: () => "target-session",
-      getSessionFile: () => "/tmp/current-session.jsonl",
+      getSessionFile: () => join(dir, "current-session.jsonl"),
       appendMessage: vi.fn(),
     } as unknown as SessionManager;
     const params = Type.Object({
@@ -479,36 +488,41 @@ describe("invokeToolFromUi", () => {
         };
       },
     };
-    const invokeTool = vi.fn(invokeToolFromUi);
-    const controller = createToolInvokeController({
-      role: "writer",
-      getSessionManager: () => currentSessionManager,
-      resolveSessionManager: vi.fn(async () => targetSessionManager),
-      broadcastState,
-      broadcastSessionSnapshot: targetSessionSnapshot,
-      getTools: () => [tool],
-      invokeTool,
-    });
+    try {
+      const invokeTool = vi.fn(invokeToolFromUi);
+      const controller = createToolInvokeController({
+        role: "writer",
+        getSessionManager: () => currentSessionManager,
+        resolveSessionManager: vi.fn(async () => targetSessionManager),
+        broadcastState,
+        broadcastSessionSnapshot: targetSessionSnapshot,
+        getTools: () => [tool],
+        invokeTool,
+      });
 
-    await controller.handleToolInvokeMessage(
-      { send: (message: unknown) => sentMessages.push(message) },
-      {
-        requestId: "req-target",
-        sessionId: "target-session",
-        toolName: "get_stock_quote",
-        args: { symbol: "NVDA" },
-      },
-    );
+      await controller.handleToolInvokeMessage(
+        { send: (message: unknown) => sentMessages.push(message) },
+        {
+          requestId: "req-target",
+          sessionId: "target-session",
+          actionId: "tool-action-target",
+          toolName: "get_stock_quote",
+          args: { symbol: "NVDA" },
+        },
+      );
 
-    expect(invokeTool).toHaveBeenCalledWith(
-      targetSessionManager,
-      tool,
-      { symbol: "NVDA" },
-      "ui",
-      expect.any(Object),
-    );
-    expect(broadcastState).toHaveBeenCalledOnce();
-    expect(sentMessages[0]).toMatchObject({ ok: true, requestId: "req-target" });
+      expect(invokeTool).toHaveBeenCalledWith(
+        targetSessionManager,
+        tool,
+        { symbol: "NVDA" },
+        "ui",
+        expect.any(Object),
+      );
+      expect(broadcastState).toHaveBeenCalledOnce();
+      expect(sentMessages[0]).toMatchObject({ ok: true, requestId: "req-target" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("refreshes and releases non-current session locks during direct tool invocation", async () => {
@@ -710,6 +724,7 @@ describe("invokeToolFromUi", () => {
     const broadcastState = vi.fn();
     const onMarketStateChanged = vi.fn();
     const sessionManager = {
+      getSessionId: () => "session-1",
       appendMessage(message: Message) {
         messages.push(message);
       },
@@ -740,7 +755,13 @@ describe("invokeToolFromUi", () => {
 
     await controller.handleToolInvokeMessage(
       { send: (message: unknown) => sentMessages.push(message) },
-      { requestId: "req-3", toolName: "manage_watchlist", args: { action: "add", symbol: "AAPL" } },
+      {
+        requestId: "req-3",
+        sessionId: "session-1",
+        actionId: "tool-action-3",
+        toolName: "manage_watchlist",
+        args: { action: "add", symbol: "AAPL" },
+      },
     );
 
     expect(onMarketStateChanged).toHaveBeenCalledOnce();
@@ -752,14 +773,23 @@ describe("invokeToolFromUi", () => {
     const sentMessages: unknown[] = [];
     const controller = createToolInvokeController({
       role: "writer",
-      getSessionManager: () => ({}) as SessionManager,
+      getSessionManager: () =>
+        ({
+          getSessionId: () => "session-1",
+        }) as SessionManager,
       broadcastState: vi.fn(),
       getTools: () => [],
     });
 
     await controller.handleToolInvokeMessage(
       { send: (message: unknown) => sentMessages.push(message) },
-      { requestId: "req-2", toolName: "missing_tool", args: {} },
+      {
+        requestId: "req-2",
+        sessionId: "session-1",
+        actionId: "tool-action-2",
+        toolName: "missing_tool",
+        args: {},
+      },
     );
 
     expect(sentMessages).toEqual([

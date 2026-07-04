@@ -6,11 +6,13 @@ export interface ToolCallTrace {
   result: unknown;
   isError: boolean;
   durationMs: number;
+  promptIndex?: number;
 }
 
 export interface TurnTrace {
   toolCalls: ToolCallTrace[];
   text: string;
+  promptIndex?: number;
 }
 
 export interface InteractionTrace {
@@ -18,6 +20,7 @@ export interface InteractionTrace {
   method: "select" | "text" | "confirm";
   options?: string[];
   answer: string | null;
+  promptIndex?: number;
 }
 
 /** Custom session entry captured from the session manager after settle.
@@ -31,10 +34,12 @@ export interface CustomEntryTrace {
   customType: string;
   data: unknown;
   timestamp: string;
+  promptIndex?: number;
 }
 
 export interface AgentTrace {
   prompt: string;
+  prompts?: string[];
   turns: TurnTrace[];
   interactions: InteractionTrace[];
   finalText: string;

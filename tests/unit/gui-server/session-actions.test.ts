@@ -55,24 +55,15 @@ describe("GUI session actions", () => {
     }
   });
 
-  it("records a setup message instead of prompting when no model is configured", async () => {
-    const appendedMessages: unknown[] = [];
-    const customMessages: unknown[] = [];
-    const broadcastState = vi.fn();
-    const session = { prompt: vi.fn() } as unknown as AgentSession;
-    const sessionManager = {
-      appendMessage: (message: unknown) => appendedMessages.push(message),
-      appendCustomMessageEntry: (...args: unknown[]) => customMessages.push(args),
-      getEntries: () => [],
-    } as unknown as SessionManager;
+  it("does not expose a legacy active-session prompt action", async () => {
     const controller = createSessionActionsController({
       role: "writer",
       cwd: "/tmp",
       sessionDir: "/tmp/sessions",
-      getSession: () => session,
-      getSessionManager: () => sessionManager,
+      getSession: () => ({ prompt: vi.fn() }) as unknown as AgentSession,
+      getSessionManager: () => ({ getEntries: () => [] }) as unknown as SessionManager,
       getModelSetupState: () => ({
-        requirement: "connect_auth",
+        requirement: "ready",
         providers: [],
         availableModels: [],
       }),
@@ -82,24 +73,15 @@ describe("GUI session actions", () => {
         switchSession: async () => ({ cancelled: false }),
       },
       sendBoot: vi.fn(),
-      broadcastState,
+      broadcastState: vi.fn(),
       broadcastSessions: vi.fn(),
       now: () => 123,
     });
 
-    await controller.handlePrompt("Tell me about AAPL");
-
-    expect(session.prompt).not.toHaveBeenCalled();
-    expect(appendedMessages).toEqual([
-      { role: "user", content: "Tell me about AAPL", timestamp: 123 },
-    ]);
-    expect(customMessages[0]).toEqual([
-      "opencandle-model-setup",
-      "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.",
-      true,
-      { source: "gui", requirement: "connect_auth" },
-    ]);
-    expect(broadcastState).toHaveBeenCalledTimes(2);
+    // Chat prompts must go through the session-addressed chat-run API
+    // (http-routes), which owns model-setup gating and action IDs; the
+    // controller no longer carries an implicit active-session mutation.
+    expect("handlePrompt" in controller).toBe(false);
   });
 
   it("renames the live current session through the current session manager", async () => {
@@ -173,6 +155,84 @@ describe("GUI session actions", () => {
     });
 
     expect(answer).toHaveBeenCalledOnce();
+  });
+
+  it("requires coordinated ask_user answers to name their target session", async () => {
+    const answer = vi.fn(() => true);
+    const sessionManager = {
+      getSessionId: () => "session-1",
+    } as unknown as SessionManager;
+    const controller = createSessionActionsController({
+      role: "writer",
+      cwd: "/tmp",
+      sessionDir: "/tmp/sessions",
+      getSession: () => ({}) as AgentSession,
+      getSessionManager: () => sessionManager,
+      getModelSetupState: () => ({
+        requirement: "ready",
+        providers: [],
+        availableModels: [],
+      }),
+      askUserBridge: { answer, cancel: () => true },
+      runtime: {
+        newSession: async () => ({ cancelled: false }),
+        switchSession: async () => ({ cancelled: false }),
+      },
+      sendBoot: vi.fn(),
+      broadcastState: vi.fn(),
+      broadcastSessions: vi.fn(),
+      localSessionCoordinator: createLocalSessionCoordinator(),
+    });
+
+    await expect(
+      controller.handleAskUserAnswer("ask-1", "Yes", {
+        actionId: "ask-action-1",
+        source: "browser",
+      }),
+    ).rejects.toThrow("sessionId is required");
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it("rejects ask_user actions for unknown non-current sessions instead of falling back", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
+    const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));
+    try {
+      const currentManager = SessionManager.create(cwd, sessionDir);
+      const answer = vi.fn();
+      const controller = createSessionActionsController({
+        role: "writer",
+        cwd,
+        sessionDir,
+        getSession: () => ({}) as AgentSession,
+        getSessionManager: () => currentManager,
+        getModelSetupState: () => ({
+          requirement: "ready",
+          providers: [],
+          availableModels: [],
+        }),
+        askUserBridge: { answer, cancel: vi.fn() },
+        runtime: {
+          newSession: async () => ({ cancelled: false }),
+          switchSession: async () => ({ cancelled: false }),
+        },
+        sendBoot: vi.fn(),
+        broadcastState: vi.fn(),
+        broadcastSessions: vi.fn(),
+        localSessionCoordinator: createLocalSessionCoordinator(),
+      });
+
+      await expect(
+        controller.handleAskUserAnswer("ask-1", "Yes", {
+          actionId: "ask-action-1",
+          sessionId: "missing-session",
+          source: "browser",
+        }),
+      ).rejects.toThrow("Unknown saved session");
+      expect(answer).not.toHaveBeenCalled();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+      await rm(sessionDir, { recursive: true, force: true });
+    }
   });
 
   it("proxies ask_user answers from non-owner GUI windows", async () => {

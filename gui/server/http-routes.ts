@@ -13,7 +13,6 @@ import {
 } from "../../src/pi/session-action-dedupe.js";
 import type { ChatEvent } from "../shared/chat-events.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
-import { chatRunSessionConflict } from "./chat-run-session.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
 import { createLiveChatEventAdapter } from "./live-chat-event-adapter.js";
 import type {
@@ -234,28 +233,35 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
 
     if (url.pathname === "/api/chat/run" && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
-      await handleSseChatRun(req, res, options, activeRunSessionIds);
+      writeJson(
+        res,
+        {
+          error: "Legacy active-session chat runs are no longer supported.",
+          code: "legacy_route_removed",
+        },
+        410,
+      );
       return;
     }
 
     if (url.pathname === "/api/local-coordinator/chat-run" && req.method === "POST") {
       if (!allowLocalCoordinatorRequest(req, res, options)) return;
       const body = asRecord(await readJsonBody(req));
-      const requestedSessionId = String(body.sessionId ?? "").trim();
-      const sessionManager = requestedSessionId
-        ? await resolveSessionManagerById(options, requestedSessionId)
-        : undefined;
-      if (requestedSessionId && !sessionManager) {
+      if (!requireSessionActionFields(res, body)) return;
+      const sessionManager = await resolveSessionManagerById(options, String(body.sessionId));
+      if (!sessionManager) {
         writeJson(res, { error: "Unknown saved session" }, 404);
         return;
       }
-      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body);
+      // allowProxy: false — this endpoint is the proxy target; re-proxying loops.
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, false);
       return;
     }
 
     if (url.pathname === "/api/local-coordinator/tool-invoke" && req.method === "POST") {
       if (!allowLocalCoordinatorRequest(req, res, options)) return;
       const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, body)) return;
       let ack: unknown;
       await options.toolInvokeController.handleToolInvokeMessage(
         { send: (message) => (ack = message) },
@@ -285,6 +291,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     if (url.pathname === "/api/local-coordinator/ask-user" && req.method === "POST") {
       if (!allowLocalCoordinatorRequest(req, res, options)) return;
       const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, body)) return;
       const payload = asRecord(body.payload);
       try {
         const action = {
@@ -319,12 +326,16 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
     const runSessionId = sessionIdFromRoute(url.pathname, "runs");
     if (runSessionId && req.method === "POST") {
       if (!allowTrustedGuiRequest(req, res, "Chat run API", options)) return;
+      const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, { ...body, sessionId: runSessionId }, false)) return;
       const sessionManager = await resolveSessionManagerById(options, runSessionId);
       if (!sessionManager) {
         writeJson(res, { error: "Unknown saved session" }, 404);
         return;
       }
-      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager);
+      // allowProxy: true — forward to a live coordinator owned by another
+      // process (0.11.0 authenticated local forwarding).
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, true);
       return;
     }
 
@@ -337,8 +348,13 @@ async function handleSseChatRun(
   res: ServerResponse,
   options: GuiHttpRouteOptions,
   activeRunSessionIds: Set<string>,
-  targetSessionManager?: SessionManager,
-  bodyOverride?: Record<string, unknown>,
+  targetSessionManager: SessionManager | undefined,
+  bodyOverride: Record<string, unknown> | undefined,
+  // Explicit because both remaining callers pass a body: the browser-facing
+  // runs route must forward to a live coordinator owned by another process,
+  // while the local-coordinator endpoint IS the proxy target and re-proxying
+  // there would loop.
+  allowProxy: boolean,
 ): Promise<void> {
   const body = bodyOverride ?? asRecord(await readJsonBody(req));
   const prompt = String(asRecord(body).prompt ?? "").trim();
@@ -352,13 +368,7 @@ async function handleSseChatRun(
   const requestedSessionId = String(bodyRecord.sessionId ?? "").trim();
   const runSessionManager = targetSessionManager ?? currentSessionManager;
   const sessionId = runSessionManager.getSessionId();
-  if (!targetSessionManager) {
-    const sessionConflict = chatRunSessionConflict(requestedSessionId, sessionId);
-    if (sessionConflict) {
-      writeJson(res, sessionConflict, 409);
-      return;
-    }
-  } else if (requestedSessionId && requestedSessionId !== sessionId) {
+  if (requestedSessionId && requestedSessionId !== sessionId) {
     writeJson(
       res,
       { error: "Session route and request body disagree", code: "session_changed" },
@@ -367,9 +377,8 @@ async function handleSseChatRun(
     return;
   }
 
-  const proxyAllowed = bodyOverride === undefined;
   const actionId = String(bodyRecord.actionId ?? "").trim();
-  const shouldProxyChatRun = proxyAllowed && canProxyChatRunToCoordinator(runSessionManager);
+  const shouldProxyChatRun = allowProxy && canProxyChatRunToCoordinator(runSessionManager);
   if (shouldProxyChatRun) {
     if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) {
       const useCurrentSession =
@@ -796,7 +805,7 @@ export function buildChatRunActionEnvelope(
   body: Record<string, unknown>,
   sessionId: string,
 ): SessionActionEnvelope {
-  const actionId = String(body.actionId ?? "").trim() || `legacy-chat-${Date.now()}`;
+  const actionId = String(body.actionId ?? "").trim();
   return {
     sessionId,
     actionId,
@@ -808,6 +817,22 @@ export function buildChatRunActionEnvelope(
 
 function hasClientActionId(body: Record<string, unknown>): boolean {
   return typeof body.actionId === "string" && body.actionId.trim().length > 0;
+}
+
+function requireSessionActionFields(
+  res: ServerResponse,
+  body: Record<string, unknown>,
+  requireSessionId = true,
+): boolean {
+  if (requireSessionId && !String(body.sessionId ?? "").trim()) {
+    writeJson(res, { error: "sessionId is required" }, 400);
+    return false;
+  }
+  if (!String(body.actionId ?? "").trim()) {
+    writeJson(res, { error: "actionId is required" }, 400);
+    return false;
+  }
+  return true;
 }
 
 function shouldBlockFailedCoordinatorAction(

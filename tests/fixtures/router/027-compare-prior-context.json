@@ -1,0 +1,67 @@
+{
+  "input": "compare those with SPY over the last year",
+  "priorTurns": [
+    {
+      "role": "user",
+      "text": "I'm deciding between NVDA and AMD for a semiconductor position."
+    },
+    {
+      "role": "assistant",
+      "text": "NVDA and AMD are the two semiconductor names in scope."
+    }
+  ],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "SPY",
+        "NVDA",
+        "AMD"
+      ],
+      "timeHorizon": "1y"
+    },
+    "slots": {
+      "symbols": {
+        "value": [
+          "SPY",
+          "NVDA",
+          "AMD"
+        ],
+        "source": "prior_context",
+        "confidence": "high"
+      },
+      "time_horizon": {
+        "value": "1y",
+        "source": "user",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "compare_symbols_canonicalized",
+        "message": "compare symbols restored from deterministic extraction and ordered by user text"
+      },
+      {
+        "code": "symbols_slot_provenance_prior_context",
+        "message": "compare symbols slot includes symbols absent from the user text; source downgraded from user to prior_context"
+      }
+    ],
+    "reasoning": "compare verb plus prior turn resolves 'those' to NVDA and AMD; current turn adds SPY and a one-year horizon"
+  },
+  "tags": [
+    "compare_assets",
+    "prior-context",
+    "synthetic-multi-turn"
+  ]
+}

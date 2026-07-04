@@ -77,6 +77,17 @@ export default function openCandleExtension(
     pi.appendEntry("opencandle-user-input", { original });
   };
 
+  const appendComprehensiveAnalysisWorkflowEntry = (
+    symbol: string,
+    definition: ReturnType<typeof buildComprehensiveAnalysisDefinition>,
+  ): void => {
+    pi.appendEntry("opencandle-workflow", {
+      workflow: "comprehensive_analysis",
+      resolvedSlots: { symbol },
+      analystsTotal: definition.steps.filter((step) => step.stepType.startsWith("analyst_")).length,
+    });
+  };
+
   // Credential-interception state. Lifetime:
   //   `sessionPromptedSet` — cleared on session_start, persists across turns
   //      within a session so users don't get re-prompted after picking
@@ -116,6 +127,7 @@ export default function openCandleExtension(
         return;
       }
       const definition = buildComprehensiveAnalysisDefinition(symbol);
+      appendComprehensiveAnalysisWorkflowEntry(symbol, definition);
       coordinator.executeWorkflow(pi, definition, ctx);
     },
   });
@@ -678,6 +690,7 @@ export default function openCandleExtension(
     const analysis = isAnalysisRequest(event.text);
     if (analysis.match && analysis.symbol) {
       const definition = buildComprehensiveAnalysisDefinition(analysis.symbol);
+      appendComprehensiveAnalysisWorkflowEntry(analysis.symbol, definition);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
       if (prompt) markOriginalInput(event.text);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };

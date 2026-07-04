@@ -1,46 +1,67 @@
 # High-Leverage Improvements Plan
 
-**Date:** 2026-07-03
-**Companion doc:** `docs/internal/openspec-backlog-cleanup-plan.md` (WP1–WP6). Items below reference its work packages; I4 and I7 cannot start until their spec packages (WP6, WP4.2) merge.
+**Date:** 2026-07-03 (revised 2026-07-04 after the cleanup merge)
+**Companion doc:** `docs/internal/openspec-backlog-cleanup-plan.md` (WP1–WP7) — **fully merged to `main`** as PR #64 (merge commit `88b21cb`), including WP7. All spec preconditions in this plan are satisfied; every active item is unblocked today (see Execution model & kickoff for the integration branch all work targets).
 **Audience:** implementation agents working one item per isolated worktree/branch, plus the reviewer who verifies each PR.
 
-**Priorities (in order):** correctness, product trust, privacy, local GUI/TUI runtime consistency, eval coverage, release safety. Feature volume is explicitly last.
+**Status decision (2026-07-04):** the maintainer has **backlogged I4 (`/forget`) and the E4 privacy eval** — do not implement them now. The active implementation set is: **I1, I2, I3, I5 (E1–E3, E5–E7), I7, I9.** I6 is already complete (see its section). I8 remains a north star, not a scheduled item.
 
-## Branching & PR policy
+**Priorities (in order):** correctness, product trust, privacy, local GUI/TUI runtime consistency, eval coverage, release safety. Feature volume is explicitly last. (Privacy stays a named priority, but its implementation vehicle — I4/E4 — is deferred; nothing else in this plan may regress the four documented leak surfaces.)
 
-- One item per branch per isolated worktree, named `feat/<item-slug>`, cut from `main`, PR against `main`:
+## Execution model & kickoff
+
+This plan is written to be executed end to end by **one orchestrating agent** driving concurrent worktree subagents from a single kickoff prompt. Everything an implementer needs is in this doc plus the referenced specs. If an item forces a product decision not written here or in its governing spec, STOP that item and surface the question in its PR — never improvise the decision; the other items keep running.
+
+**Kickoff:** the maintainer issues the kickoff prompt out-of-band; it names the integration branch below, which already exists and carries this plan revision.
+
+**Integration branch — the single PR target:**
+- The integration branch is `feat/high-leverage-improvements`, cut from `main` (it already exists — do not recreate it). Every item PR targets this branch. **No PR from this plan targets `main`.**
+- The orchestrator merges an item's PR into the integration branch as soon as that item's own gates are green (universal rule 4: `npm test`, `npx tsc --noEmit`, `npx biome ci .`, tests named in the item, NOTES mapping, committed runtime evidence). This is what unblocks wave-2 items — do not wait for human review to merge into the integration branch.
+- The PRs remain the per-item review record: the maintainer reviews them (reviewer protocol below) after the fact and reviews the final `feat/high-leverage-improvements` → `main` merge, which only the maintainer performs. If review finds a problem, the fix is a follow-up commit on the integration branch, not a rewrite of merged history.
+
+**Waves (ordering):**
+- **Wave 1 — start immediately, one worktree each, fully parallel:** I1, I2, I5(E3), I7, I9, the E6 release-gate smoke PR, and the I5 router-fixture authoring PR.
+- **Wave 2 — each starts the moment its parent merges into the integration branch:** I3 (after I2), E1/E2/E5 (after I1), E6 parity case (after I2). E7 (frozen competitive panel) has no code parent and may run in either wave.
+- **Never started:** I4 and E4 (backlogged), I6 (done), I8 (north star; requires a future OpenSpec proposal).
+
+**Worktree/branch mechanics:**
+- One item per branch per isolated worktree: `git worktree add ../oc-<item-slug> -b feat/<item-slug> feat/high-leverage-improvements` — i.e. cut from the integration branch head at the time the item starts (at kickoff that equals `main`).
+- Branch names:
   - I1 → `feat/harness-multi-prompt`
   - I2 → `feat/analyst-evidence-capture`
   - I3 → `feat/deterministic-synthesis-validation`
-  - I4 → `feat/forget-command`
-  - I5 → one branch per suite, `feat/eval-<suite>` (e.g. `feat/eval-provider-outage` for E3, `feat/eval-multi-turn` for E1, `feat/eval-release-gate-gui-smoke` for the E6 gate PR)
-  - I6 → moved to cleanup WP7 (`feat/openspec-wp7-coordinator-verification`, PRs into the integration branch, not `main`)
+  - I4 → BACKLOGGED (branch name `feat/forget-command` reserved for when it is scheduled)
+  - I5 → one branch per suite, `feat/eval-<suite>` (e.g. `feat/eval-provider-outage` for E3, `feat/eval-multi-turn` for E1, `feat/eval-release-gate-gui-smoke` for the E6 gate PR, `feat/eval-router-fixtures` for the fixture-authoring PR)
+  - I6 → DONE (delivered as cleanup WP7, commit `e57e499`, merged in #64; nothing left to branch)
   - I7 → `feat/gui-session-scoped-actions`
   - I9 → `feat/router-gemini-contract`
-- **Dependency on the cleanup branch:** OpenSpec changes are consolidated on `feat/openspec-backlog-cleanup` (see the companion cleanup plan's Branching & PR policy). I4 and I7 implement specs delivered by that branch (WP6 and WP4.2), so they must branch from `main` only AFTER `feat/openspec-backlog-cleanup` has merged to `main` — never from the integration branch itself.
-- Do not stack item branches on each other. Where sequencing exists (I2 → I3, I1 → E1/E2/E4/E5), the downstream branch starts only after the upstream PR merges to `main`.
+- Do not stack item branches on each other. Wave-2 items branch from the integration branch only after their parent has merged into it.
+- Conflict policy: item scopes are file-disjoint by design, so conflicts should be rare. If two items do collide, the later-merging branch rebases onto the current integration branch and resolves; never resolve a conflict by discarding another item's merged work, and never edit another item's files "while you're in there."
+- **Cleanup-branch dependency: SATISFIED.** `feat/openspec-backlog-cleanup` merged to `main` as #64 (`88b21cb`). The WP4.2 spec (`gui-session-scoped-action-cleanup`) is on `main`, so I7 starts in wave 1. The WP6 spec (`forget-command`) is also on `main` but its implementation (I4) is backlogged — leave the change directory active and untouched.
 
 ## Universal rules for every item
 
 1. Read `AGENTS.md` and follow it: TDD (failing test first), `.js` extensions on relative imports, no live API calls in unit tests, no `any` outside raw provider responses, CHANGELOG `[Unreleased]` entry for every atomic feature/fix, run `graphify update .` after code changes.
 2. **Prompt integrity is a hard gate.** Unless the item explicitly says otherwise, you may not edit any prompt template string (anything under `src/prompts/`, persona/stage prompts in `src/analysts/orchestrator.ts`, policy cards, workflow prompt builders). If your approach requires a prompt change, STOP and report; do not "make the text easier to parse."
 3. Ask-first areas from AGENTS.md still apply: `src/pi/`, system prompt, analyst orchestration *prompts*, memory SQLite schema. Where an item below authorizes touching one (e.g. I4's v9 migration), that authorization is scoped to exactly what the item says.
-4. Done means: `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; new behavior covered by tests named in the item; a short `NOTES.md` in the PR (or PR description) mapping each claimed behavior to the test that proves it; runtime evidence (below) committed under `docs/internal/pr-evidence/<branch-name>/` — never `/tmp` (ephemeral evidence has already rotted once in this repo's history).
+4. Done means: `npm test`, `npx tsc --noEmit`, `npx biome ci .` green; new behavior covered by tests named in the item; a short `NOTES.md` in the PR (or PR description) mapping each claimed behavior to the test that proves it; runtime evidence (below) saved under `docs/internal/pr-evidence/<branch-name>/` — a **git-ignored** local directory since 2026-07-04: keep artifacts there for the reviewer's machine-local verification and paste the load-bearing excerpts (entry counts, key trace fields, screenshots) into the PR description, but do NOT commit them (a prior revision committed ~26 MB / ~60k lines of traces, logs, and screenshots, dwarfing the reviewable diff). Durable *decision records* (triage tables, open-item lists) go in `docs/internal/` as plain markdown instead.
 5. Runtime evidence by surface: agent-behavior changes → a harness `trace.json` of the target scenario; GUI changes → screenshots at 1440x960 and 390x844 plus the browser-suite log; coordinator/lock changes → the convergence smoke output; schema changes → migration-test output against a real pre-upgrade fixture DB.
 6. **E2E-first evidence policy (2026-07-03):** executor environments are provisioned with model/provider credentials, and live end-to-end runs are EXPECTED, not optional. **Auth model:** Claude access goes through Pi's sign-in auth (`~/.pi/agent/` auth storage — the same path production uses via `ctx.model`), NOT a raw `ANTHROPIC_API_KEY`; provider keys for data APIs and `GEMINI_API_KEY` come from `.env`. acpx is an agent transport, used ONLY for competitive-benchmark generic-agent baselines — never as a model transport for router or harness evals. Runtime evidence must come from a real credentialed run (harness trace, live eval, real browser) — never from mocks alone. Unit suites stay mock-based per AGENTS.md (no live calls in `npm test`), but every item's "done" includes its live evidence. If your environment lacks the needed credential, STOP and request it from the maintainer; do not substitute a mocked run and do not mark the item done. Cost discipline: run the targeted live scenario for your item, not whole live suites repeatedly.
 
 ## Sequencing
 
 ```
-I1 harness multi-prompt ──→ I5 evals E1/E2/E5 ──→ (E4 also needs I4)
+I1 harness multi-prompt ──→ I5 evals E1/E2/E5
 I2 evidence capture ──→ I3 deterministic synthesis + validation ──→ I8 receipts (phase 2+)
-WP6 spec merge ──→ I4 /forget ──→ I5 eval E4
-WP4.2 spec merge ──→ I7 session-scoped action cleanup
-I5 evals E3/E6/E7 need nothing else; E3 can start immediately
+I7 session-scoped action cleanup — spec (WP4.2) merged; can start immediately
+I5 evals E3/E7 need nothing else; E3 can start immediately
+I5 eval E6 parity case needs I2 (projector signals); E6's release-gate smoke PR is independent, can start immediately
 I9 Gemini router-contract hardening — independent (uses the archived 2026-07-03 baseline); can start immediately
+
+BACKLOGGED (do not start): I4 /forget, I5 eval E4 (E4 needs I1 + I4)
 ```
 
-Parallel-safe from day one: I1, I2, I5(E3), I9. Everything else has exactly one parent. (Coordinator verification closeout, formerly I6, moved to cleanup plan WP7 so the coordinator change archives on the integration branch.)
+Parallel-safe from day one: I1, I2, I5(E3), I7, I9. Everything else has exactly one parent. (Coordinator verification closeout, formerly I6, shipped with the cleanup merge as WP7; the coordinator change is archived.)
 
 ---
 
@@ -91,7 +112,7 @@ Parallel-safe from day one: I1, I2, I5(E3), I9. Everything else has exactly one 
 
 **Likely wrong:** editing analyst prompts to make parsing easier (hard reject); blocking on parse failure; capturing evidence globally instead of per-step; subscribing to tool events once and never unsubscribing (leak across runs); needing a hook that only exists in `src/pi/opencandle-extension.ts` and improvising there — if you need an extension change, STOP and report which hook you need (`src/pi/` is ask-first).
 
-**Reviewer verification:** `git diff main -- src/analysts/orchestrator.ts src/prompts/` shows zero changes inside template literals; run the live harness check yourself and confirm entries exist in a real trace (if entries appear in tests but not live, the wiring is mock-only — reject); confirm no existing test assertions were weakened.
+**Reviewer verification:** the PR diff (against its integration-branch base) over `src/analysts/orchestrator.ts` and `src/prompts/` shows zero changes inside template literals; run the live harness check yourself and confirm entries exist in a real trace (if entries appear in tests but not live, the wiring is mock-only — reject); confirm no existing test assertions were weakened.
 
 ---
 
@@ -113,11 +134,13 @@ Parallel-safe from day one: I1, I2, I5(E3), I9. Everything else has exactly one 
 
 **Likely wrong:** replacing analyst text with the tally; treating validator false positives as run failures; editing the rebuttal prompt; resurrecting any debate on/off flag (the debate always runs — a removed env flag must not return).
 
-**Reviewer verification:** same prompt-integrity gate as I2 plus: confirm the only prompt-builder change is additive data injection in the synthesis builder; check the degradation rule by forcing `parsed: false` in a test and confirming byte-equivalent synthesis prompt to `main`.
+**Reviewer verification:** same prompt-integrity gate as I2 plus: confirm the only prompt-builder change is additive data injection in the synthesis builder; check the degradation rule by forcing `parsed: false` in a test and confirming a byte-equivalent synthesis prompt to the pre-change baseline (the PR's integration-branch base).
 
 ---
 
-## I4 — `/forget` implementation (after cleanup WP6 spec merges)
+## I4 — `/forget` implementation — **BACKLOGGED (2026-07-04 maintainer decision — do not implement)**
+
+**Status:** deferred. The WP6 spec merged and `openspec/changes/forget-command/` stays **active and untouched** on `main` — do not implement it, do not archive it, and do not "clean it up" as stale backlog (it is deliberate). E4 below is deferred with it. When it is scheduled later it needs I1's multi-prompt harness support, which will already exist. The section below is preserved as the implementation brief for that future slice.
 
 **Why:** Privacy is a named priority; four independent leak surfaces exist today (priorTurns, structured memory, saved market-state summaries, compaction summaries) with zero coverage; three source comments mark `/forget` as the designated scrubbing primitive (`src/runtime/session-coordinator.ts` ~217-220, `src/routing/router-prompt.ts` ~5-9, `src/pi/opencandle-extension.ts` ~709).
 
@@ -140,7 +163,7 @@ Parallel-safe from day one: I1, I2, I5(E3), I9. Everything else has exactly one 
 
 ## I5 — Eval expansion (the adversarial suite)
 
-**Why:** Every recurring competitive-loss class and audit gap becomes a regression tripwire; all future delegation gets cheaper to verify. Current holes: no end-to-end multi-turn, no provider-outage injection, no ask-vs-guess case, no privacy eval, GUI browser suite in no CI gate, router fixtures stopped at 26 with task 4.7's candidates unwritten.
+**Why:** Every recurring competitive-loss class and audit gap becomes a regression tripwire; all future delegation gets cheaper to verify. Current holes: no end-to-end multi-turn, no provider-outage injection, no ask-vs-guess case, no privacy eval (E4 — deferred with I4), GUI browser suite in no CI gate, router fixtures stopped at 26 with task 4.7's candidates unwritten.
 
 **Ground rule for the eval author:** if a new case fails against current behavior, that is a FINDING — record it in the PR description and mark the case appropriately (skip/known-fail annotation consistent with the suite's conventions). **Never modify production code to make your own eval pass.** Deterministic suites must not make live API calls; keep benchmark literals in manifests/tests only (`tests/unit/prompts/prompt-debt-guard.test.ts` enforces this — respect it, don't fight it).
 
@@ -152,7 +175,7 @@ Three-turn session: "tell me about NVDA" → "what about at $500?" → (with see
 - **Trace evidence:** `evalTrace.customEntries` → `opencandle-router.entities`, slot `source` fields, `opencandle-route-context` priorTurns presence.
 - **Catches:** `buildPriorTurns` regressions across Pi upgrades (its implementation depends on vendored Pi internals — explicitly fragile), provenance corruption.
 
-### E2 — Saved market-state fidelity (needs I1 for the multi-turn variant; seeded-state single-turn cases can start now)
+### E2 — Saved market-state fidelity (one wave-2 PR after I1; the seeded single-turn cases may be drafted earlier but land in the same PR)
 Against the competitive seed fixture (`OPENCANDLE_COMPETITIVE_SEED_STATE` fixture or a purpose-built twin): "is my current portfolio too exposed if rates stay high?" (must route to portfolio review, NOT `portfolio_builder` — the exact documented 2026-06-17 competitive loss); "what's my cost basis on my SPY lot?" (must quote the stored lot, not estimate).
 - **Trace evidence:** `opencandle-route-context` shows saved-state summary injected; routed workflow/agent path; final text contains fixture values (layer-4-style number check against the fixture).
 - **Catches:** the dominant historical loss class (existing-portfolio prompts routed to construction), saved-state context gating regressions.
@@ -162,7 +185,7 @@ Fixture-mocked `fetch`: Yahoo returns 429/zero-filled payloads for one symbol mi
 - **Expected:** explicit unavailability disclosure; no fabricated number for the missing symbol; compare proceeds on survivors with a dropped-symbol note; correlation computes a partial matrix; no `$0.00` presented as a price; `opencandle-turn-gap` entry present.
 - **Catches:** regressions of the InvalidSymbolError/zero-quote heuristic and the "missing data became the thesis" failure class. Cheapest suite to keep in plain `npm test`.
 
-### E4 — Privacy / `/forget` (needs I1 + I4; author alongside I4, TDD)
+### E4 — Privacy / `/forget` — **BACKLOGGED with I4** (needs I1 + I4; author alongside I4 when scheduled, TDD)
 Turn 1: "I hold 4,000 shares of XYZ at $12" → turn 2: `/forget XYZ` → turn 3: "what should I buy this month?"
 - **Expected:** turn-3 serialized router prompt and prompt context contain no "XYZ"/"$XYZ" (case-insensitive); structured memory and market-state summary surfaces clean; confirmation message does not echo "XYZ" beyond the user's typed command; turn-3 answer does not reference the position.
 - **Catches:** any future context-assembly refactor re-leaking a scrubbed topic through any of the four surfaces.
@@ -181,21 +204,21 @@ Keep the generated 5-prompt benchmark for discovery; add a FROZEN panel rerun pe
 ### Also in I5:
 - Author the 4–9 router fixtures from archived task 4.7's candidate list (multi-symbol compare with prior context; fallback-from-general-qa shift; preference ECHO that must NOT become a `preference_update`; router misclassification recovery). Update `BASELINE.json` count, and run `npm run eval:router-live` after adding fixtures so the archived baseline in `tests/fixtures/router/eval-baselines/` covers the grown set (cleanup WP2 archives the pre-growth baseline; this refreshes it).
 - Establish the live-eval cadence: `eval:router-live`, `test:evals` (always tier), and `test:evals:product` run per release as part of release preparation (documented in the release checklist), with the E7 frozen competitive panel. Live suites are not in per-PR CI, but they are not optional at release time.
-- Optional (moved from cleanup WP2): add a Pi-auth model-resolution mode to `tests/scripts/run-live-router-eval.ts` (resolve via the Pi model registry + `~/.pi/agent/` auth storage — the same path production's `ctx.model` uses) to enable a Claude-family comparison baseline without any API key. acpx remains rejected as a router-eval transport: it drives a full agent CLI, not the router's raw prompt→JSON call.
+- Optional (moved from cleanup WP2): add a Pi-auth model-resolution mode to `tests/scripts/run-live-router-eval.ts` (resolve via the Pi model registry + `~/.pi/agent/` auth storage — the same path production's `ctx.model` uses via `resolveRouterLlmClient` in `src/pi/opencandle-extension.ts`) to enable a Claude-family comparison baseline without any API key. Current state of the script for context: it resolves models through pi-ai's built-in API providers (`registerBuiltInApiProviders()` + `getModel`, default `anthropic`/`claude-haiku-4-5`, overridable via `OPENCANDLE_ROUTER_PROVIDER`/`OPENCANDLE_ROUTER_MODEL`) and therefore needs a raw API key today. acpx remains rejected as a router-eval transport: it drives a full agent CLI, not the router's raw prompt→JSON call.
 
 **Reviewer verification for all of I5:** every case has explicit assertions on trace evidence (no vibes-only rubrics in deterministic suites); failed-against-current-behavior cases are flagged findings, not silently weakened; no live calls in deterministic suites; prompt-debt-guard still green.
 
 ---
 
-## I6 — MOVED to cleanup plan WP7
+## I6 — DONE (shipped as cleanup plan WP7)
 
-Coordinator verification closeout (the 1.8 long-stream test, auto-retry pinning test, 5.4 convergence smoke, and archival of `transparent-local-session-coordinator`) now lives in `docs/internal/openspec-backlog-cleanup-plan.md` **WP7**, on branch `feat/openspec-wp7-coordinator-verification` PRing into the integration branch — so the coordinator change archives together with the rest of the backlog cleanup. The item number I6 is retired to keep cross-references in both docs stable; nothing else renumbers.
+Coordinator verification closeout (the 1.8 long-stream test, auto-retry pinning test, 5.4 convergence smoke, and archival of `transparent-local-session-coordinator`) shipped as cleanup WP7 (commit `e57e499`) and merged to `main` in #64; the coordinator change is archived at `openspec/changes/archive/2026-07-04-transparent-local-session-coordinator/`. Nothing remains. The item number I6 is retired to keep cross-references in both docs stable; nothing else renumbers.
 
 ---
 
-## I7 — GUI session-scoped action cleanup (after cleanup WP4.2 spec merges)
+## I7 — GUI session-scoped action cleanup (WP4.2 spec merged — can start now)
 
-**Why:** The GUI currently has two send paths (legacy active-session + session-addressed), the exact "ambiguous ownership" state the original design forbade. Product decision: slim scope, aligned to the shipped coordinator's `actionId` envelope.
+**Why:** The GUI currently has two send paths (legacy active-session + session-addressed), the exact "ambiguous ownership" state the original design forbade. Product decision: slim scope, aligned to the shipped coordinator's `actionId` envelope. Concretely (verified on `main` 2026-07-04): the legacy implicit-active-session path is `POST /api/chat/run` (`gui/server/http-routes.ts` ~line 235, calls `handleSseChatRun` with no session addressing); the session-addressed paths are `POST /api/local-coordinator/chat-run` / `tool-invoke` / `ask-user` (explicit `body.sessionId`) and `POST /api/sessions/{id}/runs`. Recent coordinator-hardening commits (owner-liveness helpers, lock-scope fail-closed, boot coordination from session locks) landed around these files but did NOT remove the legacy path — the WP4.2 tasks are all still open.
 
 **Scope: implement the WP4.2 change:** remove the legacy active-session mutation path (routes removed or 410); every mutation (chat run, stop, retry/regenerate, ask_user answer/cancel, tool.invoke) carries explicit `sessionId` + coordinator `actionId` semantics; one active run per session with cross-session concurrency; parity confirmation of TUI resume per the spec's concrete expectation.
 
@@ -203,7 +226,7 @@ Coordinator verification closeout (the 1.8 long-stream test, auto-retry pinning 
 
 **Tests:** GUI-server unit tests for scoped stop/retry/ask_user against a non-focused session; a two-session concurrent browser test in `tests/e2e/gui-browser.test.ts`; grep-level assertion (a real test, e.g. route-table snapshot) that no mutation route resolves an implicit active session.
 
-**Closeout:** the completing PR checks off the change's tasks.md and **archives the `gui-session-scoped-action-cleanup` change** (`openspec validate --strict` first) — with I4's archival, this takes the active OpenSpec backlog to zero.
+**Closeout:** the completing PR checks off the change's tasks.md and **archives the `gui-session-scoped-action-cleanup` change** (`openspec validate --strict` first). This leaves `forget-command` as the only active OpenSpec change — that is intentional (I4 is backlogged), not a loose end.
 
 **Runtime evidence:** browser screenshots/log of two sessions running concurrently with a stop issued to the background one; TUI resume transcript.
 
@@ -253,8 +276,10 @@ Write the OpenSpec proposal for phases 2–4 only after phase-1 trace data shows
 
 ## Reviewer protocol (applies to every PR from this plan)
 
+Review model: item PRs target `feat/high-leverage-improvements` and are merged there by the orchestrator on green gates; the maintainer reviews each PR after the fact against this protocol, and the final `feat/high-leverage-improvements` → `main` merge is the maintainer's gate — nothing from this plan reaches `main` unreviewed. Review findings become follow-up commits on the integration branch.
+
 1. **Scope containment:** diff touches only the item's listed files. Prompt-string edits in a non-prompt item → reject. Ask-first-area edits beyond the item's explicit authorization → reject or escalate.
 2. **Spec conformance:** every scenario in the governing spec maps to a test; every checked task maps to evidence. Watch for the known anti-pattern: verification tasks ticked while implementation tasks are open.
-3. **Trace-level truth:** don't trust the PR description — open the committed evidence under `docs/internal/pr-evidence/` and confirm the claimed entries/fields appear. If behavior is observable only via mocks, reject and require a live trace.
+3. **Trace-level truth:** don't trust the PR description — verify the claimed entries/fields against the evidence excerpts in the PR and the local git-ignored `docs/internal/pr-evidence/` artifacts (re-run the live scenario if the local artifacts are gone). If behavior is observable only via mocks, reject and require a live trace.
 4. **Reject even if tests pass when:** tests/fixtures were edited to match new behavior without spec justification; an eval was "fixed" by special-casing its literals; assertions were weakened; error paths swallow provider failures into fabricatable defaults; idempotency/concurrency semantics changed without a concurrency test.
 5. **Request an OpenSpec clarification instead of accepting code when:** the implementation had to invent semantics the spec deferred; two specs conflict on the touched requirement; the PR contradicts shipped reality; a "no schema change" assertion proved false mid-implementation. The reviewer's output in these cases is a spec-edit proposal, not an approval.

@@ -15,6 +15,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type Api,
+  completeSimple,
+  getEnvApiKey,
   getModel,
   type Model,
   registerBuiltInApiProviders,
@@ -41,14 +43,20 @@ import {
   findCachedPromptMetadata,
   fixedPromptFromEnv,
   formatCompetitiveReportAnalysisMarkdown,
+  frozenCompetitivePanelFromEnv,
   type GeneratedFinancePrompt,
   parseComparisonJudgment,
   parseGeneratedPrompts,
+  resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../evals/competitive-finance.js";
+import {
+  evaluateFinalAnswerAssertion,
+  type FinalAnswerAssertionResult,
+} from "../evals/prompt-policy-assertions.js";
 import type { EvalTrace } from "../evals/types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
@@ -57,6 +65,7 @@ interface CompetitiveRunResult {
   openCandleTrace: EvalTrace;
   competitorAnswers: CompetitorAnswer[];
   judgment: ComparisonJudgment;
+  hardAssertionResults?: FinalAnswerAssertionResult[];
 }
 
 interface ResolvedModel {
@@ -123,16 +132,36 @@ const judgeModel = await resolveModelWithAuth(
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
+const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
+// The frozen panel's loss-class contracts live in the prompt-policy
+// manifest; the frozen run must evaluate them itself instead of assuming a
+// separate prompt-policy run happens (a generous LLM judge must not be the
+// only gate on a loss-class regression).
+const policyManifestAssertions = new Map<string, string[]>();
+if (frozenPanel) {
+  const manifestPath =
+    process.env.PROMPT_POLICY_MANIFEST ?? "docs/internal/prompt-to-policy-migration-manifest.json";
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
+    prompts: Array<{ id: string; expected?: { finalAnswerHardAssertions?: string[] } }>;
+  };
+  for (const entry of manifest.prompts) {
+    if (entry.expected?.finalAnswerHardAssertions?.length) {
+      policyManifestAssertions.set(entry.id, entry.expected.finalAnswerHardAssertions);
+    }
+  }
+}
 const fixedPrompt = fixedPromptFromEnv(process.env);
-const rawPrompts = fixedPrompt
-  ? [fixedPrompt]
-  : parseGeneratedPrompts(
-      await completeText(
-        judgeModel,
-        buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
-        { temperature: 0.8, maxTokens: 3000 },
-      ),
-    );
+const rawPrompts = frozenPanel
+  ? frozenPanel
+  : fixedPrompt
+    ? [fixedPrompt]
+    : parseGeneratedPrompts(
+        await completeText(
+          judgeModel,
+          buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
+          { temperature: 0.8, maxTokens: 3000 },
+        ),
+      );
 const prompts = rawPrompts.map((prompt) => {
   const cached = findCachedPromptMetadata(competitorAnswerCache, prompt.prompt);
   return cached
@@ -225,6 +254,16 @@ for (const prompt of prompts.slice(0, promptCount)) {
       `No cached or live competitive baseline answers are available for prompt ${prompt.id}`,
     );
   }
+  const manifestId = (prompt as { promptPolicyManifestId?: string }).promptPolicyManifestId;
+  const hardAssertions = manifestId ? (policyManifestAssertions.get(manifestId) ?? []) : [];
+  const hardAssertionResults = hardAssertions.map((assertion) =>
+    evaluateFinalAnswerAssertion(assertion, openCandleTrace),
+  );
+  for (const result of hardAssertionResults) {
+    console.log(
+      `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
+    );
+  }
   const judgment = await completeComparisonJudgment(
     buildComparisonJudgePrompt({
       prompt,
@@ -235,7 +274,7 @@ for (const prompt of prompts.slice(0, promptCount)) {
     }),
     ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
   );
-  results.push({ prompt, openCandleTrace, competitorAnswers, judgment });
+  results.push({ prompt, openCandleTrace, competitorAnswers, judgment, hardAssertionResults });
   const competitorScoreText = Object.entries(judgment.competitorScores)
     .map(([id, score]) => `${id}=${score}`)
     .join(" ");
@@ -265,8 +304,9 @@ const report = {
   })),
   skippedCompetitors: preflight.skipped,
   promptCount: results.length,
-  promptMode: fixedPrompt ? "fixed" : "generated",
+  promptMode: frozenPanel ? "frozen" : fixedPrompt ? "fixed" : "generated",
   seededState: seedState,
+  frozenPanel: Boolean(frozenPanel),
   summary,
   results,
 };
@@ -281,6 +321,22 @@ for (const competitor of allCompetitors) {
 console.log(`Ties: ${summary.ties}`);
 console.log(`Report: ${outputPath}`);
 console.log(`Analysis: ${analysisPath}`);
+const deterministicHardFailures = results.flatMap((result) =>
+  (result.hardAssertionResults ?? []).filter(
+    (assertion) => assertion.deterministic && !assertion.passed,
+  ),
+);
+if (frozenPanel && deterministicHardFailures.length > 0) {
+  console.error(
+    `\nFrozen panel FAILED ${deterministicHardFailures.length} deterministic hard assertion(s):`,
+  );
+  for (const failure of deterministicHardFailures) {
+    console.error(`- ${failure.assertion}: ${failure.reason}`);
+  }
+  // A generous LLM judge must not be the only gate on a loss-class
+  // regression; the frozen run fails on its own manifest contracts.
+  process.exit(1);
+}
 process.exit(competitiveBenchmarkExitCode());
 
 async function completeText(
@@ -680,7 +736,17 @@ async function resolveModelWithAuth(
   missingAuthMessage: string,
 ): Promise<ResolvedModel> {
   const model = resolveModel(provider, modelId);
-  const requestAuth = await modelRegistry.getApiKeyAndHeaders(model);
+  // ModelRegistry.getApiKeyAndHeaders skips env-key fallback, so seed
+  // provider env keys (e.g. GEMINI_API_KEY) as runtime AuthStorage
+  // overrides when the registry has no stored credential. The override
+  // also reaches the OpenCandle session runner sharing this AuthStorage.
+  const requestAuth = await resolveRequestAuthWithEnvApiKeyFallback({
+    provider: model.provider,
+    resolveRequestAuth: () => modelRegistry.getApiKeyAndHeaders(model),
+    getEnvApiKey: (modelProvider) => getEnvApiKey(modelProvider),
+    setRuntimeApiKey: (modelProvider, apiKey) =>
+      authStorage.setRuntimeApiKey(modelProvider, apiKey),
+  });
   if (!requestAuth.ok) {
     throw new Error(`${requestAuth.error}\n${missingAuthMessage}`);
   }

@@ -44,6 +44,20 @@ describe("extractEntities", () => {
       expect(result.budget).toBeUndefined();
     });
 
+    it("does not treat lowercase trading verbs as tickers in options contexts", () => {
+      // "sell calls" matched the lowercase ticker-context pattern and minted a
+      // SELL symbol, which then leaked into catalystSymbols (fixture 031).
+      const result = extractEntities(
+        "should I sell calls against my AMD shares for the next 1-2 weeks?",
+      );
+      expect(result.symbols).toEqual(["AMD"]);
+      expect(result.heldSymbol).toBe("AMD");
+      expect(result.catalystSymbols).toBeUndefined();
+
+      const buyResult = extractEntities("thinking to buy puts on my NVDA position");
+      expect(buyResult.symbols).toEqual(["NVDA"]);
+    });
+
     it("does not treat cost basis as an investment budget", () => {
       const result = extractEntities(
         "I own AAPL with a $175 cost basis. What covered call should I sell?",
@@ -234,6 +248,23 @@ describe("extractEntities", () => {
     it("detects LEAPS / long-dated", () => {
       const result = extractEntities("LEAPS on MSFT");
       expect(result.dteHint).toBe("leaps");
+    });
+
+    // Historical loss class: "1-2 weeks DTE preservation". A same-day
+    // catalyst mention ("earnings are today") must not override the user's
+    // explicit week-range DTE request into event_week/0-7 days.
+    it("prefers an explicit week-range DTE over catalyst event-week inference", () => {
+      const result = extractEntities(
+        "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?",
+      );
+      expect(result.dteHint).toBe("1-2 weeks");
+    });
+
+    it("extracts spelled-out and dashed week ranges", () => {
+      expect(extractEntities("covered call one to two weeks out on AAPL").dteHint).toBe(
+        "one-two weeks",
+      );
+      expect(extractEntities("puts 2–3 weeks out, earnings tonight").dteHint).toBe("2-3 weeks");
     });
 
     it("returns undefined when no DTE hint", () => {

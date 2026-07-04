@@ -29,7 +29,6 @@ interface SessionActionClient {
 }
 
 export interface SessionActionsController {
-  handlePrompt(prompt: string): Promise<void>;
   handleAskUserAnswer(id: string, value: unknown, action?: SessionActionMeta): Promise<void>;
   handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void>;
   handleNewSession(): Promise<void>;
@@ -78,32 +77,6 @@ export function createSessionActionsController({
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
     if (role !== "writer") throw new Error("Read-only follower mode");
-  }
-
-  async function handlePrompt(prompt: string): Promise<void> {
-    ensureWriter();
-
-    const modelSetup = getModelSetupState();
-    const sessionManager = getSessionManager();
-    const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt.startsWith("/") && modelSetup.requirement !== "ready") {
-      sessionManager.appendMessage({ role: "user", content: prompt, timestamp: now() });
-      broadcastState();
-      const message =
-        modelSetup.requirement === "select_model"
-          ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
-          : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
-      sessionManager.appendCustomMessageEntry("opencandle-model-setup", message, true, {
-        source: "gui",
-        requirement: modelSetup.requirement,
-      });
-      broadcastState();
-      return;
-    }
-
-    const beforeIds = new Set(sessionManager.getEntries().map((entry) => entry.id));
-    await promptAndSettle(getSession(), prompt, beforeIds);
-    broadcastState();
   }
 
   async function handleAskUserAnswer(
@@ -172,7 +145,6 @@ export function createSessionActionsController({
   }
 
   return {
-    handlePrompt,
     handleAskUserAnswer,
     handleAskUserCancel,
     handleNewSession,
@@ -191,7 +163,8 @@ export function createSessionActionsController({
       await handler();
       return;
     }
-    const sessionId = action.sessionId?.trim() || getSessionManager().getSessionId();
+    const sessionId = action.sessionId?.trim();
+    if (!sessionId) throw new Error("sessionId is required");
     const result = await localSessionCoordinator.runSessionAction(
       {
         sessionId,
@@ -230,7 +203,7 @@ export function createSessionActionsController({
           "x-opencandle-coordinator-secret": lock.coordinatorSecret,
         },
         body: JSON.stringify({
-          sessionId: action?.sessionId || sessionManager.getSessionId(),
+          sessionId: action?.sessionId,
           actionId: action?.actionId || "",
           actionType,
           payload,
@@ -258,7 +231,8 @@ export function createSessionActionsController({
     if (!targetSessionId || targetSessionId === current.getSessionId()) return current;
     const sessions = await SessionManager.list(cwd, sessionDir);
     const match = sessions.find((candidate) => candidate.id === targetSessionId);
-    return match ? SessionManager.open(match.path, sessionDir, cwd) : current;
+    if (!match) throw new Error("Unknown saved session");
+    return SessionManager.open(match.path, sessionDir, cwd);
   }
 }
 
@@ -269,16 +243,34 @@ export async function promptAndSettle(
   observation?: PromptObservation,
 ): Promise<void> {
   await runSession.prompt(prompt);
-  await waitForSessionTurnSettlement(() => ({
-    isStreaming: runSession.isStreaming,
-    pendingMessageCount: runSession.pendingMessageCount,
-  }));
+  await settleWithEventProgress(runSession);
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
     beforeIds,
   );
   await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
   await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
+}
+
+/**
+ * Settle wait fed by a session-event counter: a single long model generation
+ * keeps isStreaming/pendingMessageCount frozen for its whole duration, and
+ * without an activity signal the stall detector killed healthy long turns.
+ */
+async function settleWithEventProgress(runSession: AgentSession): Promise<void> {
+  let progressToken = 0;
+  const unsubscribe = runSession.subscribe(() => {
+    progressToken += 1;
+  });
+  try {
+    await waitForSessionTurnSettlement(() => ({
+      isStreaming: runSession.isStreaming,
+      pendingMessageCount: runSession.pendingMessageCount,
+      progressToken,
+    }));
+  } finally {
+    unsubscribe();
+  }
 }
 
 export async function replayObservedWorkflowPromptIfNeeded(
@@ -294,10 +286,7 @@ export async function replayObservedWorkflowPromptIfNeeded(
     expandPromptTemplates: false,
     source: "extension",
   });
-  await waitForSessionTurnSettlement(() => ({
-    isStreaming: runSession.isStreaming,
-    pendingMessageCount: runSession.pendingMessageCount,
-  }));
+  await settleWithEventProgress(runSession);
   await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
 }
 

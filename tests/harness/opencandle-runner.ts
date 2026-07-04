@@ -48,7 +48,8 @@ const MULTI_STEP_WORKFLOWS = new Set<WorkflowType>([
 ]);
 
 export interface RunOpenCandleSessionOptions {
-  prompt: string;
+  prompt?: string;
+  prompts?: string[];
   scriptedAnswers?: string[];
   cwd?: string;
   openCandleHome?: string;
@@ -69,6 +70,8 @@ export interface RunOpenCandleSessionResult {
 export async function runOpenCandleSession(
   options: RunOpenCandleSessionOptions,
 ): Promise<RunOpenCandleSessionResult> {
+  const prompts = normalizePrompts(options);
+  const tagsPromptIndex = options.prompts !== undefined;
   const openCandleHome = options.openCandleHome ?? mkdtempSync(join(tmpdir(), "oc-harness-home-"));
   const shouldRemoveOpenCandleHome = options.openCandleHome === undefined;
   const previousHome = process.env.OPENCANDLE_HOME;
@@ -100,19 +103,32 @@ export async function runOpenCandleSession(
     });
     session = created.session;
 
-    collector = createTraceCollector(session, options.prompt, {
+    collector = createTraceCollector(session, prompts[0], {
       jsonlPath: options.jsonlPath,
+      trackPromptIndex: tagsPromptIndex,
     });
 
     cache.clear();
-    await promptAndWaitForSettle(session, options.prompt, {
-      settleGraceMs: options.settleGraceMs ?? defaultSettleGraceMs(options.prompt),
-      timeoutMs: options.timeoutMs ?? 900_000,
-    });
+    const customEntries: CustomEntryTrace[] = [];
+    let customEntryOffset = 0;
+    for (const [promptIndex, prompt] of prompts.entries()) {
+      collector.setPromptIndex(promptIndex);
+      await promptAndWaitForSettle(session, prompt, {
+        settleGraceMs: options.settleGraceMs ?? defaultSettleGraceMs(prompt),
+        timeoutMs: options.timeoutMs ?? 900_000,
+      });
+      const drained = drainOpenCandleCustomEntries(
+        session.sessionManager,
+        customEntryOffset,
+        tagsPromptIndex ? promptIndex : undefined,
+      );
+      customEntries.push(...drained.entries);
+      customEntryOffset = drained.nextEntryOffset;
+    }
 
-    const customEntries = drainOpenCandleCustomEntries(session.sessionManager);
     const agentTrace: AgentTrace = {
       ...collector.getTrace(),
+      ...(tagsPromptIndex ? { prompts } : {}),
       customEntries,
     };
     return {
@@ -135,9 +151,22 @@ export async function runOpenCandleSession(
 
 export function drainOpenCandleCustomEntries(
   sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
-): CustomEntryTrace[] {
-  return sessionManager
-    .getEntries()
+  startEntryOffset?: undefined,
+  promptIndex?: number,
+): CustomEntryTrace[];
+export function drainOpenCandleCustomEntries(
+  sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
+  startEntryOffset: number,
+  promptIndex?: number,
+): { entries: CustomEntryTrace[]; nextEntryOffset: number };
+export function drainOpenCandleCustomEntries(
+  sessionManager: Pick<ReturnType<typeof PiSessionManager.inMemory>, "getEntries">,
+  startEntryOffset?: number,
+  promptIndex?: number,
+): CustomEntryTrace[] | { entries: CustomEntryTrace[]; nextEntryOffset: number } {
+  const allEntries = sessionManager.getEntries();
+  const entries = allEntries
+    .slice(startEntryOffset ?? 0)
     .filter((entry) => entry.type === "custom" && entry.customType.startsWith("opencandle-"))
     .map((entry) => {
       const customEntry = entry as Extract<
@@ -148,8 +177,11 @@ export function drainOpenCandleCustomEntries(
         customType: customEntry.customType,
         data: customEntry.data,
         timestamp: customEntry.timestamp,
+        ...(promptIndex === undefined ? {} : { promptIndex }),
       };
     });
+  if (startEntryOffset === undefined) return entries;
+  return { entries, nextEntryOffset: allEntries.length };
 }
 
 export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
@@ -159,6 +191,7 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
         name: tool.name,
         args: tool.args,
         result: tool.result,
+        ...(tool.promptIndex === undefined ? {} : { promptIndex: tool.promptIndex }),
       }),
     ),
   );
@@ -179,6 +212,17 @@ export function toEvalTrace(agentTrace: AgentTrace): EvalTrace {
     text: agentTrace.finalText || agentTrace.turns.map((turn) => turn.text).join(""),
     customEntries: agentTrace.customEntries,
   };
+}
+
+function normalizePrompts(options: RunOpenCandleSessionOptions): string[] {
+  if (options.prompts !== undefined) {
+    if (options.prompts.length === 0) {
+      throw new Error("runOpenCandleSession requires at least one prompt");
+    }
+    return options.prompts;
+  }
+  if (options.prompt !== undefined) return [options.prompt];
+  throw new Error("runOpenCandleSession requires prompt or prompts");
 }
 
 function createScriptedAskHandler(

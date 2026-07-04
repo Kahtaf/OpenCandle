@@ -14,6 +14,10 @@ export interface Question {
   reason?: string;
 }
 
+export interface PromptRequest {
+  prompt: string;
+}
+
 export class IpcChannel {
   constructor(private dir: string) {}
 
@@ -44,6 +48,11 @@ export class IpcChannel {
           resolve(JSON.parse(raw) as { value: string });
           return true;
         }
+        if (existsSync(join(this.dir, "prompt-request.json"))) {
+          cleanup();
+          resolve(null);
+          return true;
+        }
         return false;
       };
 
@@ -72,10 +81,24 @@ export class IpcChannel {
     return result;
   }
 
-  /** Write trace.json and set status=done. */
+  /** Write trace.json atomically and set status=done. */
   writeTrace(trace: AgentTrace): void {
-    writeFileSync(join(this.dir, "trace.json"), JSON.stringify(trace, null, 2), "utf-8");
+    // tmp+rename like every other IPC write: a follow-up prompt rewrites
+    // trace.json, and a concurrent `trace` CLI read of a truncated file
+    // throws "Unexpected end of JSON input".
+    const tmp = join(this.dir, "trace.json.tmp");
+    writeFileSync(tmp, JSON.stringify(trace, null, 2), "utf-8");
+    renameSync(tmp, join(this.dir, "trace.json"));
     this.setStatus("done");
+  }
+
+  /** Consume a pending follow-up prompt request, if one exists. */
+  readPromptRequest(): PromptRequest | null {
+    const p = join(this.dir, "prompt-request.json");
+    if (!existsSync(p)) return null;
+    const request = JSON.parse(readFileSync(p, "utf-8")) as PromptRequest;
+    rmSync(p, { force: true });
+    return request;
   }
 
   /** Write error.txt and set status=error. */
@@ -115,9 +138,30 @@ export class IpcChannel {
     renameSync(tmp, join(dir, "answer.json"));
   }
 
+  static writePromptRequest(dir: string, prompt: string): void {
+    const tmp = join(dir, "prompt-request.json.tmp");
+    writeFileSync(tmp, JSON.stringify({ prompt }, null, 2), "utf-8");
+    renameSync(tmp, join(dir, "prompt-request.json"));
+    new IpcChannel(dir).setStatus("running");
+  }
+
   static readTrace(dir: string): AgentTrace | null {
     const p = join(dir, "trace.json");
     if (!existsSync(p)) return null;
     return JSON.parse(readFileSync(p, "utf-8")) as AgentTrace;
+  }
+
+  /** True when the run process that wrote the pid file is still alive. */
+  static isRunAlive(dir: string): boolean {
+    const p = join(dir, "pid");
+    if (!existsSync(p)) return false;
+    const pid = Number(readFileSync(p, "utf-8").trim());
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

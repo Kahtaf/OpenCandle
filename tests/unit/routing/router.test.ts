@@ -609,6 +609,39 @@ describe("route()", () => {
     expect(result.missing_required).toEqual(["symbols"]);
   });
 
+  it("corrects macro metric comparisons after acronym slot cleanup leaves one ticker", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Show CPI vs SPY YTD",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["CPI", "SPY"] },
+          slots: {
+            symbols: { value: ["CPI", "SPY"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "misread CPI as a ticker",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.entities.symbols).toEqual(["SPY"]);
+    expect(result.slots.symbols).toBeUndefined();
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+  });
+
   it("keeps finance acronym tickers with a direct ticker phrase", async () => {
     const result = await route(
       {
@@ -632,6 +665,131 @@ describe("route()", () => {
     );
 
     expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+  });
+
+  it("restores locally marked acronym tickers omitted by the model in text order", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare KO, the IV ticker, and PEP",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["KO", "PEP"] },
+          slots: {
+            symbols: { value: ["KO", "PEP"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "missed locally marked IV ticker",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+    expect(result.slots.symbols?.value).toEqual(["KO", "IV", "PEP"]);
+    // Every synced symbol appears in the user's text, so user provenance holds.
+    expect(result.slots.symbols?.source).toBe("user");
+  });
+
+  it("labels synced compare symbol slots prior_context when merged symbols are absent from the text", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare those with SPY over the last year",
+        priorTurns: [
+          { role: "user", text: "I'm deciding between NVDA and AMD for a semiconductor position." },
+          { role: "assistant", text: "NVDA and AMD are the two semiconductor names in scope." },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["NVDA", "AMD", "SPY"] },
+          slots: {
+            symbols: { value: ["SPY"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "NVDA and AMD carried from prior turns",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["SPY", "NVDA", "AMD"]);
+    expect(result.slots.symbols?.value).toEqual(["SPY", "NVDA", "AMD"]);
+    // NVDA/AMD never appear in this turn's text; claiming the user specified
+    // them corrupts the Assumptions block and ask-vs-guess provenance.
+    expect(result.slots.symbols?.source).toBe("prior_context");
+    expect(result.diagnostics.map((d) => d.code)).toContain(
+      "symbols_slot_provenance_prior_context",
+    );
+  });
+
+  it("downgrades user provenance on already-ordered compare slots with prior-turn symbols", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare those with SPY over the last year",
+        priorTurns: [
+          { role: "user", text: "I'm deciding between NVDA and AMD for a semiconductor position." },
+        ],
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["SPY", "NVDA", "AMD"] },
+          slots: {
+            symbols: { value: ["SPY", "NVDA", "AMD"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "already in text order; no sync fires",
+        }),
+      ),
+    );
+
+    expect(result.slots.symbols?.source).toBe("prior_context");
+  });
+
+  it("keeps preference-sourced compare slots untouched when symbols are absent from text", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare my usual etfs over the last year",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["VOO", "VTI"] },
+          slots: {
+            symbols: { value: ["VOO", "VTI"], source: "preference", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "symbols from saved preferences",
+        }),
+      ),
+    );
+
+    expect(result.slots.symbols?.source).toBe("preference");
   });
 
   it("corrects macro data prompts misread as ticker comparisons", async () => {
@@ -716,6 +874,220 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
+  });
+
+  it("fills profile-backed portfolio risk slots when the model omits them", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "build me a portfolio for $30k",
+        profileSnapshot: { risk_profile: "conservative" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 30000 },
+          slots: {
+            budget: { value: 30000, source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "portfolio budget extracted",
+        }),
+      ),
+    );
+
+    expect(result.slots.risk_profile).toEqual({
+      value: "conservative",
+      source: "preference",
+      confidence: "high",
+    });
+  });
+
+  it("fills the options dte_target slot from deterministic extraction when the model omits it", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "find me bullish calls on NVDA 30-45 DTE",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+          slots: {
+            symbol: { value: "NVDA", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "options screener without the dte slot",
+        }),
+      ),
+    );
+
+    // The DTE horizon is a named historical loss class; when the model drops
+    // the slot the deterministic extraction must preserve the user's range.
+    expect(result.slots.dte_target).toEqual({
+      value: "30_to_45_days",
+      source: "user",
+      confidence: "high",
+    });
+    expect(result.diagnostics.map((d) => d.code)).toContain("dte_slot_filled_from_extraction");
+  });
+
+  it("canonicalizes asset_scope vocabulary synonyms in slots and preference updates", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I only want ETFs in my portfolio, budget is $20k",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 20000 },
+          slots: {
+            budget: { value: 20000, source: "user", confidence: "high" },
+            asset_scope: { value: "etf_only", source: "user", confidence: "high" },
+          },
+          preference_updates: [
+            { key: "asset_scope", value: "etf_only", confidence: "high", source: "inferred" },
+          ],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "asset scope emitted with synonym vocabulary",
+        }),
+      ),
+    );
+
+    // "etf_only"/"etfs_only" are model-vocabulary synonyms of the canonical
+    // asset_scope value; canonicalization keeps saved preferences and slot
+    // consumers on one vocabulary.
+    expect(result.slots.asset_scope?.value).toBe("etf_focused");
+    expect(result.preference_updates).toEqual([
+      { key: "asset_scope", value: "etf_focused", confidence: "high", source: "inferred" },
+    ]);
+  });
+
+  it("suppresses preference updates that restate the saved profile value", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "remember, I only want ETFs, so compare VOO and SCHD",
+        profileSnapshot: { asset_scope: "etf_focused" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["VOO", "SCHD"] },
+          slots: {
+            symbols: { value: ["VOO", "SCHD"], source: "user", confidence: "high" },
+          },
+          preference_updates: [
+            { key: "asset_scope", value: "etf_focused", confidence: "high", source: "inferred" },
+          ],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "echoed preference written as an update",
+        }),
+      ),
+    );
+
+    // "remember, I only want ETFs" restates the saved preference; a no-op
+    // rewrite pollutes preference provenance (the fixture-029 ECHO contract).
+    expect(result.preference_updates).toEqual([]);
+    expect(result.diagnostics.map((d) => d.code)).toContain("preference_echo_suppressed");
+  });
+
+  it("does not hijack non-finance pass-through chat into a risk preference write", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I'm feeling more aggressive on the tennis court lately",
+        priorTurns: [
+          { role: "user", text: "my backhand has been improving all summer" },
+          { role: "assistant", text: "Great to hear the training is paying off." },
+        ],
+        profileSnapshot: { risk_profile: "conservative" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "pass_through",
+          route: "fallback",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "non-finance conversation",
+        }),
+      ),
+    );
+
+    // A saved risk_profile alone must not convert non-finance chat into a
+    // preference write; finance context must come from the conversation.
+    expect(result.routeKind).toBe("pass_through");
+    expect(result.preference_updates).toEqual([]);
+  });
+
+  it("recovers conversational risk preference updates from prior profile context", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I've been getting more cautious lately, I'm thinking conservative now",
+        priorTurns: [
+          {
+            role: "assistant",
+            text: "Got it — based on your profile I've been sizing positions aggressively.",
+          },
+        ],
+        profileSnapshot: { risk_profile: "aggressive" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "pass_through",
+          route: "fallback",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "conversational statement",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.entities.riskProfile).toBe("conservative");
+    expect(result.slots.risk_profile).toEqual({
+      value: "conservative",
+      source: "user",
+      confidence: "high",
+    });
+    expect(result.preference_updates).toEqual([
+      {
+        key: "risk_profile",
+        value: "conservative",
+        confidence: "high",
+        source: "inferred",
+      },
+    ]);
+    expect(result.tool_bundles).toEqual(["core_market"]);
   });
 
   it("corrects portfolio-builder output for existing-allocation evaluation prompts", async () => {
@@ -1174,6 +1546,36 @@ describe("route()", () => {
         code: "covered_call_underlying_corrected",
       }),
     );
+  });
+
+  // Historical loss class: "1-2 weeks DTE preservation". The held-symbol
+  // correction re-derives dteHint from deterministic extraction; a same-day
+  // catalyst mention must not collapse an explicit "1-2 weeks out" request
+  // into event_week/0-7 days anywhere in the postprocess.
+  it("preserves an explicit 1-2 week DTE through catalyst-driven covered-call correction", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"], dteHint: "1-2 weeks" },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          reasoning: "covered call on owned DRAM around NVDA catalyst",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("workflow_dispatch");
+    expect(result.workflow).toBe("options_screener");
+    expect(result.entities.heldSymbol).toBe("DRAM");
+    expect(result.entities.dteHint).toBe("1-2 weeks");
+    expect(result.slots.dte_target?.value).toBe("7_to_14_days");
   });
 
   it("keeps covered-call education and suitability prompts out of options workflow dispatch", async () => {

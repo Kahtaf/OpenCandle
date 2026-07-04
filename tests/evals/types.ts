@@ -11,12 +11,15 @@ import type {
 import type { ArtifactContractId } from "../../src/runtime/artifact-contracts.js";
 import type { PlanningEvidenceRecord } from "../../src/runtime/planning-evidence.js";
 import type { CustomEntryTrace } from "../harness/types.js";
+import type { SeededMarketStateFixture } from "./competitive-finance.js";
+import type { SavedMarketStateFidelityAssertion } from "./scorers/saved-market-state-fidelity.js";
 
 /** Shape of tool call data captured in a trace. */
 export interface TraceToolCall {
   name: string;
   args: Record<string, unknown>;
   result?: unknown;
+  promptIndex?: number;
 }
 
 export interface RouterTelemetry {
@@ -72,6 +75,8 @@ export interface EvalCase {
   prompt: string;
   /** Ordered answers for multi-turn ask_user scripting, consumed in sequence. */
   answers?: string[];
+  /** Optional deterministic saved market-state fixture seeded into the harness home. */
+  savedMarketStateFixture?: SeededMarketStateFixture;
   assertions: {
     // Layer 1: Workflow classification
     expectedWorkflow?: WorkflowType;
@@ -87,6 +92,8 @@ export interface EvalCase {
     responseNotContains?: (string | RegExp)[];
     // Layer 6-7: LLM-judge
     rubric?: string[];
+    // Saved-state fidelity: trace context + final answer values.
+    savedMarketStateFidelity?: SavedMarketStateFidelityAssertion;
   };
 }
 

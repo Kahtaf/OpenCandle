@@ -45,15 +45,19 @@ describe("release readiness automation", () => {
     );
   });
 
-  it("defines a local release check that covers compile, lint, tests, docs, packing, and link checks", () => {
+  it("defines a local release check that covers compile, lint, tests, GUI smoke, docs, packing, and link checks", () => {
     const pkg = JSON.parse(read("package.json")) as {
       scripts: Record<string, string>;
     };
     const releaseCheck = pkg.scripts["release:check"];
 
+    expect(pkg.scripts["test:gui:release-smoke"]).toBe(
+      "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --config vitest.config.gui-release.ts",
+    );
     expect(releaseCheck).toContain("npx tsc --noEmit");
     expect(releaseCheck).toContain("npx biome ci .");
     expect(releaseCheck).toContain("npm test");
+    expect(releaseCheck).toContain("npm run test:gui:release-smoke");
     expect(releaseCheck).toContain("npm run docs:site:build");
     expect(releaseCheck).toContain("npm run package:contents:check");
     expect(releaseCheck).toContain("npm run test:packed-install");

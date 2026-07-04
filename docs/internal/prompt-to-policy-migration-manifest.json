@@ -285,13 +285,41 @@
         "commitmentMode": "decision",
         "toolBundles": ["core_market", "options", "sentiment", "clarification"],
         "requiredEvidence": ["owned underlying DRAM", "catalyst symbol NVDA", "options chain when available"],
-        "finalAnswerHardAssertions": [],
+        "finalAnswerHardAssertions": [
+          "uses DRAM as the covered-call underlying",
+          "preserves NVDA as catalyst context",
+          "preserves cost basis and event-week DTE hint"
+        ],
         "providerGapDisclosure": []
       },
       "optionalJudgeAssertions": ["strategy/risk framing", "uses DRAM as the covered-call underlying", "preserves NVDA as catalyst context, not the option-chain symbol", "preserves cost basis and event-week DTE hint", "frames covered-call assignment/downside/opportunity-cost risk"],
       "baselineOpenCandleReportPath": "tests/unit/routing/router.test.ts",
       "competitorBaselineReportPathOrHash": "not-applicable-router-boundary",
       "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "covered-call-dte-preservation",
+      "text": "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?",
+      "followupSequence": [],
+      "ledgerRows": ["options-existing-position", "frozen-competitive-panel"],
+      "expected": {
+        "routeKind": "workflow_dispatch",
+        "workflow": "options_screener",
+        "taskFamily": "options_strategy",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "options", "sentiment", "clarification"],
+        "requiredEvidence": ["owned underlying DRAM", "catalyst symbol NVDA", "requested 1-2 week DTE", "options chain when available"],
+        "finalAnswerHardAssertions": [
+          "uses DRAM as the covered-call underlying",
+          "preserves NVDA as catalyst context",
+          "preserves requested 1-2 week DTE"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["strategy/risk framing", "uses DRAM as the covered-call underlying", "preserves NVDA as catalyst context, not the option-chain symbol", "preserves requested 1-2 week DTE instead of same-day expiry", "frames covered-call assignment/downside/opportunity-cost risk"],
+      "baselineOpenCandleReportPath": "not-applicable-frozen-competitive-panel",
+      "competitorBaselineReportPathOrHash": "not-applicable-frozen-competitive-panel",
+      "cachedCompetitorAnswersAllowed": true
     },
     {
       "id": "protective-put-routing",
@@ -305,7 +333,12 @@
         "commitmentMode": "decision",
         "toolBundles": ["core_market", "options", "sentiment", "clarification"],
         "requiredEvidence": ["owned underlying AMD", "catalyst symbol NVDA", "share quantity", "options chain when available"],
-        "finalAnswerHardAssertions": [],
+        "finalAnswerHardAssertions": [
+          "uses AMD as protective-put underlying",
+          "preserves NVDA as catalyst context",
+          "preserves 200-share hedge quantity and month DTE hint",
+          "does not convert protective put request into a bullish call strategy"
+        ],
         "providerGapDisclosure": []
       },
       "optionalJudgeAssertions": ["cost-sensitive hedge quality", "uses AMD as protective-put underlying", "preserves NVDA as catalyst context", "preserves 200-share hedge quantity and month DTE hint", "frames hedge floor, premium, Greeks, liquidity, and protective-put risks"],
@@ -363,7 +396,8 @@
         "requiredEvidence": [],
         "finalAnswerHardAssertions": [
           "does not ask for a portfolio budget",
-          "does not route as portfolio construction requiring a budget"
+          "does not route as portfolio construction requiring a budget",
+          "starts with a bottom-line structural portfolio read"
         ],
         "providerGapDisclosure": []
       },
@@ -371,6 +405,30 @@
       "baselineOpenCandleReportPath": "not-applicable-new-prompt-policy-case",
       "competitorBaselineReportPathOrHash": "not-applicable-new-prompt-policy-case",
       "cachedCompetitorAnswersAllowed": false
+    },
+    {
+      "id": "hedge-sizing-share-count",
+      "text": "I own 450 shares of AAPL and want downside protection through the next month. How many puts should I consider and what tradeoffs matter?",
+      "followupSequence": [],
+      "ledgerRows": ["options-existing-position", "frozen-competitive-panel"],
+      "expected": {
+        "routeKind": "workflow_dispatch",
+        "workflow": "options_screener",
+        "taskFamily": "options_strategy",
+        "commitmentMode": "decision",
+        "toolBundles": ["core_market", "options", "sentiment", "clarification"],
+        "requiredEvidence": ["owned underlying AAPL", "share quantity", "one contract per 100 shares sizing", "options chain when available"],
+        "finalAnswerHardAssertions": [
+          "uses AAPL as protective-put underlying",
+          "sizes hedge from 450 shares into 4 puts plus residual 50 shares or explicitly explains rounding",
+          "frames hedge floor, premium, Greeks, liquidity, and protective-put risks"
+        ],
+        "providerGapDisclosure": []
+      },
+      "optionalJudgeAssertions": ["cost-sensitive hedge quality", "uses AAPL as protective-put underlying", "preserves 450-share hedge quantity and month DTE hint", "sizes hedge contracts from the 100-share options multiplier", "frames hedge floor, premium, Greeks, liquidity, and protective-put risks"],
+      "baselineOpenCandleReportPath": "not-applicable-frozen-competitive-panel",
+      "competitorBaselineReportPathOrHash": "not-applicable-frozen-competitive-panel",
+      "cachedCompetitorAnswersAllowed": true
     },
     {
       "id": "provider-degradation-disclosure",

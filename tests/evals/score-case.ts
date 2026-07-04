@@ -1,5 +1,6 @@
 import { scoreDataFaithfulness } from "./scorers/data-faithfulness.js";
 import { scoreRiskDisclosure } from "./scorers/risk-disclosure.js";
+import { scoreSavedMarketStateFidelity } from "./scorers/saved-market-state-fidelity.js";
 import { scoreToolArguments } from "./scorers/tool-arguments.js";
 import { scoreToolSelection } from "./scorers/tool-selection.js";
 import { scoreWorkflowClassification } from "./scorers/workflow-classification.js";
@@ -40,6 +41,12 @@ export function scoreCase(evalCase: EvalCase, trace: EvalTrace): EvalCaseResult 
   if (assertions.dataFaithfulness) {
     const detail = scoreDataFaithfulness(trace);
     layers["data_faithfulness"] = detail;
+    scores.push(detail.score);
+  }
+
+  if (assertions.savedMarketStateFidelity) {
+    const detail = scoreSavedMarketStateFidelity(trace, assertions.savedMarketStateFidelity);
+    layers["saved_market_state_fidelity"] = detail;
     scores.push(detail.score);
   }
 

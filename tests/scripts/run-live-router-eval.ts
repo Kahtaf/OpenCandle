@@ -46,13 +46,60 @@ function loadFixtures(): Array<{ name: string; data: RouterFixture }> {
     }));
 }
 
-// Diff the routing contract only. `reasoning` is model prose. `diagnostics`
-// are internal post-processing correction traces: a model that emits the
-// correct routeKind directly never triggers the corrections that the
-// fixture-recording model needed, so they cannot be compared across models.
-function stripNonContract(out: RouterOutput): Omit<RouterOutput, "reasoning" | "diagnostics"> {
-  const { reasoning: _r, diagnostics: _d, ...rest } = out;
-  return rest;
+// Diff the routing contract only. Route kind/route stay visible so exemptions
+// cannot mask dispatch/pass-through/clarification flips. Every exemption
+// carries its classification; anything not exempted here is contractual.
+function stripNonContract(
+  out: RouterOutput,
+  expected?: { slotKeys: string[]; toolBundles: string[] },
+): unknown {
+  const entities = { ...out.entities };
+  // Class C: natural DTE prose and ETF-only compare metric vocabulary are
+  // normalized by downstream slot resolution, not by route selection. DTE
+  // horizon coverage is preserved through slot values below.
+  delete entities.dteHint;
+  delete entities.compareMetrics;
+
+  return {
+    routeKind: out.routeKind,
+    route: out.route,
+    // Class B: fallback/agent-task workflow labels are model-specific planning
+    // hints; workflow identity is contractual only for dispatchable workflows.
+    workflow: out.routeKind === "workflow_dispatch" ? out.workflow : undefined,
+    entities,
+    // Class A: EXTRA slot keys a model volunteers are exempt; the VALUE of
+    // every expected slot is contractual (blanket slot dropping masked wrong
+    // budgets/symbols). Class C: source/confidence are provenance detail.
+    slots: contractSlotValues(out.slots, expected?.slotKeys),
+    // Contractual: a spurious preference write is the exact failure class the
+    // preference-ECHO fixture (029) exists to forbid.
+    preference_updates: out.preference_updates,
+    // Contractual: every EXPECTED bundle must be present (a missing bundle
+    // means tools unavailable at runtime). Class A: extra volunteered
+    // bundles only widen the available tool surface and are exempt; order
+    // is presentation.
+    tool_bundles: contractToolBundles(out.tool_bundles, expected?.toolBundles),
+    missing_required: out.missing_required,
+  };
+}
+
+function contractToolBundles(bundles: string[] | undefined, allowedExtra?: string[]): string[] {
+  const sorted = [...(bundles ?? [])].sort();
+  if (!allowedExtra) return sorted;
+  const expectedSet = new Set(allowedExtra);
+  return sorted.filter((bundle) => expectedSet.has(bundle));
+}
+
+function contractSlotValues(
+  slots: RouterOutput["slots"],
+  allowedKeys?: string[],
+): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const [key, slot] of Object.entries(slots ?? {})) {
+    if (allowedKeys && !allowedKeys.includes(key)) continue;
+    values[key] = slot?.value;
+  }
+  return values;
 }
 
 function shallowDiff(expected: unknown, actual: unknown): string[] {
@@ -123,7 +170,10 @@ async function main(): Promise<void> {
 
     const diffs = shallowDiff(
       stripNonContract(data.expectedRouterOutput),
-      stripNonContract(result),
+      stripNonContract(result, {
+        slotKeys: Object.keys(data.expectedRouterOutput.slots ?? {}),
+        toolBundles: data.expectedRouterOutput.tool_bundles ?? [],
+      }),
     );
     if (diffs.length === 0) {
       pass += 1;

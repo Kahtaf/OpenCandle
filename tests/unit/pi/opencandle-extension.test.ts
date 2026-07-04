@@ -151,6 +151,16 @@ describe("opencandle extension", () => {
     };
 
     await fake.commands.get("analyze")!.handler("NVDA", ctx);
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow", {
+      workflow: "comprehensive_analysis",
+      resolvedSlots: { symbol: "NVDA" },
+      analystsTotal: 5,
+    });
+    expect(
+      (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([type]) => type === "opencandle-workflow",
+      ),
+    ).toHaveLength(1);
     expect(fake.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(fake.sendUserMessage).toHaveBeenNthCalledWith(
       1,
@@ -159,12 +169,18 @@ describe("opencandle extension", () => {
 
     await vi.runAllTimersAsync();
 
+    // This fake yields no assistant text, so every structured step re-prompts
+    // once (interleaved "revise" messages) and, with zero parsed analysts,
+    // the rebuttal runs instead of being skipped as false consensus.
     const prompts = comprehensiveAnalysisPrompts("NVDA");
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length);
-    for (const [index, prompt] of prompts.entries()) {
-      if (index === 0) continue;
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index + 1, prompt);
-    }
+    const canonicalCalls = (fake.sendUserMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([prompt]) => prompt as string)
+      .filter((prompt) => prompts.includes(prompt));
+    expect(canonicalCalls).toEqual(prompts);
+    expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-event",
+      expect.objectContaining({ eventType: "step_skipped", stepType: "debate_rebuttal" }),
+    );
   });
 
   it("intercepts natural-language analyze input and queues the same prompt sequence", async () => {
@@ -192,14 +208,31 @@ describe("opencandle extension", () => {
 
     const prompts = comprehensiveAnalysisPrompts("NVDA");
     expect(result).toEqual({ action: "transform", text: prompts[0] });
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow", {
+      workflow: "comprehensive_analysis",
+      resolvedSlots: { symbol: "NVDA" },
+      analystsTotal: 5,
+    });
+    expect(
+      (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([type]) => type === "opencandle-workflow",
+      ),
+    ).toHaveLength(1);
 
     await vi.runAllTimersAsync();
-    expect(fake.sendUserMessage).toHaveBeenCalledTimes(prompts.length - 1);
-    for (const [index, prompt] of prompts.entries()) {
-      if (index === 0) continue;
-      expect(fake.sendUserMessage).toHaveBeenNthCalledWith(index, prompt);
-    }
+    // Same all-unparsed degradation semantics as the /analyze command test:
+    // canonical follow-up prompts arrive in order with revise re-prompts
+    // interleaved, and the rebuttal is dispatched (no consensus to gate on).
+    const sentFollowUps = prompts.filter((_, index) => index !== 0);
+    const canonicalCalls = (fake.sendUserMessage as ReturnType<typeof vi.fn>).mock.calls
+      .map(([prompt]) => prompt as string)
+      .filter((prompt) => sentFollowUps.includes(prompt));
+    expect(canonicalCalls).toEqual(sentFollowUps);
     expect(ctx.ui.notify).not.toHaveBeenCalledWith("Analysis queued as follow-up.", "info");
+    expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-workflow-event",
+      expect.objectContaining({ eventType: "step_skipped", stepType: "debate_rebuttal" }),
+    );
   });
 
   it("records the original user text when a workflow transform replaces the turn", async () => {

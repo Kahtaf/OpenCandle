@@ -189,6 +189,15 @@ const LOWERCASE_FINANCE_TERMS = new Set([
   "rate",
   "rates",
   "cuts",
+  // Trading verbs written in lowercase are actions, not tickers — "sell
+  // calls" must not mint a SELL symbol. Uppercase ticker extraction is
+  // unaffected, so a genuine $SELL / "SELL" ticker still resolves.
+  "sell",
+  "buy",
+  "hold",
+  "write",
+  "roll",
+  "trim",
   "gold",
   "oil",
   "stock",
@@ -478,6 +487,14 @@ function extractDteHint(input: string): string | undefined {
   const lower = input.toLowerCase();
   const explicitDays = lower.match(/\b(\d+)\s*(?:-|to|or)\s*(\d+)\s*(?:dte|days?)\b/);
   if (explicitDays) return `${explicitDays[1]}-${explicitDays[2]} days`;
+  // An explicit user week range ("1-2 weeks out") must outrank the
+  // catalyst-derived event_week inference below; a same-day earnings
+  // mention otherwise collapses the requested horizon to 0-7 days
+  // (historical "1-2 weeks DTE preservation" loss class).
+  const explicitWeeks = lower.match(
+    /\b(\d+|one|two|three|four)\s*(?:[-–]|to|or)\s*(\d+|one|two|three|four)\s*weeks?\b/,
+  );
+  if (explicitWeeks) return `${explicitWeeks[1]}-${explicitWeeks[2]} weeks`;
   if (/\bmonth\b/.test(lower)) return "month";
   if (
     /\bearnings?\b.*\b(?:today|tonight|this\s+week)\b|\b(?:today|tonight|this\s+week)\b.*\bearnings?\b/.test(

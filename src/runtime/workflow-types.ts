@@ -44,6 +44,9 @@ export interface StepOutput {
   stepType: string;
   evidence: EvidenceRecord[];
   rawText?: string;
+  analystOutput?: AnalystOutput;
+  debateOutput?: DebateOutput;
+  parsed?: boolean;
 }
 
 /** Analyst signal direction. */

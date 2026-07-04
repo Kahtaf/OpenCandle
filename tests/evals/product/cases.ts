@@ -50,6 +50,23 @@ const toolBacked: ProductEvalDimension = {
   requiredToolNames: ["get_stock_quote"],
 };
 
+const exactlyOneFocusedAskUser: ProductEvalDimension = {
+  id: "ask_instead_of_guess",
+  description: "Asks exactly one focused clarification question instead of guessing.",
+  expectedAskUserCount: 1,
+  askUserQuestionPatterns: [/\b(which|what|ticker|symbol|position|bank|calls?)\b/i],
+  mandatory: true,
+  weight: 2,
+};
+
+const noAskUser: ProductEvalDimension = {
+  id: "no_unneeded_clarification",
+  description: "Does not ask for clarification when context resolves the request.",
+  expectedAskUserCount: 0,
+  mandatory: true,
+  weight: 2,
+};
+
 export const PRODUCT_SCENARIO_TEMPLATES: ScenarioTemplate[] = [
   {
     id: "compare_assets_with_horizon",
@@ -156,6 +173,40 @@ export const PRODUCT_EVAL_CASES: ProductEvalCase[] = [
     prompt: "Screen MSFT bullish call options with good liquidity for the next month.",
     assertions: { expectedWorkflow: "options_screener", requiredTools: ["get_option_chain"] },
   }),
+  // PROMOTE: E5 ask-vs-guess cases are live-model boundary evals. Promote only
+  // after the paired ambiguous/resolvable traces pass reliably on the integration branch.
+  makeCase("ask-vs-guess-ambiguous-sell-my-calls", "options_screen_with_dte_objective", {
+    tier: "opt-in",
+    prompt: "Should I sell my calls?",
+    setup: { marketStateFixture: "e5_two_option_positions" },
+    dimensions: [
+      exactlyOneFocusedAskUser,
+      {
+        id: "ambiguous_calls_no_guess",
+        description: "Does not resolve either saved option position before the user clarifies.",
+        forbiddenResolvedSymbols: ["NVDA", "AMD"],
+        mandatory: true,
+      },
+    ],
+  }),
+  makeCase("ask-vs-guess-prior-turn-sell-my-calls", "options_screen_with_dte_objective", {
+    tier: "opt-in",
+    prompt: "Should I sell my calls?",
+    prompts: ["I'm looking at my NVDA calls.", "Should I sell my calls?"],
+    setup: { marketStateFixture: "e5_two_option_positions" },
+    assertions: { expectedWorkflow: "options_screener", requiredTools: ["get_option_chain"] },
+    dimensions: [
+      noAskUser,
+      {
+        id: "prior_turn_calls_resolution",
+        description: "Resolves the pronoun-backed option request to NVDA from prior turn context.",
+        requiredResolvedSymbols: ["NVDA"],
+        forbiddenResolvedSymbols: ["AMD"],
+        mandatory: true,
+      },
+      riskFraming,
+    ],
+  }),
   makeCase("sentiment-meta-source-gaps", "sentiment_request_with_source_gaps", {
     prompt: "What is Reddit and news sentiment saying about META?",
     assertions: { requiredTools: ["get_sentiment_summary"] },
@@ -171,6 +222,37 @@ export const PRODUCT_EVAL_CASES: ProductEvalCase[] = [
   makeCase("macro-inflation-portfolio-risk", "macro_market_context", {
     prompt: "What macro risks matter most for a balanced portfolio right now?",
     assertions: { expectedWorkflow: "general_finance_qa" },
+  }),
+  // PROMOTE: E5 ask-vs-guess cases are live-model boundary evals. Promote only
+  // after the paired ambiguous/resolvable traces pass reliably on the integration branch.
+  makeCase("ask-vs-guess-ambiguous-compare-the-banks", "compare_assets_with_horizon", {
+    tier: "opt-in",
+    prompt: "Compare the banks.",
+    dimensions: [
+      exactlyOneFocusedAskUser,
+      {
+        id: "ambiguous_banks_no_guess",
+        description: "Does not choose bank tickers before the user specifies them.",
+        forbiddenResolvedSymbols: ["JPM", "BAC", "WFC", "C", "GS", "MS"],
+        mandatory: true,
+      },
+    ],
+  }),
+  makeCase("ask-vs-guess-prior-turn-compare-the-banks", "compare_assets_with_horizon", {
+    tier: "opt-in",
+    prompt: "Compare the banks.",
+    prompts: ["I'm deciding between JPM and BAC.", "Compare the banks."],
+    assertions: { expectedWorkflow: "compare_assets", requiredTools: ["get_stock_quote"] },
+    dimensions: [
+      noAskUser,
+      {
+        id: "prior_turn_banks_resolution",
+        description: "Resolves the bank comparison to JPM and BAC from prior turn context.",
+        requiredResolvedSymbols: ["JPM", "BAC"],
+        mandatory: true,
+      },
+      riskFraming,
+    ],
   }),
   makeCase("education-pe-ratio", "education_without_fake_current_data", {
     prompt: "Explain how to use P/E ratios without over relying on them.",

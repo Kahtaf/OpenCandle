@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildGuiToastPayload,
@@ -132,6 +134,13 @@ describe("useGuiConnection helpers", () => {
       requestId: "req-2",
       sessionId: "session-visible-route",
     });
+
+    expect(() =>
+      buildToolInvokeSocketMessage(
+        { requestId: "req-3", toolName: "get_stock_quote", args: { symbol: "MSFT" } },
+        "",
+      ),
+    ).toThrow("sessionId is required");
   });
 
   it("stamps ask_user socket messages with action ids and session ids", () => {
@@ -158,6 +167,15 @@ describe("useGuiConnection helpers", () => {
       actionId: "ask-action-2",
       sessionId: "prompt-session",
     });
+    expect(() => buildSessionActionSocketMessage("ask_user.cancel", { id: "ask-3" }, "")).toThrow(
+      "sessionId is required",
+    );
+  });
+
+  it("does not send legacy active-session chat prompts from browser call sites", () => {
+    const source = readSourceTree(resolve("gui/web/src"));
+
+    expect(source).not.toContain("chat.prompt");
   });
 
   it("preserves the global writer role while loading a follower historical session", () => {
@@ -244,3 +262,14 @@ describe("useGuiConnection helpers", () => {
     expect(afterB["session-b"]?.entries).toEqual([{ id: "entry-b" }]);
   });
 });
+
+function readSourceTree(root: string): string {
+  return readdirSync(root, { withFileTypes: true })
+    .flatMap((entry) => {
+      const path = join(root, entry.name);
+      if (entry.isDirectory()) return [readSourceTree(path)];
+      if (!/\.(js|jsx|ts|tsx)$/.test(entry.name)) return [];
+      return [readFileSync(path, "utf-8")];
+    })
+    .join("\n");
+}

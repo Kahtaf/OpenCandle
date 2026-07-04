@@ -52,6 +52,16 @@ The runner:
 
 Reports are ignored by git. Commit reusable code and benchmark design, not one-off run transcripts or screenshots.
 
+## Frozen Release Panel
+
+Generated competitive prompts remain the discovery tool. Release preparation should also rerun the frozen historical-loss panel:
+
+```bash
+npm run test:evals:competitive:frozen
+```
+
+This sets `OPENCANDLE_COMPETITIVE_PANEL=frozen` and reuses the competitive runner's exact-prompt cache for Claude, Codex, and Gemini baselines when previous reports contain matching answers. The panel covers portfolio-review-not-builder, requested 1-2 week DTE preservation, protective-put-not-bullish-call, unknown-ticker-no-dead-end, and hedge sizing with share count. The deterministic hard assertions for these prompts live in `docs/internal/prompt-to-policy-migration-manifest.json`; do not copy those literals into production prompt guidance.
+
 ## Recording Improvement History
 
 Raw JSON reports under `tests/evals/runs/` are local evidence only and are ignored by git. When a competitive run leads to a product or harness change, record a compact, committed summary in `docs/internal/competitive-benchmark-history.md`.
@@ -78,6 +88,7 @@ Useful environment variables:
 
 - `COMPETITIVE_PROMPT_COUNT`: number of generated prompts. Defaults to `5`.
 - `COMPETITIVE_PROMPT_SEED`: text seed for varying or reproducing prompt generation.
+- `OPENCANDLE_COMPETITIVE_PANEL=frozen`: use the frozen release panel instead of generated prompts.
 - `OPENCANDLE_COMPETITIVE_PROMPT`: fixed user prompt for rerunning the same case after a change. When set, prompt generation is skipped.
 - `OPENCANDLE_COMPETITIVE_PROMPT_ID`: optional id for the fixed prompt. Defaults to `fixed-prompt`.
 - `OPENCANDLE_COMPETITIVE_PROMPT_TOPIC`: optional topic for the fixed prompt. Defaults to `fixed prompt`.

@@ -9,6 +9,11 @@ export interface GeneratedFinancePrompt {
   evaluationFocus: string;
 }
 
+export interface FrozenCompetitivePanelPrompt extends GeneratedFinancePrompt {
+  lossClass: string;
+  promptPolicyManifestId: string;
+}
+
 export interface PromptGenerationOptions {
   count: number;
   seed?: string;
@@ -54,6 +59,70 @@ export const COMPETITIVE_STATE_FIXTURE: SeededMarketStateFixture = {
     { symbol: "JPM", name: "JPMorgan Chase & Co.", thesis: "rate-cycle beneficiary" },
   ],
 };
+
+export const FROZEN_COMPETITIVE_PANEL: FrozenCompetitivePanelPrompt[] = [
+  {
+    id: "frozen-portfolio-review-not-builder",
+    prompt:
+      "Critically evaluate a 60/40 portfolio for the next year. Do not build a new portfolio; just review the existing allocation.",
+    topic: "portfolio review",
+    complexity: "moderate",
+    evaluationFocus:
+      "Preserve the user's review request and avoid turning an existing-allocation critique into portfolio construction.",
+    lossClass: "portfolio-review-not-builder",
+    promptPolicyManifestId: "existing-allocation-review",
+  },
+  {
+    id: "frozen-covered-call-dte-preservation",
+    prompt:
+      "I own 100 shares of DRAM at a $51 cost basis. NVDA earnings are today, but I want a covered call 1-2 weeks out. What strike and expiry should I look at?",
+    topic: "options existing position",
+    complexity: "complex",
+    evaluationFocus:
+      "Preserve the owned underlying, catalyst context, cost basis, and requested 1-2 week DTE instead of drifting to the catalyst ticker or same-day expiry.",
+    lossClass: "1-2 weeks DTE preservation",
+    promptPolicyManifestId: "covered-call-dte-preservation",
+  },
+  {
+    id: "frozen-protective-put-not-bullish-call",
+    prompt:
+      "NVDA earnings are today. I own 200 shares of AMD. What protective put should I buy for the next month?",
+    topic: "options existing position",
+    complexity: "complex",
+    evaluationFocus:
+      "Keep the strategy as a protective put on AMD sized to the owned share count, not a bullish call or catalyst-ticker options trade.",
+    lossClass: "protective-put-not-bullish-call",
+    promptPolicyManifestId: "protective-put-routing",
+  },
+  {
+    id: "frozen-unknown-ticker-no-dead-end",
+    prompt:
+      "I hold 300 shares of ZZZZ and earnings are tonight. Should I trim, hedge, or hold through it?",
+    topic: "unknown ticker event risk",
+    complexity: "complex",
+    evaluationFocus:
+      "Avoid dead-ending on an unknown ticker: disclose unverifiability, avoid fabricated earnings facts, and still give a useful event-risk framework.",
+    lossClass: "unknown-ticker-no-dead-end",
+    promptPolicyManifestId: "unknown-ticker-earnings-risk",
+  },
+  {
+    id: "frozen-hedge-sizing-with-share-count",
+    prompt:
+      "I own 450 shares of AAPL and want downside protection through the next month. How many puts should I consider and what tradeoffs matter?",
+    topic: "options hedge sizing",
+    complexity: "complex",
+    evaluationFocus:
+      "Use the stated share count to size protective puts by 100-share contracts and explain residual unhedged shares and hedge tradeoffs.",
+    lossClass: "hedge sizing with share count",
+    promptPolicyManifestId: "hedge-sizing-share-count",
+  },
+];
+
+export function frozenCompetitivePanelFromEnv(
+  env: Record<string, string | undefined>,
+): FrozenCompetitivePanelPrompt[] | null {
+  return env.OPENCANDLE_COMPETITIVE_PANEL === "frozen" ? FROZEN_COMPETITIVE_PANEL : null;
+}
 
 export function buildSavedStateSummary(fixture: SeededMarketStateFixture): string {
   const lines = ["The user's saved OpenCandle state:"];
@@ -371,7 +440,11 @@ export function findCachedCompetitorAnswer(
       const prompt = promptFromResult(result);
       if (prompt?.prompt !== promptText) continue;
       const answers = competitorAnswersFromResult(result);
-      const answer = answers.find((candidate) => candidate.id === competitorId);
+      // Failed baselines record a failure-placeholder answer with `error`
+      // set; only clean answers are reusable — a crashed baseline must be
+      // retried live (or skipped at preflight) on later runs, not frozen
+      // into the cache.
+      const answer = answers.find((candidate) => candidate.id === competitorId && !candidate.error);
       if (!answer) continue;
       return {
         ...answer,
@@ -627,7 +700,7 @@ export function competitivePreflightTimeoutMs(env: Record<string, string | undef
 }
 
 export function selectCompetitiveCodexModel(env: Record<string, string | undefined>): string {
-  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark[medium]";
+  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark";
 }
 
 export function shouldRetryCompetitiveModelCall(
@@ -639,6 +712,33 @@ export function shouldRetryCompetitiveModelCall(
   return /\b(fetch failed|ECONNRESET|ETIMEDOUT|ECONNREFUSED|EAI_AGAIN|rate limit|429|500|502|503|504)\b/i.test(
     message,
   );
+}
+
+/**
+ * Pi's ModelRegistry.getApiKeyAndHeaders resolves AuthStorage credentials
+ * with includeFallback: false, so provider env keys (for example
+ * GEMINI_API_KEY for google) are never consulted. The competitive eval runs
+ * in environments where .env is the only credential source, so when the
+ * registry resolves no API key, seed the env key as a runtime AuthStorage
+ * override and re-resolve. The runtime override has top priority in
+ * AuthStorage, so the same key also reaches the OpenCandle session runner
+ * that shares the AuthStorage instance. Test-harness-only behavior; the
+ * production auth path is unchanged.
+ */
+export async function resolveRequestAuthWithEnvApiKeyFallback<
+  T extends { ok: boolean; apiKey?: string },
+>(options: {
+  provider: string;
+  resolveRequestAuth: () => Promise<T>;
+  getEnvApiKey: (provider: string) => string | undefined;
+  setRuntimeApiKey: (provider: string, apiKey: string) => void;
+}): Promise<T> {
+  const initial = await options.resolveRequestAuth();
+  if (initial.ok && initial.apiKey) return initial;
+  const envKey = options.getEnvApiKey(options.provider);
+  if (!envKey) return initial;
+  options.setRuntimeApiKey(options.provider, envKey);
+  return options.resolveRequestAuth();
 }
 
 function normalizeGeneratedPrompt(item: unknown, index: number): GeneratedFinancePrompt {

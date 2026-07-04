@@ -26,6 +26,7 @@ import type {
   RouterSlot,
   ToolBundleName,
 } from "./router-types.js";
+import { mapDteHintToTarget } from "./slot-resolver.js";
 import { disambiguateSymbols } from "./symbol-disambiguator.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
@@ -57,7 +58,7 @@ export async function route(
   let firstError: string | undefined;
   try {
     const raw = await client.complete(prompt);
-    return postProcessRouterOutput(input.text, validateRouterOutput(raw));
+    return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
   } catch (err) {
     firstError = err instanceof Error ? err.message : String(err);
   }
@@ -66,10 +67,10 @@ export async function route(
   try {
     const retryPrompt = `${prompt}\n\n(Your previous response failed validation: ${firstError}. Return a valid JSON object conforming to RouterOutput. Nothing else.)`;
     const raw = await client.complete(retryPrompt);
-    return postProcessRouterOutput(input.text, validateRouterOutput(raw));
+    return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
   } catch {
     // Persistent failure — return a minimal fallback with regex-extracted symbols.
-    return postProcessRouterOutput(input.text, minimalFallback(input.text));
+    return postProcessRouterOutput(input.text, minimalFallback(input.text), input);
   }
 }
 
@@ -192,15 +193,25 @@ function validateEntities(raw: unknown): ExtractedEntities {
   return out;
 }
 
-export function postProcessRouterOutput(text: string, output: RouterOutput): RouterOutput {
+export function postProcessRouterOutput(
+  text: string,
+  output: RouterOutput,
+  inputContext?: Pick<RouterInputContext, "priorTurns" | "profileSnapshot">,
+): RouterOutput {
   const extracted = extractEntities(text);
   const deterministic = classifyWithLegacyRules(text);
   let diagnostics: RouterDiagnostic[] = [...output.diagnostics];
+  const symbolsAfterAmbiguousFilter = output.entities.symbols.filter(
+    (symbol) => !isAmbiguousConceptUsage(text, symbol),
+  );
+  const droppedAmbiguousSymbols = output.entities.symbols.filter(
+    (symbol) => !symbolsAfterAmbiguousFilter.includes(symbol),
+  );
   let next: RouterOutput = {
     ...output,
     entities: {
       ...output.entities,
-      symbols: output.entities.symbols.filter((symbol) => !isAmbiguousConceptUsage(text, symbol)),
+      symbols: symbolsAfterAmbiguousFilter,
       budget: output.entities.budget ?? extracted.budget,
       maxPremium: output.entities.maxPremium ?? extracted.maxPremium,
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
@@ -219,6 +230,169 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     },
     diagnostics,
   };
+
+  if (next.workflow === "compare_assets") {
+    const restorableExtractedSymbols = extracted.symbols.filter(
+      (symbol) => disambiguateSymbols([symbol], text).kept.length > 0,
+    );
+    const orderedSymbols = orderSymbolsByText(
+      text,
+      mergeSymbols(next.entities.symbols, restorableExtractedSymbols),
+    );
+    if (!sameStringArray(orderedSymbols, next.entities.symbols)) {
+      diagnostics.push({
+        code: "compare_symbols_canonicalized",
+        message: "compare symbols restored from deterministic extraction and ordered by user text",
+      });
+      next = {
+        ...next,
+        entities: {
+          ...next.entities,
+          symbols: orderedSymbols,
+        },
+        slots: syncSymbolListSlot(next.slots, orderedSymbols),
+        diagnostics,
+      };
+    }
+
+    // Prior-turn symbols merged into the slot (by the model or by the sync
+    // above) must not claim user provenance: the user typed only what is in
+    // this turn's text, and the Assumptions block renders slot sources.
+    // preference/memory/default sources legitimately reference out-of-text
+    // symbols and are left alone.
+    if (symbolsSlotClaimsPriorTurnUserProvenance(next.slots, text, inputContext?.priorTurns)) {
+      diagnostics.push({
+        code: "symbols_slot_provenance_prior_context",
+        message:
+          "compare symbols slot includes symbols absent from the user text; source downgraded from user to prior_context",
+      });
+      next = {
+        ...next,
+        slots: {
+          ...next.slots,
+          symbols: {
+            ...next.slots.symbols,
+            source: "prior_context",
+          },
+        },
+        diagnostics,
+      };
+    }
+  }
+
+  // The DTE horizon is a named historical loss class; when the model drops
+  // the slot on an options dispatch, the deterministic extraction preserves
+  // the user's stated range (mirrors the profile risk-slot fill below).
+  const dteHint = next.entities.dteHint ?? extracted.dteHint;
+  if (next.workflow === "options_screener" && !next.slots.dte_target && dteHint) {
+    const dteTarget = mapDteHintToTarget(dteHint);
+    if (dteTarget) {
+      diagnostics.push({
+        code: "dte_slot_filled_from_extraction",
+        message: "dte_target slot filled from deterministic horizon extraction",
+      });
+      next = {
+        ...next,
+        slots: {
+          ...next.slots,
+          dte_target: {
+            value: dteTarget,
+            source: "user",
+            confidence: "high",
+          },
+        },
+        diagnostics,
+      };
+    }
+  }
+
+  // Model-vocabulary synonyms for the canonical asset_scope value
+  // ("etf_only" for "etf_focused") drift saved preferences and slot
+  // consumers onto private vocabularies; canonicalize before the echo
+  // suppression below so restatements still match the profile.
+  next = canonicalizeAssetScopeVocabulary(next);
+
+  // A preference update that restates the saved profile value is an echo,
+  // not a change; writing it pollutes preference provenance (the
+  // preference-ECHO contract, fixture 029).
+  const echoedUpdates = next.preference_updates.filter(
+    (update) => readProfileString(inputContext?.profileSnapshot, update.key) === update.value,
+  );
+  if (echoedUpdates.length > 0) {
+    diagnostics.push({
+      code: "preference_echo_suppressed",
+      message: `dropped preference update(s) restating the saved profile: ${echoedUpdates
+        .map((update) => update.key)
+        .join(", ")}`,
+    });
+    next = {
+      ...next,
+      preference_updates: next.preference_updates.filter(
+        (update) => !echoedUpdates.includes(update),
+      ),
+      diagnostics,
+    };
+  }
+
+  const profileRiskProfile = readProfileString(inputContext?.profileSnapshot, "risk_profile");
+  if (
+    next.workflow === "portfolio_builder" &&
+    profileRiskProfile &&
+    !next.slots.risk_profile &&
+    !next.entities.riskProfile
+  ) {
+    diagnostics.push({
+      code: "profile_risk_slot_filled",
+      message: "risk_profile slot filled from investor profile snapshot",
+    });
+    next = {
+      ...next,
+      slots: {
+        ...next.slots,
+        risk_profile: {
+          value: profileRiskProfile,
+          source: "preference",
+          confidence: "high",
+        },
+      },
+      diagnostics,
+    };
+  }
+
+  if (
+    next.routeKind === "pass_through" &&
+    extracted.riskProfile &&
+    isConversationalRiskPreferenceUpdate(text, inputContext)
+  ) {
+    diagnostics.push({
+      code: "conversational_risk_preference_recovered",
+      message: "risk preference update recovered from profile/prior-turn context",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      entities: {
+        ...next.entities,
+        riskProfile: extracted.riskProfile,
+      },
+      slots: {
+        ...next.slots,
+        risk_profile: {
+          value: extracted.riskProfile,
+          source: "user",
+          confidence: "high",
+        },
+      },
+      preference_updates: ensurePreferenceUpdate(next.preference_updates, {
+        key: "risk_profile",
+        value: extracted.riskProfile,
+        confidence: "high",
+        source: "inferred",
+      }),
+      diagnostics,
+    };
+  }
 
   if (
     next.workflow === "options_screener" &&
@@ -544,6 +718,27 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    next.workflow === "compare_assets" &&
+    (disambiguated.dropped.length > 0 || droppedAmbiguousSymbols.length > 0) &&
+    next.entities.symbols.length < 2 &&
+    isExplicitMacroDataRequest(text)
+  ) {
+    diagnostics.push({
+      code: "compare_route_corrected_to_macro_task",
+      message: "macro/source acronyms were not explicit tickers",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      slots: removeSymbolSlots(next.slots),
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -859,6 +1054,146 @@ function canonicalizeSymbolSlots(
     }
   }
   return next;
+}
+
+function syncSymbolListSlot(
+  slots: Record<string, RouterSlot>,
+  symbols: string[],
+): Record<string, RouterSlot> {
+  if (!slots.symbols || symbols.length === 0) return slots;
+  return {
+    ...slots,
+    symbols: {
+      ...slots.symbols,
+      value: symbols,
+    },
+  };
+}
+
+const ASSET_SCOPE_SYNONYMS: Record<string, string> = {
+  etf_only: "etf_focused",
+  etfs_only: "etf_focused",
+  only_etfs: "etf_focused",
+  etf: "etf_focused",
+  etfs: "etf_focused",
+};
+
+function canonicalAssetScope(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return ASSET_SCOPE_SYNONYMS[value.toLowerCase()];
+}
+
+function canonicalizeAssetScopeVocabulary(output: RouterOutput): RouterOutput {
+  let next = output;
+  const slotCanonical = canonicalAssetScope(next.slots.asset_scope?.value);
+  if (slotCanonical) {
+    next = {
+      ...next,
+      slots: {
+        ...next.slots,
+        asset_scope: { ...next.slots.asset_scope, value: slotCanonical },
+      },
+    };
+  }
+  const entityCanonical = canonicalAssetScope(next.entities.assetScope);
+  if (entityCanonical) {
+    next = {
+      ...next,
+      entities: { ...next.entities, assetScope: entityCanonical },
+    };
+  }
+  if (
+    next.preference_updates.some(
+      (update) => update.key === "asset_scope" && canonicalAssetScope(update.value),
+    )
+  ) {
+    next = {
+      ...next,
+      preference_updates: next.preference_updates.map((update) =>
+        update.key === "asset_scope"
+          ? { ...update, value: canonicalAssetScope(update.value) ?? update.value }
+          : update,
+      ),
+    };
+  }
+  return next;
+}
+
+function symbolsSlotClaimsPriorTurnUserProvenance(
+  slots: Record<string, RouterSlot>,
+  text: string,
+  priorTurns: RouterInputContext["priorTurns"] | undefined,
+): boolean {
+  const slot = slots.symbols;
+  if (!slot || slot.source !== "user" || !Array.isArray(slot.value)) return false;
+  if (!priorTurns || priorTurns.length === 0) return false;
+  const priorText = priorTurns.map((turn) => turn.text).join("\n");
+  // A symbol absent from this turn's text but present in prior turns is a
+  // carryover, not a user-typed value. Symbols absent from both (e.g. tickers
+  // resolved from company names in the current text) are left alone.
+  return slot.value.some(
+    (symbol) =>
+      typeof symbol === "string" &&
+      symbolPosition(text, symbol) === Number.MAX_SAFE_INTEGER &&
+      symbolPosition(priorText, symbol) !== Number.MAX_SAFE_INTEGER,
+  );
+}
+
+function removeSymbolSlots(slots: Record<string, RouterSlot>): Record<string, RouterSlot> {
+  const next = { ...slots };
+  delete next.symbol;
+  delete next.symbols;
+  return next;
+}
+
+function orderSymbolsByText(text: string, symbols: string[]): string[] {
+  return [...symbols].sort((a, b) => symbolPosition(text, a) - symbolPosition(text, b));
+}
+
+function symbolPosition(text: string, symbol: string): number {
+  const escaped = escapeRegExp(symbol);
+  const match = new RegExp(`\\$?${escaped}\\b`, "i").exec(text);
+  return match?.index ?? Number.MAX_SAFE_INTEGER;
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function readProfileString(
+  profileSnapshot: RouterInputContext["profileSnapshot"] | undefined,
+  key: string,
+): string | undefined {
+  const value = profileSnapshot?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isConversationalRiskPreferenceUpdate(
+  text: string,
+  inputContext: Pick<RouterInputContext, "priorTurns" | "profileSnapshot"> | undefined,
+): boolean {
+  if (!/\b(?:now|lately|getting|becoming|thinking|feel|feeling|prefer|preference)\b/i.test(text)) {
+    return false;
+  }
+  // Finance context must come from the conversation itself — a saved
+  // risk_profile alone must not convert non-finance chat ("more aggressive
+  // on the tennis court lately") into a routed preference write.
+  const priorText = inputContext?.priorTurns.map((turn) => turn.text).join(" ") ?? "";
+  return /\b(?:profile|risk|portfolio|position|invest|sizing)\b/i.test(`${text} ${priorText}`);
+}
+
+function ensurePreferenceUpdate(
+  updates: RouterPreferenceUpdate[],
+  update: RouterPreferenceUpdate,
+): RouterPreferenceUpdate[] {
+  if (updates.some((item) => item.key === update.key && item.value === update.value)) {
+    return updates;
+  }
+  return [...updates, update];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {
