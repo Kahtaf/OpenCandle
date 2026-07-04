@@ -1,6 +1,6 @@
 {
   "passRate": 1.0,
-  "fixtureCount": 26,
-  "recordedAt": "2026-05-31",
-  "notes": "26 fixtures total: 001-012 single-turn seed set + 013-018 synthesized multi-turn fixtures covering the six required classes from the router-evals spec (coreference, carried-context, topic-shift, correction, preference-conflict, dollar-phrase-preservation) + 019-025 acronym disambiguation fixtures from production-router-and-tool-hardening + 026 pass-through non-finance guard. Multi-turn fixtures carry the `synthetic-multi-turn` tag for later replacement with sampled real sessions. Deterministic suite mocks the LLM and asserts against expectedRouterOutput."
+  "fixtureCount": 32,
+  "recordedAt": "2026-07-04",
+  "notes": "32 fixtures total: 001-012 single-turn seed set + 013-018 synthesized multi-turn fixtures covering the six required classes from the router-evals spec (coreference, carried-context, topic-shift, correction, preference-conflict, dollar-phrase-preservation) + 019-025 acronym disambiguation fixtures from production-router-and-tool-hardening + 026 pass-through non-finance guard + 027-032 high-leverage eval expansion fixtures from archived task 4.7 candidates (multi-symbol compare with prior context, fallback-from-general-qa shift, preference ECHO without preference_update, and router misclassification recovery). Multi-turn fixtures carry the `synthetic-multi-turn` tag for later replacement with sampled real sessions. Deterministic suite mocks the LLM and asserts against expectedRouterOutput."
 }

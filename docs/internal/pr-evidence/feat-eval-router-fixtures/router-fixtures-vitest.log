@@ -1,0 +1,9 @@
+
+ RUN  v4.1.9 /Users/kahtaf/Documents/workspace/oc-eval-router-fixtures
+
+
+ Test Files  1 passed (1)
+      Tests  74 passed (74)
+   Start at  23:47:48
+   Duration  243ms (transform 120ms, setup 0ms, import 150ms, tests 23ms, environment 0ms)
+
