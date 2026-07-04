@@ -116,3 +116,9 @@ Stakeholders: live-run reviewers (who today infer router behavior from main-agen
 - Should `customEntries` preserve the `id`/`parentId` from SessionEntry for tree reconstruction, or is `{customType, data, timestamp}` sufficient? Lean sufficient — harness consumers want audit, not graph reconstruction — but revisit if a reviewer needs the edge.
 - Turn-shape v2: if fixtures show coreference misses, the promotion path for "include assistant tool-call names" should live in this change's design as a documented follow-up hook, or spin up a fresh change? Lean fresh change — adding prompt surface is a router-prompt decision, not a context-plumbing decision.
 - Does `buildPriorTurns` belong on `SessionCoordinator` or should it live as a standalone util under `src/runtime/prior-turns.ts`? Current pick is `SessionCoordinator` for locality with `buildRouterContextBase`; revisit if the helper grows.
+
+## Resolution of open questions
+
+- `customEntries` resolved as implemented in `tests/harness/manual-run.ts`: each captured entry preserves `{customType, data, timestamp}` only; `id` and `parentId` are not included.
+- Turn-shape v2 resolved as deferred: v1 keeps `{role, text}` and prompt clipping in `src/routing/router-prompt.ts`; assistant tool-call summaries require a fresh follow-up change if evidence justifies widening the prompt surface.
+- `buildPriorTurns` resolved as implemented in `src/runtime/session-coordinator.ts`, where `SessionCoordinator.buildRouterContextBase()` assembles `priorTurns` with the rest of the router context.

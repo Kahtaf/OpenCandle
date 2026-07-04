@@ -25,7 +25,7 @@
 - [x] 4.4 Author a correction fixture (`016-ticker-correction.json`): prior TSLA → "I meant TSLAQ". `entities.symbols: ["TSLAQ"]`.
 - [x] 4.5 Author a preference-conflict fixture (`017-pref-conflict.json`): profile.risk=aggressive + current-turn cautious phrasing → `preference_updates` emits high-confidence `risk_profile`.
 - [x] 4.6 Author a dollar-phrase-preservation fixture (`018-dollar-phrase.json`): prior "$500k in SPY" → "same for QQQ" with no dollar-derived slot leak from the prior turn.
-- [ ] 4.7 Author 4–9 additional fixtures filling coverage gaps identified while reviewing the existing 12 (candidates: multi-symbol compare with prior context, fallback-from-general-qa shift, preference ECHO that MUST NOT become a preference_update, router misclassification recovery).
+- [ ] 4.7 Moved to `docs/internal/high-leverage-improvements-plan.md` (I5 — eval expansion); candidate list preserved there. Original scope: author 4–9 additional fixtures filling coverage gaps identified while reviewing the existing 12 (candidates: multi-symbol compare with prior context, fallback-from-general-qa shift, preference ECHO that MUST NOT become a preference_update, router misclassification recovery).
 - [x] 4.8 Ensure each multi-turn fixture uses intra-fixture-consistent anonymization for tickers and bucketed dollar placeholders.
 - [x] 4.9 Tag every synthesized multi-turn fixture (013–018 and any further synthetic additions) with `synthetic-multi-turn` in the fixture `tags` array, per the router-evals spec.
 - [x] 4.10 Run `npm test` and confirm `router-fixtures.test.ts` passes at 100% against all new fixtures.
@@ -45,7 +45,7 @@
 
 - [x] 7.1 Run `npm test` end-to-end; all suites green.
 - [x] 7.2 Add a unit/integration test that wires the extension handler end-to-end against a fake `ReadonlySessionManager` returning a synthetic branch (e.g., one prior user turn "tell me about NVDA" and one assistant text turn), invokes `handleLlmRouterTurn("what about at $500?")` with a stub `RouterLlmClient` that echoes its input prompt, and asserts the prompt rendered by `buildRouterPrompt` contains the NVDA prior-turn text in the "Prior conversation turns" section. This replaces the previously-scoped live-multi-turn harness verification, which is infeasible because `manual-run.ts` accepts only one top-level prompt per invocation.
-- [ ] 7.3 (Optional, not gating) Run `npm run eval:router-live` on the full fixture set; record latency + pass-rate in the PR description.
+- [ ] 7.3 Superseded by the mandatory baseline run in WP2 of `docs/internal/openspec-backlog-cleanup-plan.md`. Original optional scope: run `npm run eval:router-live` on the full fixture set; record latency + pass-rate in the PR description.
 - [x] 7.4 (Optional, not gating) Run `OPENCANDLE_ROUTER_MODE=llm` with a single-turn prompt via `manual-run.ts` and confirm `trace.json.customEntries` contains an `opencandle-router` entry whose `data.output` matches the router output schema. Skip if live LLM unavailable; document skip in the PR.
 
 ## 8. Proposal housekeeping
