@@ -34,6 +34,7 @@ export function ChatPanel({
   catalog,
   send,
   startChatRun,
+  stopRun,
   setToast,
   draft: draftProp,
   setDraft: setDraftProp,
@@ -104,6 +105,7 @@ export function ChatPanel({
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
   const composerDisabled = inputDisabled || needsSetup;
   const chatDisabled = composerDisabled || needsSetup;
+  const canStopRun = runState === "connecting" || runState === "streaming";
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
@@ -116,6 +118,11 @@ export function ChatPanel({
     setAllowToolAutoOpen(true);
     setDraft("");
     void startChatRun(prompt);
+  };
+
+  const stop = () => {
+    if (!canStopRun) return;
+    stopRun?.(sessionId);
   };
 
   const placeholder = needsSetup
@@ -193,7 +200,9 @@ export function ChatPanel({
         setupBlocked={needsSetup}
         placeholder={placeholder}
         canSend={Boolean(draft.trim()) && !chatDisabled}
+        canStop={canStopRun}
         onSubmit={() => submit()}
+        onStop={stop}
         onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
         onOpenContext={onOpenContext}
         modelSetup={modelSetup}

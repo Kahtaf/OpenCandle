@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-07-04T03:34:39.064Z",
+  "log": [
+    {
+      "viewport": "desktop-1440x960",
+      "size": {
+        "width": 1440,
+        "height": 960
+      },
+      "sessionA": [
+        {
+          "sessionId": "desktop-1440x960-session-a",
+          "prompt": "Background session prompt",
+          "actionId": "chat-daabb05d-9c83-49de-afa3-0df0fad562c8",
+          "aborted": true
+        }
+      ],
+      "sessionB": [
+        {
+          "sessionId": "desktop-1440x960-session-b",
+          "prompt": "Foreground session prompt",
+          "actionId": "chat-4449f59e-be5f-41f5-bad9-641084deed3b",
+          "aborted": false
+        }
+      ]
+    },
+    {
+      "viewport": "mobile-390x844",
+      "size": {
+        "width": 390,
+        "height": 844
+      },
+      "sessionA": [
+        {
+          "sessionId": "mobile-390x844-session-a",
+          "prompt": "Background session prompt",
+          "actionId": "chat-ad42719e-ab4b-43a9-8c50-194a81a03bc5",
+          "aborted": true
+        }
+      ],
+      "sessionB": [
+        {
+          "sessionId": "mobile-390x844-session-b",
+          "prompt": "Foreground session prompt",
+          "actionId": "chat-a60e57ea-6205-4fe0-a582-3cf86e11b016",
+          "aborted": false
+        }
+      ]
+    }
+  ]
+}

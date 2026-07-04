@@ -14,10 +14,10 @@ describe("chat run request helpers", () => {
     expect(chatRunEndpoint("session/with/slash")).toBe("/api/sessions/session%2Fwith%2Fslash/runs");
   });
 
-  it("keeps the legacy run endpoint only when no session id is available", () => {
-    expect(chatRunEndpoint()).toBe("/api/chat/run");
-    expect(chatRunEndpoint("")).toBe("/api/chat/run");
-    expect(chatRunEndpoint("   ")).toBe("/api/chat/run");
+  it("rejects chat run endpoints without an explicit session id", () => {
+    expect(() => chatRunEndpoint()).toThrow("sessionId is required");
+    expect(() => chatRunEndpoint("")).toThrow("sessionId is required");
+    expect(() => chatRunEndpoint("   ")).toThrow("sessionId is required");
   });
 
   it("includes the expected session id when provided", () => {
@@ -28,15 +28,11 @@ describe("chat run request helpers", () => {
     });
   });
 
-  it("omits the session id when the caller has none", () => {
-    expect(buildChatRunRequestBody("hello", "", "action-1")).toEqual({
-      prompt: "hello",
-      actionId: "action-1",
-    });
-    expect(buildChatRunRequestBody("hello", "   ", "action-1")).toEqual({
-      prompt: "hello",
-      actionId: "action-1",
-    });
+  it("rejects chat run bodies without an explicit session id", () => {
+    expect(() => buildChatRunRequestBody("hello", "", "action-1")).toThrow("sessionId is required");
+    expect(() => buildChatRunRequestBody("hello", "   ", "action-1")).toThrow(
+      "sessionId is required",
+    );
   });
 
   it("mints distinct action ids for deliberate run submissions", () => {
