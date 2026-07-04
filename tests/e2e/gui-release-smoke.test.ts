@@ -88,7 +88,10 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     expect(bootstrap.modelSetup.requirement).toBe("connect_auth");
     expect(JSON.stringify(bootstrap.modelSetup)).not.toContain("needs_api_key");
 
-    await expect(page.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
+    // Shipped 0.11.0 behavior: the composer stays usable for drafting during
+    // first-run setup; only sending is blocked until a model is ready.
+    await expect(page.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await page.getByLabel("Message OpenCandle").fill("Draft while I find my key");
     await expect(page.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
       true,
     );

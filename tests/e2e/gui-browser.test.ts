@@ -115,7 +115,8 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Connect an AI model"));
     await expectVisible(mocked.getByLabel("API key"));
     await expectVisible(mocked.getByRole("button", { name: "Save key" }));
-    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await mocked.getByLabel("Message OpenCandle").fill("Draft while I find my key");
     await expect(mocked.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
       true,
     );
@@ -144,7 +145,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
     await expectVisible(mocked.getByText("Model setup changes are unavailable"));
-    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
+    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
     await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
     await mocked.close();
   });

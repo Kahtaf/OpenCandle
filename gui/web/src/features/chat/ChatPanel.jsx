@@ -103,7 +103,9 @@ export function ChatPanel({
     setAllowToolAutoOpen(false);
   }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const composerDisabled = inputDisabled || needsSetup;
+  // Drafting stays available during first-run setup (shipped 0.11.0
+  // behavior); needsSetup blocks only sending, via chatDisabled and submit.
+  const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
   const canStopRun = runState === "connecting" || runState === "streaming";
 
