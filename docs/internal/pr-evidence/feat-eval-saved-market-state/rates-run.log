@@ -1,4 +1,0 @@
-IPC dir: /Users/kahtaf/Documents/workspace/oc-eval-saved-market-state/.tmp-e2-ipc-rates
-Session complete. Trace written.
-Shutdown requested, writing partial trace...
-d if rates stay high?","turns":3,"toolSequence":["get_economic_data","get_economic_data","get_company_overview"],"interactions":0,"durationMs":25017}

@@ -1,3 +1,0 @@
-Command: npx biome ci .
-Result: PASS (exit 0)
-Note: Biome reported existing repository warnings but no blocking errors; no fixes were applied.

@@ -1,3 +1,8 @@
+> NOTE (2026-07-04): moved from `docs/internal/pr-evidence/` when that tree
+> was pruned from git (26 MB of point-in-time run artifacts). Sibling artifact
+> paths referenced below (logs, traces, screenshots) no longer exist in the
+> repo; their contents are summarized in the surrounding text.
+
 # PR #85 Open Items Triage
 
 Date: 2026-07-04
@@ -11,7 +16,7 @@ validation review comment.
 
 | Item | Status | PR #85 action |
 | --- | --- | --- |
-| Gemini exact-contract rate is 87.5% on widened contract | Pragmatically closable as documented residuals | Do not edit prompts or add broad product work. The hard invariant, zero route-kind flips across repeated Gemini runs, holds. Residual exact diffs are stable same-route-kind carryover/preference omissions documented in `docs/internal/pr-evidence/feat-router-gemini-contract/router-triage-table.md`. |
+| Gemini exact-contract rate is 87.5% on widened contract | Pragmatically closable as documented residuals | Do not edit prompts or add broad product work. The hard invariant, zero route-kind flips across repeated Gemini runs, holds. Residual exact diffs are stable same-route-kind carryover/preference omissions documented in `docs/internal/router-gemini-triage-table.md`. |
 | E7 full live competitive run | Blocked by judge/OpenCandle model auth plus Claude acpx quota | The competitive baseline agents are driven by `acpx`; the captured frozen-run failure happened before those baselines, while resolving the shared judge/OpenCandle model through Pi `AuthStorage`/`ModelRegistry`. A direct Claude acpx preflight now reaches Claude but fails on the account monthly spend limit. |
 | Real two-session concurrency evidence | Closed | Existing browser artifact proves two session/action IDs, concurrent sends, and targeted stop. Re-ran the focused browser test locally with the GUI server. |
 | Claude-family router baseline pending Pi-auth model resolution | Blocked for credentialed baseline; non-credentialed script output captured | Pi auth has no Anthropic auth. `eval:router-live` can produce a fast fallback-shaped 4/32 result, but that is not acceptable as a credentialed Claude-family baseline. |

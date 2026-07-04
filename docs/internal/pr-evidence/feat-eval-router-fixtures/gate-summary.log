@@ -1,1 +1,0 @@
-tsc, biome, npm test, router fixture vitest, and live router baseline were run. Note: live router eval intentionally exits nonzero at 4/32 exact; see router-live evidence.

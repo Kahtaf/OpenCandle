@@ -1,3 +1,8 @@
+> NOTE (2026-07-04): moved from `docs/internal/pr-evidence/` when that tree
+> was pruned from git (26 MB of point-in-time run artifacts). Sibling artifact
+> paths referenced below (logs, traces, screenshots) no longer exist in the
+> repo; their contents are summarized in the surrounding text.
+
 # Gemini Router Contract Triage Table
 
 Classes follow the archived 2026-07-03 evidence:

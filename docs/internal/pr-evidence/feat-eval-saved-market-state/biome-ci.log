@@ -1,3 +1,0 @@
-Command: npx biome ci .
-Result: passed (exit 0)
-Summary from command output: Checked 600 files. No fixes applied. Found existing non-fatal warnings/infos.

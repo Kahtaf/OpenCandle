@@ -1,5 +1,0 @@
-RUN: OPENCANDLE_GUI_BROWSER=1 OPENCANDLE_GUI_URL=http://127.0.0.1:14667 OPENCANDLE_GUI_TUI_PARITY_EVIDENCE_DIR=docs/internal/pr-evidence/feat-eval-gui-tui-parity npx vitest run --config vitest.config.gui.ts -t "keeps opencandle trace and dashboard projection in parity with the TUI path"
-
-Test Files  1 passed (1)
-Tests       1 expected fail | 24 skipped (25)
-Duration    252.37s

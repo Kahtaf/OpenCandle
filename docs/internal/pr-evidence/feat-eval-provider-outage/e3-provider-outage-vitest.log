@@ -1,9 +1,0 @@
-
- RUN  v4.1.9 /Users/kahtaf/Documents/workspace/oc-eval-provider-outage
-
-
- Test Files  1 passed (1)
-      Tests  2 passed | 2 skipped (4)
-   Start at  23:42:02
-   Duration  3.26s (transform 70ms, setup 0ms, import 168ms, tests 3.02s, environment 0ms)
-

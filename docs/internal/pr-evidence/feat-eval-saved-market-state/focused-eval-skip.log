@@ -1,9 +1,0 @@
-
- RUN  v4.1.9 /Users/kahtaf/Documents/workspace/oc-eval-saved-market-state
-
-
- Test Files  1 skipped (1)
-      Tests  1 skipped (1)
-   Start at  00:13:23
-   Duration  1.44s (transform 545ms, setup 0ms, import 1.35s, tests 0ms, environment 0ms)
-

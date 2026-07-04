@@ -1,9 +1,0 @@
-
- RUN  v4.1.9 /Users/kahtaf/Documents/workspace/oc-eval-frozen-competitive
-
-
- Test Files  3 passed (3)
-      Tests  37 passed (37)
-   Start at  00:32:55
-   Duration  1.25s (transform 415ms, setup 0ms, import 1.23s, tests 28ms, environment 0ms)
-

@@ -1,2 +1,0 @@
-$ tmpdir=$(mktemp -d /tmp/oc-acpx-claude-preflight.XXXXXX); printf 'Reply exactly: OK' | node_modules/.bin/acpx --cwd "$tmpdir" --format quiet --deny-all --non-interactive-permissions fail --allowed-tools "" --timeout 60 --agent "$PWD/node_modules/.bin/claude-agent-acp" exec; code=$?; rm -rf "$tmpdir"; exit $code
-Internal error: You've hit your monthly spend limit · raise it at claude.ai/settings/usage
