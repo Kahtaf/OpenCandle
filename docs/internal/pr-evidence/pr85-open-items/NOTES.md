@@ -12,7 +12,7 @@ validation review comment.
 | Item | Status | PR #85 action |
 | --- | --- | --- |
 | Gemini exact-contract rate is 87.5% on widened contract | Pragmatically closable as documented residuals | Do not edit prompts or add broad product work. The hard invariant, zero route-kind flips across repeated Gemini runs, holds. Residual exact diffs are stable same-route-kind carryover/preference omissions documented in `docs/internal/pr-evidence/feat-router-gemini-contract/router-triage-table.md`. |
-| E7 full live competitive run | Blocked by model auth/tooling | Full run cannot start because the competitive runner's Pi `AuthStorage`/`ModelRegistry` path has no Google auth, even though `.env` has `GEMINI_API_KEY`. |
+| E7 full live competitive run | Blocked by judge/OpenCandle model auth plus Claude acpx quota | The competitive baseline agents are driven by `acpx`; the captured frozen-run failure happened before those baselines, while resolving the shared judge/OpenCandle model through Pi `AuthStorage`/`ModelRegistry`. A direct Claude acpx preflight now reaches Claude but fails on the account monthly spend limit. |
 | Real two-session concurrency evidence | Closed | Existing browser artifact proves two session/action IDs, concurrent sends, and targeted stop. Re-ran the focused browser test locally with the GUI server. |
 | Claude-family router baseline pending Pi-auth model resolution | Blocked for credentialed baseline; non-credentialed script output captured | Pi auth has no Anthropic auth. `eval:router-live` can produce a fast fallback-shaped 4/32 result, but that is not acceptable as a credentialed Claude-family baseline. |
 
@@ -23,6 +23,7 @@ validation review comment.
 - `competitive-focused-vitest.log`: competitive eval unit coverage passed, 33 tests.
 - `router-focused-vitest.log`: router unit/fixture coverage passed, 151 tests.
 - `frozen-competitive-live.log`: E7 frozen competitive live attempt failed before model calls with `No API key available for google/gemini-2.5-flash`.
+- `acpx-claude-preflight.log`: direct Claude acpx preflight reached Claude but failed on the account monthly spend limit.
 - `pi-auth-probe.log`: Pi `AuthStorage`/`ModelRegistry` reports no Google or Anthropic auth in this environment.
 - `router-live-claude-pi-auth-attempt.log`: Claude-family router eval attempt exited nonzero at 4/32 exact; treat as non-credentialed/fallback-shaped evidence, not a valid baseline.
 
@@ -89,7 +90,20 @@ Result: passed, 151 tests.
 
 ## E7 Frozen Competitive Live Run
 
-This remains blocked by auth/tooling in this workspace.
+This remains blocked by judge/OpenCandle model auth plus Claude acpx quota in
+this workspace.
+
+The competitive baseline agents themselves are driven through `acpx`:
+
+- Claude: `acpx` with `claude-agent-acp`
+- Codex: `acpx codex`
+- Gemini: `acpx gemini`
+
+The captured frozen-run failure occurred before any of those baseline agents
+were run. The startup path first resolves `judgeModel` through Pi
+`AuthStorage`/`ModelRegistry` so it can generate prompts, judge comparisons,
+and run OpenCandle's own live model path. That path is separate from the acpx
+competitor baselines.
 
 Attempt:
 
@@ -105,6 +119,35 @@ Result: failed before model calls:
 Error: No API key available for google/gemini-2.5-flash.
 Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.
 ```
+
+Direct Claude acpx preflight:
+
+```bash
+tmpdir=$(mktemp -d /tmp/oc-acpx-claude-preflight.XXXXXX)
+printf 'Reply exactly: OK' | node_modules/.bin/acpx \
+  --cwd "$tmpdir" \
+  --format quiet \
+  --deny-all \
+  --non-interactive-permissions fail \
+  --allowed-tools "" \
+  --timeout 60 \
+  --agent "$PWD/node_modules/.bin/claude-agent-acp" \
+  exec
+code=$?
+rm -rf "$tmpdir"
+exit $code
+```
+
+Result: `acpx` reached Claude, then failed with the account-side quota error:
+
+```text
+Internal error: You've hit your monthly spend limit · raise it at claude.ai/settings/usage
+```
+
+Rerun note: once Claude quota clears, no acpx-specific code change is required
+for the Claude competitive baseline. The run still needs a configured
+judge/OpenCandle model path, such as Pi auth for the selected
+`OPENCANDLE_COMPETITIVE_PROVIDER`/`OPENCANDLE_COMPETITIVE_MODEL`.
 
 Pi auth probe:
 
