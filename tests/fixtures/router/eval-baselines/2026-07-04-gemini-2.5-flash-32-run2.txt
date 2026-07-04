@@ -1,0 +1,7 @@
+
+> opencandle@0.11.0 eval:router-live
+> tsx tests/scripts/run-live-router-eval.ts
+
+Running live router eval against 32 fixtures with model=gemini-2.5-flash...
+
+PASS 001-portfolio-builder-aggressive.json (2197ms)

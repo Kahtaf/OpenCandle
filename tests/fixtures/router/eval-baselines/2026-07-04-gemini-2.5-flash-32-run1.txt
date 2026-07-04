@@ -4,66 +4,39 @@
 
 Running live router eval against 32 fixtures with model=gemini-2.5-flash...
 
-PASS 001-portfolio-builder-aggressive.json (2272ms)
-PASS 002-portfolio-builder-diversified.json (1658ms)
-FAIL 003-options-screener-calls.json (2075ms)
-  .slots.dte_target: expected "25_to_45_days", got undefined
-PASS 004-options-missing-symbol.json (1890ms)
-PASS 005-compare-assets.json (1727ms)
-FAIL 006-fallback-entry-levels.json (1911ms)
-  .tool_bundles.0: expected "core_market", got "clarification"
-  .tool_bundles.1: expected undefined, got "core_market"
-  .tool_bundles.2: expected undefined, got "options"
-  .tool_bundles.3: expected undefined, got "sec"
-  .tool_bundles.4: expected undefined, got "sentiment"
-FAIL 007-fallback-data-fetch.json (1749ms)
-  .tool_bundles.0: expected "core_market", got "clarification"
-  .tool_bundles.1: expected undefined, got "core_market"
-  .tool_bundles.2: expected undefined, got "options"
-  .tool_bundles.3: expected undefined, got "sec"
-  .tool_bundles.4: expected undefined, got "sentiment"
-PASS 008-single-asset-analysis.json (2092ms)
-PASS 009-general-qa.json (1898ms)
-PASS 010-preference-from-memory.json (1993ms)
-PASS 011-fallback-missing-symbol.json (2144ms)
-FAIL 012-preference-write-etf.json (2242ms)
+PASS 001-portfolio-builder-aggressive.json (2246ms)
+PASS 002-portfolio-builder-diversified.json (2003ms)
+PASS 003-options-screener-calls.json (2117ms)
+PASS 004-options-missing-symbol.json (1794ms)
+PASS 005-compare-assets.json (2212ms)
+PASS 006-fallback-entry-levels.json (1819ms)
+PASS 007-fallback-data-fetch.json (2013ms)
+PASS 008-single-asset-analysis.json (1705ms)
+PASS 009-general-qa.json (1798ms)
+PASS 010-preference-from-memory.json (2018ms)
+PASS 011-fallback-missing-symbol.json (1806ms)
+FAIL 012-preference-write-etf.json (1892ms)
   .slots.asset_scope: expected "etf_focused", got undefined
   .preference_updates.0: expected {"key":"asset_scope","value":"etf_focused","confidence":"high","source":"inferred"}, got undefined
-FAIL 013-coreference-price.json (2128ms)
-  .tool_bundles.0: expected "core_market", got "clarification"
-  .tool_bundles.1: expected undefined, got "core_market"
-  .tool_bundles.2: expected undefined, got "options"
-  .tool_bundles.3: expected undefined, got "sec"
-  .tool_bundles.4: expected undefined, got "sentiment"
-PASS 014-carried-budget.json (2227ms)
-FAIL 015-topic-shift.json (2021ms)
-  .tool_bundles.0: expected "core_market", got "clarification"
-  .tool_bundles.1: expected undefined, got "core_market"
-  .tool_bundles.2: expected undefined, got "options"
-  .tool_bundles.3: expected undefined, got "sec"
-  .tool_bundles.4: expected undefined, got "sentiment"
-PASS 016-ticker-correction.json (1796ms)
-PASS 017-pref-conflict.json (1672ms)
-FAIL 018-dollar-phrase.json (2510ms)
+PASS 013-coreference-price.json (1660ms)
+PASS 014-carried-budget.json (2094ms)
+PASS 015-topic-shift.json (1984ms)
+PASS 016-ticker-correction.json (2190ms)
+PASS 017-pref-conflict.json (1739ms)
+FAIL 018-dollar-phrase.json (1918ms)
   .entities.symbols.1: expected "SPY", got undefined
-  .tool_bundles.0: expected "core_market", got "clarification"
-  .tool_bundles.1: expected undefined, got "core_market"
-  .tool_bundles.2: expected undefined, got "options"
-  .tool_bundles.3: expected undefined, got "sec"
-  .tool_bundles.4: expected undefined, got "sentiment"
-PASS 019-iv-as-volatility.json (1907ms)
-PASS 020-sec-as-regulator.json (1600ms)
-PASS 021-fed-as-bank.json (1918ms)
-PASS 022-cpi-as-metric.json (1964ms)
-PASS 023-iv-with-positive-signal.json (1850ms)
-PASS 024-iv-bare-list-dropped.json (2184ms)
-PASS 025-iv-local-ticker-phrase.json (1840ms)
-PASS 026-pass-through-non-finance.json (1870ms)
-PASS 027-compare-prior-context.json (1888ms)
-PASS 028-general-qa-to-analysis-shift.json (2054ms)
-FAIL 029-preference-echo-not-update.json (2041ms)
-  .preference_updates.0: expected undefined, got {"key":"asset_scope","value":"etf_focused","confidence":"high","source":"inferred"}
-FAIL 030-misclassification-recovery-current-portfolio.json (1982ms)
+PASS 019-iv-as-volatility.json (2029ms)
+PASS 020-sec-as-regulator.json (2050ms)
+PASS 021-fed-as-bank.json (1910ms)
+PASS 022-cpi-as-metric.json (1932ms)
+PASS 023-iv-with-positive-signal.json (2097ms)
+PASS 024-iv-bare-list-dropped.json (1889ms)
+PASS 025-iv-local-ticker-phrase.json (1814ms)
+PASS 026-pass-through-non-finance.json (1603ms)
+PASS 027-compare-prior-context.json (1832ms)
+PASS 028-general-qa-to-analysis-shift.json (1639ms)
+PASS 029-preference-echo-not-update.json (2157ms)
+FAIL 030-misclassification-recovery-current-portfolio.json (2086ms)
   .entities.symbols.0: expected "SPY", got undefined
   .entities.symbols.1: expected "TLT", got undefined
   .entities.symbols.2: expected "AMD", got undefined
@@ -71,13 +44,14 @@ FAIL 030-misclassification-recovery-current-portfolio.json (1982ms)
   .slots.risk_profile: expected "moderate", got undefined
   .tool_bundles.3: expected "sec", got undefined
   .tool_bundles.4: expected "sentiment", got undefined
-FAIL 031-misclassification-recovery-options-position.json (2007ms)
+FAIL 031-misclassification-recovery-options-position.json (2110ms)
   .entities.shareQuantity: expected 100, got undefined
   .entities.timeHorizon: expected undefined, got "short"
   .slots.strategy: expected "covered_call", got undefined
-PASS 032-compare-recovery-from-company-names.json (1984ms)
+  .slots.time_horizon: expected "1-2 weeks", got "short"
+PASS 032-compare-recovery-from-company-names.json (1879ms)
 
 --- Summary ---
-pass: 22/32 (passRate=0.688)
-latency p50=1982ms p95=2272ms
-failures: 003-options-screener-calls.json, 006-fallback-entry-levels.json, 007-fallback-data-fetch.json, 012-preference-write-etf.json, 013-coreference-price.json, 015-topic-shift.json, 018-dollar-phrase.json, 029-preference-echo-not-update.json, 030-misclassification-recovery-current-portfolio.json, 031-misclassification-recovery-options-position.json
+pass: 28/32 (passRate=0.875)
+latency p50=1932ms p95=2212ms
+failures: 012-preference-write-etf.json, 018-dollar-phrase.json, 030-misclassification-recovery-current-portfolio.json, 031-misclassification-recovery-options-position.json

@@ -66,10 +66,17 @@ describe("E1 live multi-turn coreference eval", () => {
         expect(symbolsFromRouterEntry(turn3Router)).toEqual(
           expect.arrayContaining(["NVDA", "AMD"]),
         );
-        expect(slotSymbolsFromRouterEntry(turn2Router)).not.toContain("NVDA");
-        expect(slotSymbolsFromRouterEntry(turn3Router)).not.toEqual(
-          expect.arrayContaining(["NVDA", "AMD"]),
-        );
+        // Shipped contract (src/routing/types.ts SlotSource): prior-turn
+        // symbols MAY appear in slots but must carry source "prior_context"
+        // (or preference/memory) — never "user". The original assertion
+        // ("prior-turn symbols never land in slots") predates the shipped
+        // prior_context provenance and was also vacuous: it read slot values
+        // through a string-only extractor that missed the
+        // {value, source, confidence} slot shape entirely.
+        expect(userSourcedSlotSymbols(turn2Router)).not.toContain("NVDA");
+        const turn3UserSlotSymbols = userSourcedSlotSymbols(turn3Router);
+        expect(turn3UserSlotSymbols).not.toContain("NVDA");
+        expect(turn3UserSlotSymbols).not.toContain("AMD");
 
         expect(slotSourcesFromContext(turn2Context)).toEqual(expect.arrayContaining(["user"]));
         expect(slotSourcesFromContext(turn3Context)).toEqual(expect.arrayContaining(["user"]));
@@ -137,13 +144,19 @@ function symbolsFromRouterEntry(entry: CustomEntryTrace): string[] {
   return stringArray(entities?.symbols).map((symbol) => symbol.toUpperCase());
 }
 
-function slotSymbolsFromRouterEntry(entry: CustomEntryTrace): string[] {
+function userSourcedSlotSymbols(entry: CustomEntryTrace): string[] {
   const output = routerOutput(entry);
   const slots = recordOrNull(output.slots);
   if (!slots) return [];
   const symbols = new Set<string>();
   for (const key of ["symbol", "symbols"]) {
-    for (const value of stringsFromUnknown(slots[key])) {
+    const slot = recordOrNull(slots[key]);
+    // Router slots are {value, source, confidence} objects; a plain string
+    // fallback keeps older trace shapes readable.
+    const source = typeof slot?.source === "string" ? slot.source : "user";
+    if (source !== "user") continue;
+    const rawValue = slot ? slot.value : slots[key];
+    for (const value of stringsFromUnknown(rawValue)) {
       symbols.add(value.toUpperCase());
     }
   }
@@ -152,7 +165,10 @@ function slotSymbolsFromRouterEntry(entry: CustomEntryTrace): string[] {
 
 function slotSourcesFromContext(entry: CustomEntryTrace): string[] {
   const context = recordOrThrow(entry.data, "route context");
-  const resolvedSlots = recordOrNull(context.resolvedSlots);
+  // The route-context entry's key is `slots`; `resolvedSlots` is kept as a
+  // fallback for older traces (the original assertion read only the
+  // nonexistent key and failed unconditionally).
+  const resolvedSlots = recordOrNull(context.slots) ?? recordOrNull(context.resolvedSlots);
   if (!resolvedSlots) return [];
   const sources = new Set<string>();
   for (const value of Object.values(resolvedSlots)) {
