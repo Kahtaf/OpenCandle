@@ -1,0 +1,11 @@
+Command: NO_COLOR=1 npx biome ci .
+Exit code: 0
+
+    488 │     const result = await sentimentSummaryTool.execute("call-topic", {
+  
+  ℹ any disables many type checking rules. Its use should be avoided.
+  
+
+Checked 597 files in 238ms. No fixes applied.
+Found 494 warnings.
+Found 38 infos.

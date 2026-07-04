@@ -1,0 +1,34 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "symbol": "WEEKEND",
+          "regularMarketPrice": 123.45,
+          "previousClose": 122.1,
+          "regularMarketOpen": 122.5,
+          "regularMarketDayHigh": 124,
+          "regularMarketDayLow": 121.9,
+          "regularMarketVolume": 987654,
+          "marketCap": 12345000000,
+          "fiftyTwoWeekHigh": 140,
+          "fiftyTwoWeekLow": 90,
+          "currency": "USD"
+        },
+        "timestamp": [1711152000],
+        "indicators": {
+          "quote": [
+            {
+              "open": [122.5],
+              "high": [124],
+              "low": [121.9],
+              "close": [123.45],
+              "volume": [987654]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}
