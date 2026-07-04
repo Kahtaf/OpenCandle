@@ -1,0 +1,5 @@
+has google auth false
+has anthropic auth false
+available count 0
+google/gemini-2.5-flash no-api-key
+anthropic/claude-haiku-4-5 no-api-key

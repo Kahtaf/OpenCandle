@@ -1,0 +1,9 @@
+
+ RUN  v4.1.9 /Users/kahtaf/Documents/workspace/oc-pr85-open-items
+
+
+ Test Files  2 passed (2)
+      Tests  33 passed (33)
+   Start at  09:19:01
+   Duration  1.06s (transform 437ms, setup 0ms, import 1.03s, tests 28ms, environment 0ms)
+

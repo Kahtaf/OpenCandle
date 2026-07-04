@@ -1,0 +1,6 @@
+
+> opencandle@0.11.0 gui
+> tsx gui/server/server.ts
+
+OpenCandle GUI listening on http://127.0.0.1:14567
+Writer role: writer
