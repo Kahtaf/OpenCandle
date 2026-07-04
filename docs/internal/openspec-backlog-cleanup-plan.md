@@ -20,7 +20,7 @@ All cleanup work funnels through a single integration branch so one branch conta
   - `feat/openspec-wp5-coordinator-closeout`
   - `feat/openspec-wp6-forget-spec`
   - `feat/openspec-wp7-coordinator-verification`
-- **PR target:** every WP PR targets `feat/openspec-backlog-cleanup`, NOT `main`. Merge PRs in WP order (see the table at the end); after each merge, later in-flight WP branches rebase onto the updated integration branch before review.
+- **PR target:** every WP PR targets `feat/openspec-backlog-cleanup`, NOT `main`. **Merge order follows the dependency table at the end of this plan, not strict numeric order** (amended 2026-07-03): WP1, WP3, and WP5 have no dependencies and merge as soon as green; WP2/WP4/WP6 merge after WP1; WP7 merges after WP5. After each merge, in-flight WP branches rebase onto the updated integration branch before review.
 - **Final step:** after WP7 merges, one PR from `feat/openspec-backlog-cleanup` → `main` delivers all OpenSpec updates together. Its description links each WP PR and includes the aggregate `openspec validate --strict` output.
 - Note: `npm run review:pr` auto-detects the PR base via `gh`, so it will review WP diffs against the integration branch correctly — run it per WP PR as usual.
 
@@ -66,6 +66,7 @@ These are binding on WP6 and on the later implementation change:
 3. `openspec validate --strict`, then archive via the archival skill/CLI.
 
 ### WP1.2 `router-context-and-observability`
+0. **Delta-section fix (verified against baseline 2026-07-03; required or archival validation fails).** In the change's `specs/intent-routing/spec.md`, the `## MODIFIED Requirements` section lists three requirements, but only `Prior-Turn Context Window` exists in the baseline (`openspec/specs/intent-routing/spec.md`). Move BOTH `Prior-Turn Shape` AND `Prior-Turn Privacy and Forget Integration` into an `## ADDED Requirements` section (requirement text unchanged); leave `Prior-Turn Context Window` under MODIFIED. The `router-evals` delta is correct as-is (both its MODIFIED entries exist in baseline).
 1. Task 4.7 (author 4–9 more router fixtures) is being moved, not dropped: it is now owned by the eval-expansion work item in `docs/internal/high-leverage-improvements-plan.md` (item I5). Edit `tasks.md`: mark 4.7 with a note "Moved to docs/internal/high-leverage-improvements-plan.md (I5 — eval expansion); candidate list preserved there." Do the same for optional task 7.3 (live router eval run): note it is superseded by the mandatory baseline run in WP2 of this plan.
 2. In `design.md`, close the recorded open questions (customEntries `id`/`parentId`, turn-shape v2 location, `buildPriorTurns` placement) with one-line "resolved as implemented" notes pointing at the current code locations (`src/runtime/session-coordinator.ts`, `src/routing/router-prompt.ts`).
 3. Validate strictly, then archive.
@@ -100,7 +101,7 @@ Decision: archive without implementing. Rationale in Background above. Its still
    - "Refresh prices" button requirements: manual refresh buttons were removed in favor of background quote snapshots and an "Updated Xm ago" freshness line. Void.
    - Follower/read-only mode requirements: superseded by `transparent-local-session-coordinator` neutral-language requirement ("SHALL NOT show 'writer', 'follower', 'read-only follower', or 'take over' as the primary user-facing state").
    - React Doctor gating: shipped via the autoreview pipeline changes (React Doctor pinned, diff-scoped scanning, error-level blocking).
-2. **Neutralize the deltas before archiving.** Because archival applies deltas to baseline specs, and these deltas describe removed features, the `specs/gui-market-state-ux/spec.md` delta must not land in the baseline. **Verified (openspec CLI 1.4.1): `openspec archive --skip-specs` exists** ("Skip spec update operations"). Use it, and say so in the PR. Belt-and-braces: also replace the delta file's contents with a minimal note ("Superseded before implementation; no baseline spec changes. See proposal.md Superseded section.") so the archived record is unambiguous.
+2. **Archive with `--skip-specs`; leave the delta file untouched.** Because archival normally applies deltas to baseline specs, and these deltas describe removed features, the `specs/gui-market-state-ux/spec.md` delta must not land in the baseline. **Verified (openspec CLI 1.4.1): `openspec archive --skip-specs` exists** ("Skip spec update operations"). Use it, say so in the PR, and do NOT rewrite or neutralize the delta file — it is syntactically valid as authored, and replacing its contents with prose breaks `openspec validate --strict` (a prior instruction to do so was retracted 2026-07-03 after exactly that failure). The proposal.md "Superseded" section is the archival record.
 3. Leave `tasks.md` at 0/28 — do not check anything off. The Superseded section is the record.
 
 **Acceptance:** change archived; `openspec/specs/` contains NO new `gui-market-state-ux` capability (verify after archival); no baseline spec references Predictions/Thesis Tracker or Refresh-prices buttons.
