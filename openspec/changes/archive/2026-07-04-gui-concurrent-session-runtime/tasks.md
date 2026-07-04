@@ -79,6 +79,6 @@
 - [ ] Upload the browser validation screenshots to the PR before deleting local screenshot files.
 - [ ] Add a Pi/TUI parity smoke test or documented harness check covering GUI-to-TUI resume, TUI-to-GUI resume, writer-lock participation, branch context, custom entries, and tool-result persistence.
 - [x] Run focused GUI server/web tests.
-- [x] Run browser verification on the local GUI.
-- [x] Run `openspec validate gui-concurrent-session-runtime --strict`.
-- [x] Run `npm test`.
+- [ ] Run browser verification on the local GUI. Unchecked 2026-07-03: these were ticked mid-flight while implementation was incomplete; change is being re-baselined, see `gui-session-scoped-action-cleanup`.
+- [ ] Run `openspec validate gui-concurrent-session-runtime --strict`. Unchecked 2026-07-03: these were ticked mid-flight while implementation was incomplete; change is being re-baselined, see `gui-session-scoped-action-cleanup`.
+- [ ] Run `npm test`. Unchecked 2026-07-03: these were ticked mid-flight while implementation was incomplete; change is being re-baselined, see `gui-session-scoped-action-cleanup`.
