@@ -1,5 +1,7 @@
 import type { WorkflowDefinition } from "../runtime/prompt-step.js";
 import { promptStep } from "../runtime/prompt-step.js";
+import type { AnalystOutput } from "../runtime/workflow-types.js";
+import { isAnalystSplit, tallyVotes } from "./contracts.js";
 
 export type AnalystRole = "valuation" | "momentum" | "options" | "contrarian" | "risk";
 
@@ -115,8 +117,23 @@ CONCESSIONS: [bullet list of points you concede]
 REMAINING CONVICTION: [1-10, where 10 = fully confident despite bear case]`;
 }
 
-export function buildSynthesisPrompt(symbol: string): string {
-  return `**[Synthesis]** You have received five analyst signals with conviction scores for ${symbol}, a bull case arguing FOR the position, and a bear case arguing AGAINST.
+export function buildAnalystVoteTallyBlock(outputs: AnalystOutput[]): string | null {
+  if (outputs.length < 2) return null;
+  const tally = tallyVotes(outputs);
+  const split = isAnalystSplit(outputs);
+  return `## Deterministic Analyst Vote Tally
+- Parsed analyst outputs: ${outputs.length}
+- BUY: ${tally.buy}
+- HOLD: ${tally.hold}
+- SELL: ${tally.sell}
+- Weighted average conviction: ${tally.weightedConviction}
+- Computed verdict: ${tally.verdict}
+- BUY+SELL split: ${split ? "yes" : "no"}`;
+}
+
+export function buildSynthesisPrompt(symbol: string, tallyBlock?: string): string {
+  const structuredFacts = tallyBlock ? `${tallyBlock}\n\n` : "";
+  return `${structuredFacts}**[Synthesis]** You have received five analyst signals with conviction scores for ${symbol}, a bull case arguing FOR the position, and a bear case arguing AGAINST.
 If a bull rebuttal with concessions appears above (not a line starting with "REBUTTAL SKIPPED"), treat the concessions as validated risks that must be addressed.
 
 Your job is NOT to average opinions. Your job is to RESOLVE THE DEBATE.
@@ -183,6 +200,7 @@ export function buildComprehensiveAnalysisDefinition(symbol: string): WorkflowDe
         expectedOutputs: ["bear_thesis"],
       }),
       promptStep("debate_rebuttal", "Bull rebuttal (self-gating)", buildRebuttalPrompt(symbol), {
+        skippable: true,
         requiredInputs: [...analystOutputs, "bull_thesis", "bear_thesis"],
         expectedOutputs: ["rebuttal"],
       }),

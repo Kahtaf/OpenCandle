@@ -12,6 +12,7 @@
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and keeps chat disabled until setup is ready.
 - Harness sessions now support sequential `prompts` with per-prompt trace boundaries while preserving single-`prompt` behavior, and the IPC harness can `send` follow-up prompts into an existing session.
 - Comprehensive-analysis workflow steps now capture observe-only tool evidence, parse structured analyst/debate outputs into step records, emit `opencandle-analyst-step` trace entries, and let the GUI projector count analyst progress from those entries without changing analyst prompt templates.
+- Comprehensive-analysis synthesis now receives an additive deterministic analyst vote tally when at least two analyst outputs parse, skips consensus rebuttals programmatically, and emits observe-only validation trace entries after synthesis without enforcing or rewriting the answer.
 - Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
 
 ### Fixed
