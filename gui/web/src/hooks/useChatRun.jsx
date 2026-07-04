@@ -12,9 +12,8 @@ function runStateKey(sessionId) {
 
 export function chatRunEndpoint(sessionId) {
   const targetSessionId = normalizeSessionId(sessionId);
-  return targetSessionId
-    ? `/api/sessions/${encodeURIComponent(targetSessionId)}/runs`
-    : "/api/chat/run";
+  if (!targetSessionId) throw new Error("sessionId is required");
+  return `/api/sessions/${encodeURIComponent(targetSessionId)}/runs`;
 }
 
 export function createSessionActionId(prefix = "action") {
@@ -25,8 +24,9 @@ export function createSessionActionId(prefix = "action") {
 
 export function buildChatRunRequestBody(prompt, sessionId, actionId) {
   const expectedSessionId = normalizeSessionId(sessionId);
+  if (!expectedSessionId) throw new Error("sessionId is required");
   const body = { prompt, actionId };
-  return expectedSessionId ? { ...body, sessionId: expectedSessionId } : body;
+  return { ...body, sessionId: expectedSessionId };
 }
 
 export function buildRetryChatRunOptions(lastRun) {
@@ -66,6 +66,10 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
       const key = runStateKey(targetSessionId);
       const currentRunState = runStatesRef.current[key] || "ready";
       if (!trimmed || currentRunState === "connecting" || currentRunState === "streaming") return;
+      if (!targetSessionId) {
+        setToast("sessionId is required");
+        return;
+      }
       const actionId = options.actionId || createSessionActionId("chat");
       setLastRuns((current) => ({
         ...current,

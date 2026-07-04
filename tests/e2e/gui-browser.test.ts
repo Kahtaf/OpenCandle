@@ -112,8 +112,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByText("Connect an AI model"));
     await expectVisible(mocked.getByLabel("API key"));
     await expectVisible(mocked.getByRole("button", { name: "Save key" }));
-    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
-    await mocked.getByLabel("Message OpenCandle").fill("Draft while I find my key");
+    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
     await expect(mocked.getByRole("button", { name: "Send message" }).isDisabled()).resolves.toBe(
       true,
     );
@@ -142,7 +141,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.goto(guiUrl, { waitUntil: "networkidle" });
 
     await expectVisible(mocked.getByText("Model setup changes are unavailable"));
-    await expect(mocked.getByLabel("Message OpenCandle").isEnabled()).resolves.toBe(true);
+    await expect(mocked.getByLabel("Message OpenCandle").isDisabled()).resolves.toBe(true);
     await expect(mocked.getByRole("button", { name: "Save key" }).isDisabled()).resolves.toBe(true);
     await mocked.close();
   });
@@ -982,6 +981,54 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await first.close();
     await second.close();
   }, 30_000);
+
+  it("drives two routed sessions concurrently and stops only the targeted session", async () => {
+    const first = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    const second = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installConcurrentSessionRunMock(first, {
+      sessionId: "session-a",
+      prompt: "Background session prompt",
+      holdOpen: true,
+      answer: "Session A should not complete before stop",
+    });
+    await installConcurrentSessionRunMock(second, {
+      sessionId: "session-b",
+      prompt: "Foreground session prompt",
+      holdOpen: false,
+      answer: "Session B completed independently",
+    });
+
+    await first.goto(`${guiUrl}/sessions/session-a`, { waitUntil: "networkidle" });
+    await second.goto(`${guiUrl}/sessions/session-b`, { waitUntil: "networkidle" });
+    await first.getByLabel("Message OpenCandle").fill("Background session prompt");
+    await first.getByRole("button", { name: "Send message" }).click();
+    await expectVisible(first.getByRole("button", { name: "Stop response" }));
+
+    await second.getByLabel("Message OpenCandle").fill("Foreground session prompt");
+    await second.getByRole("button", { name: "Send message" }).click();
+    await expectVisible(second.getByText("Session B completed independently"));
+
+    await first.getByRole("button", { name: "Stop response" }).click();
+    await expectVisible(first.getByText("Stopped response."));
+    const firstRequests = await first.evaluate(() => window.__concurrentSessionRequests);
+    const secondRequests = await second.evaluate(() => window.__concurrentSessionRequests);
+    expect(firstRequests).toContainEqual(
+      expect.objectContaining({
+        sessionId: "session-a",
+        prompt: "Background session prompt",
+        aborted: true,
+      }),
+    );
+    expect(secondRequests).toContainEqual(
+      expect.objectContaining({
+        sessionId: "session-b",
+        prompt: "Foreground session prompt",
+        aborted: false,
+      }),
+    );
+    await first.close();
+    await second.close();
+  }, 30_000);
 });
 
 function resolveChromiumExecutable(): string {
@@ -1584,4 +1631,109 @@ async function installTwoClientCoordinatorMock(page: Page, sessionId: string): P
       );
     }
   }, sessionId);
+}
+
+async function installConcurrentSessionRunMock(
+  page: Page,
+  options: { sessionId: string; prompt: string; holdOpen: boolean; answer: string },
+): Promise<void> {
+  await page.addInitScript((mockOptions) => {
+    window.__concurrentSessionRequests = [];
+    window.WebSocket = function BrokenWebSocket() {
+      throw new TypeError("WebSocket is not a constructor");
+    };
+    window.fetch = async (input, init = {}) => {
+      const rawUrl = typeof input === "string" ? input : input.url;
+      const url = new URL(rawUrl, window.location.origin);
+      if (url.pathname === "/api/bootstrap" || url.pathname.endsWith("/bootstrap")) {
+        return jsonResponse(buildBootstrap(mockOptions.sessionId));
+      }
+      if (url.pathname === `/api/sessions/${mockOptions.sessionId}/runs`) {
+        const body = JSON.parse(String(init.body ?? "{}"));
+        const request = {
+          sessionId: body.sessionId,
+          prompt: body.prompt,
+          actionId: body.actionId,
+          aborted: false,
+        };
+        window.__concurrentSessionRequests.push(request);
+        const encoder = new TextEncoder();
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              init.signal?.addEventListener("abort", () => {
+                request.aborted = true;
+                controller.error(new DOMException("Aborted", "AbortError"));
+              });
+              const send = (event) =>
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              send({
+                type: "run.started",
+                sessionId: mockOptions.sessionId,
+                runId: "run-1",
+                seq: 1,
+              });
+              if (mockOptions.holdOpen) return;
+              send({
+                type: "message.completed",
+                sessionId: mockOptions.sessionId,
+                messageId: "assistant-1",
+                role: "assistant",
+                content: [{ type: "text", text: mockOptions.answer }],
+                seq: 2,
+              });
+              send({
+                type: "run.completed",
+                sessionId: mockOptions.sessionId,
+                runId: "run-1",
+                seq: 3,
+              });
+              controller.close();
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "text/event-stream; charset=utf-8" },
+          },
+        );
+      }
+      if (url.pathname === "/api/market-state/quotes") {
+        return jsonResponse({ watchlistQuotes: [], portfolioQuotes: [], portfolioSummary: null });
+      }
+      return new Response("Not found", { status: 404 });
+    };
+
+    function buildBootstrap(sessionId) {
+      return {
+        role: "writer",
+        supportsSessionActions: true,
+        sessionId,
+        sessions: [{ id: sessionId, name: sessionId, path: `${sessionId}.jsonl` }],
+        catalog: { tools: [], workflows: [], providers: [] },
+        modelSetup: { requirement: "ready", providers: [], availableModels: [] },
+        askUserPrompts: [],
+        coordination: { sessionId, status: "ready" },
+        snapshot: {
+          sessionId,
+          entries: [],
+          events: [],
+          state: {
+            watchlist: [],
+            activeAnalyses: [],
+            recentResearch: [],
+            dataQuality: { softGaps: [], hardSkips: [] },
+          },
+        },
+      };
+    }
+
+    function jsonResponse(payload, status = 200) {
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+  }, options);
 }

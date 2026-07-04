@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-07-04T03:34:52.544Z",
+  "cwd": "/var/folders/b3/57m2m1p11mz3963k17lwkfvh0000gn/T/opencandle-gui-tui-cwd-uO8iVn",
+  "sessionDir": "/var/folders/b3/57m2m1p11mz3963k17lwkfvh0000gn/T/opencandle-gui-tui-sessions-PW2p0k",
+  "guiSessionId": "019f2b31-817d-717d-93e3-f46694cded3b",
+  "guiSessionFile": "/var/folders/b3/57m2m1p11mz3963k17lwkfvh0000gn/T/opencandle-gui-tui-sessions-PW2p0k/2026-07-04T03-34-52-541Z_019f2b31-817d-717d-93e3-f46694cded3b.jsonl",
+  "listedSessionIds": [
+    "019f2b31-817d-717d-93e3-f46694cded3b"
+  ],
+  "resumedSessionId": "019f2b31-817d-717d-93e3-f46694cded3b",
+  "resumedSessionFile": "/var/folders/b3/57m2m1p11mz3963k17lwkfvh0000gn/T/opencandle-gui-tui-sessions-PW2p0k/2026-07-04T03-34-52-541Z_019f2b31-817d-717d-93e3-f46694cded3b.jsonl",
+  "entryTypes": [
+    "message",
+    "message"
+  ],
+  "messages": [
+    "user",
+    "assistant"
+  ],
+  "noSqliteSchemaMigrationRequired": true,
+  "noPiSessionFormatChangeRequired": true
+}

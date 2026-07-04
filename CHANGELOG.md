@@ -8,10 +8,12 @@
 
 ### Changed
 
+- `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and keeps chat disabled until setup is ready.
 - Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
 
 ### Fixed
 
+- GUI chat runs now reject the legacy active-session mutation route, require explicit session/action IDs for chat, ask-user, and tool actions, and expose a session-scoped stop control so one session can be stopped without interrupting another.
 - Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
 - OpenSpec backlog cleanup now archives the stale GUI concurrent-session proposal against shipped behavior and adds `gui-session-scoped-action-cleanup` as the slim follow-up for explicit session-scoped GUI mutations.
 - GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
