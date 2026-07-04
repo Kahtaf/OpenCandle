@@ -908,6 +908,73 @@ describe("route()", () => {
     });
   });
 
+  it("fills the options dte_target slot from deterministic extraction when the model omits it", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "find me bullish calls on NVDA 30-45 DTE",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "options_screener",
+          entities: { symbols: ["NVDA"] },
+          slots: {
+            symbol: { value: "NVDA", source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "options screener without the dte slot",
+        }),
+      ),
+    );
+
+    // The DTE horizon is a named historical loss class; when the model drops
+    // the slot the deterministic extraction must preserve the user's range.
+    expect(result.slots.dte_target).toEqual({
+      value: "30_to_45_days",
+      source: "user",
+      confidence: "high",
+    });
+    expect(result.diagnostics.map((d) => d.code)).toContain("dte_slot_filled_from_extraction");
+  });
+
+  it("suppresses preference updates that restate the saved profile value", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "remember, I only want ETFs, so compare VOO and SCHD",
+        profileSnapshot: { asset_scope: "etf_focused" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["VOO", "SCHD"] },
+          slots: {
+            symbols: { value: ["VOO", "SCHD"], source: "user", confidence: "high" },
+          },
+          preference_updates: [
+            { key: "asset_scope", value: "etf_focused", confidence: "high", source: "inferred" },
+          ],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "echoed preference written as an update",
+        }),
+      ),
+    );
+
+    // "remember, I only want ETFs" restates the saved preference; a no-op
+    // rewrite pollutes preference provenance (the fixture-029 ECHO contract).
+    expect(result.preference_updates).toEqual([]);
+    expect(result.diagnostics.map((d) => d.code)).toContain("preference_echo_suppressed");
+  });
+
   it("does not hijack non-finance pass-through chat into a risk preference write", async () => {
     const result = await route(
       {

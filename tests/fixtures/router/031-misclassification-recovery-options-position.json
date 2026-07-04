@@ -38,6 +38,11 @@
         "value": "1-2 weeks",
         "source": "user",
         "confidence": "high"
+      },
+      "dte_target": {
+        "value": "7_to_14_days",
+        "source": "user",
+        "confidence": "high"
       }
     },
     "preference_updates": [],
@@ -48,7 +53,12 @@
       "sentiment",
       "clarification"
     ],
-    "diagnostics": [],
+    "diagnostics": [
+      {
+        "code": "dte_slot_filled_from_extraction",
+        "message": "dte_target slot filled from deterministic horizon extraction"
+      }
+    ],
     "reasoning": "covered-call language against owned AMD shares should route to options_screener while preserving the 1-2 week DTE phrase"
   },
   "tags": [

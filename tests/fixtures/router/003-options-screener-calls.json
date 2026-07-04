@@ -25,7 +25,7 @@
         "confidence": "high"
       },
       "dte_target": {
-        "value": "25_to_45_days",
+        "value": "30_to_45_days",
         "source": "user",
         "confidence": "high"
       }

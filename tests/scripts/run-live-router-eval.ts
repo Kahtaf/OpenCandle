@@ -49,7 +49,10 @@ function loadFixtures(): Array<{ name: string; data: RouterFixture }> {
 // Diff the routing contract only. Route kind/route stay visible so exemptions
 // cannot mask dispatch/pass-through/clarification flips. Every exemption
 // carries its classification; anything not exempted here is contractual.
-function stripNonContract(out: RouterOutput, expectedSlotKeys?: string[]): unknown {
+function stripNonContract(
+  out: RouterOutput,
+  expected?: { slotKeys: string[]; toolBundles: string[] },
+): unknown {
   const entities = { ...out.entities };
   // Class C: natural DTE prose and ETF-only compare metric vocabulary are
   // normalized by downstream slot resolution, not by route selection. DTE
@@ -67,15 +70,24 @@ function stripNonContract(out: RouterOutput, expectedSlotKeys?: string[]): unkno
     // Class A: EXTRA slot keys a model volunteers are exempt; the VALUE of
     // every expected slot is contractual (blanket slot dropping masked wrong
     // budgets/symbols). Class C: source/confidence are provenance detail.
-    slots: contractSlotValues(out.slots, expectedSlotKeys),
+    slots: contractSlotValues(out.slots, expected?.slotKeys),
     // Contractual: a spurious preference write is the exact failure class the
     // preference-ECHO fixture (029) exists to forbid.
     preference_updates: out.preference_updates,
-    // Contractual membership, order-insensitive: bundle order is
-    // presentation; the exposed tool surface is not.
-    tool_bundles: [...(out.tool_bundles ?? [])].sort(),
+    // Contractual: every EXPECTED bundle must be present (a missing bundle
+    // means tools unavailable at runtime). Class A: extra volunteered
+    // bundles only widen the available tool surface and are exempt; order
+    // is presentation.
+    tool_bundles: contractToolBundles(out.tool_bundles, expected?.toolBundles),
     missing_required: out.missing_required,
   };
+}
+
+function contractToolBundles(bundles: string[] | undefined, allowedExtra?: string[]): string[] {
+  const sorted = [...(bundles ?? [])].sort();
+  if (!allowedExtra) return sorted;
+  const expectedSet = new Set(allowedExtra);
+  return sorted.filter((bundle) => expectedSet.has(bundle));
 }
 
 function contractSlotValues(
@@ -156,10 +168,12 @@ async function main(): Promise<void> {
     const elapsed = Date.now() - start;
     latencies.push(elapsed);
 
-    const expectedSlotKeys = Object.keys(data.expectedRouterOutput.slots ?? {});
     const diffs = shallowDiff(
       stripNonContract(data.expectedRouterOutput),
-      stripNonContract(result, expectedSlotKeys),
+      stripNonContract(result, {
+        slotKeys: Object.keys(data.expectedRouterOutput.slots ?? {}),
+        toolBundles: data.expectedRouterOutput.tool_bundles ?? [],
+      }),
     );
     if (diffs.length === 0) {
       pass += 1;

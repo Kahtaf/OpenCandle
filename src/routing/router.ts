@@ -15,6 +15,7 @@ import {
   workflowRequiredSlots,
 } from "./route-manifest.js";
 import { buildRouterPrompt } from "./router-prompt.js";
+import { mapDteHintToTarget } from "./slot-resolver.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
@@ -277,6 +278,54 @@ export function postProcessRouterOutput(
         diagnostics,
       };
     }
+  }
+
+  // The DTE horizon is a named historical loss class; when the model drops
+  // the slot on an options dispatch, the deterministic extraction preserves
+  // the user's stated range (mirrors the profile risk-slot fill below).
+  const dteHint = next.entities.dteHint ?? extracted.dteHint;
+  if (next.workflow === "options_screener" && !next.slots.dte_target && dteHint) {
+    const dteTarget = mapDteHintToTarget(dteHint);
+    if (dteTarget) {
+      diagnostics.push({
+        code: "dte_slot_filled_from_extraction",
+        message: "dte_target slot filled from deterministic horizon extraction",
+      });
+      next = {
+        ...next,
+        slots: {
+          ...next.slots,
+          dte_target: {
+            value: dteTarget,
+            source: "user",
+            confidence: "high",
+          },
+        },
+        diagnostics,
+      };
+    }
+  }
+
+  // A preference update that restates the saved profile value is an echo,
+  // not a change; writing it pollutes preference provenance (the
+  // preference-ECHO contract, fixture 029).
+  const echoedUpdates = next.preference_updates.filter(
+    (update) => readProfileString(inputContext?.profileSnapshot, update.key) === update.value,
+  );
+  if (echoedUpdates.length > 0) {
+    diagnostics.push({
+      code: "preference_echo_suppressed",
+      message: `dropped preference update(s) restating the saved profile: ${echoedUpdates
+        .map((update) => update.key)
+        .join(", ")}`,
+    });
+    next = {
+      ...next,
+      preference_updates: next.preference_updates.filter(
+        (update) => !echoedUpdates.includes(update),
+      ),
+      diagnostics,
+    };
   }
 
   const profileRiskProfile = readProfileString(inputContext?.profileSnapshot, "risk_profile");

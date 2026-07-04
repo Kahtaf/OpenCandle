@@ -19,7 +19,7 @@ interface Preferences {
   liquidityMinimum?: string;
 }
 
-function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
+export function mapDteHintToTarget(dteHint: string | undefined): string | undefined {
   const normalized = dteHint?.toLowerCase().trim();
   if (!normalized) return undefined;
 
