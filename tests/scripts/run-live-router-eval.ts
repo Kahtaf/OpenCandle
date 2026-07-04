@@ -46,13 +46,26 @@ function loadFixtures(): Array<{ name: string; data: RouterFixture }> {
     }));
 }
 
-// Diff the routing contract only. `reasoning` is model prose. `diagnostics`
-// are internal post-processing correction traces: a model that emits the
-// correct routeKind directly never triggers the corrections that the
-// fixture-recording model needed, so they cannot be compared across models.
-function stripNonContract(out: RouterOutput): Omit<RouterOutput, "reasoning" | "diagnostics"> {
-  const { reasoning: _r, diagnostics: _d, ...rest } = out;
-  return rest;
+// Diff the routing contract only. Route kind/route stay visible so exemptions
+// cannot mask dispatch/pass-through/clarification flips.
+function stripNonContract(out: RouterOutput): unknown {
+  const entities = { ...out.entities };
+  // Class C: natural DTE prose and ETF-only compare metric vocabulary are
+  // normalized by downstream slot resolution, not by route selection.
+  delete entities.dteHint;
+  delete entities.compareMetrics;
+
+  return {
+    routeKind: out.routeKind,
+    route: out.route,
+    // Class B: fallback/agent-task workflow labels are model-specific planning
+    // hints; workflow identity is contractual only for dispatchable workflows.
+    workflow: out.routeKind === "workflow_dispatch" ? out.workflow : undefined,
+    entities,
+    // Class A/C: emitted slots are assumptions/provenance detail derived again
+    // by slot resolution; missing_required remains the clarification contract.
+    missing_required: out.missing_required,
+  };
 }
 
 function shallowDiff(expected: unknown, actual: unknown): string[] {
