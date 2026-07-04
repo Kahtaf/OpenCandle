@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  collectToolNumbers,
-  extractNumericClaims,
-} from "../../../src/runtime/numeric-claims.js";
 import type { EvidenceRecord } from "../../../src/runtime/evidence.js";
+import { collectToolNumbers, extractNumericClaims } from "../../../src/runtime/numeric-claims.js";
 
 function toolRecord(tool: string, resultPreview: unknown): EvidenceRecord {
   return {
@@ -58,10 +55,7 @@ describe("extractNumericClaims", () => {
   });
 
   it("parses thousands separators instead of truncating at the first comma", () => {
-    const claims = extractNumericClaims(
-      "Today's volume was 129,935,067 shares.",
-      toolResults,
-    );
+    const claims = extractNumericClaims("Today's volume was 129,935,067 shares.", toolResults);
     const volume = claims.find((c) => c.label.endsWith(".volume"));
     expect(volume?.value).toBe(129935067);
   });

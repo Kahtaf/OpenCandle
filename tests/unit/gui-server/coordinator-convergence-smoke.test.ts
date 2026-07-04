@@ -195,7 +195,6 @@ function fakeModelSetupController(): ModelSetupController {
 
 function fakeSessionActionsController(): SessionActionsController {
   return {
-
     handleAskUserAnswer: async () => {},
     handleAskUserCancel: async () => {},
     handleNewSession: async () => {},

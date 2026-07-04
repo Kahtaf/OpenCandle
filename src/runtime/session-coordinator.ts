@@ -29,6 +29,7 @@ import type { RouterRouteKind } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import { getAddonToolDescriptions } from "../tool-kit.js";
 import type { EvidenceRecord } from "./evidence.js";
+import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
 import {
   captureToolEvidence,
@@ -38,7 +39,6 @@ import {
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
-import { collectToolNumbers, extractNumericClaims } from "./numeric-claims.js";
 import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
@@ -845,9 +845,7 @@ function hasStructuredContract(stepType: string, text: string): boolean {
     const convictionInRange =
       conviction !== null && Number(conviction[1]) >= 1 && Number(conviction[1]) <= 10;
     return (
-      /SIGNAL:\s*(BUY|HOLD|SELL)/i.test(text) &&
-      convictionInRange &&
-      /THESIS:\s*(.+)/i.test(text)
+      /SIGNAL:\s*(BUY|HOLD|SELL)/i.test(text) && convictionInRange && /THESIS:\s*(.+)/i.test(text)
     );
   }
   if (stepType === "debate_bull") {

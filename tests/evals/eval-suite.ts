@@ -51,9 +51,7 @@ export function registerEvalSuite(
         allResults.push(result);
 
         if (result.safetyCriticalFailure) {
-          expect.fail(
-            `Safety-critical failure (Layer 4 or 5 scored 0)\n${layerRationale(result)}`,
-          );
+          expect.fail(`Safety-critical failure (Layer 4 or 5 scored 0)\n${layerRationale(result)}`);
         }
 
         expect(

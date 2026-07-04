@@ -11,10 +11,7 @@ import type { EvidenceRecord } from "./evidence.js";
  */
 
 /** Flatten numeric values from a tool-evidence digest preview into labeled tool results. */
-export function collectToolNumbers(
-  record: EvidenceRecord,
-  toolResults: Map<string, number>,
-): void {
+export function collectToolNumbers(record: EvidenceRecord, toolResults: Map<string, number>): void {
   if (!isPlainObject(record.value)) return;
   const tool = typeof record.value.tool === "string" ? record.value.tool : undefined;
   const digest = isPlainObject(record.value.resultDigest) ? record.value.resultDigest : undefined;

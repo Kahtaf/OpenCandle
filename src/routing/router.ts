@@ -15,7 +15,6 @@ import {
   workflowRequiredSlots,
 } from "./route-manifest.js";
 import { buildRouterPrompt } from "./router-prompt.js";
-import { mapDteHintToTarget } from "./slot-resolver.js";
 import type {
   RouterDiagnostic,
   RouterInputContext,
@@ -27,6 +26,7 @@ import type {
   RouterSlot,
   ToolBundleName,
 } from "./router-types.js";
+import { mapDteHintToTarget } from "./slot-resolver.js";
 import { disambiguateSymbols } from "./symbol-disambiguator.js";
 import type { ExtractedEntities, WorkflowType } from "./types.js";
 
