@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -87,6 +87,36 @@ describe("IpcChannel", () => {
     expect(IpcChannel.readStatus(dir)).toBe("running");
     expect(ipc.readPromptRequest()).toEqual({ prompt: "What about AMD?" });
     expect(ipc.readPromptRequest()).toBeNull();
+  });
+
+  it("writeTrace leaves no partial tmp file behind", () => {
+    const trace: AgentTrace = {
+      prompt: "test",
+      turns: [],
+      interactions: [],
+      finalText: "done",
+      toolSequence: [],
+      durationMs: 100,
+    };
+    ipc.writeTrace(trace);
+
+    // Atomic tmp+rename write: readers polling trace.json must never observe
+    // a truncated file during a follow-up prompt's rewrite.
+    expect(existsSync(join(dir, "trace.json.tmp"))).toBe(false);
+    expect(IpcChannel.readTrace(dir)).toEqual(trace);
+  });
+
+  it("isRunAlive reflects the pid file's process liveness", () => {
+    expect(IpcChannel.isRunAlive(dir)).toBe(false);
+
+    ipc.writePid();
+    expect(IpcChannel.isRunAlive(dir)).toBe(true);
+  });
+
+  it("isRunAlive is false for a dead pid", () => {
+    // PID beyond the OS pid range cannot be a live process.
+    writeFileSync(join(dir, "pid"), "999999999", "utf-8");
+    expect(IpcChannel.isRunAlive(dir)).toBe(false);
   });
 
   it("writeError writes error.txt and sets status=error", () => {

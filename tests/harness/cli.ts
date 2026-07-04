@@ -173,21 +173,40 @@ async function cmdRun() {
     console.log(`IPC dir: ${ipcDir}`);
     console.log("Session complete. Trace written.");
 
+    // Wait a bounded window for follow-up `send` prompts, then exit so
+    // scripted runs terminate and self-created temp homes are cleaned up.
+    // Each accepted follow-up resets the window. Override with --linger.
+    const lingerMs = args.linger ? Number(args.linger) : 120_000;
+    let idleSince = Date.now();
     while (!shutdownRequested) {
       const request = ipc.readPromptRequest();
       if (!request) {
+        if (Date.now() - idleSince > lingerMs) {
+          console.log(`No follow-up prompt within ${lingerMs}ms. Exiting.`);
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 100));
         continue;
       }
       const promptIndex = prompts.length;
       prompts.push(request.prompt);
       collector.setPromptIndex(promptIndex);
+      const followUpIsAnalysis = isAnalysisRequest(request.prompt).match;
       await promptAndWaitForSettle(session, request.prompt, {
-        settleGraceMs: isAnalysisRequest(request.prompt).match ? 30_000 : 3_000,
-        timeoutMs,
+        settleGraceMs: followUpIsAnalysis ? 30_000 : 3_000,
+        // Analysis follow-ups need the long window even when the first
+        // prompt was a quick one; an explicit --timeout still wins.
+        timeoutMs: args.timeout ? timeoutMs : followUpIsAnalysis ? 900_000 : 300_000,
       });
       writeCurrentTrace(promptIndex);
+      idleSince = Date.now();
       console.log("Follow-up complete. Trace written.");
+    }
+    if (!shutdownRequested) {
+      collector.dispose();
+      session.dispose();
+      cleanupHome();
+      process.exit(0);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -342,6 +361,12 @@ function cmdSend() {
   const status = IpcChannel.readStatus(ipcDir);
   if (status !== "done" && status !== "waiting") {
     console.error(`Cannot send follow-up while harness status is ${status ?? "missing"}`);
+    process.exit(1);
+  }
+  if (!IpcChannel.isRunAlive(ipcDir)) {
+    console.error(
+      "Cannot send follow-up: the harness run process is no longer alive (it may have exited after its linger window).",
+    );
     process.exit(1);
   }
   IpcChannel.writePromptRequest(ipcDir, prompt);
