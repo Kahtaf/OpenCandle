@@ -908,6 +908,38 @@ describe("route()", () => {
     });
   });
 
+  it("does not hijack non-finance pass-through chat into a risk preference write", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I'm feeling more aggressive on the tennis court lately",
+        priorTurns: [
+          { role: "user", text: "my backhand has been improving all summer" },
+          { role: "assistant", text: "Great to hear the training is paying off." },
+        ],
+        profileSnapshot: { risk_profile: "conservative" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "pass_through",
+          route: "fallback",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "non-finance conversation",
+        }),
+      ),
+    );
+
+    // A saved risk_profile alone must not convert non-finance chat into a
+    // preference write; finance context must come from the conversation.
+    expect(result.routeKind).toBe("pass_through");
+    expect(result.preference_updates).toEqual([]);
+  });
+
   it("recovers conversational risk preference updates from prior profile context", async () => {
     const result = await route(
       {

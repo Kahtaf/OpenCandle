@@ -1071,9 +1071,11 @@ function isConversationalRiskPreferenceUpdate(
   if (!/\b(?:now|lately|getting|becoming|thinking|feel|feeling|prefer|preference)\b/i.test(text)) {
     return false;
   }
-  if (readProfileString(inputContext?.profileSnapshot, "risk_profile")) return true;
+  // Finance context must come from the conversation itself — a saved
+  // risk_profile alone must not convert non-finance chat ("more aggressive
+  // on the tennis court lately") into a routed preference write.
   const priorText = inputContext?.priorTurns.map((turn) => turn.text).join(" ") ?? "";
-  return /\b(?:profile|risk|portfolio|position|invest|sizing)\b/i.test(priorText);
+  return /\b(?:profile|risk|portfolio|position|invest|sizing)\b/i.test(`${text} ${priorText}`);
 }
 
 function ensurePreferenceUpdate(

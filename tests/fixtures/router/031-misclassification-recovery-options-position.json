@@ -18,9 +18,6 @@
         "AMD"
       ],
       "heldSymbol": "AMD",
-      "catalystSymbols": [
-        "SELL"
-      ],
       "shareQuantity": 100,
       "dteHint": "1-2 weeks",
       "optionStrategy": "covered_call",

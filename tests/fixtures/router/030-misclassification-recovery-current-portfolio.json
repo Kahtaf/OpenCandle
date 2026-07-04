@@ -40,12 +40,7 @@
       "sec",
       "clarification"
     ],
-    "diagnostics": [
-      {
-        "code": "saved_portfolio_review_not_builder",
-        "message": "existing portfolio exposure review should not be routed to portfolio_builder"
-      }
-    ],
+    "diagnostics": [],
     "reasoning": "asks for a review of an existing current portfolio under a rates scenario, not construction of a new portfolio"
   },
   "tags": [

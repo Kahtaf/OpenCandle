@@ -189,6 +189,15 @@ const LOWERCASE_FINANCE_TERMS = new Set([
   "rate",
   "rates",
   "cuts",
+  // Trading verbs written in lowercase are actions, not tickers — "sell
+  // calls" must not mint a SELL symbol. Uppercase ticker extraction is
+  // unaffected, so a genuine $SELL / "SELL" ticker still resolves.
+  "sell",
+  "buy",
+  "hold",
+  "write",
+  "roll",
+  "trim",
   "gold",
   "oil",
   "stock",

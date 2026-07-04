@@ -44,6 +44,20 @@ describe("extractEntities", () => {
       expect(result.budget).toBeUndefined();
     });
 
+    it("does not treat lowercase trading verbs as tickers in options contexts", () => {
+      // "sell calls" matched the lowercase ticker-context pattern and minted a
+      // SELL symbol, which then leaked into catalystSymbols (fixture 031).
+      const result = extractEntities(
+        "should I sell calls against my AMD shares for the next 1-2 weeks?",
+      );
+      expect(result.symbols).toEqual(["AMD"]);
+      expect(result.heldSymbol).toBe("AMD");
+      expect(result.catalystSymbols).toBeUndefined();
+
+      const buyResult = extractEntities("thinking to buy puts on my NVDA position");
+      expect(buyResult.symbols).toEqual(["NVDA"]);
+    });
+
     it("does not treat cost basis as an investment budget", () => {
       const result = extractEntities(
         "I own AAPL with a $175 cost basis. What covered call should I sell?",
