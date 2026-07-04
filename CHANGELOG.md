@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
 - Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
 
 ### Changed

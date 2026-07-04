@@ -1,9 +1,12 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { type Browser, chromium, type Locator, type Page } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
 const runGuiBrowser = process.env.OPENCANDLE_GUI_BROWSER === "1";
 const guiUrl = process.env.OPENCANDLE_GUI_URL ?? "http://127.0.0.1:14567";
+const parityPrompt = process.env.OPENCANDLE_GUI_TUI_PARITY_PROMPT ?? "analyze NVDA";
 
 describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
   let browser: Browser;
@@ -1029,6 +1032,71 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await first.close();
     await second.close();
   }, 30_000);
+
+  it.fails("keeps opencandle trace and dashboard projection in parity with the TUI path", async () => {
+    await page.setViewportSize({ width: 1440, height: 960 });
+
+    const tui = await runOpenCandleSession({
+      prompt: parityPrompt,
+      cwd: process.cwd(),
+      timeoutMs: 900_000,
+    });
+    const tuiSequence = opencandleEntrySequence(tui.agentTrace.customEntries ?? []);
+    expect(tuiSequence).toContain("opencandle-analyst-step");
+
+    await page.goto(guiUrl, { waitUntil: "networkidle" });
+    const newSession = await page.evaluate(async () => {
+      const response = await fetch("/api/session/new", { method: "POST" });
+      if (!response.ok) throw new Error(`new session failed: ${response.status}`);
+      return response.json();
+    });
+    const sessionId = stringValue(recordValue(newSession).sessionId);
+    expect(sessionId).toBeTruthy();
+
+    const guiRunEvents = await runGuiChat(page, sessionId, parityPrompt);
+    const guiSnapshot = await fetchGuiSessionSnapshot(page);
+    const guiEntries = arrayValue(recordValue(guiSnapshot).entries);
+    const guiCustomEntries = guiEntries.filter(isOpenCandleCustomEntry);
+    const guiSequence = opencandleEntrySequence(guiCustomEntries);
+    const runEventTypes = guiRunEvents.map((event) => recordValue(event).type);
+    const diagnosticScreenshot = await page.screenshot({ fullPage: true });
+    writeParityEvidence("gui-tui-parity-preassert.json", {
+      prompt: parityPrompt,
+      sessionId,
+      tuiSequence,
+      guiSequence,
+      guiEntryCount: guiEntries.length,
+      guiCustomEntryCount: guiCustomEntries.length,
+      runEvents: runEventTypes,
+    });
+    writeParityEvidence("gui-tui-parity-preassert.png", diagnosticScreenshot);
+
+    expect(runEventTypes).toContain("run.completed");
+    expect(guiSequence).toEqual(tuiSequence);
+
+    const analystStepCount = guiSequence.filter(
+      (customType) => customType === "opencandle-analyst-step",
+    ).length;
+    expect(analystStepCount).toBeGreaterThan(0);
+
+    const dashboard = recordValue(recordValue(guiSnapshot).state);
+    const activeAnalyses = arrayValue(dashboard.activeAnalyses).map(recordValue);
+    const activeAnalysis = activeAnalyses.at(-1);
+    expect(activeAnalysis).toBeTruthy();
+    expect(numberValue(activeAnalysis?.analystsDone)).toBe(analystStepCount);
+
+    const screenshot = await page.screenshot({ fullPage: true });
+    writeParityEvidence("gui-tui-parity.json", {
+      prompt: parityPrompt,
+      sessionId,
+      tuiSequence,
+      guiSequence,
+      analystStepCount,
+      dashboardActiveAnalyses: activeAnalyses,
+      runEvents: guiRunEvents.map((event) => recordValue(event).type),
+    });
+    writeParityEvidence("gui-tui-parity-desktop.png", screenshot);
+  }, 1_800_000);
 });
 
 function resolveChromiumExecutable(): string {
@@ -1086,6 +1154,101 @@ function hasScrollableAncestor(element: Element): boolean {
     current = current.parentElement;
   }
   return false;
+}
+
+async function runGuiChat(
+  page: Page,
+  sessionId: string,
+  prompt: string,
+): Promise<Record<string, unknown>[]> {
+  return page.evaluate(
+    async ({ targetSessionId, targetPrompt }) => {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(targetSessionId)}/runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          prompt: targetPrompt,
+          sessionId: targetSessionId,
+          actionId: `gui-tui-parity-${Date.now()}`,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`chat run failed: ${response.status} ${await response.text()}`);
+      }
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("chat run response did not include an SSE body");
+      const decoder = new TextDecoder();
+      const events: Record<string, unknown>[] = [];
+      let buffer = "";
+      const parseEventChunk = (chunk: string) => {
+        const line = chunk.split("\n").find((candidate) => candidate.startsWith("data: "));
+        if (line) events.push(JSON.parse(line.slice("data: ".length)));
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        if (value) {
+          buffer += decoder.decode(value, { stream: !done });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() ?? "";
+          for (const chunk of chunks) {
+            parseEventChunk(chunk);
+          }
+        }
+        if (done) break;
+      }
+      if (buffer.trim()) parseEventChunk(buffer);
+      return events;
+    },
+    { targetSessionId: sessionId, targetPrompt: prompt },
+  );
+}
+
+async function fetchGuiSessionSnapshot(page: Page): Promise<unknown> {
+  return page.evaluate(async () => {
+    const response = await fetch("/api/bootstrap");
+    if (!response.ok) {
+      throw new Error(`session bootstrap failed: ${response.status} ${await response.text()}`);
+    }
+    const bootstrap = await response.json();
+    return bootstrap.snapshot;
+  });
+}
+
+function opencandleEntrySequence(entries: unknown[]): string[] {
+  return entries.map((entry) => String(recordValue(entry).customType));
+}
+
+function isOpenCandleCustomEntry(entry: unknown): boolean {
+  const record = recordValue(entry);
+  return record.type === "custom" && stringValue(record.customType)?.startsWith("opencandle-");
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function writeParityEvidence(fileName: string, content: unknown): void {
+  const evidenceDir = process.env.OPENCANDLE_GUI_TUI_PARITY_EVIDENCE_DIR;
+  if (!evidenceDir) return;
+  mkdirSync(evidenceDir, { recursive: true });
+  const path = join(evidenceDir, fileName);
+  if (content instanceof Uint8Array) {
+    writeFileSync(path, content);
+    return;
+  }
+  writeFileSync(path, `${JSON.stringify(content, null, 2)}\n`);
 }
 
 function toolRunEntries(toolCallId: string, symbol: string) {
