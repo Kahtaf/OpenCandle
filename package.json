@@ -145,13 +145,13 @@
     "@sinclair/typebox": "*"
   },
   "devDependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.52.0",
+    "@agentclientprotocol/claude-agent-acp": "^0.55.0",
     "@agentclientprotocol/codex-acp": "^1.0.1",
     "@biomejs/biome": "^2.5.1",
     "@sinclair/typebox": "^0.34.49",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.0.1",
-    "acpx": "^0.11.2",
+    "acpx": "^0.12.0",
     "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
