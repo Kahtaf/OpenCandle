@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
+
 ### Changed
 
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and keeps chat disabled until setup is ready.

@@ -1,0 +1,21 @@
+
+> opencandle@0.11.0 pretest
+> npm run check:node
+
+
+> opencandle@0.11.0 check:node
+> node scripts/check-node-version.mjs
+
+
+> opencandle@0.11.0 test
+> vitest run
+
+
+ RUN  v4.1.9 /Users/kahtaf/Documents/workspace/oc-eval-provider-outage
+
+
+ Test Files  222 passed (222)
+      Tests  2301 passed | 2 skipped (2303)
+   Start at  23:42:09
+   Duration  16.30s (transform 9.01s, setup 0ms, import 37.93s, tests 51.66s, environment 19ms)
+
