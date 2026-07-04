@@ -92,3 +92,16 @@ Branch: `feat/eval-provider-outage`
 
 - `npm run test:evals -- -t "no-tool"` remains blocked before cases execute by the existing `vitest-evals` loader failure: `TypeError: define is not a function`.
 - Full `npx biome ci .` passed with existing repository warnings.
+
+# PR Notes
+
+## feat/analyst-evidence-capture
+
+- Per-step tool evidence capture and scoped prior-evidence flow: `tests/unit/runtime/session-coordinator.test.ts` (`captures tool evidence from each workflow step without leaking between steps`).
+- Structured analyst parse success and custom entry emission: `tests/unit/runtime/session-coordinator.test.ts` (`stores parsed analyst output and appends an analyst-step entry`).
+- Structured debate parse success and custom entry emission: `tests/unit/runtime/session-coordinator.test.ts` (`stores parsed debate output and appends an analyst-step entry`).
+- Parse failure retry and continuation: `tests/unit/runtime/session-coordinator.test.ts` (`re-prompts once on analyst parse failure, records parsed false, and completes the step`).
+- Harness custom-entry capture: `tests/unit/harness/custom-entries.test.ts` (`preserves structured analyst-step entries for trace evidence`).
+- GUI `analystsDone` projection: `tests/unit/gui-server/projector.test.ts` (`counts completed analyst steps from opencandle analyst-step entries`).
+
+Prompt-template edits are deliberately deferred per `openspec/changes/structured-analyst-evidence-capture/`; `src/analysts/orchestrator.ts` and `src/prompts/` are unchanged in this branch.
