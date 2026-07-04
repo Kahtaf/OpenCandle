@@ -52,3 +52,11 @@ This proposal captures a UI-only overhaul for those surfaces.
 - Do not turn the Today page into a broker dashboard.
 - Do not add decorative motion, page-load choreography, animated finance theater, or unsupported dark/crypto/fintech visual language.
 - Do not replace OC primitives with Efferd/shadcn primitives.
+
+## Superseded
+
+- Symbol-centric market-state redesign, mobile-first layouts, bottom-sheet create/edit: shipped (CHANGELOG 0.6.0-era "GUI market-state pages were redesigned around symbol-centric layouts...").
+- Predictions / "Thesis Tracker": feature removed entirely in 0.11.0 (tool, GUI page, `prediction_records` table dropped by v8 migration). Requirements targeting it are void.
+- "Refresh prices" button requirements: manual refresh buttons were removed in favor of background quote snapshots and an "Updated Xm ago" freshness line. Void.
+- Follower/read-only mode requirements: superseded by `transparent-local-session-coordinator` neutral-language requirement ("SHALL NOT show 'writer', 'follower', 'read-only follower', or 'take over' as the primary user-facing state").
+- React Doctor gating: shipped via the autoreview pipeline changes (React Doctor pinned, diff-scoped scanning, error-level blocking).
