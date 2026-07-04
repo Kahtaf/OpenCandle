@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- The frozen competitive eval script no longer crashes with a `completeSimple` ReferenceError at the first judge call (after a live OpenCandle session had already run); a unit-level typecheck guard now catches eval-script type errors that `tsc --noEmit` misses because tests are excluded from the repo typecheck.
 - `/analyze` comprehensive-analysis runs now emit the same `opencandle-workflow` session entry as router-dispatched workflows, so the GUI dashboard can track active analyses and move completed research into recent research.
 - The live GUI/TUI parity eval now passes end to end and asserts truthful contracts: identical `opencandle-*` entry-type sets across both surfaces (excluding run-conditional provider-gap entries), session-addressed snapshot reads, and the projector's actual completed-run state.
 - The last legacy implicit-active-session mutation surface is gone: the GUI WebSocket `chat.prompt` message now returns an error directing callers to the session-addressed chat-run API (matching the HTTP route's 410), the underlying controller `handlePrompt` was removed, and the orphaned `chat-run-session` module with zero production callers was deleted.

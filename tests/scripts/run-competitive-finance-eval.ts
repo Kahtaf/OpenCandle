@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type Api,
+  completeSimple,
   getModel,
   type Model,
   registerBuiltInApiProviders,
