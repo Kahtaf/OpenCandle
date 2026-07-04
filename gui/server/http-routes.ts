@@ -253,7 +253,8 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         writeJson(res, { error: "Unknown saved session" }, 404);
         return;
       }
-      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body);
+      // allowProxy: false — this endpoint is the proxy target; re-proxying loops.
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, false);
       return;
     }
 
@@ -332,7 +333,9 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
         writeJson(res, { error: "Unknown saved session" }, 404);
         return;
       }
-      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body);
+      // allowProxy: true — forward to a live coordinator owned by another
+      // process (0.11.0 authenticated local forwarding).
+      await handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, true);
       return;
     }
 
@@ -345,8 +348,13 @@ async function handleSseChatRun(
   res: ServerResponse,
   options: GuiHttpRouteOptions,
   activeRunSessionIds: Set<string>,
-  targetSessionManager?: SessionManager,
-  bodyOverride?: Record<string, unknown>,
+  targetSessionManager: SessionManager | undefined,
+  bodyOverride: Record<string, unknown> | undefined,
+  // Explicit because both remaining callers pass a body: the browser-facing
+  // runs route must forward to a live coordinator owned by another process,
+  // while the local-coordinator endpoint IS the proxy target and re-proxying
+  // there would loop.
+  allowProxy: boolean,
 ): Promise<void> {
   const body = bodyOverride ?? asRecord(await readJsonBody(req));
   const prompt = String(asRecord(body).prompt ?? "").trim();
@@ -369,9 +377,8 @@ async function handleSseChatRun(
     return;
   }
 
-  const proxyAllowed = bodyOverride === undefined;
   const actionId = String(bodyRecord.actionId ?? "").trim();
-  const shouldProxyChatRun = proxyAllowed && canProxyChatRunToCoordinator(runSessionManager);
+  const shouldProxyChatRun = allowProxy && canProxyChatRunToCoordinator(runSessionManager);
   if (shouldProxyChatRun) {
     if (await proxyChatRunToCoordinator(res, runSessionManager, bodyRecord)) {
       const useCurrentSession =

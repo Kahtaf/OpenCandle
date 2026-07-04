@@ -253,6 +253,32 @@ describe("GUI server route guards", () => {
     expect(lockSource).toContain("return isCoordinatorOwnerAlive(lock.pid)");
   });
 
+  it("keeps proxy forwarding reachable from the browser runs route but not the proxy target", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+
+    // Regression guard: proxy allowance was once inferred from
+    // `bodyOverride === undefined`, and when every caller began passing a
+    // body the cross-process forwarding path went silently dead — browsers
+    // got endless 409 "reconnecting" against sessions owned by another
+    // process. The browser-facing runs route must allow proxying; the
+    // local-coordinator endpoint (the proxy target) must not, or it loops.
+    expect(source).not.toContain("bodyOverride === undefined");
+    const runsRoute = source.slice(
+      source.indexOf('sessionIdFromRoute(url.pathname, "runs")'),
+      source.indexOf("serveStaticAsset(url.pathname, res, options)"),
+    );
+    expect(runsRoute).toContain(
+      "handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, true)",
+    );
+    const coordinatorRoute = source.slice(
+      source.indexOf('url.pathname === "/api/local-coordinator/chat-run"'),
+      source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"'),
+    );
+    expect(coordinatorRoute).toContain(
+      "handleSseChatRun(req, res, options, activeRunSessionIds, sessionManager, body, false)",
+    );
+  });
+
   it("broadcasts target session snapshots after proxied chat runs", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const proxyStart = source.indexOf("if (shouldProxyChatRun)");
