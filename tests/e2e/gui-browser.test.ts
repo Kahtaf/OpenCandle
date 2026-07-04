@@ -1270,7 +1270,6 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-
 function writeParityEvidence(fileName: string, content: unknown): void {
   const evidenceDir = process.env.OPENCANDLE_GUI_TUI_PARITY_EVIDENCE_DIR;
   if (!evidenceDir) return;
