@@ -2,7 +2,7 @@
 
 ### Requirement: Prior-Turn Privacy and Forget Integration
 
-The system SHALL provide a local `/forget` command that suppresses matching historical context before future router and agent prompts are assembled. Conversational text in `priorTurns` is not governed by the structured-memory `NEVER_TRUST_FROM_MEMORY` guard, so `/forget` SHALL apply the same deterministic matcher to prior-turn derivation, structured memory reads, saved market-state prompt-context summaries, and compaction or branch summaries that can become router-visible history. Suppression SHALL be read-time filtering, not destructive deletion, unless the user explicitly invokes `/forget --remove <topic>` to remove a forget-list entry.
+The system SHALL provide a local `/forget` command that suppresses matching historical context before future router and agent prompts are assembled. Conversational text in `priorTurns` is not governed by the structured-memory `NEVER_TRUST_FROM_MEMORY` guard, so `/forget` SHALL apply the same deterministic matcher to prior-turn derivation, structured memory reads, saved market-state prompt-context summaries, and compaction or branch summaries that can become router-visible history. Suppression SHALL be read-time filtering, not destructive deletion; no suppressed content is ever deleted. (`/forget --remove <topic>` deletes only the forget-list entry itself, restoring visibility of previously suppressed content.)
 
 #### Scenario: Forgotten prior turn is excluded whole
 
@@ -31,7 +31,7 @@ The system SHALL provide a local `/forget` command that suppresses matching hist
 
 OpenCandle SHALL support `/forget <topic>` where `topic` is a ticker, phrase, or free text. The topic SHALL be normalized by trimming whitespace, casefolding, and stripping one leading `$` before mode selection. If the normalized topic matches `^[A-Za-z]{1,5}$`, the entry kind SHALL be `ticker`; otherwise the entry kind SHALL be `phrase`.
 
-Ticker entries SHALL match word-boundary occurrences, case-insensitively, of either the bare symbol or the `$SYMBOL` cashtag. Ticker matching SHALL NOT match inside longer words. Ticker matching SHALL NOT match company-name aliases in v1; for example, forgetting `ASTS` does not match the phrase "AST SpaceMobile" unless the symbol token is also present. Acronym collisions are the user's responsibility.
+Ticker entries SHALL match word-boundary occurrences, case-insensitively, of either the bare symbol or the `$SYMBOL` cashtag. Ticker matching SHALL NOT match inside longer words. Ticker matching SHALL NOT match company-name aliases in v1; for example, forgetting `ASTS` does not match the phrase "AST SpaceMobile" unless the symbol token is also present. Acronym collisions are the user's responsibility. Both ticker and phrase matching SHALL operate on the raw stored text, including markdown syntax characters such as backticks; markdown is not stripped or rendered before matching, so a phrase that spans a markdown boundary (for example, text containing backticks between its words) does not match unless the stored characters match.
 
 Phrase entries SHALL match by case-insensitive substring search on the normalized phrase and target text.
 
@@ -120,7 +120,7 @@ On successful `/forget <topic>`, the session SHALL show a confirmation that stat
 
 - **WHEN** the user runs `/forget` with no argument
 - **THEN** the session SHALL list active forget entries with their stored patterns, kinds, and suppression counts
-- **AND** this listing MAY show patterns because the user requested the active forget list
+- **AND** this listing SHALL show patterns because the user requested the active forget list
 
 ### Requirement: Forget Undo
 
