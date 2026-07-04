@@ -12,7 +12,12 @@
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
+import {
+  type AgentSessionEvent,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { isAnalysisRequest } from "../../src/analysts/orchestrator.js";
 import { createOpenCandleSession } from "../../src/index.js";
 import { cache } from "../../src/infra/cache.js";
 import { IpcChannel } from "./ipc.js";
@@ -63,7 +68,8 @@ async function cmdRun() {
   }
 
   const ipcDir = args.ipc || join(tmpdir(), `oc-harness-${Date.now()}`);
-  const timeoutMs = args.timeout ? Number(args.timeout) : 300_000;
+  const isAnalysisPrompt = isAnalysisRequest(prompt).match;
+  const timeoutMs = args.timeout ? Number(args.timeout) : isAnalysisPrompt ? 900_000 : 300_000;
 
   mkdirSync(ipcDir, { recursive: true });
   const ipc = new IpcChannel(ipcDir);
@@ -159,7 +165,10 @@ async function cmdRun() {
       });
     };
 
-    await promptAndWaitForAgentEnd(session, prompt);
+    await promptAndWaitForSettle(session, prompt, {
+      settleGraceMs: isAnalysisPrompt ? 30_000 : 3_000,
+      timeoutMs,
+    });
     writeCurrentTrace(0);
     console.log(`IPC dir: ${ipcDir}`);
     console.log("Session complete. Trace written.");
@@ -173,7 +182,10 @@ async function cmdRun() {
       const promptIndex = prompts.length;
       prompts.push(request.prompt);
       collector.setPromptIndex(promptIndex);
-      await promptAndWaitForAgentEnd(session, request.prompt);
+      await promptAndWaitForSettle(session, request.prompt, {
+        settleGraceMs: isAnalysisRequest(request.prompt).match ? 30_000 : 3_000,
+        timeoutMs,
+      });
       writeCurrentTrace(promptIndex);
       console.log("Follow-up complete. Trace written.");
     }
@@ -212,19 +224,57 @@ function drainOpenCandleCustomEntries(
   return { entries, nextEntryOffset: allEntries.length };
 }
 
-async function promptAndWaitForAgentEnd(
+async function promptAndWaitForSettle(
   session: Awaited<ReturnType<typeof createOpenCandleSession>>["session"],
   prompt: string,
+  options: { settleGraceMs: number; timeoutMs: number },
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const unsub = session.subscribe((event) => {
-      if (event.type === "agent_end") {
-        unsub();
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let unsub = () => {};
+    const timeoutTimer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`OpenCandle harness timed out after ${options.timeoutMs}ms`));
+    }, options.timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timeoutTimer);
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+      unsub();
+    };
+
+    const cancelSettle = () => {
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+    };
+
+    const finishAfterGrace = () => {
+      cancelSettle();
+      settleTimer = setTimeout(() => {
+        cleanup();
         resolve();
+      }, options.settleGraceMs);
+    };
+
+    unsub = session.subscribe((event: AgentSessionEvent) => {
+      if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+        cancelSettle();
+      }
+      if (event.type === "tool_execution_start") {
+        cancelSettle();
+      }
+      if (event.type === "agent_end") {
+        finishAfterGrace();
       }
     });
+
     void session.prompt(prompt).catch((error: unknown) => {
-      unsub();
+      cleanup();
       reject(error);
     });
   });

@@ -4,6 +4,7 @@ import type {
   ExtensionContext,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
+import { parseAnalystOutput, parseDebateOutput } from "../analysts/contracts.js";
 import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
@@ -26,8 +27,14 @@ import type { SymbolValidationCache } from "../prompts/symbol-preflight.js";
 import type { RouterRouteKind } from "../routing/router-types.js";
 import type { ResolvedTurnContext } from "../routing/turn-context.js";
 import { getAddonToolDescriptions } from "../tool-kit.js";
+import type { EvidenceRecord } from "./evidence.js";
 import type { WorkflowDefinition } from "./prompt-step.js";
-import { promptStepOutput, toStepDefinitions } from "./prompt-step.js";
+import {
+  captureToolEvidence,
+  extractAssistantText,
+  promptStepOutput,
+  toStepDefinitions,
+} from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
@@ -39,6 +46,12 @@ const IMMEDIATE_IDLE_GRACE_MS = 100;
 interface ActiveWorkflowRunRef {
   active: boolean;
   contextToken: RunContextToken;
+}
+
+interface ActiveStepCapture {
+  evidence: EvidenceRecord[];
+  pendingTools: Map<string, { tool: string; args: unknown; startedAt: string }>;
+  rawText: string;
 }
 
 function parseMaybeJson(raw: unknown): Record<string, unknown> | undefined {
@@ -59,6 +72,7 @@ type QueueContext =
       isIdle(): boolean;
       hasPendingMessages?(): boolean;
       ui?: { notify(message: string, level?: string): void };
+      sessionManager?: { getEntries(): SessionEntry[] };
     };
 
 function hasPendingMessages(ctx: QueueContext): boolean {
@@ -67,6 +81,11 @@ function hasPendingMessages(ctx: QueueContext): boolean {
 
 function isReadyForNextPrompt(ctx: QueueContext): boolean {
   return ctx.isIdle() && !hasPendingMessages(ctx);
+}
+
+function readSessionEntries(ctx: QueueContext): SessionEntry[] {
+  const manager = "sessionManager" in ctx ? ctx.sessionManager : undefined;
+  return manager?.getEntries?.() ?? [];
 }
 
 function sleep(ms: number): Promise<void> {
@@ -119,6 +138,8 @@ export class SessionCoordinator {
   private providerTracker: ProviderTracker;
   private activeWorkflowRunRef: ActiveWorkflowRunRef | null = null;
   private activeWorkflowType: string | undefined;
+  private activeStepCapture: ActiveStepCapture | null = null;
+  private workflowEventCaptureInstalled = false;
   private tickerValidationCache: SymbolValidationCache = new Map();
   private sessionId = "unknown";
 
@@ -416,6 +437,7 @@ export class SessionCoordinator {
     firstPromptMode: "send" | "transform",
   ): void {
     if (definition.steps.length === 0) return;
+    this.installWorkflowEventCapture(pi);
 
     const runner = this.runner;
     if (this.activeWorkflowRunRef) {
@@ -444,26 +466,78 @@ export class SessionCoordinator {
     // Start the runner in the background for state tracking
     const stepDefs = toStepDefinitions(definition.steps);
     void runner
-      .start(definition.workflowType, stepDefs, async (step, stepIndex) => {
-        // First step was already sent above — just wait for settlement
-        if (stepIndex > 0) {
-          const settled = await waitForPromptSettlement(ctx, () => runRef.active);
-          if (!settled || !runRef.active) {
-            throw new Error("run_cancelled");
+      .start(
+        definition.workflowType,
+        stepDefs,
+        async (step, stepIndex, _priorEvidence, context) => {
+          let entriesBeforeStep = readSessionEntries(ctx).length;
+          const eventCapture = this.startStepCapture();
+
+          // First step was already sent above — later steps are sent here.
+          if (stepIndex > 0) {
+            const settled = await waitForPromptSettlement(ctx, () => runRef.active);
+            if (!settled || !runRef.active) {
+              throw new Error("run_cancelled");
+            }
+            entriesBeforeStep = readSessionEntries(ctx).length;
+            pi.sendUserMessage(definition.steps[stepIndex].prompt);
           }
-          pi.sendUserMessage(definition.steps[stepIndex].prompt);
-        } else {
-          // For the first step, just wait for it to settle
+
           const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
-            requireActivity: firstPromptMode === "transform",
+            requireActivity: stepIndex === 0 && firstPromptMode === "transform",
           });
           if (!settled || !runRef.active) {
             throw new Error("run_cancelled");
           }
-        }
-        return promptStepOutput(stepIndex, step.stepType);
-      })
+
+          let stepEntries = readSessionEntries(ctx).slice(entriesBeforeStep);
+          let rawText = capturedText(eventCapture, stepEntries);
+          let output = promptStepOutput(stepIndex, step.stepType, {
+            evidence: capturedEvidence(eventCapture, stepEntries),
+            rawText,
+          });
+
+          if (
+            isStructuredAnalystStep(step.stepType) &&
+            rawText.length > 0 &&
+            !hasStructuredContract(step.stepType, rawText)
+          ) {
+            pi.sendUserMessage(
+              "Please revise your previous response to include the exact required final output format from the stage prompt. Do not add new tool calls.",
+            );
+            const retrySettled = await waitForPromptSettlement(ctx, () => runRef.active);
+            if (!retrySettled || !runRef.active) {
+              throw new Error("run_cancelled");
+            }
+            stepEntries = readSessionEntries(ctx).slice(entriesBeforeStep);
+            rawText = capturedText(eventCapture, stepEntries);
+            output = promptStepOutput(stepIndex, step.stepType, {
+              evidence: capturedEvidence(eventCapture, stepEntries),
+              rawText,
+            });
+          }
+
+          for (const record of output.evidence) {
+            const value = isPlainObject(record.value) ? record.value : {};
+            this.eventLogger?.log(context.runId, stepIndex, "tool_called", {
+              stepType: step.stepType,
+              tool: value.tool,
+              args: value.args,
+              resultDigest: value.resultDigest,
+            });
+          }
+
+          if (this.activeStepCapture === eventCapture) {
+            this.activeStepCapture = null;
+          }
+
+          return attachStructuredOutput(pi, output);
+        },
+      )
       .finally(() => {
+        if (this.activeWorkflowRunRef === runRef) {
+          this.activeStepCapture = null;
+        }
         clearRunContext(runRef.contextToken);
         if (this.activeWorkflowRunRef === runRef) {
           this.activeWorkflowRunRef = null;
@@ -479,8 +553,116 @@ export class SessionCoordinator {
       clearRunContext(activeRef.contextToken);
       this.activeWorkflowRunRef = null;
     }
+    this.activeStepCapture = null;
     this.runner?.cancel();
   }
+
+  private startStepCapture(): ActiveStepCapture {
+    const capture: ActiveStepCapture = {
+      evidence: [],
+      pendingTools: new Map(),
+      rawText: "",
+    };
+    this.activeStepCapture = capture;
+    return capture;
+  }
+
+  private installWorkflowEventCapture(pi: ExtensionAPI): void {
+    const on = (pi as { on?: unknown }).on;
+    if (this.workflowEventCaptureInstalled || typeof on !== "function") return;
+    this.workflowEventCaptureInstalled = true;
+
+    pi.on("message_update", (event) => {
+      const capture = this.activeStepCapture;
+      if (!capture || event.assistantMessageEvent.type !== "text_delta") return;
+      capture.rawText += event.assistantMessageEvent.delta;
+    });
+
+    pi.on("tool_execution_start", (event) => {
+      const capture = this.activeStepCapture;
+      if (!capture) return;
+      capture.pendingTools.set(event.toolCallId, {
+        tool: event.toolName,
+        args: event.args ?? {},
+        startedAt: new Date().toISOString(),
+      });
+    });
+
+    pi.on("tool_execution_end", (event) => {
+      const capture = this.activeStepCapture;
+      if (!capture) return;
+      const completedAt = new Date().toISOString();
+      const pending = capture.pendingTools.get(event.toolCallId);
+      capture.pendingTools.delete(event.toolCallId);
+      const tool = pending?.tool ?? event.toolName;
+      if (!tool) return;
+      capture.evidence.push(
+        toolEvidenceRecord({
+          tool,
+          args: pending?.args ?? {},
+          result: event.result,
+          startedAt: pending?.startedAt ?? completedAt,
+          completedAt,
+          isError: event.isError === true,
+        }),
+      );
+    });
+  }
+}
+
+function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): string {
+  return capture.rawText.trim() || extractAssistantText(entries);
+}
+
+function capturedEvidence(capture: ActiveStepCapture, entries: SessionEntry[]): EvidenceRecord[] {
+  return capture.evidence.length > 0 ? [...capture.evidence] : captureToolEvidence(entries);
+}
+
+function toolEvidenceRecord(input: {
+  tool: string;
+  args: unknown;
+  result: unknown;
+  startedAt: string;
+  completedAt: string;
+  isError: boolean;
+}): EvidenceRecord {
+  const serializedResult = serialize(input.result);
+  return {
+    label: `tool:${input.tool}`,
+    value: {
+      tool: input.tool,
+      args: truncate(serialize(input.args), 500),
+      resultDigest: {
+        preview: truncate(serializedResult, 500),
+        totalLength: serializedResult.length,
+      },
+      startedAt: input.startedAt,
+      completedAt: input.completedAt,
+    },
+    provenance: {
+      source: "computed",
+      timestamp: input.completedAt,
+      provider: input.tool,
+      confidence: input.isError ? 0.5 : undefined,
+    },
+  };
+}
+
+function summarizeStepEvidence(evidence: EvidenceRecord[]): unknown[] {
+  return evidence.map((record) => (isPlainObject(record.value) ? record.value : record));
+}
+
+function serialize(value: unknown): string {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
 }
 
 function formatToolDefaultsForPrompt(): string[] {
@@ -509,6 +691,86 @@ function flattenDefaults(defaults: Record<string, unknown>, prefix = ""): Array<
     }
   }
   return out;
+}
+
+function isStructuredAnalystStep(stepType: string): boolean {
+  return stepType.startsWith("analyst_") || stepType.startsWith("debate_");
+}
+
+function hasStructuredContract(stepType: string, text: string): boolean {
+  if (stepType.startsWith("analyst_")) {
+    return (
+      /SIGNAL:\s*(BUY|HOLD|SELL)/i.test(text) &&
+      /CONVICTION:\s*(\d+)/i.test(text) &&
+      /THESIS:\s*(.+)/i.test(text)
+    );
+  }
+  if (stepType === "debate_bull") {
+    return (
+      /BULL THESIS:\s*(.+)/i.test(text) && /KEY RISK(?:\s+TO THIS THESIS)?:\s*(.+)/i.test(text)
+    );
+  }
+  if (stepType === "debate_bear") {
+    return /BEAR THESIS:\s*(.+)/i.test(text) && /WHAT WOULD CHANGE MY MIND:\s*(.+)/i.test(text);
+  }
+  if (stepType === "debate_rebuttal") {
+    return (
+      /^REBUTTAL SKIPPED/i.test(text.trim()) ||
+      (/CONCESSIONS:\s*[\s\S]+/i.test(text) && /REMAINING CONVICTION:\s*(\d+)/i.test(text))
+    );
+  }
+  return false;
+}
+
+function attachStructuredOutput(pi: ExtensionAPI, output: ReturnType<typeof promptStepOutput>) {
+  if (!isStructuredAnalystStep(output.stepType)) return output;
+
+  const rawText = output.rawText ?? "";
+  if (rawText.length === 0) return output;
+  const evidence = summarizeStepEvidence(output.evidence);
+  const evidenceCount = output.evidence.length;
+  if (!hasStructuredContract(output.stepType, rawText)) {
+    const role = analystRoleFromStep(output.stepType);
+    pi.appendEntry("opencandle-analyst-step", {
+      stage: output.stepType,
+      ...(role ? { role } : {}),
+      parsed: false,
+      evidenceCount,
+      evidence,
+    });
+    return { ...output, parsed: false };
+  }
+
+  if (output.stepType.startsWith("analyst_")) {
+    const role = analystRoleFromStep(output.stepType) ?? "analyst";
+    const analystOutput = parseAnalystOutput(role, rawText);
+    const parsedOutput = { ...output, analystOutput, parsed: true };
+    pi.appendEntry("opencandle-analyst-step", {
+      stage: output.stepType,
+      role,
+      signal: analystOutput.signal,
+      conviction: analystOutput.conviction,
+      parsed: true,
+      evidenceCount,
+      evidence,
+    });
+    return parsedOutput;
+  }
+
+  const side = output.stepType === "debate_bear" ? "bear" : "bull";
+  const debateOutput = parseDebateOutput(side, rawText);
+  pi.appendEntry("opencandle-analyst-step", {
+    stage: output.stepType,
+    side,
+    parsed: true,
+    evidenceCount,
+    evidence,
+  });
+  return { ...output, debateOutput, parsed: true };
+}
+
+function analystRoleFromStep(stepType: string): string | undefined {
+  return stepType.startsWith("analyst_") ? stepType.slice("analyst_".length) : undefined;
 }
 
 function buildSavedMarketStateContext(db: Database.Database): string {

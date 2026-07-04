@@ -609,6 +609,39 @@ describe("route()", () => {
     expect(result.missing_required).toEqual(["symbols"]);
   });
 
+  it("corrects macro metric comparisons after acronym slot cleanup leaves one ticker", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Show CPI vs SPY YTD",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["CPI", "SPY"] },
+          slots: {
+            symbols: { value: ["CPI", "SPY"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "misread CPI as a ticker",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.entities.symbols).toEqual(["SPY"]);
+    expect(result.slots.symbols).toBeUndefined();
+    expect(result.missing_required).toEqual([]);
+    expect(result.tool_bundles).toContain("macro");
+  });
+
   it("keeps finance acronym tickers with a direct ticker phrase", async () => {
     const result = await route(
       {
@@ -632,6 +665,34 @@ describe("route()", () => {
     );
 
     expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+  });
+
+  it("restores locally marked acronym tickers omitted by the model in text order", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "compare KO, the IV ticker, and PEP",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "compare_assets",
+          entities: { symbols: ["KO", "PEP"] },
+          slots: {
+            symbols: { value: ["KO", "PEP"], source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "missed locally marked IV ticker",
+        }),
+      ),
+    );
+
+    expect(result.entities.symbols).toEqual(["KO", "IV", "PEP"]);
+    expect(result.slots.symbols?.value).toEqual(["KO", "IV", "PEP"]);
   });
 
   it("corrects macro data prompts misread as ticker comparisons", async () => {
@@ -716,6 +777,85 @@ describe("route()", () => {
     expect(result.workflow).toBe("general_finance_qa");
     expect(result.missing_required).toEqual([]);
     expect(result.tool_bundles).toContain("macro");
+  });
+
+  it("fills profile-backed portfolio risk slots when the model omits them", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "build me a portfolio for $30k",
+        profileSnapshot: { risk_profile: "conservative" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 30000 },
+          slots: {
+            budget: { value: 30000, source: "user", confidence: "high" },
+          },
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "portfolio budget extracted",
+        }),
+      ),
+    );
+
+    expect(result.slots.risk_profile).toEqual({
+      value: "conservative",
+      source: "preference",
+      confidence: "high",
+    });
+  });
+
+  it("recovers conversational risk preference updates from prior profile context", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I've been getting more cautious lately, I'm thinking conservative now",
+        priorTurns: [
+          {
+            role: "assistant",
+            text: "Got it — based on your profile I've been sizing positions aggressively.",
+          },
+        ],
+        profileSnapshot: { risk_profile: "aggressive" },
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "pass_through",
+          route: "fallback",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "conversational statement",
+        }),
+      ),
+    );
+
+    expect(result.routeKind).toBe("agent_task");
+    expect(result.route).toBe("fallback");
+    expect(result.entities.riskProfile).toBe("conservative");
+    expect(result.slots.risk_profile).toEqual({
+      value: "conservative",
+      source: "user",
+      confidence: "high",
+    });
+    expect(result.preference_updates).toEqual([
+      {
+        key: "risk_profile",
+        value: "conservative",
+        confidence: "high",
+        source: "inferred",
+      },
+    ]);
+    expect(result.tool_bundles).toEqual(["core_market"]);
   });
 
   it("corrects portfolio-builder output for existing-allocation evaluation prompts", async () => {
