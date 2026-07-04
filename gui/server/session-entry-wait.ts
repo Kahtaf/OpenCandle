@@ -60,15 +60,29 @@ export async function waitForSessionTurnSettlement(
   const timeoutMs = options.timeoutMs ?? 120_000;
   const intervalMs = options.intervalMs ?? 25;
   const idleGraceMs = options.idleGraceMs ?? 250;
-  const deadline = Date.now() + timeoutMs;
+  // timeoutMs bounds STALL, not total runtime: a live workflow run (e.g.
+  // /analyze) stays active for minutes while its status keeps changing, and
+  // capping total runtime failed those runs mid-workflow with
+  // "Timed out waiting for the session turn to settle". A hung session stops
+  // changing status entirely, which is what the deadline must catch.
+  let lastProgressAt = Date.now();
+  let lastSignature: string | undefined;
   let idleSince: number | undefined;
 
-  while (Date.now() < deadline) {
+  while (true) {
     const status = getStatus();
+    const signature = `${status.isStreaming}:${status.pendingMessageCount}`;
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      lastProgressAt = Date.now();
+    }
     const active = status.isStreaming || status.pendingMessageCount > 0;
 
     if (active) {
       idleSince = undefined;
+      if (Date.now() - lastProgressAt >= timeoutMs) {
+        throw new Error("Timed out waiting for the session turn to settle");
+      }
       await delay(intervalMs);
       continue;
     }
@@ -80,7 +94,6 @@ export async function waitForSessionTurnSettlement(
 
     await delay(intervalMs);
   }
-  throw new Error("Timed out waiting for the session turn to settle");
 }
 
 export function findUnresolvedToolCalls(entries: SessionEntry[]): UnresolvedToolCall[] {

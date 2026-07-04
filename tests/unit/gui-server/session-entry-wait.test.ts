@@ -95,6 +95,43 @@ describe("waitForSessionTurnSettlement", () => {
     expect(pendingMessageCount).toBe(0);
   });
 
+  it("does not time out while the session keeps making progress past the stall window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    // A live /analyze run stays active far longer than any reasonable total
+    // cap while its status keeps changing between steps; the timeout must
+    // detect a stalled session (frozen status), not cap total runtime.
+    let isStreaming = true;
+    let pendingMessageCount = 0;
+    for (let t = 8; t <= 48; t += 8) {
+      setTimeout(() => {
+        isStreaming = !isStreaming;
+        pendingMessageCount = isStreaming ? 0 : 1;
+      }, t);
+    }
+    setTimeout(() => {
+      isStreaming = false;
+      pendingMessageCount = 0;
+    }, 56);
+
+    let resolved = false;
+    const settled = waitForSessionTurnSettlement(
+      () => ({ isStreaming, pendingMessageCount }),
+      {
+        timeoutMs: 10,
+        intervalMs: 1,
+        idleGraceMs: 3,
+      },
+    ).then(() => {
+      resolved = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(70);
+    await settled;
+    expect(resolved).toBe(true);
+  });
+
   it("throws after the timeout when the session remains active", async () => {
     await expect(
       waitForSessionTurnSettlement(() => ({ isStreaming: true, pendingMessageCount: 0 }), {
