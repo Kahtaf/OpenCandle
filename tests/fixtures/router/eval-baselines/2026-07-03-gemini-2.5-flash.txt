@@ -1,0 +1,117 @@
+
+> opencandle@0.11.0 eval:router-live
+> tsx tests/scripts/run-live-router-eval.ts
+
+Running live router eval against 26 fixtures with model=gemini-2.5-flash...
+
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 001-portfolio-builder-aggressive.json (2401ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 002-portfolio-builder-diversified.json (1914ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 003-options-screener-calls.json (2141ms)
+  .entities.dteHint: expected "month", got "30-45 DTE"
+  .slots.dte_target: expected {"value":"25_to_45_days","source":"user","confidence":"high"}, got undefined
+  .slots.dte_hint: expected undefined, got {"value":"30-45 DTE","source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 004-options-missing-symbol.json (1972ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 005-compare-assets.json (1755ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 006-fallback-entry-levels.json (1845ms)
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 007-fallback-data-fetch.json (1870ms)
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 008-single-asset-analysis.json (1842ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 009-general-qa.json (2028ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 010-preference-from-memory.json (1887ms)
+  .slots.risk_profile: expected {"value":"conservative","source":"preference","confidence":"high"}, got undefined
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 011-fallback-missing-symbol.json (2087ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 012-preference-write-etf.json (1926ms)
+  .entities.compareMetrics: expected undefined, got ["etf_only"]
+  .slots.asset_scope.value: expected "etf_focused", got "etf_only"
+  .preference_updates.0.value: expected "etf_focused", got "etf_only"
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 013-coreference-price.json (1824ms)
+  .slots.symbol: expected undefined, got {"value":"NVDA","source":"prior_context","confidence":"high"}
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 014-carried-budget.json (2184ms)
+  .slots.budget: expected undefined, got {"value":20000,"source":"prior_context","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 015-topic-shift.json (1763ms)
+  .slots.symbol: expected undefined, got {"value":"NVDA","source":"user","confidence":"high"}
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 016-ticker-correction.json (1829ms)
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 017-pref-conflict.json (1915ms)
+  .routeKind: expected "agent_task", got "pass_through"
+  .slots.risk_profile: expected {"value":"conservative","source":"user","confidence":"high"}, got undefined
+  .tool_bundles.0: expected "core_market", got undefined
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 018-dollar-phrase.json (1952ms)
+  .entities.symbols.1: expected "SPY", got undefined
+  .slots.symbol: expected undefined, got {"value":"QQQ","source":"user","confidence":"high"}
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 019-iv-as-volatility.json (1930ms)
+  .slots.symbols: expected undefined, got {"value":["ASTS"],"source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 020-sec-as-regulator.json (1716ms)
+  .slots.symbols: expected undefined, got {"value":["TSLA"],"source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 021-fed-as-bank.json (1787ms)
+  .slots.symbols: expected undefined, got {"value":["TLT"],"source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 022-cpi-as-metric.json (1755ms)
+  .routeKind: expected "agent_task", got "workflow_dispatch"
+  .route: expected "fallback", got "workflow"
+  .workflow: expected "general_finance_qa", got "compare_assets"
+  .slots.symbols: expected undefined, got {"value":["CPI","SPY"],"source":"user","confidence":"high"}
+  .tool_bundles.3: expected "sec", got "clarification"
+  .tool_bundles.4: expected "clarification", got undefined
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 023-iv-with-positive-signal.json (1984ms)
+  .slots.symbol: expected undefined, got {"value":"IV","source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 024-iv-bare-list-dropped.json (2155ms)
+  .slots.symbols: expected undefined, got {"value":["KO","PEP"],"source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+FAIL 025-iv-local-ticker-phrase.json (1924ms)
+  .entities.symbols.1: expected "IV", got "PEP"
+  .entities.symbols.2: expected "PEP", got undefined
+  .slots.symbols: expected undefined, got {"value":["KO","PEP"],"source":"user","confidence":"high"}
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+PASS 026-pass-through-non-finance.json (2058ms)
+
+--- Summary ---
+pass: 9/26 (passRate=0.346)
+latency p50=1924ms p95=2184ms
+failures: 003-options-screener-calls.json, 006-fallback-entry-levels.json, 007-fallback-data-fetch.json, 010-preference-from-memory.json, 012-preference-write-etf.json, 013-coreference-price.json, 014-carried-budget.json, 015-topic-shift.json, 017-pref-conflict.json, 018-dollar-phrase.json, 019-iv-as-volatility.json, 020-sec-as-regulator.json, 021-fed-as-bank.json, 022-cpi-as-metric.json, 023-iv-with-positive-signal.json, 024-iv-bare-list-dropped.json, 025-iv-local-ticker-phrase.json

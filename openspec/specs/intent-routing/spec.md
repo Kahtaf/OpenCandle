@@ -152,12 +152,42 @@ The router LLM call SHALL NOT have access to any registered AgentTools in v1. Cl
 
 ### Requirement: Prior-Turn Context Window
 
-The router SHALL receive the last 5 user/assistant turns of conversation history, the current investor_profile snapshot, and the 3 most recent `workflow_runs` summaries as part of its input context.
+The router SHALL receive the last 5 user/assistant turns of conversation history, the current investor_profile snapshot, and the 3 most recent `workflow_runs` summaries as part of its input context. Prior turns SHALL be retrieved from the active session branch (Pi `ReadonlySessionManager.getBranch()`) at input-event time, filtered to `role === "user"` and `role === "assistant"` message entries with non-empty text content, ordered oldest-to-newest, and sliced to the 5 most recent. Tool-result messages and empty-text turns SHALL be excluded. When the session has fewer than 5 qualifying prior turns, the router SHALL receive the full available history; an empty window is only permitted when the session has no prior qualifying turns.
 
 #### Scenario: Context-dependent query uses prior turns
 
-- **WHEN** the previous turn was about NVDA and the current turn is "what about at $500?"
-- **THEN** the router receives the NVDA prior-turn in its context and can disambiguate the pronoun reference
+- **WHEN** the previous turn was "tell me about NVDA" and the current turn is "what about at $500?"
+- **THEN** the router's `RouterInputContext.priorTurns` contains the NVDA user turn (and any subsequent assistant text turn) and the emitted `RouterOutput.entities.symbols` contains `"NVDA"`
+
+#### Scenario: Prior turns retrieved at input-event time reflect strictly prior state
+
+- **WHEN** the `pi.on("input")` handler invokes the router
+- **THEN** the branch read at that moment contains all prior user/assistant turns but NOT the current turn's text (Pi emits the input event before appending the user message)
+
+#### Scenario: Tool-result and empty-text turns excluded
+
+- **WHEN** the branch contains tool-result messages and an aborted assistant turn with no text content
+- **THEN** those entries SHALL NOT appear in `priorTurns`; only user and assistant message entries with non-empty text are included
+
+#### Scenario: Fewer than 5 prior turns
+
+- **WHEN** the session has only 2 qualifying prior turns
+- **THEN** `priorTurns` contains those 2 entries, not a padded or empty array
+
+#### Scenario: No prior turns
+
+- **WHEN** the session is fresh and has no prior user/assistant messages
+- **THEN** `priorTurns` is an empty array and the router still produces a valid route for the current turn
+
+#### Scenario: Compacted session branch
+
+- **WHEN** the session branch contains a compaction summary entry (Pi `type === "compaction"`) between root and leaf
+- **THEN** the `priorTurns` extraction SHALL skip compaction entries (and branch summary entries) rather than attempt to parse their summary text as message content; `priorTurns` MAY be shorter than 5 when the post-compaction message window is narrower than 5, and this is correct behavior — no synthesized messages are injected to pad the window
+
+#### Scenario: Assistant turn with tool calls but no text
+
+- **WHEN** an assistant message entry contains only tool-call content blocks and no text block
+- **THEN** that entry contributes nothing to `priorTurns` (it is dropped by the empty-text filter), and the neighboring text-bearing turns retain their positions in the window
 
 ### Requirement: Shared Assumptions-Block Rendering
 
@@ -284,7 +314,7 @@ The system SHALL define a route capability manifest that is the source of truth 
 
 ### Requirement: Deterministic Router as Post-Processor
 
-Deterministic routing code SHALL NOT make the primary route decision. Deterministic code SHALL validate and normalize the LLM output, enforce manifest constraints, compute missing required slots, and produce diagnostics for any correction. Deterministic safety nets — acronym disambiguation, symbol preflight and provider invalid-symbol handling, compare-abort clarification, and tool validation — SHALL remain active on LLM router output.
+Deterministic routing code SHALL NOT make the primary route decision. Deterministic code SHALL validate and normalize the LLM output, enforce manifest constraints, compute missing required slots, and produce diagnostics for any correction. Deterministic safety nets — acronym disambiguation via `symbol-disambiguator`, symbol preflight and provider invalid-symbol handling, compare clarification aborts, router validation-failure recovery, and tool validation — SHALL remain active on LLM router output.
 
 #### Scenario: LLM route remains primary
 
@@ -299,11 +329,11 @@ Deterministic routing code SHALL NOT make the primary route decision. Determinis
 #### Scenario: Deterministic safety nets survive rules-router removal
 
 - **WHEN** the legacy rules router is removed as a dispatch path
-- **THEN** acronym disambiguation, workflow symbol preflight, provider/tool validation, and compare clarification aborts continue to run against LLM router output
+- **THEN** acronym disambiguation via `symbol-disambiguator`, workflow symbol preflight, provider/tool validation, compare clarification aborts, and router validation-failure recovery continue to run against LLM router output
 
 ### Requirement: Single LLM Router Call per Turn
 
-The system SHALL invoke a single LLM-based router call on every user turn before system-prompt assembly. The router SHALL emit a structured JSON output containing route classification, entities, slots with provenance, preference updates, and a `missing_required` list. The LLM router is the only production routing path; no rules-mode primary dispatch exists.
+The system SHALL invoke a single LLM-based router call on every user turn before system-prompt assembly. The router SHALL emit a structured JSON output containing route classification, entities, slots with provenance, preference updates, and a `missing_required` list. The LLM router is the default and only production routing path; no rules-mode primary dispatch exists.
 
 #### Scenario: Router runs on every turn
 
@@ -313,6 +343,11 @@ The system SHALL invoke a single LLM-based router call on every user turn before
 #### Scenario: Unset router mode uses the LLM router
 
 - **WHEN** `OPENCANDLE_ROUTER_MODE` is unset
+- **THEN** OpenCandle routes input through the LLM router
+
+#### Scenario: Explicit llm mode uses the LLM router
+
+- **WHEN** `OPENCANDLE_ROUTER_MODE=llm` is set
 - **THEN** OpenCandle routes input through the LLM router
 
 #### Scenario: Rules mode is rejected with migration guidance
@@ -329,14 +364,113 @@ The system SHALL invoke a single LLM-based router call on every user turn before
 
 The legacy rules-router dispatch path SHALL only be removed after the live router eval has been run against the production model with the results recorded in the change, including a classification of every fixture failure. Failures SHALL be either benign model-choice differences (extra informational slots, richer workflow labels with the same route kind, internal diagnostics differences) or individually explained; unexplained route-kind regressions block the removal. The eval diff SHALL compare the routing contract (route kind, workflow, entities, slots, missing required, tool bundles, preference updates) and not internal correction diagnostics, which are model-recording-specific.
 
-#### Scenario: Acceptance evidence precedes removal
+#### Scenario: Live eval evidence recorded before removal
 
 - **WHEN** the change removing rules-mode dispatch is prepared
 - **THEN** `eval:router-live` has been run with live credentials against the production model
-- **AND** the run output and a per-failure classification are recorded in the implementing PR before the removal lands
+- **AND** the run output is recorded in the change evidence
 
-#### Scenario: Route-kind regressions block removal
+#### Scenario: Fixture failures classified
 
-- **WHEN** the live eval shows a fixture whose route kind disagrees with the recorded expectation and no documented explanation accounts for it
+- **WHEN** the recorded live eval has non-exact fixtures
+- **THEN** each failure is classified as benign model-choice difference, fixture/recording mismatch, or genuine route-quality gap with rationale
+
+#### Scenario: Unexplained route-kind regression blocks removal
+
+- **WHEN** the live eval shows a route-kind disagreement that is not explained and accepted in the evidence record
 - **THEN** the rules-router removal does not land until the regression is fixed or the fixture is re-recorded with justification
+
+### Requirement: Prior-Turn Shape
+
+Each prior-turn entry SHALL be a `{ role: "user" | "assistant", text: string }` object. The `text` field SHALL contain the concatenated text content of the message. The router prompt renderer SHALL clip each turn's text to a fixed character limit and strip newlines to bound prompt growth. Assistant tool-call summaries SHALL NOT be included in v1.
+
+#### Scenario: Assistant turn with mixed content blocks
+
+- **WHEN** an assistant message contains a text block and a tool-call block
+- **THEN** the prior-turn entry contains the text block's content only; the tool call is omitted
+
+#### Scenario: Long text is clipped
+
+- **WHEN** a prior user message exceeds the per-turn character limit
+- **THEN** the router prompt renders a clipped version, preserving router-prompt size bounds
+
+### Requirement: Prior-Turn Privacy and Forget Integration
+
+The system SHALL document that conversational text in `priorTurns` is NOT governed by the structured-memory `NEVER_TRUST_FROM_MEMORY` guard and that priorTurns scrubbing is the responsibility of a future `/forget` command. The documentation SHALL name this as a known gap until `/forget` ships.
+
+#### Scenario: Documentation declares the gap
+
+- **WHEN** a contributor reads the router proposal, design, or router README
+- **THEN** they find an explicit note that priorTurns is not filtered by the current memory privacy controls and that `/forget` is the designated follow-up primitive
+
+#### Scenario: /forget (when implemented) scrubs priorTurns sources
+
+- **WHEN** a future `/forget <topic>` command is implemented
+- **THEN** its contract SHALL include removing or masking matching entries from the session branch or its priorTurns derivation so that subsequent router invocations do not see scrubbed content
+
+### Requirement: Acronym Disambiguation Post-Filter
+
+After LLM router output is parsed, the system SHALL apply an acronym disambiguation post-filter to `entities.symbols` that removes tokens belonging to a finance-acronym dictionary unless at least one positive ticker signal is present in the raw user input.
+
+The dictionary SHALL include at minimum: IV, HV, ITM, OTM, ATM, IPO, SEC, FED, FOMC, IRS, ECB, BOE, BOJ, GDP, CPI, PPI, FX, NDA. `MA` SHALL NOT be blanket-dropped because it is the common Mastercard ticker; moving-average or M&A usage SHALL be handled with context-specific rules instead.
+
+A positive ticker signal is defined as one of:
+- The raw input contains `$<token>` (case-insensitive),
+- The raw input contains a local phrase that marks that token as a ticker/stock/symbol, such as "IV ticker", "ticker IV", "IV stock", "symbol IV", or "stock IV",
+- A future parser emits another explicit per-token ticker marker covered by tests.
+
+Bare comma-list or "and"-list adjacency is not a positive ticker signal.
+
+#### Scenario: Bare acronym with no signal is dropped
+
+- **WHEN** the user says "Compare these assets: IV, ASTS" with no `$`-prefix and no local ticker phrase for IV
+- **THEN** `entities.symbols === ["ASTS"]` and IV is dropped via the post-filter
+- **AND** an `opencandle-symbol-dropped` custom entry is appended with `{ token: "IV", reason: "no positive ticker signal", source: <mode> }`
+
+#### Scenario: Compare prompt clarifies when a drop leaves too few symbols
+
+- **WHEN** the LLM router receives "Compare these assets: IV, ASTS"
+- **AND** IV is dropped as an ambiguous finance acronym
+- **THEN** OpenCandle SHALL NOT pass the raw prompt through to the main agent as a comparison request
+- **AND** it SHALL append `opencandle-workflow-aborted` with reason `symbol-disambiguation-insufficient-symbols`
+- **AND** the next agent turn SHALL receive clarification context instructing it to call `ask_user` before comparison tools
+
+#### Scenario: Acronym with `$`-prefix is retained
+
+- **WHEN** the user says "Get me a quote on $IV"
+- **THEN** `entities.symbols === ["IV"]` (retained because `$IV` is a positive signal)
+
+#### Scenario: Bare acronym in mixed list is dropped
+
+- **WHEN** the user says "compare KO, IV, PEP"
+- **THEN** `entities.symbols === ["KO","PEP"]`
+- **AND** IV is dropped because list context alone is insufficient
+
+#### Scenario: Acronym with local ticker phrase is retained
+
+- **WHEN** the user says "compare KO, the IV ticker, and PEP"
+- **THEN** `entities.symbols === ["KO","IV","PEP"]`
+
+#### Scenario: Disambiguation runs after LLM router output
+
+- **WHEN** the LLM router emits `entities.symbols: ["IV","ASTS"]` for input "Compare these assets: IV, ASTS"
+- **THEN** the post-filter still removes IV before the output reaches the main agent
+- **AND** the same drop logic and observability entries apply regardless of the model output shape
+
+#### Scenario: Dropped symbols are not restored from slots
+
+- **WHEN** the LLM router emits a dropped token in both `entities.symbols` and `slots.symbols`
+- **THEN** OpenCandle SHALL remove the token from workflow dispatch symbols
+- **AND** router slot merging SHALL NOT reintroduce a token already reported by `symbol_dropped`
+- **AND** missing-required-slot checks SHALL use sanitized symbol slots so a single survivor cannot satisfy a multi-symbol workflow
+
+#### Scenario: MA ticker survives plain comparison
+
+- **WHEN** the user says "compare V and MA"
+- **THEN** OpenCandle SHALL retain `MA` as the Mastercard ticker
+
+#### Scenario: MA moving-average usage is not a ticker
+
+- **WHEN** the user says "compare the 20 day MA and 50 day MA for SPY"
+- **THEN** OpenCandle SHALL NOT treat `MA` as a ticker symbol
 

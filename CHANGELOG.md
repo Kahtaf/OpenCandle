@@ -2,9 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
+
 ### Fixed
 
 - Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
+- OpenSpec backlog cleanup now archives the stale GUI concurrent-session proposal against shipped behavior and adds `gui-session-scoped-action-cleanup` as the slim follow-up for explicit session-scoped GUI mutations.
 - GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.
 - Session-entry wait tests now use deterministic timers for async workflow settlement, removing a Node 24 CI timing flake.
 
