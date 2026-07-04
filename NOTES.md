@@ -1,5 +1,21 @@
 # feat/eval-router-fixtures
 
+# PR Notes: Deterministic Synthesis Validation
+
+- Computed analyst tally injection when at least two analyst outputs parse:
+  `tests/unit/runtime/session-coordinator.test.ts` (`injects a computed vote tally into synthesis when at least two analysts parse`).
+- Degradation path skips tally injection and records `tally_skipped`:
+  `tests/unit/runtime/session-coordinator.test.ts` (`skips tally injection and records tally_skipped when fewer than two analysts parse`).
+- Consensus rebuttal is skipped programmatically through the runner status:
+  `tests/unit/runtime/session-coordinator.test.ts` (`skips rebuttal programmatically when parsed analysts do not include a BUY and SELL split`) and
+  `tests/unit/tools/orchestrator.test.ts` (`only the rebuttal debate step is skippable for programmatic consensus gating`).
+- Observe-only synthesis validation emits `opencandle-validation`, `validation_passed`/`validation_failed`, and `skipped_unparsed` metadata without enforcing:
+  `tests/unit/runtime/session-coordinator.test.ts` (`emits observe-only validation after synthesis with mismatches and skipped unparsed analysts`).
+- Existing analyst tally/split and runtime validator contracts remain covered by:
+  `tests/unit/analysts/contracts.test.ts`, `tests/unit/runtime/validation.test.ts`, and `tests/unit/runtime/runtime-validator.test.ts`.
+- Live evidence for the `/analyze` trace is stored under
+  `docs/internal/pr-evidence/feat-deterministic-synthesis-validation/`.
+
 ## Behavior-to-test mapping
 
 - Added archived task 4.7 coverage for multi-symbol compare with prior context:

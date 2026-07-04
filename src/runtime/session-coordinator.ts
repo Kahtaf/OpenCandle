@@ -4,7 +4,8 @@ import type {
   ExtensionContext,
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { parseAnalystOutput, parseDebateOutput } from "../analysts/contracts.js";
+import { isAnalystSplit, parseAnalystOutput, parseDebateOutput } from "../analysts/contracts.js";
+import { buildAnalystVoteTallyBlock } from "../analysts/orchestrator.js";
 import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
@@ -37,8 +38,10 @@ import {
 } from "./prompt-step.js";
 import { ProviderTracker } from "./provider-tracker.js";
 import { clearRunContext, type RunContextToken, setRunContext } from "./run-context.js";
+import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
+import type { AnalystOutput, WorkflowRun } from "./workflow-types.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -479,8 +482,21 @@ export class SessionCoordinator {
             if (!settled || !runRef.active) {
               throw new Error("run_cancelled");
             }
+            if (shouldSkipRebuttal(runner.getActiveRun(), step.stepType)) {
+              this.appendWorkflowEvent(pi, "step_skipped", {
+                stepType: step.stepType,
+                reason: "analyst_consensus",
+              });
+              throw new Error("analyst_consensus");
+            }
             entriesBeforeStep = readSessionEntries(ctx).length;
-            pi.sendUserMessage(definition.steps[stepIndex].prompt);
+            const prompt = this.prepareWorkflowPrompt(
+              pi,
+              definition.steps[stepIndex].prompt,
+              step.stepType,
+              runner.getActiveRun(),
+            );
+            pi.sendUserMessage(prompt);
           }
 
           const settled = await waitForPromptSettlement(ctx, () => runRef.active, {
@@ -531,7 +547,12 @@ export class SessionCoordinator {
             this.activeStepCapture = null;
           }
 
-          return attachStructuredOutput(pi, output);
+          const structuredOutput = attachStructuredOutput(pi, output);
+          if (step.stepType === "synthesis") {
+            this.emitSynthesisValidation(pi, context.runId, stepIndex, runner.getActiveRun());
+          }
+
+          return structuredOutput;
         },
       )
       .finally(() => {
@@ -608,6 +629,76 @@ export class SessionCoordinator {
       );
     });
   }
+
+  private prepareWorkflowPrompt(
+    pi: ExtensionAPI,
+    prompt: string,
+    stepType: string,
+    run: WorkflowRun | null,
+  ): string {
+    if (stepType !== "synthesis") return prompt;
+    const parsedAnalysts = collectParsedAnalystOutputs(run);
+    const tallyBlock = buildAnalystVoteTallyBlock(parsedAnalysts);
+    if (!tallyBlock) {
+      this.eventLogger?.log(run?.runId ?? "unknown", run?.currentStepIndex ?? 0, "tally_skipped", {
+        reason: "tally_skipped",
+        parsedAnalystCount: parsedAnalysts.length,
+      });
+      this.appendWorkflowEvent(pi, "tally_skipped", {
+        reason: "fewer_than_2_parsed_analysts",
+        parsedAnalystCount: parsedAnalysts.length,
+      });
+      return prompt;
+    }
+    this.eventLogger?.log(run?.runId ?? "unknown", run?.currentStepIndex ?? 0, "tally_injected", {
+      tallyBlock,
+      parsedAnalystCount: parsedAnalysts.length,
+    });
+    this.appendWorkflowEvent(pi, "tally_injected", {
+      tallyBlock,
+      parsedAnalystCount: parsedAnalysts.length,
+    });
+    return `${tallyBlock}\n\n${prompt}`;
+  }
+
+  private emitSynthesisValidation(
+    pi: ExtensionAPI,
+    runId: string,
+    stepIndex: number,
+    run: WorkflowRun | null,
+  ): void {
+    const validationInput = collectValidationInput(run);
+    const mismatches = checkNumberMatch(
+      validationInput.evidence,
+      validationInput.toolResults,
+    ).filter((entry) => entry.message.includes("mismatch"));
+    const passed = mismatches.length === 0;
+    const payload = {
+      passed,
+      mismatches,
+      skipped_unparsed: validationInput.skippedUnparsed,
+    };
+    this.eventLogger?.log(runId, stepIndex, passed ? "validation_passed" : "validation_failed", {
+      mismatches,
+      skipped_unparsed: validationInput.skippedUnparsed,
+    });
+    pi.appendEntry("opencandle-validation", payload);
+    this.appendWorkflowEvent(pi, passed ? "validation_passed" : "validation_failed", {
+      mismatches,
+      skipped_unparsed: validationInput.skippedUnparsed,
+    });
+  }
+
+  private appendWorkflowEvent(
+    pi: ExtensionAPI,
+    eventType: string,
+    payload: Record<string, unknown>,
+  ): void {
+    pi.appendEntry("opencandle-workflow-event", {
+      eventType,
+      ...payload,
+    });
+  }
 }
 
 function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): string {
@@ -616,6 +707,103 @@ function capturedText(capture: ActiveStepCapture, entries: SessionEntry[]): stri
 
 function capturedEvidence(capture: ActiveStepCapture, entries: SessionEntry[]): EvidenceRecord[] {
   return capture.evidence.length > 0 ? [...capture.evidence] : captureToolEvidence(entries);
+}
+
+function collectParsedAnalystOutputs(run: WorkflowRun | null): AnalystOutput[] {
+  if (!run) return [];
+  const outputs: AnalystOutput[] = [];
+  for (const output of run.stepOutputs.values()) {
+    if (output.parsed === true && output.analystOutput) {
+      outputs.push(output.analystOutput);
+    }
+  }
+  return outputs;
+}
+
+function shouldSkipRebuttal(run: WorkflowRun | null, stepType: string): boolean {
+  if (stepType !== "debate_rebuttal") return false;
+  const parsedAnalysts = collectParsedAnalystOutputs(run);
+  return !isAnalystSplit(parsedAnalysts);
+}
+
+function collectValidationInput(run: WorkflowRun | null): {
+  evidence: EvidenceRecord[];
+  toolResults: Map<string, number>;
+  skippedUnparsed: string[];
+} {
+  const evidence: EvidenceRecord[] = [];
+  const toolResults = new Map<string, number>();
+  const skippedUnparsed: string[] = [];
+  if (!run) return { evidence, toolResults, skippedUnparsed };
+
+  for (const output of run.stepOutputs.values()) {
+    if (output.stepType.startsWith("analyst_") && output.parsed === false) {
+      skippedUnparsed.push(output.stepType);
+    }
+    for (const record of output.evidence) {
+      collectToolNumbers(record, toolResults);
+    }
+  }
+
+  for (const output of run.stepOutputs.values()) {
+    if (!output.rawText) continue;
+    evidence.push(...extractNumericClaims(output.rawText, toolResults));
+  }
+
+  return { evidence, toolResults, skippedUnparsed };
+}
+
+function collectToolNumbers(record: EvidenceRecord, toolResults: Map<string, number>): void {
+  if (!isPlainObject(record.value)) return;
+  const tool = typeof record.value.tool === "string" ? record.value.tool : undefined;
+  const digest = isPlainObject(record.value.resultDigest) ? record.value.resultDigest : undefined;
+  const preview = typeof digest?.preview === "string" ? digest.preview : undefined;
+  if (!tool || !preview) return;
+  const parsed = parseMaybeJson(preview);
+  if (!parsed) return;
+  for (const [path, value] of flattenNumericValues(parsed)) {
+    toolResults.set(`${tool}.${path}`, value);
+  }
+}
+
+function extractNumericClaims(text: string, toolResults: Map<string, number>): EvidenceRecord[] {
+  const records: EvidenceRecord[] = [];
+  const lower = text.toLowerCase();
+  for (const [label] of toolResults) {
+    const metric = label.split(".").at(-1);
+    if (!metric || !lower.includes(metric.toLowerCase())) continue;
+    const pattern = new RegExp(`${escapeRegex(metric)}[^\\d-]*(-?\\d+(?:\\.\\d+)?)`, "i");
+    const match = text.match(pattern);
+    if (!match) continue;
+    const value = Number(match[1]);
+    if (!Number.isFinite(value)) continue;
+    records.push({
+      label,
+      value,
+      provenance: { source: "computed" },
+    });
+  }
+  return records;
+}
+
+function flattenNumericValues(
+  value: Record<string, unknown>,
+  prefix = "",
+): Array<[string, number]> {
+  const values: Array<[string, number]> = [];
+  for (const [key, item] of Object.entries(value)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (typeof item === "number" && Number.isFinite(item)) {
+      values.push([path, item]);
+    } else if (isPlainObject(item)) {
+      values.push(...flattenNumericValues(item, path));
+    }
+  }
+  return values;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function toolEvidenceRecord(input: {

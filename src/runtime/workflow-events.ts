@@ -12,6 +12,8 @@ export type WorkflowEventType =
   | "step_skipped"
   | "tool_called"
   | "tool_failed"
+  | "tally_injected"
+  | "tally_skipped"
   | "validation_passed"
   | "validation_failed"
   | "workflow_completed"
