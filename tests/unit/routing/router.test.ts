@@ -942,6 +942,42 @@ describe("route()", () => {
     expect(result.diagnostics.map((d) => d.code)).toContain("dte_slot_filled_from_extraction");
   });
 
+  it("canonicalizes asset_scope vocabulary synonyms in slots and preference updates", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "I only want ETFs in my portfolio, budget is $20k",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "workflow_dispatch",
+          route: "workflow",
+          workflow: "portfolio_builder",
+          entities: { symbols: [], budget: 20000 },
+          slots: {
+            budget: { value: 20000, source: "user", confidence: "high" },
+            asset_scope: { value: "etf_only", source: "user", confidence: "high" },
+          },
+          preference_updates: [
+            { key: "asset_scope", value: "etf_only", confidence: "high", source: "inferred" },
+          ],
+          missing_required: [],
+          tool_bundles: [],
+          diagnostics: [],
+          reasoning: "asset scope emitted with synonym vocabulary",
+        }),
+      ),
+    );
+
+    // "etf_only"/"etfs_only" are model-vocabulary synonyms of the canonical
+    // asset_scope value; canonicalization keeps saved preferences and slot
+    // consumers on one vocabulary.
+    expect(result.slots.asset_scope?.value).toBe("etf_focused");
+    expect(result.preference_updates).toEqual([
+      { key: "asset_scope", value: "etf_focused", confidence: "high", source: "inferred" },
+    ]);
+  });
+
   it("suppresses preference updates that restate the saved profile value", async () => {
     const result = await route(
       {

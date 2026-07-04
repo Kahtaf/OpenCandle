@@ -306,6 +306,12 @@ export function postProcessRouterOutput(
     }
   }
 
+  // Model-vocabulary synonyms for the canonical asset_scope value
+  // ("etf_only" for "etf_focused") drift saved preferences and slot
+  // consumers onto private vocabularies; canonicalize before the echo
+  // suppression below so restatements still match the profile.
+  next = canonicalizeAssetScopeVocabulary(next);
+
   // A preference update that restates the saved profile value is an echo,
   // not a change; writing it pollutes preference provenance (the
   // preference-ECHO contract, fixture 029).
@@ -1062,6 +1068,55 @@ function syncSymbolListSlot(
       value: symbols,
     },
   };
+}
+
+const ASSET_SCOPE_SYNONYMS: Record<string, string> = {
+  etf_only: "etf_focused",
+  etfs_only: "etf_focused",
+  only_etfs: "etf_focused",
+  etf: "etf_focused",
+  etfs: "etf_focused",
+};
+
+function canonicalAssetScope(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return ASSET_SCOPE_SYNONYMS[value.toLowerCase()];
+}
+
+function canonicalizeAssetScopeVocabulary(output: RouterOutput): RouterOutput {
+  let next = output;
+  const slotCanonical = canonicalAssetScope(next.slots.asset_scope?.value);
+  if (slotCanonical) {
+    next = {
+      ...next,
+      slots: {
+        ...next.slots,
+        asset_scope: { ...next.slots.asset_scope, value: slotCanonical },
+      },
+    };
+  }
+  const entityCanonical = canonicalAssetScope(next.entities.assetScope);
+  if (entityCanonical) {
+    next = {
+      ...next,
+      entities: { ...next.entities, assetScope: entityCanonical },
+    };
+  }
+  if (
+    next.preference_updates.some(
+      (update) => update.key === "asset_scope" && canonicalAssetScope(update.value),
+    )
+  ) {
+    next = {
+      ...next,
+      preference_updates: next.preference_updates.map((update) =>
+        update.key === "asset_scope"
+          ? { ...update, value: canonicalAssetScope(update.value) ?? update.value }
+          : update,
+      ),
+    };
+  }
+  return next;
 }
 
 function symbolsSlotClaimsPriorTurnUserProvenance(

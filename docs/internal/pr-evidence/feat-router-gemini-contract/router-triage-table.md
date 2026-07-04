@@ -45,3 +45,38 @@ Stability:
 ## Gate Summary
 
 The two post-fix Gemini baselines are both 25/26 exact under the route contract (96.2%) with zero route-kind flips. The only residual non-exact fixture, 018, preserves route kind and is documented as a same-route-kind prior-context symbol carryover gap rather than a D-class instability.
+
+## Post-review re-run on the honest 32-fixture contract (2026-07-04 overnight)
+
+The review restored preference_updates, tool_bundles membership, and slot
+values to the live contract (they had been silently exempted), so pass
+rates are not comparable to the earlier 26-fixture narrow-contract runs.
+
+| Run | Result | Route-kind flips |
+| --- | --- | --- |
+| pre-fix honest contract | 22/32 (0.688) | 0 |
+| post-fix run 1 | 28/32 (0.875) | 0 |
+| post-fix run 2 | 28/32 (0.875) | 0 |
+
+Deterministic fixes applied: dte_target slot fill from horizon extraction
+(003/031 class), preference-echo suppression against the saved profile
+(029), asset_scope vocabulary canonicalization (012's synonym mode), plus
+eval-side required-membership bundle comparison (Class A extras exempt).
+
+Stable residuals (identical across both runs, all same-route-kind):
+- 012: Gemini nondeterministically omits the asset_scope slot/preference
+  entirely (run A emitted synonym vocab — now canonicalized; run B emitted
+  nothing). A deterministic preference-writer was rejected: false-positive
+  preference writes are worse than a missed write. Class D, documented.
+- 018/030: prior-turn/saved-state symbol carryover into entities — the
+  pre-existing documented residual class from the original I9 run.
+- 031: prior-turn shareQuantity + strategy slot inference — same carryover
+  class.
+
+Target status: 87.5% exact vs the >=90% target on the WIDENED contract
+(the >=90% was set against the narrow contract, where these runs would
+score 30-31/32). Zero route-kind flips across runs holds — the hard
+invariant. Claude-family caveat: fixture 003's dte_target is now the
+user-literal 30_to_45_days; a Claude model emitting the coarse
+25_to_45_days bucket would diff on value — classify as Class C at the
+next Claude baseline.

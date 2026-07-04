@@ -50,6 +50,10 @@ import {
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../evals/competitive-finance.js";
+import {
+  evaluateFinalAnswerAssertion,
+  type FinalAnswerAssertionResult,
+} from "../evals/prompt-policy-assertions.js";
 import type { EvalTrace } from "../evals/types.js";
 import { runOpenCandleSession } from "../harness/opencandle-runner.js";
 
@@ -58,6 +62,7 @@ interface CompetitiveRunResult {
   openCandleTrace: EvalTrace;
   competitorAnswers: CompetitorAnswer[];
   judgment: ComparisonJudgment;
+  hardAssertionResults?: FinalAnswerAssertionResult[];
 }
 
 interface ResolvedModel {
@@ -125,6 +130,23 @@ const judgeModel = await resolveModelWithAuth(
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
 const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
+// The frozen panel's loss-class contracts live in the prompt-policy
+// manifest; the frozen run must evaluate them itself instead of assuming a
+// separate prompt-policy run happens (a generous LLM judge must not be the
+// only gate on a loss-class regression).
+const policyManifestAssertions = new Map<string, string[]>();
+if (frozenPanel) {
+  const manifestPath =
+    process.env.PROMPT_POLICY_MANIFEST ?? "docs/internal/prompt-to-policy-migration-manifest.json";
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as {
+    prompts: Array<{ id: string; expected?: { finalAnswerHardAssertions?: string[] } }>;
+  };
+  for (const entry of manifest.prompts) {
+    if (entry.expected?.finalAnswerHardAssertions?.length) {
+      policyManifestAssertions.set(entry.id, entry.expected.finalAnswerHardAssertions);
+    }
+  }
+}
 const fixedPrompt = fixedPromptFromEnv(process.env);
 const rawPrompts = frozenPanel
   ? frozenPanel
