@@ -251,6 +251,16 @@ for (const prompt of prompts.slice(0, promptCount)) {
       `No cached or live competitive baseline answers are available for prompt ${prompt.id}`,
     );
   }
+  const manifestId = (prompt as { promptPolicyManifestId?: string }).promptPolicyManifestId;
+  const hardAssertions = manifestId ? (policyManifestAssertions.get(manifestId) ?? []) : [];
+  const hardAssertionResults = hardAssertions.map((assertion) =>
+    evaluateFinalAnswerAssertion(assertion, openCandleTrace),
+  );
+  for (const result of hardAssertionResults) {
+    console.log(
+      `hard-assertion ${result.passed ? "PASS" : "FAIL"}${result.deterministic ? "" : " (non-deterministic)"}: ${result.assertion} — ${result.reason}`,
+    );
+  }
   const judgment = await completeComparisonJudgment(
     buildComparisonJudgePrompt({
       prompt,
@@ -261,7 +271,7 @@ for (const prompt of prompts.slice(0, promptCount)) {
     }),
     ["opencandle", ...competitorAnswers.map((answer) => answer.id), "tie"],
   );
-  results.push({ prompt, openCandleTrace, competitorAnswers, judgment });
+  results.push({ prompt, openCandleTrace, competitorAnswers, judgment, hardAssertionResults });
   const competitorScoreText = Object.entries(judgment.competitorScores)
     .map(([id, score]) => `${id}=${score}`)
     .join(" ");
@@ -308,6 +318,22 @@ for (const competitor of allCompetitors) {
 console.log(`Ties: ${summary.ties}`);
 console.log(`Report: ${outputPath}`);
 console.log(`Analysis: ${analysisPath}`);
+const deterministicHardFailures = results.flatMap((result) =>
+  (result.hardAssertionResults ?? []).filter(
+    (assertion) => assertion.deterministic && !assertion.passed,
+  ),
+);
+if (frozenPanel && deterministicHardFailures.length > 0) {
+  console.error(
+    `\nFrozen panel FAILED ${deterministicHardFailures.length} deterministic hard assertion(s):`,
+  );
+  for (const failure of deterministicHardFailures) {
+    console.error(`- ${failure.assertion}: ${failure.reason}`);
+  }
+  // A generous LLM judge must not be the only gate on a loss-class
+  // regression; the frozen run fails on its own manifest contracts.
+  process.exit(1);
+}
 process.exit(competitiveBenchmarkExitCode());
 
 async function completeText(
