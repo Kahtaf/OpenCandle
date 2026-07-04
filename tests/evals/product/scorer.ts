@@ -137,6 +137,34 @@ function scoreDimension(
     }
   }
 
+  if (
+    dimension.expectedAskUserCount !== undefined &&
+    trace.askUserTranscript.length !== dimension.expectedAskUserCount
+  ) {
+    issues.push(
+      `expected exactly ${dimension.expectedAskUserCount} ask_user calls, got ${trace.askUserTranscript.length}`,
+    );
+  }
+
+  for (const pattern of dimension.askUserQuestionPatterns ?? []) {
+    if (!trace.askUserTranscript.some((interaction) => pattern.test(interaction.question))) {
+      issues.push(`missing ask_user question pattern ${pattern}`);
+    }
+  }
+
+  const resolvedSymbols = traceResolvedSymbols(trace);
+  for (const symbol of dimension.requiredResolvedSymbols ?? []) {
+    if (!resolvedSymbols.has(symbol.toUpperCase())) {
+      issues.push(`missing resolved symbol ${symbol}`);
+    }
+  }
+
+  for (const symbol of dimension.forbiddenResolvedSymbols ?? []) {
+    if (resolvedSymbols.has(symbol.toUpperCase())) {
+      issues.push(`forbidden resolved symbol ${symbol}`);
+    }
+  }
+
   for (const pattern of dimension.requiredPatterns ?? []) {
     if (!pattern.test(text) && !passesFamilyAwareDimension(dimension.id, evalCase, trace, text)) {
       issues.push(`missing pattern ${pattern}`);
@@ -209,6 +237,32 @@ function getVisibleText(trace: EvalTrace): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function traceResolvedSymbols(trace: EvalTrace): Set<string> {
+  const symbols = new Set<string>();
+  for (const symbol of trace.classification.entities.symbols ?? []) {
+    symbols.add(symbol.toUpperCase());
+  }
+  for (const call of trace.toolCalls) {
+    collectSymbols(call.args, symbols);
+  }
+  return symbols;
+}
+
+function collectSymbols(value: unknown, symbols: Set<string>): void {
+  if (typeof value === "string") {
+    if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(value)) symbols.add(value.toUpperCase());
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectSymbols(item, symbols);
+    return;
+  }
+  if (!isRecord(value)) return;
+  for (const [key, item] of Object.entries(value)) {
+    if (/symbol/i.test(key)) collectSymbols(item, symbols);
+  }
 }
 
 function average(values: number[]): number {

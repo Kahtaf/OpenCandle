@@ -1,0 +1,38 @@
+
+> opencandle@0.11.0 eval:router-live
+> tsx tests/scripts/run-live-router-eval.ts
+
+Running live router eval against 26 fixtures with model=gemini-2.5-flash...
+
+PASS 001-portfolio-builder-aggressive.json (2428ms)
+PASS 002-portfolio-builder-diversified.json (2087ms)
+PASS 003-options-screener-calls.json (2333ms)
+PASS 004-options-missing-symbol.json (2185ms)
+PASS 005-compare-assets.json (1668ms)
+PASS 006-fallback-entry-levels.json (1902ms)
+PASS 007-fallback-data-fetch.json (1945ms)
+PASS 008-single-asset-analysis.json (2060ms)
+PASS 009-general-qa.json (2056ms)
+PASS 010-preference-from-memory.json (2201ms)
+PASS 011-fallback-missing-symbol.json (1926ms)
+PASS 012-preference-write-etf.json (1989ms)
+PASS 013-coreference-price.json (2196ms)
+PASS 014-carried-budget.json (2229ms)
+PASS 015-topic-shift.json (1829ms)
+PASS 016-ticker-correction.json (2648ms)
+PASS 017-pref-conflict.json (2122ms)
+FAIL 018-dollar-phrase.json (2216ms)
+  .entities.symbols.1: expected "SPY", got undefined
+PASS 019-iv-as-volatility.json (1917ms)
+PASS 020-sec-as-regulator.json (1682ms)
+PASS 021-fed-as-bank.json (2224ms)
+PASS 022-cpi-as-metric.json (2144ms)
+PASS 023-iv-with-positive-signal.json (2036ms)
+PASS 024-iv-bare-list-dropped.json (1964ms)
+PASS 025-iv-local-ticker-phrase.json (1999ms)
+PASS 026-pass-through-non-finance.json (1999ms)
+
+--- Summary ---
+pass: 25/26 (passRate=0.962)
+latency p50=2060ms p95=2428ms
+failures: 018-dollar-phrase.json

@@ -240,11 +240,68 @@ function workflowDefinition(name: string): WorkflowDefinition {
   };
 }
 
-function fakeQueueContext(isIdle: () => boolean) {
+function multiStepWorkflowDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "comprehensive_analysis",
+    steps: [
+      {
+        stepType: "initial_fetch",
+        description: "fetch step",
+        prompt: "fetch prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+      {
+        stepType: "analyst_valuation",
+        description: "valuation step",
+        prompt: "valuation prompt",
+        skippable: true,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+function analystWorkflowDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "comprehensive_analysis",
+    steps: [
+      {
+        stepType: "analyst_valuation",
+        description: "valuation step",
+        prompt: "valuation prompt",
+        skippable: true,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+function debateWorkflowDefinition(): WorkflowDefinition {
+  return {
+    workflowType: "comprehensive_analysis",
+    steps: [
+      {
+        stepType: "debate_bull",
+        description: "bull debate step",
+        prompt: "bull prompt",
+        skippable: false,
+        requiredInputs: [],
+        expectedOutputs: [],
+      },
+    ],
+  };
+}
+
+function fakeQueueContext(isIdle: () => boolean, entries: SessionEntry[] = []) {
   return {
     isIdle,
     hasPendingMessages: () => false,
     ui: { notify: vi.fn() },
+    sessionManager: fakeSessionManager(entries),
   };
 }
 
@@ -305,6 +362,278 @@ describe("SessionCoordinator workflow runtime ownership", () => {
     await vi.advanceTimersByTimeAsync(26);
 
     expect(getProviderTracker()).toBe(newTracker);
+  });
+
+  it("captures tool evidence from each workflow step without leaking between steps", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    let sendCount = 0;
+    const pi = {
+      sendUserMessage: vi.fn(() => {
+        sendCount += 1;
+        const currentSend = sendCount;
+        const stepCallId = `tc-${sendCount}`;
+        const toolName = sendCount === 1 ? "get_stock_quote" : "get_company_overview";
+        const symbol = sendCount === 1 ? "NVDA" : "AAPL";
+        entries.push(userTextEntry(`prompt ${sendCount}`));
+        setTimeout(() => {
+          entries.push(assistantToolOnlyEntry(toolName));
+          const toolResult = toolResultEntry(`${symbol} result`);
+          toolResult.message.toolCallId = stepCallId;
+          toolResult.message.toolName = toolName;
+          toolResult.message.details = { symbol, price: currentSend * 100 };
+          entries.push(toolResult);
+          entries.push(
+            assistantTextEntry(
+              currentSend === 1
+                ? "step 1 done"
+                : "step 2 done\nSIGNAL: HOLD\nCONVICTION: 5\nTHESIS: Evidence is balanced.",
+            ),
+          );
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      multiStepWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    const run = coord.getRunner().getActiveRun();
+
+    expect(run?.status).toBe("completed");
+    expect(run?.stepOutputs.get(0)?.evidence).toHaveLength(1);
+    expect(run?.stepOutputs.get(1)?.evidence).toHaveLength(1);
+    expect(run?.stepOutputs.get(0)?.evidence[0]).toMatchObject({
+      label: "tool:get_stock_quote",
+      value: {
+        tool: "get_stock_quote",
+        args: "{}",
+        resultDigest: { preview: expect.stringContaining("NVDA"), totalLength: expect.any(Number) },
+      },
+      provenance: { source: "computed", provider: "get_stock_quote" },
+    });
+    expect(run?.stepOutputs.get(1)?.evidence[0]).toMatchObject({
+      label: "tool:get_company_overview",
+      value: {
+        tool: "get_company_overview",
+        args: "{}",
+        resultDigest: { preview: expect.stringContaining("AAPL"), totalLength: expect.any(Number) },
+      },
+      provenance: { source: "computed", provider: "get_company_overview" },
+    });
+  });
+
+  it("captures streamed Pi tool evidence for structured analyst entries", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    type Handler = (event: never) => void;
+    const handlers = new Map<string, Handler[]>();
+    const emit = (name: string, event: unknown) => {
+      for (const handler of handlers.get(name) ?? []) {
+        handler(event as never);
+      }
+    };
+    const pi = {
+      on: vi.fn((name: string, handler: Handler) => {
+        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+      }),
+      sendUserMessage: vi.fn(() => {
+        entries.push(userTextEntry("valuation prompt"));
+        setTimeout(() => {
+          emit("tool_execution_start", {
+            toolCallId: "tc-live",
+            toolName: "get_stock_quote",
+            args: { symbol: "NVDA" },
+          });
+          emit("tool_execution_end", {
+            toolCallId: "tc-live",
+            toolName: "get_stock_quote",
+            result: { symbol: "NVDA", price: 123 },
+            isError: false,
+          });
+          emit("message_update", {
+            assistantMessageEvent: {
+              type: "text_delta",
+              delta:
+                "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Revenue growth supports upside.",
+            },
+          });
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      analystWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    const output = coord.getRunner().getActiveRun()?.stepOutputs.get(0);
+
+    expect(output?.evidence).toHaveLength(1);
+    expect(output?.evidence[0]).toMatchObject({
+      label: "tool:get_stock_quote",
+      value: {
+        tool: "get_stock_quote",
+        args: '{"symbol":"NVDA"}',
+        resultDigest: {
+          preview: '{"symbol":"NVDA","price":123}',
+          totalLength: 29,
+        },
+      },
+    });
+    expect(output?.analystOutput?.signal).toBe("BUY");
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-analyst-step", {
+      stage: "analyst_valuation",
+      role: "valuation",
+      signal: "BUY",
+      conviction: 8,
+      parsed: true,
+      evidenceCount: 1,
+      evidence: [
+        expect.objectContaining({
+          tool: "get_stock_quote",
+          args: '{"symbol":"NVDA"}',
+          resultDigest: {
+            preview: '{"symbol":"NVDA","price":123}',
+            totalLength: 29,
+          },
+        }),
+      ],
+    });
+  });
+
+  it("stores parsed analyst output and appends an analyst-step entry", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn(() => {
+        entries.push(userTextEntry("valuation prompt"));
+        setTimeout(() => {
+          entries.push(
+            assistantTextEntry(
+              "Valuation work.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Revenue growth supports upside.",
+            ),
+          );
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      analystWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    const output = coord.getRunner().getActiveRun()?.stepOutputs.get(0);
+
+    expect(output?.analystOutput).toMatchObject({
+      role: "valuation",
+      signal: "BUY",
+      conviction: 8,
+      thesis: "Revenue growth supports upside.",
+    });
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-analyst-step", {
+      stage: "analyst_valuation",
+      role: "valuation",
+      signal: "BUY",
+      conviction: 8,
+      parsed: true,
+      evidenceCount: 0,
+      evidence: [],
+    });
+  });
+
+  it("re-prompts once on analyst parse failure, records parsed false, and completes the step", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        setTimeout(() => {
+          entries.push(assistantTextEntry("I have a view, but no required footer."));
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      analystWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(800);
+    const run = coord.getRunner().getActiveRun();
+
+    expect(pi.sendUserMessage).toHaveBeenCalledTimes(2);
+    expect(pi.sendUserMessage).toHaveBeenLastCalledWith(
+      expect.stringContaining("exact required final output format"),
+    );
+    expect(run?.status).toBe("completed");
+    expect(run?.steps[0].status).toBe("completed");
+    expect(run?.stepOutputs.get(0)?.rawText).toContain("no required footer");
+    expect(run?.stepOutputs.get(0)?.analystOutput).toBeUndefined();
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-analyst-step", {
+      stage: "analyst_valuation",
+      role: "valuation",
+      parsed: false,
+      evidenceCount: 0,
+      evidence: [],
+    });
+  });
+
+  it("stores parsed debate output and appends an analyst-step entry", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    const pi = {
+      sendUserMessage: vi.fn(() => {
+        entries.push(userTextEntry("bull prompt"));
+        setTimeout(() => {
+          entries.push(
+            assistantTextEntry(
+              "BULL THESIS: Cash flow momentum can support upside.\nKEY RISK TO THIS THESIS: Guidance misses would invalidate it.",
+            ),
+          );
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      debateWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(500);
+    const output = coord.getRunner().getActiveRun()?.stepOutputs.get(0);
+
+    expect(output?.debateOutput).toMatchObject({
+      side: "bull",
+      thesis: "Cash flow momentum can support upside.",
+      keyRisk: "Guidance misses would invalidate it.",
+    });
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-analyst-step", {
+      stage: "debate_bull",
+      side: "bull",
+      parsed: true,
+      evidenceCount: 0,
+      evidence: [],
+    });
   });
 });
 

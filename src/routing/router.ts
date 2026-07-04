@@ -57,7 +57,7 @@ export async function route(
   let firstError: string | undefined;
   try {
     const raw = await client.complete(prompt);
-    return postProcessRouterOutput(input.text, validateRouterOutput(raw));
+    return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
   } catch (err) {
     firstError = err instanceof Error ? err.message : String(err);
   }
@@ -66,10 +66,10 @@ export async function route(
   try {
     const retryPrompt = `${prompt}\n\n(Your previous response failed validation: ${firstError}. Return a valid JSON object conforming to RouterOutput. Nothing else.)`;
     const raw = await client.complete(retryPrompt);
-    return postProcessRouterOutput(input.text, validateRouterOutput(raw));
+    return postProcessRouterOutput(input.text, validateRouterOutput(raw), input);
   } catch {
     // Persistent failure — return a minimal fallback with regex-extracted symbols.
-    return postProcessRouterOutput(input.text, minimalFallback(input.text));
+    return postProcessRouterOutput(input.text, minimalFallback(input.text), input);
   }
 }
 
@@ -192,15 +192,25 @@ function validateEntities(raw: unknown): ExtractedEntities {
   return out;
 }
 
-export function postProcessRouterOutput(text: string, output: RouterOutput): RouterOutput {
+export function postProcessRouterOutput(
+  text: string,
+  output: RouterOutput,
+  inputContext?: Pick<RouterInputContext, "priorTurns" | "profileSnapshot">,
+): RouterOutput {
   const extracted = extractEntities(text);
   const deterministic = classifyWithLegacyRules(text);
   let diagnostics: RouterDiagnostic[] = [...output.diagnostics];
+  const symbolsAfterAmbiguousFilter = output.entities.symbols.filter(
+    (symbol) => !isAmbiguousConceptUsage(text, symbol),
+  );
+  const droppedAmbiguousSymbols = output.entities.symbols.filter(
+    (symbol) => !symbolsAfterAmbiguousFilter.includes(symbol),
+  );
   let next: RouterOutput = {
     ...output,
     entities: {
       ...output.entities,
-      symbols: output.entities.symbols.filter((symbol) => !isAmbiguousConceptUsage(text, symbol)),
+      symbols: symbolsAfterAmbiguousFilter,
       budget: output.entities.budget ?? extracted.budget,
       maxPremium: output.entities.maxPremium ?? extracted.maxPremium,
       timeHorizon: output.entities.timeHorizon ?? extracted.timeHorizon,
@@ -219,6 +229,91 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     },
     diagnostics,
   };
+
+  if (next.workflow === "compare_assets") {
+    const restorableExtractedSymbols = extracted.symbols.filter(
+      (symbol) => disambiguateSymbols([symbol], text).kept.length > 0,
+    );
+    const orderedSymbols = orderSymbolsByText(
+      text,
+      mergeSymbols(next.entities.symbols, restorableExtractedSymbols),
+    );
+    if (!sameStringArray(orderedSymbols, next.entities.symbols)) {
+      diagnostics.push({
+        code: "compare_symbols_canonicalized",
+        message: "compare symbols restored from deterministic extraction and ordered by user text",
+      });
+      next = {
+        ...next,
+        entities: {
+          ...next.entities,
+          symbols: orderedSymbols,
+        },
+        slots: syncSymbolListSlot(next.slots, orderedSymbols),
+        diagnostics,
+      };
+    }
+  }
+
+  const profileRiskProfile = readProfileString(inputContext?.profileSnapshot, "risk_profile");
+  if (
+    next.workflow === "portfolio_builder" &&
+    profileRiskProfile &&
+    !next.slots.risk_profile &&
+    !next.entities.riskProfile
+  ) {
+    diagnostics.push({
+      code: "profile_risk_slot_filled",
+      message: "risk_profile slot filled from investor profile snapshot",
+    });
+    next = {
+      ...next,
+      slots: {
+        ...next.slots,
+        risk_profile: {
+          value: profileRiskProfile,
+          source: "preference",
+          confidence: "high",
+        },
+      },
+      diagnostics,
+    };
+  }
+
+  if (
+    next.routeKind === "pass_through" &&
+    extracted.riskProfile &&
+    isConversationalRiskPreferenceUpdate(text, inputContext)
+  ) {
+    diagnostics.push({
+      code: "conversational_risk_preference_recovered",
+      message: "risk preference update recovered from profile/prior-turn context",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      entities: {
+        ...next.entities,
+        riskProfile: extracted.riskProfile,
+      },
+      slots: {
+        ...next.slots,
+        risk_profile: {
+          value: extracted.riskProfile,
+          source: "user",
+          confidence: "high",
+        },
+      },
+      preference_updates: ensurePreferenceUpdate(next.preference_updates, {
+        key: "risk_profile",
+        value: extracted.riskProfile,
+        confidence: "high",
+        source: "inferred",
+      }),
+      diagnostics,
+    };
+  }
 
   if (
     next.workflow === "options_screener" &&
@@ -544,6 +639,27 @@ export function postProcessRouterOutput(text: string, output: RouterOutput): Rou
     };
   }
 
+  if (
+    next.workflow === "compare_assets" &&
+    (disambiguated.dropped.length > 0 || droppedAmbiguousSymbols.length > 0) &&
+    next.entities.symbols.length < 2 &&
+    isExplicitMacroDataRequest(text)
+  ) {
+    diagnostics.push({
+      code: "compare_route_corrected_to_macro_task",
+      message: "macro/source acronyms were not explicit tickers",
+    });
+    next = {
+      ...next,
+      routeKind: "agent_task",
+      route: "fallback",
+      workflow: "general_finance_qa",
+      missing_required: [],
+      slots: removeSymbolSlots(next.slots),
+      diagnostics,
+    };
+  }
+
   const missingRequired = computeMissingRequiredSlots(
     next.workflow,
     next.entities,
@@ -859,6 +975,75 @@ function canonicalizeSymbolSlots(
     }
   }
   return next;
+}
+
+function syncSymbolListSlot(
+  slots: Record<string, RouterSlot>,
+  symbols: string[],
+): Record<string, RouterSlot> {
+  if (!slots.symbols || symbols.length === 0) return slots;
+  return {
+    ...slots,
+    symbols: {
+      ...slots.symbols,
+      value: symbols,
+    },
+  };
+}
+
+function removeSymbolSlots(slots: Record<string, RouterSlot>): Record<string, RouterSlot> {
+  const next = { ...slots };
+  delete next.symbol;
+  delete next.symbols;
+  return next;
+}
+
+function orderSymbolsByText(text: string, symbols: string[]): string[] {
+  return [...symbols].sort((a, b) => symbolPosition(text, a) - symbolPosition(text, b));
+}
+
+function symbolPosition(text: string, symbol: string): number {
+  const escaped = escapeRegExp(symbol);
+  const match = new RegExp(`\\$?${escaped}\\b`, "i").exec(text);
+  return match?.index ?? Number.MAX_SAFE_INTEGER;
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function readProfileString(
+  profileSnapshot: RouterInputContext["profileSnapshot"] | undefined,
+  key: string,
+): string | undefined {
+  const value = profileSnapshot?.[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function isConversationalRiskPreferenceUpdate(
+  text: string,
+  inputContext: Pick<RouterInputContext, "priorTurns" | "profileSnapshot"> | undefined,
+): boolean {
+  if (!/\b(?:now|lately|getting|becoming|thinking|feel|feeling|prefer|preference)\b/i.test(text)) {
+    return false;
+  }
+  if (readProfileString(inputContext?.profileSnapshot, "risk_profile")) return true;
+  const priorText = inputContext?.priorTurns.map((turn) => turn.text).join(" ") ?? "";
+  return /\b(?:profile|risk|portfolio|position|invest|sizing)\b/i.test(priorText);
+}
+
+function ensurePreferenceUpdate(
+  updates: RouterPreferenceUpdate[],
+  update: RouterPreferenceUpdate,
+): RouterPreferenceUpdate[] {
+  if (updates.some((item) => item.key === update.key && item.value === update.value)) {
+    return updates;
+  }
+  return [...updates, update];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function validatePreferenceUpdates(raw: unknown): RouterPreferenceUpdate[] {

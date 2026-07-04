@@ -74,6 +74,7 @@ describe("harness opencandle-* custom-entry drain", () => {
       "opencandle-disclaimer",
       "opencandle-turn-gap",
       "opencandle-workflow",
+      "opencandle-analyst-step",
       "opencandle-future-hypothetical", // wildcard should still catch unknown future types
     ];
     for (const t of knownTypes) {
@@ -82,6 +83,44 @@ describe("harness opencandle-* custom-entry drain", () => {
 
     const entries = drainOpenCandleCustomEntries(sm);
     expect(entries.map((e) => e.customType)).toEqual(knownTypes);
+  });
+
+  it("preserves structured analyst-step entries for trace evidence", () => {
+    const sm = SessionManager.inMemory();
+    sm.appendCustomEntry("opencandle-analyst-step", {
+      stage: "analyst_valuation",
+      role: "valuation",
+      signal: "BUY",
+      conviction: 8,
+      parsed: true,
+      evidenceCount: 1,
+      evidence: [
+        {
+          tool: "get_stock_quote",
+          resultDigest: { preview: '{"symbol":"NVDA"}', totalLength: 17 },
+        },
+      ],
+    });
+
+    const [entry] = drainOpenCandleCustomEntries(sm);
+
+    expect(entry).toMatchObject({
+      customType: "opencandle-analyst-step",
+      data: {
+        stage: "analyst_valuation",
+        role: "valuation",
+        signal: "BUY",
+        conviction: 8,
+        parsed: true,
+        evidenceCount: 1,
+        evidence: [
+          {
+            tool: "get_stock_quote",
+            resultDigest: { preview: '{"symbol":"NVDA"}', totalLength: 17 },
+          },
+        ],
+      },
+    });
   });
 
   it("returns an empty array when no opencandle-* entries are present", () => {

@@ -1,0 +1,85 @@
+
+> opencandle@0.11.0 eval:router-live
+> tsx tests/scripts/run-live-router-eval.ts
+
+Running live router eval against 26 fixtures with model=gemini-2.5-flash...
+
+PASS 001-portfolio-builder-aggressive.json (2448ms)
+PASS 002-portfolio-builder-diversified.json (2003ms)
+FAIL 003-options-screener-calls.json (2243ms)
+  .entities.dteHint: expected "month", got "30-45 DTE"
+  .slots.dte_target: expected {"value":"25_to_45_days","source":"user","confidence":"high"}, got undefined
+  .slots.dte_hint: expected undefined, got {"value":"30-45 DTE","source":"user","confidence":"high"}
+PASS 004-options-missing-symbol.json (1892ms)
+PASS 005-compare-assets.json (1849ms)
+FAIL 006-fallback-entry-levels.json (2018ms)
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+FAIL 007-fallback-data-fetch.json (1983ms)
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+PASS 008-single-asset-analysis.json (2102ms)
+PASS 009-general-qa.json (1934ms)
+FAIL 010-preference-from-memory.json (1687ms)
+  .slots.risk_profile: expected {"value":"conservative","source":"preference","confidence":"high"}, got undefined
+PASS 011-fallback-missing-symbol.json (2154ms)
+FAIL 012-preference-write-etf.json (1788ms)
+  .entities.compareMetrics: expected undefined, got ["etf_only"]
+  .slots.asset_scope: expected {"value":"etf_focused","source":"user","confidence":"high"}, got undefined
+  .slots.compare_metrics: expected undefined, got {"value":["etf_only"],"source":"user","confidence":"high"}
+  .preference_updates.0: expected {"key":"asset_scope","value":"etf_focused","confidence":"high","source":"inferred"}, got undefined
+FAIL 013-coreference-price.json (2211ms)
+  .slots.symbol: expected undefined, got {"value":"NVDA","source":"prior_context","confidence":"high"}
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+FAIL 014-carried-budget.json (2056ms)
+  .slots.budget: expected undefined, got {"value":20000,"source":"prior_context","confidence":"high"}
+FAIL 015-topic-shift.json (1993ms)
+  .slots.symbol: expected undefined, got {"value":"NVDA","source":"user","confidence":"high"}
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+PASS 016-ticker-correction.json (1926ms)
+FAIL 017-pref-conflict.json (2309ms)
+  .routeKind: expected "agent_task", got "pass_through"
+  .slots.risk_profile: expected {"value":"conservative","source":"user","confidence":"high"}, got undefined
+  .tool_bundles.0: expected "core_market", got undefined
+FAIL 018-dollar-phrase.json (2103ms)
+  .entities.symbols.1: expected "SPY", got undefined
+  .slots.symbol: expected undefined, got {"value":"QQQ","source":"user","confidence":"high"}
+  .tool_bundles.1: expected undefined, got "options"
+  .tool_bundles.2: expected undefined, got "sentiment"
+  .tool_bundles.3: expected undefined, got "sec"
+  .tool_bundles.4: expected undefined, got "clarification"
+  .workflow: expected undefined, got "single_asset_analysis"
+FAIL 019-iv-as-volatility.json (2041ms)
+  .slots.symbols: expected undefined, got {"value":["ASTS"],"source":"user","confidence":"high"}
+FAIL 020-sec-as-regulator.json (2139ms)
+  .slots.symbols: expected undefined, got {"value":["TSLA"],"source":"user","confidence":"high"}
+FAIL 021-fed-as-bank.json (1985ms)
+  .slots.symbols: expected undefined, got {"value":["TLT"],"source":"user","confidence":"high"}
+FAIL 022-cpi-as-metric.json (2071ms)
+  .slots.symbols: expected undefined, got {"value":["SPY"],"source":"user","confidence":"high"}
+FAIL 023-iv-with-positive-signal.json (2174ms)
+  .slots.symbol: expected undefined, got {"value":"IV","source":"user","confidence":"high"}
+FAIL 024-iv-bare-list-dropped.json (1948ms)
+  .slots.symbols: expected undefined, got {"value":["KO","PEP"],"source":"user","confidence":"high"}
+FAIL 025-iv-local-ticker-phrase.json (2027ms)
+  .slots.symbols: expected undefined, got {"value":["KO","IV","PEP"],"source":"user","confidence":"high"}
+PASS 026-pass-through-non-finance.json (1836ms)
+
+--- Summary ---
+pass: 9/26 (passRate=0.346)
+latency p50=2027ms p95=2309ms
+failures: 003-options-screener-calls.json, 006-fallback-entry-levels.json, 007-fallback-data-fetch.json, 010-preference-from-memory.json, 012-preference-write-etf.json, 013-coreference-price.json, 014-carried-budget.json, 015-topic-shift.json, 017-pref-conflict.json, 018-dollar-phrase.json, 019-iv-as-volatility.json, 020-sec-as-regulator.json, 021-fed-as-bank.json, 022-cpi-as-metric.json, 023-iv-with-positive-signal.json, 024-iv-bare-list-dropped.json, 025-iv-local-ticker-phrase.json
