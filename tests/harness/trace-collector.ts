@@ -16,6 +16,8 @@ interface PendingToolCall {
 export interface TraceCollector {
   /** Get the current trace snapshot. */
   getTrace(): AgentTrace;
+  /** Set the prompt index applied to subsequently captured turns/interactions. */
+  setPromptIndex(promptIndex: number): void;
   /** Record an ask_user interaction. */
   addInteraction(interaction: InteractionTrace): void;
   /** Unsubscribe from session events. */
@@ -25,13 +27,19 @@ export interface TraceCollector {
 export function createTraceCollector(
   session: { subscribe: (cb: (event: AgentSessionEvent) => void) => () => void },
   prompt: string,
-  options?: { jsonlPath?: string },
+  options?: { jsonlPath?: string; trackPromptIndex?: boolean },
 ): TraceCollector {
   const startTime = Date.now();
   const pendingTools = new Map<string, PendingToolCall>();
   const turns: TurnTrace[] = [];
   const interactions: InteractionTrace[] = [];
-  let currentTurn: TurnTrace = { toolCalls: [], text: "" };
+  let currentPromptIndex = 0;
+  const createTurn = (): TurnTrace => ({
+    toolCalls: [],
+    text: "",
+    ...(options?.trackPromptIndex ? { promptIndex: currentPromptIndex } : {}),
+  });
+  let currentTurn: TurnTrace = createTurn();
   let finalText = "";
 
   if (options?.jsonlPath) {
@@ -40,7 +48,7 @@ export function createTraceCollector(
 
   function appendToJsonl(event: Record<string, unknown>) {
     if (options?.jsonlPath) {
-      appendFileSync(options.jsonlPath, JSON.stringify(event) + "\n", "utf-8");
+      appendFileSync(options.jsonlPath, `${JSON.stringify(event)}\n`, "utf-8");
     }
   }
 
@@ -70,6 +78,7 @@ export function createTraceCollector(
             result: event.result,
             isError: event.isError,
             durationMs: Date.now() - pending.startTime,
+            ...(options?.trackPromptIndex ? { promptIndex: currentPromptIndex } : {}),
           };
           currentTurn.toolCalls.push(trace);
           pendingTools.delete(event.toolCallId);
@@ -93,7 +102,7 @@ export function createTraceCollector(
         if (currentTurn.toolCalls.length > 0 || currentTurn.text.length > 0) {
           turns.push(currentTurn);
         }
-        currentTurn = { toolCalls: [], text: "" };
+        currentTurn = createTurn();
         appendToJsonl({ type: event.type, timestamp: Date.now() });
         break;
       }
@@ -101,7 +110,7 @@ export function createTraceCollector(
         // Push any remaining current turn
         if (currentTurn.toolCalls.length > 0 || currentTurn.text.length > 0) {
           turns.push(currentTurn);
-          currentTurn = { toolCalls: [], text: "" };
+          currentTurn = createTurn();
         }
         finalText = turns.length > 0 ? turns[turns.length - 1].text : "";
         appendToJsonl({ type: event.type, timestamp: Date.now() });
@@ -125,8 +134,21 @@ export function createTraceCollector(
         durationMs: Date.now() - startTime,
       };
     },
+    setPromptIndex(promptIndex: number) {
+      currentPromptIndex = promptIndex;
+      if (
+        options?.trackPromptIndex &&
+        currentTurn.toolCalls.length === 0 &&
+        currentTurn.text === ""
+      ) {
+        currentTurn.promptIndex = promptIndex;
+      }
+    },
     addInteraction(interaction: InteractionTrace) {
-      interactions.push(interaction);
+      interactions.push({
+        ...interaction,
+        ...(options?.trackPromptIndex ? { promptIndex: currentPromptIndex } : {}),
+      });
     },
     dispose() {
       unsub();

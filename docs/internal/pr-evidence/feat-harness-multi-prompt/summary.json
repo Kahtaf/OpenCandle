@@ -1,0 +1,22 @@
+{
+  "prompts": [
+    "Answer briefly: say READY.",
+    "Follow up briefly: say STILL READY."
+  ],
+  "turns": 2,
+  "promptIndexes": [
+    0,
+    1
+  ],
+  "customPromptIndexes": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    1,
+    1,
+    1
+  ],
+  "finalText": "STILL READY."
+}

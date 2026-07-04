@@ -162,4 +162,118 @@ describe("runOpenCandleSession", () => {
     expect(options.settingsManager.getDefaultModel()).toBe("gemini-2.5-flash");
     expect(process.env.OPENCANDLE_HOME).toBe(originalHome);
   });
+
+  it("keeps single prompt traces in the original one-prompt shape", async () => {
+    const listeners: Array<(event: Record<string, unknown>) => void> = [];
+    const session = {
+      subscribe: vi.fn((listener: (event: Record<string, unknown>) => void) => {
+        listeners.push(listener);
+        return () => {};
+      }),
+      prompt: vi.fn(async () => {
+        queueMicrotask(() => {
+          for (const listener of listeners) {
+            listener({
+              type: "message_update",
+              assistantMessageEvent: { type: "text_delta", delta: "done" },
+            });
+            listener({ type: "turn_end", message: {}, toolResults: [] });
+            listener({ type: "agent_end", messages: [] });
+          }
+        });
+      }),
+      dispose: vi.fn(),
+      sessionManager: {
+        getEntries: () => [
+          {
+            type: "custom",
+            customType: "opencandle-router",
+            data: { output: { workflow: "general_qa" } },
+            timestamp: "2026-07-04T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+    createOpenCandleSessionMock.mockResolvedValue({ session });
+
+    const result = await runOpenCandleSession({
+      prompt: "Answer briefly",
+      settleGraceMs: 0,
+      timeoutMs: 1000,
+    });
+
+    expect(result.agentTrace.prompt).toBe("Answer briefly");
+    expect(result.agentTrace.prompts).toBeUndefined();
+    expect(result.agentTrace.turns[0]?.promptIndex).toBeUndefined();
+    expect(result.agentTrace.customEntries?.[0]?.promptIndex).toBeUndefined();
+  });
+
+  it("runs multiple prompts sequentially and tags trace entries by prompt index", async () => {
+    const listeners: Array<(event: Record<string, unknown>) => void> = [];
+    const entries: Array<Record<string, unknown>> = [];
+    const session = {
+      subscribe: vi.fn((listener: (event: Record<string, unknown>) => void) => {
+        listeners.push(listener);
+        return () => {};
+      }),
+      prompt: vi.fn(async (prompt: string) => {
+        const promptIndex = session.prompt.mock.calls.length - 1;
+        entries.push({
+          type: "custom",
+          customType: "opencandle-router",
+          data: { prompt },
+          timestamp: `2026-07-04T00:00:0${promptIndex}.000Z`,
+        });
+        queueMicrotask(() => {
+          for (const listener of listeners) {
+            listener({
+              type: "tool_execution_start",
+              toolCallId: `tool-${promptIndex}`,
+              toolName: "get_stock_quote",
+              args: { symbol: promptIndex === 0 ? "NVDA" : "AMD" },
+            });
+            listener({
+              type: "tool_execution_end",
+              toolCallId: `tool-${promptIndex}`,
+              toolName: "get_stock_quote",
+              result: { promptIndex },
+              isError: false,
+            });
+            listener({
+              type: "message_update",
+              assistantMessageEvent: {
+                type: "text_delta",
+                delta: `answer ${promptIndex}`,
+              },
+            });
+            listener({ type: "turn_end", message: {}, toolResults: [] });
+            listener({ type: "agent_end", messages: [] });
+          }
+        });
+      }),
+      dispose: vi.fn(),
+      sessionManager: {
+        getEntries: () => entries,
+      },
+    };
+    createOpenCandleSessionMock.mockResolvedValue({ session });
+
+    const result = await runOpenCandleSession({
+      prompts: ["Tell me about NVDA", "Now compare AMD"],
+      settleGraceMs: 0,
+      timeoutMs: 1000,
+    });
+
+    expect(session.prompt).toHaveBeenCalledTimes(2);
+    expect(session.prompt.mock.calls.map((call) => call[0])).toEqual([
+      "Tell me about NVDA",
+      "Now compare AMD",
+    ]);
+    expect(result.agentTrace.prompt).toBe("Tell me about NVDA");
+    expect(result.agentTrace.prompts).toEqual(["Tell me about NVDA", "Now compare AMD"]);
+    expect(result.agentTrace.turns.map((turn) => turn.promptIndex)).toEqual([0, 1]);
+    expect(result.agentTrace.turns.map((turn) => turn.toolCalls[0]?.promptIndex)).toEqual([0, 1]);
+    expect(result.agentTrace.customEntries?.map((entry) => entry.promptIndex)).toEqual([0, 1]);
+    expect(result.evalTrace.customEntries?.map((entry) => entry.promptIndex)).toEqual([0, 1]);
+  });
 });
