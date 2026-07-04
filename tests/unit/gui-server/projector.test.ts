@@ -88,6 +88,55 @@ describe("projectDashboard", () => {
     ]);
   });
 
+  it("tracks /analyze comprehensive-analysis workflow entries in the dashboard", () => {
+    const running = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+    ]);
+
+    expect(running.activeAnalyses).toMatchObject([
+      {
+        workflow: "comprehensive_analysis",
+        symbol: "NVDA",
+        analystsTotal: 5,
+        analystsDone: 0,
+      },
+    ]);
+
+    const completed = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+      messageEntry({
+        role: "assistant",
+        content: [{ type: "text", text: "Done" }],
+        api: "openai-responses",
+        provider: "openai",
+        model: "test",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: Date.now(),
+      }),
+    ]);
+
+    expect(completed.activeAnalyses).toEqual([]);
+    expect(completed.recentResearch).toMatchObject([
+      { workflow: "comprehensive_analysis", symbol: "NVDA" },
+    ]);
+  });
+
   it("counts completed analyst steps from opencandle analyst-step entries", () => {
     const state = projectDashboard([
       customEntry("opencandle-workflow", {

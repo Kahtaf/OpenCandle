@@ -151,6 +151,16 @@ describe("opencandle extension", () => {
     };
 
     await fake.commands.get("analyze")!.handler("NVDA", ctx);
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow", {
+      workflow: "comprehensive_analysis",
+      resolvedSlots: { symbol: "NVDA" },
+      analystsTotal: 5,
+    });
+    expect(
+      (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([type]) => type === "opencandle-workflow",
+      ),
+    ).toHaveLength(1);
     expect(fake.sendUserMessage).toHaveBeenCalledTimes(1);
     expect(fake.sendUserMessage).toHaveBeenNthCalledWith(
       1,
@@ -198,6 +208,16 @@ describe("opencandle extension", () => {
 
     const prompts = comprehensiveAnalysisPrompts("NVDA");
     expect(result).toEqual({ action: "transform", text: prompts[0] });
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-workflow", {
+      workflow: "comprehensive_analysis",
+      resolvedSlots: { symbol: "NVDA" },
+      analystsTotal: 5,
+    });
+    expect(
+      (fake.api.appendEntry as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([type]) => type === "opencandle-workflow",
+      ),
+    ).toHaveLength(1);
 
     await vi.runAllTimersAsync();
     // Same all-unparsed degradation semantics as the /analyze command test:
