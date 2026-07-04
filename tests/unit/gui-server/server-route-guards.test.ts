@@ -253,6 +253,22 @@ describe("GUI server route guards", () => {
     expect(lockSource).toContain("return isCoordinatorOwnerAlive(lock.pid)");
   });
 
+  it("keeps the model-setup gate on the session-addressed chat-run path", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const sseStart = source.indexOf("async function streamAcceptedSseChatRun");
+
+    // The legacy controller handlePrompt carried this gate; after its
+    // removal the SSE chat-run path is the only owner: a not-ready model
+    // must record the user message plus an opencandle-model-setup entry
+    // instead of prompting the model.
+    const sseBlock = source.slice(sseStart);
+    expect(sseBlock).toContain('modelSetup.requirement !== "ready"');
+    expect(sseBlock).toContain('appendCustomMessageEntry("opencandle-model-setup"');
+    const wsSource = readFileSync(resolve("gui/server/ws-hub.ts"), "utf-8");
+    expect(wsSource).not.toContain("handlePrompt");
+    expect(wsSource).toContain("Legacy active-session chat prompts are no longer supported");
+  });
+
   it("keeps proxy forwarding reachable from the browser runs route but not the proxy target", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
 

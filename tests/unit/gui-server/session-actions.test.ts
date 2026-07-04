@@ -55,24 +55,15 @@ describe("GUI session actions", () => {
     }
   });
 
-  it("records a setup message instead of prompting when no model is configured", async () => {
-    const appendedMessages: unknown[] = [];
-    const customMessages: unknown[] = [];
-    const broadcastState = vi.fn();
-    const session = { prompt: vi.fn() } as unknown as AgentSession;
-    const sessionManager = {
-      appendMessage: (message: unknown) => appendedMessages.push(message),
-      appendCustomMessageEntry: (...args: unknown[]) => customMessages.push(args),
-      getEntries: () => [],
-    } as unknown as SessionManager;
+  it("does not expose a legacy active-session prompt action", async () => {
     const controller = createSessionActionsController({
       role: "writer",
       cwd: "/tmp",
       sessionDir: "/tmp/sessions",
-      getSession: () => session,
-      getSessionManager: () => sessionManager,
+      getSession: () => ({ prompt: vi.fn() }) as unknown as AgentSession,
+      getSessionManager: () => ({ getEntries: () => [] }) as unknown as SessionManager,
       getModelSetupState: () => ({
-        requirement: "connect_auth",
+        requirement: "ready",
         providers: [],
         availableModels: [],
       }),
@@ -82,24 +73,15 @@ describe("GUI session actions", () => {
         switchSession: async () => ({ cancelled: false }),
       },
       sendBoot: vi.fn(),
-      broadcastState,
+      broadcastState: vi.fn(),
       broadcastSessions: vi.fn(),
       now: () => 123,
     });
 
-    await controller.handlePrompt("Tell me about AAPL");
-
-    expect(session.prompt).not.toHaveBeenCalled();
-    expect(appendedMessages).toEqual([
-      { role: "user", content: "Tell me about AAPL", timestamp: 123 },
-    ]);
-    expect(customMessages[0]).toEqual([
-      "opencandle-model-setup",
-      "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.",
-      true,
-      { source: "gui", requirement: "connect_auth" },
-    ]);
-    expect(broadcastState).toHaveBeenCalledTimes(2);
+    // Chat prompts must go through the session-addressed chat-run API
+    // (http-routes), which owns model-setup gating and action IDs; the
+    // controller no longer carries an implicit active-session mutation.
+    expect("handlePrompt" in controller).toBe(false);
   });
 
   it("renames the live current session through the current session manager", async () => {

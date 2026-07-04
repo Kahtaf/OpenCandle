@@ -29,7 +29,6 @@ interface SessionActionClient {
 }
 
 export interface SessionActionsController {
-  handlePrompt(prompt: string): Promise<void>;
   handleAskUserAnswer(id: string, value: unknown, action?: SessionActionMeta): Promise<void>;
   handleAskUserCancel(id: string, action?: SessionActionMeta): Promise<void>;
   handleNewSession(): Promise<void>;
@@ -78,32 +77,6 @@ export function createSessionActionsController({
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
     if (role !== "writer") throw new Error("Read-only follower mode");
-  }
-
-  async function handlePrompt(prompt: string): Promise<void> {
-    ensureWriter();
-
-    const modelSetup = getModelSetupState();
-    const sessionManager = getSessionManager();
-    const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt.startsWith("/") && modelSetup.requirement !== "ready") {
-      sessionManager.appendMessage({ role: "user", content: prompt, timestamp: now() });
-      broadcastState();
-      const message =
-        modelSetup.requirement === "select_model"
-          ? "Choose an available model before chat can run. OpenCandle found configured credentials but no active model."
-          : "Connect an AI model before chat can run. Paste a Google Gemini, OpenAI, or Anthropic API key in the setup panel.";
-      sessionManager.appendCustomMessageEntry("opencandle-model-setup", message, true, {
-        source: "gui",
-        requirement: modelSetup.requirement,
-      });
-      broadcastState();
-      return;
-    }
-
-    const beforeIds = new Set(sessionManager.getEntries().map((entry) => entry.id));
-    await promptAndSettle(getSession(), prompt, beforeIds);
-    broadcastState();
   }
 
   async function handleAskUserAnswer(
@@ -172,7 +145,6 @@ export function createSessionActionsController({
   }
 
   return {
-    handlePrompt,
     handleAskUserAnswer,
     handleAskUserCancel,
     handleNewSession,
