@@ -102,7 +102,7 @@ export function ChatPanel({
     setAllowToolAutoOpen(false);
   }
   const needsSetup = modelSetup?.requirement && modelSetup.requirement !== "ready";
-  const composerDisabled = inputDisabled;
+  const composerDisabled = inputDisabled || needsSetup;
   const chatDisabled = composerDisabled || needsSetup;
 
   const submit = (value = draft) => {
