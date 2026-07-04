@@ -17,16 +17,18 @@
     "workflow": "compare_assets",
     "entities": {
       "symbols": [
+        "SPY",
         "NVDA",
-        "AMD",
-        "SPY"
+        "AMD"
       ],
       "timeHorizon": "1y"
     },
     "slots": {
       "symbols": {
         "value": [
-          "SPY"
+          "SPY",
+          "NVDA",
+          "AMD"
         ],
         "source": "user",
         "confidence": "high"
@@ -45,7 +47,12 @@
       "sentiment",
       "clarification"
     ],
-    "diagnostics": [],
+    "diagnostics": [
+      {
+        "code": "compare_symbols_canonicalized",
+        "message": "compare symbols restored from deterministic extraction and ordered by user text"
+      }
+    ],
     "reasoning": "compare verb plus prior turn resolves 'those' to NVDA and AMD; current turn adds SPY and a one-year horizon"
   },
   "tags": [

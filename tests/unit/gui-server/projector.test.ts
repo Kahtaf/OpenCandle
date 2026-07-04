@@ -88,6 +88,35 @@ describe("projectDashboard", () => {
     ]);
   });
 
+  it("counts completed analyst steps from opencandle analyst-step entries", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-workflow", {
+        workflow: "comprehensive_analysis",
+        resolvedSlots: { symbol: "NVDA" },
+        analystsTotal: 5,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "analyst_valuation",
+        role: "valuation",
+        signal: "BUY",
+        conviction: 8,
+        parsed: true,
+      }),
+      customEntry("opencandle-analyst-step", {
+        stage: "analyst_momentum",
+        role: "momentum",
+        parsed: false,
+      }),
+    ]);
+
+    expect(state.activeAnalyses[0]).toMatchObject({
+      workflow: "comprehensive_analysis",
+      symbol: "NVDA",
+      analystsTotal: 5,
+      analystsDone: 2,
+    });
+  });
+
   it("projects turn gaps and credential-required hard skips into data quality", () => {
     const state = projectDashboard([
       customEntry("opencandle-turn-gap", {
