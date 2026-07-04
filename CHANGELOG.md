@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added opt-in known-fail E2 saved market-state fidelity eval coverage for seeded portfolio rate-exposure and SPY cost-basis prompts, including trace assertions for saved-state route context, portfolio-review routing, and fixture value reuse.
 - Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
 
 ### Changed
