@@ -999,6 +999,76 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       skipped_unparsed: ["analyst_momentum"],
     });
   });
+
+  it("includes the current synthesis output when emitting validation", async () => {
+    vi.useFakeTimers();
+    const coord = new SessionCoordinator();
+    const entries: SessionEntry[] = [];
+    type Handler = (event: never) => void;
+    const handlers = new Map<string, Handler[]>();
+    const emit = (name: string, event: unknown) => {
+      for (const handler of handlers.get(name) ?? []) {
+        handler(event as never);
+      }
+    };
+    const responses = [
+      "Valuation work. The price is 101.\nSIGNAL: BUY\nCONVICTION: 8\nTHESIS: Growth supports upside.",
+      "Momentum work.\nSIGNAL: HOLD\nCONVICTION: 6\nTHESIS: Price action is balanced.",
+      "BULL THESIS: Upside remains plausible.\nKEY RISK TO THIS THESIS: Support breaks.",
+      "BEAR THESIS: Downside evidence is stronger.\nWHAT WOULD CHANGE MY MIND: Breakout above resistance.",
+      "VERDICT: BUY\nCONFIDENCE: 6\nDEBATE WINNER: BULL\nREVERSAL CONDITION: The price is 100.",
+    ];
+    const pi = {
+      on: vi.fn((name: string, handler: Handler) => {
+        handlers.set(name, [...(handlers.get(name) ?? []), handler]);
+      }),
+      sendUserMessage: vi.fn((prompt: string) => {
+        entries.push(userTextEntry(prompt));
+        const response = responses.shift() ?? "";
+        setTimeout(() => {
+          if (prompt === "valuation prompt") {
+            emit("tool_execution_start", {
+              toolCallId: "tc-price",
+              toolName: "seed_validation",
+              args: {},
+            });
+            emit("tool_execution_end", {
+              toolCallId: "tc-price",
+              toolName: "seed_validation",
+              result: { price: 101 },
+              isError: false,
+            });
+          }
+          entries.push(assistantTextEntry(response));
+        }, 10);
+      }),
+      appendEntry: vi.fn(),
+    };
+
+    coord.executeWorkflow(
+      pi as never,
+      deterministicWorkflowDefinition(),
+      fakeQueueContext(() => true, entries),
+    );
+
+    await vi.advanceTimersByTimeAsync(1400);
+
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-validation", {
+      passed: false,
+      mismatches: [
+        expect.objectContaining({
+          evidenceLabel: "seed_validation.price",
+          message: expect.stringContaining("mismatch"),
+        }),
+      ],
+      skipped_unparsed: [],
+    });
+    expect(pi.appendEntry).toHaveBeenCalledWith("opencandle-workflow-event", {
+      eventType: "validation_failed",
+      mismatches: expect.any(Array),
+      skipped_unparsed: [],
+    });
+  });
 });
 
 describe("SessionCoordinator.buildPriorTurns", () => {

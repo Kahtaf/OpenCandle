@@ -42,7 +42,7 @@ import { clearRunContext, type RunContextToken, setRunContext } from "./run-cont
 import { checkNumberMatch } from "./validation.js";
 import { WorkflowEventLogger } from "./workflow-events.js";
 import { WorkflowRunner } from "./workflow-runner.js";
-import type { AnalystOutput, WorkflowRun } from "./workflow-types.js";
+import type { AnalystOutput, StepOutput, WorkflowRun } from "./workflow-types.js";
 
 const PROMPT_SETTLE_POLL_MS = 25;
 const IMMEDIATE_IDLE_GRACE_MS = 100;
@@ -549,7 +549,13 @@ export class SessionCoordinator {
 
           const structuredOutput = attachStructuredOutput(pi, output);
           if (step.stepType === "synthesis") {
-            this.emitSynthesisValidation(pi, context.runId, stepIndex, runner.getActiveRun());
+            this.emitSynthesisValidation(
+              pi,
+              context.runId,
+              stepIndex,
+              runner.getActiveRun(),
+              structuredOutput,
+            );
           }
 
           return structuredOutput;
@@ -666,8 +672,9 @@ export class SessionCoordinator {
     runId: string,
     stepIndex: number,
     run: WorkflowRun | null,
+    currentOutput: StepOutput,
   ): void {
-    const validationInput = collectValidationInput(run);
+    const validationInput = collectValidationInput(run, currentOutput);
     const mismatches = checkNumberMatch(
       validationInput.evidence,
       validationInput.toolResults,
@@ -730,7 +737,10 @@ function shouldSkipRebuttal(run: WorkflowRun | null, stepType: string): boolean 
   return !isAnalystSplit(parsedAnalysts);
 }
 
-function collectValidationInput(run: WorkflowRun | null): {
+function collectValidationInput(
+  run: WorkflowRun | null,
+  currentOutput?: StepOutput,
+): {
   evidence: EvidenceRecord[];
   toolResults: Map<string, number>;
   skippedUnparsed: string[];
@@ -738,9 +748,12 @@ function collectValidationInput(run: WorkflowRun | null): {
   const evidence: EvidenceRecord[] = [];
   const toolResults = new Map<string, number>();
   const skippedUnparsed: string[] = [];
-  if (!run) return { evidence, toolResults, skippedUnparsed };
+  const outputs = run ? [...run.stepOutputs.values()] : [];
+  if (currentOutput) {
+    outputs.push(currentOutput);
+  }
 
-  for (const output of run.stepOutputs.values()) {
+  for (const output of outputs) {
     if (output.stepType.startsWith("analyst_") && output.parsed === false) {
       skippedUnparsed.push(output.stepType);
     }
@@ -749,7 +762,7 @@ function collectValidationInput(run: WorkflowRun | null): {
     }
   }
 
-  for (const output of run.stepOutputs.values()) {
+  for (const output of outputs) {
     if (!output.rawText) continue;
     evidence.push(...extractNumericClaims(output.rawText, toolResults));
   }
