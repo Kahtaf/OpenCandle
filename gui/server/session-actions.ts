@@ -191,7 +191,8 @@ export function createSessionActionsController({
       await handler();
       return;
     }
-    const sessionId = action.sessionId?.trim() || getSessionManager().getSessionId();
+    const sessionId = action.sessionId?.trim();
+    if (!sessionId) throw new Error("sessionId is required");
     const result = await localSessionCoordinator.runSessionAction(
       {
         sessionId,
@@ -230,7 +231,7 @@ export function createSessionActionsController({
           "x-opencandle-coordinator-secret": lock.coordinatorSecret,
         },
         body: JSON.stringify({
-          sessionId: action?.sessionId || sessionManager.getSessionId(),
+          sessionId: action?.sessionId,
           actionId: action?.actionId || "",
           actionType,
           payload,
@@ -258,7 +259,8 @@ export function createSessionActionsController({
     if (!targetSessionId || targetSessionId === current.getSessionId()) return current;
     const sessions = await SessionManager.list(cwd, sessionDir);
     const match = sessions.find((candidate) => candidate.id === targetSessionId);
-    return match ? SessionManager.open(match.path, sessionDir, cwd) : current;
+    if (!match) throw new Error("Unknown saved session");
+    return SessionManager.open(match.path, sessionDir, cwd);
   }
 }
 

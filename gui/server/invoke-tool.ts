@@ -194,21 +194,22 @@ export function createToolInvokeController({
     const sessionId = typeof data.sessionId === "string" ? data.sessionId : "";
     const allowProxy = data.allowProxy !== false;
     try {
+      if (!sessionId.trim()) throw new Error("sessionId is required");
+      if (!actionId.trim()) throw new Error("actionId is required");
       const invoke = () =>
         handleToolInvoke(toolName, requestArgs(data.args), sessionId, { actionId, allowProxy });
-      const actionResult =
-        localSessionCoordinator && actionId
-          ? await localSessionCoordinator.runSessionAction(
-              {
-                sessionId: sessionId || safeSessionId(getSessionManager()),
-                actionId,
-                actionType: "tool.invoke",
-                payload: { toolName, args: requestArgs(data.args) },
-                source: "browser",
-              },
-              invoke,
-            )
-          : await invoke().then((result) => ({ ok: true as const, duplicate: false, result }));
+      const actionResult = localSessionCoordinator
+        ? await localSessionCoordinator.runSessionAction(
+            {
+              sessionId,
+              actionId,
+              actionType: "tool.invoke",
+              payload: { toolName, args: requestArgs(data.args) },
+              source: "browser",
+            },
+            invoke,
+          )
+        : await invoke().then((result) => ({ ok: true as const, duplicate: false, result }));
       if (!actionResult.ok) throw new Error(actionResult.message);
       const result = actionResult.result;
       if (requestId) {

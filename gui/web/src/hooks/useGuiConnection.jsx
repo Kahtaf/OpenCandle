@@ -82,7 +82,8 @@ export function mergeSessionSnapshotMap(current, payload) {
 }
 
 export function buildToolInvokeSocketMessage(payload, currentSessionId = "", targetSessionId = "") {
-  const sessionId = targetSessionId || currentSessionId;
+  const sessionId = String(targetSessionId || currentSessionId || "").trim();
+  if (!sessionId) throw new Error("sessionId is required");
   return {
     type: "tool.invoke",
     actionId: payload.actionId || createSessionActionId("tool"),
@@ -99,7 +100,8 @@ export function createSessionActionId(prefix = "action") {
 
 export function buildSessionActionSocketMessage(type, payload = {}, currentSessionId = "") {
   const actionPrefix = type.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "action";
-  const sessionId = payload.sessionId || currentSessionId;
+  const sessionId = String(payload.sessionId || currentSessionId || "").trim();
+  if (!sessionId) throw new Error("sessionId is required");
   return {
     type,
     ...payload,
@@ -385,14 +387,19 @@ export function useGuiConnection() {
         void sendHttpFallbackMessage(request);
         return true;
       }
-      socket.send(
-        JSON.stringify(
-          type === "tool.invoke"
-            ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
-            : buildSessionActionSocketMessage(type, payload, currentSessionId),
-        ),
-      );
-      return true;
+      try {
+        socket.send(
+          JSON.stringify(
+            type === "tool.invoke"
+              ? buildToolInvokeSocketMessage(payload, currentSessionId, payload.sessionId)
+              : buildSessionActionSocketMessage(type, payload, currentSessionId),
+          ),
+        );
+        return true;
+      } catch (error) {
+        setToast(error instanceof Error ? error.message : String(error), { destructive: true });
+        return false;
+      }
     },
     [currentSessionId, sendHttpFallbackMessage, setToast],
   );
@@ -416,15 +423,23 @@ export function useGuiConnection() {
         pendingToolInvokesRef.current.set(requestId, { resolve, reject, timeout });
       });
 
-      socket.send(
-        JSON.stringify(
-          buildToolInvokeSocketMessage(
-            { requestId, actionId, toolName, args },
-            currentSessionId,
-            targetSessionId,
+      try {
+        socket.send(
+          JSON.stringify(
+            buildToolInvokeSocketMessage(
+              { requestId, actionId, toolName, args },
+              currentSessionId,
+              targetSessionId,
+            ),
           ),
-        ),
-      );
+        );
+      } catch (error) {
+        window.clearTimeout(timeout);
+        pendingToolInvokesRef.current.delete(requestId);
+        const message = error instanceof Error ? error.message : String(error);
+        setToast(message, { destructive: true });
+        return Promise.reject(new Error(message));
+      }
       return promise;
     },
     [currentSessionId, setToast],
