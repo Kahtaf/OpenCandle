@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- Gemini router-contract evals now stabilize known drift cases with deterministic post-processing for macro-acronym comparisons, profile-backed risk slots, conversational risk preference updates, and locally marked acronym tickers.
 - GUI chat runs now reject the legacy active-session mutation route, require explicit session/action IDs for chat, ask-user, and tool actions, and expose a session-scoped stop control so one session can be stopped without interrupting another.
 - Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
 - OpenSpec backlog cleanup now archives the stale GUI concurrent-session proposal against shipped behavior and adds `gui-session-scoped-action-cleanup` as the slim follow-up for explicit session-scoped GUI mutations.
