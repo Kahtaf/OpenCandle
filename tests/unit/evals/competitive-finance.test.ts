@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -17,10 +17,12 @@ import {
   competitivePreflightTimeoutMs,
   competitiveReportAnalysisPath,
   extractUsableAnswerFromCliFailure,
+  FROZEN_COMPETITIVE_PANEL,
   findCachedCompetitorAnswer,
   findCachedPromptMetadata,
   fixedPromptFromEnv,
   formatCompetitiveReportAnalysisMarkdown,
+  frozenCompetitivePanelFromEnv,
   parseComparisonJudgment,
   parseGeneratedPrompts,
   selectCliFailureMessage,
@@ -504,6 +506,40 @@ describe("competitive finance benchmarking", () => {
       complexity: "complex",
       evaluationFocus: "Check whether OC improves after a prompt fix.",
     });
+  });
+
+  it("defines a frozen competitive panel from historical loss classes", () => {
+    const manifest = JSON.parse(
+      readFileSync("docs/internal/prompt-to-policy-migration-manifest.json", "utf-8"),
+    ) as {
+      prompts: Array<{ id: string; expected: { finalAnswerHardAssertions?: string[] } }>;
+    };
+    const promptsById = new Map(manifest.prompts.map((prompt) => [prompt.id, prompt]));
+
+    expect(frozenCompetitivePanelFromEnv({})).toBeNull();
+    expect(frozenCompetitivePanelFromEnv({ OPENCANDLE_COMPETITIVE_PANEL: "frozen" })).toStrictEqual(
+      FROZEN_COMPETITIVE_PANEL,
+    );
+    expect(FROZEN_COMPETITIVE_PANEL).toHaveLength(5);
+    expect(FROZEN_COMPETITIVE_PANEL.map((prompt) => prompt.lossClass)).toEqual([
+      "portfolio-review-not-builder",
+      "1-2 weeks DTE preservation",
+      "protective-put-not-bullish-call",
+      "unknown-ticker-no-dead-end",
+      "hedge sizing with share count",
+    ]);
+    expect(new Set(FROZEN_COMPETITIVE_PANEL.map((prompt) => prompt.prompt)).size).toBe(5);
+    expect(
+      FROZEN_COMPETITIVE_PANEL.every((prompt) => prompt.promptPolicyManifestId.length > 0),
+    ).toBe(true);
+    for (const prompt of FROZEN_COMPETITIVE_PANEL) {
+      expect(
+        promptsById.get(prompt.promptPolicyManifestId)?.expected.finalAnswerHardAssertions,
+      ).toBeDefined();
+      expect(
+        promptsById.get(prompt.promptPolicyManifestId)?.expected.finalAnswerHardAssertions?.length,
+      ).toBeGreaterThan(0);
+    }
   });
 
   it("finds cached competitor answers by exact prompt text and competitor id", () => {

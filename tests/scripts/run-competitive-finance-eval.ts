@@ -41,6 +41,7 @@ import {
   findCachedPromptMetadata,
   fixedPromptFromEnv,
   formatCompetitiveReportAnalysisMarkdown,
+  frozenCompetitivePanelFromEnv,
   type GeneratedFinancePrompt,
   parseComparisonJudgment,
   parseGeneratedPrompts,
@@ -123,16 +124,19 @@ const judgeModel = await resolveModelWithAuth(
   requestedModelId,
   "Set OPENCANDLE_COMPETITIVE_PROVIDER and OPENCANDLE_COMPETITIVE_MODEL, plus the matching API key, or configure a model through the OpenCandle/Pi setup flow.",
 );
+const frozenPanel = frozenCompetitivePanelFromEnv(process.env);
 const fixedPrompt = fixedPromptFromEnv(process.env);
-const rawPrompts = fixedPrompt
-  ? [fixedPrompt]
-  : parseGeneratedPrompts(
-      await completeText(
-        judgeModel,
-        buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
-        { temperature: 0.8, maxTokens: 3000 },
-      ),
-    );
+const rawPrompts = frozenPanel
+  ? frozenPanel
+  : fixedPrompt
+    ? [fixedPrompt]
+    : parseGeneratedPrompts(
+        await completeText(
+          judgeModel,
+          buildPromptGenerationPrompt({ count: promptCount, seed, asOfDate, savedStateSummary }),
+          { temperature: 0.8, maxTokens: 3000 },
+        ),
+      );
 const prompts = rawPrompts.map((prompt) => {
   const cached = findCachedPromptMetadata(competitorAnswerCache, prompt.prompt);
   return cached
@@ -265,8 +269,9 @@ const report = {
   })),
   skippedCompetitors: preflight.skipped,
   promptCount: results.length,
-  promptMode: fixedPrompt ? "fixed" : "generated",
+  promptMode: frozenPanel ? "frozen" : fixedPrompt ? "fixed" : "generated",
   seededState: seedState,
+  frozenPanel: Boolean(frozenPanel),
   summary,
   results,
 };

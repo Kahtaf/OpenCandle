@@ -113,6 +113,7 @@
     "test:evals:usually": "EVAL_TIER=usually vitest run --config vitest.config.evals.ts",
     "test:evals:product": "tsx tests/scripts/run-product-evals.ts",
     "test:evals:competitive": "tsx tests/scripts/run-competitive-finance-eval.ts",
+    "test:evals:competitive:frozen": "OPENCANDLE_COMPETITIVE_PANEL=frozen tsx tests/scripts/run-competitive-finance-eval.ts",
     "test:packed-install": "node scripts/packed-install-smoke.mjs",
     "eval:competitive:analyze": "tsx tests/scripts/analyze-competitive-finance-report.ts",
     "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx biome ci . && npx vitest run\"",

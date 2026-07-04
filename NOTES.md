@@ -1,3 +1,25 @@
+# E7 Frozen Competitive Panel
+
+Branch: `feat/eval-frozen-competitive`
+
+## Scope
+
+- Added `OPENCANDLE_COMPETITIVE_PANEL=frozen` and `npm run test:evals:competitive:frozen`.
+- Kept `npm run test:evals:competitive` as generated-prompt discovery.
+- Frozen panel loss classes:
+  - portfolio-review-not-builder
+  - "1-2 weeks" DTE preservation
+  - protective-put-not-bullish-call
+  - unknown-ticker-no-dead-end
+  - hedge sizing with share count
+- Prompt-specific literals and hard assertions live in `docs/internal/prompt-to-policy-migration-manifest.json`, not production prompts.
+
+## Evidence
+
+- Focused unit and guard logs are stored under `docs/internal/pr-evidence/feat-eval-frozen-competitive/`.
+- Live frozen competitive rerun is opt-in/release-runnable because it needs model/provider credentials and generic-agent baselines.
+- Live attempt on 2026-07-04 stopped before model calls: Pi model auth did not expose an API key for `google/gemini-2.5-flash`, including when mapping `.env` `GEMINI_API_KEY` to `GOOGLE_API_KEY` for the command. See `docs/internal/pr-evidence/feat-eval-frozen-competitive/frozen-competitive-live.log`.
+
 # feat/eval-router-fixtures
 
 # PR Notes: Deterministic Synthesis Validation
