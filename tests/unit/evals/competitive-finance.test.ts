@@ -1,4 +1,9 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { MarketStateService } from "../../../src/market-state/service.js";
+import { initDefaultDatabase } from "../../../src/memory/sqlite.js";
 import {
   analyzeCompetitiveReport,
   buildComparisonJudgePrompt,
@@ -23,9 +28,47 @@ import {
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../../evals/competitive-finance.js";
+import { seedOpenCandleHomeMarketState } from "../../evals/runner.js";
 import type { EvalTrace } from "../../evals/types.js";
 
 describe("competitive finance benchmarking", () => {
+  it("seeds the competitive saved-state fixture into a harness OPENCANDLE_HOME", () => {
+    const originalHome = process.env.OPENCANDLE_HOME;
+    const home = mkdtempSync(join(tmpdir(), "oc-competitive-state-"));
+    process.env.OPENCANDLE_HOME = home;
+
+    try {
+      seedOpenCandleHomeMarketState(COMPETITIVE_STATE_FIXTURE);
+
+      const db = initDefaultDatabase();
+      try {
+        const service = new MarketStateService(db);
+        expect(service.listPortfolioLots()).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ symbol: "SPY", quantity: 60, avgCost: 480 }),
+            expect.objectContaining({ symbol: "AAPL", quantity: 40, avgCost: 175 }),
+            expect.objectContaining({ symbol: "XLE", quantity: 100, avgCost: 85 }),
+          ]),
+        );
+        expect(service.listWatchlistItems()).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ symbol: "MSFT", targetPrice: 420 }),
+            expect.objectContaining({ symbol: "JPM", thesis: "rate-cycle beneficiary" }),
+          ]),
+        );
+      } finally {
+        db.close();
+      }
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.OPENCANDLE_HOME;
+      } else {
+        process.env.OPENCANDLE_HOME = originalHome;
+      }
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("generates broad finance prompts without assuming OpenCandle should win", () => {
     const prompt = buildPromptGenerationPrompt({
       count: 4,
