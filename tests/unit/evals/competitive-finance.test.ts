@@ -747,7 +747,12 @@ describe("competitive finance benchmarking", () => {
   });
 
   it("uses the ACP-advertised Codex model id by default", () => {
-    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark[medium]");
+    // The current codex ACP agent advertises plain model ids
+    // (gpt-5.5, gpt-5.4, gpt-5.4-mini, gpt-5.3-codex-spark); the old
+    // reasoning-suffixed "gpt-5.3-codex-spark[medium]" id is rejected with
+    // "did not advertise that model", which made the codex baseline fail
+    // preflight and get skipped.
+    expect(selectCompetitiveCodexModel({})).toBe("gpt-5.3-codex-spark");
     expect(
       selectCompetitiveCodexModel({
         OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",

@@ -696,7 +696,7 @@ export function competitivePreflightTimeoutMs(env: Record<string, string | undef
 }
 
 export function selectCompetitiveCodexModel(env: Record<string, string | undefined>): string {
-  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark[medium]";
+  return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark";
 }
 
 export function shouldRetryCompetitiveModelCall(

@@ -22,6 +22,7 @@
 
 ### Fixed
 
+- The competitive Codex baseline default model id is now `gpt-5.3-codex-spark`, matching what the current codex ACP agent advertises; the old reasoning-suffixed `gpt-5.3-codex-spark[medium]` id was rejected at preflight ("did not advertise that model"), silently skipping the Codex baseline. `OPENCANDLE_COMPETITIVE_CODEX_MODEL` still overrides.
 - The competitive eval script now resolves the judge/OpenCandle model from provider env keys (for example `GEMINI_API_KEY` in `.env`) when Pi AuthStorage has no stored credential, by seeding the env key as a runtime AuthStorage override; previously the run aborted with "No API key available" before any baseline ran because Pi's ModelRegistry skips env-key fallback. Production auth paths are unchanged.
 - The frozen competitive eval script no longer crashes with a `completeSimple` ReferenceError at the first judge call (after a live OpenCandle session had already run); a unit-level typecheck guard now catches eval-script type errors that `tsc --noEmit` misses because tests are excluded from the repo typecheck.
 - `/analyze` comprehensive-analysis runs now emit the same `opencandle-workflow` session entry as router-dispatched workflows, so the GUI dashboard can track active analyses and move completed research into recent research.
