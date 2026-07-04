@@ -47,11 +47,13 @@ function loadFixtures(): Array<{ name: string; data: RouterFixture }> {
 }
 
 // Diff the routing contract only. Route kind/route stay visible so exemptions
-// cannot mask dispatch/pass-through/clarification flips.
-function stripNonContract(out: RouterOutput): unknown {
+// cannot mask dispatch/pass-through/clarification flips. Every exemption
+// carries its classification; anything not exempted here is contractual.
+function stripNonContract(out: RouterOutput, expectedSlotKeys?: string[]): unknown {
   const entities = { ...out.entities };
   // Class C: natural DTE prose and ETF-only compare metric vocabulary are
-  // normalized by downstream slot resolution, not by route selection.
+  // normalized by downstream slot resolution, not by route selection. DTE
+  // horizon coverage is preserved through slot values below.
   delete entities.dteHint;
   delete entities.compareMetrics;
 
@@ -62,10 +64,30 @@ function stripNonContract(out: RouterOutput): unknown {
     // hints; workflow identity is contractual only for dispatchable workflows.
     workflow: out.routeKind === "workflow_dispatch" ? out.workflow : undefined,
     entities,
-    // Class A/C: emitted slots are assumptions/provenance detail derived again
-    // by slot resolution; missing_required remains the clarification contract.
+    // Class A: EXTRA slot keys a model volunteers are exempt; the VALUE of
+    // every expected slot is contractual (blanket slot dropping masked wrong
+    // budgets/symbols). Class C: source/confidence are provenance detail.
+    slots: contractSlotValues(out.slots, expectedSlotKeys),
+    // Contractual: a spurious preference write is the exact failure class the
+    // preference-ECHO fixture (029) exists to forbid.
+    preference_updates: out.preference_updates,
+    // Contractual membership, order-insensitive: bundle order is
+    // presentation; the exposed tool surface is not.
+    tool_bundles: [...(out.tool_bundles ?? [])].sort(),
     missing_required: out.missing_required,
   };
+}
+
+function contractSlotValues(
+  slots: RouterOutput["slots"],
+  allowedKeys?: string[],
+): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const [key, slot] of Object.entries(slots ?? {})) {
+    if (allowedKeys && !allowedKeys.includes(key)) continue;
+    values[key] = slot?.value;
+  }
+  return values;
 }
 
 function shallowDiff(expected: unknown, actual: unknown): string[] {
@@ -134,9 +156,10 @@ async function main(): Promise<void> {
     const elapsed = Date.now() - start;
     latencies.push(elapsed);
 
+    const expectedSlotKeys = Object.keys(data.expectedRouterOutput.slots ?? {});
     const diffs = shallowDiff(
       stripNonContract(data.expectedRouterOutput),
-      stripNonContract(result),
+      stripNonContract(result, expectedSlotKeys),
     );
     if (diffs.length === 0) {
       pass += 1;
