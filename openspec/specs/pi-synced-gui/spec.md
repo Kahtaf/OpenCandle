@@ -424,6 +424,12 @@ The GUI SHALL allow independent sessions to run concurrently while preserving on
 - **AND** the browser sends stop or cancel for session A
 - **THEN** only session A's targeted run or pending action is affected
 - **AND** session B continues unchanged
+- Shipped stop semantics (v1): "stop" for a chat run is a client-side abort
+  of session A's SSE stream — the browser stops rendering and re-enables the
+  composer, while the server-side model turn runs to completion and its
+  result persists to session A's transcript. Only `ask_user` cancel
+  interrupts server-side work. Server-side chat-run interruption is a
+  documented follow-up, not a v1 behavior.
 
 #### Scenario: Retry or regenerate stays with the original session
 

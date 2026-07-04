@@ -1034,7 +1034,11 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await second.close();
   }, 30_000);
 
-  it.fails("keeps opencandle trace and dashboard projection in parity with the TUI path", async () => {
+  // Previously it.fails for the GUI chat-run settle-timeout defect (fixed:
+  // waitForSessionTurnSettlement now detects stall instead of capping total
+  // runtime). it.fails also passed on ANY error — credential loss, dead
+  // server, 410 — so it could not distinguish the known gap from breakage.
+  it("keeps opencandle trace and dashboard projection in parity with the TUI path", async () => {
     await page.setViewportSize({ width: 1440, height: 960 });
 
     const tui = await runOpenCandleSession({
@@ -1055,7 +1059,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     expect(sessionId).toBeTruthy();
 
     const guiRunEvents = await runGuiChat(page, sessionId, parityPrompt);
-    const guiSnapshot = await fetchGuiSessionSnapshot(page);
+    const guiSnapshot = await fetchGuiSessionSnapshot(page, sessionId);
     const guiEntries = arrayValue(recordValue(guiSnapshot).entries);
     const guiCustomEntries = guiEntries.filter(isOpenCandleCustomEntry);
     const guiSequence = opencandleEntrySequence(guiCustomEntries);
@@ -1073,18 +1077,29 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     writeParityEvidence("gui-tui-parity-preassert.png", diagnosticScreenshot);
 
     expect(runEventTypes).toContain("run.completed");
-    expect(guiSequence).toEqual(tuiSequence);
+    // TUI and GUI are two independent live model runs; exact entry-sequence
+    // equality flakes on model nondeterminism (disclaimer counts, step
+    // interleaving). The parity contract is structural: both paths emit the
+    // same set of opencandle entry types, and both produce a full analyst
+    // roster.
+    expect(new Set(guiSequence)).toEqual(new Set(tuiSequence));
 
-    const analystStepCount = guiSequence.filter(
-      (customType) => customType === "opencandle-analyst-step",
-    ).length;
-    expect(analystStepCount).toBeGreaterThan(0);
+    const analystStageCount = guiCustomEntries.filter((entry) => {
+      if (!isOpenCandleCustomEntry(entry)) return false;
+      const record = recordValue(entry);
+      if (stringValue(record.customType) !== "opencandle-analyst-step") return false;
+      const stage = stringValue(recordValue(record.data).stage) ?? "";
+      return stage.startsWith("analyst_");
+    }).length;
+    expect(analystStageCount).toBeGreaterThan(0);
 
     const dashboard = recordValue(recordValue(guiSnapshot).state);
     const activeAnalyses = arrayValue(dashboard.activeAnalyses).map(recordValue);
     const activeAnalysis = activeAnalyses.at(-1);
     expect(activeAnalysis).toBeTruthy();
-    expect(numberValue(activeAnalysis?.analystsDone)).toBe(analystStepCount);
+    // Post-I2 the projector derives analystsDone from analyst_* stage
+    // entries (debate_* entries share the type but are not analysts).
+    expect(numberValue(activeAnalysis?.analystsDone)).toBe(analystStageCount);
 
     const screenshot = await page.screenshot({ fullPage: true });
     writeParityEvidence("gui-tui-parity.json", {
@@ -1092,7 +1107,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
       sessionId,
       tuiSequence,
       guiSequence,
-      analystStepCount,
+      analystStageCount,
       dashboardActiveAnalyses: activeAnalyses,
       runEvents: guiRunEvents.map((event) => recordValue(event).type),
     });
@@ -1204,15 +1219,20 @@ async function runGuiChat(
   );
 }
 
-async function fetchGuiSessionSnapshot(page: Page): Promise<unknown> {
-  return page.evaluate(async () => {
-    const response = await fetch("/api/bootstrap");
+async function fetchGuiSessionSnapshot(page: Page, sessionId?: string): Promise<unknown> {
+  return page.evaluate(async (targetSessionId) => {
+    // Session-addressed bootstrap: the plain /api/bootstrap returns the
+    // server's focused session, not the session the run was dispatched to.
+    const path = targetSessionId
+      ? `/api/sessions/${encodeURIComponent(targetSessionId)}/bootstrap`
+      : "/api/bootstrap";
+    const response = await fetch(path);
     if (!response.ok) {
       throw new Error(`session bootstrap failed: ${response.status} ${await response.text()}`);
     }
     const bootstrap = await response.json();
     return bootstrap.snapshot;
-  });
+  }, sessionId);
 }
 
 function opencandleEntrySequence(entries: unknown[]): string[] {

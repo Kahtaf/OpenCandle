@@ -12,6 +12,12 @@ export interface WaitForSessionTurnSettlementOptions extends WaitForEntryCountOp
 export interface SessionRunStatus {
   isStreaming: boolean;
   pendingMessageCount: number;
+  /**
+   * Monotonic activity signal (e.g. a session-event counter). A single long
+   * model generation keeps isStreaming/pendingMessageCount frozen for its
+   * whole duration; this token is what distinguishes it from a hung run.
+   */
+  progressToken?: number;
 }
 
 export interface UnresolvedToolCall {
@@ -71,7 +77,7 @@ export async function waitForSessionTurnSettlement(
 
   while (true) {
     const status = getStatus();
-    const signature = `${status.isStreaming}:${status.pendingMessageCount}`;
+    const signature = `${status.isStreaming}:${status.pendingMessageCount}:${status.progressToken ?? 0}`;
     if (signature !== lastSignature) {
       lastSignature = signature;
       lastProgressAt = Date.now();

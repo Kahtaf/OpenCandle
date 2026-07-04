@@ -116,8 +116,40 @@ describe("waitForSessionTurnSettlement", () => {
     }, 56);
 
     let resolved = false;
+    const settled = waitForSessionTurnSettlement(() => ({ isStreaming, pendingMessageCount }), {
+      timeoutMs: 10,
+      intervalMs: 1,
+      idleGraceMs: 3,
+    }).then(() => {
+      resolved = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(70);
+    await settled;
+    expect(resolved).toBe(true);
+  });
+
+  it("does not time out while a progress token keeps advancing during one long turn", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+
+    // A single long model generation keeps isStreaming=true with no
+    // pending-count changes; streamed session events are the only signal
+    // that the turn is alive. The stall clock must reset on that signal.
+    let isStreaming = true;
+    let progressToken = 0;
+    for (let t = 4; t <= 44; t += 4) {
+      setTimeout(() => {
+        progressToken += 1;
+      }, t);
+    }
+    setTimeout(() => {
+      isStreaming = false;
+    }, 52);
+
+    let resolved = false;
     const settled = waitForSessionTurnSettlement(
-      () => ({ isStreaming, pendingMessageCount }),
+      () => ({ isStreaming, pendingMessageCount: 0, progressToken }),
       {
         timeoutMs: 10,
         intervalMs: 1,

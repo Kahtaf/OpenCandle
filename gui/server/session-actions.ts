@@ -243,16 +243,34 @@ export async function promptAndSettle(
   observation?: PromptObservation,
 ): Promise<void> {
   await runSession.prompt(prompt);
-  await waitForSessionTurnSettlement(() => ({
-    isStreaming: runSession.isStreaming,
-    pendingMessageCount: runSession.pendingMessageCount,
-  }));
+  await settleWithEventProgress(runSession);
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
     beforeIds,
   );
   await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
   await replayObservedWorkflowPromptIfNeeded(runSession, prompt, observation);
+}
+
+/**
+ * Settle wait fed by a session-event counter: a single long model generation
+ * keeps isStreaming/pendingMessageCount frozen for its whole duration, and
+ * without an activity signal the stall detector killed healthy long turns.
+ */
+async function settleWithEventProgress(runSession: AgentSession): Promise<void> {
+  let progressToken = 0;
+  const unsubscribe = runSession.subscribe(() => {
+    progressToken += 1;
+  });
+  try {
+    await waitForSessionTurnSettlement(() => ({
+      isStreaming: runSession.isStreaming,
+      pendingMessageCount: runSession.pendingMessageCount,
+      progressToken,
+    }));
+  } finally {
+    unsubscribe();
+  }
 }
 
 export async function replayObservedWorkflowPromptIfNeeded(
@@ -268,10 +286,7 @@ export async function replayObservedWorkflowPromptIfNeeded(
     expandPromptTemplates: false,
     source: "extension",
   });
-  await waitForSessionTurnSettlement(() => ({
-    isStreaming: runSession.isStreaming,
-    pendingMessageCount: runSession.pendingMessageCount,
-  }));
+  await settleWithEventProgress(runSession);
   await waitForResolvedToolCalls(() => runSession.sessionManager.getEntries());
 }
 
