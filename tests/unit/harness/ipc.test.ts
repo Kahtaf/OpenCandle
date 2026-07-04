@@ -79,6 +79,16 @@ describe("IpcChannel", () => {
     expect(read).toEqual(trace);
   });
 
+  it("writePromptRequest moves a completed session back to running for send", () => {
+    ipc.setStatus("done");
+
+    IpcChannel.writePromptRequest(dir, "What about AMD?");
+
+    expect(IpcChannel.readStatus(dir)).toBe("running");
+    expect(ipc.readPromptRequest()).toEqual({ prompt: "What about AMD?" });
+    expect(ipc.readPromptRequest()).toBeNull();
+  });
+
   it("writeError writes error.txt and sets status=error", () => {
     ipc.writeError("something broke");
 

@@ -1,0 +1,17 @@
+release:check passed end to end on 2026-07-04.
+
+Included gates:
+- npx tsc --noEmit
+- npx biome ci .
+- npm test
+- npm run test:gui:release-smoke
+- npm run docs:site:build
+- npm run package:contents:check
+- npm run test:packed-install
+- npm run docs:links:check
+
+Observed summaries:
+- Unit tests: 221 files passed, 2299 tests passed.
+- GUI release smoke: 1 file passed, 2 tests passed.
+- Packed install smoke: passed.
+- Public docs external link check: checked 34 links.

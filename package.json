@@ -105,6 +105,7 @@
     "test:e2e:credential-soft-fallback": "tsx tests/e2e/credential-soft-fallback.test.ts",
     "test:e2e:credential-per-workflow-cap": "tsx tests/e2e/credential-per-workflow-cap.test.ts",
     "test:gui:browser": "OPENCANDLE_GUI_BROWSER=1 vitest run --config vitest.config.gui.ts",
+    "test:gui:release-smoke": "npm run gui:web:build && OPENCANDLE_GUI_RELEASE_SMOKE=1 vitest run --config vitest.config.gui-release.ts",
     "test:e2e:providers": "tsx tests/e2e/providers.test.ts",
     "test:e2e:harness-dcf": "tsx tests/e2e/harness-dcf.test.ts",
     "test:evals": "vitest run --config vitest.config.evals.ts",
@@ -122,7 +123,7 @@
     "version:set": "npm version",
     "prepublishOnly": "npm run release:check",
     "publish:dry": "npm run release:check && npm publish --access public --dry-run",
-    "release:check": "npx tsc --noEmit && npx biome ci . && npm test && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
+    "release:check": "npx tsc --noEmit && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major"

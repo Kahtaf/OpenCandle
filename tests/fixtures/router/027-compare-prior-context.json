@@ -1,0 +1,56 @@
+{
+  "input": "compare those with SPY over the last year",
+  "priorTurns": [
+    {
+      "role": "user",
+      "text": "I'm deciding between NVDA and AMD for a semiconductor position."
+    },
+    {
+      "role": "assistant",
+      "text": "NVDA and AMD are the two semiconductor names in scope."
+    }
+  ],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "NVDA",
+        "AMD",
+        "SPY"
+      ],
+      "timeHorizon": "1y"
+    },
+    "slots": {
+      "symbols": {
+        "value": [
+          "SPY"
+        ],
+        "source": "user",
+        "confidence": "high"
+      },
+      "time_horizon": {
+        "value": "1y",
+        "source": "user",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "compare verb plus prior turn resolves 'those' to NVDA and AMD; current turn adds SPY and a one-year horizon"
+  },
+  "tags": [
+    "compare_assets",
+    "prior-context",
+    "synthetic-multi-turn"
+  ]
+}

@@ -3,6 +3,7 @@
  *
  * Usage:
  *   npx tsx tests/harness/cli.ts run    --prompt "..." --ipc <dir> [--timeout <ms>]
+ *   npx tsx tests/harness/cli.ts send   --prompt "..." --ipc <dir>
  *   npx tsx tests/harness/cli.ts wait   --ipc <dir> [--timeout <ms>]
  *   npx tsx tests/harness/cli.ts answer --ipc <dir> --value "..."
  *   npx tsx tests/harness/cli.ts trace  --ipc <dir>
@@ -37,6 +38,9 @@ switch (subcommand) {
   case "run":
     await cmdRun();
     break;
+  case "send":
+    cmdSend();
+    break;
   case "wait":
     await cmdWait();
     break;
@@ -47,7 +51,7 @@ switch (subcommand) {
     cmdTrace();
     break;
   default:
-    console.error(`Usage: cli.ts <run|wait|answer|trace> [options]`);
+    console.error(`Usage: cli.ts <run|send|wait|answer|trace> [options]`);
     process.exit(1);
 }
 
@@ -102,8 +106,13 @@ async function cmdRun() {
       askUserHandler: askHandler,
     });
 
+    const prompts = [prompt];
+    let customEntryOffset = 0;
+    const customEntries: CustomEntryTrace[] = [];
+
     collector = createTraceCollector(session, prompt, {
       jsonlPath: join(ipcDir, "events.jsonl"),
+      trackPromptIndex: true,
     });
 
     // Graceful shutdown
@@ -113,9 +122,16 @@ async function cmdRun() {
       shutdownRequested = true;
       console.error("Shutdown requested, writing partial trace...");
       if (collector) {
+        const drained = drainOpenCandleCustomEntries(
+          session.sessionManager,
+          customEntryOffset,
+          prompts.length - 1,
+        );
+        customEntries.push(...drained.entries);
         ipc.writeTrace({
           ...collector.getTrace(),
-          customEntries: drainOpenCandleCustomEntries(session.sessionManager),
+          prompts,
+          customEntries,
         });
       }
       session.dispose();
@@ -127,27 +143,40 @@ async function cmdRun() {
 
     cache.clear();
 
-    await new Promise<void>((resolve) => {
-      const unsub = session.subscribe((event) => {
-        if (event.type === "agent_end") {
-          unsub();
-          resolve();
-        }
+    const writeCurrentTrace = (promptIndex: number) => {
+      const drained = drainOpenCandleCustomEntries(
+        session.sessionManager,
+        customEntryOffset,
+        promptIndex,
+      );
+      customEntryOffset = drained.nextEntryOffset;
+      customEntries.push(...drained.entries);
+      if (!collector) throw new Error("Trace collector was not initialized");
+      ipc.writeTrace({
+        ...collector.getTrace(),
+        prompts,
+        customEntries,
       });
-      void session.prompt(prompt);
-    });
+    };
 
-    ipc.writeTrace({
-      ...collector.getTrace(),
-      customEntries: drainOpenCandleCustomEntries(session.sessionManager),
-    });
+    await promptAndWaitForAgentEnd(session, prompt);
+    writeCurrentTrace(0);
     console.log(`IPC dir: ${ipcDir}`);
     console.log("Session complete. Trace written.");
 
-    collector.dispose();
-    session.dispose();
-    cleanupHome();
-    process.exit(0);
+    while (!shutdownRequested) {
+      const request = ipc.readPromptRequest();
+      if (!request) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
+      }
+      const promptIndex = prompts.length;
+      prompts.push(request.prompt);
+      collector.setPromptIndex(promptIndex);
+      await promptAndWaitForAgentEnd(session, request.prompt);
+      writeCurrentTrace(promptIndex);
+      console.log("Follow-up complete. Trace written.");
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     ipc.writeError(message);
@@ -158,11 +187,16 @@ async function cmdRun() {
   }
 }
 
-function drainOpenCandleCustomEntries(sessionManager: {
-  getEntries(): Array<Record<string, unknown>>;
-}): CustomEntryTrace[] {
-  return sessionManager
-    .getEntries()
+function drainOpenCandleCustomEntries(
+  sessionManager: {
+    getEntries(): Array<Record<string, unknown>>;
+  },
+  startEntryOffset: number,
+  promptIndex: number,
+): { entries: CustomEntryTrace[]; nextEntryOffset: number } {
+  const allEntries = sessionManager.getEntries();
+  const entries = allEntries
+    .slice(startEntryOffset)
     .filter(
       (entry) =>
         entry.type === "custom" &&
@@ -173,7 +207,27 @@ function drainOpenCandleCustomEntries(sessionManager: {
       customType: String(entry.customType),
       data: entry.data,
       timestamp: String(entry.timestamp),
+      promptIndex,
     }));
+  return { entries, nextEntryOffset: allEntries.length };
+}
+
+async function promptAndWaitForAgentEnd(
+  session: Awaited<ReturnType<typeof createOpenCandleSession>>["session"],
+  prompt: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const unsub = session.subscribe((event) => {
+      if (event.type === "agent_end") {
+        unsub();
+        resolve();
+      }
+    });
+    void session.prompt(prompt).catch((error: unknown) => {
+      unsub();
+      reject(error);
+    });
+  });
 }
 
 async function cmdWait() {
@@ -226,6 +280,21 @@ async function cmdWait() {
 
   console.error("Timeout waiting for harness");
   process.exit(2);
+}
+
+function cmdSend() {
+  const ipcDir = args.ipc;
+  const prompt = args.prompt;
+  if (!ipcDir || !prompt) {
+    console.error("--ipc and --prompt are required");
+    process.exit(1);
+  }
+  const status = IpcChannel.readStatus(ipcDir);
+  if (status !== "done" && status !== "waiting") {
+    console.error(`Cannot send follow-up while harness status is ${status ?? "missing"}`);
+    process.exit(1);
+  }
+  IpcChannel.writePromptRequest(ipcDir, prompt);
 }
 
 function cmdAnswer() {

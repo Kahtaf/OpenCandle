@@ -1,0 +1,51 @@
+{
+  "input": "now apply that to AAPL",
+  "priorTurns": [
+    {
+      "role": "user",
+      "text": "what does free cash flow yield mean?"
+    },
+    {
+      "role": "assistant",
+      "text": "Free cash flow yield compares a company's free cash flow to its market value."
+    }
+  ],
+  "profileSnapshot": {},
+  "expectedRouterOutput": {
+    "routeKind": "agent_task",
+    "route": "fallback",
+    "workflow": "single_asset_analysis",
+    "entities": {
+      "symbols": [
+        "AAPL"
+      ]
+    },
+    "slots": {
+      "symbol": {
+        "value": "AAPL",
+        "source": "user",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "options",
+      "sentiment",
+      "sec",
+      "clarification"
+    ],
+    "diagnostics": [
+      {
+        "code": "route_kind_corrected_to_agent_task",
+        "message": "single_asset_analysis is not a dispatchable workflow"
+      }
+    ],
+    "reasoning": "follow-up shifts from a definition to applying the concept to a named ticker"
+  },
+  "tags": [
+    "fallback-from-general-qa-shift",
+    "synthetic-multi-turn"
+  ]
+}

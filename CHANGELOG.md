@@ -2,13 +2,21 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
+
 ### Changed
 
+- Expanded the deterministic router fixture corpus with archived task 4.7 coverage for prior-context comparisons, general-QA follow-up shifts, preference echoes that must not write preferences, and historical misclassification recovery cases.
+- `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and keeps chat disabled until setup is ready.
+- Harness sessions now support sequential `prompts` with per-prompt trace boundaries while preserving single-`prompt` behavior, and the IPC harness can `send` follow-up prompts into an existing session.
 - Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
 
 ### Fixed
 
 - Gemini router-contract evals now stabilize known drift cases with deterministic post-processing for macro-acronym comparisons, profile-backed risk slots, conversational risk preference updates, and locally marked acronym tickers.
+- GUI chat runs now reject the legacy active-session mutation route, require explicit session/action IDs for chat, ask-user, and tool actions, and expose a session-scoped stop control so one session can be stopped without interrupting another.
 - Autoreview now skips the React Doctor changed-scope gate for commit/range reviews whose reviewed head is not the checked-out `HEAD`, preventing unrelated later GUI changes from failing historical reviews.
 - OpenSpec backlog cleanup now archives the stale GUI concurrent-session proposal against shipped behavior and adds `gui-session-scoped-action-cleanup` as the slim follow-up for explicit session-scoped GUI mutations.
 - GitHub Pages deployment now retries once after a transient `deploy-pages` failure before failing the workflow.

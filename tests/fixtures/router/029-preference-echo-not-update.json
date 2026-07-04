@@ -1,0 +1,49 @@
+{
+  "input": "remember, I only want ETFs, so compare VOO and SCHD",
+  "priorTurns": [],
+  "profileSnapshot": {
+    "asset_scope": "etf_focused"
+  },
+  "expectedRouterOutput": {
+    "routeKind": "workflow_dispatch",
+    "route": "workflow",
+    "workflow": "compare_assets",
+    "entities": {
+      "symbols": [
+        "VOO",
+        "SCHD"
+      ],
+      "assetScope": "etf_focused"
+    },
+    "slots": {
+      "symbols": {
+        "value": [
+          "VOO",
+          "SCHD"
+        ],
+        "source": "user",
+        "confidence": "high"
+      },
+      "asset_scope": {
+        "value": "etf_focused",
+        "source": "preference",
+        "confidence": "high"
+      }
+    },
+    "preference_updates": [],
+    "missing_required": [],
+    "tool_bundles": [
+      "core_market",
+      "macro",
+      "sentiment",
+      "clarification"
+    ],
+    "diagnostics": [],
+    "reasoning": "user echoes an already-saved ETF preference while requesting an ETF comparison; no new preference update should be emitted"
+  },
+  "tags": [
+    "compare_assets",
+    "preference-echo",
+    "no-preference-update"
+  ]
+}

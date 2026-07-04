@@ -184,16 +184,16 @@ describe("session-addressed GUI bootstrap", () => {
     });
   });
 
-  it("mints a legacy chat action id when older clients do not send one", () => {
+  it("does not mint a fallback chat action id when older clients do not send one", () => {
     const action = buildChatRunActionEnvelope({ prompt: "hello" }, "session-1");
 
-    expect(action).toMatchObject({
+    expect(action).toEqual({
       sessionId: "session-1",
+      actionId: "",
       actionType: "chat.prompt",
       payload: { prompt: "hello" },
       source: "browser",
     });
-    expect(action.actionId).toMatch(/^legacy-chat-/);
   });
 
   it("detects a per-session coordinator even when this process owns another session", async () => {
