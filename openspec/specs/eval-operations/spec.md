@@ -17,10 +17,11 @@ The repository SHALL provide one eval front door (`npm run eval -- <suite>`) tha
 - **WHEN** `npm run eval -- replay:product --base-ref main` runs
 - **THEN** `tests/scripts/run-main-branch-product-replay.ts` executes with `PRODUCT_REPLAY_BASE_REF=main`
 
-#### Scenario: Legacy npm scripts remain behavior-identical aliases
+#### Scenario: Legacy npm scripts are not eval routes
 
-- **WHEN** `npm run test:evals:usually` runs
-- **THEN** it routes through the front door with `EVAL_TIER=usually` and exercises the same vitest config and cases as before the consolidation
+- **WHEN** package scripts are inspected
+- **THEN** the only eval npm script is `eval`
+- **AND** no `test:evals*` or `eval:*` aliases are defined
 
 ### Requirement: Release eval cadence is one command
 

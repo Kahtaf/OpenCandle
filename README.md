@@ -232,7 +232,7 @@ Baseline check:
 npm test
 ```
 
-The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. `npm run eval` lists every eval suite, including legacy aliases such as `npm run test:evals`. Run them intentionally; see [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html).
+The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. `npm run eval` lists every eval suite; run suites through `npm run eval -- <suite>`. Run them intentionally; see [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html).
 
 Repository rules that matter:
 

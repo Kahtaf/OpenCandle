@@ -4,8 +4,8 @@
 
 ### Added
 
-- Added a release-runnable frozen competitive adversarial panel for historical loss classes, runnable through `npm run eval -- competitive:frozen` (with the legacy `test:evals:competitive:frozen` alias), cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
-- Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, aliases for the legacy eval npm scripts, and a local JSONL run index under `tests/evals/runs/`.
+- Added a release-runnable frozen competitive adversarial panel for historical loss classes, runnable through `npm run eval -- competitive:frozen`, cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
+- Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, and a local JSONL run index under `tests/evals/runs/`.
 - Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
 - Added opt-in known-fail E2 saved market-state fidelity eval coverage for seeded portfolio rate-exposure and SPY cost-basis prompts, including trace assertions for saved-state route context, portfolio-review routing, and fixture value reuse.
 - Added a live, usually-tier E1 multi-turn coreference eval for prior-turn ticker carryover and saved-portfolio holding references, currently marked known-fail/opt-in with committed trace evidence for the saved-state AMD resolution gap.
@@ -16,6 +16,7 @@
 
 ### Changed
 
+- Removed legacy eval npm routes (`test:evals*`, `eval:router-live`, `eval:competitive:analyze`, and `eval:release`); `npm run eval -- <suite>` is now the only supported eval command surface.
 - Expanded the deterministic router fixture corpus with archived task 4.7 coverage for prior-context comparisons, general-QA follow-up shifts, preference echoes that must not write preferences, and historical misclassification recovery cases.
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and confirms drafting stays available while sending is blocked until model setup is ready. (An earlier revision of the smoke had disabled the whole composer during first-run setup, reverting the shipped 0.11.0 draft-while-setup behavior; the behavior and its assertions are restored.)
 - Harness sessions now support sequential `prompts` with per-prompt trace boundaries while preserving single-`prompt` behavior, and the IPC harness can `send` follow-up prompts into an existing session. The `run` command now exits after a bounded follow-up window (default 120s, `--linger` to override) instead of polling forever, cleaning up its session and any self-created temp home; trace files are written atomically so a concurrent `trace` read never observes truncated JSON; follow-up prompts get analysis-aware timeouts instead of inheriting the first prompt's; and `send` fails fast when the run process is no longer alive.
@@ -314,7 +315,7 @@
 - **General finance context** — broad finance questions receive tool-first guidance and missing-slot handling even when they do not use a named workflow.
 - **Shared Assumptions-block renderer** — `buildAssumptionsBlockFromRouter` converts request slots to the canonical provenance-labeled block (`User-specified` / `From saved preferences` / `Defaults`), consistent across workflow and general finance routes.
 - **Request-turn observability** — each request-understanding output is persisted as an `opencandle-router` session entry; dropped low/medium-confidence preference extractions are logged as `opencandle-router-prefs-dropped`.
-- **Request-understanding eval infrastructure** — 12 deterministic fixtures in `tests/fixtures/router/` (expected output recorded for CI), plus `npm run eval:router-live` for opt-in live verification against the real model. CI gates on 100% deterministic pass-rate.
+- **Request-understanding eval infrastructure** — 12 deterministic fixtures in `tests/fixtures/router/` (expected output recorded for CI), plus `npm run eval -- router-live` for opt-in live verification against the real model. CI gates on 100% deterministic pass-rate.
 
 ### Changed
 

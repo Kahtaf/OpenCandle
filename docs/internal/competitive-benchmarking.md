@@ -40,7 +40,7 @@ Set `OPENCANDLE_COMPETITIVE_SEED_STATE=1` to benchmark personalization. The runn
 
 ## How It Works
 
-`npm run eval -- competitive` runs `tests/scripts/run-competitive-finance-eval.ts`. The legacy `npm run test:evals:competitive` alias still routes through the same eval front door.
+`npm run eval -- competitive` runs `tests/scripts/run-competitive-finance-eval.ts`. This front door is the only supported competitive eval route.
 
 The runner:
 

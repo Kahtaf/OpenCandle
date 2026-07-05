@@ -353,7 +353,7 @@ Each fixture SHALL include the expected post-filter outcome in `expectedRouterOu
 
 ### Requirement: Live-Eval Baseline Archived per Run
 
-Each `npm run eval:router-live` run executed for acceptance verification SHALL be archived under `tests/fixtures/router/eval-baselines/<YYYY-MM-DD>.txt` with the full per-fixture pass/fail output, latency p50/p95, and total cost. Inadmissible runs (e.g., missing API credentials) SHALL be labeled as such in the archive.
+Each `npm run eval -- router-live` run executed for acceptance verification SHALL be archived under `tests/fixtures/router/eval-baselines/<YYYY-MM-DD>.txt` with the full per-fixture pass/fail output, latency p50/p95, and total cost. Inadmissible runs (e.g., missing API credentials) SHALL be labeled as such in the archive.
 
 #### Scenario: Acceptance run archived
 
@@ -365,4 +365,3 @@ Each `npm run eval:router-live` run executed for acceptance verification SHALL b
 - **WHEN** the eval is run without credentials and the output shows the deterministic-fallback shape on every fixture
 - **THEN** the archive entry is annotated `INADMISSIBLE: missing ANTHROPIC_API_KEY` (or equivalent provider)
 - **AND** that run is NOT used to compute the acceptance gate
-

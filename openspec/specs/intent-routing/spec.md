@@ -367,7 +367,7 @@ The legacy rules-router dispatch path SHALL only be removed after the live route
 #### Scenario: Live eval evidence recorded before removal
 
 - **WHEN** the change removing rules-mode dispatch is prepared
-- **THEN** `eval:router-live` has been run with live credentials against the production model
+- **THEN** `npm run eval -- router-live` has been run with live credentials against the production model
 - **AND** the run output is recorded in the change evidence
 
 #### Scenario: Fixture failures classified
@@ -473,4 +473,3 @@ Bare comma-list or "and"-list adjacency is not a positive ticker signal.
 
 - **WHEN** the user says "compare the 20 day MA and 50 day MA for SPY"
 - **THEN** OpenCandle SHALL NOT treat `MA` as a ticker symbol
-
