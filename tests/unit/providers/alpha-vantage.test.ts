@@ -155,6 +155,7 @@ describe("alpha-vantage provider", () => {
       expect(quote.low).toBe(184.8);
       expect(quote.previousClose).toBe(185.0);
       expect(quote.volume).toBe(54321000);
+      expect(quote.asOf).toBe("2026-04-03T00:00:00.000Z");
     });
 
     it("sets zero/null for fields not in GLOBAL_QUOTE", async () => {

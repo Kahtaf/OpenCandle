@@ -6,6 +6,7 @@ import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
+import weekendStaleQuoteFixture from "../../fixtures/yahoo/weekend-stale-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 describe("yahoo-finance provider", () => {
@@ -52,6 +53,21 @@ describe("yahoo-finance provider", () => {
       const expectedPercent = (expectedChange / 175.1) * 100;
       expect(quote.change).toBeCloseTo(expectedChange, 2);
       expect(quote.changePercent).toBeCloseTo(expectedPercent, 2);
+    });
+
+    it("maps Yahoo regularMarketTime to provider asOf without changing fetch timestamp", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(weekendStaleQuoteFixture),
+      });
+
+      const before = Date.now();
+      const quote = await getQuote("WEEKEND");
+      const after = Date.now();
+
+      expect(quote.asOf).toBe("2024-03-22T20:00:00.000Z");
+      expect(quote.timestamp).toBeGreaterThanOrEqual(before);
+      expect(quote.timestamp).toBeLessThanOrEqual(after);
     });
 
     it("uses cache on second call", async () => {

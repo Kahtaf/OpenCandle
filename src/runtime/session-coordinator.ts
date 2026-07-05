@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { isAnalystSplit, parseAnalystOutput, parseDebateOutput } from "../analysts/contracts.js";
 import { buildAnalystVoteTallyBlock } from "../analysts/orchestrator.js";
+import type { FreshnessStamp } from "../infra/freshness.js";
 import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
@@ -779,11 +780,13 @@ function toolEvidenceRecord(input: {
   isError: boolean;
 }): EvidenceRecord {
   const serializedResult = serialize(input.result);
+  const freshness = extractFreshness(input.result);
   return {
     label: `tool:${input.tool}`,
     value: {
       tool: input.tool,
       args: truncate(serialize(input.args), 500),
+      ...(freshness ? { freshness } : {}),
       resultDigest: {
         preview: truncate(serializedResult, 500),
         totalLength: serializedResult.length,
@@ -793,7 +796,7 @@ function toolEvidenceRecord(input: {
     },
     provenance: {
       source: "computed",
-      timestamp: input.completedAt,
+      timestamp: freshness?.providerDataAt ?? freshness?.fetchedAt ?? input.completedAt,
       provider: input.tool,
       confidence: input.isError ? 0.5 : undefined,
     },
@@ -815,6 +818,24 @@ function serialize(value: unknown): string {
 
 function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? value.slice(0, maxLength) : value;
+}
+
+function extractFreshness(value: unknown): FreshnessStamp | undefined {
+  const record = isPlainObject(value) ? value : {};
+  const direct = record.freshness;
+  if (isFreshnessStamp(direct)) return direct;
+  const details = isPlainObject(record.details) ? record.details : {};
+  return isFreshnessStamp(details.freshness) ? details.freshness : undefined;
+}
+
+function isFreshnessStamp(value: unknown): value is FreshnessStamp {
+  const record = isPlainObject(value) ? value : {};
+  return (
+    typeof record.fetchedAt === "string" &&
+    typeof record.cacheStatus === "string" &&
+    typeof record.marketSession === "string" &&
+    typeof record.isStaleForSession === "boolean"
+  );
 }
 
 function formatToolDefaultsForPrompt(): string[] {

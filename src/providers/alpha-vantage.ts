@@ -234,6 +234,7 @@ export async function getGlobalQuote(symbol: string, apiKey: string): Promise<St
       week52High: 0, // Not available from GLOBAL_QUOTE
       week52Low: 0, // Not available from GLOBAL_QUOTE
       timestamp: Date.now(),
+      asOf: dateOnlyToIso(gq["07. latest trading day"]),
     };
 
     cache.set(cacheKey, result, TTL.QUOTE);
@@ -244,6 +245,11 @@ export async function getGlobalQuote(symbol: string, apiKey: string): Promise<St
     if (stale) return stale.value;
     throw error;
   }
+}
+
+function dateOnlyToIso(value: string | undefined): string | undefined {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return `${value}T00:00:00.000Z`;
 }
 
 export async function getDailyHistory(

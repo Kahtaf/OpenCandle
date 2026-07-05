@@ -117,6 +117,7 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       week52High: meta.fiftyTwoWeekHigh ?? 0,
       week52Low: meta.fiftyTwoWeekLow ?? 0,
       timestamp: Date.now(),
+      asOf: yahooMarketTimeToIso(meta.regularMarketTime),
       currency:
         typeof meta.currency === "string" && meta.currency.trim() !== ""
           ? meta.currency.trim().toUpperCase()
@@ -608,6 +609,7 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
     putCallRatio: totalCallVolume > 0 ? totalPutVolume / totalCallVolume : 0,
     quoteStatus,
     fetchedAt: new Date().toISOString(),
+    asOf: yahooMarketTimeToIso(quote.regularMarketTime),
   };
 }
 
@@ -669,4 +671,19 @@ function toYahooUnixSeconds(value: Date | number | string): number {
     return value > 1_000_000_000_000 ? Math.floor(value / 1000) : value;
   }
   return Math.floor(new Date(value).getTime() / 1000);
+}
+
+function yahooMarketTimeToIso(value: unknown): string | undefined {
+  let date: Date | undefined;
+  if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    date = new Date(value < 10_000_000_000 ? value * 1000 : value);
+  } else if (typeof value === "string" && value.trim() !== "") {
+    const numeric = Number(value);
+    date = Number.isFinite(numeric)
+      ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+      : new Date(value);
+  }
+  return date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }

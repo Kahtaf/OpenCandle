@@ -1,5 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { type Static, Type } from "@sinclair/typebox";
+import { buildFreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import type { ScreenerRow, ScreenFilterOp } from "../../providers/tradingview.js";
 import { screenStocks } from "../../providers/tradingview.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
@@ -136,6 +137,11 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
     }
 
     const rows = result.data;
+    const freshness = buildFreshnessStamp({
+      stale: result.stale,
+      cachedAt: result.stale ? result.timestamp : undefined,
+      dataDelayMs: 15 * 60_000,
+    });
     if (rows.length === 0) {
       return {
         content: [
@@ -150,8 +156,9 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
 
     const lines = [
       `**Stock screen** — ${rows.length} TradingView result${rows.length === 1 ? "" : "s"}`,
-      ...(result.stale ? [`⚠ Using cached TradingView screen from ${result.timestamp}.`] : []),
-      `Data freshness: ${result.stale ? `cached screen retrieved at ${result.timestamp}` : `retrieved at ${result.timestamp}`}; TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.`,
+      formatAsOfLine(freshness),
+      rows[0]?.dataCaveat ??
+        "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       formatInterpretationNote(normalized),
       "",
       ...rows.map(formatRow),

@@ -110,19 +110,17 @@ describe("E3 deterministic provider outage cases", () => {
     ]);
   });
 
-  // FINDING(E3-provider-outage): current quote tooling does not expose Yahoo's
-  // weekend-dated quote timestamp in the tool text or details, so a final answer
-  // cannot deterministically disclose stale weekend quote freshness without a
-  // production freshness ledger/tool-output change. Keep this known-fail skipped
-  // until the runtime exposes provider quote as-of timestamps.
-  it.skip("KNOWN-FAIL E3: stale weekend quote timestamps are disclosed and never rendered as fresh live prices", async () => {
+  // FINDING(E3-provider-outage): promoted by freshness-ledger. The fixture now
+  // carries Yahoo's provider market time, so asserting Friday 2024-03-22 is a
+  // strengthening over the old Saturday fetch-day placeholder.
+  it("E3: stale weekend quote timestamps are disclosed and never rendered as fresh live prices", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(makeResponse(weekendStaleQuoteFixture));
 
     const result = await stockQuoteTool.execute("quote-weekend", { symbol: "WEEKEND" });
     const text = textFromToolResult(result);
 
     expect(text).toMatch(/stale|weekend|last available|as of/i);
-    expect(text).toMatch(/2024-03-23|Mar(?:ch)? 23,? 2024/i);
+    expect(text).toMatch(/2024-03-22|Mar(?:ch)? 22,? 2024/i);
     expect(text).not.toContain("$0.00");
   });
 

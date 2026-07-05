@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
+import type { StockQuote } from "../../../src/types/market.js";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
+import weekendStaleQuoteFixture from "../../fixtures/yahoo/weekend-stale-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 describe("get_stock_quote tool", () => {
@@ -35,6 +37,9 @@ describe("get_stock_quote tool", () => {
     expect(text.text).toContain("AAPL");
     expect(text.text).toContain("178.72");
     expect(text.text).toContain("52W Range");
+    expect(text.text.split("\n").at(-1)).toBe(
+      "As of 2026-07-02 16:00 ET (market closed — weekend).",
+    );
   });
 
   it("returns StockQuote in details", async () => {
@@ -46,6 +51,50 @@ describe("get_stock_quote tool", () => {
     const result = await stockQuoteTool.execute("call-2", { symbol: "aapl" });
     expect(result.details.symbol).toBe("AAPL");
     expect(result.details.price).toBe(178.72);
+    expect(result.details.freshness.providerDataAt).toBe("2026-07-02T20:00:00.000Z");
+  });
+
+  it("discloses weekend-stale provider dates without the old cached prefix", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(weekendStaleQuoteFixture),
+    });
+
+    const result = await stockQuoteTool.execute("call-weekend-stale", { symbol: "WEEKEND" });
+    const text = (result.content[0] as any).text;
+
+    expect(text).toMatch(/Last available price as of 2024-03-22/i);
+    expect(text).toContain("This is not a live quote.");
+    expect(text).not.toContain("Using cached quote from");
+  });
+
+  it("uses the shared stale-cache wording instead of the old stale prefix", async () => {
+    const staleQuote: StockQuote = {
+      symbol: "AAPL",
+      price: 171.25,
+      change: 1.5,
+      changePercent: 0.88,
+      open: 170,
+      high: 172,
+      low: 169,
+      previousClose: 169.75,
+      volume: 123_456,
+      marketCap: 2_700_000_000_000,
+      pe: null,
+      week52High: 199,
+      week52Low: 140,
+      timestamp: Date.now(),
+      currency: "USD",
+    };
+    cache.set("yahoo:quote:AAPL", staleQuote, -1);
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("network down"));
+
+    const result = await stockQuoteTool.execute("call-stale-cache", { symbol: "AAPL" });
+    const text = (result.content[0] as any).text;
+
+    expect(text).toContain("Using cached data from");
+    expect(text).not.toContain("Using cached quote from");
+    expect(result.details.freshness.cacheStatus).toBe("stale");
   });
 
   it("uppercases the symbol", async () => {

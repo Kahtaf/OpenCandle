@@ -13,6 +13,7 @@ export interface StockQuote {
   week52High: number;
   week52Low: number;
   timestamp: number;
+  asOf?: string;
   currency?: string | null;
 }
 
@@ -41,4 +42,5 @@ export interface CryptoPrice {
   circulatingSupply: number;
   totalSupply: number | null;
   timestamp: number;
+  asOf?: string;
 }

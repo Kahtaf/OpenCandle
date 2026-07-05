@@ -1,5 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
+import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getOptionsChain } from "../../providers/yahoo-finance.js";
 import type { OptionContract, OptionsChain } from "../../types/options.js";
@@ -22,7 +23,10 @@ const params = Type.Object({
   ),
 });
 
-export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
+export const optionChainTool: AgentTool<
+  typeof params,
+  OptionsChain & { freshness: FreshnessStamp }
+> = {
   name: "get_option_chain",
   label: "Options Chain",
   description:
@@ -43,6 +47,11 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
       };
     }
     const chain = result.data;
+    const freshness = buildFreshnessStamp({
+      asOf: chain.asOf,
+      stale: result.stale,
+      cachedAt: result.stale ? result.timestamp : undefined,
+    });
 
     const lines: string[] = [
       `**${chain.symbol} Options Chain** — Expiry: ${chain.expirationDate}`,
@@ -90,8 +99,12 @@ export const optionChainTool: AgentTool<typeof params, OptionsChain> = {
     }
 
     lines.push(`Put/Call Ratio: ${chain.putCallRatio.toFixed(2)}`);
+    lines.push(formatAsOfLine(freshness));
 
-    return { content: [{ type: "text", text: lines.join("\n") }], details: chain };
+    return {
+      content: [{ type: "text", text: lines.join("\n") }],
+      details: { ...chain, freshness },
+    };
   },
 };
 
