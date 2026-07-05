@@ -41,3 +41,8 @@
 - No deletion of any file.
 - No changes to `openspec/changes/archive/` (OpenSpec has its own archive mechanism).
 - No changes to the git-ignored `docs/internal/pr-evidence/` directory.
+
+## PR Description Notes
+
+- `claude-code-principles-for-opencandle.md` stays in `docs/internal/`: its header describes reusable OpenCandle design guidance for maintainers, not a completed point-in-time exercise.
+- The base `docs-cleanup` capability spec still names `docs/production-plan.md` as a public doc that must remain, but that file no longer exists; fixing the base spec example is out of scope for this archive pass.
