@@ -139,7 +139,7 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
 }
 
 type YahooFundamentalsRow = {
-  date?: Date | string;
+  date?: Date | string | number;
   totalRevenue?: number;
   grossProfit?: number;
   operatingIncome?: number;
@@ -234,8 +234,14 @@ function yahooFundamentalsRowToStatement(row: YahooFundamentalsRow): FinancialSt
   };
 }
 
-function normalizeYahooDate(value: Date | string | undefined): string | null {
+function normalizeYahooDate(value: Date | string | number | undefined): string | null {
   if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    const timestampMs = Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value;
+    const date = new Date(timestampMs);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  }
   if (typeof value !== "string" || value.trim() === "") return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
