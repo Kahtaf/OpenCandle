@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * TUI-harness e2e for the DCF tool: drives a natural DCF prompt through
- * `tests/harness/manual-run.ts` against a live LLM and asserts that:
+ * `tests/harness/cli.ts` against a live LLM and asserts that:
  *   - the trace shows a `compute_dcf` tool call
  *   - the final answer reports an intrinsic value with its assumptions OR an
  *     explicit refusal naming the missing input (never a fabricated
@@ -10,8 +10,8 @@
  * Requires a live LLM credential plus ALPHA_VANTAGE_API_KEY (compute_dcf
  * reads statements from Alpha Vantage). Skips with a notice otherwise.
  */
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,27 +30,94 @@ if (!process.env.ALPHA_VANTAGE_API_KEY) {
 
 interface Trace {
   prompt: string;
-  toolCalls: Array<{ name: string; args: unknown; result?: unknown }>;
-  text?: string;
+  toolSequence: string[];
+  finalText: string;
 }
 
 function runHarness(prompt: string): Trace {
   const ipcDir = mkdtempSync(join(tmpdir(), "oc-harness-dcf-"));
-  try {
-    const result = spawnSync("npx", ["tsx", "tests/harness/manual-run.ts", ipcDir, prompt], {
+  const child = spawn(
+    "npx",
+    ["tsx", "tests/harness/cli.ts", "run", "--prompt", prompt, "--ipc", ipcDir, "--linger", "1"],
+    {
       cwd: process.cwd(),
-      encoding: "utf-8",
-      timeout: 10 * 60 * 1000,
-    });
-    if (result.status !== 0) {
-      throw new Error(
-        `manual-run failed (exit ${result.status}):\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
-      );
-    }
-    return JSON.parse(readFileSync(join(ipcDir, "trace.json"), "utf-8")) as Trace;
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += String(chunk);
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += String(chunk);
+  });
+  try {
+    waitForHarness(ipcDir, [], 10 * 60 * 1000, () => ({ stdout, stderr }));
+    return readTrace(ipcDir);
   } finally {
+    child.kill();
     rmSync(ipcDir, { recursive: true, force: true });
   }
+}
+
+function waitForHarness(
+  ipcDir: string,
+  answers: string[],
+  timeoutMs: number,
+  childOutput: () => { stdout: string; stderr: string },
+): void {
+  const deadline = Date.now() + timeoutMs;
+  let answerIndex = 0;
+  while (Date.now() < deadline) {
+    const waitMs = Math.min(30_000, Math.max(1_000, deadline - Date.now()));
+    const result = spawnSync(
+      "npx",
+      ["tsx", "tests/harness/cli.ts", "wait", "--ipc", ipcDir, "--timeout", String(waitMs)],
+      { cwd: process.cwd(), encoding: "utf-8", timeout: waitMs + 10_000 },
+    );
+    if (result.status === 0) return;
+    if (result.status === 100) {
+      const answer = answers[answerIndex++];
+      if (answer === undefined) {
+        throw new Error(`harness asked a question with no scripted answer: ${result.stdout}`);
+      }
+      const answerResult = spawnSync(
+        "npx",
+        ["tsx", "tests/harness/cli.ts", "answer", "--ipc", ipcDir, "--value", answer],
+        { cwd: process.cwd(), encoding: "utf-8", timeout: 30_000 },
+      );
+      if (answerResult.status !== 0) {
+        throw new Error(
+          `harness answer failed (exit ${answerResult.status}):\nstdout: ${answerResult.stdout}\nstderr: ${answerResult.stderr}`,
+        );
+      }
+      continue;
+    }
+    if (result.status === 2) continue;
+    const output = childOutput();
+    throw new Error(
+      `cli harness failed while waiting (exit ${result.status}):\nwait stdout: ${result.stdout}\nwait stderr: ${result.stderr}\nrun stdout: ${output.stdout}\nrun stderr: ${output.stderr}`,
+    );
+  }
+  const output = childOutput();
+  throw new Error(
+    `cli harness timed out:\nrun stdout: ${output.stdout}\nrun stderr: ${output.stderr}`,
+  );
+}
+
+function readTrace(ipcDir: string): Trace {
+  const result = spawnSync("npx", ["tsx", "tests/harness/cli.ts", "trace", "--ipc", ipcDir], {
+    cwd: process.cwd(),
+    encoding: "utf-8",
+    timeout: 30_000,
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `harness trace failed (exit ${result.status}):\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+  }
+  return JSON.parse(result.stdout) as Trace;
 }
 
 function assert(condition: boolean, message: string): void {
@@ -60,19 +127,18 @@ function assert(condition: boolean, message: string): void {
 console.log("harness-dcf e2e: running 'Run a DCF on AAPL and tell me the intrinsic value'...");
 const trace = runHarness("Run a DCF on AAPL and tell me the intrinsic value");
 
-const toolNames = trace.toolCalls.map((call) => call.name);
 assert(
-  toolNames.includes("compute_dcf"),
-  `expected a compute_dcf tool call in the trace, got: ${toolNames.join(", ") || "(none)"}`,
+  trace.toolSequence.includes("compute_dcf"),
+  `expected a compute_dcf tool call in the trace, got: ${trace.toolSequence.join(", ") || "(none)"}`,
 );
 
-const text = (trace.text ?? "").toLowerCase();
-const reportsValue = /intrinsic value/.test(text) && /\$\s?\d/.test(trace.text ?? "");
+const text = trace.finalText.toLowerCase();
+const reportsValue = /intrinsic value/.test(text) && /\$\s?\d/.test(trace.finalText);
 const explicitRefusal =
   /cannot compute|unavailable|shares outstanding|missing/.test(text) && text.length > 40;
 assert(
   reportsValue || explicitRefusal,
-  `expected an intrinsic value with assumptions or an explicit refusal naming the missing input; got: ${trace.text?.slice(0, 400)}`,
+  `expected an intrinsic value with assumptions or an explicit refusal naming the missing input; got: ${trace.finalText.slice(0, 400)}`,
 );
 
 console.log(

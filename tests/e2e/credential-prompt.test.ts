@@ -41,7 +41,7 @@ process.env.OPENCANDLE_HOME = openCandleHome;
 delete process.env.ALPHA_VANTAGE_API_KEY;
 
 // Pick an LLM provider/model based on available credentials. Matches the
-// defaults used by tests/e2e/cli.test.ts and tests/harness/manual-run.ts.
+// defaults used by tests/e2e/cli.test.ts and tests/harness/cli.ts.
 type LlmChoice = { provider: string; model: string; envVars: string[] };
 const LLM_CANDIDATES: readonly LlmChoice[] = [
   { provider: "google", model: "gemini-2.5-flash", envVars: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
@@ -147,7 +147,7 @@ cache.clear();
 
 // -----------------------------------------------------------------------------
 // STEP 6: Drive the analyze flow and accumulate output with a settle-based
-// termination strategy (mirrors tests/harness/manual-run.ts).
+// termination strategy (mirrors tests/harness/cli.ts).
 //
 // "analyze NVDA" is a multi-turn workflow: the orchestrator queues several
 // follow-up messages after the initial prompt, so we can't just listen for a

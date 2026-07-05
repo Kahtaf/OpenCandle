@@ -4,7 +4,6 @@ Harnesses for driving OpenCandle as a simulated user and producing structured tr
 
 - `tests/harness/opencandle-runner.ts` is the shared in-process runner used by evals and competitive benchmarking. It returns both the rich `AgentTrace` and the flattened `EvalTrace` consumed by scorers.
 - `tests/harness/cli.ts` is the file-based IPC harness for an external agent or GUI flow that needs to wait for `ask_user`, answer, and continue.
-- `tests/harness/manual-run.ts` is the older one-shot IPC runner kept for manual compatibility.
 
 ## Quick Start
 
@@ -38,16 +37,6 @@ const { evalTrace, agentTrace } = await runOpenCandleSession({
   prompt: "Build me a portfolio",
   scriptedAnswers: ["Growth", "Moderate", "10000"],
 });
-```
-
-### Legacy Programmatic (manual-run.ts)
-
-```bash
-# Basic run with IPC
-npx tsx tests/harness/manual-run.ts /tmp/ipc "Build me a portfolio"
-
-# With pre-scripted answers (no IPC polling needed)
-npx tsx tests/harness/manual-run.ts /tmp/ipc "Build me a portfolio" '["Growth","Moderate","10000"]'
 ```
 
 ## CLI Reference
@@ -107,7 +96,7 @@ interface AgentTrace {
 
 ### `customEntries`
 
-`opencandle-runner.ts` and `manual-run.ts` drain every session entry whose `type === "custom"` and
+`opencandle-runner.ts` and `cli.ts` drain every session entry whose `type === "custom"` and
 `customType` starts with `opencandle-` into `trace.json.customEntries` after
 the agent has settled, preserving append order. These entries are appended
 by the OpenCandle Pi extension via `pi.appendEntry(...)` and are **not**

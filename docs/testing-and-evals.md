@@ -68,24 +68,49 @@ Only run these when live network/API behavior is part of the validation goal.
 OpenCandle separates deterministic tests from opt-in evals because evals may depend on model credentials, live data, local agent CLIs, or longer-running traces.
 
 ```bash
+npm run eval
+npm run eval -- <suite> [options]
+npm run eval -- release
+```
+
+`npm run eval` lists the available suites and the env flags the front door can set. Before each run, the front door prints the delegated command plus the env flags it resolved, then appends a JSONL record to `tests/evals/runs/index.jsonl` after completion.
+
+| Suite | Delegates to | Key options |
+|-------|--------------|-------------|
+| `cases` | `vitest run --config vitest.config.evals.ts` | `--tier usually`, `--known-fail e1`, `--known-fail e2` |
+| `product` | `tests/scripts/run-product-evals.ts` | `--case <id>`, `--family <name>`, `--include-opt-in`, `--limit <n>` |
+| `competitive` | `tests/scripts/run-competitive-finance-eval.ts` | `--provider <id>`, `--model <id>`, `--count <n>`, `--seed <seed>` |
+| `competitive:frozen` | `tests/scripts/run-competitive-finance-eval.ts` with `OPENCANDLE_COMPETITIVE_PANEL=frozen` | `--provider <id>`, `--model <id>` |
+| `competitive:analyze` | `tests/scripts/analyze-competitive-finance-report.ts` | optional report path |
+| `router-live` | `tests/scripts/run-live-router-eval.ts` | `--provider <id>`, `--model <id>` |
+| `replay:product` | `tests/scripts/run-main-branch-product-replay.ts` | `--base-ref <ref>` |
+| `replay:competitive` | `tests/scripts/run-main-branch-competitive-replay.ts` | forwards `--current-report`, `--base-report`, `--unsupported-base-reason`, `--current-ref`, `--base-ref` |
+| `scorecard` | `tests/scripts/build-oc-superiority-scorecard.ts` | forwards `--product-replay`, `--competitive-replay`, `--prompt-policy` |
+| `prompt-policy` | `tests/scripts/run-prompt-policy-manifest.ts` | `--ids <csv>`, `--limit <n>`, `--strict` |
+| `prompt-policy:parity` | `tests/scripts/run-prompt-policy-ref-parity.ts` | `--base-ref <ref>`, `--current-ref <ref>` |
+| `release` | `router-live`, `cases`, `product`, `competitive:frozen` | continues past failures and exits non-zero if any suite fails |
+
+Legacy npm script names still work and route through the same front door:
+
+```bash
 npm run test:evals
 npm run test:evals:usually
 npm run eval:router-live
 npm run test:evals:product
 npm run test:evals:competitive
 npm run test:evals:competitive:frozen
+npm run eval:competitive:analyze
 ```
 
-| Command | What it runs | When to use it |
-|---------|--------------|----------------|
-| `npm run test:evals` | Vitest eval cases under `tests/evals/cases/**/*.eval.ts` | Deterministic or semi-deterministic scoring cases that should run as a suite. |
-| `npm run test:evals:usually` | Same Vitest eval suite with `EVAL_TIER=usually` | The common eval tier when you want the usual subset rather than every case. |
-| `npm run eval:router-live` | `tests/scripts/run-live-router-eval.ts` against request-understanding fixtures with a live model | Opt-in task-selection quality check. Requires live model credentials and compares live output to fixture expectations. |
-| `npm run test:evals:product` | `tests/scripts/run-product-evals.ts` | Full-session product evals over curated finance prompts, using the OpenCandle harness and rubric-style dimensions. |
-| `npm run test:evals:competitive` | `tests/scripts/run-competitive-finance-eval.ts` | Competitive finance benchmark against generic no-tool Claude, Codex, and Gemini baselines. See [Competitive Benchmarking](#competitive-benchmarking). |
-| `npm run test:evals:competitive:frozen` | `tests/scripts/run-competitive-finance-eval.ts` with `OPENCANDLE_COMPETITIVE_PANEL=frozen` | Per-release frozen competitive panel over historical loss classes, using exact prompt text and cached competitor baselines when available. Not part of per-PR CI. |
+For release preparation, run the full manual eval cadence:
 
-Eval reports are written under `tests/evals/runs/` when a runner produces a JSON report. Treat those run files as local evidence, not committed documentation.
+```bash
+npm run eval -- release
+```
+
+This gate is deliberately not part of `release:check` or CI because it requires live credentials and can run external agent baselines.
+
+Eval reports are written under `tests/evals/runs/` when a runner produces a JSON report. The front-door index at `tests/evals/runs/index.jsonl` records suite id, timestamps, exit code, argv, and report paths. Treat those run files as local evidence, not committed documentation.
 
 ## Product Evals
 
@@ -104,7 +129,7 @@ Prompt families currently include:
 Run all product evals:
 
 ```bash
-npm run test:evals:product
+npm run eval -- product
 ```
 
 Useful environment variables:
@@ -116,7 +141,7 @@ Useful environment variables:
 Example:
 
 ```bash
-PRODUCT_EVAL_FAMILY=options PRODUCT_EVAL_LIMIT=1 npm run test:evals:product
+npm run eval -- product --family options --limit 1
 ```
 
 Each run writes a timestamped `*_product-evals.json` report under `tests/evals/runs/`.
@@ -128,7 +153,7 @@ The competitive benchmark answers a product question: when does a finance-native
 Expect live model/API usage and multi-minute runs. OpenCandle needs model credentials for its own run. Claude, Codex, and Gemini baselines run as generic no-tool agents through `acpx`, an [Agent Client Protocol](https://agentclientprotocol.com) runner bundled in the repo; unavailable baselines are recorded as skipped unless `OPENCANDLE_COMPETITIVE_REQUIRE_ALL=1`.
 
 ```bash
-npm run test:evals:competitive
+npm run eval -- competitive
 ```
 
 The runner generates (or accepts) finance prompts, runs each through OpenCandle and the baselines, judges usefulness, correctness, evidence, clarity, and uncertainty handling with a configured judge model, and writes a timestamped `*_competitive-finance.json` report under `tests/evals/runs/`.
@@ -136,7 +161,7 @@ The runner generates (or accepts) finance prompts, runs each through OpenCandle 
 For release preparation, rerun the frozen competitive panel:
 
 ```bash
-npm run test:evals:competitive:frozen
+npm run eval -- competitive:frozen
 ```
 
 The frozen panel keeps generated prompt discovery separate from regression tracking. It covers portfolio-review-not-builder, requested DTE preservation, protective-put-not-bullish-call, unknown-ticker-no-dead-end, and hedge sizing with share count. Its hard assertions live in `docs/internal/prompt-to-policy-migration-manifest.json` so benchmark literals stay out of production prompts.
@@ -148,6 +173,7 @@ Useful knobs (all optional):
 - `OPENCANDLE_COMPETITIVE_PROMPT` (with `_ID`, `_TOPIC`, `_COMPLEXITY`, `_FOCUS`): pin one fixed prompt instead of generating.
 - `OPENCANDLE_COMPETITIVE_PROVIDER` / `OPENCANDLE_COMPETITIVE_MODEL`: judge and prompt-generation model. Defaults prefer configured Google auth with `gemini-2.5-flash`, then the first configured model.
 - `OPENCANDLE_COMPETITIVE_ACPX_COMMAND` and per-baseline `*_AGENT_COMMAND` / `*_MODEL` overrides, timeouts, and `OPENCANDLE_COMPETITIVE_PREFLIGHT=0` to skip baseline smoke calls.
+- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: legacy-named settle window used by the competitive eval runner when it calls the shared OpenCandle harness. The old manual-run harness is gone; this env var remains only to avoid renaming an established benchmark knob.
 
 Do not commit raw transcripts or one-off run reports; treat run files as local evidence.
 
@@ -208,7 +234,7 @@ Use them when changing:
 The live fixture eval is opt-in:
 
 ```bash
-npm run eval:router-live
+npm run eval -- router-live
 ```
 
 It uses `OPENCANDLE_ROUTER_PROVIDER` and `OPENCANDLE_ROUTER_MODEL` when set. Defaults are `anthropic` and `claude-haiku-4-5`, so it requires matching live model credentials unless you override those env vars.

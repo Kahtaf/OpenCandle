@@ -5,6 +5,7 @@
 ### Added
 
 - Added a release-runnable frozen competitive adversarial panel for historical loss classes, with a `test:evals:competitive:frozen` command, cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
+- Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, aliases for the legacy eval npm scripts, and a local JSONL run index under `tests/evals/runs/`.
 - Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
 - Added opt-in known-fail E2 saved market-state fidelity eval coverage for seeded portfolio rate-exposure and SPY cost-basis prompts, including trace assertions for saved-state route context, portfolio-review routing, and fixture value reuse.
 - Added a live, usually-tier E1 multi-turn coreference eval for prior-turn ticker carryover and saved-portfolio holding references, currently marked known-fail/opt-in with committed trace evidence for the saved-state AMD resolution gap.
