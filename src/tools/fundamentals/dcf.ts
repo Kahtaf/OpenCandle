@@ -4,7 +4,7 @@ import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getFinancials, getOverview } from "../../providers/alpha-vantage.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
-import { getQuote } from "../../providers/yahoo-finance.js";
+import { getQuote, getYahooFinancials } from "../../providers/yahoo-finance.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 export interface DCFResult {
@@ -196,21 +196,28 @@ export const dcfTool: AgentTool<typeof params> = {
     return withCredentialCheck("alpha_vantage", async () => {
       const symbol = args.symbol.toUpperCase();
       const config = getConfig();
+      const alphaVantageApiKey = config.alphaVantageApiKey;
+      if (!alphaVantageApiKey) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "⚠ DCF valuation unavailable: Alpha Vantage API key is required for financial statement access.",
+            },
+          ],
+          details: null,
+        };
+      }
 
-      const [overviewResult, financialsResult, quoteResult] = await Promise.all([
-        wrapProvider("alphavantage", () => getOverview(symbol, config.alphaVantageApiKey!)),
-        wrapProvider("alphavantage", () => getFinancials(symbol, config.alphaVantageApiKey!)),
+      const [alphaVantageFinancialsResult, quoteResult] = await Promise.all([
+        wrapProvider("alphavantage", () => getFinancials(symbol, alphaVantageApiKey)),
         wrapProvider("yahoo", () => getQuote(symbol)),
       ]);
 
       const missing: string[] = [];
-      if (overviewResult.status === "unavailable")
-        missing.push(`company overview (${overviewResult.reason})`);
-      if (financialsResult.status === "unavailable")
-        missing.push(`financial statements (${financialsResult.reason})`);
       if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
 
-      if (financialsResult.status === "unavailable" || quoteResult.status === "unavailable") {
+      if (quoteResult.status === "unavailable") {
         return {
           content: [
             {
@@ -222,9 +229,27 @@ export const dcfTool: AgentTool<typeof params> = {
         };
       }
 
-      const overview = overviewResult.status === "ok" ? overviewResult.data : null;
-      const financials = financialsResult.data;
       const quote = quoteResult.data;
+      let financialsSource = "Alpha Vantage";
+      let financials: FinancialStatement[];
+      if (alphaVantageFinancialsResult.status === "ok") {
+        financials = alphaVantageFinancialsResult.data;
+      } else {
+        const yahooFinancialsResult = await wrapProvider("yahoo", () => getYahooFinancials(symbol));
+        if (yahooFinancialsResult.status === "unavailable") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `⚠ DCF valuation unavailable for ${symbol}. Missing: financial statements (Alpha Vantage: ${alphaVantageFinancialsResult.reason}; Yahoo Finance: ${yahooFinancialsResult.reason}). Both financials and current price are required.`,
+              },
+            ],
+            details: null,
+          };
+        }
+        financials = yahooFinancialsResult.data;
+        financialsSource = "Yahoo Finance";
+      }
 
       const latestFCF = financials[0]?.freeCashFlow ?? 0;
       if (latestFCF <= 0) {
@@ -263,27 +288,36 @@ export const dcfTool: AgentTool<typeof params> = {
       }
 
       const years = args.projection_years ?? 5;
-      // Prefer the overview market cap; fall back to the quote's market cap.
-      // Never substitute a placeholder share count — a fabricated
-      // per-share value is worse than an honest refusal.
-      const marketCap =
-        overview?.marketCap && overview.marketCap > 0
-          ? overview.marketCap
-          : quote.marketCap > 0
-            ? quote.marketCap
-            : 0;
-      if (quote.price <= 0 || marketCap <= 0) {
+      // Prefer an actual reported share count, then derive from market cap
+      // only when needed. Never substitute a placeholder share count.
+      const statementSharesOutstanding = financials[0]?.sharesOutstanding;
+      let marketCap = quote.marketCap > 0 ? quote.marketCap : 0;
+      let sharesOutstanding =
+        statementSharesOutstanding && statementSharesOutstanding > 0
+          ? statementSharesOutstanding
+          : 0;
+      if (sharesOutstanding <= 0 && marketCap <= 0) {
+        const overviewResult = await wrapProvider("alphavantage", () =>
+          getOverview(symbol, alphaVantageApiKey),
+        );
+        if (overviewResult.status === "ok" && overviewResult.data.marketCap > 0) {
+          marketCap = overviewResult.data.marketCap;
+        }
+      }
+      if (sharesOutstanding <= 0 && quote.price > 0 && marketCap > 0) {
+        sharesOutstanding = marketCap / quote.price;
+      }
+      if (sharesOutstanding <= 0) {
         return {
           content: [
             {
               type: "text",
-              text: `⚠ Cannot compute a per-share DCF for ${symbol}: shares outstanding cannot be derived because ${quote.price <= 0 ? "the current quote price is unavailable" : "market capitalization is unavailable from the overview and quote providers"}. Per-share intrinsic value requires a real share count.`,
+              text: `⚠ Cannot compute a per-share DCF for ${symbol}: shares outstanding are unavailable from financial statements and cannot be derived because ${quote.price <= 0 ? "the current quote price is unavailable" : "market capitalization is unavailable from the overview and quote providers"}. Per-share intrinsic value requires a real share count.`,
             },
           ],
           details: null,
         };
       }
-      const sharesOutstanding = marketCap / quote.price;
       // Signed on purpose: net cash (negative net debt) adds to equity value.
       // Omit the adjustment if debt/cash fields are missing; assets minus
       // liabilities is book equity, not a net-cash proxy.
@@ -317,6 +351,7 @@ export const dcfTool: AgentTool<typeof params> = {
         `Upside/Downside: ${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(1)}%`,
         ``,
         `**Assumptions**`,
+        `Financial statements source: ${financialsSource}`,
         `Free Cash Flow: $${(latestFCF / 1e9).toFixed(2)}B`,
         `Growth Rate: ${(growthRate * 100).toFixed(1)}%`,
         `Discount Rate (WACC): ${(discountRate * 100).toFixed(1)}%`,

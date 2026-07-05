@@ -220,9 +220,10 @@ npm run test:watch
 npm run test:e2e
 npm run test:e2e:cli
 npm run test:e2e:providers
-npm run test:evals
-npm run test:evals:product
-npm run test:evals:competitive
+npm run eval
+npm run eval -- cases
+npm run eval -- product
+npm run eval -- competitive
 ```
 
 Baseline check:
@@ -231,7 +232,7 @@ Baseline check:
 npm test
 ```
 
-The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. Run them intentionally; see [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html).
+The e2e, provider, and eval commands can hit live APIs, live model providers, or local agent CLIs. `npm run eval` lists every eval suite; run suites through `npm run eval -- <suite>`. Run them intentionally; see [Testing and Evals](https://opencandle.app/docs/testing-and-evals.html).
 
 Repository rules that matter:
 

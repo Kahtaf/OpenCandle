@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getFinancials, getOverview } from "../../../src/providers/alpha-vantage.js";
-import { getQuote } from "../../../src/providers/yahoo-finance.js";
+import { getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finance.js";
 import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 
@@ -25,6 +25,7 @@ vi.mock("../../../src/providers/alpha-vantage.js", () => ({
 }));
 vi.mock("../../../src/providers/yahoo-finance.js", () => ({
   getQuote: vi.fn(),
+  getYahooFinancials: vi.fn(),
 }));
 
 describe("computeDCF", () => {
@@ -207,7 +208,43 @@ describe("compute_dcf tool guards", () => {
 
   beforeEach(() => {
     vi.mocked(getFinancials).mockResolvedValue([statement]);
+    vi.mocked(getYahooFinancials).mockRejectedValue(new Error("Yahoo financials unavailable"));
     vi.mocked(getQuote).mockResolvedValue(quote);
+  });
+
+  it("uses Yahoo quote market cap and skips Alpha Vantage overview when deriving shares", async () => {
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(getOverview).not.toHaveBeenCalled();
+    expect(result.content[0].text).toContain("Intrinsic Value:");
+    expect(result.details).not.toBeNull();
+  });
+
+  it("falls back to Yahoo financial statements when Alpha Vantage financials are unavailable", async () => {
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
+    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.content[0].text).toContain("Intrinsic Value:");
+    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
+    expect(result.details).not.toBeNull();
+  });
+
+  it("uses financial statement shares when market cap is unavailable", async () => {
+    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
+    vi.mocked(getYahooFinancials).mockResolvedValue([
+      { ...statement, sharesOutstanding: 15_000_000_000 },
+    ]);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(getOverview).not.toHaveBeenCalled();
+    expect(result.content[0].text).toContain("Intrinsic Value:");
+    expect(result.details).not.toBeNull();
   });
 
   it("refuses per-share output when shares outstanding cannot be derived", async () => {

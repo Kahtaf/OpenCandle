@@ -40,7 +40,7 @@ Set `OPENCANDLE_COMPETITIVE_SEED_STATE=1` to benchmark personalization. The runn
 
 ## How It Works
 
-`npm run test:evals:competitive` runs `tests/scripts/run-competitive-finance-eval.ts`.
+`npm run eval -- competitive` runs `tests/scripts/run-competitive-finance-eval.ts`. This front door is the only supported competitive eval route.
 
 The runner:
 
@@ -57,7 +57,7 @@ Reports are ignored by git. Commit reusable code and benchmark design, not one-o
 Generated competitive prompts remain the discovery tool. Release preparation should also rerun the frozen historical-loss panel:
 
 ```bash
-npm run test:evals:competitive:frozen
+npm run eval -- competitive:frozen
 ```
 
 This sets `OPENCANDLE_COMPETITIVE_PANEL=frozen` and reuses the competitive runner's exact-prompt cache for Claude, Codex, and Gemini baselines when previous reports contain matching answers. The panel covers portfolio-review-not-builder, requested 1-2 week DTE preservation, protective-put-not-bullish-call, unknown-ticker-no-dead-end, and hedge sizing with share count. The deterministic hard assertions for these prompts live in `docs/internal/prompt-to-policy-migration-manifest.json`; do not copy those literals into production prompt guidance.
@@ -81,7 +81,7 @@ Do not paste full agent transcripts into the history file. Keep it readable enou
 ## Configuration
 
 ```bash
-npm run test:evals:competitive
+npm run eval -- competitive
 ```
 
 Useful environment variables:
@@ -98,22 +98,24 @@ Useful environment variables:
 - `OPENCANDLE_COMPETITIVE_MODEL`: model id for prompt generation and judging. Defaults to `gemini-2.5-flash` when using configured Google auth; otherwise uses the first configured model.
 - Claude baseline runs through `acpx --agent <repo-local claude-agent-acp> exec`.
 - Codex baseline runs through the `acpx codex exec` built-in.
-- Gemini baseline runs through `acpx --agent "gemini --acp --skip-trust" exec`.
+- Gemini baseline prefers direct Google API mode when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is available, avoiding the retired consumer Gemini CLI ACP path.
 - `OPENCANDLE_COMPETITIVE_ACPX_COMMAND`: optional acpx command override. Defaults to the repo-local `node_modules/.bin/acpx`.
 - `OPENCANDLE_COMPETITIVE_CLAUDE_AGENT_COMMAND`: optional Claude ACP adapter override. Defaults to the repo-local `node_modules/.bin/claude-agent-acp`.
 - `OPENCANDLE_COMPETITIVE_CODEX_AGENT_COMMAND`: optional Codex ACP adapter override. Defaults to the acpx `codex` built-in.
-- `OPENCANDLE_COMPETITIVE_GEMINI_AGENT_COMMAND`: optional Gemini ACP adapter override. Defaults to `gemini --acp --skip-trust`.
-- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.3-codex-spark[medium]`.
+- `OPENCANDLE_COMPETITIVE_GEMINI_AGENT`: set to `api` to force direct Google API mode or `acpx` to force the legacy Gemini CLI ACP path. Defaults to API mode when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is present, otherwise ACP.
+- `OPENCANDLE_COMPETITIVE_GEMINI_MODEL`: Gemini API baseline model. Defaults to `gemini-2.5-flash`.
+- `OPENCANDLE_COMPETITIVE_GEMINI_AGENT_COMMAND`: optional Gemini ACP adapter override when using `OPENCANDLE_COMPETITIVE_GEMINI_AGENT=acpx`. Defaults to `gemini --acp --skip-trust`.
+- `OPENCANDLE_COMPETITIVE_CODEX_MODEL`: Codex ACP baseline model. Defaults to `gpt-5.3-codex-spark`.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_SECONDS`: acpx timeout in seconds for each baseline call. Defaults to `900`.
 - `OPENCANDLE_COMPETITIVE_AGENT_TIMEOUT_MS`: process timeout in milliseconds for each baseline call. Defaults to `900000`.
 - `OPENCANDLE_COMPETITIVE_PREFLIGHT`: set to `0` to skip one-time baseline smoke calls before running OpenCandle. Defaults to enabled so auth failures happen early.
 - `OPENCANDLE_COMPETITIVE_REQUIRE_ALL`: set to `1` to fail when any baseline fails preflight. By default, unavailable local baselines are recorded under `skippedCompetitors` and the loop continues with the available agents.
-- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: settle window for OpenCandle traces. Defaults to `90000` in this loop.
+- `OPENCANDLE_MANUAL_RUN_SETTLE_GRACE_MS`: legacy-named settle window for OpenCandle traces. The old manual-run harness is gone; this env var remains to avoid renaming an established benchmark knob. Defaults to `90000` in this loop.
 - `OPENCANDLE_ROUTER_MODE`: defaults to `rules`; set `llm` to benchmark the LLM router while its live acceptance gate remains incomplete.
 
-`acpx` requires its ACP adapter binaries to be available on PATH or passed through `--agent`. The repo carries `acpx`, `@agentclientprotocol/codex-acp`, and `@agentclientprotocol/claude-agent-acp` as dev dependencies so `npm run test:evals:competitive` can use the structured ACP path instead of raw CLI/PTTY scraping. Gemini uses the local `gemini --acp --skip-trust` command with `GEMINI_CLI_TRUST_WORKSPACE=true`.
+`acpx` requires its ACP adapter binaries to be available on PATH or passed through `--agent`. The repo carries `acpx`, `@agentclientprotocol/codex-acp`, and `@agentclientprotocol/claude-agent-acp` as dev dependencies so `npm run eval -- competitive` can use the structured ACP path instead of raw CLI/PTTY scraping. The Gemini baseline does not require `acpx` when API mode is selected. If forced to ACP mode, it uses the local `gemini --acp --skip-trust` command with `GEMINI_CLI_TRUST_WORKSPACE=true`.
 
-The runner uses `--agent` for Claude and Gemini instead of relying only on acpx built-ins because acpx's project config is resolved against the benchmark agent cwd, which is an isolated temp directory. This also lets us pin or override adapter commands per provider without changing global `~/.acpx/config.json`.
+The runner uses `--agent` for Claude and for Gemini only when Gemini is forced to ACP mode instead of relying only on acpx built-ins because acpx's project config is resolved against the benchmark agent cwd, which is an isolated temp directory. This also lets us pin or override adapter commands per provider without changing global `~/.acpx/config.json`.
 
 ## Reading Results
 
@@ -182,5 +184,5 @@ OPENCANDLE_COMPETITIVE_PROMPT_TOPIC=macro \
 OPENCANDLE_COMPETITIVE_PROMPT_COMPLEXITY=complex \
 OPENCANDLE_COMPETITIVE_PROMPT_FOCUS="Check whether OpenCandle improved macro synthesis after the prompt fix." \
 OPENCANDLE_COMPETITIVE_PROMPT="As of today, May 17, 2026, analyze the current macroeconomic environment..." \
-npm run test:evals:competitive
+npm run eval -- competitive
 ```

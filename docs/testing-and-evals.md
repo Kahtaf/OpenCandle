@@ -53,9 +53,10 @@ npm run test:e2e:credential-prompt
 npm run test:e2e:credential-snooze
 npm run test:e2e:credential-soft-fallback
 npm run test:e2e:credential-per-workflow-cap
+npm run test:e2e:harness-dcf
 ```
 
-`npm run test:e2e` intentionally hits live APIs through focused tool checks. The provider matrix is broader and also live:
+`npm run test:e2e` intentionally hits live APIs through focused tool checks. `npm run test:e2e:harness-dcf` drives a natural DCF prompt through the IPC harness and requires a final intrinsic-value answer rather than accepting an explicit refusal. The provider matrix is broader and also live:
 
 ```bash
 npm run test:e2e:providers
@@ -73,7 +74,7 @@ npm run eval -- <suite> [options]
 npm run eval -- release
 ```
 
-`npm run eval` lists the available suites and the env flags the front door can set. Before each run, the front door prints the delegated command plus the env flags it resolved, then appends a JSONL record to `tests/evals/runs/index.jsonl` after completion.
+`npm run eval` lists the available suites and the env flags the front door can set. Before each run, the front door prints the delegated command plus the env flags it resolved, then appends a JSONL record to `tests/evals/runs/index.jsonl` after completion. Legacy `test:evals*` and `eval:*` npm aliases are intentionally not supported; use `npm run eval -- <suite>` for every eval suite.
 
 | Suite | Delegates to | Key options |
 |-------|--------------|-------------|
@@ -89,18 +90,6 @@ npm run eval -- release
 | `prompt-policy` | `tests/scripts/run-prompt-policy-manifest.ts` | `--ids <csv>`, `--limit <n>`, `--strict` |
 | `prompt-policy:parity` | `tests/scripts/run-prompt-policy-ref-parity.ts` | `--base-ref <ref>`, `--current-ref <ref>` |
 | `release` | `router-live`, `cases`, `product`, `competitive:frozen` | continues past failures and exits non-zero if any suite fails |
-
-Legacy npm script names still work and route through the same front door:
-
-```bash
-npm run test:evals
-npm run test:evals:usually
-npm run eval:router-live
-npm run test:evals:product
-npm run test:evals:competitive
-npm run test:evals:competitive:frozen
-npm run eval:competitive:analyze
-```
 
 For release preparation, run the full manual eval cadence:
 

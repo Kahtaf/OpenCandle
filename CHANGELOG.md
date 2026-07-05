@@ -4,8 +4,8 @@
 
 ### Added
 
-- Added a release-runnable frozen competitive adversarial panel for historical loss classes, with a `test:evals:competitive:frozen` command, cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
-- Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, aliases for the legacy eval npm scripts, and a local JSONL run index under `tests/evals/runs/`.
+- Added a release-runnable frozen competitive adversarial panel for historical loss classes, runnable through `npm run eval -- competitive:frozen`, cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
+- Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, and a local JSONL run index under `tests/evals/runs/`.
 - Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
 - Added opt-in known-fail E2 saved market-state fidelity eval coverage for seeded portfolio rate-exposure and SPY cost-basis prompts, including trace assertions for saved-state route context, portfolio-review routing, and fixture value reuse.
 - Added a live, usually-tier E1 multi-turn coreference eval for prior-turn ticker carryover and saved-portfolio holding references, currently marked known-fail/opt-in with committed trace evidence for the saved-state AMD resolution gap.
@@ -16,6 +16,7 @@
 
 ### Changed
 
+- Removed legacy eval npm routes (`test:evals*`, `eval:router-live`, `eval:competitive:analyze`, and `eval:release`); `npm run eval -- <suite>` is now the only supported eval command surface.
 - Expanded the deterministic router fixture corpus with archived task 4.7 coverage for prior-context comparisons, general-QA follow-up shifts, preference echoes that must not write preferences, and historical misclassification recovery cases.
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and confirms drafting stays available while sending is blocked until model setup is ready. (An earlier revision of the smoke had disabled the whole composer during first-run setup, reverting the shipped 0.11.0 draft-while-setup behavior; the behavior and its assertions are restored.)
 - Harness sessions now support sequential `prompts` with per-prompt trace boundaries while preserving single-`prompt` behavior, and the IPC harness can `send` follow-up prompts into an existing session. The `run` command now exits after a bounded follow-up window (default 120s, `--linger` to override) instead of polling forever, cleaning up its session and any self-created temp home; trace files are written atomically so a concurrent `trace` read never observes truncated JSON; follow-up prompts get analysis-aware timeouts instead of inheriting the first prompt's; and `send` fails fast when the run process is no longer alive.
@@ -30,6 +31,9 @@
 - The competitive Codex baseline default model id is now `gpt-5.3-codex-spark`, matching what the current codex ACP agent advertises; the old reasoning-suffixed `gpt-5.3-codex-spark[medium]` id was rejected at preflight ("did not advertise that model"), silently skipping the Codex baseline. `OPENCANDLE_COMPETITIVE_CODEX_MODEL` still overrides.
 - The competitive eval script now resolves the judge/OpenCandle model from provider env keys (for example `GEMINI_API_KEY` in `.env`) when Pi AuthStorage has no stored credential, by seeding the env key as a runtime AuthStorage override; previously the run aborted with "No API key available" before any baseline ran because Pi's ModelRegistry skips env-key fallback. Production auth paths are unchanged.
 - The frozen competitive eval script no longer crashes with a `completeSimple` ReferenceError at the first judge call (after a live OpenCandle session had already run); a unit-level typecheck guard now catches eval-script type errors that `tsc --noEmit` misses because tests are excluded from the repo typecheck.
+- The DCF harness eval now requires a final intrinsic-value answer instead of accepting explicit refusal as success; `compute_dcf` can fall back from Alpha Vantage statement throttling to Yahoo Finance financial statements and reported share counts.
+- The DCF Yahoo fallback now accepts raw epoch-second fiscal dates from `yahoo-finance2` fundamentals rows, so the fallback does not drop every financial statement when Alpha Vantage statements are throttled.
+- The competitive Gemini baseline now prefers direct Google API mode when `GEMINI_API_KEY` or `GOOGLE_API_KEY` is configured, avoiding the retired consumer Gemini CLI ACP path. Set `OPENCANDLE_COMPETITIVE_GEMINI_AGENT=acpx` to force the legacy ACP command.
 - `/analyze` comprehensive-analysis runs now emit the same `opencandle-workflow` session entry as router-dispatched workflows, so the GUI dashboard can track active analyses and move completed research into recent research.
 - Committed PR runtime-evidence artifacts (traces, logs, screenshots, eval dumps — ~26 MB across 170+ files, including pre-existing website-redesign screenshot sets) were pruned from the repo; `docs/internal/pr-evidence/` is now git-ignored, evidence stays machine-local with load-bearing excerpts pasted into PR descriptions, and the two durable decision records (the Gemini router triage table and the PR 85 open-items list) moved to `docs/internal/` as markdown.
 - The live GUI/TUI parity eval now passes end to end and asserts truthful contracts: identical `opencandle-*` entry-type sets across both surfaces (excluding run-conditional provider-gap entries), session-addressed snapshot reads, and the projector's actual completed-run state.
@@ -311,7 +315,7 @@
 - **General finance context** — broad finance questions receive tool-first guidance and missing-slot handling even when they do not use a named workflow.
 - **Shared Assumptions-block renderer** — `buildAssumptionsBlockFromRouter` converts request slots to the canonical provenance-labeled block (`User-specified` / `From saved preferences` / `Defaults`), consistent across workflow and general finance routes.
 - **Request-turn observability** — each request-understanding output is persisted as an `opencandle-router` session entry; dropped low/medium-confidence preference extractions are logged as `opencandle-router-prefs-dropped`.
-- **Request-understanding eval infrastructure** — 12 deterministic fixtures in `tests/fixtures/router/` (expected output recorded for CI), plus `npm run eval:router-live` for opt-in live verification against the real model. CI gates on 100% deterministic pass-rate.
+- **Request-understanding eval infrastructure** — 12 deterministic fixtures in `tests/fixtures/router/` (expected output recorded for CI), plus `npm run eval -- router-live` for opt-in live verification against the real model. CI gates on 100% deterministic pass-rate.
 
 ### Changed
 

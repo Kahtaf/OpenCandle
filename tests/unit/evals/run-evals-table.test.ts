@@ -11,6 +11,20 @@ import {
 } from "../../scripts/run-evals-table.js";
 
 describe("eval front door dispatch table", () => {
+  it("keeps npm eval scripts limited to the promoted front door", () => {
+    const packageJson = JSON.parse(readFileSync("package.json", "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(
+      Object.keys(packageJson.scripts ?? {}).filter((name) => name.startsWith("eval:")),
+    ).toEqual([]);
+    expect(
+      Object.keys(packageJson.scripts ?? {}).filter((name) => name.startsWith("test:evals")),
+    ).toEqual([]);
+    expect(packageJson.scripts?.eval).toBe("tsx tests/scripts/run-evals.ts");
+  });
+
   it("lists every suite from the consolidation design", () => {
     expect(listEvalSuites().map((suite) => suite.id)).toEqual([
       "cases",

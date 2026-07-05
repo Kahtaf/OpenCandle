@@ -2,12 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { InvalidSymbolError } from "../../../src/providers/errors.js";
-import { getHistory, getQuote } from "../../../src/providers/yahoo-finance.js";
+import { getHistory, getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import weekendStaleQuoteFixture from "../../fixtures/yahoo/weekend-stale-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
+
+const yahooFinanceMock = vi.hoisted(() => ({
+  fundamentalsTimeSeries: vi.fn(),
+}));
+
+vi.mock("yahoo-finance2", () => ({
+  default: vi.fn(function YahooFinance() {
+    return { fundamentalsTimeSeries: yahooFinanceMock.fundamentalsTimeSeries };
+  }),
+}));
 
 describe("yahoo-finance provider", () => {
   const originalFetch = globalThis.fetch;
@@ -15,6 +25,7 @@ describe("yahoo-finance provider", () => {
   beforeEach(() => {
     cache.clear();
     rateLimiter.configure("yahoo", 1000, 1000);
+    yahooFinanceMock.fundamentalsTimeSeries.mockReset();
   });
 
   afterEach(() => {
@@ -211,6 +222,36 @@ describe("yahoo-finance provider", () => {
       await getHistory("AAPL", "6mo", "1d");
       await getHistory("AAPL", "6mo", "1d");
       expect(fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("getYahooFinancials", () => {
+    it("accepts epoch-second dates from raw Yahoo fundamentals rows", async () => {
+      yahooFinanceMock.fundamentalsTimeSeries.mockResolvedValue([
+        {
+          date: Date.UTC(2024, 5, 30) / 1000,
+          totalRevenue: 391_035_000_000,
+          grossProfit: 180_683_000_000,
+          operatingIncome: 123_216_000_000,
+          netIncome: 93_736_000_000,
+          freeCashFlow: 108_807_000_000,
+          ordinarySharesNumber: 15_343_783_000,
+        },
+      ]);
+
+      const statements = await getYahooFinancials("aapl");
+
+      expect(statements).toMatchObject([
+        {
+          fiscalDate: "2024-06-30",
+          revenue: 391_035_000_000,
+          grossProfit: 180_683_000_000,
+          operatingIncome: 123_216_000_000,
+          netIncome: 93_736_000_000,
+          freeCashFlow: 108_807_000_000,
+          sharesOutstanding: 15_343_783_000,
+        },
+      ]);
     });
   });
 });

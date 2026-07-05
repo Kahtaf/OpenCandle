@@ -112,7 +112,7 @@ describe("main branch product replay comparison", () => {
     });
     const base = unsupportedProductReplayRun(
       "origin/main",
-      "package.json does not define test:evals:product",
+      "package.json does not define the eval front door",
     );
 
     const comparison = buildProductReplayComparison({ current, base });
@@ -121,7 +121,7 @@ describe("main branch product replay comparison", () => {
     expect(comparison.aggregateDelta).toBeUndefined();
     expect(comparison.passDelta).toBeUndefined();
     expect(comparison.caseChanges).toEqual([]);
-    expect(comparison.unsupportedReason).toBe("package.json does not define test:evals:product");
+    expect(comparison.unsupportedReason).toBe("package.json does not define the eval front door");
   });
 
   it("writes comparison reports under tests/evals/runs and discovers latest product reports", () => {

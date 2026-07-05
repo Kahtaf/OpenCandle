@@ -4,6 +4,7 @@ import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { computeGreeks } from "../tools/options/greeks.js";
+import type { FinancialStatement } from "../types/fundamentals.js";
 import type { OHLCV, StockQuote } from "../types/market.js";
 import type {
   OptionContract,
@@ -135,6 +136,115 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     if (stale) return stale.value;
     throw error;
   }
+}
+
+type YahooFundamentalsRow = {
+  date?: Date | string | number;
+  totalRevenue?: number;
+  grossProfit?: number;
+  operatingIncome?: number;
+  netIncome?: number;
+  netIncomeCommonStockholders?: number;
+  basicEPS?: number;
+  dilutedEPS?: number;
+  totalAssets?: number;
+  totalLiabilitiesNetMinorityInterest?: number;
+  totalLiabilities?: number;
+  stockholdersEquity?: number;
+  commonStockEquity?: number;
+  cashFlowFromContinuingOperatingActivities?: number;
+  operatingCashFlow?: number;
+  freeCashFlow?: number;
+  capitalExpenditure?: number;
+  capitalExpenditures?: number;
+  totalDebt?: number;
+  cashAndCashEquivalents?: number;
+  ordinarySharesNumber?: number;
+  shareIssued?: number;
+  dilutedAverageShares?: number;
+  basicAverageShares?: number;
+};
+
+export async function getYahooFinancials(symbol: string): Promise<FinancialStatement[]> {
+  const normalizedSymbol = symbol.toUpperCase();
+  const cacheKey = `yahoo:financials:${normalizedSymbol}`;
+  const cached = cache.get<FinancialStatement[]>(cacheKey);
+  if (cached) return cached;
+
+  await rateLimiter.acquire("yahoo");
+
+  const period1 = new Date();
+  period1.setUTCFullYear(period1.getUTCFullYear() - 6);
+  const rows = (await getYahooFinance2Client().fundamentalsTimeSeries(
+    normalizedSymbol,
+    {
+      period1,
+      period2: new Date(),
+      type: "annual",
+      module: "all",
+    },
+    { validateResult: false },
+  )) as YahooFundamentalsRow[];
+
+  const statements = rows
+    .map((row) => yahooFundamentalsRowToStatement(row))
+    .filter((statement): statement is FinancialStatement => statement !== null)
+    .sort((a, b) => b.fiscalDate.localeCompare(a.fiscalDate))
+    .slice(0, 4);
+
+  if (statements.length === 0) {
+    throw new Error(`Yahoo Finance: no financial statements returned for ${normalizedSymbol}`);
+  }
+
+  cache.set(cacheKey, statements, TTL.FUNDAMENTALS);
+  return statements;
+}
+
+function yahooFundamentalsRowToStatement(row: YahooFundamentalsRow): FinancialStatement | null {
+  const fiscalDate = normalizeYahooDate(row.date);
+  if (!fiscalDate) return null;
+
+  const operatingCashFlow =
+    row.cashFlowFromContinuingOperatingActivities ?? row.operatingCashFlow ?? 0;
+  const freeCashFlow =
+    row.freeCashFlow ??
+    (operatingCashFlow !== 0
+      ? operatingCashFlow + (row.capitalExpenditure ?? row.capitalExpenditures ?? 0)
+      : 0);
+
+  return {
+    fiscalDate,
+    revenue: row.totalRevenue ?? 0,
+    grossProfit: row.grossProfit ?? 0,
+    operatingIncome: row.operatingIncome ?? 0,
+    netIncome: row.netIncome ?? row.netIncomeCommonStockholders ?? 0,
+    eps: row.dilutedEPS ?? row.basicEPS ?? 0,
+    totalAssets: row.totalAssets ?? 0,
+    totalLiabilities: row.totalLiabilitiesNetMinorityInterest ?? row.totalLiabilities ?? 0,
+    totalEquity: row.stockholdersEquity ?? row.commonStockEquity ?? 0,
+    operatingCashFlow,
+    freeCashFlow,
+    totalDebt: row.totalDebt,
+    cashAndEquivalents: row.cashAndCashEquivalents,
+    sharesOutstanding:
+      row.ordinarySharesNumber ??
+      row.shareIssued ??
+      row.dilutedAverageShares ??
+      row.basicAverageShares,
+  };
+}
+
+function normalizeYahooDate(value: Date | string | number | undefined): string | null {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    const timestampMs = Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value;
+    const date = new Date(timestampMs);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  }
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
 
 function isZeroResultQuote(quote: StockQuote): boolean {

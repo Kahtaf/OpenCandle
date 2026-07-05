@@ -32,7 +32,7 @@ try {
     linkInstallArtifacts(cwd, baseWorktree);
     baseRun = productEvalSupported(baseWorktree)
       ? runProductEval(baseWorktree, baseRef)
-      : unsupportedProductReplayRun(baseRef, "package.json does not define test:evals:product");
+      : unsupportedProductReplayRun(baseRef, "package.json does not define the eval front door");
   }
 } finally {
   rmSync(baseWorktree, { recursive: true, force: true });
@@ -58,7 +58,7 @@ console.log(`Report: ${outputPath}`);
 
 function runProductEval(workdir: string, ref: string) {
   const before = findLatestProductEvalReport(workdir);
-  const result = run("npm", ["run", "test:evals:product"], workdir, "inherit", {
+  const result = run("npm", ["run", "eval", "--", "product"], workdir, "inherit", {
     timeoutMs: productReplayTimeoutMs,
   });
   if (result.timedOut) {
@@ -84,7 +84,7 @@ function productEvalSupported(workdir: string): boolean {
   const packageJson = JSON.parse(readFileSync(packagePath, "utf-8")) as {
     scripts?: Record<string, string>;
   };
-  return typeof packageJson.scripts?.["test:evals:product"] === "string";
+  return typeof packageJson.scripts?.eval === "string";
 }
 
 function linkInstallArtifacts(source: string, target: string): void {

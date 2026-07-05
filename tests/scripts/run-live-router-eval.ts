@@ -7,7 +7,7 @@
  * it as the labeled answer for diffing).
  *
  * NOT part of CI. Not wired into `npm test` or `npm run test:e2e`.
- * Invoke via `npm run eval:router-live`.
+ * Invoke via `npm run eval -- router-live`.
  *
  * Requires live credentials for the configured pi-ai model (ANTHROPIC_API_KEY
  * or similar). Uses the OPENCANDLE_ROUTER_MODEL env var if set, otherwise

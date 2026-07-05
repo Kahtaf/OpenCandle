@@ -703,6 +703,25 @@ export function selectCompetitiveCodexModel(env: Record<string, string | undefin
   return env.OPENCANDLE_COMPETITIVE_CODEX_MODEL ?? "gpt-5.3-codex-spark";
 }
 
+export function selectCompetitiveGeminiBaseline(env: Record<string, string | undefined>): {
+  mode: "api" | "acpx";
+  provider: string;
+  model: string;
+} {
+  if (env.OPENCANDLE_COMPETITIVE_GEMINI_AGENT === "acpx") {
+    return { mode: "acpx", provider: "acpx/gemini", model: "subscription" };
+  }
+  const model = env.OPENCANDLE_COMPETITIVE_GEMINI_MODEL ?? "gemini-2.5-flash";
+  if (
+    env.OPENCANDLE_COMPETITIVE_GEMINI_AGENT === "api" ||
+    env.GEMINI_API_KEY ||
+    env.GOOGLE_API_KEY
+  ) {
+    return { mode: "api", provider: "google", model };
+  }
+  return { mode: "acpx", provider: "acpx/gemini", model: "subscription" };
+}
+
 export function shouldRetryCompetitiveModelCall(
   message: string,
   attempt: number,
