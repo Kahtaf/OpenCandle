@@ -53,9 +53,10 @@ npm run test:e2e:credential-prompt
 npm run test:e2e:credential-snooze
 npm run test:e2e:credential-soft-fallback
 npm run test:e2e:credential-per-workflow-cap
+npm run test:e2e:harness-dcf
 ```
 
-`npm run test:e2e` intentionally hits live APIs through focused tool checks. The provider matrix is broader and also live:
+`npm run test:e2e` intentionally hits live APIs through focused tool checks. `npm run test:e2e:harness-dcf` drives a natural DCF prompt through the IPC harness and requires a final intrinsic-value answer rather than accepting an explicit refusal. The provider matrix is broader and also live:
 
 ```bash
 npm run test:e2e:providers

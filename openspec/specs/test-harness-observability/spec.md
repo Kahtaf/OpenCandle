@@ -1,7 +1,7 @@
 # test-harness-observability Specification
 
 ## Purpose
-Define how the manual-run harness records OpenCandle custom session entries in trace output so router, workflow, disclaimer, and soft-degradation events are auditable after a run.
+Define how harness runners record OpenCandle custom session entries in trace output so router, workflow, disclaimer, and soft-degradation events are auditable after a run.
 ## Requirements
 ### Requirement: Captured Entry Shape
 

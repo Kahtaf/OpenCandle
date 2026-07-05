@@ -1,7 +1,7 @@
 # eval-operations Specification
 
 ## Purpose
-TBD - created by archiving change eval-entrypoint-consolidation. Update Purpose after archive.
+Define the repository's eval front door, release eval cadence, and local run indexing so eval, benchmark, replay, scorecard, and prompt-policy suites are discoverable and runnable through one consistent command surface.
 ## Requirements
 ### Requirement: Single eval front door
 
@@ -40,4 +40,3 @@ Every front-door run SHALL append one JSON line to `tests/evals/runs/index.jsonl
 
 - **WHEN** any suite completes through the front door
 - **THEN** the last line of `tests/evals/runs/index.jsonl` names that suite and its report path(s)
-
