@@ -3,12 +3,10 @@
  * TUI-harness e2e for the DCF tool: drives a natural DCF prompt through
  * `tests/harness/cli.ts` against a live LLM and asserts that:
  *   - the trace shows a `compute_dcf` tool call
- *   - the final answer reports an intrinsic value with its assumptions OR an
- *     explicit refusal naming the missing input (never a fabricated
- *     per-share value)
+ *   - the final answer reports an intrinsic value with its assumptions
  *
- * Requires a live LLM credential plus ALPHA_VANTAGE_API_KEY (compute_dcf
- * reads statements from Alpha Vantage). Skips with a notice otherwise.
+ * Requires a live LLM credential plus ALPHA_VANTAGE_API_KEY. The DCF tool
+ * prefers Alpha Vantage statements and falls back to Yahoo Finance statements.
  */
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -134,14 +132,10 @@ assert(
 
 const text = trace.finalText.toLowerCase();
 const reportsValue = /intrinsic value/.test(text) && /\$\s?\d/.test(trace.finalText);
-const explicitRefusal =
-  /cannot compute|unavailable|shares outstanding|missing/.test(text) && text.length > 40;
 assert(
-  reportsValue || explicitRefusal,
-  `expected an intrinsic value with assumptions or an explicit refusal naming the missing input; got: ${trace.finalText.slice(0, 400)}`,
+  reportsValue,
+  `expected an intrinsic value with assumptions; got: ${trace.finalText.slice(0, 400)}`,
 );
 
-console.log(
-  `  ✓ compute_dcf called; final answer ${reportsValue ? "reports intrinsic value" : "refuses explicitly"}`,
-);
+console.log("  ✓ compute_dcf called; final answer reports intrinsic value");
 console.log("harness-dcf e2e passed.");

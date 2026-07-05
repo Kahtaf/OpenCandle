@@ -43,4 +43,5 @@ export interface FinancialStatement {
   freeCashFlow: number;
   totalDebt?: number;
   cashAndEquivalents?: number;
+  sharesOutstanding?: number;
 }
