@@ -18,7 +18,7 @@ import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
-import { attachmentsForRequest } from "./attachments.js";
+import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
 import { EntityPopover } from "./entity-popover.jsx";
 import { StepsCard } from "./steps-card.jsx";
@@ -182,7 +182,10 @@ export function ChatPanel({
     setDraft("");
     const attachments = pendingAttachments;
     setPendingAttachmentState({ sessionId, attachments: [] });
-    void startChatRun(prompt, attachmentsForRequest(attachments));
+    void startChatRun(prompt, {
+      ...attachmentsForRequest(attachments),
+      optimisticAttachments: attachmentsForOptimisticMessage(attachments),
+    });
   };
 
   const addAttachment = useCallback(

@@ -85,13 +85,18 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           ? { attachments: options.attachments }
           : {}),
       };
+      const optimisticAttachments = Array.isArray(options.optimisticAttachments)
+        ? options.optimisticAttachments
+        : [];
       setLastRuns((current) => ({
         ...current,
         [key]: { prompt: trimmed, sessionId: targetSessionId, actionId, ...runExtras },
       }));
       setRunStateFor(key, "connecting");
       setToast("");
-      onRunStart?.(trimmed, options.baseEventCount, targetSessionId);
+      onRunStart?.(trimmed, options.baseEventCount, targetSessionId, {
+        attachments: optimisticAttachments,
+      });
       const abort = new AbortController();
       abortsRef.current.set(key, abort);
 

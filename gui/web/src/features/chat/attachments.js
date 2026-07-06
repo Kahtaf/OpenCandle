@@ -67,6 +67,15 @@ export function attachmentsForRequest(attachments) {
   };
 }
 
+export function attachmentsForOptimisticMessage(attachments) {
+  return Array.from(attachments ?? [])
+    .map((attachment) => ({
+      kind: String(attachment?.kind || ""),
+      label: attachmentLabel(attachment),
+    }))
+    .filter((attachment) => attachment.kind);
+}
+
 async function readFileAsBase64(file) {
   if (typeof file.arrayBuffer === "function") {
     const buffer = await file.arrayBuffer();

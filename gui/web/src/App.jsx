@@ -44,7 +44,7 @@ export function AppShell() {
     activeSessionId,
     setToast: gui.setToast,
     onRunStart: useCallback(
-      (prompt, baseEventCount, sessionId) => {
+      (prompt, baseEventCount, sessionId, optimistic = {}) => {
         const key = sessionId || activeSessionId;
         if (!key) return;
         const targetSnapshot = gui.sessionSnapshots[key];
@@ -54,7 +54,9 @@ export function AppShell() {
         }));
         setLiveEventsBySession((current) => ({
           ...current,
-          [key]: createOptimisticUserMessageEvents(prompt, key),
+          [key]: createOptimisticUserMessageEvents(prompt, key, {
+            attachments: optimistic.attachments,
+          }),
         }));
       },
       [activeSessionId, gui.sessionSnapshots, visibleEventCount],

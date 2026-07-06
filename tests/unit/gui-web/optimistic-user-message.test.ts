@@ -44,6 +44,19 @@ describe("optimistic GUI user messages", () => {
     expect(chatRowsFromEvents(optimistic, persisted)).toHaveLength(1);
   });
 
+  it("deduplicates attachment sends once the persisted server message arrives", () => {
+    const attachments = [{ kind: "image", label: "chart.png" }];
+    const optimistic = createOptimisticUserMessageEvents("is this bearish?", "session-a", {
+      attachments,
+    });
+    const persisted = persistedUserEvents("persisted-user", "is this bearish?", attachments);
+
+    const rows = chatRowsFromEvents(optimistic, persisted);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ attachments });
+  });
+
   it("keeps repeated user prompts when their attachments differ", () => {
     const first = persistedUserEvents("first-user", "is this bullish or bearish?", [
       { kind: "image", label: "image/png #1" },

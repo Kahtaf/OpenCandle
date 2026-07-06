@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   attachmentLabel,
+  attachmentsForOptimisticMessage,
   attachmentsForRequest,
   attachmentsFromImageFiles,
   imageFilesFromClipboardData,
@@ -41,6 +42,18 @@ describe("GUI chat attachments", () => {
     expect(attachmentLabel({ kind: "portfolio" })).toBe("Portfolio");
     expect(attachmentLabel({ kind: "report" })).toBe("Latest report");
     expect(attachmentLabel({ kind: "image", name: "chart.webp" })).toBe("chart.webp");
+  });
+
+  it("builds optimistic message attachment chips without image bytes", () => {
+    expect(
+      attachmentsForOptimisticMessage([
+        { kind: "image", name: "chart.png", data: "base64", mimeType: "image/png" },
+        { kind: "watchlist", id: "7", label: "Watchlist 7" },
+      ]),
+    ).toEqual([
+      { kind: "image", label: "chart.png" },
+      { kind: "watchlist", label: "Watchlist 7" },
+    ]);
   });
 
   it("extracts image files from clipboard items without treating pasted text as an attachment", () => {
