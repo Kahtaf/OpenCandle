@@ -250,6 +250,67 @@ describe("projectDashboard", () => {
     expect(state.dataQuality.softGaps.map((gap) => gap.provider)).toEqual(["fred", "brave"]);
   });
 
+  it("projects the latest routed turn with slot sources, validation, and attachments", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-user-input", {
+        original: "am I too concentrated?",
+        attachments: [{ kind: "portfolio", label: "Portfolio" }],
+      }),
+      customEntry("opencandle-route-context", {
+        routeKind: "workflow",
+        workflow: "portfolio_builder",
+        entities: { symbols: ["AAPL", "MSFT"] },
+        slots: {
+          symbols: { value: ["AAPL", "MSFT"], source: "user" },
+          timeHorizon: { value: "1y", source: "default" },
+        },
+        priorTurns: [{ role: "user" }, { role: "assistant" }],
+        savedStateIncluded: true,
+      }),
+      customEntry("opencandle-validation", {
+        passed: false,
+        mismatches: [{ claim: "price" }, { claim: "ratio" }],
+      }),
+    ]);
+
+    expect(state.lastTurn).toEqual({
+      routeKind: "workflow",
+      workflow: "portfolio_builder",
+      symbols: ["AAPL", "MSFT"],
+      slotSources: { user: 1, default: 1 },
+      priorTurnCount: 2,
+      savedStateIncluded: true,
+      attachmentCount: 1,
+      validation: { passed: false, mismatchCount: 2 },
+    });
+  });
+
+  it("resets validation when a newer route context has no validation", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-route-context", {
+        routeKind: "workflow",
+        workflow: "single_asset_analysis",
+        entities: { symbols: ["NVDA"] },
+        slots: {},
+        priorTurns: [],
+      }),
+      customEntry("opencandle-validation", { passed: true, mismatches: [] }),
+      customEntry("opencandle-route-context", {
+        routeKind: "agent_task",
+        entities: { symbols: ["TSLA"] },
+        slots: {},
+        priorTurns: [],
+      }),
+    ]);
+
+    expect(state.lastTurn).toEqual({
+      routeKind: "agent_task",
+      symbols: ["TSLA"],
+      slotSources: {},
+      priorTurnCount: 0,
+    });
+  });
+
   it("projects Reddit external-tool-required results into data quality", () => {
     const state = projectDashboard([
       messageEntry({

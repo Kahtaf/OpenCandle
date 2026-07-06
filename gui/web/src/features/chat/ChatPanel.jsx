@@ -17,6 +17,7 @@ import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
+import { attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
@@ -50,6 +51,10 @@ export function ChatPanel({
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
+  const [pendingAttachmentState, setPendingAttachmentState] = useState({
+    sessionId,
+    attachments: [],
+  });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
@@ -108,6 +113,8 @@ export function ChatPanel({
   const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
   const canStopRun = runState === "connecting" || runState === "streaming";
+  const pendingAttachments =
+    pendingAttachmentState.sessionId === sessionId ? pendingAttachmentState.attachments : [];
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
@@ -119,8 +126,34 @@ export function ChatPanel({
     if (chatDisabled) return;
     setAllowToolAutoOpen(true);
     setDraft("");
-    void startChatRun(prompt);
+    const attachments = pendingAttachments;
+    setPendingAttachmentState({ sessionId, attachments: [] });
+    void startChatRun(prompt, attachmentsForRequest(attachments));
   };
+
+  const addAttachment = useCallback(
+    (attachment) => {
+      setPendingAttachmentState((current) => ({
+        sessionId,
+        attachments:
+          current.sessionId === sessionId ? [...current.attachments, attachment] : [attachment],
+      }));
+    },
+    [sessionId],
+  );
+
+  const removeAttachment = useCallback(
+    (index) => {
+      setPendingAttachmentState((current) => ({
+        sessionId,
+        attachments:
+          current.sessionId === sessionId
+            ? current.attachments.filter((_, itemIndex) => itemIndex !== index)
+            : [],
+      }));
+    },
+    [sessionId],
+  );
 
   const stop = () => {
     if (!canStopRun) return;
@@ -211,6 +244,9 @@ export function ChatPanel({
         role={role}
         send={send}
         setToast={setToast}
+        pendingAttachments={pendingAttachments}
+        onAddAttachment={addAttachment}
+        onRemoveAttachment={removeAttachment}
       />
     </section>
   );
@@ -618,7 +654,8 @@ function MessageRowContent({ entry, catalog, autoOpenToolRun = false }) {
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;
   }
-  if (entry.type === "user_message") return <UserMessage content={entry.content} />;
+  if (entry.type === "user_message")
+    return <UserMessage content={entry.content} attachments={entry.attachments} />;
   if (entry.type === "tool_result")
     return <ToolResultCard message={entry.message} catalog={catalog} />;
   if (entry.type === "assistant_message") return <AssistantMessage content={entry.content} />;

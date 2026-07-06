@@ -28,6 +28,7 @@ export function chatRowsFromEvents(events = [], liveEvents = [], defaultSessionI
         messageId: message.id,
         sessionId,
         content: message.content,
+        attachments: message.attachments || [],
       });
       continue;
     }

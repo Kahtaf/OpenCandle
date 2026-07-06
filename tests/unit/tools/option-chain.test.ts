@@ -48,6 +48,9 @@ describe("get_option_chain tool", () => {
   });
 
   it("returns formatted text with strikes, Greeks, and summary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-05T16:00:00.000Z"));
+    rateLimiter.configure("yahoo", 1000, 1000);
     mockCrumbAndOptions();
     const result = await optionChainTool.execute("call-1", { symbol: "AAPL" });
     const text = (result.content[0] as any).text;

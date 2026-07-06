@@ -66,6 +66,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
       message.status = "completed";
       message.content = event.content;
       message.text = contentText(event.content);
+      message.attachments = event.attachments;
       break;
     }
 

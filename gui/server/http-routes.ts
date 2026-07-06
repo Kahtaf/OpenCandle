@@ -3,6 +3,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, resolve } from "node:path";
 import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
 import { buildDoctorReport } from "../../src/doctor/report.js";
+import { MarketStateService } from "../../src/market-state/service.js";
+import {
+  formatLatestReportSummary,
+  formatPortfolioSummary,
+  formatWatchlistSummary,
+} from "../../src/market-state/summaries.js";
+import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import {
   clearPendingSessionAction,
@@ -62,6 +69,28 @@ interface GuiHttpRouteOptions {
   quoteSnapshotStore: QuoteSnapshotStore;
   localSessionCoordinator?: LocalSessionCoordinator;
 }
+
+export interface ChatRunImageInput {
+  data: string;
+  mimeType: string;
+}
+
+export type ChatRunAttachmentInput =
+  | { kind: "portfolio"; id?: string }
+  | { kind: "watchlist"; id: string }
+  | { kind: "report"; id: string };
+
+export interface ParsedChatRunBody {
+  prompt: string;
+  images: ChatRunImageInput[];
+  attachments: ChatRunAttachmentInput[];
+}
+
+type ChatRunParseResult = { ok: true; value: ParsedChatRunBody } | { ok: false; error: string };
+
+const CHAT_RUN_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const CHAT_RUN_MAX_IMAGE_COUNT = 4;
+const CHAT_RUN_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
   const activeRunSessionIds = new Set<string>();
@@ -357,12 +386,11 @@ async function handleSseChatRun(
   allowProxy: boolean,
 ): Promise<void> {
   const body = bodyOverride ?? asRecord(await readJsonBody(req));
-  const prompt = String(asRecord(body).prompt ?? "").trim();
-  if (!prompt) {
-    writeJson(res, { error: "prompt is required" }, 400);
+  const parsed = parseChatRunBody(body);
+  if (!parsed.ok) {
+    writeJson(res, { error: parsed.error }, 400);
     return;
   }
-
   const currentSessionManager = options.getSessionManager();
   const bodyRecord = asRecord(body);
   const requestedSessionId = String(bodyRecord.sessionId ?? "").trim();
@@ -430,7 +458,7 @@ async function handleSseChatRun(
           currentSessionManager,
           runSessionManager,
           sessionId,
-          prompt,
+          parsedRun: parsed.value,
           actionId: action.actionId,
         });
         if (!admitted) throw new SessionActionNotAdmitted();
@@ -458,7 +486,7 @@ async function handleSseChatRun(
     currentSessionManager,
     runSessionManager,
     sessionId,
-    prompt,
+    parsedRun: parsed.value,
     actionId,
   });
 }
@@ -507,7 +535,7 @@ async function streamAcceptedSseChatRun({
   currentSessionManager,
   runSessionManager,
   sessionId,
-  prompt,
+  parsedRun,
   actionId,
 }: {
   res: ServerResponse;
@@ -517,13 +545,30 @@ async function streamAcceptedSseChatRun({
   currentSessionManager: SessionManager;
   runSessionManager: SessionManager;
   sessionId: string;
-  prompt: string;
+  parsedRun: ParsedChatRunBody;
   actionId: string;
 }): Promise<boolean> {
+  const prompt = parsedRun.prompt;
   if (activeRunSessionIds.has(sessionId)) {
     writeJson(res, { error: "Session already has an active run", code: "session_busy" }, 409);
     return false;
   }
+  let dispatchedPrompt: string;
+  try {
+    dispatchedPrompt = await buildDispatchedPrompt(parsedRun);
+  } catch (error) {
+    writeJson(res, { error: error instanceof Error ? error.message : String(error) }, 400);
+    return false;
+  }
+  const promptImages = parsedRun.images.map((image) => ({
+    type: "image" as const,
+    data: image.data,
+    mimeType: image.mimeType,
+  }));
+  const attachmentLabels = parsedRun.attachments.map((attachment) => ({
+    kind: attachment.kind,
+    label: attachmentLabel(attachment),
+  }));
 
   const currentSessionFile = currentSessionManager.getSessionFile();
   const targetSessionFile = runSessionManager.getSessionFile();
@@ -588,6 +633,7 @@ async function streamAcceptedSseChatRun({
     startSeq: seq,
     emit: (event) => writeSse(res, event),
     originalPrompt: prompt,
+    originalAttachments: attachmentLabels,
   });
   const observation = createPromptObservation();
   let actionAccepted = false;
@@ -597,13 +643,20 @@ async function streamAcceptedSseChatRun({
     if (useCurrentSession) options.syncCurrentWriterLockScope?.();
     actionAccepted = true;
   };
+  if (attachmentLabels.length > 0) {
+    runSessionManager.appendCustomEntry("opencandle-user-input", {
+      original: prompt,
+      attachments: attachmentLabels,
+    });
+  }
+
   const unsubscribeLive = runSession.subscribe((event) => {
     liveAdapter.handle(event);
     observePromptEvent(observation, event);
     if (
       !prompt.startsWith("/") &&
       !actionAccepted &&
-      observation.userTexts.some((text) => text.trim() === prompt.trim())
+      observation.userTexts.some((text) => text.trim() === dispatchedPrompt.trim())
     ) {
       recordAcceptedAction();
     }
@@ -625,7 +678,13 @@ async function streamAcceptedSseChatRun({
       });
       await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     } else {
-      await promptAndSettle(runSession, prompt, beforeIds, observation);
+      await promptAndSettle(
+        runSession,
+        dispatchedPrompt,
+        beforeIds,
+        observation,
+        promptImages.length > 0 ? { images: promptImages } : undefined,
+      );
       recordAcceptedAction();
       await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
     }
@@ -806,13 +865,120 @@ export function buildChatRunActionEnvelope(
   sessionId: string,
 ): SessionActionEnvelope {
   const actionId = String(body.actionId ?? "").trim();
+  const parsed = parseChatRunBody(body);
+  const attachments = parsed.ok ? parsed.value.attachments : [];
+  const images = parsed.ok ? parsed.value.images : [];
   return {
     sessionId,
     actionId,
     actionType: "chat.prompt",
-    payload: { prompt: String(body.prompt ?? "") },
+    payload: {
+      prompt: String(body.prompt ?? ""),
+      ...(images.length > 0 ? { imageCount: images.length } : {}),
+      ...(attachments.length > 0
+        ? { attachments: attachments.map((attachment) => ({ kind: attachment.kind })) }
+        : {}),
+    },
     source: "browser",
   };
+}
+
+export function parseChatRunBody(body: unknown): ChatRunParseResult {
+  const record = asRecord(body);
+  const prompt = String(record.prompt ?? "").trim();
+  if (!prompt) return { ok: false, error: "prompt is required" };
+
+  const rawImages = record.images;
+  const images: ChatRunImageInput[] = [];
+  if (rawImages !== undefined) {
+    if (!Array.isArray(rawImages)) return { ok: false, error: "images must be an array" };
+    if (rawImages.length > CHAT_RUN_MAX_IMAGE_COUNT) {
+      return { ok: false, error: "Attach up to 4 images" };
+    }
+    for (const rawImage of rawImages) {
+      const image = asRecord(rawImage);
+      const mimeType = String(image.mimeType ?? "");
+      const data = String(image.data ?? "");
+      if (!CHAT_RUN_IMAGE_MIME_TYPES.has(mimeType)) {
+        return { ok: false, error: "Unsupported image mime type" };
+      }
+      if (Buffer.byteLength(data, "base64") > CHAT_RUN_MAX_IMAGE_BYTES) {
+        return { ok: false, error: "Image attachment must be 5 MB or smaller" };
+      }
+      images.push({ data, mimeType });
+    }
+  }
+
+  const rawAttachments = record.attachments;
+  const attachments: ChatRunAttachmentInput[] = [];
+  if (rawAttachments !== undefined) {
+    if (!Array.isArray(rawAttachments)) {
+      return { ok: false, error: "attachments must be an array" };
+    }
+    for (const rawAttachment of rawAttachments) {
+      const attachment = asRecord(rawAttachment);
+      const kind = String(attachment.kind ?? "");
+      const id = typeof attachment.id === "string" ? attachment.id.trim() : "";
+      if (kind === "portfolio") {
+        attachments.push(id ? { kind, id } : { kind });
+      } else if (kind === "watchlist" || kind === "report") {
+        if (!id) return { ok: false, error: `${kind} attachment id is required` };
+        attachments.push({ kind, id });
+      } else {
+        return { ok: false, error: "Unsupported attachment kind" };
+      }
+    }
+  }
+
+  return { ok: true, value: { prompt, images, attachments } };
+}
+
+export async function buildDispatchedPrompt(parsed: ParsedChatRunBody): Promise<string> {
+  if (parsed.attachments.length === 0) return parsed.prompt;
+  const db = initDefaultDatabase();
+  try {
+    const service = new MarketStateService(db);
+    const blocks = parsed.attachments.map((attachment) => {
+      const lines = attachmentSummaryLines(service, attachment);
+      if (lines.length === 0) throw new Error(`${attachment.kind} attachment was empty`);
+      return `[Attached by user — ${attachment.kind}]\n${lines.join("\n")}`;
+    });
+    return [parsed.prompt, ...blocks].join("\n\n");
+  } finally {
+    db.close();
+  }
+}
+
+function attachmentSummaryLines(
+  service: MarketStateService,
+  attachment: ChatRunAttachmentInput,
+): string[] {
+  if (attachment.kind === "portfolio") {
+    const portfolioId = attachment.id ? Number(attachment.id) : undefined;
+    if (attachment.id && !Number.isFinite(portfolioId)) {
+      throw new Error("Unknown portfolio attachment");
+    }
+    return formatPortfolioSummary(service.listPortfolioLots(portfolioId));
+  }
+  if (attachment.kind === "watchlist") {
+    const watchlistId =
+      attachment.id === "default" ? service.getDefaultWatchlist().id : Number(attachment.id);
+    if (!Number.isFinite(watchlistId)) throw new Error("Unknown watchlist attachment");
+    return formatWatchlistSummary(service.listWatchlistItems(watchlistId));
+  }
+  const reports = service.listReportRuns();
+  const report =
+    attachment.id === "latest"
+      ? reports[0]
+      : reports.find((candidate) => candidate.id === Number(attachment.id));
+  if (!report) throw new Error("Unknown report attachment");
+  return formatLatestReportSummary(report);
+}
+
+function attachmentLabel(attachment: ChatRunAttachmentInput): string {
+  if (attachment.kind === "portfolio") return "Portfolio";
+  if (attachment.kind === "watchlist") return "Watchlist";
+  return "Latest report";
 }
 
 function hasClientActionId(body: Record<string, unknown>): boolean {

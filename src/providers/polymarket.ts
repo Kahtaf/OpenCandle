@@ -1,0 +1,192 @@
+import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
+import { httpGet } from "../infra/http-client.js";
+import { rateLimiter } from "../infra/rate-limiter.js";
+import type { PredictionMarketQuote } from "../types/prediction-markets.js";
+
+const BASE_URL = "https://gamma-api.polymarket.com";
+const POLYMARKET_URL = "https://polymarket.com";
+
+interface GammaSearchResponse {
+  events?: GammaEvent[];
+  markets?: GammaMarket[];
+}
+
+interface GammaEvent {
+  id?: string | number;
+  slug?: string;
+  title?: string;
+  description?: string;
+  resolutionSource?: string;
+  endDate?: string;
+  volume?: unknown;
+  liquidity?: unknown;
+  markets?: GammaMarket[];
+}
+
+interface GammaMarket {
+  id?: string | number;
+  question?: string;
+  slug?: string;
+  description?: string;
+  resolutionSource?: string;
+  outcomes?: unknown;
+  outcomePrices?: unknown;
+  volume?: unknown;
+  volumeNum?: unknown;
+  liquidity?: unknown;
+  liquidityNum?: unknown;
+  endDate?: string;
+  endDateIso?: string;
+  updatedAt?: string;
+}
+
+interface MarketWithEvent {
+  event?: GammaEvent;
+  market: GammaMarket;
+}
+
+export async function searchPredictionMarkets(
+  query: string,
+  limit: number = 8,
+): Promise<PredictionMarketQuote[]> {
+  const normalizedQuery = query.trim();
+  const normalizedLimit = normalizeLimit(limit);
+  if (!normalizedQuery) return [];
+
+  const cacheKey = `polymarket:search:${normalizedQuery.toLowerCase()}:${normalizedLimit}`;
+  const cached = cache.get<PredictionMarketQuote[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("polymarket");
+    const url = `${BASE_URL}/public-search?q=${encodeURIComponent(normalizedQuery)}&limit=${normalizedLimit}`;
+    const response = await httpGet<GammaSearchResponse>(url, {
+      headers: { Accept: "application/json" },
+      maxRetries: 0,
+    });
+    const quotes = decodeSearchResponse(response).slice(0, normalizedLimit);
+    cache.set(cacheKey, quotes, TTL.PREDICTION_MARKETS);
+    return quotes;
+  } catch (error) {
+    const stale = cache.getStale<PredictionMarketQuote[]>(cacheKey, STALE_LIMIT.PREDICTION_MARKETS);
+    if (stale) return stale.value;
+    throw error;
+  }
+}
+
+function decodeSearchResponse(response: GammaSearchResponse): PredictionMarketQuote[] {
+  const markets: MarketWithEvent[] = [
+    ...(response.events ?? []).flatMap((event) =>
+      (event.markets ?? []).map((market) => ({ event, market })),
+    ),
+    ...(response.markets ?? []).map((market) => ({ market })),
+  ];
+  return markets.flatMap(({ event, market }) => marketToQuotes(market, event));
+}
+
+function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMarketQuote[] {
+  const marketId = market.id === undefined ? undefined : String(market.id);
+  const title = stringValue(market.question) ?? stringValue(event?.title);
+  if (!marketId || !title) return [];
+
+  const outcomes = parseStringArray(market.outcomes);
+  const prices = parseNumberArray(market.outcomePrices);
+  if (outcomes.length === 0 || prices.length === 0) return [];
+
+  const resolutionCriteria = firstNonEmpty(market.description, market.resolutionSource);
+  const volumeUsd =
+    numberValue(market.volumeNum) ?? numberValue(market.volume) ?? numberValue(event?.volume);
+  const liquidityUsd =
+    numberValue(market.liquidityNum) ??
+    numberValue(market.liquidity) ??
+    numberValue(event?.liquidity);
+  const closeDate =
+    stringValue(market.endDate) ?? normalizeDateOnly(market.endDateIso ?? event?.endDate);
+  const url = marketUrl(market, event);
+  const asOf = new Date().toISOString();
+
+  return outcomes.flatMap((outcome, index) => {
+    const probability = prices[index];
+    if (probability === undefined) return [];
+    return [
+      {
+        source: "polymarket" as const,
+        marketId,
+        title,
+        outcome,
+        probability,
+        ...(volumeUsd !== undefined && { volumeUsd }),
+        ...(liquidityUsd !== undefined && { liquidityUsd }),
+        ...(closeDate && { closeDate }),
+        ...(resolutionCriteria && { resolutionCriteria }),
+        url,
+        asOf,
+      },
+    ];
+  });
+}
+
+function normalizeLimit(limit: number): number {
+  if (!Number.isFinite(limit)) return 8;
+  return Math.min(50, Math.max(1, Math.floor(limit)));
+}
+
+function parseStringArray(value: unknown): string[] {
+  const parsed = parseJsonArray(value);
+  return parsed.flatMap((item) => {
+    const text = stringValue(item);
+    return text ? [text] : [];
+  });
+}
+
+function parseNumberArray(value: unknown): number[] {
+  const parsed = parseJsonArray(value);
+  return parsed.flatMap((item) => {
+    const number = numberValue(item);
+    return number === undefined ? [] : [number];
+  });
+}
+
+function parseJsonArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function numberValue(value: unknown): number | undefined {
+  const number =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function firstNonEmpty(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    const text = stringValue(value);
+    if (text) return text;
+  }
+  return undefined;
+}
+
+function normalizeDateOnly(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value;
+}
+
+function marketUrl(market: GammaMarket, event?: GammaEvent): string {
+  const marketSlug = stringValue(market.slug);
+  const eventSlug = stringValue(event?.slug);
+  if (eventSlug && marketSlug) return `${POLYMARKET_URL}/event/${eventSlug}/${marketSlug}`;
+  if (marketSlug) return `${POLYMARKET_URL}/event/${marketSlug}`;
+  return POLYMARKET_URL;
+}

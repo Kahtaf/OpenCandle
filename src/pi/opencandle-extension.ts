@@ -65,6 +65,10 @@ export interface OpenCandleExtensionOptions {
   titleCompletion?: (prompt: string) => Promise<string>;
 }
 
+interface OriginalInputMarkerContext {
+  sessionManager?: { getBranch?: () => unknown[]; getEntries?: () => unknown[] };
+}
+
 export default function openCandleExtension(
   pi: ExtensionAPI,
   options?: OpenCandleExtensionOptions,
@@ -73,7 +77,8 @@ export default function openCandleExtension(
 
   // Workflow transforms replace the user's turn with the expanded prompt; this
   // marker lets the GUI render the user's original words instead.
-  const markOriginalInput = (original: string): void => {
+  const markOriginalInput = (original: string, ctx?: OriginalInputMarkerContext): void => {
+    if (hasUnconsumedOriginalInputMarker(ctx)) return;
     pi.appendEntry("opencandle-user-input", { original });
   };
 
@@ -692,7 +697,7 @@ export default function openCandleExtension(
       const definition = buildComprehensiveAnalysisDefinition(analysis.symbol);
       appendComprehensiveAnalysisWorkflowEntry(analysis.symbol, definition);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-      if (prompt) markOriginalInput(event.text);
+      if (prompt) markOriginalInput(event.text, ctx);
       return prompt ? { action: "transform", text: prompt } : { action: "handled" };
     }
 
@@ -857,7 +862,7 @@ export default function openCandleExtension(
       });
       const definition = buildPortfolioWorkflowDefinition(resolution);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-      if (prompt) markOriginalInput(originalText);
+      if (prompt) markOriginalInput(originalText, ctx);
       return prompt ? { action: "transform", text: prompt } : false;
     }
     if (workflow === "options_screener") {
@@ -882,7 +887,7 @@ export default function openCandleExtension(
         });
         const definition = buildOptionsScreenerWorkflowDefinition(resolution);
         const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-        if (prompt) markOriginalInput(originalText);
+        if (prompt) markOriginalInput(originalText, ctx);
         return prompt ? { action: "transform", text: prompt } : false;
       }
       // Missing required symbol — treat as fallback with ask_user directive.
@@ -940,7 +945,7 @@ export default function openCandleExtension(
       const definition = buildCompareAssetsWorkflowDefinition(preflight.resolution);
       applyPreflightAnnotation(definition, preflight.dropped);
       const prompt = coordinator.transformWorkflowInput(pi, definition, ctx);
-      if (prompt) markOriginalInput(originalText);
+      if (prompt) markOriginalInput(originalText, ctx);
       return prompt ? { action: "transform", text: prompt } : false;
     }
 
@@ -1218,6 +1223,34 @@ export default function openCandleExtension(
       ),
     };
   });
+}
+
+function hasUnconsumedOriginalInputMarker(ctx?: OriginalInputMarkerContext): boolean {
+  const manager = ctx?.sessionManager;
+  const entries =
+    typeof manager?.getBranch === "function"
+      ? manager.getBranch()
+      : typeof manager?.getEntries === "function"
+        ? manager.getEntries()
+        : [];
+  let markerAfterLastUser = false;
+  for (const entry of entries) {
+    if (!isSessionEntryRecord(entry)) continue;
+    if (entry.type === "message" && entry.message?.role === "user") {
+      markerAfterLastUser = false;
+      continue;
+    }
+    if (entry.type === "custom" && entry.customType === "opencandle-user-input") {
+      markerAfterLastUser = true;
+    }
+  }
+  return markerAfterLastUser;
+}
+
+function isSessionEntryRecord(
+  entry: unknown,
+): entry is { type?: unknown; customType?: unknown; message?: { role?: unknown } } {
+  return typeof entry === "object" && entry !== null;
 }
 
 /** Concatenate text from a Pi message `content` (plain string or block array). */

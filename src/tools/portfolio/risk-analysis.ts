@@ -169,5 +169,5 @@ function riskSummary(m: RiskMetrics): string {
   if (m.sharpeRatio < 0) signals.push("Negative risk-adjusted returns");
   if (m.sharpeRatio >= 1.5) signals.push("Strong risk-adjusted performance");
   if (m.var95 > 0.03) signals.push("High daily VaR (>3%)");
-  return signals.length > 0 ? "Flags: " + signals.join(" | ") : "Risk profile appears moderate";
+  return signals.length > 0 ? `Flags: ${signals.join(" | ")}` : "Risk profile appears moderate";
 }

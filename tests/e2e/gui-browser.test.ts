@@ -29,7 +29,7 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByRole("button", { name: "New chat", exact: true }).first());
-    await expectVisible(page.getByRole("button", { name: "Open context" }).first());
+    await expectVisible(page.getByRole("button", { name: "What the agent sees" }).first());
   });
 
   it("renders a stock quote prompt and updates context", async () => {
@@ -41,8 +41,8 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
 
     await expectVisible(page.getByText("Stock Quote").first(), 45_000);
     await expectVisible(page.getByText("NVDA").first());
-    await page.getByRole("button", { name: "Open context" }).click();
-    await expectVisible(page.getByRole("dialog", { name: "Context" }));
+    await page.getByRole("button", { name: "What the agent sees" }).click();
+    await expectVisible(page.getByRole("dialog", { name: "What the agent sees" }));
     await expectVisible(page.getByText("Recent quotes"));
   }, 60_000);
 
@@ -180,6 +180,95 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await expectVisible(mocked.getByRole("dialog", { name: "Catalog" }));
     await mocked.keyboard.press("Escape");
     await mocked.getByRole("dialog", { name: "Catalog" }).waitFor({ state: "detached" });
+    await mocked.close();
+  }, 30_000);
+
+  it("sends portfolio attachments and renders last-turn context receipts", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      dashboard: {
+        watchlist: [],
+        activeAnalyses: [],
+        recentResearch: [],
+        dataQuality: { softGaps: [], hardSkips: [] },
+        lastTurn: {
+          routeKind: "workflow",
+          workflow: "portfolio_builder",
+          symbols: ["AAPL", "MSFT"],
+          slotSources: { user: 1, default: 1 },
+          priorTurnCount: 2,
+          savedStateIncluded: true,
+          attachmentCount: 1,
+          validation: { passed: false, mismatchCount: 2 },
+        },
+      },
+    });
+    await mocked.addInitScript(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.__chatRunRequests = [];
+      window.fetch = (input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.endsWith("/api/sessions/mock-session/runs")) {
+          const body = init?.body ? JSON.parse(String(init.body)) : {};
+          window.__chatRunRequests.push(body);
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              const send = (payload) =>
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+              send({ type: "run.started", runId: "portfolio-run", seq: 1 });
+              send({
+                type: "message.created",
+                messageId: "portfolio-user",
+                role: "user",
+                seq: 2,
+              });
+              send({
+                type: "message.completed",
+                messageId: "portfolio-user",
+                content: [{ type: "text", text: body.prompt }],
+                attachments: [{ kind: "portfolio", label: "Portfolio" }],
+                seq: 3,
+              });
+              send({ type: "run.completed", runId: "portfolio-run", seq: 4 });
+              controller.close();
+            },
+          });
+          return Promise.resolve(
+            new Response(stream, {
+              status: 200,
+              headers: { "content-type": "text/event-stream" },
+            }),
+          );
+        }
+        return originalFetch(input, init);
+      };
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await mocked.getByRole("button", { name: "Attach context" }).click();
+    await mocked.getByRole("menuitem", { name: "Portfolio" }).click();
+    await expectVisible(mocked.getByText("Portfolio").first());
+    await mocked.getByLabel("Message OpenCandle").fill("am I too concentrated?");
+    await mocked.getByRole("button", { name: "Send" }).click();
+
+    await expectVisible(mocked.getByText("am I too concentrated?"));
+    await expectVisible(mocked.getByText("Portfolio").first());
+    await mocked.waitForFunction(() => window.__chatRunRequests?.length === 1);
+    const requestBody = await mocked.evaluate(() => window.__chatRunRequests[0]);
+    expect(requestBody).toMatchObject({
+      prompt: "am I too concentrated?",
+      sessionId: "mock-session",
+      attachments: [{ kind: "portfolio" }],
+    });
+
+    await mocked.getByRole("button", { name: "What the agent sees" }).click();
+    await expectVisible(mocked.getByRole("dialog", { name: "What the agent sees" }));
+    await expectVisible(mocked.getByText("Last turn"));
+    await expectVisible(mocked.getByText("Portfolio builder"));
+    await expectVisible(mocked.getByText("AAPL, MSFT"));
+    await expectVisible(mocked.getByText("user 1, default 1"));
+    await expectVisible(mocked.getByText("2 mismatches"));
     await mocked.close();
   }, 30_000);
 

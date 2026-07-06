@@ -98,6 +98,7 @@ export const TTL = {
   CRUMB: 900_000, // 15 minutes
   WEB_SEARCH: 300_000, // 5 minutes
   FINNHUB_NEWS: 300_000, // 5 minutes
+  PREDICTION_MARKETS: 300_000, // 5 minutes
 } as const;
 
 // Stale limits — how long past TTL expiry a cached value is still useful as fallback
@@ -111,4 +112,5 @@ export const STALE_LIMIT = {
   SCREENER: 15 * 60_000, // 15 minutes
   WEB_SEARCH: 3_600_000, // 1 hour
   FINNHUB_NEWS: 3_600_000, // 1 hour
+  PREDICTION_MARKETS: 3_600_000, // 1 hour
 } as const;

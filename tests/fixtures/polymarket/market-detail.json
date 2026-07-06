@@ -1,0 +1,16 @@
+{
+  "id": "949492",
+  "question": "Fed rate cut by January 2026 meeting?",
+  "slug": "fed-rate-cut-by-january-2026-meeting-412",
+  "description": "This market will resolve to “Yes” if the upper bound of the target federal funds rate is decreased at any point between December 16, 2025 and the completion of the Federal Open Market Committee (FOMC) meeting for January 2026, currently scheduled for January 27-28. Otherwise, this market will resolve to “No”.\n\nIf no January meeting takes place by February 7, 2026, 11:59 PM ET, and no qualifying rate cut has been announced, this market will resolve to \"No\". \n\nEmergency rate cuts will qualify.\n\nThe primary resolution source for this market will be the official website of the Federal Reserve (https://www.federalreserve.gov/monetarypolicy/openmarket.htm), however a consensus of credible reporting may also be used.",
+  "resolutionSource": "",
+  "outcomes": "[\"Yes\", \"No\"]",
+  "outcomePrices": "[\"0\", \"1\"]",
+  "volume": "588114.763678",
+  "volumeNum": 588114.763678,
+  "endDate": "2026-01-28T00:00:00Z",
+  "endDateIso": "2026-01-28",
+  "active": true,
+  "closed": true,
+  "updatedAt": "2026-04-28T11:03:59.263227Z"
+}

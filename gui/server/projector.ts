@@ -26,6 +26,16 @@ export interface DashboardState {
     softGaps: Array<{ provider: string; lastSeen: string }>;
     hardSkips: Array<{ provider: string; lastSeen: string }>;
   };
+  lastTurn?: {
+    routeKind: string;
+    workflow?: string;
+    symbols: string[];
+    slotSources: Record<string, number>;
+    priorTurnCount: number;
+    savedStateIncluded?: boolean;
+    attachmentCount?: number;
+    validation?: { passed: boolean; mismatchCount: number };
+  };
 }
 
 const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
@@ -50,6 +60,7 @@ export function createEmptyDashboardState(): DashboardState {
 
 export function projectDashboard(entries: SessionEntry[], sessionId = "local"): DashboardState {
   const state = createEmptyDashboardState();
+  let pendingAttachmentCount: number | undefined;
 
   for (const entry of entries) {
     if (entry.type === "message") {
@@ -70,6 +81,34 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
         analystsDone: 0,
         startedAt: entry.timestamp,
       });
+      continue;
+    }
+
+    if (entry.type === "custom" && entry.customType === "opencandle-user-input") {
+      const attachments = asArray(asRecord(entry.data).attachments);
+      pendingAttachmentCount = attachments.length > 0 ? attachments.length : undefined;
+      if (state.lastTurn) {
+        if (pendingAttachmentCount !== undefined)
+          state.lastTurn.attachmentCount = pendingAttachmentCount;
+        else delete state.lastTurn.attachmentCount;
+      }
+      continue;
+    }
+
+    if (entry.type === "custom" && entry.customType === "opencandle-route-context") {
+      state.lastTurn = projectRouteContext(entry.data, pendingAttachmentCount);
+      pendingAttachmentCount = undefined;
+      continue;
+    }
+
+    if (entry.type === "custom" && entry.customType === "opencandle-validation") {
+      if (state.lastTurn) {
+        const data = asRecord(entry.data);
+        state.lastTurn.validation = {
+          passed: Boolean(data.passed),
+          mismatchCount: asArray(data.mismatches).length,
+        };
+      }
       continue;
     }
 
@@ -118,6 +157,36 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
   }
 
   return state;
+}
+
+function projectRouteContext(
+  data: unknown,
+  attachmentCount: number | undefined,
+): DashboardState["lastTurn"] {
+  const record = asRecord(data);
+  const entities = asRecord(record.entities);
+  const routeKind = stringValue(record.routeKind) ?? "unknown";
+  const workflow = stringValue(record.workflow);
+  const slots = asRecord(record.slots);
+  const slotSources: Record<string, number> = {};
+  for (const slot of Object.values(slots)) {
+    const source = stringValue(asRecord(slot).source);
+    if (!source) continue;
+    slotSources[source] = (slotSources[source] ?? 0) + 1;
+  }
+  const symbols = stringArray(entities.symbols);
+  const priorTurnCount = asArray(record.priorTurns).length;
+  return {
+    routeKind,
+    ...(workflow ? { workflow } : {}),
+    symbols,
+    slotSources,
+    priorTurnCount,
+    ...(typeof record.savedStateIncluded === "boolean"
+      ? { savedStateIncluded: record.savedStateIncluded }
+      : {}),
+    ...(attachmentCount !== undefined ? { attachmentCount } : {}),
+  };
 }
 
 function projectMessage(
@@ -268,6 +337,12 @@ function stringValue(value: unknown): string | undefined {
 
 function firstString(value: unknown): string | undefined {
   return Array.isArray(value) ? value.find((item) => typeof item === "string") : undefined;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function numberValue(value: unknown): number | undefined {

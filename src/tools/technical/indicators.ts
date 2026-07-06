@@ -277,5 +277,5 @@ function trendSummary(
   if (vwap != null && price < vwap)
     signals.push("Price below cumulative VWAP — bearish volume-weighted bias");
 
-  return signals.length > 0 ? "Signals: " + signals.join(" | ") : "No strong signals";
+  return signals.length > 0 ? `Signals: ${signals.join(" | ")}` : "No strong signals";
 }

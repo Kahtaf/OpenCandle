@@ -28,6 +28,21 @@ describe("chat run request helpers", () => {
     });
   });
 
+  it("includes images and saved context attachments in session-addressed run bodies", () => {
+    expect(
+      buildChatRunRequestBody("review this", "session-a", "chat-1", {
+        images: [{ data: "base64", mimeType: "image/png" }],
+        attachments: [{ kind: "portfolio" }],
+      }),
+    ).toEqual({
+      prompt: "review this",
+      actionId: "chat-1",
+      sessionId: "session-a",
+      images: [{ data: "base64", mimeType: "image/png" }],
+      attachments: [{ kind: "portfolio" }],
+    });
+  });
+
   it("rejects chat run bodies without an explicit session id", () => {
     expect(() => buildChatRunRequestBody("hello", "", "action-1")).toThrow("sessionId is required");
     expect(() => buildChatRunRequestBody("hello", "   ", "action-1")).toThrow(

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
+import { rateLimiter } from "../../../src/infra/rate-limiter.js";
 import { stockQuoteTool } from "../../../src/tools/market/stock-quote.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
@@ -16,6 +17,7 @@ describe("get_stock_quote tool", () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("has correct tool metadata", () => {
@@ -25,6 +27,9 @@ describe("get_stock_quote tool", () => {
   });
 
   it("returns formatted text with price data", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-05T16:00:00.000Z"));
+    rateLimiter.configure("yahoo", 1000, 1000);
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve(quoteFixture),

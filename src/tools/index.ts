@@ -6,6 +6,7 @@ import { dcfTool } from "./fundamentals/dcf.js";
 import { earningsTool } from "./fundamentals/earnings.js";
 import { financialsTool } from "./fundamentals/financials.js";
 import { secFilingsTool } from "./fundamentals/sec-filings.js";
+import { eventProbabilitiesTool } from "./macro/event-probabilities.js";
 import { fearGreedTool } from "./macro/fear-greed.js";
 import { fredDataTool } from "./macro/fred-data.js";
 import { cryptoHistoryTool } from "./market/crypto-history.js";
@@ -38,6 +39,7 @@ export { dcfTool } from "./fundamentals/dcf.js";
 export { earningsTool } from "./fundamentals/earnings.js";
 export { financialsTool } from "./fundamentals/financials.js";
 export { secFilingsTool } from "./fundamentals/sec-filings.js";
+export { eventProbabilitiesTool } from "./macro/event-probabilities.js";
 export { fearGreedTool } from "./macro/fear-greed.js";
 export { fredDataTool } from "./macro/fred-data.js";
 export { cryptoHistoryTool } from "./market/crypto-history.js";
@@ -78,6 +80,7 @@ export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): 
     dcfTool,
     compsTool,
     secFilingsTool,
+    eventProbabilitiesTool,
     fredDataTool,
     fearGreedTool,
     createRedditSentimentTool({ askUserHandler: options.askUserHandler }),

@@ -12,6 +12,7 @@ description: Run the local OpenCandle browser workbench and understand local ses
 4. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
 5. Start with a keyless market-data prompt such as `What is AAPL trading at?` or the empty-state action cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
 6. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
+7. Use the composer plus button to attach images or saved context such as your portfolio, watchlist, or latest report before sending a prompt.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or [Tailscale](https://tailscale.com) access.
 
@@ -67,7 +68,7 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 
 Workflow catalog entries prefill a structured chat prompt. They do not switch the GUI into a separate mode; the result still appears in the same chat timeline with the same tool cards and session history.
 
-The financial context panel summarizes relevant local context from the current session, such as watchlist entries, holdings, recent symbols, and provider status. Treat it as a navigation aid, not a separate source of truth.
+The "What the agent sees" drawer summarizes the latest routed turn before the saved-state shortcuts and session context: route/workflow, resolved symbols, slot provenance, prior-turn count, saved-state injection, attachment count, validation receipts, active analyst progress, recent quotes, research, and provider data gaps. Treat it as a transparency panel for the current session, not a separate source of truth.
 
 ## When To Use The GUI
 

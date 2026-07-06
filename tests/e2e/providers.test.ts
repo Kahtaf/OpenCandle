@@ -9,6 +9,7 @@ import { getEarnings, getFinancials, getOverview } from "../../src/providers/alp
 import { getCryptoHistory, getCryptoPrice } from "../../src/providers/coingecko.js";
 import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
 import { getSeries } from "../../src/providers/fred.js";
+import { searchPredictionMarkets } from "../../src/providers/polymarket.js";
 import { getPostComments, getSubredditPosts } from "../../src/providers/reddit.js";
 import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
 import {
@@ -173,6 +174,11 @@ if (avKey) {
 // --- MACRO + SENTIMENT ---
 console.log(`\n[8/8] Macro + Sentiment...`);
 await test("fear_greed", "index", () => getFearGreedIndex());
+await test("polymarket", "fed rate cut", async () => {
+  const quotes = await searchPredictionMarkets("fed rate cut", 3);
+  if (quotes.length === 0) throw new Error("no prediction markets");
+  return quotes;
+});
 if (fredKey) {
   await test("fred", "FEDFUNDS", () => getSeries("FEDFUNDS", fredKey, 10));
   await test("fred", "DGS10", () => getSeries("DGS10", fredKey, 10));

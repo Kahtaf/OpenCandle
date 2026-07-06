@@ -35,7 +35,7 @@ export const TOOL_BUNDLE_TOOLS: Record<ToolBundleName, readonly string[]> = {
     "search_web",
   ],
   options: ["get_option_chain", "get_stock_quote", "search_ticker", "search_web"],
-  macro: ["get_economic_data", "get_fear_greed", "search_web"],
+  macro: ["get_economic_data", "get_event_probabilities", "get_fear_greed", "search_web"],
   sentiment: [
     "get_reddit_sentiment",
     "get_twitter_sentiment",

@@ -12,11 +12,18 @@ export interface MessageToolContent {
 
 export interface MessageImageContent {
   type: "image";
-  url: string;
+  url?: string;
+  data?: string;
+  mimeType?: string;
   alt?: string;
 }
 
 export type MessageContent = MessageTextContent | MessageToolContent | MessageImageContent;
+
+export interface MessageAttachmentChip {
+  kind: string;
+  label: string;
+}
 
 export interface ToolOutput {
   content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
@@ -63,6 +70,7 @@ export type ChatEvent =
       type: "message.completed";
       messageId: string;
       content: MessageContent[];
+      attachments?: MessageAttachmentChip[];
       runId?: string;
     } & ChatEventBase)
   | ({
@@ -98,6 +106,7 @@ export interface RenderMessage {
   status: "streaming" | "completed";
   content: MessageContent[];
   text: string;
+  attachments?: MessageAttachmentChip[];
   customType?: string;
 }
 

@@ -12,6 +12,8 @@
 - Added opt-in E5 ask-instead-of-guess product evals for ambiguous calls/bank prompts and resolvable prior-turn twins, with committed live findings for current over-guessing and over-asking behavior.
 - Added deterministic E3 provider-outage eval coverage for zero-filled Yahoo quote payloads and partial correlation matrices under a mocked Yahoo fetch surface, with known-fail findings recorded for stale weekend quote freshness and turn-gap trace emission.
 - Added a shared freshness ledger for quote-family tools, preserving provider market/as-of times from Yahoo, Alpha Vantage, CoinGecko, and Yahoo options, appending deterministic as-of disclosure lines, and propagating freshness into runtime evidence records.
+- Added GUI composer attachments for images and saved market-state context, including pending chips/thumbnails, clipboard image paste, server-side image validation, Pi vision prompt threading, persistent session image content, and user-bubble attachment chips.
+- Added keyless Polymarket event probabilities with cached/rate-limited Gamma search, a `get_event_probabilities` macro tool, mandatory prediction-market caveats, doctor readiness, and data-source documentation that defers Kalshi pending ToS clearance.
 - Promoted the E3 stale-weekend quote freshness case from known-fail to a gating deterministic eval using Yahoo's provider market date instead of the Saturday fetch-day placeholder.
 
 ### Changed
@@ -23,6 +25,7 @@
 - Comprehensive-analysis workflow steps now capture observe-only tool evidence, parse structured analyst/debate outputs into step records, emit `opencandle-analyst-step` trace entries, and let the GUI projector count analyst progress from those entries without changing analyst prompt templates.
 - Comprehensive-analysis synthesis now receives an additive deterministic analyst vote tally when at least two analyst outputs parse, skips consensus rebuttals programmatically, and emits observe-only validation trace entries after synthesis without enforcing or rewriting the answer.
 - Rewrote the OpenSpec `/forget` proposal to define deterministic matcher semantics, durable forget-list storage, non-destructive AI-context suppression surfaces, confirmation/listing behavior, undo, and verification requirements.
+- Reframed the GUI context drawer as "What the agent sees", with last-turn routing context, slot provenance, attachment counts, validation receipts, and analyst progress above the existing session context sections.
 
 ### Fixed
 

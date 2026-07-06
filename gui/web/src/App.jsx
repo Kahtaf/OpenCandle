@@ -237,7 +237,7 @@ export function AppShell() {
   // the previous active session. Non-owner windows submit to the active session
   // and let the server proxy to the current coordinator when one is available.
   const startRoutedChatRun = useCallback(
-    async (prompt) => {
+    async (prompt, options = {}) => {
       const target = chatRunSessionTarget({
         pathname,
         supportsSessionActions: gui.supportsSessionActions,
@@ -245,11 +245,14 @@ export function AppShell() {
         canStartFreshHomeSession: gui.role === "writer",
       });
       if (target.mode === "current") {
-        void chatRun.startChatRun(prompt);
+        void chatRun.startChatRun(prompt, options);
         return;
       }
       if (target.mode === "route") {
-        const result = await chatRun.startChatRun(prompt, { sessionId: target.sessionId });
+        const result = await chatRun.startChatRun(prompt, {
+          ...options,
+          sessionId: target.sessionId,
+        });
         if (result?.sessionChanged) {
           clearLiveEventsForSession(target.sessionId);
           gui.setToast("The active session changed before your message was sent. Please resend.", {
@@ -266,6 +269,7 @@ export function AppShell() {
           if (!freshSessionId) return;
           homeResetSessionRef.current = freshSessionId;
           const result = await chatRun.startChatRun(prompt, {
+            ...options,
             sessionId: freshSessionId,
             baseEventCount: 0,
           });

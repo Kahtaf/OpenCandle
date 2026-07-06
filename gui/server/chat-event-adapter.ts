@@ -22,6 +22,7 @@ export function sessionEntriesToChatEvents(
   // Set by an opencandle-user-input marker: the user's words before a workflow
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
+  let pendingOriginalAttachments: Array<{ kind: string; label: string }> = [];
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
   events.push({
@@ -35,6 +36,7 @@ export function sessionEntriesToChatEvents(
   for (const entry of entries) {
     if (isOriginalInputEntry(entry)) {
       pendingOriginalInput = originalInputText(entry);
+      pendingOriginalAttachments = originalInputAttachments(entry);
       continue;
     }
 
@@ -67,10 +69,14 @@ export function sessionEntriesToChatEvents(
         type: "message.completed",
         sessionId: options.sessionId,
         messageId,
-        content: [{ type: "text", text: pendingOriginalInput ?? messageText(message.content) }],
+        content: userMessageContent(message.content, pendingOriginalInput),
+        ...(pendingOriginalAttachments.length > 0
+          ? { attachments: pendingOriginalAttachments }
+          : {}),
         seq: seq++,
       });
       pendingOriginalInput = null;
+      pendingOriginalAttachments = [];
       continue;
     }
 
@@ -178,6 +184,21 @@ export function originalInputText(entry: SessionEntry): string | null {
     : null;
 }
 
+export function originalInputAttachments(
+  entry: SessionEntry,
+): Array<{ kind: string; label: string }> {
+  const data = (entry as { data?: { attachments?: unknown } }).data;
+  if (!Array.isArray(data?.attachments)) return [];
+  return data.attachments
+    .map((attachment) => {
+      if (typeof attachment !== "object" || attachment === null) return null;
+      const kind = String((attachment as { kind?: unknown }).kind ?? "").trim();
+      const label = String((attachment as { label?: unknown }).label ?? "").trim();
+      return kind && label ? { kind, label } : null;
+    })
+    .filter((attachment): attachment is { kind: string; label: string } => attachment != null);
+}
+
 function customMessageText(content: unknown): string {
   if (typeof content === "string") return content;
   return messageText(content);
@@ -187,6 +208,37 @@ function messageText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.map((part) => (typeof part.text === "string" ? part.text : "")).join("");
+}
+
+function userMessageContent(content: unknown, originalText: string | null): MessageContent[] {
+  const parts: MessageContent[] = [{ type: "text", text: originalText ?? messageText(content) }];
+  if (!Array.isArray(content)) return parts;
+  for (const part of content) {
+    if (part?.type !== "image") continue;
+    if (typeof part.url === "string") {
+      parts.push({ type: "image", url: part.url, alt: imageAlt(part) });
+      continue;
+    }
+    if (typeof part.data === "string" && typeof part.mimeType === "string") {
+      parts.push({
+        type: "image",
+        url: `data:${part.mimeType};base64,${part.data}`,
+        data: part.data,
+        mimeType: part.mimeType,
+        alt: imageAlt(part),
+      });
+    }
+  }
+  return parts;
+}
+
+function imageAlt(part: unknown): string | undefined {
+  return typeof part === "object" &&
+    part !== null &&
+    "alt" in part &&
+    typeof (part as { alt?: unknown }).alt === "string"
+    ? (part as { alt: string }).alt
+    : undefined;
 }
 
 function toolOutput(message: ToolResultMessage): ToolOutput {

@@ -8,11 +8,33 @@ import { createLocalSessionCoordinator } from "../../../gui/server/local-session
 import {
   createSessionActionsController,
   deleteSessionFile,
+  promptAndSettle,
   renameSessionFile,
 } from "../../../gui/server/session-actions.js";
 import { acquireWriterLock, writerLockScopeForSession } from "../../../gui/server/writer-lock.js";
 
 describe("GUI session actions", () => {
+  it("threads image prompt options into the Pi session prompt", async () => {
+    const entries = [{ id: "before" }, { id: "after" }];
+    const runSession = {
+      prompt: vi.fn(async () => undefined),
+      subscribe: vi.fn(() => () => undefined),
+      isStreaming: false,
+      pendingMessageCount: 0,
+      sessionManager: {
+        getEntries: vi.fn(() => entries),
+      },
+    } as unknown as AgentSession;
+
+    await promptAndSettle(runSession, "what is in this chart?", new Set(["before"]), undefined, {
+      images: [{ type: "image", data: "base64", mimeType: "image/png" }],
+    });
+
+    expect(runSession.prompt).toHaveBeenCalledWith("what is in this chart?", {
+      images: [{ type: "image", data: "base64", mimeType: "image/png" }],
+    });
+  });
+
   it("renames a Pi session by appending session_info so the TUI session list sees it", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-actions-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-actions-sessions-"));

@@ -66,6 +66,35 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Current date: 2026-06-12 Compare these assets");
   });
 
+  it("renders user attachment chips and image thumbnails without exposing expanded prompt text", () => {
+    const events: ChatEvent[] = [
+      {
+        type: "session.updated",
+        sessionId: "session-1",
+        updatedAt: "2026-06-12T00:00:00.000Z",
+        seq: 1,
+      },
+      { type: "message.created", messageId: "user-1", role: "user", seq: 2 },
+      {
+        type: "message.completed",
+        messageId: "user-1",
+        content: [
+          { type: "text", text: "am I too concentrated?" },
+          { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png", alt: "chart.png" },
+        ],
+        attachments: [{ kind: "portfolio", label: "Portfolio" }],
+        seq: 3,
+      },
+    ];
+
+    const html = renderChatPanelHtml({ events });
+
+    expect(html).toContain("am I too concentrated?");
+    expect(html).toContain("Portfolio");
+    expect(html).toContain('src="data:image/png;base64,iVBORw0KGgo="');
+    expect(html).not.toContain("[Attached by user");
+  });
+
   it("renders pending ask_user prompts on an otherwise empty thread", () => {
     const html = renderChatPanelHtml({
       askUserPrompts: [
