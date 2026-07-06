@@ -68,7 +68,7 @@ Phrase entries SHALL match by case-insensitive substring search on the normalize
 
 ### Requirement: Durable Forget List Storage
 
-OpenCandle SHALL persist forget entries in the memory SQLite database so active entries apply across sessions and processes. The implementation SHALL add an additive v8 to v9 schema migration that creates a durable table such as `forget_entries(id, kind TEXT CHECK(kind IN ('ticker','phrase')), pattern TEXT, created_at)`. The migration SHALL preserve all existing data and SHALL NOT reset the database on version mismatch.
+OpenCandle SHALL persist forget entries in the memory SQLite database so active entries apply across sessions and processes. The implementation SHALL add an additive v9 to v10 schema migration that creates a durable table such as `forget_entries(id, kind TEXT CHECK(kind IN ('ticker','phrase')), pattern TEXT, created_at)`. The migration SHALL preserve all existing data and SHALL NOT reset the database on version mismatch.
 
 #### Scenario: Forget entry persists across sessions and processes
 
@@ -76,10 +76,10 @@ OpenCandle SHALL persist forget entries in the memory SQLite database so active 
 - **AND** OpenCandle starts a later session or another process using the same memory database
 - **THEN** the later router and prompt-context assembly paths SHALL apply the active `ASTS` forget entry
 
-#### Scenario: v8 database migrates to v9 without data loss
+#### Scenario: v9 database migrates to v10 without data loss
 
-- **WHEN** OpenCandle opens a real v8 fixture database containing existing workflow, preference, and market-state data
-- **THEN** the database SHALL migrate additively to v9
+- **WHEN** OpenCandle opens a representative v9 database containing existing workflow, preference, and market-state data
+- **THEN** the database SHALL migrate additively to v10
 - **AND** `forget_entries` SHALL exist
 - **AND** all pre-existing rows SHALL remain present
 

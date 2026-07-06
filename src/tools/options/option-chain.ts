@@ -49,8 +49,9 @@ export const optionChainTool: AgentTool<
     const chain = result.data;
     const freshness = buildFreshnessStamp({
       asOf: chain.asOf,
+      cached: result.cached,
       stale: result.stale,
-      cachedAt: result.stale ? result.timestamp : undefined,
+      cachedAt: result.cached || result.stale ? result.timestamp : undefined,
     });
 
     const lines: string[] = [

@@ -121,6 +121,37 @@ describe("sessionEntriesToChatEvents", () => {
     });
   });
 
+  it("applies original-input attachments when the marker follows the accepted user message", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        messageEntry("u1", {
+          role: "user",
+          content:
+            "am I too concentrated?\n\n[Attached by user — portfolio]\nPortfolio lots:\n- ASTS",
+          timestamp: Date.now(),
+        } as Message),
+        {
+          type: "custom",
+          id: "c1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          customType: "opencandle-user-input",
+          data: {
+            original: "am I too concentrated?",
+            attachments: [{ kind: "portfolio", label: "Portfolio" }],
+          },
+        } as unknown as SessionEntry,
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const completed = events.find((event) => event.type === "message.completed");
+    expect(completed).toMatchObject({
+      content: [{ type: "text", text: "am I too concentrated?" }],
+      attachments: [{ kind: "portfolio", label: "Portfolio" }],
+    });
+  });
+
   it("preserves visible custom messages as custom chat events", () => {
     const events = sessionEntriesToChatEvents(
       [

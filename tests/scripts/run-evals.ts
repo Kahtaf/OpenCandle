@@ -81,7 +81,7 @@ function runResolved(resolved: ResolvedEvalCommand): number {
   const result = spawnSync(resolved.command, resolved.args, {
     cwd,
     env: { ...process.env, ...resolved.env },
-    shell: true,
+    shell: false,
     stdio: "inherit",
   });
   if (result.error) {

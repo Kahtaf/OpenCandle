@@ -124,6 +124,13 @@ describe("main branch product replay comparison", () => {
     expect(comparison.unsupportedReason).toBe("package.json does not define the eval front door");
   });
 
+  it("keeps product replay compatible with pre-front-door base branches", () => {
+    const source = readFileSync("tests/scripts/run-main-branch-product-replay.ts", "utf-8");
+
+    expect(source).toContain('scripts?.["test:evals:product"]');
+    expect(source).toContain('"npm", "run", "test:evals:product"');
+  });
+
   it("writes comparison reports under tests/evals/runs and discovers latest product reports", () => {
     const cwd = mkdtempSync(join(tmpdir(), "oc-product-replay-"));
     const comparison = buildProductReplayComparison({

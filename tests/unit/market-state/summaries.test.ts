@@ -40,7 +40,11 @@ describe("market-state summaries", () => {
     service.recordReportRun({
       status: "completed",
       completedAt: "2026-07-05T14:30:00.000Z",
-      summary: { symbols: ["ASTS"], headline: "Launch cadence improved" },
+      summary: {
+        symbols: ["ASTS"],
+        headline: "Launch cadence improved",
+        text: "Daily Watchlist Report\nASTS quote line\nData gaps: none\nConclusion: launch cadence improved.",
+      },
       errors: [],
     });
 
@@ -56,12 +60,20 @@ describe("market-state summaries", () => {
       "Watchlist:",
       "- ASTS (AST SpaceMobile, Inc.) — target $55.00; stop $22.00; thesis: Space-based broadband satellite network; tags: space, satellite; notes: Watch launch cadence and carrier partnerships",
     ]);
-    expect(report).toEqual([
-      'Latest report run: completed at 2026-07-05T14:30:00.000Z — {"symbols":["ASTS"],"headline":"Launch cadence improved"}',
-    ]);
+    expect(report[0]).toContain("Latest report run: completed at 2026-07-05T14:30:00.000Z");
+    expect(report[0]).toContain('"headline":"Launch cadence improved"');
+    expect(report).toContain("Report text:");
+    expect(report).toContain(
+      "Daily Watchlist Report\nASTS quote line\nData gaps: none\nConclusion: launch cadence improved.",
+    );
     expect([...portfolio, ...watchlist, ...report].join("\n")).not.toContain(
       "Use this saved user state",
     );
+
+    const compactReport = formatLatestReportSummary(service.listReportRuns()[0], {
+      includeSummary: false,
+    });
+    expect(compactReport).toEqual(["Latest report run: completed at 2026-07-05T14:30:00.000Z"]);
     db.close();
     rmSync(dir, { recursive: true, force: true });
   });

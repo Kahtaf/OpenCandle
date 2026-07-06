@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   detectCashtagFragment,
   insertAcceptedCashtag,
-} from "../../../gui/web/src/features/chat/cashtag-autocomplete.jsx";
+} from "../../../gui/web/src/features/chat/cashtag-autocomplete-helpers.js";
 
 describe("cashtag autocomplete helpers", () => {
   it("detects a start-of-text cashtag fragment", () => {

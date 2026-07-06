@@ -303,7 +303,7 @@ describe("GUI server route guards", () => {
         {
           prompt: "review this",
           actionId: "chat-1",
-          images: [{ data: "base64-image-bytes", mimeType: "image/png" }],
+          images: [{ data: Buffer.from("image-bytes").toString("base64"), mimeType: "image/png" }],
           attachments: [{ kind: "portfolio" }],
         },
         "session-1",
@@ -319,6 +319,16 @@ describe("GUI server route guards", () => {
       },
       source: "browser",
     });
+  }, 20_000);
+
+  it("records image labels in user input metadata without image bytes", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+
+    expect(source).toContain("inputAttachmentLabels");
+    expect(source).toContain('kind: "image"');
+    expect(source).toContain('label: `${image.mimeType || "image"} #${index + 1}`');
+    expect(source).toContain("attachments: inputAttachmentLabels");
+    expect(source).not.toContain("attachments: promptImages");
   });
 
   it("broadcasts target session snapshots after proxied chat runs", () => {

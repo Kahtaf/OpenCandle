@@ -20,6 +20,7 @@ interface GammaEvent {
   endDate?: string;
   volume?: unknown;
   liquidity?: unknown;
+  updatedAt?: string;
   markets?: GammaMarket[];
 }
 
@@ -38,6 +39,8 @@ interface GammaMarket {
   endDate?: string;
   endDateIso?: string;
   updatedAt?: string;
+  active?: unknown;
+  closed?: unknown;
 }
 
 interface MarketWithEvent {
@@ -81,7 +84,9 @@ function decodeSearchResponse(response: GammaSearchResponse): PredictionMarketQu
     ),
     ...(response.markets ?? []).map((market) => ({ market })),
   ];
-  return markets.flatMap(({ event, market }) => marketToQuotes(market, event));
+  return markets.flatMap(({ event, market }) =>
+    isOpenMarket(market) ? marketToQuotes(market, event) : [],
+  );
 }
 
 function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMarketQuote[] {
@@ -103,11 +108,11 @@ function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMark
   const closeDate =
     stringValue(market.endDate) ?? normalizeDateOnly(market.endDateIso ?? event?.endDate);
   const url = marketUrl(market, event);
-  const asOf = new Date().toISOString();
+  const asOf = stringValue(market.updatedAt) ?? stringValue(event?.updatedAt);
 
   return outcomes.flatMap((outcome, index) => {
     const probability = prices[index];
-    if (probability === undefined) return [];
+    if (probability === undefined || probability < 0 || probability > 1) return [];
     return [
       {
         source: "polymarket" as const,
@@ -120,10 +125,19 @@ function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMark
         ...(closeDate && { closeDate }),
         ...(resolutionCriteria && { resolutionCriteria }),
         url,
-        asOf,
+        ...(asOf && { asOf }),
       },
     ];
   });
+}
+
+function isOpenMarket(market: GammaMarket): boolean {
+  if (booleanValue(market.closed) === true) return false;
+  if (booleanValue(market.active) === false) return false;
+  const endDate = stringValue(market.endDate) ?? stringValue(market.endDateIso);
+  if (!endDate) return true;
+  const parsed = new Date(endDate);
+  return Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now();
 }
 
 function normalizeLimit(limit: number): number {
@@ -139,12 +153,9 @@ function parseStringArray(value: unknown): string[] {
   });
 }
 
-function parseNumberArray(value: unknown): number[] {
+function parseNumberArray(value: unknown): Array<number | undefined> {
   const parsed = parseJsonArray(value);
-  return parsed.flatMap((item) => {
-    const number = numberValue(item);
-    return number === undefined ? [] : [number];
-  });
+  return parsed.map((item) => numberValue(item));
 }
 
 function parseJsonArray(value: unknown): unknown[] {
@@ -170,6 +181,15 @@ function stringValue(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function booleanValue(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return undefined;
+}
+
 function firstNonEmpty(...values: unknown[]): string | undefined {
   for (const value of values) {
     const text = stringValue(value);
@@ -186,7 +206,9 @@ function normalizeDateOnly(value: string | undefined): string | undefined {
 function marketUrl(market: GammaMarket, event?: GammaEvent): string {
   const marketSlug = stringValue(market.slug);
   const eventSlug = stringValue(event?.slug);
-  if (eventSlug && marketSlug) return `${POLYMARKET_URL}/event/${eventSlug}/${marketSlug}`;
-  if (marketSlug) return `${POLYMARKET_URL}/event/${marketSlug}`;
+  if (eventSlug && marketSlug) {
+    return `${POLYMARKET_URL}/event/${encodeURIComponent(eventSlug)}/${encodeURIComponent(marketSlug)}`;
+  }
+  if (marketSlug) return `${POLYMARKET_URL}/event/${encodeURIComponent(marketSlug)}`;
   return POLYMARKET_URL;
 }

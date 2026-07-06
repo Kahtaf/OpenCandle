@@ -65,6 +65,37 @@ describe("GUI chat-run body parsing", () => {
     });
   });
 
+  it("rejects attachments on slash commands so command arguments remain unchanged", () => {
+    expect(
+      parseChatRunBody({
+        prompt: "/analyze NVDA",
+        attachments: [{ kind: "portfolio" }],
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Attachments are not supported for slash commands",
+    });
+    expect(
+      parseChatRunBody({
+        prompt: "/analyze NVDA",
+        images: [{ data: Buffer.from("png").toString("base64"), mimeType: "image/png" }],
+      }),
+    ).toEqual({
+      ok: false,
+      error: "Attachments are not supported for slash commands",
+    });
+  });
+
+  it("does not append saved-context blocks to slash-command prompt text", async () => {
+    await expect(
+      buildDispatchedPrompt({
+        prompt: "/analyze NVDA",
+        images: [],
+        attachments: [{ kind: "portfolio" }],
+      }),
+    ).resolves.toBe("/analyze NVDA");
+  });
+
   it.each([
     [{ prompt: "", images: [] }, "prompt is required"],
     [
@@ -86,6 +117,14 @@ describe("GUI chat-run body parsing", () => {
         images: Array.from({ length: 5 }, () => ({ data: "a", mimeType: "image/png" })),
       },
       "Attach up to 4 images",
+    ],
+    [
+      { prompt: "x", images: [{ data: "!!!!", mimeType: "image/png" }] },
+      "Image attachment data must be valid base64",
+    ],
+    [
+      { prompt: "x", images: [{ data: "", mimeType: "image/png" }] },
+      "Image attachment data must be valid base64",
     ],
     [{ prompt: "x", attachments: [{ kind: "analysis" }] }, "Unsupported attachment kind"],
     [{ prompt: "x", attachments: [{ kind: "watchlist" }] }, "watchlist attachment id is required"],

@@ -141,28 +141,51 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
 type YahooFundamentalsRow = {
   date?: Date | string | number;
   totalRevenue?: number;
+  annualTotalRevenue?: number;
   grossProfit?: number;
+  annualGrossProfit?: number;
   operatingIncome?: number;
+  annualOperatingIncome?: number;
   netIncome?: number;
+  annualNetIncome?: number;
   netIncomeCommonStockholders?: number;
+  annualNetIncomeCommonStockholders?: number;
   basicEPS?: number;
+  annualBasicEPS?: number;
   dilutedEPS?: number;
+  annualDilutedEPS?: number;
   totalAssets?: number;
+  annualTotalAssets?: number;
   totalLiabilitiesNetMinorityInterest?: number;
+  annualTotalLiabilitiesNetMinorityInterest?: number;
   totalLiabilities?: number;
+  annualTotalLiabilities?: number;
   stockholdersEquity?: number;
+  annualStockholdersEquity?: number;
   commonStockEquity?: number;
+  annualCommonStockEquity?: number;
   cashFlowFromContinuingOperatingActivities?: number;
+  annualCashFlowFromContinuingOperatingActivities?: number;
   operatingCashFlow?: number;
+  annualOperatingCashFlow?: number;
   freeCashFlow?: number;
+  annualFreeCashFlow?: number;
   capitalExpenditure?: number;
+  annualCapitalExpenditure?: number;
   capitalExpenditures?: number;
+  annualCapitalExpenditures?: number;
   totalDebt?: number;
+  annualTotalDebt?: number;
   cashAndCashEquivalents?: number;
+  annualCashAndCashEquivalents?: number;
   ordinarySharesNumber?: number;
+  annualOrdinarySharesNumber?: number;
   shareIssued?: number;
+  annualShareIssued?: number;
   dilutedAverageShares?: number;
+  annualDilutedAverageShares?: number;
   basicAverageShares?: number;
+  annualBasicAverageShares?: number;
 };
 
 export async function getYahooFinancials(symbol: string): Promise<FinancialStatement[]> {
@@ -171,65 +194,101 @@ export async function getYahooFinancials(symbol: string): Promise<FinancialState
   const cached = cache.get<FinancialStatement[]>(cacheKey);
   if (cached) return cached;
 
-  await rateLimiter.acquire("yahoo");
+  try {
+    await rateLimiter.acquire("yahoo");
 
-  const period1 = new Date();
-  period1.setUTCFullYear(period1.getUTCFullYear() - 6);
-  const rows = (await getYahooFinance2Client().fundamentalsTimeSeries(
-    normalizedSymbol,
-    {
-      period1,
-      period2: new Date(),
-      type: "annual",
-      module: "all",
-    },
-    { validateResult: false },
-  )) as YahooFundamentalsRow[];
+    const period1 = new Date();
+    period1.setUTCFullYear(period1.getUTCFullYear() - 6);
+    const rows = (await getYahooFinance2Client().fundamentalsTimeSeries(
+      normalizedSymbol,
+      {
+        period1,
+        period2: new Date(),
+        type: "annual",
+        module: "all",
+      },
+      { validateResult: false },
+    )) as YahooFundamentalsRow[];
 
-  const statements = rows
-    .map((row) => yahooFundamentalsRowToStatement(row))
-    .filter((statement): statement is FinancialStatement => statement !== null)
-    .sort((a, b) => b.fiscalDate.localeCompare(a.fiscalDate))
-    .slice(0, 4);
+    const statements = rows
+      .map((row) => yahooFundamentalsRowToStatement(row))
+      .filter((statement): statement is FinancialStatement => statement !== null)
+      .sort((a, b) => b.fiscalDate.localeCompare(a.fiscalDate))
+      .slice(0, 4);
 
-  if (statements.length === 0) {
-    throw new Error(`Yahoo Finance: no financial statements returned for ${normalizedSymbol}`);
+    if (statements.length === 0) {
+      throw new Error(`Yahoo Finance: no financial statements returned for ${normalizedSymbol}`);
+    }
+
+    cache.set(cacheKey, statements, TTL.FUNDAMENTALS);
+    return statements;
+  } catch (error) {
+    const stale = cache.getStale<FinancialStatement[]>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
+    if (stale) return stale.value;
+    throw error;
   }
-
-  cache.set(cacheKey, statements, TTL.FUNDAMENTALS);
-  return statements;
 }
 
 function yahooFundamentalsRowToStatement(row: YahooFundamentalsRow): FinancialStatement | null {
   const fiscalDate = normalizeYahooDate(row.date);
   if (!fiscalDate) return null;
 
-  const operatingCashFlow =
-    row.cashFlowFromContinuingOperatingActivities ?? row.operatingCashFlow ?? 0;
+  const operatingCashFlowValue =
+    row.annualCashFlowFromContinuingOperatingActivities ??
+    row.cashFlowFromContinuingOperatingActivities ??
+    row.annualOperatingCashFlow ??
+    row.operatingCashFlow;
+  const capitalExpenditureValue =
+    row.annualCapitalExpenditure ??
+    row.capitalExpenditure ??
+    row.annualCapitalExpenditures ??
+    row.capitalExpenditures;
+  const operatingCashFlow = operatingCashFlowValue ?? 0;
+  const capitalExpenditure = capitalExpenditureValue ?? 0;
   const freeCashFlow =
+    row.annualFreeCashFlow ??
     row.freeCashFlow ??
-    (operatingCashFlow !== 0
-      ? operatingCashFlow + (row.capitalExpenditure ?? row.capitalExpenditures ?? 0)
+    (operatingCashFlowValue !== undefined && capitalExpenditureValue !== undefined
+      ? operatingCashFlow + capitalExpenditure
       : 0);
 
   return {
     fiscalDate,
-    revenue: row.totalRevenue ?? 0,
-    grossProfit: row.grossProfit ?? 0,
-    operatingIncome: row.operatingIncome ?? 0,
-    netIncome: row.netIncome ?? row.netIncomeCommonStockholders ?? 0,
-    eps: row.dilutedEPS ?? row.basicEPS ?? 0,
-    totalAssets: row.totalAssets ?? 0,
-    totalLiabilities: row.totalLiabilitiesNetMinorityInterest ?? row.totalLiabilities ?? 0,
-    totalEquity: row.stockholdersEquity ?? row.commonStockEquity ?? 0,
+    revenue: row.annualTotalRevenue ?? row.totalRevenue ?? 0,
+    grossProfit: row.annualGrossProfit ?? row.grossProfit ?? 0,
+    operatingIncome: row.annualOperatingIncome ?? row.operatingIncome ?? 0,
+    netIncome:
+      row.annualNetIncome ??
+      row.netIncome ??
+      row.annualNetIncomeCommonStockholders ??
+      row.netIncomeCommonStockholders ??
+      0,
+    eps: row.annualDilutedEPS ?? row.dilutedEPS ?? row.annualBasicEPS ?? row.basicEPS ?? 0,
+    totalAssets: row.annualTotalAssets ?? row.totalAssets ?? 0,
+    totalLiabilities:
+      row.annualTotalLiabilitiesNetMinorityInterest ??
+      row.totalLiabilitiesNetMinorityInterest ??
+      row.annualTotalLiabilities ??
+      row.totalLiabilities ??
+      0,
+    totalEquity:
+      row.annualStockholdersEquity ??
+      row.stockholdersEquity ??
+      row.annualCommonStockEquity ??
+      row.commonStockEquity ??
+      0,
     operatingCashFlow,
     freeCashFlow,
-    totalDebt: row.totalDebt,
-    cashAndEquivalents: row.cashAndCashEquivalents,
+    totalDebt: row.annualTotalDebt ?? row.totalDebt,
+    cashAndEquivalents: row.annualCashAndCashEquivalents ?? row.cashAndCashEquivalents,
     sharesOutstanding:
+      row.annualOrdinarySharesNumber ??
       row.ordinarySharesNumber ??
+      row.annualShareIssued ??
       row.shareIssued ??
+      row.annualDilutedAverageShares ??
       row.dilutedAverageShares ??
+      row.annualBasicAverageShares ??
       row.basicAverageShares,
   };
 }

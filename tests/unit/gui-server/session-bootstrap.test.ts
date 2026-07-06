@@ -196,21 +196,29 @@ describe("session-addressed GUI bootstrap", () => {
     });
   });
 
-  it("detects a per-session coordinator even when this process owns another session", async () => {
+  it("detects only a fresh live per-session coordinator when this process owns another session", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-cwd-"));
     const sessionDir = mkdtempSync(join(tmpdir(), "opencandle-session-bootstrap-sessions-"));
     try {
       const current = SessionManager.create(cwd, sessionDir);
       const requested = SessionManager.create(cwd, sessionDir);
+      const staleRequested = SessionManager.create(cwd, sessionDir);
       await acquireWriterLock(writerLockScopeForSession(current), "gui", { pid: process.pid });
       await acquireWriterLock(writerLockScopeForSession(requested), "tui", {
-        pid: 999_999,
+        pid: process.ppid,
         coordinatorEndpoint: "http://127.0.0.1:25432",
         coordinatorSecret: "secret",
+      });
+      await acquireWriterLock(writerLockScopeForSession(staleRequested), "tui", {
+        pid: process.ppid,
+        coordinatorEndpoint: "http://127.0.0.1:25432",
+        coordinatorSecret: "secret",
+        now: () => new Date("2000-01-01T00:00:00.000Z"),
       });
 
       expect(canProxyChatRunToCoordinator(current)).toBe(false);
       expect(canProxyChatRunToCoordinator(requested)).toBe(true);
+      expect(canProxyChatRunToCoordinator(staleRequested)).toBe(false);
     } finally {
       await rm(cwd, { recursive: true, force: true });
       await rm(sessionDir, { recursive: true, force: true });

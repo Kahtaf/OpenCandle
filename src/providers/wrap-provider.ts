@@ -37,12 +37,14 @@ export async function wrapProvider<T>(
   }
 
   try {
-    const { value: data, stale } = await runWithStaleMetadata(fn);
+    const { value: data, cache } = await runWithStaleMetadata(fn);
+    const timestamp = cache ? new Date(cache.cachedAt).toISOString() : new Date().toISOString();
     return {
       status: "ok",
       data,
-      timestamp: stale ? new Date(stale.cachedAt).toISOString() : new Date().toISOString(),
-      stale: stale ? true : undefined,
+      timestamp,
+      cached: cache?.status === "cached" ? true : undefined,
+      stale: cache?.status === "stale" ? true : undefined,
     };
   } catch (error) {
     // Credential errors are re-thrown so the tool-layer `withCredentialCheck`

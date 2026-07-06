@@ -67,10 +67,19 @@ export function projectDashboard(
 ): DashboardState {
   const state = createEmptyDashboardState();
   let pendingAttachmentCount: number | undefined;
+  let pendingAttachmentUserSeen = false;
 
   for (const entry of entries) {
     if (entry.type === "message") {
       projectMessage(state, entry.message as Message, entry.timestamp, sessionId);
+      const message = entry.message as Message;
+      if (pendingAttachmentCount !== undefined) {
+        if (message.role === "user") pendingAttachmentUserSeen = true;
+        else if (pendingAttachmentUserSeen) {
+          pendingAttachmentCount = undefined;
+          pendingAttachmentUserSeen = false;
+        }
+      }
       continue;
     }
 
@@ -93,6 +102,7 @@ export function projectDashboard(
     if (entry.type === "custom" && entry.customType === "opencandle-user-input") {
       const attachments = asArray(asRecord(entry.data).attachments);
       pendingAttachmentCount = attachments.length > 0 ? attachments.length : undefined;
+      pendingAttachmentUserSeen = false;
       if (state.lastTurn) {
         if (pendingAttachmentCount !== undefined)
           state.lastTurn.attachmentCount = pendingAttachmentCount;
@@ -105,7 +115,13 @@ export function projectDashboard(
       state.lastTurn = projectRouteContext(entry.data, pendingAttachmentCount);
       addKnownSymbols(state, asArray(asRecord(asRecord(entry.data).entities).symbols));
       pendingAttachmentCount = undefined;
+      pendingAttachmentUserSeen = false;
       continue;
+    }
+
+    if (pendingAttachmentUserSeen) {
+      pendingAttachmentCount = undefined;
+      pendingAttachmentUserSeen = false;
     }
 
     if (entry.type === "custom" && entry.customType === "opencandle-validation") {

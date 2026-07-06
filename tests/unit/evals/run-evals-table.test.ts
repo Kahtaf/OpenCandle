@@ -25,6 +25,14 @@ describe("eval front door dispatch table", () => {
     expect(packageJson.scripts?.eval).toBe("tsx tests/scripts/run-evals.ts");
   });
 
+  it("runs resolved eval commands without shell argument parsing", () => {
+    const frontDoorSource = readFileSync("tests/scripts/run-evals.ts", "utf-8");
+
+    expect(frontDoorSource).toContain("spawnSync(resolved.command, resolved.args");
+    expect(frontDoorSource).toContain("shell: false");
+    expect(frontDoorSource).not.toContain("shell: true");
+  });
+
   it("lists every suite from the consolidation design", () => {
     expect(listEvalSuites().map((suite) => suite.id)).toEqual([
       "cases",

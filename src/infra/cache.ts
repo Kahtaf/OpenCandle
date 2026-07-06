@@ -12,21 +12,27 @@ export interface StaleResult<T> {
   cachedAt: number;
 }
 
-interface StaleMetadata {
-  stale: boolean;
+interface CacheMetadata {
+  status: "none" | "cached" | "stale";
   cachedAt: number;
 }
 
-const staleMetadataStorage = new AsyncLocalStorage<StaleMetadata>();
+const cacheMetadataStorage = new AsyncLocalStorage<CacheMetadata>();
 
-export async function runWithStaleMetadata<T>(
-  fn: () => Promise<T>,
-): Promise<{ value: T; stale?: { cachedAt: number } }> {
-  const metadata: StaleMetadata = { stale: false, cachedAt: 0 };
-  const value = await staleMetadataStorage.run(metadata, fn);
+export async function runWithStaleMetadata<T>(fn: () => Promise<T>): Promise<{
+  value: T;
+  cache?: { status: "cached" | "stale"; cachedAt: number };
+  stale?: { cachedAt: number };
+}> {
+  const metadata: CacheMetadata = { status: "none", cachedAt: 0 };
+  const value = await cacheMetadataStorage.run(metadata, fn);
   return {
     value,
-    stale: metadata.stale ? { cachedAt: metadata.cachedAt } : undefined,
+    cache:
+      metadata.status === "cached" || metadata.status === "stale"
+        ? { status: metadata.status, cachedAt: metadata.cachedAt }
+        : undefined,
+    stale: metadata.status === "stale" ? { cachedAt: metadata.cachedAt } : undefined,
   };
 }
 
@@ -37,6 +43,11 @@ export class Cache {
     const entry = this.store.get(key);
     if (!entry) return undefined;
     if (Date.now() > entry.expiresAt) return undefined;
+    const metadata = cacheMetadataStorage.getStore();
+    if (metadata && metadata.status === "none") {
+      metadata.status = "cached";
+      metadata.cachedAt = entry.cachedAt;
+    }
     return entry.value as T;
   }
 
@@ -54,9 +65,9 @@ export class Cache {
       return undefined;
     }
 
-    const metadata = staleMetadataStorage.getStore();
+    const metadata = cacheMetadataStorage.getStore();
     if (metadata) {
-      metadata.stale = true;
+      metadata.status = "stale";
       metadata.cachedAt = entry.cachedAt;
     }
     return { value: entry.value as T, stale: true, cachedAt: entry.cachedAt };

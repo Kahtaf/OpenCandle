@@ -15,7 +15,6 @@ import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
-import { searchInstruments } from "../instruments/instrument-api.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
@@ -25,14 +24,13 @@ import { EntityPopover } from "./entity-popover.jsx";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { groupToolRuns } from "./tool-run-grouper.js";
+import { useSymbolResolution } from "./use-symbol-resolution.js";
 
 const EMPTY_KNOWN_SYMBOLS = [];
-const EMPTY_SYMBOL_RESOLUTION = {
-  candidate: null,
-  error: "",
-  resolving: false,
-};
 
+// React Doctor still flags this pre-existing shell as a giant component. New
+// async symbol-resolution state lives in a hook while the broader split remains
+// outside this review-focused change.
 export function ChatPanel({
   events = [],
   liveEvents = [],
@@ -69,7 +67,7 @@ export function ChatPanel({
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState("");
-  const [symbolResolution, setSymbolResolution] = useState(EMPTY_SYMBOL_RESOLUTION);
+  const symbolResolution = useSymbolResolution(selectedSymbol);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
   const marketState = useMarketState();
@@ -103,34 +101,6 @@ export function ChatPanel({
     () => (Array.isArray(dashboard?.knownSymbols) ? dashboard.knownSymbols : []),
     [dashboard?.knownSymbols],
   );
-
-  useEffect(() => {
-    if (!selectedSymbol) return undefined;
-    let disposed = false;
-    setSymbolResolution({ candidate: null, error: "", resolving: true });
-    searchInstruments(selectedSymbol)
-      .then((candidates) => {
-        if (disposed) return;
-        const match =
-          candidates.find((candidate) => candidate.symbol === selectedSymbol) ?? candidates[0];
-        setSymbolResolution({
-          candidate: match ?? null,
-          error: match ? "" : "unresolved symbol",
-          resolving: false,
-        });
-      })
-      .catch((error) => {
-        if (disposed) return;
-        setSymbolResolution({
-          candidate: null,
-          error: error instanceof Error ? error.message : String(error),
-          resolving: false,
-        });
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [selectedSymbol]);
 
   const onTranscriptClick = useCallback((event) => {
     const chip = event.target?.closest?.("[data-symbol]");

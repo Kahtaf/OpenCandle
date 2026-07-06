@@ -82,6 +82,23 @@ describe("chat run request helpers", () => {
     ).toEqual({ sessionId: "session-1", actionId: "chat-action-1" });
   });
 
+  it("preserves image and saved-context attachments for failed-run retries", () => {
+    expect(
+      buildRetryChatRunOptions({
+        prompt: "review this chart",
+        sessionId: "session-1",
+        actionId: "chat-action-1",
+        images: [{ data: "base64", mimeType: "image/png" }],
+        attachments: [{ kind: "portfolio" }],
+      }),
+    ).toEqual({
+      sessionId: "session-1",
+      actionId: "chat-action-1",
+      images: [{ data: "base64", mimeType: "image/png" }],
+      attachments: [{ kind: "portfolio" }],
+    });
+  });
+
   it("omits cleared action ids for deliberate failed-run retries", () => {
     expect(
       buildRetryChatRunOptions({

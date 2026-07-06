@@ -16,7 +16,7 @@ The implementation is expected to touch `src/pi/`, `src/runtime/session-coordina
 
 ## Memory Schema Ask
 
-This proposal requests the memory SQLite schema change required by `AGENTS.md`: add an additive v8 to v9 migration for a durable `forget_entries` table, for example `forget_entries(id, kind TEXT CHECK(kind IN ('ticker','phrase')), pattern TEXT, created_at)`. The implementation PR must link this proposal as the ask-first authorization, include a migration test upgrading a real v8 fixture database, and prove no data loss.
+This proposal requests the memory SQLite schema change required by `AGENTS.md`: add an additive v9 to v10 migration for a durable `forget_entries` table, for example `forget_entries(id, kind TEXT CHECK(kind IN ('ticker','phrase')), pattern TEXT, created_at)`. The implementation PR must link this proposal as the ask-first authorization, include a migration test upgrading a representative v9 database constructed in a temporary directory, and prove no data loss. The original draft reserved v8 to v9, but `close-the-loop` now owns that additive migration for `analysis_reflections`.
 
 ## Non-Goals and Limitations
 

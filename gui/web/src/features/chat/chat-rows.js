@@ -143,13 +143,23 @@ export function compactDuplicateUserRows(rows) {
     if (
       row.type === "user_message" &&
       previous?.type === "user_message" &&
-      textContent(row.content) === textContent(previous.content)
+      userRowSignature(row) === userRowSignature(previous)
     ) {
       continue;
     }
     compacted.push(row);
   }
   return compacted;
+}
+
+function userRowSignature(row) {
+  return JSON.stringify({
+    text: textContent(row.content),
+    attachments: (row.attachments || []).map((attachment) => ({
+      kind: String(attachment?.kind || ""),
+      label: String(attachment?.label || ""),
+    })),
+  });
 }
 
 function isBackgroundTool(tool) {

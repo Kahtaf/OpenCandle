@@ -1,12 +1,13 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { InstrumentSuggestionList } from "../../../gui/web/src/features/instruments/instrument-search.jsx";
 import {
   formatInstrumentCandidateLabel,
   formatInstrumentCandidateMeta,
-  InstrumentSuggestionList,
   nextInstrumentActiveIndex,
-} from "../../../gui/web/src/features/instruments/instrument-search.jsx";
+  resolveInstrumentSearchState,
+} from "../../../gui/web/src/features/instruments/instrument-search-helpers.js";
 
 describe("instrument search UI helpers", () => {
   const candidates = [
@@ -47,5 +48,32 @@ describe("instrument search UI helpers", () => {
     expect(nextInstrumentActiveIndex(-1, 3, "next")).toBe(0);
     expect(nextInstrumentActiveIndex(2, 3, "next")).toBe(0);
     expect(nextInstrumentActiveIndex(0, 3, "previous", { wrap: false })).toBe(0);
+  });
+
+  it("hides stale candidates while a new query is waiting for fresh results", () => {
+    const staleState = {
+      query: "AA",
+      activeIndex: 0,
+      candidates: [{ provider: "yahoo", symbol: "AAPL", name: "Apple Inc." }],
+    };
+
+    expect(
+      resolveInstrumentSearchState({
+        state: staleState,
+        query: "MS",
+        enabled: true,
+        minLength: 1,
+        initialActiveIndex: 0,
+      }),
+    ).toEqual({ candidates: [], activeIndex: 0 });
+    expect(
+      resolveInstrumentSearchState({
+        state: staleState,
+        query: "AA",
+        enabled: true,
+        minLength: 1,
+        initialActiveIndex: 0,
+      }).candidates,
+    ).toEqual(staleState.candidates);
   });
 });

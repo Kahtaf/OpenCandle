@@ -42,6 +42,7 @@ import { waitForNewEntryId } from "./session-entry-wait.js";
 import { buildCatalog } from "./tool-metadata.js";
 import {
   acquireWriterLock,
+  isCoordinatorOwnerAlive,
   readWriterLock,
   refreshWriterLock,
   releaseWriterLock,
@@ -497,7 +498,7 @@ async function handleSseChatRun(
 
 export function canProxyChatRunToCoordinator(runSessionManager: SessionManager): boolean {
   const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
-  return Boolean(lock?.coordinatorEndpoint && lock.coordinatorSecret && lock.pid !== process.pid);
+  return hasLiveCoordinatorLock(lock);
 }
 
 async function proxyChatRunToCoordinator(
@@ -506,7 +507,7 @@ async function proxyChatRunToCoordinator(
   body: Record<string, unknown>,
 ): Promise<boolean> {
   const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
-  if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return false;
+  if (!hasLiveCoordinatorLock(lock)) return false;
   const endpoint = new URL("/api/local-coordinator/chat-run", lock.coordinatorEndpoint);
   let response: Response;
   try {
@@ -529,6 +530,21 @@ async function proxyChatRunToCoordinator(
   }
   res.end();
   return true;
+}
+
+function hasLiveCoordinatorLock(
+  lock: ReturnType<typeof readWriterLock>,
+  staleGraceMs = 15_000,
+): lock is NonNullable<ReturnType<typeof readWriterLock>> & {
+  coordinatorEndpoint: string;
+  coordinatorSecret: string;
+} {
+  if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret || lock.pid === process.pid) {
+    return false;
+  }
+  const heartbeat = Date.parse(lock.lastHeartbeat);
+  const hasFreshHeartbeat = Number.isFinite(heartbeat) && Date.now() - heartbeat <= staleGraceMs;
+  return hasFreshHeartbeat && isCoordinatorOwnerAlive(lock.pid);
 }
 
 async function streamAcceptedSseChatRun({
@@ -573,6 +589,13 @@ async function streamAcceptedSseChatRun({
     kind: attachment.kind,
     label: attachmentLabel(attachment),
   }));
+  const inputAttachmentLabels = [
+    ...promptImages.map((image, index) => ({
+      kind: "image",
+      label: `${image.mimeType || "image"} #${index + 1}`,
+    })),
+    ...attachmentLabels,
+  ];
 
   const currentSessionFile = currentSessionManager.getSessionFile();
   const targetSessionFile = runSessionManager.getSessionFile();
@@ -637,22 +660,26 @@ async function streamAcceptedSseChatRun({
     startSeq: seq,
     emit: (event) => writeSse(res, event),
     originalPrompt: prompt,
-    originalAttachments: attachmentLabels,
+    originalAttachments: inputAttachmentLabels,
   });
   const observation = createPromptObservation();
+  let originalInputMarkerAppended = false;
+  const appendOriginalInputMarker = () => {
+    if (inputAttachmentLabels.length === 0 || originalInputMarkerAppended) return;
+    runSessionManager.appendCustomEntry("opencandle-user-input", {
+      original: prompt,
+      attachments: inputAttachmentLabels,
+    });
+    originalInputMarkerAppended = true;
+  };
   let actionAccepted = false;
   const recordAcceptedAction = () => {
     if (actionAccepted) return;
+    appendOriginalInputMarker();
     recordAcceptedSessionAction(runSessionManager, actionId);
     if (useCurrentSession) options.syncCurrentWriterLockScope?.();
     actionAccepted = true;
   };
-  if (attachmentLabels.length > 0) {
-    runSessionManager.appendCustomEntry("opencandle-user-input", {
-      original: prompt,
-      attachments: attachmentLabels,
-    });
-  }
 
   const unsubscribeLive = runSession.subscribe((event) => {
     liveAdapter.handle(event);
@@ -906,7 +933,14 @@ export function parseChatRunBody(body: unknown): ChatRunParseResult {
       if (!CHAT_RUN_IMAGE_MIME_TYPES.has(mimeType)) {
         return { ok: false, error: "Unsupported image mime type" };
       }
-      if (Buffer.byteLength(data, "base64") > CHAT_RUN_MAX_IMAGE_BYTES) {
+      if (data.length > Math.ceil(CHAT_RUN_MAX_IMAGE_BYTES / 3) * 4) {
+        return { ok: false, error: "Image attachment must be 5 MB or smaller" };
+      }
+      const decoded = decodeStrictBase64(data);
+      if (!decoded) {
+        return { ok: false, error: "Image attachment data must be valid base64" };
+      }
+      if (decoded.byteLength > CHAT_RUN_MAX_IMAGE_BYTES) {
         return { ok: false, error: "Image attachment must be 5 MB or smaller" };
       }
       images.push({ data, mimeType });
@@ -934,10 +968,29 @@ export function parseChatRunBody(body: unknown): ChatRunParseResult {
     }
   }
 
+  if (prompt.startsWith("/") && (images.length > 0 || attachments.length > 0)) {
+    return { ok: false, error: "Attachments are not supported for slash commands" };
+  }
+
   return { ok: true, value: { prompt, images, attachments } };
 }
 
+function decodeStrictBase64(data: string): Buffer | null {
+  if (!data || data.trim() !== data) return null;
+  if (data.length % 4 !== 0) return null;
+  if (/[^A-Za-z0-9+/=]/.test(data)) return null;
+  const firstPadding = data.indexOf("=");
+  if (firstPadding !== -1) {
+    const padding = data.slice(firstPadding);
+    if (!/^={1,2}$/.test(padding)) return null;
+  }
+  const decoded = Buffer.from(data, "base64");
+  if (decoded.byteLength === 0) return null;
+  return decoded.toString("base64") === data ? decoded : null;
+}
+
 export async function buildDispatchedPrompt(parsed: ParsedChatRunBody): Promise<string> {
+  if (parsed.prompt.startsWith("/")) return parsed.prompt;
   if (parsed.attachments.length === 0) return parsed.prompt;
   const db = initDefaultDatabase();
   try {

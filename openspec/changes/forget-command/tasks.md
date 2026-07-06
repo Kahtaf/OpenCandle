@@ -9,8 +9,8 @@
 ## 2. Durable Forget List
 
 - [ ] 2.1 Add the `forget_entries` memory SQLite table with `kind` constrained to `ticker` or `phrase`, stored normalized `pattern`, and `created_at`.
-- [ ] 2.2 Bump the memory database schema from v8 to v9 through an additive migration.
-- [ ] 2.3 Add a migration test upgrading a real v8 fixture database to v9 and asserting no data loss.
+- [ ] 2.2 Bump the memory database schema from v9 to v10 through an additive migration.
+- [ ] 2.3 Add a migration test upgrading a representative v9 database constructed in a temporary directory to v10 and asserting no data loss.
 - [ ] 2.4 Ensure forget entries persist across sessions and processes that share the same memory database.
 
 ## 3. Suppression Surfaces

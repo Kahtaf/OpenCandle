@@ -337,6 +337,36 @@ describe("projectDashboard", () => {
     });
   });
 
+  it("does not carry attachment markers from unrouted turns into later route contexts", () => {
+    const state = projectDashboard([
+      customEntry("opencandle-user-input", {
+        original: "look at this image",
+        attachments: [{ kind: "image", label: "image/png #1" }],
+      }),
+      messageEntry({
+        role: "user",
+        content: "look at this image",
+        timestamp: Date.now(),
+      }),
+      customEntry("opencandle-model-setup", {
+        requirement: "connect_model",
+      }),
+      customEntry("opencandle-route-context", {
+        routeKind: "agent_task",
+        entities: { symbols: ["TSLA"] },
+        slots: {},
+        priorTurns: [],
+      }),
+    ]);
+
+    expect(state.lastTurn).toEqual({
+      routeKind: "agent_task",
+      symbols: ["TSLA"],
+      slotSources: {},
+      priorTurnCount: 0,
+    });
+  });
+
   it("projects Reddit external-tool-required results into data quality", () => {
     const state = projectDashboard([
       messageEntry({

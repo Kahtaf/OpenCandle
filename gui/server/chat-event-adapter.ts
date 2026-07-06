@@ -23,6 +23,8 @@ export function sessionEntriesToChatEvents(
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
   let pendingOriginalAttachments: Array<{ kind: string; label: string }> = [];
+  let lastEntryWasUserMessage = false;
+  let lastUserCompletedEventIndex: number | null = null;
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
   events.push({
@@ -35,12 +37,20 @@ export function sessionEntriesToChatEvents(
 
   for (const entry of entries) {
     if (isOriginalInputEntry(entry)) {
-      pendingOriginalInput = originalInputText(entry);
-      pendingOriginalAttachments = originalInputAttachments(entry);
+      const originalInput = originalInputText(entry);
+      const originalAttachments = originalInputAttachments(entry);
+      if (lastEntryWasUserMessage && lastUserCompletedEventIndex != null) {
+        applyOriginalInput(events[lastUserCompletedEventIndex], originalInput, originalAttachments);
+      } else {
+        pendingOriginalInput = originalInput;
+        pendingOriginalAttachments = originalAttachments;
+      }
+      lastEntryWasUserMessage = false;
       continue;
     }
 
     if (entry.type === "custom_message") {
+      lastEntryWasUserMessage = false;
       const messageId = entry.id;
       events.push({
         type: "custom.message",
@@ -53,7 +63,10 @@ export function sessionEntriesToChatEvents(
       continue;
     }
 
-    if (entry.type !== "message") continue;
+    if (entry.type !== "message") {
+      lastEntryWasUserMessage = false;
+      continue;
+    }
     const message = entry.message as Message;
     const messageId = entry.id;
 
@@ -65,7 +78,7 @@ export function sessionEntriesToChatEvents(
         role: "user",
         seq: seq++,
       });
-      events.push({
+      const completedEvent: ChatEvent = {
         type: "message.completed",
         sessionId: options.sessionId,
         messageId,
@@ -74,13 +87,17 @@ export function sessionEntriesToChatEvents(
           ? { attachments: pendingOriginalAttachments }
           : {}),
         seq: seq++,
-      });
+      };
+      events.push(completedEvent);
+      lastUserCompletedEventIndex = events.length - 1;
+      lastEntryWasUserMessage = true;
       pendingOriginalInput = null;
       pendingOriginalAttachments = [];
       continue;
     }
 
     if (message.role === "assistant") {
+      lastEntryWasUserMessage = false;
       events.push({
         type: "message.created",
         sessionId: options.sessionId,
@@ -123,6 +140,7 @@ export function sessionEntriesToChatEvents(
     }
 
     if (message.role === "toolResult") {
+      lastEntryWasUserMessage = false;
       const tool = message as ToolResultMessage;
       const toolCallId = tool.toolCallId || `tool-${entry.id}`;
       resolvedToolCalls.add(toolCallId);
@@ -168,6 +186,20 @@ export function sessionEntriesToChatEvents(
   }
 
   return events;
+}
+
+function applyOriginalInput(
+  event: ChatEvent | undefined,
+  originalInput: string | null,
+  attachments: Array<{ kind: string; label: string }>,
+): void {
+  if (event?.type !== "message.completed") return;
+  if (originalInput) {
+    event.content = userMessageContent(event.content, originalInput);
+  }
+  if (attachments.length > 0) {
+    event.attachments = attachments;
+  }
 }
 
 export function isOriginalInputEntry(entry: SessionEntry): boolean {

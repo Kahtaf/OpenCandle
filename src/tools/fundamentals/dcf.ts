@@ -1,10 +1,11 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { getConfig } from "../../config.js";
-import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getFinancials, getOverview } from "../../providers/alpha-vantage.js";
+import { ProviderCredentialError } from "../../providers/provider-credential-error.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import { getQuote, getYahooFinancials } from "../../providers/yahoo-finance.js";
+import type { ProviderResult } from "../../runtime/evidence.js";
 import type { FinancialStatement } from "../../types/fundamentals.js";
 
 export interface DCFResult {
@@ -167,6 +168,31 @@ export function computeNetDebt(f: FinancialStatement): number | null {
   return null;
 }
 
+async function optionalAlphaVantage<T>(
+  apiKey: string | undefined,
+  fn: (apiKey: string) => Promise<T>,
+): Promise<ProviderResult<T>> {
+  if (!apiKey) {
+    return {
+      status: "unavailable",
+      reason: "Alpha Vantage API key not configured",
+      provider: "alphavantage",
+    };
+  }
+  try {
+    return await wrapProvider("alphavantage", () => fn(apiKey));
+  } catch (error) {
+    if (error instanceof ProviderCredentialError) {
+      return {
+        status: "unavailable",
+        reason: `Alpha Vantage credential ${error.reason}`,
+        provider: "alphavantage",
+      };
+    }
+    throw error;
+  }
+}
+
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),
   growth_rate: Type.Optional(
@@ -193,191 +219,210 @@ export const dcfTool: AgentTool<typeof params> = {
     "Compute a Discounted Cash Flow (DCF) intrinsic value estimate for a stock. Uses free cash flow, growth projections, and a discount rate to estimate what the stock is worth. Returns intrinsic value per share, margin of safety vs current price, and a sensitivity table.",
   parameters: params,
   async execute(_toolCallId, args) {
-    return withCredentialCheck("alpha_vantage", async () => {
-      const symbol = args.symbol.toUpperCase();
-      const config = getConfig();
-      const alphaVantageApiKey = config.alphaVantageApiKey;
-      if (!alphaVantageApiKey) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "⚠ DCF valuation unavailable: Alpha Vantage API key is required for financial statement access.",
-            },
-          ],
-          details: null,
-        };
-      }
+    const symbol = args.symbol.toUpperCase();
+    const config = getConfig();
+    const alphaVantageApiKey = config.alphaVantageApiKey;
 
-      const [alphaVantageFinancialsResult, quoteResult] = await Promise.all([
-        wrapProvider("alphavantage", () => getFinancials(symbol, alphaVantageApiKey)),
-        wrapProvider("yahoo", () => getQuote(symbol)),
-      ]);
+    const [alphaVantageFinancialsResult, quoteResult] = await Promise.all([
+      optionalAlphaVantage(alphaVantageApiKey, (apiKey) => getFinancials(symbol, apiKey)),
+      wrapProvider("yahoo", () => getQuote(symbol)),
+    ]);
 
-      const missing: string[] = [];
-      if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
+    const missing: string[] = [];
+    if (quoteResult.status === "unavailable") missing.push(`stock quote (${quoteResult.reason})`);
 
-      if (quoteResult.status === "unavailable") {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `⚠ DCF valuation unavailable for ${symbol}. Missing: ${missing.join(", ")}. Both financials and current price are required.`,
-            },
-          ],
-          details: null,
-        };
-      }
-
-      const quote = quoteResult.data;
-      let financialsSource = "Alpha Vantage";
-      let financials: FinancialStatement[];
-      if (alphaVantageFinancialsResult.status === "ok") {
-        financials = alphaVantageFinancialsResult.data;
-      } else {
-        const yahooFinancialsResult = await wrapProvider("yahoo", () => getYahooFinancials(symbol));
-        if (yahooFinancialsResult.status === "unavailable") {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `⚠ DCF valuation unavailable for ${symbol}. Missing: financial statements (Alpha Vantage: ${alphaVantageFinancialsResult.reason}; Yahoo Finance: ${yahooFinancialsResult.reason}). Both financials and current price are required.`,
-              },
-            ],
-            details: null,
-          };
-        }
-        financials = yahooFinancialsResult.data;
-        financialsSource = "Yahoo Finance";
-      }
-
-      const latestFCF = financials[0]?.freeCashFlow ?? 0;
-      if (latestFCF <= 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `${symbol} has negative or zero free cash flow ($${latestFCF.toLocaleString()}). DCF is not meaningful for companies without positive FCF.`,
-            },
-          ],
-          details: null,
-        };
-      }
-
-      // Estimate growth from historical FCF if not provided
-      let growthRate = args.growth_rate ?? 0.1;
-      if (!args.growth_rate && financials.length >= 2) {
-        const olderFCF = financials[1]?.freeCashFlow;
-        if (olderFCF && olderFCF > 0) {
-          growthRate = Math.max(0.02, Math.min(0.25, (latestFCF - olderFCF) / olderFCF));
-        }
-      }
-
-      const discountRate = args.discount_rate ?? 0.1;
-      const terminalGrowth = args.terminal_growth ?? 0.03;
-      if (discountRate <= terminalGrowth) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `⚠ Invalid DCF assumptions for ${symbol}: terminal growth (${(terminalGrowth * 100).toFixed(1)}%) must be below the discount rate (${(discountRate * 100).toFixed(1)}%) for the Gordon Growth terminal value to be meaningful. Lower terminal_growth or raise discount_rate.`,
-            },
-          ],
-          details: null,
-        };
-      }
-
-      const years = args.projection_years ?? 5;
-      // Prefer an actual reported share count, then derive from market cap
-      // only when needed. Never substitute a placeholder share count.
-      const statementSharesOutstanding = financials[0]?.sharesOutstanding;
-      let marketCap = quote.marketCap > 0 ? quote.marketCap : 0;
-      let sharesOutstanding =
-        statementSharesOutstanding && statementSharesOutstanding > 0
-          ? statementSharesOutstanding
-          : 0;
-      if (sharesOutstanding <= 0 && marketCap <= 0) {
-        const overviewResult = await wrapProvider("alphavantage", () =>
-          getOverview(symbol, alphaVantageApiKey),
-        );
-        if (overviewResult.status === "ok" && overviewResult.data.marketCap > 0) {
-          marketCap = overviewResult.data.marketCap;
-        }
-      }
-      if (sharesOutstanding <= 0 && quote.price > 0 && marketCap > 0) {
-        sharesOutstanding = marketCap / quote.price;
-      }
-      if (sharesOutstanding <= 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `⚠ Cannot compute a per-share DCF for ${symbol}: shares outstanding are unavailable from financial statements and cannot be derived because ${quote.price <= 0 ? "the current quote price is unavailable" : "market capitalization is unavailable from the overview and quote providers"}. Per-share intrinsic value requires a real share count.`,
-            },
-          ],
-          details: null,
-        };
-      }
-      // Signed on purpose: net cash (negative net debt) adds to equity value.
-      // Omit the adjustment if debt/cash fields are missing; assets minus
-      // liabilities is book equity, not a net-cash proxy.
-      const computedNetDebt = financials[0] ? computeNetDebt(financials[0]) : null;
-      const netDebt = computedNetDebt ?? 0;
-
-      const result = computeDCF({
-        freeCashFlow: latestFCF,
-        growthRate,
-        discountRate,
-        terminalGrowth,
-        years,
-        netDebt,
-        sharesOutstanding,
-      });
-      if (computedNetDebt == null) {
-        result.warnings.push(
-          "Net debt adjustment omitted because total debt and cash equivalents were unavailable.",
-        );
-      }
-
-      const marginOfSafety = (result.intrinsicValue - quote.price) / result.intrinsicValue;
-      const upside = (result.intrinsicValue - quote.price) / quote.price;
-
-      const lines = [
-        `**${symbol} DCF Valuation**`,
-        ``,
-        `Current Price: $${quote.price.toFixed(2)}`,
-        `Intrinsic Value: $${result.intrinsicValue.toFixed(2)}`,
-        `Margin of Safety: ${(marginOfSafety * 100).toFixed(1)}%`,
-        `Upside/Downside: ${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(1)}%`,
-        ``,
-        `**Assumptions**`,
-        `Financial statements source: ${financialsSource}`,
-        `Free Cash Flow: $${(latestFCF / 1e9).toFixed(2)}B`,
-        `Growth Rate: ${(growthRate * 100).toFixed(1)}%`,
-        `Discount Rate (WACC): ${(discountRate * 100).toFixed(1)}%`,
-        `Terminal Growth: ${(terminalGrowth * 100).toFixed(1)}%`,
-        `Projection: ${years} years`,
-        ``,
-        `**Projected Cash Flows**`,
-        ...result.projectedCashFlows.map(
-          (cf) =>
-            `  Year ${cf.year}: FCF $${(cf.fcf / 1e9).toFixed(2)}B → PV $${(cf.presentValue / 1e9).toFixed(2)}B`,
-        ),
-        `  Terminal Value: $${(result.terminalValue / 1e9).toFixed(2)}B`,
-        `  Enterprise Value: $${(result.enterpriseValue / 1e9).toFixed(2)}B`,
-        ``,
-        `**Sensitivity Table** (Intrinsic Value at different Growth/Discount rates)`,
-        ...formatSensitivityTable(result.sensitivityTable),
-        ...(result.warnings.length > 0
-          ? ["", "**Warnings**", ...result.warnings.map((warning) => `- ${warning}`)]
-          : []),
-      ];
-
+    if (quoteResult.status === "unavailable") {
       return {
-        content: [{ type: "text", text: lines.join("\n") }],
-        details: { ...result, currentPrice: quote.price, marginOfSafety, upside },
+        content: [
+          {
+            type: "text",
+            text: `⚠ DCF valuation unavailable for ${symbol}. Missing: ${missing.join(", ")}. Both financials and current price are required.`,
+          },
+        ],
+        details: null,
       };
+    }
+
+    const quote = quoteResult.data;
+    if (quote.price <= 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `⚠ DCF valuation unavailable for ${symbol}. Missing: current stock price. DCF output requires a real current quote price.`,
+          },
+        ],
+        details: null,
+      };
+    }
+
+    let financialsSource = "Alpha Vantage";
+    let financials: FinancialStatement[];
+    if (alphaVantageFinancialsResult.status === "ok" && !alphaVantageFinancialsResult.stale) {
+      financials = alphaVantageFinancialsResult.data;
+    } else {
+      const alphaVantageReason =
+        alphaVantageFinancialsResult.status === "ok"
+          ? `stale cached financial statements${
+              alphaVantageFinancialsResult.timestamp
+                ? ` from ${alphaVantageFinancialsResult.timestamp}`
+                : ""
+            }`
+          : alphaVantageFinancialsResult.reason;
+      const yahooFinancialsResult = await wrapProvider("yahoo", () => getYahooFinancials(symbol));
+      if (yahooFinancialsResult.status === "unavailable") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ DCF valuation unavailable for ${symbol}. Missing: financial statements (Alpha Vantage: ${alphaVantageReason}; Yahoo Finance: ${yahooFinancialsResult.reason}). Both financials and current price are required.`,
+            },
+          ],
+          details: null,
+        };
+      }
+      if (yahooFinancialsResult.stale) {
+        const cachedAt = yahooFinancialsResult.timestamp
+          ? ` from ${yahooFinancialsResult.timestamp}`
+          : "";
+        return {
+          content: [
+            {
+              type: "text",
+              text: `⚠ DCF valuation unavailable for ${symbol}. Yahoo Finance returned stale cached financial statements${cachedAt} after Alpha Vantage could not provide fresh financial statements (${alphaVantageReason}). DCF output requires fresh financial statements and a current price.`,
+            },
+          ],
+          details: null,
+        };
+      }
+      financials = yahooFinancialsResult.data;
+      financialsSource = "Yahoo Finance";
+    }
+
+    const latestFCF = financials[0]?.freeCashFlow ?? 0;
+    if (latestFCF <= 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `${symbol} has negative or zero free cash flow ($${latestFCF.toLocaleString()}). DCF is not meaningful for companies without positive FCF.`,
+          },
+        ],
+        details: null,
+      };
+    }
+
+    // Estimate growth from historical FCF if not provided
+    let growthRate = args.growth_rate ?? 0.1;
+    if (!args.growth_rate && financials.length >= 2) {
+      const olderFCF = financials[1]?.freeCashFlow;
+      if (olderFCF && olderFCF > 0) {
+        growthRate = Math.max(0.02, Math.min(0.25, (latestFCF - olderFCF) / olderFCF));
+      }
+    }
+
+    const discountRate = args.discount_rate ?? 0.1;
+    const terminalGrowth = args.terminal_growth ?? 0.03;
+    if (discountRate <= terminalGrowth) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `⚠ Invalid DCF assumptions for ${symbol}: terminal growth (${(terminalGrowth * 100).toFixed(1)}%) must be below the discount rate (${(discountRate * 100).toFixed(1)}%) for the Gordon Growth terminal value to be meaningful. Lower terminal_growth or raise discount_rate.`,
+          },
+        ],
+        details: null,
+      };
+    }
+
+    const years = args.projection_years ?? 5;
+    // Prefer an actual reported share count, then derive from market cap
+    // only when needed. Never substitute a placeholder share count.
+    const statementSharesOutstanding = financials[0]?.sharesOutstanding;
+    let marketCap = quote.marketCap > 0 ? quote.marketCap : 0;
+    let sharesOutstanding =
+      statementSharesOutstanding && statementSharesOutstanding > 0 ? statementSharesOutstanding : 0;
+    if (sharesOutstanding <= 0 && marketCap <= 0) {
+      const overviewResult = await optionalAlphaVantage(alphaVantageApiKey, (apiKey) =>
+        getOverview(symbol, apiKey),
+      );
+      if (overviewResult.status === "ok" && overviewResult.data.marketCap > 0) {
+        marketCap = overviewResult.data.marketCap;
+      }
+    }
+    if (sharesOutstanding <= 0 && quote.price > 0 && marketCap > 0) {
+      sharesOutstanding = marketCap / quote.price;
+    }
+    if (sharesOutstanding <= 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `⚠ Cannot compute a per-share DCF for ${symbol}: shares outstanding are unavailable from financial statements and cannot be derived because ${quote.price <= 0 ? "the current quote price is unavailable" : "market capitalization is unavailable from the overview and quote providers"}. Per-share intrinsic value requires a real share count.`,
+          },
+        ],
+        details: null,
+      };
+    }
+    // Signed on purpose: net cash (negative net debt) adds to equity value.
+    // Omit the adjustment if debt/cash fields are missing; assets minus
+    // liabilities is book equity, not a net-cash proxy.
+    const computedNetDebt = financials[0] ? computeNetDebt(financials[0]) : null;
+    const netDebt = computedNetDebt ?? 0;
+
+    const result = computeDCF({
+      freeCashFlow: latestFCF,
+      growthRate,
+      discountRate,
+      terminalGrowth,
+      years,
+      netDebt,
+      sharesOutstanding,
     });
+    if (computedNetDebt == null) {
+      result.warnings.push(
+        "Net debt adjustment omitted because total debt and cash equivalents were unavailable.",
+      );
+    }
+
+    const marginOfSafety = (result.intrinsicValue - quote.price) / result.intrinsicValue;
+    const upside = (result.intrinsicValue - quote.price) / quote.price;
+
+    const lines = [
+      `**${symbol} DCF Valuation**`,
+      ``,
+      `Current Price: $${quote.price.toFixed(2)}`,
+      `Intrinsic Value: $${result.intrinsicValue.toFixed(2)}`,
+      `Margin of Safety: ${(marginOfSafety * 100).toFixed(1)}%`,
+      `Upside/Downside: ${upside >= 0 ? "+" : ""}${(upside * 100).toFixed(1)}%`,
+      ``,
+      `**Assumptions**`,
+      `Financial statements source: ${financialsSource}`,
+      `Free Cash Flow: $${(latestFCF / 1e9).toFixed(2)}B`,
+      `Growth Rate: ${(growthRate * 100).toFixed(1)}%`,
+      `Discount Rate (WACC): ${(discountRate * 100).toFixed(1)}%`,
+      `Terminal Growth: ${(terminalGrowth * 100).toFixed(1)}%`,
+      `Projection: ${years} years`,
+      ``,
+      `**Projected Cash Flows**`,
+      ...result.projectedCashFlows.map(
+        (cf) =>
+          `  Year ${cf.year}: FCF $${(cf.fcf / 1e9).toFixed(2)}B → PV $${(cf.presentValue / 1e9).toFixed(2)}B`,
+      ),
+      `  Terminal Value: $${(result.terminalValue / 1e9).toFixed(2)}B`,
+      `  Enterprise Value: $${(result.enterpriseValue / 1e9).toFixed(2)}B`,
+      ``,
+      `**Sensitivity Table** (Intrinsic Value at different Growth/Discount rates)`,
+      ...formatSensitivityTable(result.sensitivityTable),
+      ...(result.warnings.length > 0
+        ? ["", "**Warnings**", ...result.warnings.map((warning) => `- ${warning}`)]
+        : []),
+    ];
+
+    return {
+      content: [{ type: "text", text: lines.join("\n") }],
+      details: { ...result, currentPrice: quote.price, marginOfSafety, upside },
+    };
   },
 };
 

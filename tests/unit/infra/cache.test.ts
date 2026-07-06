@@ -107,9 +107,24 @@ describe("Cache", () => {
   });
 
   describe("runWithStaleMetadata", () => {
+    it("records fresh cache-hit metadata inside the current async scope", async () => {
+      vi.useFakeTimers();
+      cache.set("key", "data", 1000);
+      const cachedAt = Date.now();
+      vi.advanceTimersByTime(100);
+
+      const result = await runWithStaleMetadata(async () => cache.get("key"));
+
+      expect(result.value).toBe("data");
+      expect(result.cache).toEqual({ status: "cached", cachedAt });
+      expect(result.stale).toBeUndefined();
+      vi.useRealTimers();
+    });
+
     it("records stale metadata inside the current async scope", async () => {
       vi.useFakeTimers();
       cache.set("key", "data", 100);
+      const cachedAt = Date.now();
       vi.advanceTimersByTime(200);
 
       const result = await runWithStaleMetadata(async () => {
@@ -117,7 +132,8 @@ describe("Cache", () => {
       });
 
       expect(result.value).toBe("data");
-      expect(result.stale?.cachedAt).toBeGreaterThan(0);
+      expect(result.cache).toEqual({ status: "stale", cachedAt });
+      expect(result.stale).toEqual({ cachedAt });
       vi.useRealTimers();
     });
 

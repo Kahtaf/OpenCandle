@@ -34,6 +34,12 @@ export function buildRetryChatRunOptions(lastRun) {
   return {
     sessionId: lastRun.sessionId,
     ...(lastRun.actionId ? { actionId: lastRun.actionId } : {}),
+    ...(Array.isArray(lastRun.images) && lastRun.images.length > 0
+      ? { images: lastRun.images }
+      : {}),
+    ...(Array.isArray(lastRun.attachments) && lastRun.attachments.length > 0
+      ? { attachments: lastRun.attachments }
+      : {}),
   };
 }
 
@@ -71,9 +77,17 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         return;
       }
       const actionId = options.actionId || createSessionActionId("chat");
+      const runExtras = {
+        ...(Array.isArray(options.images) && options.images.length > 0
+          ? { images: options.images }
+          : {}),
+        ...(Array.isArray(options.attachments) && options.attachments.length > 0
+          ? { attachments: options.attachments }
+          : {}),
+      };
       setLastRuns((current) => ({
         ...current,
-        [key]: { prompt: trimmed, sessionId: targetSessionId, actionId },
+        [key]: { prompt: trimmed, sessionId: targetSessionId, actionId, ...runExtras },
       }));
       setRunStateFor(key, "connecting");
       setToast("");
@@ -86,14 +100,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(
-            buildChatRunRequestBody(trimmed, targetSessionId, actionId, {
-              ...(Array.isArray(options.images) && options.images.length > 0
-                ? { images: options.images }
-                : {}),
-              ...(Array.isArray(options.attachments) && options.attachments.length > 0
-                ? { attachments: options.attachments }
-                : {}),
-            }),
+            buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
           ),
           signal: abort.signal,
         });
@@ -118,7 +125,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           if (event.type === "run.failed") {
             setLastRuns((current) => ({
               ...current,
-              [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "" },
+              [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "", ...runExtras },
             }));
             setRunStateFor(key, "failed");
             setToast(event.error?.message || "Run failed");

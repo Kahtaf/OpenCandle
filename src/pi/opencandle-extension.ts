@@ -1242,6 +1242,10 @@ function hasUnconsumedOriginalInputMarker(ctx?: OriginalInputMarkerContext): boo
     }
     if (entry.type === "custom" && entry.customType === "opencandle-user-input") {
       markerAfterLastUser = true;
+      continue;
+    }
+    if (markerAfterLastUser) {
+      markerAfterLastUser = false;
     }
   }
   return markerAfterLastUser;

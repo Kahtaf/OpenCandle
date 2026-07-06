@@ -43,16 +43,40 @@ describe("optimistic GUI user messages", () => {
     expect(chatRowsFromEvents(persisted, optimistic)).toHaveLength(1);
     expect(chatRowsFromEvents(optimistic, persisted)).toHaveLength(1);
   });
+
+  it("keeps repeated user prompts when their attachments differ", () => {
+    const first = persistedUserEvents("first-user", "is this bullish or bearish?", [
+      { kind: "image", label: "image/png #1" },
+    ]);
+    const second = persistedUserEvents(
+      "second-user",
+      "is this bullish or bearish?",
+      [{ kind: "image", label: "image/png #2" }],
+      3,
+    );
+
+    const rows = chatRowsFromEvents([...first, ...second]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ attachments: [{ kind: "image", label: "image/png #1" }] });
+    expect(rows[1]).toMatchObject({ attachments: [{ kind: "image", label: "image/png #2" }] });
+  });
 });
 
-function persistedUserEvents(messageId: string, text: string) {
+function persistedUserEvents(
+  messageId: string,
+  text: string,
+  attachments?: unknown[],
+  seqStart = 1,
+) {
   return [
-    { type: "message.created" as const, messageId, role: "user" as const, seq: 1 },
+    { type: "message.created" as const, messageId, role: "user" as const, seq: seqStart },
     {
       type: "message.completed" as const,
       messageId,
       content: [{ type: "text" as const, text }],
-      seq: 2,
+      ...(attachments ? { attachments } : {}),
+      seq: seqStart + 1,
     },
   ];
 }

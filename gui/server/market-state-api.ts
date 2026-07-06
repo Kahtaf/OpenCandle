@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { buildFreshnessStamp } from "../../src/infra/freshness.js";
 import { isZeroFilledQuote, searchYahooInstruments } from "../../src/market-state/resolve.js";
 import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
@@ -37,12 +38,12 @@ export interface MarketStateQuoteSnapshot {
     instrumentId: number;
     symbol: string;
     status: "ok" | "unavailable";
-    currentPrice?: number;
+    currentPrice?: number | null;
     changePercent?: number;
-    marketValue?: number;
+    marketValue?: number | null;
     totalCost: number;
-    pnl?: number;
-    pnlPercent?: number;
+    pnl?: number | null;
+    pnlPercent?: number | null;
     allocationPercent?: number;
     currency: string;
     includedInTotals: boolean;
@@ -310,11 +311,20 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
   if (isZeroFilledQuote(result.data)) {
     return { status: "unavailable", reason: "Yahoo returned no valid market data." };
   }
+  const freshness = buildFreshnessStamp({
+    asOf: result.data.asOf,
+    cached: result.cached,
+    stale: result.stale,
+    cachedAt: result.timestamp,
+  });
+  if (freshness.isStaleForSession) {
+    return { status: "unavailable", reason: "provider returned stale market data" };
+  }
   return {
     status: "ok",
     price: result.data.price,
     changePercent: result.data.changePercent,
-    fetchedAt: result.timestamp,
+    fetchedAt: freshness.providerDataAt ?? result.timestamp,
     stale: result.stale,
     currency: result.data.currency ?? null,
   };

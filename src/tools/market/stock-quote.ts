@@ -41,8 +41,9 @@ export const stockQuoteTool: AgentTool<typeof params, StockQuote & { freshness: 
       const quote = result.data;
       const freshness = buildFreshnessStamp({
         asOf: quote.asOf,
+        cached: result.cached,
         stale: result.stale,
-        cachedAt: result.stale ? result.timestamp : undefined,
+        cachedAt: result.cached || result.stale ? result.timestamp : undefined,
       });
       const sign = quote.changePercent >= 0 ? "+" : "";
 

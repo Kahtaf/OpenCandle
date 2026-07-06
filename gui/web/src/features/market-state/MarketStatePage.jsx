@@ -6,13 +6,13 @@ import { Textarea } from "../../components/ui/textarea.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
+import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {
   clampInstrumentActiveIndex,
-  InstrumentSuggestionList,
   instrumentSuggestionOptionId,
   nextInstrumentActiveIndex,
-  useInstrumentSearch,
-} from "../instruments/instrument-search.jsx";
+} from "../instruments/instrument-search-helpers.js";
+import { useInstrumentSearch } from "../instruments/use-instrument-search.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
 import { quoteFreshness } from "./format.js";

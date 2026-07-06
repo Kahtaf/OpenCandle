@@ -16,8 +16,8 @@ On completion of a comprehensive-analysis run — the synthesis-step completion 
 
 #### Scenario: Migration preserves data
 
-- **WHEN** a real v8 fixture database is opened after this change
-- **THEN** it migrates additively to v9 with all existing rows intact (migration test against a fixture file, not `:memory:`)
+- **WHEN** a test constructs a representative v8 database in a temporary directory and opens it after this change
+- **THEN** it migrates additively to v9 with all existing rows intact (migration test against a file-backed temporary database, not `:memory:`)
 
 ### Requirement: Prior reflections are injected as data, never fabricated
 

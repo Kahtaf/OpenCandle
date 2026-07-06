@@ -8,6 +8,7 @@ import {
 export interface FreshnessStamp {
   fetchedAt: string;
   providerDataAt?: string;
+  providerDataDate?: string;
   cacheStatus: "live" | "cached" | "stale";
   cachedAt?: string;
   marketSession: MarketSession;
@@ -17,6 +18,7 @@ export interface FreshnessStamp {
 
 export function buildFreshnessStamp(input: {
   asOf?: string | number | Date;
+  cached?: boolean;
   stale?: boolean;
   cachedAt?: string;
   dataDelayMs?: number;
@@ -26,10 +28,11 @@ export function buildFreshnessStamp(input: {
   const now = input.now ?? new Date();
   const parsedAsOf = normalizeAsOf(input.asOf);
   const fetchedAt = now.toISOString();
-  const cacheStatus = input.stale ? "stale" : "live";
+  const cacheStatus = input.stale ? "stale" : input.cached ? "cached" : "live";
   const marketSession = input.assetClass === "crypto" ? "unknown" : classifyMarketStatusAt(now);
   const cachedAt = input.cachedAt ? normalizeDate(input.cachedAt)?.toISOString() : undefined;
   const providerDataAt = parsedAsOf?.date.toISOString();
+  const providerDataDate = parsedAsOf?.dateOnly;
   const isStaleForSession =
     input.assetClass === "crypto"
       ? isCryptoStale(parsedAsOf?.date, cachedAt, now, cacheStatus)
@@ -38,6 +41,7 @@ export function buildFreshnessStamp(input: {
   return {
     fetchedAt,
     providerDataAt,
+    providerDataDate,
     cacheStatus,
     cachedAt,
     marketSession,
@@ -48,7 +52,7 @@ export function buildFreshnessStamp(input: {
 
 export function formatAsOfLine(stamp: FreshnessStamp): string {
   if (stamp.isStaleForSession && stamp.providerDataAt) {
-    const date = formatEtDate(new Date(stamp.providerDataAt));
+    const date = stamp.providerDataDate ?? formatEtDate(new Date(stamp.providerDataAt));
     const parenthetical = staleSessionParenthetical(stamp.marketSession);
     const cached = stamp.cachedAt
       ? ` Cached from ${formatEtDateTime(new Date(stamp.cachedAt))} ET.`
@@ -57,11 +61,13 @@ export function formatAsOfLine(stamp: FreshnessStamp): string {
   }
 
   if (stamp.cacheStatus === "stale" && stamp.cachedAt) {
-    return `Using cached data from ${formatEtDateTime(new Date(stamp.cachedAt))} ET (provider unavailable).`;
+    const notLive = stamp.isStaleForSession ? " This is not a live quote." : "";
+    return `Using cached data from ${formatEtDateTime(new Date(stamp.cachedAt))} ET (provider unavailable).${notLive}`;
   }
 
   if (stamp.providerDataAt || stamp.dataDelayMs !== undefined) {
-    const asOf = formatEtDateTime(new Date(stamp.providerDataAt ?? stamp.fetchedAt));
+    const reference = stamp.providerDataAt ?? stamp.cachedAt ?? stamp.fetchedAt;
+    const asOf = stamp.providerDataDate ?? formatEtDateTime(new Date(reference));
     if (stamp.dataDelayMs !== undefined)
       return `As of ${asOf} ET (~${Math.round(stamp.dataDelayMs / 60_000)}m delayed).`;
     return `As of ${asOf} ET (${marketSessionLabel(stamp.marketSession)}).`;
@@ -99,9 +105,17 @@ function isEquityStale(
   now: Date,
 ): boolean {
   if (!parsedAsOf) return cacheStatus === "stale";
+  const localNow = localDateTimeParts(now, "America/New_York");
   const providerTradingDate =
     parsedAsOf.dateOnly ?? localDateTimeParts(parsedAsOf.date, "America/New_York").date;
-  return providerTradingDate < lastTradingDay(localDateTimeParts(now, "America/New_York").date);
+  const marketSession = classifyMarketStatusAt(now);
+  const requiredTradingDate =
+    marketSession === "open" ||
+    marketSession === "after_close" ||
+    marketSession === "closed_after_hours"
+      ? localNow.date
+      : lastTradingDay(localNow.date);
+  return providerTradingDate < requiredTradingDate;
 }
 
 function isCryptoStale(

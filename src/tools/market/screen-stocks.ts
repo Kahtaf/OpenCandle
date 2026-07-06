@@ -138,8 +138,9 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
 
     const rows = result.data;
     const freshness = buildFreshnessStamp({
+      cached: result.cached,
       stale: result.stale,
-      cachedAt: result.stale ? result.timestamp : undefined,
+      cachedAt: result.cached || result.stale ? result.timestamp : undefined,
       dataDelayMs: 15 * 60_000,
     });
     if (rows.length === 0) {
@@ -147,7 +148,10 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
         content: [
           {
             type: "text",
-            text: "No stocks matched the screen. TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+            text: [
+              "No stocks matched the screen. TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+              formatAsOfLine(freshness),
+            ].join("\n"),
           },
         ],
         details: rows,
@@ -156,12 +160,12 @@ export const screenStocksTool: AgentTool<typeof params, ScreenerRow[]> = {
 
     const lines = [
       `**Stock screen** — ${rows.length} TradingView result${rows.length === 1 ? "" : "s"}`,
-      formatAsOfLine(freshness),
       rows[0]?.dataCaveat ??
         "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
       formatInterpretationNote(normalized),
       "",
       ...rows.map(formatRow),
+      formatAsOfLine(freshness),
     ];
 
     return {

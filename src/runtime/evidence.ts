@@ -29,6 +29,7 @@ export interface ProviderResultOk<T> {
   status: "ok";
   data: T;
   timestamp: string;
+  cached?: boolean;
   stale?: boolean;
 }
 

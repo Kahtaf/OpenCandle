@@ -9,5 +9,5 @@ export interface PredictionMarketQuote {
   closeDate?: string;
   resolutionCriteria?: string;
   url: string;
-  asOf: string;
+  asOf?: string;
 }

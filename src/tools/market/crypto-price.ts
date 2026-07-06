@@ -32,8 +32,9 @@ export const cryptoPriceTool: AgentTool<
     const crypto = result.data;
     const freshness = buildFreshnessStamp({
       asOf: crypto.asOf,
+      cached: result.cached,
       stale: result.stale,
-      cachedAt: result.stale ? result.timestamp : undefined,
+      cachedAt: result.cached || result.stale ? result.timestamp : undefined,
       assetClass: "crypto",
     });
     const sign = crypto.changePercent24h >= 0 ? "+" : "";

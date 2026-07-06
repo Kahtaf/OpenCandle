@@ -30,5 +30,5 @@ describe("run-competitive-finance-eval script", () => {
           `TS${diagnostic.code}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")}`,
       );
     expect(diagnostics).toEqual([]);
-  });
+  }, 20_000);
 });

@@ -806,13 +806,18 @@ describe("competitive finance benchmarking", () => {
     });
     expect(
       selectCompetitiveGeminiBaseline({
-        GOOGLE_API_KEY: "key",
+        GEMINI_API_KEY: "key",
         OPENCANDLE_COMPETITIVE_GEMINI_MODEL: "gemini-3-flash",
       }),
     ).toEqual({
       mode: "api",
       provider: "google",
       model: "gemini-3-flash",
+    });
+    expect(selectCompetitiveGeminiBaseline({ GOOGLE_API_KEY: "key" })).toEqual({
+      mode: "api",
+      provider: "google",
+      model: "gemini-2.5-flash",
     });
     expect(selectCompetitiveGeminiBaseline({})).toEqual({
       mode: "acpx",

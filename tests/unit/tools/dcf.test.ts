@@ -4,16 +4,28 @@ import { getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finan
 import { computeDCF, computeNetDebt, dcfTool } from "../../../src/tools/fundamentals/dcf.js";
 import type { FinancialStatement } from "../../../src/types/fundamentals.js";
 
-vi.mock("../../../src/config.js", () => ({
-  getConfig: () => ({ alphaVantageApiKey: "test-key" }),
+const configMock = vi.hoisted(() => ({
+  alphaVantageApiKey: "test-key" as string | undefined,
 }));
-vi.mock("../../../src/onboarding/tool-helpers.js", () => ({
-  withCredentialCheck: (_id: string, fn: () => unknown) => fn(),
+const providerMock = vi.hoisted(() => ({
+  staleProviders: new Set<string>(),
+  timestamps: new Map<string, string>(),
+}));
+
+vi.mock("../../../src/config.js", () => ({
+  getConfig: () => ({ alphaVantageApiKey: configMock.alphaVantageApiKey }),
 }));
 vi.mock("../../../src/providers/wrap-provider.js", () => ({
   wrapProvider: async (_name: string, fn: () => Promise<unknown>) => {
     try {
-      return { status: "ok", data: await fn() };
+      return {
+        status: "ok",
+        data: await fn(),
+        ...(providerMock.staleProviders.has(_name) ? { stale: true } : {}),
+        ...(providerMock.timestamps.has(_name)
+          ? { timestamp: providerMock.timestamps.get(_name) }
+          : {}),
+      };
     } catch (err) {
       return { status: "unavailable", reason: err instanceof Error ? err.message : String(err) };
     }
@@ -207,6 +219,10 @@ describe("compute_dcf tool guards", () => {
   };
 
   beforeEach(() => {
+    vi.clearAllMocks();
+    providerMock.staleProviders.clear();
+    providerMock.timestamps.clear();
+    configMock.alphaVantageApiKey = "test-key";
     vi.mocked(getFinancials).mockResolvedValue([statement]);
     vi.mocked(getYahooFinancials).mockRejectedValue(new Error("Yahoo financials unavailable"));
     vi.mocked(getQuote).mockResolvedValue(quote);
@@ -234,6 +250,63 @@ describe("compute_dcf tool guards", () => {
     expect(result.details).not.toBeNull();
   });
 
+  it("reaches Yahoo financial statements when no Alpha Vantage key is configured", async () => {
+    configMock.alphaVantageApiKey = undefined;
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(getFinancials).not.toHaveBeenCalled();
+    expect(result.content[0].text).toContain("Intrinsic Value:");
+    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
+    expect(result.details).not.toBeNull();
+  });
+
+  it("falls back to fresh Yahoo financial statements when Alpha Vantage returns stale cache", async () => {
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
+    providerMock.staleProviders.add("alphavantage");
+    providerMock.timestamps.set("alphavantage", "2026-07-01T14:30:00.000Z");
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.content[0].text).toContain("Intrinsic Value:");
+    expect(result.content[0].text).toContain("Financial statements source: Yahoo Finance");
+    expect(result.details).not.toBeNull();
+  });
+
+  it("refuses stale Alpha Vantage financial statements when no fresh Yahoo fallback is available", async () => {
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+    vi.mocked(getYahooFinancials).mockRejectedValue(new Error("Yahoo financials unavailable"));
+    providerMock.staleProviders.add("alphavantage");
+    providerMock.timestamps.set("alphavantage", "2026-07-01T14:30:00.000Z");
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.content[0].text).toContain("DCF valuation unavailable");
+    expect(result.content[0].text).toContain("Alpha Vantage: stale cached financial statements");
+    expect(result.content[0].text).toContain("2026-07-01T14:30:00.000Z");
+    expect(result.content[0].text).not.toContain("Intrinsic Value:");
+    expect(result.details).toBeNull();
+  });
+
+  it("refuses stale cached Yahoo financial statements for DCF fallback", async () => {
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, marketCap: 3_000e9 });
+    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
+    vi.mocked(getYahooFinancials).mockResolvedValue([statement]);
+    providerMock.staleProviders.add("yahoo");
+    providerMock.timestamps.set("yahoo", "2026-07-01T14:30:00.000Z");
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.content[0].text).toContain("DCF valuation unavailable");
+    expect(result.content[0].text).toContain("stale cached financial statements");
+    expect(result.content[0].text).toContain("2026-07-01T14:30:00.000Z");
+    expect(result.content[0].text).not.toContain("Intrinsic Value:");
+    expect(result.details).toBeNull();
+  });
+
   it("uses financial statement shares when market cap is unavailable", async () => {
     vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
     vi.mocked(getYahooFinancials).mockResolvedValue([
@@ -245,6 +318,20 @@ describe("compute_dcf tool guards", () => {
     expect(getOverview).not.toHaveBeenCalled();
     expect(result.content[0].text).toContain("Intrinsic Value:");
     expect(result.details).not.toBeNull();
+  });
+
+  it("requires a positive current quote price even when statement shares are available", async () => {
+    vi.mocked(getQuote).mockResolvedValue({ ...quote, price: 0 });
+    vi.mocked(getFinancials).mockRejectedValue(new Error("Alpha Vantage rate limited"));
+    vi.mocked(getYahooFinancials).mockResolvedValue([
+      { ...statement, sharesOutstanding: 15_000_000_000 },
+    ]);
+
+    const result = await dcfTool.execute("t", { symbol: "AAPL" });
+
+    expect(result.content[0].text).toMatch(/current stock price|current quote price/i);
+    expect(result.content[0].text).not.toContain("Current Price: $0.00");
+    expect(result.details).toBeNull();
   });
 
   it("refuses per-share output when shares outstanding cannot be derived", async () => {

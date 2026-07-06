@@ -8,9 +8,9 @@ import {
 } from "../../features/chat/attachments.js";
 import {
   CashtagAutocomplete,
-  insertAcceptedCashtag,
   useCashtagAutocomplete,
 } from "../../features/chat/cashtag-autocomplete.jsx";
+import { insertAcceptedCashtag } from "../../features/chat/cashtag-autocomplete-helpers.js";
 import { ModelSelector } from "../../features/chat/model-selector.jsx";
 import { Button } from "../ui/button.jsx";
 import { Textarea } from "../ui/textarea.jsx";

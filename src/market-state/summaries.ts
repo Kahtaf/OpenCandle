@@ -42,7 +42,12 @@ export function formatLatestReportSummary(
   if (!report) return [];
   const completed = report.completedAt ?? report.startedAt;
   const summary = options.includeSummary === false ? "" : formatJsonSummary(report.summaryJson);
-  return [`Latest report run: ${report.status} at ${completed}${summary ? ` — ${summary}` : ""}`];
+  const lines = [
+    `Latest report run: ${report.status} at ${completed}${summary ? ` — ${summary}` : ""}`,
+  ];
+  const reportText = options.includeSummary === false ? "" : extractReportText(report.summaryJson);
+  if (reportText) lines.push("Report text:", truncateText(reportText, 8_000));
+  return lines;
 }
 
 export function formatMoney(value: number, currency: string): string {
@@ -56,4 +61,15 @@ export function formatJsonSummary(value: unknown): string {
   const json = JSON.stringify(value);
   if (json.length <= 90) return json;
   return `${json.slice(0, 87)}...`;
+}
+
+function extractReportText(value: unknown): string {
+  if (!value || typeof value !== "object" || !("text" in value)) return "";
+  const text = (value as { text?: unknown }).text;
+  return typeof text === "string" ? text.trim() : "";
+}
+
+function truncateText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3)}...`;
 }

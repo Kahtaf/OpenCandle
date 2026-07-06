@@ -24,7 +24,7 @@ Follow AGENTS.md (TDD, CHANGELOG, `graphify update .`). HARD GATE: no router pro
 
 - [ ] 4.1 Remove the `OPENCANDLE_EVAL_KNOWN_FAIL_E2` gate from `saved-market-state.eval.ts` and the `OPENCANDLE_RUN_KNOWN_FAIL_EVALS` gate from `live-multi-turn-coreference.eval.ts`; E1 keeps usually-tier + its `OPENCANDLE_LIVE_MULTI_TURN_EVAL` opt-in; E2 then has no remaining opt-in flag and runs on every `EVAL_TIER=usually` invocation (which requires credentials) — this is intended. Update the FINDING/PROMOTE comments to record promotion and this change id.
 - [ ] 4.2 Run both live (E1: `EVAL_TIER=usually OPENCANDLE_LIVE_MULTI_TURN_EVAL=1`; E2: `EVAL_TIER=usually`) with credentials; both pass; trace excerpts in the PR. If either still fails, that is a FINDING — stop and report, do not weaken assertions.
-- [ ] 4.3 Run `eval:router-live` after the post-processor change (full fixture corpus — 32 today plus task 3.2's additions; zero route-kind flips) and archive the fresh baseline per `tests/fixtures/router/eval-baselines/` conventions.
+- [ ] 4.3 Run `npm run eval -- router-live` after the post-processor change (full fixture corpus — 32 today plus task 3.2's additions; zero route-kind flips) and archive the fresh baseline per `tests/fixtures/router/eval-baselines/` conventions.
 
 ## 5. Follow-through
 

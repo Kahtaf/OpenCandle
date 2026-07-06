@@ -253,5 +253,85 @@ describe("yahoo-finance provider", () => {
         },
       ]);
     });
+
+    it("maps annual-prefixed fields returned by yahoo-finance2 fundamentals rows", async () => {
+      yahooFinanceMock.fundamentalsTimeSeries.mockResolvedValue([
+        {
+          date: "2025-09-27",
+          annualTotalRevenue: 416_161_000_000,
+          annualGrossProfit: 195_061_000_000,
+          annualOperatingIncome: 133_050_000_000,
+          annualNetIncome: 112_010_000_000,
+          annualDilutedEPS: 7.46,
+          annualTotalAssets: 359_241_000_000,
+          annualTotalLiabilitiesNetMinorityInterest: 285_508_000_000,
+          annualStockholdersEquity: 73_733_000_000,
+          annualOperatingCashFlow: 122_333_000_000,
+          annualFreeCashFlow: 108_807_000_000,
+          annualTotalDebt: 98_186_000_000,
+          annualCashAndCashEquivalents: 29_943_000_000,
+          annualOrdinarySharesNumber: 14_948_000_000,
+        },
+      ]);
+
+      const statements = await getYahooFinancials("aapl");
+
+      expect(statements).toMatchObject([
+        {
+          fiscalDate: "2025-09-27",
+          revenue: 416_161_000_000,
+          grossProfit: 195_061_000_000,
+          operatingIncome: 133_050_000_000,
+          netIncome: 112_010_000_000,
+          eps: 7.46,
+          totalAssets: 359_241_000_000,
+          totalLiabilities: 285_508_000_000,
+          totalEquity: 73_733_000_000,
+          operatingCashFlow: 122_333_000_000,
+          freeCashFlow: 108_807_000_000,
+          totalDebt: 98_186_000_000,
+          cashAndEquivalents: 29_943_000_000,
+          sharesOutstanding: 14_948_000_000,
+        },
+      ]);
+    });
+
+    it("does not derive free cash flow when Yahoo omits capex", async () => {
+      yahooFinanceMock.fundamentalsTimeSeries.mockResolvedValue([
+        {
+          date: "2025-09-27",
+          annualOperatingCashFlow: 122_333_000_000,
+        },
+      ]);
+
+      const statements = await getYahooFinancials("aapl");
+
+      expect(statements[0]).toMatchObject({
+        fiscalDate: "2025-09-27",
+        operatingCashFlow: 122_333_000_000,
+        freeCashFlow: 0,
+      });
+    });
+
+    it("returns stale cached statements when Yahoo financials refresh fails", async () => {
+      const cachedAt = new Date(Date.now() - 2 * 86_400_000);
+      vi.useFakeTimers();
+      vi.setSystemTime(cachedAt);
+      rateLimiter.configure("yahoo", 1000, 1000);
+      yahooFinanceMock.fundamentalsTimeSeries.mockResolvedValueOnce([
+        {
+          date: "2025-09-27",
+          annualTotalRevenue: 416_161_000_000,
+          annualOperatingCashFlow: 122_333_000_000,
+          annualFreeCashFlow: 108_807_000_000,
+        },
+      ]);
+
+      const fresh = await getYahooFinancials("aapl");
+      vi.useRealTimers();
+      yahooFinanceMock.fundamentalsTimeSeries.mockRejectedValueOnce(new Error("Yahoo unavailable"));
+
+      await expect(getYahooFinancials("aapl")).resolves.toEqual(fresh);
+    });
   });
 });

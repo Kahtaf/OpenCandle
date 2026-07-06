@@ -321,6 +321,62 @@ describe("market-state API helpers", () => {
     db.close();
   });
 
+  it("marks stale provider as-of quote snapshot rows unavailable", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-06T14:00:00.000Z"));
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    const watchlist = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    const lot = service.addPortfolioLot({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 150,
+      currency: "USD",
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 200, { asOf: "2026-07-02T20:00:00.000Z" }));
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.watchlistQuotes).toEqual([
+      expect.objectContaining({
+        itemId: watchlist.id,
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+      }),
+    ]);
+    expect(snapshot.portfolioQuotes).toEqual([
+      expect.objectContaining({
+        lotId: lot.id,
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+        includedInTotals: false,
+      }),
+    ]);
+    expect(snapshot.portfolioSummary).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
+    });
+    db.close();
+  });
+
   it("does not let one stale quote mark a concurrently faster quote as stale", async () => {
     const db = initDatabase(":memory:");
     const service = new MarketStateService(db);
