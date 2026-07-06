@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a GUI cashtag entity layer: `$` autocomplete in the chat composer, dashboard-known symbol chips in chat text, and chip popovers that show cached quote/state context with watchlist and follow-up actions.
 - Added a release-runnable frozen competitive adversarial panel for historical loss classes, runnable through `npm run eval -- competitive:frozen`, cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
 - Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, and a local JSONL run index under `tests/evals/runs/`.
 - Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
@@ -18,6 +19,7 @@
 
 ### Changed
 
+- GUI ticker search suggestions now share one instrument-search dropdown primitive across chat cashtag autocomplete and saved-state watchlist/portfolio/alert forms.
 - Removed legacy eval npm routes (`test:evals*`, `eval:router-live`, `eval:competitive:analyze`, and `eval:release`); `npm run eval -- <suite>` is now the only supported eval command surface.
 - Expanded the deterministic router fixture corpus with archived task 4.7 coverage for prior-context comparisons, general-QA follow-up shifts, preference echoes that must not write preferences, and historical misclassification recovery cases.
 - `release:check` now includes a credential-free GUI release smoke that builds the browser bundle, boots the real GUI server, verifies `/health`, renders first-run model setup in Chromium, and confirms drafting stays available while sending is blocked until model setup is ready. (An earlier revision of the smoke had disabled the whole composer during first-run setup, reverting the shipped 0.11.0 draft-while-setup behavior; the behavior and its assertions are restored.)

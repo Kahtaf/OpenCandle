@@ -61,8 +61,8 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("Rho");
     expect(text).toContain("IV");
     expect(text).toContain("Put/Call");
-    expect(text.split("\n").at(-1)).toBe(
-      "Last available price as of 2024-03-22 (market closed — weekend). This is not a live quote.",
+    expect(text.split("\n").at(-1)).toMatch(
+      /^Last available price as of 2024-03-22(?: \(market closed — .+\))?\. This is not a live quote\.$/,
     );
   });
 

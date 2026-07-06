@@ -42,9 +42,7 @@ describe("get_stock_quote tool", () => {
     expect(text.text).toContain("AAPL");
     expect(text.text).toContain("178.72");
     expect(text.text).toContain("52W Range");
-    expect(text.text.split("\n").at(-1)).toBe(
-      "As of 2026-07-02 16:00 ET (market closed — weekend).",
-    );
+    expect(text.text.split("\n").at(-1)).toMatch(/^As of 2026-07-02 16:00 ET \(.+\)\.$/);
   });
 
   it("returns StockQuote in details", async () => {

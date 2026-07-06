@@ -193,6 +193,24 @@
     font-size: 0.875rem;
     font-weight: 400;
   }
+  .entity-chip {
+    display: inline-flex;
+    height: 1.375rem;
+    align-items: center;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--tw-border));
+    background: hsl(var(--tw-card));
+    color: hsl(var(--tw-foreground));
+    padding: 0 0.45rem;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: 0.08em;
+  }
+  .entity-chip:hover {
+    background: hsl(var(--tw-secondary));
+  }
   .chat-markdown .rich-table {
     display: block;
     width: 100%;

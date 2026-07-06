@@ -4,7 +4,7 @@ export function textContent(content) {
   return "";
 }
 
-export function renderRichText(markdown) {
+export function renderRichText(markdown, options = {}) {
   const lines = String(markdown || "").split(/\r?\n/);
   const html = [];
   let paragraph = [];
@@ -13,12 +13,12 @@ export function renderRichText(markdown) {
 
   const flushParagraph = () => {
     if (!paragraph.length) return;
-    html.push(`<p>${renderInline(paragraph.join(" "))}</p>`);
+    html.push(`<p>${renderInline(paragraph.join(" "), options)}</p>`);
     paragraph = [];
   };
   const flushList = () => {
     if (!list.length) return;
-    html.push(`<ul>${list.map((item) => `<li>${renderInline(item)}</li>`).join("")}</ul>`);
+    html.push(`<ul>${list.map((item) => `<li>${renderInline(item, options)}</li>`).join("")}</ul>`);
     list = [];
   };
   const flushTable = () => {
@@ -33,7 +33,7 @@ export function renderRichText(markdown) {
     const cells = rows.map(splitTableRow);
     const [head, ...body] = cells;
     html.push(
-      `<div class="rich-table"><table><thead><tr>${head.map((cell) => `<th>${renderInline(cell)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
+      `<div class="rich-table"><table><thead><tr>${head.map((cell) => `<th>${renderInline(cell, options)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell, options)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
     );
     table = [];
   };
@@ -67,7 +67,7 @@ export function renderRichText(markdown) {
       flushList();
       flushParagraph();
       const level = Math.min(5, Math.max(3, heading[1].length));
-      html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
+      html.push(`<h${level}>${renderInline(heading[2], options)}</h${level}>`);
       continue;
     }
     const bullet = line.match(/^[-*]\s+(.+)$/);
@@ -91,15 +91,46 @@ function splitTableRow(line) {
     .map((cell) => cell.trim());
 }
 
-function renderInline(value) {
-  return escapeHtml(value)
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>");
+export function renderInline(value, options = {}) {
+  return String(value ?? "")
+    .split(/(`[^`]*`)/g)
+    .map((segment) => {
+      if (segment.startsWith("`") && segment.endsWith("`")) {
+        return `<code>${escapeHtml(segment.slice(1, -1))}</code>`;
+      }
+      return linkifyEntities(
+        escapeHtml(segment).replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>"),
+        options,
+      );
+    })
+    .join("");
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? "").replace(
     /[&<>"']/g,
     (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char],
   );
+}
+
+function linkifyEntities(html, options) {
+  const known = new Set((options.knownSymbols ?? []).map((symbol) => String(symbol).toUpperCase()));
+  const chips = [];
+  const reserve = (markup) => {
+    const token = `@@occhip${chips.length}@@`;
+    chips.push(markup);
+    return token;
+  };
+  const withCashtags = html.replace(/\$([A-Za-z]{1,6})\b/g, (_match, symbol) =>
+    reserve(entityChip(symbol, `$${String(symbol).toUpperCase()}`)),
+  );
+  const withBareSymbols = withCashtags.replace(/\b[A-Z]{1,6}\b/g, (token) =>
+    known.has(token) ? reserve(entityChip(token, token)) : token,
+  );
+  return withBareSymbols.replace(/@@occhip(\d+)@@/g, (_match, index) => chips[Number(index)] ?? "");
+}
+
+function entityChip(symbol, label) {
+  const normalized = String(symbol).toUpperCase();
+  return `<button type="button" class="entity-chip" data-symbol="${normalized}">${label}</button>`;
 }

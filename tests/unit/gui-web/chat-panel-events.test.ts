@@ -95,6 +95,33 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("[Attached by user");
   });
 
+  it("renders bare dashboard-known symbols as entity chips in chat messages", () => {
+    const events: ChatEvent[] = [
+      { type: "message.created", messageId: "assistant-1", role: "assistant", seq: 1 },
+      {
+        type: "message.completed",
+        messageId: "assistant-1",
+        content: [{ type: "text", text: "NVDA and CPI update." }],
+        seq: 2,
+      },
+    ];
+
+    const html = renderChatPanelHtml({
+      events,
+      dashboard: { knownSymbols: ["NVDA"] },
+    });
+
+    expect(html).toContain('data-symbol="NVDA"');
+    expect(html).toContain(" and CPI update.");
+  });
+
+  it("delegates entity chip clicks by data-symbol", () => {
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
+
+    expect(source).toContain('"[data-symbol]"');
+    expect(source).toContain("setSelectedSymbol(symbol.toUpperCase())");
+  });
+
   it("renders pending ask_user prompts on an otherwise empty thread", () => {
     const html = renderChatPanelHtml({
       askUserPrompts: [

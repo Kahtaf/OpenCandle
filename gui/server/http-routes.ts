@@ -27,7 +27,11 @@ import type {
   SessionActionEnvelope,
   SessionActionResult,
 } from "./local-session-coordinator.js";
-import { buildMarketStateSnapshot, searchInstrumentCandidates } from "./market-state-api.js";
+import {
+  buildMarketStateSnapshot,
+  getSavedMarketStateSymbols,
+  searchInstrumentCandidates,
+} from "./market-state-api.js";
 import { buildModelSetupState, type ModelSetupController } from "./model-setup.js";
 import { isTrustedPrivateApiRequest, privateApiCookieHeader } from "./private-api-access.js";
 import { projectDashboard } from "./projector.js";
@@ -777,7 +781,7 @@ function buildSnapshotPayload(sessionManager: SessionManager): Record<string, un
   const entries = sessionManager.getEntries();
   return {
     sessionId,
-    state: projectDashboard(entries, sessionId),
+    state: projectDashboard(entries, sessionId, getSavedMarketStateSymbols()),
     entries,
     events: sessionEntriesToChatEvents(entries, {
       sessionId,
@@ -810,7 +814,7 @@ export async function buildSessionBootstrapPayload(
     sessions: await SessionManager.list(options.cwd, options.sessionDir),
     snapshot: {
       sessionId,
-      state: projectDashboard(entries, sessionId),
+      state: projectDashboard(entries, sessionId, getSavedMarketStateSymbols()),
       entries,
       events: sessionEntriesToChatEvents(entries, {
         sessionId,

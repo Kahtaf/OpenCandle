@@ -60,6 +60,30 @@ export interface MarketStateQuoteSnapshot {
   };
 }
 
+interface SavedSymbolsMemoOptions {
+  ttlMs?: number;
+  now?: () => number;
+}
+
+export function createSavedSymbolsMemo(
+  load: () => string[],
+  options: SavedSymbolsMemoOptions = {},
+): () => string[] {
+  const ttlMs = options.ttlMs ?? 30_000;
+  const now = options.now ?? Date.now;
+  let cachedAt = 0;
+  let cached: string[] | null = null;
+  return () => {
+    const current = now();
+    if (cached && current - cachedAt < ttlMs) return cached;
+    cached = load();
+    cachedAt = current;
+    return cached;
+  };
+}
+
+export const getSavedMarketStateSymbols = createSavedSymbolsMemo(loadSavedMarketStateSymbols);
+
 export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSnapshot {
   const ownedDb = db ?? initDefaultDatabase();
   const service = new MarketStateService(ownedDb);
@@ -86,6 +110,30 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
   } finally {
     if (!db) ownedDb.close();
   }
+}
+
+function loadSavedMarketStateSymbols(): string[] {
+  const db = initDefaultDatabase();
+  const service = new MarketStateService(db);
+  try {
+    const symbols = [
+      ...service.listWatchlistItems().map((item) => item.symbol),
+      ...service.listPortfolioLots().map((lot) => lot.symbol),
+    ];
+    return normalizeSymbols(symbols);
+  } finally {
+    db.close();
+  }
+}
+
+function normalizeSymbols(symbols: string[]): string[] {
+  const normalized: string[] = [];
+  for (const symbol of symbols) {
+    const next = symbol.trim().toUpperCase();
+    if (!next || normalized.includes(next)) continue;
+    normalized.push(next);
+  }
+  return normalized;
 }
 
 export async function buildMarketStateQuoteSnapshot(

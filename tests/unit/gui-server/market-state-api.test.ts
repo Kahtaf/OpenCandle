@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildMarketStateQuoteSnapshot,
   buildMarketStateSnapshot,
+  createSavedSymbolsMemo,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
 import { cache } from "../../../src/infra/cache.js";
@@ -117,6 +118,25 @@ describe("market-state API helpers", () => {
       }),
     ]);
     db.close();
+  });
+
+  it("memoizes saved symbols for 30 seconds", () => {
+    let calls = 0;
+    let now = 1_000;
+    const memo = createSavedSymbolsMemo(
+      () => {
+        calls += 1;
+        return [`SYM${calls}`];
+      },
+      { ttlMs: 30_000, now: () => now },
+    );
+
+    expect(memo()).toEqual(["SYM1"]);
+    expect(memo()).toEqual(["SYM1"]);
+
+    now += 30_000;
+    expect(memo()).toEqual(["SYM2"]);
+    expect(calls).toBe(2);
   });
 
   it("returns resolver candidates for GUI autocomplete", async () => {

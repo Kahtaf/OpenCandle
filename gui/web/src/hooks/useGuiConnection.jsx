@@ -2,6 +2,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { toast } from "../components/ui/use-toast.jsx";
 
 const EMPTY_DASHBOARD = {
+  knownSymbols: [],
   watchlist: [],
   activeAnalyses: [],
   recentResearch: [],

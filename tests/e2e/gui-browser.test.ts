@@ -272,6 +272,54 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   }, 30_000);
 
+  it("autocompletes cashtags and opens entity chip popovers", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+    await installMockSocket(mocked);
+    await installMockMarketState(mocked, {
+      instrumentCandidates: [
+        {
+          symbol: "AA",
+          name: "Alcoa Corp.",
+          quoteType: "EQUITY",
+          assetType: "equity",
+          exchange: "NYQ",
+          provider: "yahoo",
+          score: 100,
+        },
+      ],
+      watchlist: [{ id: 1, instrumentId: 1, symbol: "AA", name: "Alcoa Corp." }],
+      quoteSnapshot: {
+        watchlistQuotes: [
+          {
+            itemId: 1,
+            instrumentId: 1,
+            symbol: "AA",
+            status: "ok",
+            price: 32.45,
+            changePercent: 1.2,
+          },
+        ],
+        portfolioQuotes: [],
+        portfolioSummary: null,
+      },
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    const composer = mocked.getByLabel("Message OpenCandle");
+    await composer.fill("$AA");
+    await expectVisible(mocked.getByRole("listbox", { name: "Ticker suggestions" }), 5_000);
+    await mocked.keyboard.press("Enter");
+    await expect(composer.inputValue()).resolves.toBe("$AA ");
+
+    await mocked.getByRole("button", { name: "Send message" }).click();
+    const chip = mocked.locator('[data-symbol="AA"]').first();
+    await expectVisible(chip);
+    await chip.click();
+    await expectVisible(mocked.getByText("Alcoa Corp.").first());
+    await expectVisible(mocked.getByText("$32.45"));
+    await mocked.close();
+  }, 30_000);
+
   it("reconnects stale GUI sockets when the browser returns to the foreground", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked);
@@ -1789,6 +1837,7 @@ async function installMockMarketState(
 ): Promise<void> {
   await page.addInitScript((marketStateOverrides) => {
     const emptyMarketState = {
+      instrumentCandidates: [],
       watchlist: [],
       portfolio: [],
       alerts: [],
@@ -1804,23 +1853,68 @@ async function installMockMarketState(
     const marketState = { ...emptyMarketState, ...marketStateOverrides };
     window.fetch = (input) => {
       const url = typeof input === "string" ? input : input.url;
-      if (url === "/api/market-state") {
-        return Promise.resolve(
-          new Response(JSON.stringify(marketState), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-        );
-      }
-      if (url === "/api/market-state/quotes") {
+      const parsedUrl = new URL(url, window.location.href);
+      if (parsedUrl.pathname === "/api/instruments/search") {
+        const query = parsedUrl.searchParams.get("q") || "";
         return Promise.resolve(
           new Response(
-            JSON.stringify({ watchlistQuotes: [], portfolioQuotes: [], portfolioSummary: null }),
+            JSON.stringify({
+              query,
+              candidates: marketState.instrumentCandidates,
+            }),
             {
               status: 200,
               headers: { "content-type": "application/json" },
             },
           ),
+        );
+      }
+      if (parsedUrl.pathname === "/api/market-state") {
+        const {
+          instrumentCandidates: _instrumentCandidates,
+          quoteSnapshot,
+          ...snapshot
+        } = marketState;
+        return Promise.resolve(
+          new Response(JSON.stringify(snapshot), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (parsedUrl.pathname === "/api/market-state/quotes") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify(
+              marketState.quoteSnapshot ?? {
+                watchlistQuotes: [],
+                portfolioQuotes: [],
+                portfolioSummary: null,
+              },
+            ),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+        );
+      }
+      if (parsedUrl.pathname === "/api/chat/run") {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            const send = (payload) =>
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+            send({ type: "run.started", runId: "mock-run", sessionId: "mock-session", seq: 1 });
+            send({ type: "run.completed", runId: "mock-run", sessionId: "mock-session", seq: 2 });
+            controller.close();
+          },
+        });
+        return Promise.resolve(
+          new Response(stream, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          }),
         );
       }
       return Promise.resolve(new Response("Not found", { status: 404, statusText: "Not found" }));

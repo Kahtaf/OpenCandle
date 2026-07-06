@@ -56,6 +56,32 @@ describe("projectDashboard", () => {
     expect(state.watchlist[0].quote).toMatchObject({ price: 216, changePercent: 2 });
   });
 
+  it("aggregates normalized known symbols from quotes, router entities, and saved state", () => {
+    const manySavedSymbols = Array.from({ length: 110 }, (_, index) => `S${index}`);
+    const state = projectDashboard(
+      [
+        messageEntry({
+          role: "toolResult",
+          toolCallId: "call-1",
+          toolName: "get_stock_quote",
+          content: [{ type: "text", text: "NVDA quote" }],
+          details: { symbol: "nvda", price: 100, changePercent: 1.5 },
+          isError: false,
+          timestamp: Date.now(),
+        }),
+        customEntry("opencandle-route-context", {
+          entities: { symbols: ["amd", "NVDA", "", null] },
+        }),
+      ],
+      "local",
+      ["aapl", "AMD", ...manySavedSymbols],
+    );
+
+    expect(state.knownSymbols.slice(0, 4)).toEqual(["NVDA", "AMD", "AAPL", "S0"]);
+    expect(state.knownSymbols).toHaveLength(100);
+    expect(new Set(state.knownSymbols).size).toBe(100);
+  });
+
   it("opens and closes active analyses from workflow and assistant stop entries", () => {
     const state = projectDashboard([
       customEntry("opencandle-workflow", {

@@ -421,6 +421,7 @@ export function AppShell() {
             send={gui.send}
             startChatRun={startRoutedChatRun}
             stopRun={chatRun.stopRun}
+            invokeTool={invokeToolForVisibleSession}
             retryRun={chatRun.retryRun}
             setToast={gui.setToast}
             draft={draft}
@@ -433,6 +434,7 @@ export function AppShell() {
             onExpandSidebar={() => setSidebarCollapsed(false)}
             sessionId={sessionView.activeSessionId}
             scrollAnchorId={scrollAnchorId}
+            dashboard={visibleDashboard}
           />
         )}
         <ToolDrawerInline />

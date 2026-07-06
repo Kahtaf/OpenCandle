@@ -2,6 +2,7 @@ import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export interface DashboardState {
+  knownSymbols: string[];
   watchlist: Array<{
     symbol: string;
     quote: Record<string, unknown> | null;
@@ -51,6 +52,7 @@ const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
 
 export function createEmptyDashboardState(): DashboardState {
   return {
+    knownSymbols: [],
     watchlist: [],
     activeAnalyses: [],
     recentResearch: [],
@@ -58,7 +60,11 @@ export function createEmptyDashboardState(): DashboardState {
   };
 }
 
-export function projectDashboard(entries: SessionEntry[], sessionId = "local"): DashboardState {
+export function projectDashboard(
+  entries: SessionEntry[],
+  sessionId = "local",
+  savedSymbols: string[] = [],
+): DashboardState {
   const state = createEmptyDashboardState();
   let pendingAttachmentCount: number | undefined;
 
@@ -97,6 +103,7 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
 
     if (entry.type === "custom" && entry.customType === "opencandle-route-context") {
       state.lastTurn = projectRouteContext(entry.data, pendingAttachmentCount);
+      addKnownSymbols(state, asArray(asRecord(asRecord(entry.data).entities).symbols));
       pendingAttachmentCount = undefined;
       continue;
     }
@@ -156,6 +163,7 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
     }
   }
 
+  addKnownSymbols(state, savedSymbols);
   return state;
 }
 
@@ -266,10 +274,13 @@ function projectQuote(
 ): void {
   const symbol = symbolHint ?? inferSymbolFromContent(content);
   if (!symbol) return;
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) return;
+  addKnownSymbols(state, [normalizedSymbol]);
 
-  const existing = state.watchlist.find((row) => row.symbol === symbol);
+  const existing = state.watchlist.find((row) => row.symbol === normalizedSymbol);
   const row = {
-    symbol,
+    symbol: normalizedSymbol,
     quote: Object.keys(details).length > 0 ? details : null,
     pinned: existing?.pinned ?? false,
     lastSeen: timestamp,
@@ -319,6 +330,21 @@ function inferSymbolFromContent(content: ToolResultMessage["content"]): string |
   const text = content.find((part) => part.type === "text")?.text;
   const match = text?.match(/^([A-Z]{1,8})\b/);
   return match?.[1];
+}
+
+function addKnownSymbols(state: DashboardState, values: unknown[]): void {
+  for (const value of values) {
+    const symbol = normalizeSymbol(value);
+    if (!symbol || state.knownSymbols.includes(symbol)) continue;
+    if (state.knownSymbols.length >= 100) return;
+    state.knownSymbols.push(symbol);
+  }
+}
+
+function normalizeSymbol(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized ? normalized : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

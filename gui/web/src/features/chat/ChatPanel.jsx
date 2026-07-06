@@ -13,15 +13,25 @@ import { Input } from "../../components/ui/input.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
+import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
+import { searchInstruments } from "../instruments/instrument-api.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
+import { EntityPopover } from "./entity-popover.jsx";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { groupToolRuns } from "./tool-run-grouper.js";
+
+const EMPTY_KNOWN_SYMBOLS = [];
+const EMPTY_SYMBOL_RESOLUTION = {
+  candidate: null,
+  error: "",
+  resolving: false,
+};
 
 export function ChatPanel({
   events = [],
@@ -36,6 +46,7 @@ export function ChatPanel({
   send,
   startChatRun,
   stopRun,
+  invokeTool,
   setToast,
   draft: draftProp,
   setDraft: setDraftProp,
@@ -47,6 +58,7 @@ export function ChatPanel({
   onExpandSidebar,
   sessionId = "",
   scrollAnchorId = "",
+  dashboard,
 }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
@@ -56,8 +68,11 @@ export function ChatPanel({
     attachments: [],
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [symbolResolution, setSymbolResolution] = useState(EMPTY_SYMBOL_RESOLUTION);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
+  const marketState = useMarketState();
   const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
   const visibleRows = useMemo(
     () => chatRowsFromEvents(events, liveEvents, sessionId),
@@ -84,6 +99,75 @@ export function ChatPanel({
     drawerOpen: drawerOpenForSession,
   });
   const rowAnchorId = scrollAnchorId || latestUserRowIdFromRows(groupedRows);
+  const knownSymbols = useMemo(
+    () => (Array.isArray(dashboard?.knownSymbols) ? dashboard.knownSymbols : []),
+    [dashboard?.knownSymbols],
+  );
+
+  useEffect(() => {
+    if (!selectedSymbol) return undefined;
+    let disposed = false;
+    setSymbolResolution({ candidate: null, error: "", resolving: true });
+    searchInstruments(selectedSymbol)
+      .then((candidates) => {
+        if (disposed) return;
+        const match =
+          candidates.find((candidate) => candidate.symbol === selectedSymbol) ?? candidates[0];
+        setSymbolResolution({
+          candidate: match ?? null,
+          error: match ? "" : "unresolved symbol",
+          resolving: false,
+        });
+      })
+      .catch((error) => {
+        if (disposed) return;
+        setSymbolResolution({
+          candidate: null,
+          error: error instanceof Error ? error.message : String(error),
+          resolving: false,
+        });
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [selectedSymbol]);
+
+  const onTranscriptClick = useCallback((event) => {
+    const chip = event.target?.closest?.("[data-symbol]");
+    const symbol = chip?.getAttribute?.("data-symbol");
+    if (!symbol) return;
+    event.preventDefault();
+    setSelectedSymbol(symbol.toUpperCase());
+  }, []);
+
+  const addSelectedToWatchlist = useCallback(
+    async (symbol) => {
+      if (!symbol || !invokeTool) return;
+      const saved = await invokeTool("manage_watchlist", { action: "add", symbol });
+      if (saved) {
+        await marketState.refresh();
+        await marketState.refreshQuotes();
+        setSelectedSymbol("");
+      }
+    },
+    [invokeTool, marketState],
+  );
+
+  const askAboutSymbol = useCallback(
+    (symbol) => {
+      const text = `$${symbol} `;
+      setDraft(text);
+      setSelectedSymbol("");
+      window.setTimeout(() => {
+        const composer = document.getElementById("chat-composer");
+        composer?.focus?.();
+        if (composer instanceof HTMLTextAreaElement) {
+          composer.setSelectionRange(text.length, text.length);
+        }
+      }, 0);
+    },
+    [setDraft],
+  );
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
     if (!drawer.run) return;
@@ -183,6 +267,7 @@ export function ChatPanel({
           onMouseDown={transcript.onReaderIntent}
           onTouchStart={transcript.onReaderIntent}
           onKeyDown={transcript.onReaderIntent}
+          onClick={onTranscriptClick}
         >
           {needsSetup ? (
             <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
@@ -204,6 +289,7 @@ export function ChatPanel({
                   autoOpenToolRun={entry.id === autoOpenRunId}
                   anchorRowId={rowAnchorId}
                   anchorRef={transcript.anchorRowRef}
+                  knownSymbols={knownSymbols}
                 />
               ))}
               {askUserPrompts.map((prompt) => (
@@ -228,6 +314,19 @@ export function ChatPanel({
           </Button>
         ) : null}
       </div>
+      <EntityPopover
+        open={Boolean(selectedSymbol)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSymbol("");
+        }}
+        symbol={selectedSymbol}
+        marketState={marketState.state}
+        resolvedCandidate={symbolResolution.candidate}
+        resolutionError={symbolResolution.error}
+        resolving={symbolResolution.resolving}
+        onAddToWatchlist={addSelectedToWatchlist}
+        onAskAbout={askAboutSymbol}
+      />
       <ChatComposer
         draft={draft}
         setDraft={setDraft}
@@ -624,7 +723,14 @@ function AgentActivity({ activity }) {
   );
 }
 
-function MessageRow({ entry, catalog, autoOpenToolRun = false, anchorRowId = "", anchorRef }) {
+function MessageRow({
+  entry,
+  catalog,
+  autoOpenToolRun = false,
+  anchorRowId = "",
+  anchorRef,
+  knownSymbols = EMPTY_KNOWN_SYMBOLS,
+}) {
   const messageId =
     entry.messageId || (String(entry.id || "").startsWith("message-") ? entry.id.slice(8) : "");
   const isAnchorRow =
@@ -641,13 +747,23 @@ function MessageRow({ entry, catalog, autoOpenToolRun = false, anchorRowId = "",
       data-scroll-anchor={entry.type === "user_message" ? "true" : undefined}
       className="min-w-0 scroll-mt-6"
     >
-      <MessageRowContent entry={entry} catalog={catalog} autoOpenToolRun={autoOpenToolRun} />
+      <MessageRowContent
+        entry={entry}
+        catalog={catalog}
+        autoOpenToolRun={autoOpenToolRun}
+        knownSymbols={knownSymbols}
+      />
     </div>
   );
   return row;
 }
 
-function MessageRowContent({ entry, catalog, autoOpenToolRun = false }) {
+function MessageRowContent({
+  entry,
+  catalog,
+  autoOpenToolRun = false,
+  knownSymbols = EMPTY_KNOWN_SYMBOLS,
+}) {
   if (entry.type === "tool_run") {
     return <StepsCard run={entry} autoOpen={autoOpenToolRun} />;
   }
@@ -655,10 +771,17 @@ function MessageRowContent({ entry, catalog, autoOpenToolRun = false }) {
     return <CustomMessage customType={entry.customType} content={entry.content} />;
   }
   if (entry.type === "user_message")
-    return <UserMessage content={entry.content} attachments={entry.attachments} />;
+    return (
+      <UserMessage
+        content={entry.content}
+        attachments={entry.attachments}
+        knownSymbols={knownSymbols}
+      />
+    );
   if (entry.type === "tool_result")
     return <ToolResultCard message={entry.message} catalog={catalog} />;
-  if (entry.type === "assistant_message") return <AssistantMessage content={entry.content} />;
+  if (entry.type === "assistant_message")
+    return <AssistantMessage content={entry.content} knownSymbols={knownSymbols} />;
   return (
     <div className="rounded-lg border border-border bg-card p-4 text-sm">
       {JSON.stringify(entry)}

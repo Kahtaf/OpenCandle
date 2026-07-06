@@ -1,10 +1,16 @@
 import { ArrowUp, Eye, Square } from "lucide-react";
+import { useRef, useState } from "react";
 import { AttachMenu, PendingAttachmentRail } from "../../features/chat/attach-menu.jsx";
 import {
   attachmentsFromImageFiles,
   imageFilesFromClipboardData,
   validateImageFiles,
 } from "../../features/chat/attachments.js";
+import {
+  CashtagAutocomplete,
+  insertAcceptedCashtag,
+  useCashtagAutocomplete,
+} from "../../features/chat/cashtag-autocomplete.jsx";
 import { ModelSelector } from "../../features/chat/model-selector.jsx";
 import { Button } from "../ui/button.jsx";
 import { Textarea } from "../ui/textarea.jsx";
@@ -32,6 +38,11 @@ export function ChatComposer({
   onRemoveAttachment,
 }) {
   const imageCount = pendingAttachments.filter((attachment) => attachment.kind === "image").length;
+  const textareaRef = useRef(null);
+  const [caretIndex, setCaretIndex] = useState(0);
+  const updateCaret = (target) => {
+    if (target && typeof target.selectionStart === "number") setCaretIndex(target.selectionStart);
+  };
 
   async function onPaste(event) {
     if (disabled) return;
@@ -49,9 +60,27 @@ export function ChatComposer({
     setToast?.(files.length === 1 ? "Pasted image attached." : `Pasted ${files.length} images.`);
   }
 
+  const autocomplete = useCashtagAutocomplete({
+    text: draft,
+    caretIndex,
+    disabled,
+    onAccept: (symbol, match) => {
+      const next = insertAcceptedCashtag(draft, match, symbol);
+      setDraft(next.text);
+      setCaretIndex(next.caretIndex);
+      window.requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(next.caretIndex, next.caretIndex);
+      });
+    },
+  });
+
   return (
     <div className="bg-background px-3 pb-4 pt-2 sm:px-6 md:px-12">
-      <div className="mx-auto w-full max-w-[760px] rounded-2xl border border-border bg-card shadow-subtle-xs">
+      <div className="relative mx-auto w-full max-w-[760px] rounded-2xl border border-border bg-card shadow-subtle-xs">
+        <CashtagAutocomplete controller={autocomplete} />
         <label className="sr-only" htmlFor="chat-composer">
           Message OpenCandle
         </label>
@@ -60,14 +89,23 @@ export function ChatComposer({
           onRemoveAttachment={onRemoveAttachment}
         />
         <Textarea
+          ref={textareaRef}
           id="chat-composer"
           value={draft}
           disabled={disabled}
           placeholder={placeholder}
           className="min-h-[60px] rounded-2xl rounded-b-none px-4 py-3"
-          onChange={(event) => setDraft(event.target.value)}
+          aria-controls={autocomplete.open ? "cashtag-autocomplete-list" : undefined}
+          aria-autocomplete="list"
+          onChange={(event) => {
+            setDraft(event.target.value);
+            updateCaret(event.target);
+          }}
           onPaste={onPaste}
+          onClick={(event) => updateCaret(event.currentTarget)}
+          onKeyUp={(event) => updateCaret(event.currentTarget)}
           onKeyDown={(event) => {
+            if (autocomplete.handleKeyDown(event)) return;
             if (
               event.key === "/" &&
               !event.metaKey &&
