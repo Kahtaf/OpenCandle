@@ -4,7 +4,7 @@ import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { computeGreeks } from "../tools/options/greeks.js";
-import type { FinancialStatement } from "../types/fundamentals.js";
+import type { CompanyOverview, FinancialStatement } from "../types/fundamentals.js";
 import type { OHLCV, StockQuote } from "../types/market.js";
 import type {
   OptionContract,
@@ -52,25 +52,105 @@ interface YahooChartResponse {
 
 interface YahooQuoteSummaryResponse {
   quoteSummary: {
-    result?: Array<{
-      price?: {
-        symbol?: string;
-        shortName?: string;
-        longName?: string;
-      };
-      topHoldings?: {
-        holdings?: Array<{
-          symbol?: string;
-          holdingName?: string;
-          holdingPercent?: YahooNumber;
-        }>;
-        equityHoldings?: {
-          sectorWeightings?: Array<Record<string, YahooNumber>>;
-        };
-      };
-    }>;
+    result?: Array<YahooQuoteSummaryResult>;
     error?: { code?: string; description?: string } | null;
   };
+}
+
+interface YahooQuoteSummaryResult {
+  price?: {
+    symbol?: string;
+    shortName?: string;
+    longName?: string;
+    exchangeName?: string;
+    marketCap?: YahooNumber;
+  };
+  assetProfile?: {
+    longBusinessSummary?: string;
+    sector?: string;
+    industry?: string;
+  };
+  summaryProfile?: {
+    longBusinessSummary?: string;
+    sector?: string;
+    industry?: string;
+  };
+  summaryDetail?: {
+    trailingPE?: YahooNumber;
+    forwardPE?: YahooNumber;
+    dividendYield?: YahooNumber;
+    beta?: YahooNumber;
+    fiftyTwoWeekHigh?: YahooNumber;
+    fiftyTwoWeekLow?: YahooNumber;
+    averageVolume?: YahooNumber;
+  };
+  defaultKeyStatistics?: {
+    trailingEps?: YahooNumber;
+    forwardEps?: YahooNumber;
+    beta?: YahooNumber;
+  };
+  financialData?: {
+    profitMargins?: YahooNumber;
+    revenueGrowth?: YahooNumber;
+    totalRevenue?: YahooNumber;
+  };
+  topHoldings?: {
+    holdings?: Array<{
+      symbol?: string;
+      holdingName?: string;
+      holdingPercent?: YahooNumber;
+    }>;
+    equityHoldings?: {
+      sectorWeightings?: Array<Record<string, YahooNumber>>;
+    };
+  };
+}
+
+export async function getYahooCompanyOverview(symbol: string): Promise<CompanyOverview> {
+  const normalizedSymbol = symbol.toUpperCase();
+  const cacheKey = `yahoo:overview:${normalizedSymbol}`;
+  const cached = cache.get<CompanyOverview>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("yahoo");
+    const result = await getYahooCompanySummary(normalizedSymbol);
+    if (!result?.price?.symbol) {
+      throw new Error(`Yahoo Finance: no company fundamentals returned for ${normalizedSymbol}`);
+    }
+
+    const profile = result.assetProfile ?? result.summaryProfile;
+    const overview: CompanyOverview = {
+      symbol: result.price.symbol.toUpperCase(),
+      name: result.price.longName ?? result.price.shortName ?? result.price.symbol,
+      description: profile?.longBusinessSummary ?? "",
+      exchange: result.price.exchangeName ?? "",
+      sector: profile?.sector ?? "",
+      industry: profile?.industry ?? "",
+      marketCap: yahooNumber(result.price.marketCap) ?? 0,
+      pe: yahooNullableNumber(result.summaryDetail?.trailingPE),
+      forwardPe: yahooNullableNumber(result.summaryDetail?.forwardPE),
+      eps:
+        yahooNullableNumber(result.defaultKeyStatistics?.trailingEps) ??
+        yahooNullableNumber(result.defaultKeyStatistics?.forwardEps),
+      dividendYield: yahooNullableNumber(result.summaryDetail?.dividendYield),
+      beta:
+        yahooNullableNumber(result.summaryDetail?.beta) ??
+        yahooNullableNumber(result.defaultKeyStatistics?.beta),
+      week52High: yahooNumber(result.summaryDetail?.fiftyTwoWeekHigh) ?? 0,
+      week52Low: yahooNumber(result.summaryDetail?.fiftyTwoWeekLow) ?? 0,
+      avgVolume: yahooNumber(result.summaryDetail?.averageVolume) ?? 0,
+      profitMargin: yahooNullableNumber(result.financialData?.profitMargins),
+      revenueGrowth: yahooNullableNumber(result.financialData?.revenueGrowth),
+    };
+
+    cache.set(cacheKey, overview, TTL.FUNDAMENTALS);
+    return overview;
+  } catch (error) {
+    const stale = cache.getStale<CompanyOverview>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
+    if (stale) return stale.value;
+    throw error;
+  }
 }
 
 export async function getQuote(symbol: string): Promise<StockQuote> {
@@ -413,28 +493,65 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
 }
 
 async function getFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
+  return getYahooQuoteSummary(symbol, "price,topHoldings");
+}
+
+async function getYahooCompanySummary(symbol: string): Promise<YahooQuoteSummaryResult> {
+  const modules = [
+    "price",
+    "assetProfile",
+    "summaryProfile",
+    "summaryDetail",
+    "defaultKeyStatistics",
+    "financialData",
+  ] as const;
   try {
-    return await fetchFundHoldingsSummary(symbol);
+    return (await getYahooFinance2Client().quoteSummary(
+      symbol,
+      { modules: [...modules] },
+      { validateResult: false },
+    )) as YahooQuoteSummaryResult;
   } catch (error) {
-    if (!isYahooAuthError(error)) throw error;
-    return fetchFundHoldingsSummaryWithCrumb(symbol);
+    const data = await getYahooQuoteSummary(symbol, modules.join(","));
+    if (data.quoteSummary.error) {
+      throw new Error(
+        `Yahoo Finance: ${data.quoteSummary.error.description ?? data.quoteSummary.error.code ?? "quoteSummary error"}`,
+      );
+    }
+    return data.quoteSummary.result?.[0] ?? {};
   }
 }
 
-async function fetchFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
-  const modules = encodeURIComponent("price,topHoldings");
-  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}`;
+async function getYahooQuoteSummary(
+  symbol: string,
+  modules: string,
+): Promise<YahooQuoteSummaryResponse> {
+  try {
+    return await fetchYahooQuoteSummary(symbol, modules);
+  } catch (error) {
+    if (!isYahooAuthError(error)) throw error;
+    return fetchYahooQuoteSummaryWithCrumb(symbol, modules);
+  }
+}
+
+async function fetchYahooQuoteSummary(
+  symbol: string,
+  modules: string,
+): Promise<YahooQuoteSummaryResponse> {
+  const encodedModules = encodeURIComponent(modules);
+  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${encodedModules}`;
   return httpGet<YahooQuoteSummaryResponse>(url, {
     headers: { "User-Agent": "OpenCandle/1.0" },
   });
 }
 
-async function fetchFundHoldingsSummaryWithCrumb(
+async function fetchYahooQuoteSummaryWithCrumb(
   symbol: string,
+  modules: string,
 ): Promise<YahooQuoteSummaryResponse> {
-  const modules = encodeURIComponent("price,topHoldings");
+  const encodedModules = encodeURIComponent(modules);
   const { crumb, cookie } = await getYahooCrumb();
-  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
+  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${encodedModules}&crumb=${encodeURIComponent(crumb)}`;
   try {
     return await httpGet<YahooQuoteSummaryResponse>(url, {
       headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
@@ -443,7 +560,7 @@ async function fetchFundHoldingsSummaryWithCrumb(
     if (!isYahooAuthError(error)) throw error;
     clearCrumbCache();
     const fresh = await getYahooCrumb();
-    const retryUrl = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(fresh.crumb)}`;
+    const retryUrl = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${encodedModules}&crumb=${encodeURIComponent(fresh.crumb)}`;
     return httpGet<YahooQuoteSummaryResponse>(retryUrl, {
       headers: { "User-Agent": BROWSER_UA, Cookie: fresh.cookie },
     });
@@ -455,9 +572,18 @@ function isYahooAuthError(error: unknown): boolean {
 }
 
 function normalizeHoldingWeight(value: YahooNumber | undefined): number | undefined {
-  const numeric = typeof value === "number" ? value : value?.raw;
+  const numeric = yahooNumber(value);
   if (numeric === undefined || !Number.isFinite(numeric) || numeric <= 0) return undefined;
   return numeric > 1 ? roundWeight(numeric / 100) : roundWeight(numeric);
+}
+
+function yahooNumber(value: YahooNumber | undefined): number | undefined {
+  const numeric = typeof value === "number" ? value : value?.raw;
+  return numeric !== undefined && Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function yahooNullableNumber(value: YahooNumber | undefined): number | null {
+  return yahooNumber(value) ?? null;
 }
 
 function normalizeSectorWeights(

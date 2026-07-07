@@ -4,6 +4,7 @@ import { getConfig } from "../../config.js";
 import { withCredentialCheck } from "../../onboarding/tool-helpers.js";
 import { getOverview } from "../../providers/alpha-vantage.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
+import { getYahooCompanyOverview } from "../../providers/yahoo-finance.js";
 import type { CompanyOverview } from "../../types/fundamentals.js";
 
 export interface CompsMetric {
@@ -20,6 +21,7 @@ export interface CompsResult {
   companies: CompanyOverview[];
   metrics: CompsMetric[];
   unavailableSymbols: string[];
+  unavailableReasons: Record<string, string>;
 }
 
 type MetricDef = {
@@ -65,7 +67,7 @@ export function computeComps(companies: CompanyOverview[]): CompsResult {
     return { metric: def.name, values, median, p25, p75, best, worst };
   });
 
-  return { companies, metrics, unavailableSymbols: [] };
+  return { companies, metrics, unavailableSymbols: [], unavailableReasons: {} };
 }
 
 function computeMedian(sorted: number[]): number | null {
@@ -103,23 +105,26 @@ export const compsTool: AgentTool<typeof params> = {
       const config = getConfig();
       const symbols = args.symbols.map((s) => s.toUpperCase());
 
-      const results = await Promise.all(
-        symbols.map(async (s) => ({
-          symbol: s,
-          result: await wrapProvider("alphavantage", () =>
-            getOverview(s, config.alphaVantageApiKey!),
-          ),
-        })),
-      );
-
       const companies: CompanyOverview[] = [];
       const unavailableSymbols: string[] = [];
+      const unavailableReasons: Record<string, string> = {};
 
-      for (const { symbol: sym, result: r } of results) {
-        if (r.status === "ok") {
-          companies.push(r.data);
+      for (const sym of symbols) {
+        const alphaResult = await wrapProvider("alphavantage", () =>
+          getOverview(sym, config.alphaVantageApiKey!),
+        );
+        if (alphaResult.status === "ok") {
+          companies.push(alphaResult.data);
+          continue;
+        }
+
+        const yahooResult = await wrapProvider("yahoo", () => getYahooCompanyOverview(sym));
+        if (yahooResult.status === "ok") {
+          companies.push(yahooResult.data);
         } else {
           unavailableSymbols.push(sym);
+          unavailableReasons[sym] =
+            `Alpha Vantage: ${alphaResult.reason}; Yahoo Finance: ${yahooResult.reason}`;
         }
       }
 
@@ -137,6 +142,7 @@ export const compsTool: AgentTool<typeof params> = {
 
       const result = computeComps(companies);
       result.unavailableSymbols = unavailableSymbols;
+      result.unavailableReasons = unavailableReasons;
 
       const availableSymbols = companies.map((company) => company.symbol);
       const header = `**Comparable Company Analysis**: ${availableSymbols.join(" vs ")}`;
@@ -161,9 +167,14 @@ export const compsTool: AgentTool<typeof params> = {
         unavailableSymbols.length > 0
           ? ["", `Unavailable fundamentals: ${unavailableSymbols.join(", ")}`]
           : [];
+      const reasonLines =
+        unavailableSymbols.length > 0
+          ? unavailableSymbols.map((symbol) => `  - ${symbol} (${unavailableReasons[symbol]})`)
+          : [];
       const text = [header, "", symHeader, ...rows, ...noteLines].join("\n");
+      const textWithReasons = reasonLines.length > 0 ? `${text}\n${reasonLines.join("\n")}` : text;
 
-      return { content: [{ type: "text", text }], details: result };
+      return { content: [{ type: "text", text: textWithReasons }], details: result };
     });
   },
 };

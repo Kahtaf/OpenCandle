@@ -311,4 +311,19 @@ describe("provider status probes", () => {
     expect(fetchImpl.mock.calls[0][1]).toMatchObject({ method: "GET" });
     expect(fetchImpl.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
   });
+
+  it("reports TradingView scanner reachability as a public HTTP provider", async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }) as Response);
+
+    const status = await probeProviderStatus("tradingview", { fetchImpl });
+
+    expect(status).toMatchObject({
+      providerId: "tradingview",
+      kind: "public-http",
+      state: "reachable",
+      statusCode: 200,
+      cacheHit: false,
+    });
+    expect(fetchImpl.mock.calls[0][0]).toContain("scanner.tradingview.com");
+  });
 });
