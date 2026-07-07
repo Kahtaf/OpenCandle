@@ -73,9 +73,44 @@ describe("EntityPopover", () => {
       }),
     );
 
-    expect(html).toContain("No cached quote");
+    expect(html).toContain("No recent quote in this session");
     expect(html).toContain("Add to watchlist");
     expect(html).toContain("Ask about $AA");
+  });
+
+  it("renders recent session quote details when the symbol is not in saved state", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(EntityPopover, {
+        open: true,
+        symbol: "SNDK",
+        marketState: baseMarketState,
+        sessionMarketFacts: {
+          SNDK: {
+            symbol: "SNDK",
+            name: "Sandisk Corporation",
+            price: 1575.12,
+            change: -169.31,
+            changePercent: -9.71,
+            open: 1619.86,
+            high: 1638.88,
+            low: 1485.02,
+            volume: 11_320_000,
+            pe: 53.74,
+            timestamp: 1_783_443_600_000,
+          },
+        },
+        resolvedCandidate: { symbol: "SNDK" },
+        onAddToWatchlist: vi.fn(),
+        onAskAbout: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain("Sandisk Corporation");
+    expect(html).toContain("$1575.12");
+    expect(html).toContain("-9.71%");
+    expect(html).toContain("Open");
+    expect(html).toContain("P/E");
+    expect(html).not.toContain("No cached quote");
   });
 
   it("disables add-to-watchlist when resolution failed", () => {

@@ -21,6 +21,7 @@ import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
 import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
 import { EntityPopover } from "./entity-popover.jsx";
+import { collectSessionMarketFacts, enrichGroupedRows } from "./session-market-facts.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { groupToolRuns } from "./tool-run-grouper.js";
@@ -67,6 +68,7 @@ export function ChatPanel({
   });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
   const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
   const symbolResolution = useSymbolResolution(selectedSymbol);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
@@ -76,7 +78,15 @@ export function ChatPanel({
     () => chatRowsFromEvents(events, liveEvents, sessionId),
     [events, liveEvents, sessionId],
   );
-  const groupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
+  const rawGroupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
+  const sessionMarketFacts = useMemo(
+    () => collectSessionMarketFacts(rawGroupedRows),
+    [rawGroupedRows],
+  );
+  const groupedRows = useMemo(
+    () => enrichGroupedRows(rawGroupedRows, sessionMarketFacts),
+    [rawGroupedRows, sessionMarketFacts],
+  );
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
   const hasAskUserPrompts = askUserPrompts.length > 0;
   const autoOpenRunId = useMemo(() => {
@@ -107,6 +117,8 @@ export function ChatPanel({
     const symbol = chip?.getAttribute?.("data-symbol");
     if (!symbol) return;
     event.preventDefault();
+    const rect = chip.getBoundingClientRect?.();
+    setSelectedSymbolAnchor(rect ? rectToPlainObject(rect) : null);
     setSelectedSymbol(symbol.toUpperCase());
   }, []);
 
@@ -290,10 +302,15 @@ export function ChatPanel({
       <EntityPopover
         open={Boolean(selectedSymbol)}
         onOpenChange={(open) => {
-          if (!open) setSelectedSymbol("");
+          if (!open) {
+            setSelectedSymbol("");
+            setSelectedSymbolAnchor(null);
+          }
         }}
         symbol={selectedSymbol}
         marketState={marketState.state}
+        sessionMarketFacts={sessionMarketFacts}
+        anchorRect={selectedSymbolAnchor}
         resolvedCandidate={symbolResolution.candidate}
         resolutionError={symbolResolution.error}
         resolving={symbolResolution.resolving}
@@ -322,6 +339,17 @@ export function ChatPanel({
       />
     </section>
   );
+}
+
+function rectToPlainObject(rect) {
+  return {
+    left: rect.left,
+    right: rect.right,
+    top: rect.top,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) {
