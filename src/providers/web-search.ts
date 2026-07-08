@@ -270,17 +270,20 @@ export async function searchWeb(
         entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
         break;
       case "brave":
-        if (!config.braveApiKey) {
-          return {
-            status: "unavailable",
-            reason: "BRAVE_API_KEY not configured",
+        {
+          const braveApiKey = config.braveApiKey;
+          if (!braveApiKey) {
+            return {
+              status: "unavailable",
+              reason: "BRAVE_API_KEY not configured",
+              provider: "brave_search",
+            };
+          }
+          entries.push({
             provider: "brave_search",
-          };
+            fn: () => braveSearch(normalized, resolved, braveApiKey),
+          });
         }
-        entries.push({
-          provider: "brave_search",
-          fn: () => braveSearch(normalized, resolved, config.braveApiKey!),
-        });
         break;
       case "ddg":
         entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });
@@ -291,10 +294,11 @@ export async function searchWeb(
 
   // Default cascade: Exa → Brave → DDG
   entries.push({ provider: "exa", fn: () => exaSearch(normalized, resolved) });
-  if (config.braveApiKey) {
+  const braveApiKey = config.braveApiKey;
+  if (braveApiKey) {
     entries.push({
       provider: "brave_search",
-      fn: () => braveSearch(normalized, resolved, config.braveApiKey!),
+      fn: () => braveSearch(normalized, resolved, braveApiKey),
     });
   }
   entries.push({ provider: "ddg", fn: () => ddgSearch(normalized, resolved) });

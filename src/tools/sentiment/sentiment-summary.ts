@@ -71,9 +71,11 @@ export function createSentimentSummaryTool(
         import("../../providers/finnhub.js").FinnhubArticle[]
       > => {
         if (!includeFinnhub) return [];
+        const finnhubApiKey = config.finnhubApiKey;
+        if (!finnhubApiKey) return [];
         const { from, to } = finnhubDateRange("day");
         const arrays = await Promise.all(
-          finnhubTickers.map((sym) => getCompanyNews(sym, from, to, config.finnhubApiKey!)),
+          finnhubTickers.map((sym) => getCompanyNews(sym, from, to, finnhubApiKey)),
         );
         return arrays.flat();
       };
@@ -154,7 +156,9 @@ export function createSentimentSummaryTool(
         const reason =
           webResult.status === "rejected"
             ? (webResult.reason?.message ?? "unknown error")
-            : ((webResult.value as any).reason ?? "unavailable");
+            : webResult.value.status === "unavailable"
+              ? webResult.value.reason
+              : "unavailable";
         warnings.push(`Web: ${reason}`);
       }
 
@@ -187,7 +191,7 @@ export function createSentimentSummaryTool(
               text: `${softDegradedPrefix}⚠ Sentiment summary unavailable for "${args.query}" — no sources returned data.\n${warnings.join("\n")}`,
             },
           ],
-          details: null as any,
+          details: null,
         };
       }
 

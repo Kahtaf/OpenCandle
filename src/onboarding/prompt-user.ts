@@ -33,7 +33,7 @@ export interface PromptResult {
  * When neither a handler nor a UI is available, returns `{answer: null, cancelled: true}`.
  */
 export async function promptUser(
-  ctx: ExtensionContext,
+  ctx: ExtensionContext | undefined,
   opts: PromptOptions,
   handler?: AskUserHandler,
 ): Promise<PromptResult> {

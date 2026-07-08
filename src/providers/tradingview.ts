@@ -373,7 +373,7 @@ export function canUseTradingViewQuote(symbol: string): boolean {
 }
 
 function symbolFromTvSymbol(tvSymbol: string): string {
-  return tvSymbol.includes(":") ? tvSymbol.split(":").at(-1)! : tvSymbol;
+  return tvSymbol.includes(":") ? (tvSymbol.split(":").at(-1) ?? tvSymbol) : tvSymbol;
 }
 
 function stringValue(value: unknown): string | undefined {

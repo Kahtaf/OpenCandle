@@ -58,7 +58,7 @@ export const technicalIndicatorsTool: AgentTool<typeof params> = {
             text: `⚠ Technical indicators unavailable for ${symbol} (${result.reason}).`,
           },
         ],
-        details: null as any,
+        details: null,
       };
     }
     const bars = result.data;

@@ -260,7 +260,7 @@ export const backtestTool: AgentTool<typeof params> = {
         content: [
           { type: "text", text: `⚠ Backtest unavailable for ${symbol} (${historyResult.reason}).` },
         ],
-        details: null as any,
+        details: null,
       };
     }
     const bars = historyResult.data;

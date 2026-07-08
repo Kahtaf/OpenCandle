@@ -140,14 +140,15 @@ interface ExaApiResponse {
 }
 
 function mapApiResults(results: ExaApiResult[]): ParsedResult[] {
-  return results
-    .filter((r) => r.url)
-    .map((r) => ({
+  return results.flatMap((r) => {
+    if (!r.url) return [];
+    return {
       title: r.title ?? "",
-      url: r.url!,
+      url: r.url,
       published: r.publishedDate ?? null,
       snippet: (r.highlights?.join(" ") || r.text || "").slice(0, SNIPPET_MAX_CHARS),
-    }));
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------

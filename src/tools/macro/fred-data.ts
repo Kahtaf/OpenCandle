@@ -22,49 +22,52 @@ const params = Type.Object({
   ),
 });
 
-export const fredDataTool: AgentTool<typeof params, FredSeries | { credentialRequired: unknown }> =
-  {
-    name: "get_economic_data",
-    label: "FRED Economic Data",
-    description:
-      "Get economic data from FRED (Federal Reserve Economic Data): interest rates, CPI, GDP, unemployment, yield curve, and more. Requires FRED.",
-    parameters: params,
-    async execute(_toolCallId, args) {
-      return withCredentialCheck("fred", async () => {
-        const apiKey = getConfig().fredApiKey!;
-        const seriesId = args.series_id.toUpperCase();
-        const limit = normalizeLimit(seriesId, args.limit);
-        const result = await wrapProvider("fred", () => getSeries(seriesId, apiKey, limit));
-        if (result.status === "unavailable") {
-          return {
-            content: [
-              { type: "text", text: `⚠ FRED data unavailable for ${seriesId} (${result.reason}).` },
-            ],
-            details: null as any,
-          };
-        }
-        const series = result.data;
+export const fredDataTool: AgentTool<
+  typeof params,
+  FredSeries | { credentialRequired: unknown } | null
+> = {
+  name: "get_economic_data",
+  label: "FRED Economic Data",
+  description:
+    "Get economic data from FRED (Federal Reserve Economic Data): interest rates, CPI, GDP, unemployment, yield curve, and more. Requires FRED.",
+  parameters: params,
+  async execute(_toolCallId, args) {
+    return withCredentialCheck("fred", async () => {
+      const apiKey = getConfig().fredApiKey;
+      if (!apiKey) throw new Error("FRED credential is missing.");
+      const seriesId = args.series_id.toUpperCase();
+      const limit = normalizeLimit(seriesId, args.limit);
+      const result = await wrapProvider("fred", () => getSeries(seriesId, apiKey, limit));
+      if (result.status === "unavailable") {
+        return {
+          content: [
+            { type: "text", text: `⚠ FRED data unavailable for ${seriesId} (${result.reason}).` },
+          ],
+          details: null,
+        };
+      }
+      const series = result.data;
 
-        const latest = series.observations[series.observations.length - 1];
-        const header = `**${series.title}** (${series.id})`;
-        const meta = `Units: ${series.units} | Frequency: ${series.frequency} | Last updated: ${series.lastUpdated}`;
-        const current = latest ? `Latest: ${latest.value} (${latest.date})` : "No data";
-        const derived = formatDerivedChange(series);
+      const latest = series.observations[series.observations.length - 1];
+      const header = `**${series.title}** (${series.id})`;
+      const meta = `Units: ${series.units} | Frequency: ${series.frequency} | Last updated: ${series.lastUpdated}`;
+      const current = latest ? `Latest: ${latest.value} (${latest.date})` : "No data";
+      const derived = formatDerivedChange(series);
 
-        // Show last 10 observations
-        const recent = series.observations.slice(-10);
-        const table = recent.map((o) => `${o.date}: ${o.value}`).join("\n");
+      // Show last 10 observations
+      const recent = series.observations.slice(-10);
+      const table = recent.map((o) => `${o.date}: ${o.value}`).join("\n");
 
-        const text = [header, meta, current, derived, "", "Recent observations:", table]
-          .filter(Boolean)
-          .join("\n");
-        const prefix = result.stale
-          ? `⚠ Using cached FRED data from ${result.timestamp} (FRED unavailable)\n`
-          : "";
-        return { content: [{ type: "text", text: prefix + text }], details: series };
-      });
-    },
-  };
+      const text = [header, meta, current, derived, "", "Recent observations:", table]
+        .filter(Boolean)
+        .join("\n");
+      const prefix = result.stale
+        ? `⚠ Using cached FRED data from ${result.timestamp} (FRED unavailable)\n`
+        : "";
+      return { content: [{ type: "text", text: prefix + text }], details: series };
+    });
+  },
+};
 
 function normalizeLimit(seriesId: string, requested: number | undefined): number {
   const limit = requested ?? 30;

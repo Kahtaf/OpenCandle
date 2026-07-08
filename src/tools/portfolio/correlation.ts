@@ -52,7 +52,14 @@ export function alignReturnsByDate(
 
   // Find common dates across all symbols
   const symbols = [...historiesBySymbol.keys()];
-  const firstDates = priceByDate.get(symbols[0])!;
+  const firstSymbol = symbols[0];
+  if (!firstSymbol) {
+    throw new Error("No histories available for correlation analysis.");
+  }
+  const firstDates = priceByDate.get(firstSymbol);
+  if (!firstDates) {
+    throw new Error(`Missing price history for ${firstSymbol}.`);
+  }
   const commonDates = [...firstDates.keys()]
     .filter((date) => symbols.every((s) => priceByDate.get(s)?.has(date)))
     .sort();
@@ -66,8 +73,13 @@ export function alignReturnsByDate(
   // Extract aligned close prices, then compute returns
   const result = new Map<string, number[]>();
   for (const symbol of symbols) {
-    const dateMap = priceByDate.get(symbol)!;
-    const alignedCloses = commonDates.map((d) => dateMap.get(d)!);
+    const dateMap = priceByDate.get(symbol);
+    if (!dateMap) throw new Error(`Missing price history for ${symbol}.`);
+    const alignedCloses = commonDates.map((d) => {
+      const close = dateMap.get(d);
+      if (close === undefined) throw new Error(`Missing close for ${symbol} on ${d}.`);
+      return close;
+    });
     result.set(symbol, computeDailyReturns(alignedCloses));
   }
 
@@ -128,7 +140,7 @@ export const correlationTool: AgentTool<typeof params> = {
             text: `⚠ Correlation analysis unavailable — need at least 2 symbols with usable history.${droppedText}`,
           },
         ],
-        details: null as any,
+        details: null,
       };
     }
 
@@ -152,7 +164,12 @@ export const correlationTool: AgentTool<typeof params> = {
         } else if (matrix[b]?.[a] != null) {
           matrix[a][b] = matrix[b][a];
         } else {
-          const r = computeCorrelation(returnsBySymbol.get(a)!, returnsBySymbol.get(b)!);
+          const returnsA = returnsBySymbol.get(a);
+          const returnsB = returnsBySymbol.get(b);
+          if (!returnsA || !returnsB) {
+            throw new Error(`Missing aligned returns for ${a}/${b}.`);
+          }
+          const r = computeCorrelation(returnsA, returnsB);
           matrix[a][b] = r;
           if (Math.abs(r) > 0.7 && a < b) {
             warnings.push(`${a}/${b}: r=${r.toFixed(2)} — high correlation, concentration risk`);

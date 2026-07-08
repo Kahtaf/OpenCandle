@@ -111,7 +111,7 @@ function isOfficialFedSource(value: string): boolean {
   return lower.includes("federalreserve.gov") || lower.includes("fomc.gov");
 }
 
-export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
+export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope | null> = {
   name: "search_web",
   label: "Web Search",
   description:
@@ -124,7 +124,7 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
     if (!query) {
       return {
         content: [{ type: "text", text: "⚠ Cannot search with an empty query." }],
-        details: null as any,
+        details: null,
       };
     }
 
@@ -138,7 +138,7 @@ export const webSearchTool: AgentTool<typeof params, WebSearchEnvelope> = {
     if (result.status === "unavailable") {
       return {
         content: [{ type: "text", text: `⚠ Web search unavailable (${result.reason}).` }],
-        details: null as any,
+        details: null,
       };
     }
 

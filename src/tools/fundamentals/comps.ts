@@ -48,8 +48,8 @@ export function computeComps(companies: CompanyOverview[]): CompsResult {
     }
 
     const nonNull = Object.entries(values)
-      .filter(([, v]) => v != null)
-      .map(([sym, v]) => ({ sym, v: v! }));
+      .filter((entry): entry is [string, number] => entry[1] != null)
+      .map(([sym, v]) => ({ sym, v }));
 
     const sorted = [...nonNull].sort((a, b) => a.v - b.v);
     const sortedVals = sorted.map((s) => s.v);
@@ -103,6 +103,8 @@ export const compsTool: AgentTool<typeof params> = {
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
       const config = getConfig();
+      const alphaVantageApiKey = config.alphaVantageApiKey;
+      if (!alphaVantageApiKey) throw new Error("Alpha Vantage credential is missing.");
       const symbols = args.symbols.map((s) => s.toUpperCase());
 
       const companies: CompanyOverview[] = [];
@@ -111,7 +113,7 @@ export const compsTool: AgentTool<typeof params> = {
 
       for (const sym of symbols) {
         const alphaResult = await wrapProvider("alphavantage", () =>
-          getOverview(sym, config.alphaVantageApiKey!),
+          getOverview(sym, alphaVantageApiKey),
         );
         if (alphaResult.status === "ok") {
           companies.push(alphaResult.data);
@@ -136,7 +138,7 @@ export const compsTool: AgentTool<typeof params> = {
               text: `⚠ Company fundamentals unavailable for all symbols: ${symbols.join(", ")}. Alpha Vantage may be rate limited.`,
             },
           ],
-          details: null as any,
+          details: null,
         };
       }
 

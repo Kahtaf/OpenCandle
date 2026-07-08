@@ -12,7 +12,7 @@ const params = Type.Object({
 
 export const companyOverviewTool: AgentTool<
   typeof params,
-  CompanyOverview | { credentialRequired: unknown }
+  CompanyOverview | { credentialRequired: unknown } | null
 > = {
   name: "get_company_overview",
   label: "Company Overview",
@@ -21,7 +21,8 @@ export const companyOverviewTool: AgentTool<
   parameters: params,
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
-      const apiKey = getConfig().alphaVantageApiKey!;
+      const apiKey = getConfig().alphaVantageApiKey;
+      if (!apiKey) throw new Error("Alpha Vantage credential is missing.");
       const result = await wrapProvider("alphavantage", () =>
         getOverview(args.symbol.toUpperCase(), apiKey),
       );
@@ -33,7 +34,7 @@ export const companyOverviewTool: AgentTool<
               text: `⚠ Company overview unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without fundamentals.`,
             },
           ],
-          details: null as any,
+          details: null,
         };
       }
       const ov = result.data;

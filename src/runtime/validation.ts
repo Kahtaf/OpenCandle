@@ -139,7 +139,7 @@ export class RuntimeValidator {
     if (this.config.toolResults) {
       const numberEntries = checkNumberMatch(evidence, this.config.toolResults);
       for (const entry of numberEntries) {
-        if ((entry as any).type === "pass") {
+        if (entry.type === "pass") {
           result.passes.push(entry);
         } else {
           result.failures.push(entry);

@@ -100,7 +100,7 @@ async function httpRequest<T>(url: string, options: HttpRequestOptions): Promise
     }
   }
 
-  throw lastError!;
+  throw lastError ?? new Error("HTTP request failed without an error");
 }
 
 function isRetryableError(error: unknown): boolean {

@@ -1,6 +1,6 @@
 import type { EvidenceRecord } from "./evidence.js";
 import type { ProviderTracker } from "./provider-tracker.js";
-import type { WorkflowEventLogger } from "./workflow-events.js";
+import type { WorkflowEventLogger, WorkflowEventType } from "./workflow-events.js";
 import type { StepOutput, WorkflowRun, WorkflowStep } from "./workflow-types.js";
 import { createWorkflowRun, transitionStepStatus } from "./workflow-types.js";
 
@@ -124,7 +124,7 @@ export class WorkflowRunner {
       try {
         const context: StepExecutionContext = {
           runId: run.runId,
-          providerTracker: this.providerTracker!,
+          providerTracker: this.getProviderTracker(),
         };
 
         const output = await executor(step, i, priorEvidence, context);
@@ -174,9 +174,16 @@ export class WorkflowRunner {
   private logEvent(
     runId: string,
     stepIndex: number,
-    eventType: string,
+    eventType: WorkflowEventType,
     payload: Record<string, unknown>,
   ): void {
-    this.eventLogger?.log(runId, stepIndex, eventType as any, payload);
+    this.eventLogger?.log(runId, stepIndex, eventType, payload);
+  }
+
+  private getProviderTracker(): ProviderTracker {
+    if (!this.providerTracker) {
+      throw new Error("WorkflowRunner requires a ProviderTracker to execute workflow steps.");
+    }
+    return this.providerTracker;
   }
 }

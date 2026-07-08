@@ -18,7 +18,7 @@ const params = Type.Object({
   ),
 });
 
-export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
+export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics | null> = {
   name: "analyze_risk",
   label: "Risk Analysis",
   description:
@@ -33,7 +33,7 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
         content: [
           { type: "text", text: `⚠ Risk analysis unavailable for ${symbol} (${result.reason}).` },
         ],
-        details: null as any,
+        details: null,
       };
     }
     const bars = result.data;
@@ -47,7 +47,7 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
             text: `Insufficient data for risk analysis (need 30+ days, got ${closes.length})`,
           },
         ],
-        details: null as any,
+        details: null,
       };
     }
 
@@ -63,7 +63,7 @@ export const riskAnalysisTool: AgentTool<typeof params, RiskMetrics> = {
               text: `Insufficient data for risk analysis (no usable price returns after filtering invalid closes)`,
             },
           ],
-          details: null as any,
+          details: null,
         };
       }
       throw error;
