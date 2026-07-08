@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-07-08
+
 ### Added
 
 - Added a GUI cashtag entity layer: `$` autocomplete in the chat composer, dashboard-known symbol chips in chat text, and chip popovers that show cached quote/state context with watchlist and follow-up actions.
