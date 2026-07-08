@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AlertCreateForm,
   clampComboboxActiveIndex,
+  getHoldingAutofillValues,
   HoldingForm,
   invokeMarketStateMutation,
   MarketStatePage,
@@ -15,7 +16,28 @@ import {
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
 describe("MarketStatePage rendering", () => {
-  it("offers a skip-for-now path on the empty portfolio page", () => {
+  it("autofills new holding quantity, average cost, and currency from selected quote data", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "ASTS",
+        currentValues: { shares: "", avg_cost: "", currency: "USD" },
+        selectedQuote: { status: "ok", price: 42.37, currency: "USD" },
+      }),
+    ).toEqual({ shares: "100", avg_cost: "42.37", currency: "USD" });
+  });
+
+  it("does not overwrite holding fields the user has already edited", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "ASTS",
+        currentValues: { shares: "25", avg_cost: "40", currency: "CAD" },
+        previousAutofill: { shares: "100", avg_cost: "42.37", currency: "USD" },
+        selectedQuote: { status: "ok", price: 45, currency: "USD" },
+      }),
+    ).toEqual({ shares: "25", avg_cost: "40", currency: "CAD" });
+  });
+
+  it("renders an empty portfolio page without a skip action", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
         domain: "portfolios",
@@ -27,7 +49,7 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("No holdings yet");
-    expect(html).toContain("Skip For Now");
+    expect(html).not.toContain("Skip For Now");
   });
 
   it("uses the shared app shell chrome without duplicate section tabs", () => {

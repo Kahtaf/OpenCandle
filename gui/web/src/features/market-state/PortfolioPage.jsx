@@ -26,7 +26,6 @@ export function PortfolioPage({
   readOnly,
   openPanel,
   invokeTool,
-  navigate,
 }) {
   const portfolios = useMemo(() => {
     const saved = state.portfolios ?? [];
@@ -112,7 +111,6 @@ export function PortfolioPage({
             icon={BriefcaseBusiness}
             title="No holdings yet"
             action="Add a holding when you are ready, or keep using watchlists without a portfolio."
-            cta={{ label: "Skip For Now", onClick: () => navigate?.({ to: "/watchlists" }) }}
           />
         ) : null}
       </Panel>

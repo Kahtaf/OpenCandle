@@ -3,6 +3,7 @@ import {
   buildMarketStateQuoteSnapshot,
   buildMarketStateSnapshot,
   createSavedSymbolsMemo,
+  getInstrumentQuoteSnapshot,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
 import { cache } from "../../../src/infra/cache.js";
@@ -166,6 +167,20 @@ describe("market-state API helpers", () => {
           score: 101,
         },
       ],
+    });
+  });
+
+  it("returns a one-symbol quote snapshot for holding autofill", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("ASTS", 42.37, { currency: "USD" }));
+
+    await expect(getInstrumentQuoteSnapshot(" asts ")).resolves.toEqual({
+      symbol: "ASTS",
+      status: "ok",
+      price: 42.37,
+      changePercent: 0.5,
+      fetchedAt: expect.any(String),
+      stale: false,
+      currency: "USD",
     });
   });
 

@@ -6,6 +6,7 @@ import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
+import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import {
   clampInstrumentActiveIndex,
   instrumentSuggestionOptionId,
@@ -87,7 +88,6 @@ export function MarketStatePage({
   domain,
   role,
   invokeTool: invokeToolRequest,
-  navigate,
   setToast,
   onOpenSidebar,
   onOpenHome,
@@ -187,7 +187,6 @@ export function MarketStatePage({
                   readOnly={readOnly || mutationPending}
                   openPanel={openPanel}
                   invokeTool={invokeTool}
-                  navigate={navigate}
                 />
               ) : null}
               {activeId === "alerts" ? (
@@ -644,6 +643,11 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
   const quantityId = useId();
   const averageCostId = useId();
   const currencyId = useId();
+  const previousAutofillRef = useRef({
+    shares: "",
+    avg_cost: "",
+    currency: lot?.currency ?? "USD",
+  });
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
@@ -652,6 +656,38 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
   const [query, setQuery] = useState(lot?.symbol ?? "");
   const [selected, setSelected] = useState(lot?.symbol ?? "");
   const resolvedSymbol = selected || lot?.symbol;
+
+  useEffect(() => {
+    if (lot || !resolvedSymbol) return undefined;
+
+    let disposed = false;
+    const applyAutofill = (selectedQuote) => {
+      const defaults = getHoldingAutofillDefaults({
+        selectedSymbol: resolvedSymbol,
+        selectedQuote,
+      });
+      setValues((current) =>
+        getHoldingAutofillValues({
+          selectedSymbol: resolvedSymbol,
+          currentValues: current,
+          previousAutofill: previousAutofillRef.current,
+          selectedQuote,
+        }),
+      );
+      previousAutofillRef.current = defaults;
+    };
+
+    applyAutofill(null);
+    getInstrumentQuote(resolvedSymbol)
+      .then((quote) => {
+        if (!disposed) applyAutofill(quote);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+    };
+  }, [lot, resolvedSymbol]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -722,6 +758,47 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
       </Button>
     </form>
   );
+}
+
+function getHoldingAutofillDefaults({ selectedSymbol, selectedQuote }) {
+  if (!selectedSymbol) return { shares: "", avg_cost: "", currency: "" };
+  const quote =
+    selectedQuote?.status === "ok" && Number.isFinite(selectedQuote.price) ? selectedQuote : null;
+  return {
+    shares: "100",
+    avg_cost: quote ? formatAutofillNumber(quote.price) : "",
+    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "",
+  };
+}
+
+export function getHoldingAutofillValues({
+  selectedSymbol,
+  currentValues,
+  previousAutofill,
+  selectedQuote,
+}) {
+  const current = {
+    shares: String(currentValues?.shares ?? ""),
+    avg_cost: String(currentValues?.avg_cost ?? ""),
+    currency: String(currentValues?.currency ?? ""),
+  };
+  const defaults = getHoldingAutofillDefaults({ selectedSymbol, selectedQuote });
+  const replaceableValue = (field) =>
+    current[field] === "" ||
+    current[field] ===
+      String(previousAutofill?.[field] ?? (field === "currency" ? "USD" : ""));
+
+  return {
+    shares: defaults.shares && replaceableValue("shares") ? defaults.shares : current.shares,
+    avg_cost:
+      defaults.avg_cost && replaceableValue("avg_cost") ? defaults.avg_cost : current.avg_cost,
+    currency:
+      defaults.currency && replaceableValue("currency") ? defaults.currency : current.currency,
+  };
+}
+
+function formatAutofillNumber(value) {
+  return Number.parseFloat(String(value)).toString();
 }
 
 export function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {

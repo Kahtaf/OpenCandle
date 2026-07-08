@@ -355,13 +355,31 @@ export async function searchInstrumentCandidates(query: string): Promise<{
   }
 }
 
+export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
+  | {
+      symbol: string;
+      status: "ok";
+      price: number;
+      changePercent: number;
+      fetchedAt: string;
+      stale: boolean;
+      currency: string | null;
+    }
+  | { symbol: string; status: "unavailable"; reason: string }
+> {
+  const normalized = symbol.trim().toUpperCase();
+  if (!normalized) return { symbol: "", status: "unavailable", reason: "symbol is required" };
+  const quote = await fetchQuoteSnapshot(normalized);
+  return quote.status === "ok" ? { symbol: normalized, ...quote } : { symbol: normalized, ...quote };
+}
+
 async function fetchQuoteSnapshot(symbol: string): Promise<
   | {
       status: "ok";
       price: number;
       changePercent: number;
       fetchedAt: string;
-      stale?: boolean;
+      stale: boolean;
       currency: string | null;
     }
   | { status: "unavailable"; reason: string }
@@ -386,7 +404,7 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
     price: result.data.price,
     changePercent: result.data.changePercent,
     fetchedAt: freshness.providerDataAt ?? result.timestamp,
-    stale: result.stale,
+    stale: Boolean(result.stale),
     currency: result.data.currency ?? null,
   };
 }
