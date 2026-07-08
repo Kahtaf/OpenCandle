@@ -84,7 +84,7 @@ export class WorkflowRunner {
   /** Cancel the active run. */
   cancel(): void {
     const run = this.activeRun;
-    if (!run || run.status !== "running") return;
+    if (run?.status !== "running") return;
 
     for (let i = run.currentStepIndex; i < run.steps.length; i++) {
       const step = run.steps[i];

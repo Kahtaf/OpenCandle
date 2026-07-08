@@ -10,7 +10,7 @@ import {
 } from "../../../src/onboarding/state.js";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
 import type { AskUserHandler } from "../../../src/types/index.js";
-import type { RedditSentimentResult, WebSearchEnvelope } from "../../../src/types/sentiment.js";
+import type { WebSearchEnvelope } from "../../../src/types/sentiment.js";
 import listingFixture from "../../fixtures/reddit/listing-with-ids.json";
 
 const originalFetch = globalThis.fetch;
@@ -82,7 +82,7 @@ import {
   sentimentSummaryTool,
 } from "../../../src/tools/sentiment/sentiment-summary.js";
 
-const mockedGetTwitterSentiment = vi.mocked(getTwitterSentiment);
+const _mockedGetTwitterSentiment = vi.mocked(getTwitterSentiment);
 const mockedGetPostComments = vi.mocked(getPostComments);
 const mockedWrapProvider = vi.mocked(wrapProvider);
 const mockedSearchWeb = vi.mocked(searchWeb);
@@ -110,7 +110,7 @@ describe("get_sentiment_summary tool", () => {
 
   it("returns per-source breakdown when reddit and web available", async () => {
     // Mock twitter wrapProvider as unavailable
-    mockedWrapProvider.mockImplementation(async (provider, fn) => {
+    mockedWrapProvider.mockImplementation(async (provider, _fn) => {
       if (provider === "twitter") {
         return { status: "unavailable", reason: "No Twitter session found" } as any;
       }

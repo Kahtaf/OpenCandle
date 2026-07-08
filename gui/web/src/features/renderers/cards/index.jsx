@@ -71,7 +71,7 @@ export function rendererFor(toolName) {
   return RENDERERS.get(toolName) || null;
 }
 
-export function GenericCard({ message, header, text }) {
+export function GenericCard({ header, text }) {
   return (
     <ToolCard>
       {header}

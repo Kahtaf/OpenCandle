@@ -57,8 +57,8 @@ describe("parseDteTarget", () => {
   it("parses '180_plus_days'", () => {
     const result = parseDteTarget("180_plus_days");
     expect(result).toBeTruthy();
-    expect(result!.minDays).toBe(180);
-    expect(result!.maxDays).toBe(1095);
+    expect(result?.minDays).toBe(180);
+    expect(result?.maxDays).toBe(1095);
   });
 
   it("returns null for unrecognized format", () => {

@@ -1125,7 +1125,7 @@ function symbolsSlotClaimsPriorTurnUserProvenance(
   priorTurns: RouterInputContext["priorTurns"] | undefined,
 ): boolean {
   const slot = slots.symbols;
-  if (!slot || slot.source !== "user" || !Array.isArray(slot.value)) return false;
+  if (slot?.source !== "user" || !Array.isArray(slot.value)) return false;
   if (!priorTurns || priorTurns.length === 0) return false;
   const priorText = priorTurns.map((turn) => turn.text).join("\n");
   // A symbol absent from this turn's text but present in prior turns is a

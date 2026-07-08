@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { cn } from "../../lib/utils.js";
-import { useStableId } from "./use-stable-id.js";
 
 // ---------------------------------------------------------------------------
 // Field — wraps every input with a hairline-spaced label, hint, and required mark
@@ -432,7 +431,7 @@ export function MoneyInput({ value, onChange, currency = "USD", min = 0, placeho
 
   const commit = (raw) => {
     setFocused(false);
-    if (!raw || !raw.replace(/[^0-9.]/g, "")) {
+    if (!raw?.replace(/[^0-9.]/g, "")) {
       onChange(undefined);
       setDraft("");
       return;

@@ -262,8 +262,8 @@ record("scripted answer picked the Continue option", () => {
   );
   assert(alphaCall !== undefined, "no Alpha Vantage prompt was recorded");
   assert(
-    alphaCall!.answer !== null && alphaCall!.answer.startsWith("Continue"),
-    `expected a "Continue …" answer, got: ${alphaCall!.answer ?? "(null)"}`,
+    alphaCall?.answer?.startsWith("Continue"),
+    `expected a "Continue …" answer, got: ${alphaCall?.answer ?? "(null)"}`,
   );
 });
 

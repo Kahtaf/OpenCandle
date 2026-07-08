@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cache } from "../../../src/infra/cache.js";
 import { rateLimiter } from "../../../src/infra/rate-limiter.js";
-import { type SECFiling, searchFilings } from "../../../src/providers/sec-edgar.js";
+import { searchFilings } from "../../../src/providers/sec-edgar.js";
 
 const mockSearchResponse = {
   hits: {

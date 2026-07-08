@@ -263,7 +263,7 @@ export function createSentimentSummaryTool(
       );
 
       // Divergence
-      if (result.divergence && result.divergence.detected) {
+      if (result.divergence?.detected) {
         lines.push("");
         lines.push(result.divergence.message);
       } else if (result.divergence && !result.divergence.detected) {

@@ -3,7 +3,7 @@ import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
 import { cn } from "../../lib/utils.js";
 import { textContent } from "../../rendering/text.js";
-import { PlainOutput, RawDetails } from "./cards/_shared.jsx";
+import { RawDetails } from "./cards/_shared.jsx";
 import { extractDetails } from "./cards/card-format.js";
 import { GenericCard, rendererFor } from "./cards/index.jsx";
 import { ToolIcon, toolMeta } from "./tool-icon.jsx";

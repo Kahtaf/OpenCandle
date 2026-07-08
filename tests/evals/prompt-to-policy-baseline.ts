@@ -232,7 +232,7 @@ export function buildCapabilityScorecard(
   for (const entry of entries) {
     for (const gap of entry.expected.providerGapDisclosure ?? []) {
       if (!byGap.has(gap)) byGap.set(gap, new Set());
-      byGap.get(gap)!.add(entry.id);
+      byGap.get(gap)?.add(entry.id);
     }
   }
 

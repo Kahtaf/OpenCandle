@@ -54,7 +54,7 @@ export function alignReturnsByDate(
   const symbols = [...historiesBySymbol.keys()];
   const firstDates = priceByDate.get(symbols[0])!;
   const commonDates = [...firstDates.keys()]
-    .filter((date) => symbols.every((s) => priceByDate.get(s)!.has(date)))
+    .filter((date) => symbols.every((s) => priceByDate.get(s)?.has(date)))
     .sort();
 
   if (commonDates.length < minOverlap) {

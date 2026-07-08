@@ -12,7 +12,7 @@ vi.mock("duck-duck-scrape", () => ({
   SearchTimeType: { ALL: "a", DAY: "d", WEEK: "w", MONTH: "m", YEAR: "y" },
 }));
 
-import { SafeSearchType, SearchTimeType, search, searchNews } from "duck-duck-scrape";
+import { SearchTimeType, search, searchNews } from "duck-duck-scrape";
 import { getConfig } from "../../../src/config.js";
 import { httpGet } from "../../../src/infra/http-client.js";
 import { exaSearch } from "../../../src/providers/exa-search.js";
@@ -259,7 +259,7 @@ describe("ddgSearch", () => {
     // Expire the TTL manually
     cache.clear();
     // Re-set as stale (expired TTL but within stale limit)
-    cache["store"].set("web:ddg:AAPL stock news:news:day:10", {
+    cache.store.set("web:ddg:AAPL stock news:news:day:10", {
       value: {
         query: "AAPL stock news",
         results: [],

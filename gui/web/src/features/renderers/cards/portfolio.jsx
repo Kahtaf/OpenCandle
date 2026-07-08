@@ -1,9 +1,8 @@
 import { Badge } from "../../../components/ui/badge.jsx";
 import { Favicon } from "../../../components/ui/favicon.jsx";
-import { DeltaChip, MoneyTile, PlainOutput, StatRow, ToolCard } from "./_shared.jsx";
+import { DeltaChip, MoneyTile, PlainOutput, ToolCard } from "./_shared.jsx";
 import {
   extractDetails,
-  formatDateShort,
   formatLargeNumber,
   formatPercent,
   formatPrice,
@@ -21,7 +20,6 @@ export function PortfolioCard({ message, header, text }) {
       </ToolCard>
     );
   }
-  const pnlTone = (d.totalPnl ?? 0) >= 0 ? "success" : "destructive";
   return (
     <ToolCard>
       {header}

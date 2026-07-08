@@ -182,7 +182,7 @@ function writeParityReport(
     currentManifestReportPath: current.reportPath,
     parity,
   };
-  writeFileSync(path, JSON.stringify(report, null, 2) + "\n", "utf-8");
+  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   return path;
 }
 

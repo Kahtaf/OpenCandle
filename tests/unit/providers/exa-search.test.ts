@@ -33,8 +33,8 @@ const sseFixture = readFileSync(
 // Extract the data line payload from SSE fixture for Content-Type branching tests
 const sseDataPayload = sseFixture
   .split("\n")
-  .find((l) => l.startsWith("data:"))!
-  .slice(5)
+  .find((l) => l.startsWith("data:"))
+  ?.slice(5)
   .trim();
 
 function mockFetchResponse(
@@ -339,8 +339,8 @@ describe("exaSearch (MCP path)", () => {
     await exaSearch("query2", { category: "news", freshness: "month", limit: 5 });
 
     const calls = vi.mocked(globalThis.fetch).mock.calls;
-    const body1 = JSON.parse(calls[0][1]!.body as string);
-    const body2 = JSON.parse(calls[1][1]!.body as string);
+    const body1 = JSON.parse(calls[0][1]?.body as string);
+    const body2 = JSON.parse(calls[1][1]?.body as string);
     expect(body1.id).not.toBe(body2.id);
   });
 
@@ -349,7 +349,7 @@ describe("exaSearch (MCP path)", () => {
 
     await exaSearch("AAPL", { category: "news", freshness: "day", limit: 5 });
 
-    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]!.body as string);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
     expect(body.params.arguments.query).toBe("AAPL past 24 hours");
   });
 
@@ -446,7 +446,7 @@ describe("exaSearch (API path)", () => {
 
     await exaSearch("AAPL", { category: "news", freshness: "week", limit: 5 });
 
-    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]!.body as string);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
     expect(body.startPublishedDate).toBeDefined();
     // Should be roughly 7 days ago
     const pubDate = new Date(body.startPublishedDate).getTime();
@@ -461,7 +461,7 @@ describe("exaSearch (API path)", () => {
 
     await exaSearch("AAPL", { category: "news", freshness: "day", limit: 5 });
 
-    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]!.body as string);
+    const body = JSON.parse(vi.mocked(globalThis.fetch).mock.calls[0][1]?.body as string);
     expect(body.query).toBe("AAPL"); // not "AAPL past 24 hours"
   });
 

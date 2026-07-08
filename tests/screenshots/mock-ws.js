@@ -13,7 +13,7 @@
       const payload = window.__MOCK_PAYLOAD || {};
       queueMicrotask(() => {
         try {
-          this.onopen && this.onopen(new Event("open"));
+          this.onopen?.(new Event("open"));
           this._emit({
             type: "boot",
             role: "writer",
@@ -37,12 +37,12 @@
     send() {}
     close() {
       this.readyState = 3;
-      this.onclose && this.onclose(new CloseEvent("close"));
+      this.onclose?.(new CloseEvent("close"));
     }
     _emit(messagePayload) {
       const event = new MessageEvent("message", { data: JSON.stringify(messagePayload) });
       this.dispatchEvent(event);
-      this.onmessage && this.onmessage(event);
+      this.onmessage?.(event);
     }
   }
   MockWebSocket.CONNECTING = 0;

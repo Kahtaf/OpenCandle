@@ -22,7 +22,6 @@ export function ToolDrawerInline() {
   return (
     <aside
       className="flex w-[min(520px,42vw)] shrink-0 flex-col border-l border-border bg-background animate-in slide-in-from-right duration-200"
-      role="complementary"
       aria-label="Tool run timeline"
     >
       <DrawerHeader run={run} onClose={close} />

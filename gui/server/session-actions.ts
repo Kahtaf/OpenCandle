@@ -64,16 +64,13 @@ export function createSessionActionsController({
   role,
   cwd,
   sessionDir,
-  getSession,
   getSessionManager,
-  getModelSetupState,
   askUserBridge,
   runtime,
   sendBoot,
   broadcastState,
   broadcastSessions,
   localSessionCoordinator,
-  now = Date.now,
 }: SessionActionsControllerOptions): SessionActionsController {
   function ensureWriter(): void {
     if (role !== "writer") throw new Error("Read-only follower mode");

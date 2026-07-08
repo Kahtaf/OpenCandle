@@ -87,7 +87,6 @@ export async function invokeMarketStateMutation({
 export function MarketStatePage({
   domain,
   role,
-  send,
   invokeTool: invokeToolRequest,
   navigate,
   setToast,
@@ -215,7 +214,6 @@ export function MarketStatePage({
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
                 <PanelContent
                   panel={panel}
-                  state={state}
                   readOnly={readOnly || mutationPending}
                   invokeTool={invokeTool}
                   closePanel={closePanel}
@@ -253,7 +251,7 @@ function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
   );
 }
 
-function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
+function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
   const item = panel.data?.item;
   const lot = panel.data?.lot;
 

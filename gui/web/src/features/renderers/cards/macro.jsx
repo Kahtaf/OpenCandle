@@ -1,13 +1,5 @@
 import { Badge } from "../../../components/ui/badge.jsx";
-import {
-  DeltaChip,
-  MoneyTile,
-  PlainOutput,
-  RangeBar,
-  Sparkline,
-  StatRow,
-  ToolCard,
-} from "./_shared.jsx";
+import { DeltaChip, MoneyTile, PlainOutput, RangeBar, Sparkline, ToolCard } from "./_shared.jsx";
 import { extractDetails, formatDateShort } from "./card-format.js";
 
 export function MacroSeriesCard({ message, header, text }) {

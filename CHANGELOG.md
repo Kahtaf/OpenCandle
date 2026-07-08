@@ -2,8 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees.
+- Biome release-check noise is reduced with mechanical lint fixes plus scoped test/provider overrides for intentional mock and raw-response patterns.
+
 ### Fixed
 
+- README setup/data-source guidance now includes TradingView scanner and Polymarket Gamma as keyless public sources.
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
 
 ## [0.11.1] - 2026-07-08

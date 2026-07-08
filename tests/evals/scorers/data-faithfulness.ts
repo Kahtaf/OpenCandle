@@ -48,13 +48,13 @@ export function extractFinancialNumbers(text: string): number[] {
 export function extractNumbersFromObject(obj: unknown): number[] {
   const numbers: number[] = [];
 
-  if (typeof obj === "number" && isFinite(obj)) {
+  if (typeof obj === "number" && Number.isFinite(obj)) {
     numbers.push(obj);
   } else if (typeof obj === "string") {
     // Extract numbers from string values
     for (const m of obj.matchAll(/[+-]?\d+(?:\.\d+)?/g)) {
       const n = parseFloat(m[0]);
-      if (isFinite(n)) numbers.push(n);
+      if (Number.isFinite(n)) numbers.push(n);
     }
   } else if (Array.isArray(obj)) {
     for (const item of obj) {

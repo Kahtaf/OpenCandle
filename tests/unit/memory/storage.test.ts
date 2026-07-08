@@ -27,7 +27,7 @@ describe("MemoryStorage", () => {
       });
       const pref = storage.getPreference("global", "risk_profile");
       expect(pref).toBeTruthy();
-      expect(JSON.parse(pref!.value_json as string)).toBe("balanced");
+      expect(JSON.parse(pref?.value_json as string)).toBe("balanced");
     });
 
     it("upserts existing preference", () => {
@@ -46,7 +46,7 @@ describe("MemoryStorage", () => {
         source: "explicit",
       });
       const pref = storage.getPreference("global", "risk_profile");
-      expect(JSON.parse(pref!.value_json as string)).toBe("conservative");
+      expect(JSON.parse(pref?.value_json as string)).toBe("conservative");
     });
 
     it("queries all preferences by namespace", () => {

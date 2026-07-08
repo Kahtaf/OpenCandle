@@ -162,7 +162,7 @@ function filterByFreshness(
   return results.filter((r) => {
     if (!r.published) return true; // benefit of the doubt
     const pubTime = new Date(r.published).getTime();
-    return !isNaN(pubTime) && pubTime >= cutoff;
+    return !Number.isNaN(pubTime) && pubTime >= cutoff;
   });
 }
 
