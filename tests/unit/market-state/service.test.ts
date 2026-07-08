@@ -146,6 +146,28 @@ describe("MarketStateService", () => {
     expect(service.listWatchlistItems(etfs.id).map((item) => item.symbol)).toEqual(["VOO"]);
   });
 
+  it("renames a watchlist without moving its symbols", () => {
+    const growth = service.createWatchlist("Growth");
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "NVDA",
+        assetType: "equity",
+        name: "NVIDIA Corporation",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      watchlistId: growth.id,
+    });
+
+    const renamed = service.renameWatchlist("Growth", "AI");
+
+    expect(renamed).toMatchObject({ id: growth.id, name: "AI", isDefault: false });
+    expect(service.getWatchlistByName("Growth")).toBeNull();
+    expect(service.listWatchlistItems(renamed.id).map((item) => item.symbol)).toEqual(["NVDA"]);
+    expect(service.listWatchlists().map((watchlist) => watchlist.name)).toEqual(["Default", "AI"]);
+  });
+
   it("stores portfolio lots under the default portfolio", () => {
     const lot = service.addPortfolioLot({
       instrument: {

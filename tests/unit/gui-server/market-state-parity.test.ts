@@ -87,6 +87,45 @@ describe("market-state GUI/TUI parity", () => {
     ).toBe(true);
   });
 
+  it("shares GUI-originated watchlist renames with later TUI reads", async () => {
+    await watchlistTool.execute("test", {
+      action: "create",
+      watchlist_name: "Growth",
+    });
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "NVDA",
+      watchlist_name: "Growth",
+    });
+
+    await invokeToolFromUi(
+      sessionManager,
+      watchlistTool,
+      { action: "rename", watchlist_name: "Growth", new_watchlist_name: "AI" },
+      "ui",
+    );
+
+    const tuiWatchlist = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "AI",
+    });
+    const db = initDefaultDatabase();
+    const snapshot = buildMarketStateSnapshot(db);
+    db.close();
+
+    expect(tuiWatchlist.content[0].text).toContain("NVDA");
+    expect(snapshot.watchlists.map((watchlist) => watchlist.name)).toEqual(["Default", "AI"]);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "toolResult" &&
+          message.toolName === "manage_watchlist" &&
+          message.details?.stateChange?.source === "ui" &&
+          message.details.stateChange.targetType === "watchlist",
+      ),
+    ).toBe(true);
+  });
+
   it("makes GUI-originated portfolio lots visible to later TUI reads", async () => {
     await invokeToolFromUi(
       sessionManager,

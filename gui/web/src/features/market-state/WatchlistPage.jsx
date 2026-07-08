@@ -1,4 +1,4 @@
-import { ListPlus, Plus } from "lucide-react";
+import { ListPlus, Pencil, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
@@ -95,7 +95,9 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
           watchlists={watchlists}
           activeWatchlist={activeWatchlist}
           counts={countItemsByWatchlist(state.watchlist ?? [])}
+          readOnly={readOnly}
           onSelect={setActiveWatchlistId}
+          onRename={(watchlist) => openPanel("watchlist-rename", { watchlist })}
         />
         {rows.length === 0 ? (
           <EmptyState
@@ -178,30 +180,44 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
   );
 }
 
-function WatchlistTabs({ watchlists, activeWatchlist, counts, onSelect }) {
+function WatchlistTabs({ watchlists, activeWatchlist, counts, readOnly, onSelect, onRename }) {
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2" role="tablist">
-      {watchlists.map((watchlist) => {
-        const active = watchlist.id === activeWatchlist?.id;
-        return (
-          <button
-            key={watchlist.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground",
-              active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
-            )}
-            onClick={() => onSelect(watchlist.id)}
-          >
-            <span>{watchlist.name}</span>
-            <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-              {counts.get(watchlist.id) ?? 0}
-            </span>
-          </button>
-        );
-      })}
+    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist">
+        {watchlists.map((watchlist) => {
+          const active = watchlist.id === activeWatchlist?.id;
+          return (
+            <button
+              key={watchlist.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground",
+                active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
+              )}
+              onClick={() => onSelect(watchlist.id)}
+            >
+              <span>{watchlist.name}</span>
+              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                {counts.get(watchlist.id) ?? 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {activeWatchlist ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          icon={Pencil}
+          title={`Rename ${activeWatchlist.name}`}
+          aria-label={`Rename ${activeWatchlist.name}`}
+          disabled={readOnly}
+          onClick={() => onRename(activeWatchlist)}
+        />
+      ) : null}
     </div>
   );
 }

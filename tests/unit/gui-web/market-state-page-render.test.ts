@@ -10,6 +10,7 @@ import {
   nextComboboxActiveIndex,
   SymbolActionPanel,
   SymbolSearchInput,
+  WatchlistRenameForm,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
 describe("MarketStatePage rendering", () => {
@@ -60,8 +61,23 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('role="tab"');
     expect(html).toContain("Default");
     expect(html).toContain("Add ticker");
+    expect(html).toContain('aria-label="Rename Default"');
     expect(html).not.toContain("To target");
     expect(html).not.toContain("Thesis");
+  });
+
+  it("renders a focused watchlist rename form", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(WatchlistRenameForm, {
+        disabled: false,
+        watchlist: { id: 1, name: "MAG7", isDefault: false },
+        onSubmit: () => true,
+      }),
+    );
+
+    expect(html).toContain("Name");
+    expect(html).toContain('value="MAG7"');
+    expect(html).toContain("Rename watchlist");
   });
 
   it("renders the report schedule and generate action as durable report state", () => {

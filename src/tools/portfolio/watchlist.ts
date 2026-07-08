@@ -21,8 +21,14 @@ interface WatchlistCheck extends WatchlistItemRecord {
 
 const params = Type.Object({
   action: Type.Union(
-    [Type.Literal("create"), Type.Literal("add"), Type.Literal("remove"), Type.Literal("check")],
-    { description: "One of: 'create', 'add', 'remove', or 'check'" },
+    [
+      Type.Literal("create"),
+      Type.Literal("rename"),
+      Type.Literal("add"),
+      Type.Literal("remove"),
+      Type.Literal("check"),
+    ],
+    { description: "One of: 'create', 'rename', 'add', 'remove', or 'check'" },
   ),
   watchlist_name: Type.Optional(
     Type.String({
@@ -30,13 +36,16 @@ const params = Type.Object({
     }),
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
+  new_watchlist_name: Type.Optional(
+    Type.String({ description: "New watchlist name (required for rename)." }),
+  ),
 });
 
 export const watchlistTool: AgentTool<typeof params> = {
   name: "manage_watchlist",
   label: "Watchlist",
   description:
-    "Manage named watchlists of stocks and crypto. Create watchlists, add symbols, remove symbols, or check current prices.",
+    "Manage named watchlists of stocks and crypto. Create or rename watchlists, add symbols, remove symbols, or check current prices.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
@@ -50,6 +59,24 @@ export const watchlistTool: AgentTool<typeof params> = {
         const watchlist = service.createWatchlist(args.watchlist_name);
         return {
           content: [{ type: "text", text: `Created watchlist ${watchlist.name}` }],
+          details: watchlist,
+        };
+      }
+
+      if (args.action === "rename") {
+        if (!args.new_watchlist_name) {
+          throw new Error("new_watchlist_name is required for rename action.");
+        }
+        const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
+        const current = args.watchlist_name
+          ? service.getWatchlistByName(currentName)
+          : service.getDefaultWatchlist();
+        if (current == null) {
+          throw new Error(`watchlist ${currentName} not found.`);
+        }
+        const watchlist = service.renameWatchlist(current.name, args.new_watchlist_name);
+        return {
+          content: [{ type: "text", text: `Renamed ${current.name} to ${watchlist.name}` }],
           details: watchlist,
         };
       }

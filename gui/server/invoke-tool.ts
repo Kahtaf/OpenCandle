@@ -170,7 +170,7 @@ export function createToolInvokeController({
         throw error;
       }
       recordAcceptedAction();
-      if (!result.isError && marketStateToolMapping(toolName) != null) {
+      if (!result.isError && marketStateToolMapping(toolName, args) != null) {
         onMarketStateChanged?.();
       }
       if (useCurrentSession) {
@@ -438,7 +438,7 @@ function stateChangeDetails(
   value: unknown,
   source: "ui" | "background",
 ): { stateChange: Record<string, unknown> } | Record<string, never> {
-  const mapping = marketStateToolMapping(toolName);
+  const mapping = marketStateToolMapping(toolName, args);
   if (mapping == null) return {};
 
   const valueRecord = asRecord(value);
@@ -457,9 +457,15 @@ function stateChangeDetails(
   };
 }
 
-function marketStateToolMapping(toolName: string): { domain: string; targetType: string } | null {
+function marketStateToolMapping(
+  toolName: string,
+  args: Record<string, unknown>,
+): { domain: string; targetType: string } | null {
   switch (toolName) {
     case "manage_watchlist":
+      if (args.action === "create" || args.action === "rename") {
+        return { domain: "watchlist", targetType: "watchlist" };
+      }
       return { domain: "watchlist", targetType: "watchlist_item" };
     case "track_portfolio":
       return { domain: "portfolio", targetType: "portfolio_lot" };

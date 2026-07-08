@@ -496,6 +496,21 @@ export class MarketStateService {
     return row == null ? null : mapCollection(row);
   }
 
+  renameWatchlist(currentName: string, nextName: string): CollectionRecord {
+    const current = this.getWatchlistByName(currentName);
+    if (current == null) throw new Error(`watchlist ${currentName.trim()} not found.`);
+    const normalizedNext = normalizeCollectionName(nextName);
+    const now = new Date().toISOString();
+    this.db
+      .prepare("UPDATE watchlists SET name = ?, updated_at = ? WHERE id = ?")
+      .run(normalizedNext, now, current.id);
+    const row = this.db.prepare("SELECT * FROM watchlists WHERE id = ? LIMIT 1").get(current.id) as
+      | WatchlistRow
+      | undefined;
+    if (row == null) throw new Error("renamed watchlist could not be loaded.");
+    return mapCollection(row);
+  }
+
   getOrCreateWatchlist(name?: string | null): CollectionRecord {
     const normalized = normalizeNullable(name);
     if (normalized == null) return this.getDefaultWatchlist();

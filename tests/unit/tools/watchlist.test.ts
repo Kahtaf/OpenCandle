@@ -142,6 +142,41 @@ describe("watchlistTool", () => {
     expect(etfs.content[0].text).not.toContain("AAPL");
   });
 
+  it("renames a named watchlist for TUI and tool callers", async () => {
+    await watchlistTool.execute("test", { action: "create", watchlist_name: "Growth" });
+    await watchlistTool.execute("test", { action: "add", symbol: "NVDA", watchlist_name: "Growth" });
+
+    const renamed = await watchlistTool.execute("test", {
+      action: "rename",
+      watchlist_name: "Growth",
+      new_watchlist_name: "AI",
+    });
+    const check = await watchlistTool.execute("test", { action: "check", watchlist_name: "AI" });
+
+    expect(renamed.content[0].text).toContain("Renamed Growth to AI");
+    expect(renamed.details).toMatchObject({ name: "AI" });
+    expect(check.content[0].text).toContain("**AI**");
+    expect(check.content[0].text).toContain("NVDA");
+    await expect(
+      watchlistTool.execute("test", { action: "check", watchlist_name: "Growth" }),
+    ).resolves.toMatchObject({
+      content: [expect.objectContaining({ text: "Growth is empty. Use add action to add symbols." })],
+    });
+  });
+
+  it("does not create a missing watchlist while renaming", async () => {
+    await expect(
+      watchlistTool.execute("test", {
+        action: "rename",
+        watchlist_name: "Missing",
+        new_watchlist_name: "AI",
+      }),
+    ).rejects.toThrow("watchlist Missing not found");
+
+    const missing = await watchlistTool.execute("test", { action: "check", watchlist_name: "Missing" });
+    expect(missing.content[0].text).toContain("Missing is empty");
+  });
+
   it("removes a symbol from only the selected named watchlist", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "ETFs" });

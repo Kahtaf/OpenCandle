@@ -289,6 +289,28 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
     );
   }
 
+  if (panel.type === "watchlist-rename") {
+    if (!watchlist) {
+      return <p className="text-sm text-muted-foreground">Select a watchlist to rename.</p>;
+    }
+    return (
+      <WatchlistRenameForm
+        key={`${panel.type}:${watchlist.id}`}
+        disabled={readOnly}
+        watchlist={watchlist}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("manage_watchlist", {
+            action: "rename",
+            watchlist_name: watchlist.name,
+            new_watchlist_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
   if (panel.type === "holding-add" || panel.type === "holding-edit") {
     return (
       <HoldingForm
@@ -442,6 +464,38 @@ export function WatchlistCreateForm({ disabled, onSubmit }) {
       </label>
       <Button type="submit" variant="brand" disabled={disabled || !name.trim()}>
         Create watchlist
+      </Button>
+    </form>
+  );
+}
+
+export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState(watchlist?.name ?? "");
+  const trimmed = name.trim();
+  const unchanged = trimmed === (watchlist?.name ?? "");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!trimmed || unchanged) return;
+    await onSubmit({ name: trimmed });
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Watchlist name"
+          value={name}
+          disabled={disabled}
+          required
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
+        Rename watchlist
       </Button>
     </form>
   );
@@ -800,6 +854,7 @@ function panelTitle(type) {
   const titles = {
     "watchlist-create": "New Watchlist",
     "watchlist-add": "Add Ticker",
+    "watchlist-rename": "Rename Watchlist",
     "holding-add": "Add Holding",
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",

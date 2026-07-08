@@ -5,6 +5,7 @@
 ### Added
 
 - Watchlists can now be created as named lists and managed independently from the GUI tabs or the `manage_watchlist` TUI/tool flow.
+- Watchlists can now be renamed through the GUI and the `manage_watchlist` TUI/tool flow.
 
 ### Changed
 
