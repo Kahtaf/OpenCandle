@@ -128,6 +128,39 @@ describe("alertsTool", () => {
     expect(listed.content[0].text).toContain("manual checks available");
   });
 
+  it("updates and deletes alert rules through the shared TUI tool", async () => {
+    await alertsTool.execute("test", {
+      action: "create_price_above",
+      symbol: "AAPL",
+      threshold: 250,
+    });
+
+    const updated = await alertsTool.execute("test", {
+      action: "update",
+      id: 1,
+      condition_action: "create_price_below",
+      threshold: 150,
+      cooldown_seconds: 120,
+    });
+
+    expect(updated.content[0].text).toContain("Updated alert #1");
+    expect(updated.details).toMatchObject({
+      id: 1,
+      conditionType: "price_crosses_below",
+      conditionJson: { threshold: 150, field: "last_price" },
+      cooldownSeconds: 120,
+      lastCheckedAt: null,
+      lastObservedJson: null,
+    });
+
+    const deleted = await alertsTool.execute("test", { action: "delete", id: 1 });
+    expect(deleted.content[0].text).toContain("Deleted alert #1");
+    expect(deleted.details).toMatchObject({ id: 1 });
+
+    const listed = await alertsTool.execute("test", { action: "list" });
+    expect(listed.content[0].text).toContain("No alert rules");
+  });
+
   it("creates instrument-scoped alerts without adding the symbol to the watchlist", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",

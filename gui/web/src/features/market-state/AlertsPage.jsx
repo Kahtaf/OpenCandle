@@ -5,6 +5,7 @@ import { buildAlertSentenceRows } from "./alert-view-model.js";
 import { relativeTime } from "./format.js";
 import {
   Badge,
+  ConfirmButton,
   EmptyState,
   filterItems,
   groupByOne,
@@ -105,6 +106,21 @@ export function AlertsPage({ state, filter, setFilter, readOnly, openPanel, invo
                 >
                   {row.enabled ? "Pause" : "Resume"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  disabled={readOnly}
+                  onClick={() => openPanel("alert-edit", { alert: row.rule, symbol: row.symbol })}
+                >
+                  Edit
+                </Button>
+                <ConfirmButton
+                  label="Delete"
+                  confirmLabel="Delete alert"
+                  disabled={readOnly}
+                  onConfirm={() => invokeTool("manage_alerts", { action: "delete", id: row.id })}
+                />
               </li>
             ))}
           </ul>

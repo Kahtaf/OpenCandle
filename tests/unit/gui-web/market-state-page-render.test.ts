@@ -14,6 +14,7 @@ import {
   SymbolSearchInput,
   WatchlistRenameForm,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
+import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPage.jsx";
 
 describe("MarketStatePage rendering", () => {
   it("autofills new holding quantity, average cost, and currency from selected quote data", () => {
@@ -183,6 +184,39 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Active rules");
     expect(html).toContain("Alert log");
     expect(html).not.toContain("Instrument #");
+  });
+
+  it("renders edit and delete actions for alert rows", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlertsPage, {
+        state: {
+          alerts: [
+            {
+              id: 1,
+              scopeType: "instrument",
+              instrumentId: 7,
+              conditionType: "price_crosses_above",
+              conditionJson: { threshold: 50, field: "last_price" },
+              enabled: true,
+              retriggerMode: "recurring",
+            },
+          ],
+          alertEvents: [],
+          alertCheckRuns: [],
+          instruments: [{ id: 7, symbol: "RKLB" }],
+          notifications: [],
+          notificationDeliveryAttempts: [],
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+      }),
+    );
+
+    expect(html).toContain(">Edit<");
+    expect(html).toContain(">Delete<");
   });
 
   it("keeps reconnecting market-state pages readable while disabling mutation actions", () => {

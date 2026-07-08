@@ -931,6 +931,86 @@ export class MarketStateService {
     return this.getAlertRule(id);
   }
 
+  updateAlertRule(
+    id: number,
+    params: {
+      scopeType?: AlertScopeType;
+      scopeId?: number | null;
+      instrumentId?: number | null;
+      conditionType?: string;
+      conditionVersion?: number;
+      condition?: unknown;
+      timeframe?: string;
+      enabled?: boolean;
+      checkIntervalSeconds?: number | null;
+      nextCheckAt?: string | null;
+      cooldownSeconds?: number | null;
+      retriggerMode?: string;
+    },
+  ): AlertRuleRecord | null {
+    const existing = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(id) as
+      | AlertRuleRow
+      | undefined;
+    if (existing == null) return null;
+
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE alert_rules
+         SET scope_type = ?,
+             scope_id = ?,
+             instrument_id = ?,
+             condition_type = ?,
+             condition_version = ?,
+             condition_json = ?,
+             timeframe = ?,
+             enabled = ?,
+             check_interval_seconds = ?,
+             next_check_at = ?,
+             last_checked_at = NULL,
+             last_observed_json = NULL,
+             status = 'active',
+             retrigger_mode = ?,
+             last_condition_state = 'unknown',
+             rule_revision = rule_revision + 1,
+             arm_cycle_id = arm_cycle_id + 1,
+             cooldown_seconds = ?,
+             last_triggered_at = NULL,
+             updated_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        params.scopeType ?? existing.scope_type,
+        params.scopeId === undefined ? existing.scope_id : params.scopeId,
+        params.instrumentId === undefined ? existing.instrument_id : params.instrumentId,
+        params.conditionType ?? existing.condition_type,
+        params.conditionVersion ?? existing.condition_version,
+        JSON.stringify(
+          params.condition === undefined ? JSON.parse(existing.condition_json) : params.condition,
+        ),
+        params.timeframe ?? existing.timeframe,
+        params.enabled === undefined ? existing.enabled : params.enabled ? 1 : 0,
+        params.checkIntervalSeconds === undefined
+          ? existing.check_interval_seconds
+          : params.checkIntervalSeconds,
+        params.nextCheckAt === undefined ? existing.next_check_at : params.nextCheckAt,
+        params.retriggerMode ?? existing.retrigger_mode,
+        params.cooldownSeconds === undefined ? existing.cooldown_seconds : params.cooldownSeconds,
+        now,
+        id,
+      );
+    return this.getAlertRule(id);
+  }
+
+  deleteAlertRule(id: number): AlertRuleRecord | null {
+    const existing = this.db.prepare("SELECT * FROM alert_rules WHERE id = ?").get(id) as
+      | AlertRuleRow
+      | undefined;
+    if (existing == null) return null;
+    this.db.prepare("DELETE FROM alert_rules WHERE id = ?").run(id);
+    return mapAlertRule(existing);
+  }
+
   getInstrument(id: number): InstrumentRecord | null {
     const row = this.db.prepare("SELECT * FROM instruments WHERE id = ?").get(id) as
       | InstrumentRow

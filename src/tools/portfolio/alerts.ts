@@ -27,6 +27,7 @@ const ACTION_DESCRIPTION = [
   "create_sma_cross_above/create_sma_cross_below for fast/slow SMA crossing alerts,",
   "create_rsi_above/create_rsi_below for RSI alerts,",
   "create_volume_spike for volume alerts, set_enabled to enable or disable an alert,",
+  "update to replace an alert rule definition, delete to remove a rule,",
   "and status to inspect local runner/check history.",
   "When the user asks to create an alert and check it now in the same request,",
   "set check_after_create to true on the create action.",
@@ -47,6 +48,8 @@ const params = Type.Object({
       Type.Literal("create_sma_cross_above"),
       Type.Literal("create_sma_cross_below"),
       Type.Literal("set_enabled"),
+      Type.Literal("update"),
+      Type.Literal("delete"),
       Type.Literal("list"),
       Type.Literal("status"),
       Type.Literal("check"),
@@ -84,6 +87,27 @@ const params = Type.Object({
     }),
   ),
   id: Type.Optional(Type.Number({ description: "Alert rule id for update actions" })),
+  condition_action: Type.Optional(
+    Type.Union(
+      [
+        Type.Literal("create_price_above"),
+        Type.Literal("create_price_below"),
+        Type.Literal("create_price_above_sma"),
+        Type.Literal("create_price_below_sma"),
+        Type.Literal("create_rsi_above"),
+        Type.Literal("create_rsi_below"),
+        Type.Literal("create_volume_spike"),
+        Type.Literal("create_percent_move_up"),
+        Type.Literal("create_percent_move_down"),
+        Type.Literal("create_sma_cross_above"),
+        Type.Literal("create_sma_cross_below"),
+      ],
+      {
+        description:
+          "Create-style alert condition action to use when updating an existing alert rule.",
+      },
+    ),
+  ),
   enabled: Type.Optional(Type.Boolean({ description: "Whether an alert rule is enabled" })),
   check_after_create: Type.Optional(
     Type.Boolean({
@@ -97,7 +121,7 @@ export const alertsTool: AgentTool<typeof params> = {
   name: "manage_alerts",
   label: "Alerts",
   description:
-    "Create, pause/resume, list, check, and inspect status for durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, create_percent_move_up, create_percent_move_down, create_sma_cross_above, create_sma_cross_below, set_enabled, list, status, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
+    "Create, update, delete, pause/resume, list, check, and inspect status for durable local alerts. Actions include create_price_above, create_price_below, create_price_above_sma, create_price_below_sma, create_rsi_above, create_rsi_below, create_volume_spike, create_percent_move_up, create_percent_move_down, create_sma_cross_above, create_sma_cross_below, set_enabled, update, delete, list, status, and check. Local background monitoring runs only while an OpenCandle writer/monitor process is active; manual checks are always available. If the user asks to create an alert and check it now, use the create action with check_after_create=true.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
@@ -354,6 +378,67 @@ export const alertsTool: AgentTool<typeof params> = {
         };
       }
 
+      if (args.action === "update") {
+        if (args.id == null) {
+          throw new Error("id is required for update.");
+        }
+        const existing = service.listAlertRules().find((rule) => rule.id === args.id);
+        if (existing == null) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Alert #${args.id} not found. Use the list action to see alert ids.`,
+              },
+            ],
+            details: null,
+          };
+        }
+        const conditionAction = args.condition_action ?? createActionFromRule(existing);
+        if (conditionAction == null) {
+          throw new Error(
+            `Alert #${args.id} uses condition ${existing.conditionType}, which cannot be updated without condition_action.`,
+          );
+        }
+        const payload = await buildAlertRulePayload(service, conditionAction, args, existing);
+        if (payload.status === "needs_selection") return candidateResult(payload.resolution, "alert");
+        const rule = service.updateAlertRule(args.id, {
+          ...payload.input,
+          enabled: args.enabled,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                rule == null
+                  ? `Alert #${args.id} not found. Use the list action to see alert ids.`
+                  : `Updated alert #${rule.id}.`,
+            },
+          ],
+          details: rule,
+        };
+      }
+
+      if (args.action === "delete") {
+        if (args.id == null) {
+          throw new Error("id is required for delete.");
+        }
+        const rule = service.deleteAlertRule(args.id);
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                rule == null
+                  ? `Alert #${args.id} not found. Use the list action to see alert ids.`
+                  : `Deleted alert #${rule.id}.`,
+            },
+          ],
+          details: rule,
+        };
+      }
+
       const result = await checkAlerts(service);
       return {
         content: [{ type: "text", text: result.lines.join("\n") }],
@@ -364,6 +449,244 @@ export const alertsTool: AgentTool<typeof params> = {
     }
   },
 };
+
+type CreateAlertAction =
+  | "create_price_above"
+  | "create_price_below"
+  | "create_price_above_sma"
+  | "create_price_below_sma"
+  | "create_rsi_above"
+  | "create_rsi_below"
+  | "create_volume_spike"
+  | "create_percent_move_up"
+  | "create_percent_move_down"
+  | "create_sma_cross_above"
+  | "create_sma_cross_below";
+
+interface AlertRulePayloadArgs {
+  symbol?: string;
+  threshold?: number;
+  period?: number;
+  fast_period?: number;
+  slow_period?: number;
+  cooldown_seconds?: number;
+}
+
+interface AlertRulePayload {
+  scopeType: "instrument";
+  instrumentId: number;
+  conditionType: string;
+  conditionVersion: number;
+  condition: unknown;
+  timeframe: string;
+  cooldownSeconds?: number;
+}
+
+async function buildAlertRulePayload(
+  service: MarketStateService,
+  action: CreateAlertAction,
+  args: AlertRulePayloadArgs,
+  existing?: AlertRuleRecord,
+): Promise<
+  | { status: "ok"; input: AlertRulePayload }
+  | {
+      status: "needs_selection";
+      resolution: Extract<
+        Awaited<ReturnType<typeof resolveInstrumentForMutation>>,
+        { status: "needs_selection" }
+      >;
+    }
+> {
+  const instrument = await resolveAlertInstrument(service, args.symbol, existing);
+  if (instrument.status === "needs_selection") return instrument;
+  const existingCondition = conditionRecord(existing);
+  const cooldownSeconds =
+    args.cooldown_seconds === undefined ? undefined : validateCooldownSeconds(args.cooldown_seconds);
+  const base = {
+    scopeType: "instrument" as const,
+    instrumentId: instrument.id,
+    conditionVersion: ALERT_CONDITION_VERSION,
+    cooldownSeconds,
+  };
+
+  if (action === "create_price_above" || action === "create_price_below") {
+    const threshold = numberInput(args.threshold, existingCondition, "threshold", "threshold");
+    const isAbove = action === "create_price_above";
+    return {
+      status: "ok",
+      input: {
+        ...base,
+        conditionType: isAbove ? "price_crosses_above" : "price_crosses_below",
+        condition: isAbove ? priceCrossesAbove(threshold) : priceCrossesBelow(threshold),
+        timeframe: "quote",
+      },
+    };
+  }
+
+  if (action === "create_price_above_sma" || action === "create_price_below_sma") {
+    const period = validateLookbackPeriod(
+      numberInput(args.period, existingCondition, "period", "period", 50),
+      200,
+    );
+    return {
+      status: "ok",
+      input: {
+        ...base,
+        conditionType: "price_crosses_sma",
+        condition: priceCrossesSma(period, action === "create_price_above_sma" ? "above" : "below"),
+        timeframe: "1d",
+      },
+    };
+  }
+
+  if (action === "create_rsi_above" || action === "create_rsi_below") {
+    const threshold = numberInput(args.threshold, existingCondition, "threshold", "threshold");
+    const period = validateLookbackPeriod(
+      numberInput(args.period, existingCondition, "period", "period", 14),
+      100,
+    );
+    return {
+      status: "ok",
+      input: {
+        ...base,
+        conditionType: "rsi_threshold",
+        condition: rsiThreshold(period, threshold, action === "create_rsi_above" ? "above" : "below"),
+        timeframe: "1d",
+      },
+    };
+  }
+
+  if (action === "create_volume_spike") {
+    const period = validateLookbackPeriod(
+      numberInput(args.period, existingCondition, "lookback_period", "period", 20),
+      100,
+    );
+    const multiplier = numberInput(args.threshold, existingCondition, "multiplier", "threshold", 2);
+    return {
+      status: "ok",
+      input: {
+        ...base,
+        conditionType: "volume_spike",
+        condition: volumeSpike(period, multiplier),
+        timeframe: "1d",
+      },
+    };
+  }
+
+  if (action === "create_percent_move_up" || action === "create_percent_move_down") {
+    const threshold = numberInput(args.threshold, existingCondition, "percent", "threshold");
+    if (threshold <= 0) {
+      throw new Error("threshold must be greater than 0 for percent-move alert actions.");
+    }
+    return {
+      status: "ok",
+      input: {
+        ...base,
+        conditionType: "percent_move",
+        condition: percentMove(action === "create_percent_move_up" ? "up" : "down", threshold),
+        timeframe: "1d",
+      },
+    };
+  }
+
+  const fastPeriod = numberInput(args.fast_period, existingCondition, "fast_period", "fast_period", 50);
+  const slowPeriod = numberInput(args.slow_period, existingCondition, "slow_period", "slow_period", 200);
+  if (!Number.isInteger(fastPeriod) || !Number.isInteger(slowPeriod)) {
+    throw new Error(
+      "fast_period and slow_period must be whole-number lookback periods for SMA-cross alert actions.",
+    );
+  }
+  if (fastPeriod <= 0 || slowPeriod <= 0) {
+    throw new Error(
+      "fast_period and slow_period must be greater than 0 for SMA-cross alert actions.",
+    );
+  }
+  if (fastPeriod >= slowPeriod) {
+    throw new Error("fast_period must be less than slow_period for SMA-cross alert actions.");
+  }
+  if (slowPeriod > 400) {
+    throw new Error(
+      "slow_period must be at most 400 so alert checks can evaluate it against the runner's 2y daily history window.",
+    );
+  }
+  return {
+    status: "ok",
+    input: {
+      ...base,
+      conditionType: "sma_cross",
+      condition: smaCross(
+        fastPeriod,
+        slowPeriod,
+        action === "create_sma_cross_above" ? "above" : "below",
+      ),
+      timeframe: "1d",
+    },
+  };
+}
+
+async function resolveAlertInstrument(
+  service: MarketStateService,
+  symbol?: string,
+  existing?: AlertRuleRecord,
+): Promise<
+  | { status: "ok"; id: number }
+  | {
+      status: "needs_selection";
+      resolution: Extract<
+        Awaited<ReturnType<typeof resolveInstrumentForMutation>>,
+        { status: "needs_selection" }
+      >;
+    }
+> {
+  if (symbol) {
+    const resolution = await resolveInstrumentForMutation(symbol);
+    if (resolution.status === "needs_selection") return { status: "needs_selection", resolution };
+    return { status: "ok", id: service.upsertInstrumentRecord(resolution.instrument).id };
+  }
+  if (existing?.instrumentId != null) return { status: "ok", id: existing.instrumentId };
+  throw new Error("symbol is required for update when the existing alert is not instrument-scoped.");
+}
+
+function conditionRecord(rule?: AlertRuleRecord): Record<string, unknown> {
+  return typeof rule?.conditionJson === "object" && rule.conditionJson !== null
+    ? (rule.conditionJson as Record<string, unknown>)
+    : {};
+}
+
+function numberInput(
+  value: number | undefined,
+  existing: Record<string, unknown>,
+  existingKey: string,
+  label: string,
+  fallback?: number,
+): number {
+  if (value !== undefined) return value;
+  const existingValue = existing[existingKey];
+  if (typeof existingValue === "number") return existingValue;
+  if (fallback !== undefined) return fallback;
+  throw new Error(`${label} is required for update.`);
+}
+
+function createActionFromRule(rule: AlertRuleRecord): CreateAlertAction | null {
+  const condition = conditionRecord(rule);
+  const direction = condition.direction;
+  if (rule.conditionType === "price_crosses_above") return "create_price_above";
+  if (rule.conditionType === "price_crosses_below") return "create_price_below";
+  if (rule.conditionType === "price_crosses_sma") {
+    return direction === "below" ? "create_price_below_sma" : "create_price_above_sma";
+  }
+  if (rule.conditionType === "rsi_threshold") {
+    return direction === "below" ? "create_rsi_below" : "create_rsi_above";
+  }
+  if (rule.conditionType === "volume_spike") return "create_volume_spike";
+  if (rule.conditionType === "percent_move") {
+    return direction === "down" ? "create_percent_move_down" : "create_percent_move_up";
+  }
+  if (rule.conditionType === "sma_cross") {
+    return direction === "below" ? "create_sma_cross_below" : "create_sma_cross_above";
+  }
+  return null;
+}
 
 function validateLookbackPeriod(period: number, maxPeriod: number): number {
   if (!Number.isInteger(period) || period <= 0) {

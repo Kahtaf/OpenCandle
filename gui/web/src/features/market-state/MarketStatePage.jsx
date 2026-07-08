@@ -211,6 +211,7 @@ export function MarketStatePage({
             {panel ? (
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
                 <PanelContent
+                  state={state}
                   panel={panel}
                   readOnly={readOnly || mutationPending}
                   invokeTool={invokeTool}
@@ -249,9 +250,10 @@ function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
   );
 }
 
-function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
+function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
   const item = panel.data?.item;
   const lot = panel.data?.lot;
+  const alert = panel.data?.alert;
   const watchlist = panel.data?.watchlist;
   const portfolio = panel.data?.portfolio;
 
@@ -374,6 +376,25 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
 
   if (panel.type === "alert-create") {
     return <AlertCreateForm disabled={readOnly} invokeTool={invokeTool} onSaved={closePanel} />;
+  }
+
+  if (panel.type === "alert-edit") {
+    if (!alert) {
+      return <p className="text-sm text-muted-foreground">Select an alert to edit.</p>;
+    }
+    return (
+      <AlertCreateForm
+        key={`${panel.type}:${alert.id}`}
+        disabled={readOnly}
+        invokeTool={invokeTool}
+        alert={alert}
+        symbol={
+          panel.data?.symbol ??
+          state?.instruments?.find((instrument) => instrument.id === alert.instrumentId)?.symbol
+        }
+        onSaved={closePanel}
+      />
+    );
   }
 
   if (panel.type === "report-configure") {
@@ -894,30 +915,41 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
 export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
 
-export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
+export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }) {
   const conditionId = useId();
   const thresholdId = useId();
   const periodId = useId();
+  const fastPeriodId = useId();
+  const slowPeriodId = useId();
   const cooldownId = useId();
-  const [draft, setDraft] = useState({
-    query: "",
-    selected: "",
-    threshold: "",
-    condition: "create_price_above",
-    period: "14",
-    cooldown: "3600",
-  });
+  const isEditing = Boolean(alert);
+  const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol));
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
-  const { query, selected, threshold, condition, period, cooldown } = draft;
-  const needsThreshold = !condition.includes("_sma") && condition !== "create_volume_spike";
+  const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
+    draft;
+  const needsThreshold = [
+    "create_price_above",
+    "create_price_below",
+    "create_rsi_above",
+    "create_rsi_below",
+    "create_percent_move_up",
+    "create_percent_move_down",
+  ].includes(condition);
   const supportsThreshold = needsThreshold || condition === "create_volume_spike";
   const needsPeriod =
     condition.includes("_sma") ||
     condition.includes("_rsi_") ||
     condition === "create_volume_spike";
+  const needsFastSlow = condition.includes("sma_cross");
   const resolvedSymbol = selected;
   const summary = resolvedSymbol
-    ? `Notify once when ${resolvedSymbol} ${conditionSummary(condition, threshold, period)} during a manual or local-runner check.`
+    ? `Notify once when ${resolvedSymbol} ${conditionSummary(
+        condition,
+        threshold,
+        period,
+        fast_period,
+        slow_period,
+      )} during a manual or local-runner check.`
     : "Select an instrument to preview the alert rule.";
 
   return (
@@ -927,14 +959,20 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         event.preventDefault();
         if (!resolvedSymbol || (needsThreshold && !threshold)) return;
         const saved = await invokeTool("manage_alerts", {
-          action: condition,
+          action: isEditing ? "update" : condition,
+          id: alert?.id,
+          condition_action: isEditing ? condition : undefined,
           symbol: resolvedSymbol,
           threshold: supportsThreshold && threshold ? Number(threshold) : undefined,
           period: needsPeriod ? Number(period) : undefined,
+          fast_period: needsFastSlow ? Number(fast_period) : undefined,
+          slow_period: needsFastSlow ? Number(slow_period) : undefined,
           cooldown_seconds: numberOrUndefined(cooldown),
         });
         if (saved) {
-          setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
+          if (!isEditing) {
+            setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
+          }
           onSaved?.();
         }
       }}
@@ -965,6 +1003,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
           <option value="create_rsi_above">RSI above</option>
           <option value="create_rsi_below">RSI below</option>
           <option value="create_volume_spike">Volume spike</option>
+          <option value="create_percent_move_up">Percent move up</option>
+          <option value="create_percent_move_down">Percent move down</option>
+          <option value="create_sma_cross_above">Fast SMA crosses above slow SMA</option>
+          <option value="create_sma_cross_below">Fast SMA crosses below slow SMA</option>
         </select>
       </label>
       {supportsThreshold ? (
@@ -985,7 +1027,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
           />
         </label>
       ) : null}
-      {needsPeriod ? (
+      {needsPeriod && !needsFastSlow ? (
         <label htmlFor={periodId} className="grid gap-1 text-xs font-medium text-muted-foreground">
           Period (days)
           <Input
@@ -997,6 +1039,38 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
             onChange={(event) => setDraftField("period", event.target.value)}
           />
         </label>
+      ) : null}
+      {needsFastSlow ? (
+        <div className="grid grid-cols-2 gap-2">
+          <label
+            htmlFor={fastPeriodId}
+            className="grid gap-1 text-xs font-medium text-muted-foreground"
+          >
+            Fast period
+            <Input
+              id={fastPeriodId}
+              type="number"
+              step="1"
+              value={fast_period}
+              disabled={disabled}
+              onChange={(event) => setDraftField("fast_period", event.target.value)}
+            />
+          </label>
+          <label
+            htmlFor={slowPeriodId}
+            className="grid gap-1 text-xs font-medium text-muted-foreground"
+          >
+            Slow period
+            <Input
+              id={slowPeriodId}
+              type="number"
+              step="1"
+              value={slow_period}
+              disabled={disabled}
+              onChange={(event) => setDraftField("slow_period", event.target.value)}
+            />
+          </label>
+        </div>
       ) : null}
       <label htmlFor={cooldownId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Cooldown between triggers (seconds)
@@ -1017,7 +1091,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         variant="brand"
         disabled={disabled || !resolvedSymbol || (needsThreshold && !threshold)}
       >
-        Create alert
+        {isEditing ? "Save alert" : "Create alert"}
       </Button>
     </form>
   );
@@ -1041,12 +1115,78 @@ function panelTitle(type) {
     "holding-add": "Add Holding",
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",
+    "alert-edit": "Edit Alert",
     "report-configure": "Configure Report",
   };
   return titles[type] || "Details";
 }
-function conditionSummary(condition, threshold, period) {
+function initialAlertDraft(alert, symbol) {
+  const condition = alert ? conditionActionFromAlert(alert) : "create_price_above";
+  const conditionJson =
+    alert?.conditionJson && typeof alert.conditionJson === "object" ? alert.conditionJson : {};
+  return {
+    query: symbol ?? "",
+    selected: symbol ?? "",
+    threshold: alertThresholdValue(condition, conditionJson),
+    condition,
+    period: alertPeriodValue(condition, conditionJson),
+    fast_period: stringifyDraftValue(conditionJson.fast_period ?? 50),
+    slow_period: stringifyDraftValue(conditionJson.slow_period ?? 200),
+    cooldown: stringifyDraftValue(alert?.cooldownSeconds ?? 3600),
+  };
+}
+
+function conditionActionFromAlert(alert) {
+  const condition =
+    alert?.conditionJson && typeof alert.conditionJson === "object" ? alert.conditionJson : {};
+  const direction = condition.direction;
+  if (alert?.conditionType === "price_crosses_below") return "create_price_below";
+  if (alert?.conditionType === "price_crosses_above") return "create_price_above";
+  if (alert?.conditionType === "price_crosses_sma") {
+    return direction === "below" ? "create_price_below_sma" : "create_price_above_sma";
+  }
+  if (alert?.conditionType === "rsi_threshold") {
+    return direction === "below" ? "create_rsi_below" : "create_rsi_above";
+  }
+  if (alert?.conditionType === "volume_spike") return "create_volume_spike";
+  if (alert?.conditionType === "percent_move") {
+    return direction === "down" ? "create_percent_move_down" : "create_percent_move_up";
+  }
+  if (alert?.conditionType === "sma_cross") {
+    return direction === "below" ? "create_sma_cross_below" : "create_sma_cross_above";
+  }
+  return "create_price_above";
+}
+
+function alertThresholdValue(condition, conditionJson) {
+  if (condition === "create_volume_spike") {
+    return stringifyDraftValue(conditionJson.multiplier ?? 2);
+  }
+  if (condition === "create_percent_move_up" || condition === "create_percent_move_down") {
+    return stringifyDraftValue(conditionJson.percent ?? "");
+  }
+  return stringifyDraftValue(conditionJson.threshold ?? "");
+}
+
+function alertPeriodValue(condition, conditionJson) {
+  if (condition === "create_volume_spike") {
+    return stringifyDraftValue(conditionJson.lookback_period ?? 20);
+  }
+  if (condition.includes("_rsi_")) return stringifyDraftValue(conditionJson.period ?? 14);
+  if (condition.includes("_sma")) return stringifyDraftValue(conditionJson.period ?? 50);
+  return "14";
+}
+
+function stringifyDraftValue(value) {
+  return value == null ? "" : String(value);
+}
+
+function conditionSummary(condition, threshold, period, fastPeriod, slowPeriod) {
   const label = condition.replace("create_", "").replaceAll("_", " ");
+  if (condition.includes("sma_cross")) {
+    return `${label} using ${fastPeriod || "fast"} and ${slowPeriod || "slow"} periods`;
+  }
+  if (condition.includes("percent_move")) return `${label} ${threshold || "the threshold"}%`;
   if (condition.includes("_sma")) return `${label} over ${period || "the selected"} periods`;
   if (condition.includes("_rsi_"))
     return `${label} ${threshold || "the threshold"} over ${period || "the selected"} periods`;
