@@ -194,6 +194,52 @@ describe("MarketStateService", () => {
     expect(lots[0].symbol).toBe("VTI");
   });
 
+  it("stores lots in separate named portfolios and renames a portfolio without moving lots", () => {
+    const retirement = service.createPortfolio("Retirement");
+    const trading = service.createPortfolio("Trading");
+
+    service.addPortfolioLot({
+      portfolioId: retirement.id,
+      instrument: {
+        symbol: "VTI",
+        assetType: "etf",
+        name: "Vanguard Total Stock Market ETF",
+        exchange: "PCX",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 250,
+      currency: "USD",
+    });
+    service.addPortfolioLot({
+      portfolioId: trading.id,
+      instrument: {
+        symbol: "TSLA",
+        assetType: "equity",
+        name: "Tesla, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 1,
+      avgCost: 200,
+      currency: "USD",
+    });
+
+    const renamed = service.renamePortfolio("Trading", "Speculative");
+
+    expect(service.listPortfolios().map((portfolio) => portfolio.name)).toEqual([
+      "Default",
+      "Retirement",
+      "Speculative",
+    ]);
+    expect(renamed).toMatchObject({ id: trading.id, name: "Speculative", baseCurrency: "USD" });
+    expect(service.getPortfolioByName("Trading")).toBeNull();
+    expect(service.listPortfolioLots(retirement.id).map((lot) => lot.symbol)).toEqual(["VTI"]);
+    expect(service.listPortfolioLots(renamed.id).map((lot) => lot.symbol)).toEqual(["TSLA"]);
+  });
+
   it("rejects non-positive or non-finite portfolio lot quantities and costs", () => {
     const instrument = {
       symbol: "VTI",

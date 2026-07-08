@@ -2,13 +2,26 @@ import { Image, Newspaper, PieChart, Plus, WalletCards, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { attachmentLabel, attachmentsFromImageFiles, validateImageFiles } from "./attachments.js";
-import { normalizeWatchlistOptions, watchlistAttachmentForOption } from "./watchlist-options.js";
+import {
+  normalizePortfolioOptions,
+  normalizeWatchlistOptions,
+  portfolioAttachmentForOption,
+  watchlistAttachmentForOption,
+} from "./watchlist-options.js";
 
-export function AttachMenu({ disabled, pendingAttachments, watchlists, onAddAttachment, setToast }) {
+export function AttachMenu({
+  disabled,
+  pendingAttachments,
+  portfolios,
+  watchlists,
+  onAddAttachment,
+  setToast,
+}) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef(null);
 
   const imageCount = pendingAttachments.filter((attachment) => attachment.kind === "image").length;
+  const portfolioOptions = normalizePortfolioOptions(portfolios);
   const watchlistOptions = normalizeWatchlistOptions(watchlists);
 
   async function onFilesSelected(event) {
@@ -59,14 +72,20 @@ export function AttachMenu({ disabled, pendingAttachments, watchlists, onAddAtta
             label="Image..."
             onClick={() => inputRef.current?.click()}
           />
-          <AttachMenuItem
-            icon={<WalletCards />}
-            label="Portfolio"
-            onClick={() => {
-              onAddAttachment?.({ kind: "portfolio", label: "Portfolio" });
-              setOpen(false);
-            }}
-          />
+          <div className="px-2 pt-1 pb-0.5 text-[11px] font-medium uppercase text-muted-foreground">
+            Portfolios
+          </div>
+          {portfolioOptions.map((portfolio) => (
+            <AttachMenuItem
+              key={portfolio.id}
+              icon={<WalletCards />}
+              label={portfolio.name}
+              onClick={() => {
+                onAddAttachment?.(portfolioAttachmentForOption(portfolio));
+                setOpen(false);
+              }}
+            />
+          ))}
           <div className="px-2 pt-1 pb-0.5 text-[11px] font-medium uppercase text-muted-foreground">
             Watchlists
           </div>

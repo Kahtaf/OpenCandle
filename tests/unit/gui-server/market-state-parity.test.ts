@@ -161,6 +161,47 @@ describe("market-state GUI/TUI parity", () => {
       ),
     ).toBe(true);
   });
+
+  it("shares GUI-originated portfolio renames with later TUI reads", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Trading",
+      symbol: "TSLA",
+      shares: 1,
+      avg_cost: 200,
+    });
+
+    await invokeToolFromUi(
+      sessionManager,
+      portfolioTrackerTool,
+      { action: "rename", portfolio_name: "Trading", new_portfolio_name: "Speculative" },
+      "ui",
+    );
+
+    const tuiPortfolio = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Speculative",
+    });
+    const db = initDefaultDatabase();
+    const snapshot = buildMarketStateSnapshot(db);
+    db.close();
+
+    expect(tuiPortfolio.content[0].text).toContain("TSLA");
+    expect(snapshot.portfolios.map((portfolio) => portfolio.name)).toEqual([
+      "Default",
+      "Speculative",
+    ]);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "toolResult" &&
+          message.toolName === "track_portfolio" &&
+          message.details?.stateChange?.source === "ui" &&
+          message.details.stateChange.domain === "portfolio" &&
+          message.details.stateChange.targetType === "portfolio",
+      ),
+    ).toBe(true);
+  });
 });
 
 function quote(symbol: string, price: number): StockQuote {

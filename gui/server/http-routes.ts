@@ -1042,11 +1042,14 @@ function attachmentSummaryLines(
   attachment: ChatRunAttachmentInput,
 ): string[] {
   if (attachment.kind === "portfolio") {
-    const portfolioId = attachment.id ? Number(attachment.id) : undefined;
+    const portfolioId =
+      attachment.id === "default" ? service.getDefaultPortfolio().id : Number(attachment.id);
     if (attachment.id && !Number.isFinite(portfolioId)) {
       throw new Error("Unknown portfolio attachment");
     }
-    return formatPortfolioSummary(service.listPortfolioLots(portfolioId));
+    return formatPortfolioSummary(
+      service.listPortfolioLots(attachment.id ? portfolioId : undefined),
+    );
   }
   if (attachment.kind === "watchlist") {
     const watchlistId =

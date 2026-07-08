@@ -339,6 +339,7 @@ export function ChatPanel({
         send={send}
         setToast={setToast}
         pendingAttachments={pendingAttachments}
+        portfolios={marketState.state?.portfolios}
         watchlists={marketState.state?.watchlists}
         onAddAttachment={addAttachment}
         onRemoveAttachment={removeAttachment}

@@ -536,6 +536,59 @@ export class MarketStateService {
     };
   }
 
+  listPortfolios(): CollectionRecord[] {
+    this.getDefaultPortfolio();
+    const rows = this.db
+      .prepare("SELECT * FROM portfolios ORDER BY is_default DESC, name COLLATE NOCASE")
+      .all() as PortfolioRow[];
+    return rows.map((row) => ({ ...mapCollection(row), baseCurrency: row.base_currency }));
+  }
+
+  createPortfolio(name: string, baseCurrency = "USD"): CollectionRecord {
+    const normalized = normalizeCollectionName(name);
+    const normalizedCurrency = baseCurrency.trim().toUpperCase() || "USD";
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO portfolios (name, base_currency, is_default, created_at, updated_at)
+         VALUES (?, ?, 0, ?, ?)`,
+      )
+      .run(normalized, normalizedCurrency, now, now);
+    const row = this.db
+      .prepare("SELECT * FROM portfolios WHERE name = ? LIMIT 1")
+      .get(normalized) as PortfolioRow;
+    return { ...mapCollection(row), baseCurrency: row.base_currency };
+  }
+
+  getPortfolioByName(name: string): CollectionRecord | null {
+    const normalized = normalizeCollectionName(name);
+    const row = this.db
+      .prepare("SELECT * FROM portfolios WHERE name = ? LIMIT 1")
+      .get(normalized) as PortfolioRow | undefined;
+    return row == null ? null : { ...mapCollection(row), baseCurrency: row.base_currency };
+  }
+
+  renamePortfolio(currentName: string, nextName: string): CollectionRecord {
+    const current = this.getPortfolioByName(currentName);
+    if (current == null) throw new Error(`portfolio ${currentName.trim()} not found.`);
+    const normalizedNext = normalizeCollectionName(nextName);
+    const now = new Date().toISOString();
+    this.db
+      .prepare("UPDATE portfolios SET name = ?, updated_at = ? WHERE id = ?")
+      .run(normalizedNext, now, current.id);
+    const row = this.db.prepare("SELECT * FROM portfolios WHERE id = ? LIMIT 1").get(current.id) as
+      | PortfolioRow
+      | undefined;
+    if (row == null) throw new Error("renamed portfolio could not be loaded.");
+    return { ...mapCollection(row), baseCurrency: row.base_currency };
+  }
+
+  getOrCreatePortfolio(name?: string | null): CollectionRecord {
+    const normalized = normalizeNullable(name);
+    if (normalized == null) return this.getDefaultPortfolio();
+    return this.getPortfolioByName(normalized) ?? this.createPortfolio(normalized);
+  }
+
   findInstrumentByAlias(lookup: InstrumentAliasLookup): InstrumentRecord | null {
     const source = normalizeSource(lookup.source);
     const sourceId = normalizeNullable(lookup.sourceId);

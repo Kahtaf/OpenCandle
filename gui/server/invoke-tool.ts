@@ -468,6 +468,9 @@ function marketStateToolMapping(
       }
       return { domain: "watchlist", targetType: "watchlist_item" };
     case "track_portfolio":
+      if (args.action === "create" || args.action === "rename") {
+        return { domain: "portfolio", targetType: "portfolio" };
+      }
       return { domain: "portfolio", targetType: "portfolio_lot" };
     case "manage_alerts":
       return { domain: "alerts", targetType: "alert_rule" };

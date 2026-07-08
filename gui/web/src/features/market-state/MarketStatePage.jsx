@@ -28,8 +28,8 @@ const PAGE_META = {
   },
   portfolios: {
     title: "Portfolios",
-    primaryLabel: "Add holding",
-    primaryPanel: "holding-add",
+    primaryLabel: "New Portfolio",
+    primaryPanel: "portfolio-create",
   },
   alerts: {
     title: "Alerts",
@@ -254,6 +254,7 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
   const item = panel.data?.item;
   const lot = panel.data?.lot;
   const watchlist = panel.data?.watchlist;
+  const portfolio = panel.data?.portfolio;
 
   if (panel.type === "watchlist-create") {
     return (
@@ -311,6 +312,44 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
     );
   }
 
+  if (panel.type === "portfolio-create") {
+    return (
+      <PortfolioCreateForm
+        disabled={readOnly}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("track_portfolio", {
+            action: "create",
+            portfolio_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
+  if (panel.type === "portfolio-rename") {
+    if (!portfolio) {
+      return <p className="text-sm text-muted-foreground">Select a portfolio to rename.</p>;
+    }
+    return (
+      <PortfolioRenameForm
+        key={`${panel.type}:${portfolio.id}`}
+        disabled={readOnly}
+        portfolio={portfolio}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("track_portfolio", {
+            action: "rename",
+            portfolio_name: portfolio.name,
+            new_portfolio_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
   if (panel.type === "holding-add" || panel.type === "holding-edit") {
     return (
       <HoldingForm
@@ -325,6 +364,7 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
             shares: Number(values.shares),
             avg_cost: Number(values.avg_cost),
             currency: values.currency || undefined,
+            portfolio_name: portfolio?.name,
           });
           if (saved) closePanel();
           return saved;
@@ -469,6 +509,38 @@ export function WatchlistCreateForm({ disabled, onSubmit }) {
   );
 }
 
+export function PortfolioCreateForm({ disabled, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState("");
+  const trimmed = name.trim();
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!trimmed) return;
+    await onSubmit({ name: trimmed });
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Portfolio name"
+          value={name}
+          disabled={disabled}
+          required
+          placeholder="Trading"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !trimmed}>
+        Create portfolio
+      </Button>
+    </form>
+  );
+}
+
 export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
   const nameId = useId();
   const [name, setName] = useState(watchlist?.name ?? "");
@@ -496,6 +568,38 @@ export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
       </label>
       <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
         Rename watchlist
+      </Button>
+    </form>
+  );
+}
+
+export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState(portfolio?.name ?? "");
+  const trimmed = name.trim();
+  const unchanged = trimmed === (portfolio?.name ?? "");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!trimmed || unchanged) return;
+    await onSubmit({ name: trimmed });
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Portfolio name"
+          value={name}
+          disabled={disabled}
+          required
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
+        Rename portfolio
       </Button>
     </form>
   );
@@ -855,6 +959,8 @@ function panelTitle(type) {
     "watchlist-create": "New Watchlist",
     "watchlist-add": "Add Ticker",
     "watchlist-rename": "Rename Watchlist",
+    "portfolio-create": "New Portfolio",
+    "portfolio-rename": "Rename Portfolio",
     "holding-add": "Add Holding",
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",

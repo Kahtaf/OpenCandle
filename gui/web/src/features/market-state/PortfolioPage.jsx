@@ -1,6 +1,7 @@
-import { BriefcaseBusiness, ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { BriefcaseBusiness, ChevronDown, ChevronRight, Pencil, Plus } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
+import { cn } from "../../lib/utils.js";
 import { shortDateLabel } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
 import {
@@ -27,15 +28,40 @@ export function PortfolioPage({
   invokeTool,
   navigate,
 }) {
+  const portfolios = useMemo(() => {
+    const saved = state.portfolios ?? [];
+    return saved.length > 0 ? saved : [{ id: "default", name: "Default", isDefault: true }];
+  }, [state.portfolios]);
+  const [activePortfolioId, setActivePortfolioId] = useState(portfolios[0]?.id);
+  useEffect(() => {
+    if (!portfolios.some((portfolio) => portfolio.id === activePortfolioId)) {
+      setActivePortfolioId(portfolios[0]?.id);
+    }
+  }, [activePortfolioId, portfolios]);
+  const activePortfolio =
+    portfolios.find((portfolio) => portfolio.id === activePortfolioId) ?? portfolios[0];
+  const activeLots = useMemo(
+    () =>
+      (state.portfolio ?? []).filter((lot) =>
+        activePortfolio?.id === "default"
+          ? lot.portfolioId == null
+          : lot.portfolioId === activePortfolio?.id,
+      ),
+    [activePortfolio?.id, state.portfolio],
+  );
   const holdings = useMemo(
-    () => buildHoldingRows(state.portfolio ?? [], state.quoteSnapshot?.portfolioQuotes ?? []),
-    [state.portfolio, state.quoteSnapshot],
+    () => buildHoldingRows(activeLots, state.quoteSnapshot?.portfolioQuotes ?? []),
+    [activeLots, state.quoteSnapshot],
   );
   const rows = useMemo(
     () => filterItems(holdings, filter, ["symbol", "name", "currency"]),
     [holdings, filter],
   );
-  const summary = state.quoteSnapshot?.portfolioSummary;
+  const summary =
+    state.quoteSnapshot?.portfolioSummaries?.find(
+      (candidate) => candidate.portfolioId === activePortfolio?.id,
+    ) ??
+    (activePortfolio?.isDefault ? state.quoteSnapshot?.portfolioSummary : null);
   const [expanded, setExpanded] = useState(() => new Set());
 
   const toggleExpanded = (symbol) => {
@@ -47,38 +73,66 @@ export function PortfolioPage({
     });
   };
 
-  const lotCount = (state.portfolio ?? []).length;
-
-  if (lotCount === 0) {
-    return (
-      <Panel title="Holdings">
-        <EmptyState
-          icon={BriefcaseBusiness}
-          title="No holdings yet"
-          action="Add a holding when you are ready, or keep using watchlists without a portfolio."
-          cta={{ label: "Skip For Now", onClick: () => navigate?.({ to: "/watchlists" }) }}
-        />
-      </Panel>
-    );
-  }
+  const lotCount = activeLots.length;
+  const portfolioCounts = useMemo(
+    () => countLotsByPortfolio(state.portfolio ?? []),
+    [state.portfolio],
+  );
+  const addHolding = () => openPanel("holding-add", { portfolio: activePortfolio });
 
   return (
     <div className="flex flex-col gap-3">
-      <ValueHeader summary={summary} holdings={holdings} />
       <Panel
-        title="Holdings"
-        meta={`${holdings.length} ${holdings.length === 1 ? "symbol" : "symbols"} · ${lotCount} ${lotCount === 1 ? "lot" : "lots"}`}
-        actions={<PanelSearch label="Search holdings" filter={filter} setFilter={setFilter} />}
+        title="Portfolios"
+        meta={`${lotCount} ${lotCount === 1 ? "lot" : "lots"}`}
+        actions={
+          <Button
+            type="button"
+            variant="brand"
+            size="sm"
+            rounded="full"
+            prefixIcon={Plus}
+            disabled={readOnly}
+            onClick={addHolding}
+          >
+            Add holding
+          </Button>
+        }
       >
-        {rows.length === 0 ? (
+        <PortfolioTabs
+          portfolios={portfolios}
+          activePortfolio={activePortfolio}
+          counts={portfolioCounts}
+          readOnly={readOnly}
+          onSelect={setActivePortfolioId}
+          onRename={(portfolio) => openPanel("portfolio-rename", { portfolio })}
+        />
+        {lotCount === 0 ? (
           <EmptyState
             icon={BriefcaseBusiness}
-            title="No holdings match this search"
-            action="Clear the search to see all holdings."
-            cta={{ label: "Clear search", onClick: () => setFilter("") }}
+            title="No holdings yet"
+            action="Add a holding when you are ready, or keep using watchlists without a portfolio."
+            cta={{ label: "Skip For Now", onClick: () => navigate?.({ to: "/watchlists" }) }}
           />
-        ) : (
-          <div className="overflow-x-auto">
+        ) : null}
+      </Panel>
+
+      {lotCount > 0 ? <ValueHeader summary={summary} holdings={holdings} /> : null}
+      {lotCount > 0 ? (
+        <Panel
+          title="Holdings"
+          meta={`${holdings.length} ${holdings.length === 1 ? "symbol" : "symbols"} · ${lotCount} ${lotCount === 1 ? "lot" : "lots"}`}
+          actions={<PanelSearch label="Search holdings" filter={filter} setFilter={setFilter} />}
+        >
+          {rows.length === 0 ? (
+            <EmptyState
+              icon={BriefcaseBusiness}
+              title="No holdings match this search"
+              action="Clear the search to see all holdings."
+              cta={{ label: "Clear search", onClick: () => setFilter("") }}
+            />
+          ) : (
+            <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left text-sm md:min-w-[700px]">
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground">
@@ -167,6 +221,7 @@ export function PortfolioPage({
                               <div className="mt-1 flex gap-1 md:hidden">
                                 <LotActions
                                   lot={lot}
+                                  portfolio={activePortfolio}
                                   readOnly={readOnly}
                                   openPanel={openPanel}
                                   invokeTool={invokeTool}
@@ -200,6 +255,7 @@ export function PortfolioPage({
                               <div className="flex justify-end gap-1">
                                 <LotActions
                                   lot={lot}
+                                  portfolio={activePortfolio}
                                   readOnly={readOnly}
                                   openPanel={openPanel}
                                   invokeTool={invokeTool}
@@ -213,20 +269,71 @@ export function PortfolioPage({
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-        {summary?.excludedFromTotals?.length ? (
-          <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-            Excluded from totals:{" "}
-            {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
-          </p>
-        ) : null}
-      </Panel>
+            </div>
+          )}
+          {summary?.excludedFromTotals?.length ? (
+            <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+              Excluded from totals:{" "}
+              {summary.excludedFromTotals.map((row) => `${row.symbol} (${row.reason})`).join(", ")}
+            </p>
+          ) : null}
+        </Panel>
+      ) : null}
     </div>
   );
 }
 
-function LotActions({ lot, readOnly, openPanel, invokeTool }) {
+function PortfolioTabs({ portfolios, activePortfolio, counts, readOnly, onSelect, onRename }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist">
+        {portfolios.map((portfolio) => {
+          const active = portfolio.id === activePortfolio?.id;
+          return (
+            <button
+              key={portfolio.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground",
+                active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
+              )}
+              onClick={() => onSelect(portfolio.id)}
+            >
+              <span>{portfolio.name}</span>
+              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                {counts.get(portfolio.id) ?? 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {activePortfolio ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          icon={Pencil}
+          title={`Rename ${activePortfolio.name}`}
+          aria-label={`Rename ${activePortfolio.name}`}
+          disabled={readOnly}
+          onClick={() => onRename(activePortfolio)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function countLotsByPortfolio(lots) {
+  const counts = new Map();
+  for (const lot of lots ?? []) {
+    counts.set(lot.portfolioId, (counts.get(lot.portfolioId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function LotActions({ lot, portfolio, readOnly, openPanel, invokeTool }) {
   return (
     <>
       <Button
@@ -234,7 +341,7 @@ function LotActions({ lot, readOnly, openPanel, invokeTool }) {
         variant="ghost"
         size="xs"
         disabled={readOnly}
-        onClick={() => openPanel("holding-edit", { lot })}
+        onClick={() => openPanel("holding-edit", { lot, portfolio })}
       >
         Edit
       </Button>

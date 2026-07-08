@@ -8,6 +8,7 @@ import {
   invokeMarketStateMutation,
   MarketStatePage,
   nextComboboxActiveIndex,
+  PortfolioRenameForm,
   SymbolActionPanel,
   SymbolSearchInput,
   WatchlistRenameForm,
@@ -66,6 +67,25 @@ describe("MarketStatePage rendering", () => {
     expect(html).not.toContain("Thesis");
   });
 
+  it("renders named portfolios as tabs with create, rename, and add-holding actions", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "portfolios",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("New Portfolio");
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain("Default");
+    expect(html).toContain("Add holding");
+    expect(html).toContain('aria-label="Rename Default"');
+  });
+
   it("renders a focused watchlist rename form", () => {
     const html = renderToStaticMarkup(
       React.createElement(WatchlistRenameForm, {
@@ -78,6 +98,20 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Name");
     expect(html).toContain('value="MAG7"');
     expect(html).toContain("Rename watchlist");
+  });
+
+  it("renders a focused portfolio rename form", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioRenameForm, {
+        disabled: false,
+        portfolio: { id: 1, name: "Trading", isDefault: false, baseCurrency: "USD" },
+        onSubmit: () => true,
+      }),
+    );
+
+    expect(html).toContain("Name");
+    expect(html).toContain('value="Trading"');
+    expect(html).toContain("Rename portfolio");
   });
 
   it("renders the report schedule and generate action as durable report state", () => {
@@ -202,7 +236,7 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Add holding");
-    expect(html).toContain("Holdings");
+    expect(html).toContain("Portfolios");
     expect(html).not.toContain("Use the lot id shown in the portfolio table");
   });
 

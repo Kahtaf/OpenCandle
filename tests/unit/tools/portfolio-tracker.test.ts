@@ -116,6 +116,66 @@ describe("portfolioTrackerTool", () => {
     });
   });
 
+  it("creates, renames, and views named portfolios independently", async () => {
+    const created = await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Retirement",
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Retirement",
+      symbol: "VTI",
+      shares: 2,
+      avg_cost: 250,
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Trading",
+      symbol: "TSLA",
+      shares: 1,
+      avg_cost: 200,
+    });
+
+    const renamed = await portfolioTrackerTool.execute("test", {
+      action: "rename",
+      portfolio_name: "Trading",
+      new_portfolio_name: "Speculative",
+    });
+    const retirement = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Retirement",
+    });
+    const speculative = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Speculative",
+    });
+
+    expect(created.content[0].text).toContain("Created portfolio Retirement");
+    expect(renamed.content[0].text).toContain("Renamed Trading to Speculative");
+    expect(retirement.content[0].text).toContain("**Retirement**");
+    expect(retirement.content[0].text).toContain("VTI");
+    expect(retirement.content[0].text).not.toContain("TSLA");
+    expect(speculative.content[0].text).toContain("**Speculative**");
+    expect(speculative.content[0].text).toContain("TSLA");
+    expect(speculative.content[0].text).not.toContain("VTI");
+  });
+
+  it("does not create a missing portfolio while renaming", async () => {
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "rename",
+        portfolio_name: "Missing",
+        new_portfolio_name: "Speculative",
+      }),
+    ).rejects.toThrow("portfolio Missing not found");
+
+    const missing = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Missing",
+    });
+    expect(missing.content[0].text).toContain("Missing is empty");
+  });
+
   it("does not emit NaN for a legacy zero-cost portfolio lot", async () => {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
