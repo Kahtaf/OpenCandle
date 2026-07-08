@@ -56,7 +56,18 @@ describe("provider registry — shape", () => {
   it("contains API-key, external-tool, and public HTTP providers with stable ids", () => {
     const ids = PROVIDERS.map((p) => p.id).sort();
     expect(ids).toEqual(
-      ["alpha_vantage", "brave", "exa", "finnhub", "fred", "reddit", "twitter", "yahoo"].sort(),
+      [
+        "alpha_vantage",
+        "brave",
+        "exa",
+        "finnhub",
+        "fred",
+        "polymarket",
+        "reddit",
+        "tradingview",
+        "twitter",
+        "yahoo",
+      ].sort(),
     );
   });
 
@@ -101,7 +112,7 @@ describe("provider registry — shape", () => {
 
   it("hard-tier providers have null fallback descriptions", () => {
     const hard = PROVIDERS.filter((p) => p.tier === "hard");
-    expect(hard.map((p) => p.id).sort()).toEqual(["alpha_vantage", "fred", "yahoo"]);
+    expect(hard.map((p) => p.id).sort()).toEqual(["alpha_vantage", "fred", "polymarket", "yahoo"]);
     for (const p of hard) {
       expect(p.fallbackDescription).toBeNull();
     }
@@ -110,7 +121,7 @@ describe("provider registry — shape", () => {
   it("soft-tier providers all have non-null fallback descriptions", () => {
     const soft = PROVIDERS.filter((p) => p.tier === "soft");
     expect(soft.map((p) => p.id).sort()).toEqual(
-      ["brave", "exa", "finnhub", "reddit", "twitter"].sort(),
+      ["brave", "exa", "finnhub", "reddit", "tradingview", "twitter"].sort(),
     );
     for (const p of soft) {
       expect(p.fallbackDescription).not.toBeNull();
@@ -171,6 +182,19 @@ describe("provider registry — shape", () => {
     expect("configPath" in descriptor).toBe(false);
   });
 
+  it("polymarket is a public HTTP descriptor with a Gamma probe URL", () => {
+    const descriptor = getProvider("polymarket");
+    expect(descriptor.kind).toBe("public-http");
+    expect(isPublicHttpProvider(descriptor)).toBe(true);
+    if (isPublicHttpProvider(descriptor)) {
+      expect(descriptor.probeUrl).toBe(
+        "https://gamma-api.polymarket.com/public-search?q=fed%20rate%20cut&limit=1",
+      );
+    }
+    expect("envVar" in descriptor).toBe(false);
+    expect("configPath" in descriptor).toBe(false);
+  });
+
   it("every alias is lowercase kebab-case-friendly", () => {
     for (const p of PROVIDERS) {
       for (const alias of p.aliases) {
@@ -218,14 +242,14 @@ describe("provider registry — lookup helpers", () => {
     const ids = getProvidersByTier("hard")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["alpha_vantage", "fred", "yahoo"]);
+    expect(ids).toEqual(["alpha_vantage", "fred", "polymarket", "yahoo"]);
   });
 
   it("getProvidersByTier('soft') returns soft enrichment providers", () => {
     const ids = getProvidersByTier("soft")
       .map((p) => p.id)
       .sort();
-    expect(ids).toEqual(["brave", "exa", "finnhub", "reddit", "twitter"]);
+    expect(ids).toEqual(["brave", "exa", "finnhub", "reddit", "tradingview", "twitter"]);
   });
 
   it("getProvidersByCategory returns sentiment providers", () => {
@@ -340,7 +364,7 @@ describe("provider registry — import safety", () => {
     const loadFileConfigMock = configModule.loadFileConfig as ReturnType<typeof vi.fn>;
     // Freshly import the registry after the mock is in place.
     const providersModule = await import("../../../src/onboarding/providers.js");
-    expect(providersModule.PROVIDERS.length).toBe(8);
+    expect(providersModule.PROVIDERS.length).toBe(10);
     // Module evaluation must not trigger loadFileConfig.
     expect(loadFileConfigMock).not.toHaveBeenCalled();
     // Calling a credential helper SHOULD invoke loadFileConfig (lazy, on demand).

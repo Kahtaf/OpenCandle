@@ -61,9 +61,11 @@ describe("screen_stocks tool", () => {
     expect(result.content[0]?.type).toBe("text");
     expect((result.content[0] as any).text).toContain("AAPL");
     expect((result.content[0] as any).text).toContain("TradingView");
-    expect((result.content[0] as any).text).toContain("retrieved at 2026-06-01T00:00:00.000Z");
+    expect((result.content[0] as any).text).toContain("~15m delayed");
     expect((result.content[0] as any).text).toContain("candidates, not recommendations");
+    expect((result.content[0] as any).text.trim().split("\n").at(-1)).toContain("~15m delayed");
     expect(result.details).toHaveLength(1);
+    expect((result.details as any).freshness).toBeUndefined();
   });
 
   it("accepts natural comparison and field aliases from screener prompts", async () => {
@@ -175,9 +177,25 @@ describe("screen_stocks tool", () => {
 
     const result = await screenStocksTool.execute("call-stale", { market: "america" });
 
-    expect((result.content[0] as any).text).toContain(
-      "cached TradingView screen from 2026-06-01T00:00:00.000Z",
-    );
+    const text = (result.content[0] as any).text;
+    expect(text).toContain("Using cached data from");
+    expect(text).not.toContain("cached TradingView screen from");
+    expect(text).not.toContain("Data freshness:");
+  });
+
+  it("includes freshness disclosure when a stale cached screen has no rows", async () => {
+    vi.mocked(wrapProvider).mockResolvedValue({
+      status: "ok",
+      data: [],
+      timestamp: "2026-06-01T00:00:00.000Z",
+      stale: true,
+    });
+
+    const result = await screenStocksTool.execute("call-stale-empty", { market: "america" });
+
+    const text = (result.content[0] as any).text;
+    expect(text).toContain("No stocks matched the screen.");
+    expect(text).toContain("Using cached data from");
   });
 
   it("returns structured unavailable text without fabricating rows", async () => {

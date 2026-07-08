@@ -453,12 +453,12 @@ async function run() {
     const result = await tool.execute("e2e", { symbols: ["AAPL", "MSFT", "GOOGL"] });
     assert(result.details != null, "details is null");
     const m = result.details.matrix;
-    assert(m["AAPL"]["AAPL"] === 1.0, "self-correlation should be 1.0");
-    assert(m["AAPL"]["MSFT"] === m["MSFT"]["AAPL"], "matrix should be symmetric");
-    const r = m["AAPL"]["MSFT"];
+    assert(m.AAPL.AAPL === 1.0, "self-correlation should be 1.0");
+    assert(m.AAPL.MSFT === m.MSFT.AAPL, "matrix should be symmetric");
+    const r = m.AAPL.MSFT;
     assert(r >= -1 && r <= 1, `correlation ${r} out of range`);
     console.log(
-      `    AAPL-MSFT: ${r.toFixed(3)}, AAPL-GOOGL: ${m["AAPL"]["GOOGL"].toFixed(3)}, MSFT-GOOGL: ${m["MSFT"]["GOOGL"].toFixed(3)}`,
+      `    AAPL-MSFT: ${r.toFixed(3)}, AAPL-GOOGL: ${m.AAPL.GOOGL.toFixed(3)}, MSFT-GOOGL: ${m.MSFT.GOOGL.toFixed(3)}`,
     );
     // Tech stocks should be somewhat correlated
     assert(r > 0, "AAPL-MSFT should be positively correlated");

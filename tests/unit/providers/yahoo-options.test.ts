@@ -194,6 +194,7 @@ describe("yahoo-finance options provider", () => {
       const chain = await getOptionsChain("AAPL");
       expect(chain.symbol).toBe("AAPL");
       expect(chain.underlyingPrice).toBe(248.8);
+      expect(chain.asOf).toBe("2024-03-22T20:00:00.000Z");
       expect(chain.calls.length).toBeGreaterThan(0);
       expect(chain.puts.length).toBeGreaterThan(0);
       expect(chain.expirationDates.length).toBeGreaterThan(0);
@@ -290,7 +291,9 @@ describe("yahoo-finance options provider", () => {
     });
 
     it("falls back to yahoo-finance2 when direct options fetch fails", async () => {
-      yahooFinanceMock.options.mockResolvedValue(optionsFixture.optionChain.result[0]);
+      const fallbackFixture = structuredClone(optionsFixture.optionChain.result[0]);
+      fallbackFixture.quote.regularMarketTime = new Date("2024-03-22T20:00:00.000Z") as any;
+      yahooFinanceMock.options.mockResolvedValue(fallbackFixture);
 
       globalThis.fetch = vi.fn().mockImplementation((url: string) => {
         if (typeof url === "string" && url.includes("fc.yahoo.com")) {
@@ -313,6 +316,7 @@ describe("yahoo-finance options provider", () => {
 
       expect(yahooFinanceMock.options).toHaveBeenCalledWith("AAPL", undefined);
       expect(chain.symbol).toBe("AAPL");
+      expect(chain.asOf).toBe("2024-03-22T20:00:00.000Z");
       expect(chain.calls.length).toBeGreaterThan(0);
     });
 

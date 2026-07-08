@@ -38,21 +38,41 @@ export function FinancialContextDrawer({
         if (!nextOpen) onClose();
       }}
     >
-      <SheetContent width="sm" handleLabel="Context" className="bg-card p-0">
-        <Header state={state} />
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <MarketStateShortcuts onOpenMarketState={onOpenMarketState} />
-          <Watchlist rows={state?.watchlist ?? []} />
-          <Analyses rows={state?.activeAnalyses ?? []} />
-          <Research rows={state?.recentResearch ?? []} />
-          <DataQuality
-            state={state?.dataQuality ?? { softGaps: [], hardSkips: [] }}
-            catalog={catalog}
-            onConfigureProvider={onConfigureProvider}
-          />
-        </div>
+      <SheetContent width="sm" handleLabel="What the agent sees" className="bg-card p-0">
+        <FinancialContextContent
+          state={state}
+          catalog={catalog}
+          onConfigureProvider={onConfigureProvider}
+          onOpenMarketState={onOpenMarketState}
+        />
       </SheetContent>
     </Sheet>
+  );
+}
+
+export function FinancialContextContent({
+  state,
+  catalog,
+  onConfigureProvider,
+  onOpenMarketState,
+}) {
+  return (
+    <>
+      <Header state={state} />
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <LastTurn turn={state?.lastTurn} />
+        <Receipts turn={state?.lastTurn} analyses={state?.activeAnalyses ?? []} />
+        <MarketStateShortcuts onOpenMarketState={onOpenMarketState} />
+        <Watchlist rows={state?.watchlist ?? []} />
+        <Analyses rows={state?.activeAnalyses ?? []} />
+        <Research rows={state?.recentResearch ?? []} />
+        <DataQuality
+          state={state?.dataQuality ?? { softGaps: [], hardSkips: [] }}
+          catalog={catalog}
+          onConfigureProvider={onConfigureProvider}
+        />
+      </div>
+    </>
   );
 }
 
@@ -87,7 +107,7 @@ function Header({ state }) {
   return (
     <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
       <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        Context
+        What the agent sees
       </span>
       {pill ? (
         <span
@@ -113,6 +133,81 @@ function Header({ state }) {
       ) : null}
     </div>
   );
+}
+
+function LastTurn({ turn }) {
+  return (
+    <Section title="Last turn">
+      {!turn ? (
+        <EmptyHint>No routed turn yet.</EmptyHint>
+      ) : (
+        <div className="divide-y divide-border">
+          <InfoRow label="Route" value={friendlyWorkflow(turn.workflow || turn.routeKind)} />
+          {turn.symbols?.length > 0 ? (
+            <InfoRow label="Symbols" value={turn.symbols.join(", ")} />
+          ) : null}
+          <InfoRow label="Slot sources" value={formatSlotSources(turn.slotSources)} />
+          <InfoRow label="Prior turns" value={String(turn.priorTurnCount)} />
+          {"savedStateIncluded" in turn ? (
+            <InfoRow
+              label="Saved state"
+              value={turn.savedStateIncluded ? "Included" : "Not included"}
+            />
+          ) : null}
+          {"attachmentCount" in turn ? (
+            <InfoRow label="Attachments" value={String(turn.attachmentCount)} />
+          ) : null}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function Receipts({ turn, analyses }) {
+  const active = analyses?.[analyses.length - 1];
+  const progress =
+    active && active.analystsTotal > 0
+      ? `${active.analystsDone}/${active.analystsTotal} analysts`
+      : null;
+  return (
+    <Section title="Receipts">
+      {!turn?.validation ? (
+        <EmptyHint>No validation ran</EmptyHint>
+      ) : (
+        <div className="divide-y divide-border">
+          <InfoRow
+            label="Validation"
+            value={
+              turn.validation.passed ? "Passed" : `${turn.validation.mismatchCount} mismatches`
+            }
+          />
+          {progress ? <InfoRow label="Analyst progress" value={progress} /> : null}
+        </div>
+      )}
+      {turn?.validation && progress ? null : progress ? (
+        <div className="mt-1 divide-y divide-border">
+          <InfoRow label="Analyst progress" value={progress} />
+        </div>
+      ) : null}
+    </Section>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <Row>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="max-w-[180px] truncate text-right text-xs font-medium text-foreground">
+        {value}
+      </span>
+    </Row>
+  );
+}
+
+function formatSlotSources(slotSources) {
+  const entries = Object.entries(slotSources ?? {});
+  if (entries.length === 0) return "None";
+  return entries.map(([source, count]) => `${source} ${count}`).join(", ");
 }
 
 function summarize(state) {

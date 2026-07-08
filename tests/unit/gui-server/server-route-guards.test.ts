@@ -295,6 +295,42 @@ describe("GUI server route guards", () => {
     );
   });
 
+  it("records attachment metadata in chat action envelopes without image bytes", async () => {
+    const { buildChatRunActionEnvelope } = await import("../../../gui/server/http-routes.js");
+
+    expect(
+      buildChatRunActionEnvelope(
+        {
+          prompt: "review this",
+          actionId: "chat-1",
+          images: [{ data: Buffer.from("image-bytes").toString("base64"), mimeType: "image/png" }],
+          attachments: [{ kind: "portfolio" }],
+        },
+        "session-1",
+      ),
+    ).toEqual({
+      sessionId: "session-1",
+      actionId: "chat-1",
+      actionType: "chat.prompt",
+      payload: {
+        prompt: "review this",
+        imageCount: 1,
+        attachments: [{ kind: "portfolio" }],
+      },
+      source: "browser",
+    });
+  }, 20_000);
+
+  it("records image labels in user input metadata without image bytes", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+
+    expect(source).toContain("inputAttachmentLabels");
+    expect(source).toContain('kind: "image"');
+    expect(source).toContain('label: `${image.mimeType || "image"} #${index + 1}`');
+    expect(source).toContain("attachments: inputAttachmentLabels");
+    expect(source).not.toContain("attachments: promptImages");
+  });
+
   it("broadcasts target session snapshots after proxied chat runs", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const proxyStart = source.indexOf("if (shouldProxyChatRun)");
@@ -308,6 +344,19 @@ describe("GUI server route guards", () => {
       "await broadcastFreshRunSessionSnapshot(options, runSessionManager",
     );
     expect(source).toContain("SessionManager.open(sessionFile, options.sessionDir, options.cwd)");
+  });
+
+  it("forwards image and saved-context attachment fields through the chat-run proxy", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const proxyStart = source.indexOf("async function proxyChatRunToCoordinator");
+    const proxyBlock = source.slice(
+      proxyStart,
+      source.indexOf("async function streamAcceptedSseChatRun", proxyStart),
+    );
+
+    expect(proxyBlock).toContain("body: JSON.stringify({ ...body, sessionId:");
+    expect(proxyBlock).not.toContain("prompt:");
+    expect(proxyBlock).not.toContain("actionId:");
   });
 
   it("syncs the current writer lock scope when a chat action is admitted", () => {

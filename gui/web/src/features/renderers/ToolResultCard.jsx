@@ -3,7 +3,7 @@ import { RawDetails, ToolHeader, WarningRow } from "./cards/_shared.jsx";
 import { extractDetails } from "./cards/card-format.js";
 import { GenericCard, rendererFor } from "./cards/index.jsx";
 
-export function ToolResultCard({ message }) {
+export function ToolResultCard({ message, sessionMarketFacts }) {
   const text = textContent(message.content);
   const details = extractDetails(message);
   const manual = message.details?.source === "ui";
@@ -27,7 +27,12 @@ export function ToolResultCard({ message }) {
 
   return (
     <div className="grid gap-2">
-      <Component message={message} header={header} text={text} />
+      <Component
+        message={message}
+        header={header}
+        text={text}
+        sessionMarketFacts={sessionMarketFacts}
+      />
       <RawDetails message={message} details={details} text={text} />
     </div>
   );

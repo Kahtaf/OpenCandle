@@ -49,4 +49,5 @@ export interface OptionsChain {
   putCallRatio: number;
   quoteStatus: OptionsQuoteStatus;
   fetchedAt: string;
+  asOf?: string;
 }

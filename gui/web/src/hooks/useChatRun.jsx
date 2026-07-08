@@ -22,10 +22,10 @@ export function createSessionActionId(prefix = "action") {
   return `${prefix}-${random}`;
 }
 
-export function buildChatRunRequestBody(prompt, sessionId, actionId) {
+export function buildChatRunRequestBody(prompt, sessionId, actionId, extras = {}) {
   const expectedSessionId = normalizeSessionId(sessionId);
   if (!expectedSessionId) throw new Error("sessionId is required");
-  const body = { prompt, actionId };
+  const body = { prompt, actionId, ...extras };
   return { ...body, sessionId: expectedSessionId };
 }
 
@@ -34,6 +34,12 @@ export function buildRetryChatRunOptions(lastRun) {
   return {
     sessionId: lastRun.sessionId,
     ...(lastRun.actionId ? { actionId: lastRun.actionId } : {}),
+    ...(Array.isArray(lastRun.images) && lastRun.images.length > 0
+      ? { images: lastRun.images }
+      : {}),
+    ...(Array.isArray(lastRun.attachments) && lastRun.attachments.length > 0
+      ? { attachments: lastRun.attachments }
+      : {}),
   };
 }
 
@@ -71,13 +77,26 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         return;
       }
       const actionId = options.actionId || createSessionActionId("chat");
+      const runExtras = {
+        ...(Array.isArray(options.images) && options.images.length > 0
+          ? { images: options.images }
+          : {}),
+        ...(Array.isArray(options.attachments) && options.attachments.length > 0
+          ? { attachments: options.attachments }
+          : {}),
+      };
+      const optimisticAttachments = Array.isArray(options.optimisticAttachments)
+        ? options.optimisticAttachments
+        : [];
       setLastRuns((current) => ({
         ...current,
-        [key]: { prompt: trimmed, sessionId: targetSessionId, actionId },
+        [key]: { prompt: trimmed, sessionId: targetSessionId, actionId, ...runExtras },
       }));
       setRunStateFor(key, "connecting");
       setToast("");
-      onRunStart?.(trimmed, options.baseEventCount, targetSessionId);
+      onRunStart?.(trimmed, options.baseEventCount, targetSessionId, {
+        attachments: optimisticAttachments,
+      });
       const abort = new AbortController();
       abortsRef.current.set(key, abort);
 
@@ -85,7 +104,9 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
         const response = await fetch(chatRunEndpoint(targetSessionId), {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(buildChatRunRequestBody(trimmed, targetSessionId, actionId)),
+          body: JSON.stringify(
+            buildChatRunRequestBody(trimmed, targetSessionId, actionId, runExtras),
+          ),
           signal: abort.signal,
         });
         if (!response.ok) {
@@ -109,7 +130,7 @@ export function useChatRun({ activeSessionId = "", setToast, onEvent, onRunStart
           if (event.type === "run.failed") {
             setLastRuns((current) => ({
               ...current,
-              [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "" },
+              [key]: { prompt: trimmed, sessionId: targetSessionId, actionId: "", ...runExtras },
             }));
             setRunStateFor(key, "failed");
             setToast(event.error?.message || "Run failed");

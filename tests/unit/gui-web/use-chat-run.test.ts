@@ -28,6 +28,21 @@ describe("chat run request helpers", () => {
     });
   });
 
+  it("includes images and saved context attachments in session-addressed run bodies", () => {
+    expect(
+      buildChatRunRequestBody("review this", "session-a", "chat-1", {
+        images: [{ data: "base64", mimeType: "image/png" }],
+        attachments: [{ kind: "portfolio" }],
+      }),
+    ).toEqual({
+      prompt: "review this",
+      actionId: "chat-1",
+      sessionId: "session-a",
+      images: [{ data: "base64", mimeType: "image/png" }],
+      attachments: [{ kind: "portfolio" }],
+    });
+  });
+
   it("rejects chat run bodies without an explicit session id", () => {
     expect(() => buildChatRunRequestBody("hello", "", "action-1")).toThrow("sessionId is required");
     expect(() => buildChatRunRequestBody("hello", "   ", "action-1")).toThrow(
@@ -65,6 +80,23 @@ describe("chat run request helpers", () => {
         actionId: "chat-action-1",
       }),
     ).toEqual({ sessionId: "session-1", actionId: "chat-action-1" });
+  });
+
+  it("preserves image and saved-context attachments for failed-run retries", () => {
+    expect(
+      buildRetryChatRunOptions({
+        prompt: "review this chart",
+        sessionId: "session-1",
+        actionId: "chat-action-1",
+        images: [{ data: "base64", mimeType: "image/png" }],
+        attachments: [{ kind: "portfolio" }],
+      }),
+    ).toEqual({
+      sessionId: "session-1",
+      actionId: "chat-action-1",
+      images: [{ data: "base64", mimeType: "image/png" }],
+      attachments: [{ kind: "portfolio" }],
+    });
   });
 
   it("omits cleared action ids for deliberate failed-run retries", () => {

@@ -1,6 +1,8 @@
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import type { ProviderResult } from "../../../src/runtime/evidence.js";
 import { isProviderOk, toEvidenceRecord } from "../../../src/runtime/evidence.js";
+import { captureToolEvidence } from "../../../src/runtime/prompt-step.js";
 
 describe("isProviderOk", () => {
   it("returns true for ok results", () => {
@@ -19,6 +21,54 @@ describe("isProviderOk", () => {
       provider: "alpha-vantage",
     };
     expect(isProviderOk(result)).toBe(false);
+  });
+});
+
+describe("captureToolEvidence", () => {
+  it("copies freshness from tool details and timestamps provenance from provider data time", () => {
+    const freshness = {
+      fetchedAt: "2026-07-05T19:00:00.000Z",
+      providerDataAt: "2026-07-02T20:00:00.000Z",
+      cacheStatus: "live",
+      marketSession: "closed_weekend",
+      isStaleForSession: false,
+    };
+    const entries = [
+      {
+        type: "message",
+        id: "assistant-1",
+        parentId: null,
+        timestamp: "2026-07-05T19:00:00.000Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "tool-1",
+              name: "get_stock_quote",
+              arguments: { symbol: "AAPL" },
+            },
+          ],
+        },
+      },
+      {
+        type: "message",
+        id: "tool-1-result",
+        parentId: "assistant-1",
+        timestamp: "2026-07-05T19:00:01.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "tool-1",
+          toolName: "get_stock_quote",
+          details: { symbol: "AAPL", price: 178.72, freshness },
+        },
+      },
+    ] as unknown as SessionEntry[];
+
+    const [record] = captureToolEvidence(entries);
+
+    expect(record.value).toMatchObject({ freshness });
+    expect(record.provenance.timestamp).toBe("2026-07-02T20:00:00.000Z");
   });
 });
 

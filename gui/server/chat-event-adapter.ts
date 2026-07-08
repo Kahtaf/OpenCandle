@@ -22,6 +22,9 @@ export function sessionEntriesToChatEvents(
   // Set by an opencandle-user-input marker: the user's words before a workflow
   // transform expanded the turn. The next user message renders this instead.
   let pendingOriginalInput: string | null = null;
+  let pendingOriginalAttachments: Array<{ kind: string; label: string }> = [];
+  let lastEntryWasUserMessage = false;
+  let lastUserCompletedEventIndex: number | null = null;
   const updatedAt = options.updatedAt ?? entries.at(-1)?.timestamp ?? new Date().toISOString();
 
   events.push({
@@ -34,11 +37,20 @@ export function sessionEntriesToChatEvents(
 
   for (const entry of entries) {
     if (isOriginalInputEntry(entry)) {
-      pendingOriginalInput = originalInputText(entry);
+      const originalInput = originalInputText(entry);
+      const originalAttachments = originalInputAttachments(entry);
+      if (lastEntryWasUserMessage && lastUserCompletedEventIndex != null) {
+        applyOriginalInput(events[lastUserCompletedEventIndex], originalInput, originalAttachments);
+      } else {
+        pendingOriginalInput = originalInput;
+        pendingOriginalAttachments = originalAttachments;
+      }
+      lastEntryWasUserMessage = false;
       continue;
     }
 
     if (entry.type === "custom_message") {
+      lastEntryWasUserMessage = false;
       const messageId = entry.id;
       events.push({
         type: "custom.message",
@@ -51,7 +63,10 @@ export function sessionEntriesToChatEvents(
       continue;
     }
 
-    if (entry.type !== "message") continue;
+    if (entry.type !== "message") {
+      lastEntryWasUserMessage = false;
+      continue;
+    }
     const message = entry.message as Message;
     const messageId = entry.id;
 
@@ -63,18 +78,26 @@ export function sessionEntriesToChatEvents(
         role: "user",
         seq: seq++,
       });
-      events.push({
+      const completedEvent: ChatEvent = {
         type: "message.completed",
         sessionId: options.sessionId,
         messageId,
-        content: [{ type: "text", text: pendingOriginalInput ?? messageText(message.content) }],
+        content: userMessageContent(message.content, pendingOriginalInput),
+        ...(pendingOriginalAttachments.length > 0
+          ? { attachments: pendingOriginalAttachments }
+          : {}),
         seq: seq++,
-      });
+      };
+      events.push(completedEvent);
+      lastUserCompletedEventIndex = events.length - 1;
+      lastEntryWasUserMessage = true;
       pendingOriginalInput = null;
+      pendingOriginalAttachments = [];
       continue;
     }
 
     if (message.role === "assistant") {
+      lastEntryWasUserMessage = false;
       events.push({
         type: "message.created",
         sessionId: options.sessionId,
@@ -117,6 +140,7 @@ export function sessionEntriesToChatEvents(
     }
 
     if (message.role === "toolResult") {
+      lastEntryWasUserMessage = false;
       const tool = message as ToolResultMessage;
       const toolCallId = tool.toolCallId || `tool-${entry.id}`;
       resolvedToolCalls.add(toolCallId);
@@ -164,6 +188,20 @@ export function sessionEntriesToChatEvents(
   return events;
 }
 
+function applyOriginalInput(
+  event: ChatEvent | undefined,
+  originalInput: string | null,
+  attachments: Array<{ kind: string; label: string }>,
+): void {
+  if (event?.type !== "message.completed") return;
+  if (originalInput) {
+    event.content = userMessageContent(event.content, originalInput);
+  }
+  if (attachments.length > 0) {
+    event.attachments = attachments;
+  }
+}
+
 export function isOriginalInputEntry(entry: SessionEntry): boolean {
   return (
     entry.type === "custom" &&
@@ -178,6 +216,21 @@ export function originalInputText(entry: SessionEntry): string | null {
     : null;
 }
 
+export function originalInputAttachments(
+  entry: SessionEntry,
+): Array<{ kind: string; label: string }> {
+  const data = (entry as { data?: { attachments?: unknown } }).data;
+  if (!Array.isArray(data?.attachments)) return [];
+  return data.attachments
+    .map((attachment) => {
+      if (typeof attachment !== "object" || attachment === null) return null;
+      const kind = String((attachment as { kind?: unknown }).kind ?? "").trim();
+      const label = String((attachment as { label?: unknown }).label ?? "").trim();
+      return kind && label ? { kind, label } : null;
+    })
+    .filter((attachment): attachment is { kind: string; label: string } => attachment != null);
+}
+
 function customMessageText(content: unknown): string {
   if (typeof content === "string") return content;
   return messageText(content);
@@ -187,6 +240,37 @@ function messageText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.map((part) => (typeof part.text === "string" ? part.text : "")).join("");
+}
+
+function userMessageContent(content: unknown, originalText: string | null): MessageContent[] {
+  const parts: MessageContent[] = [{ type: "text", text: originalText ?? messageText(content) }];
+  if (!Array.isArray(content)) return parts;
+  for (const part of content) {
+    if (part?.type !== "image") continue;
+    if (typeof part.url === "string") {
+      parts.push({ type: "image", url: part.url, alt: imageAlt(part) });
+      continue;
+    }
+    if (typeof part.data === "string" && typeof part.mimeType === "string") {
+      parts.push({
+        type: "image",
+        url: `data:${part.mimeType};base64,${part.data}`,
+        data: part.data,
+        mimeType: part.mimeType,
+        alt: imageAlt(part),
+      });
+    }
+  }
+  return parts;
+}
+
+function imageAlt(part: unknown): string | undefined {
+  return typeof part === "object" &&
+    part !== null &&
+    "alt" in part &&
+    typeof (part as { alt?: unknown }).alt === "string"
+    ? (part as { alt: string }).alt
+    : undefined;
 }
 
 function toolOutput(message: ToolResultMessage): ToolOutput {

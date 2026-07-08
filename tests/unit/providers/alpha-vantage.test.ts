@@ -155,6 +155,32 @@ describe("alpha-vantage provider", () => {
       expect(quote.low).toBe(184.8);
       expect(quote.previousClose).toBe(185.0);
       expect(quote.volume).toBe(54321000);
+      expect(quote.asOf).toBe("2026-04-03");
+    });
+
+    it("preserves GLOBAL_QUOTE latest trading day as a date-only as-of value", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            "Global Quote": {
+              "01. symbol": "AAPL",
+              "02. open": "190.00",
+              "03. high": "192.00",
+              "04. low": "189.00",
+              "05. price": "191.00",
+              "06. volume": "1000",
+              "07. latest trading day": "2026-07-02",
+              "08. previous close": "188.00",
+              "09. change": "3.00",
+              "10. change percent": "1.59%",
+            },
+          }),
+      });
+
+      const quote = await getGlobalQuote("AAPL", "test-key");
+
+      expect(quote.asOf).toBe("2026-07-02");
     });
 
     it("sets zero/null for fields not in GLOBAL_QUOTE", async () => {

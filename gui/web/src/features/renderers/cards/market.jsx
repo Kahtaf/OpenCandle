@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
+import { enrichStockQuoteDetails } from "../../chat/session-market-facts.js";
 import { DeltaChip, MoneyTile, PlainOutput, RangeBar, ToolCard } from "./_shared.jsx";
 import { extractDetails, formatDateShort, formatLargeNumber, formatPrice } from "./card-format.js";
 
-export function StockQuoteCard({ message, header }) {
-  const d = extractDetails(message);
+export function StockQuoteCard({ message, header, sessionMarketFacts }) {
+  const d = enrichStockQuoteDetails(extractDetails(message), sessionMarketFacts);
   if (!d || !Number.isFinite(d.price)) {
     return (
       <ToolCard>

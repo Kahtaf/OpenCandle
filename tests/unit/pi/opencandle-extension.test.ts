@@ -39,6 +39,7 @@ interface FakeCommandContext {
   isIdle(): boolean;
   hasPendingMessages?(): boolean;
   ui: FakeUi;
+  sessionManager?: { getBranch?: () => unknown[]; getEntries?: () => unknown[] };
 }
 
 function createFakeApi() {
@@ -256,6 +257,74 @@ describe("opencandle extension", () => {
       ([type]) => type === "opencandle-user-input",
     );
     expect(markerCall?.[1]).toEqual({ original: "analyze NVDA" });
+  });
+
+  it("does not duplicate an unconsumed server-written original-input marker", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+      sessionManager: {
+        getBranch: () => [
+          {
+            type: "custom",
+            customType: "opencandle-user-input",
+            data: {
+              original: "analyze NVDA",
+              attachments: [{ kind: "portfolio", label: "Portfolio" }],
+            },
+          },
+        ],
+      },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "analyze NVDA", source: "interactive" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ action: "transform" });
+    expect(fake.api.appendEntry).not.toHaveBeenCalledWith(
+      "opencandle-user-input",
+      expect.anything(),
+    );
+  });
+
+  it("records a new original user text after the previous marker has been consumed", async () => {
+    const fake = createFakeApi();
+    openCandleExtension(fake.api);
+
+    const inputHandler = fake.handlers.get("input")?.[0];
+    const ctx = {
+      isIdle: () => true,
+      hasPendingMessages: () => false,
+      ui: { notify: vi.fn() },
+      sessionManager: {
+        getBranch: () => [
+          { type: "message", message: { role: "user", content: "expanded workflow prompt" } },
+          {
+            type: "custom",
+            customType: "opencandle-user-input",
+            data: { original: "analyze NVDA" },
+          },
+          { type: "message", message: { role: "assistant", content: "analysis" } },
+        ],
+      },
+    };
+
+    const result = await inputHandler!(
+      { type: "input", text: "analyze MSFT", source: "interactive" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ action: "transform" });
+    expect(fake.api.appendEntry).toHaveBeenCalledWith("opencandle-user-input", {
+      original: "analyze MSFT",
+    });
   });
 
   it("appends the OpenCandle system prompt before agent start", async () => {

@@ -28,6 +28,7 @@ import {
   resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
+  selectCompetitiveGeminiBaseline,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../../evals/competitive-finance.js";
@@ -795,6 +796,44 @@ describe("competitive finance benchmarking", () => {
         OPENCANDLE_COMPETITIVE_CODEX_MODEL: "gpt-5.5[high]",
       }),
     ).toBe("gpt-5.5[high]");
+  });
+
+  it("prefers Gemini API auth over the retired consumer ACP CLI", () => {
+    expect(selectCompetitiveGeminiBaseline({ GEMINI_API_KEY: "key" })).toEqual({
+      mode: "api",
+      provider: "google",
+      model: "gemini-2.5-flash",
+    });
+    expect(
+      selectCompetitiveGeminiBaseline({
+        GEMINI_API_KEY: "key",
+        OPENCANDLE_COMPETITIVE_GEMINI_MODEL: "gemini-3-flash",
+      }),
+    ).toEqual({
+      mode: "api",
+      provider: "google",
+      model: "gemini-3-flash",
+    });
+    expect(selectCompetitiveGeminiBaseline({ GOOGLE_API_KEY: "key" })).toEqual({
+      mode: "api",
+      provider: "google",
+      model: "gemini-2.5-flash",
+    });
+    expect(selectCompetitiveGeminiBaseline({})).toEqual({
+      mode: "acpx",
+      provider: "acpx/gemini",
+      model: "subscription",
+    });
+    expect(
+      selectCompetitiveGeminiBaseline({
+        GEMINI_API_KEY: "key",
+        OPENCANDLE_COMPETITIVE_GEMINI_AGENT: "acpx",
+      }),
+    ).toEqual({
+      mode: "acpx",
+      provider: "acpx/gemini",
+      model: "subscription",
+    });
   });
 
   it("marks completed competitive runs as successful CLI exits", () => {

@@ -241,8 +241,9 @@ export async function promptAndSettle(
   prompt: string,
   beforeIds: Set<string>,
   observation?: PromptObservation,
+  options?: { images?: Array<{ type: "image"; data: string; mimeType: string }> },
 ): Promise<void> {
-  await runSession.prompt(prompt);
+  await runSession.prompt(prompt, options);
   await settleWithEventProgress(runSession);
   await waitForNewEntryId(
     () => runSession.sessionManager.getEntries().map((entry) => entry.id),
@@ -282,6 +283,8 @@ export async function replayObservedWorkflowPromptIfNeeded(
   const replayPrompt = selectReplayPrompt(observation, originalPrompt);
   if (!replayPrompt) return;
 
+  // V1 attachment replay is text-only: the recorded expanded prompt is
+  // re-sent, but image bytes are not replayed.
   await runSession.prompt(replayPrompt, {
     expandPromptTemplates: false,
     source: "extension",

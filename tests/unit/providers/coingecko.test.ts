@@ -31,6 +31,7 @@ describe("coingecko provider", () => {
       expect(crypto.changePercent24h).toBe(1.81);
       expect(crypto.marketCap).toBe(1362000000000);
       expect(crypto.ath).toBe(73750.0);
+      expect(crypto.asOf).toBe("2026-07-03T18:50:00.000Z");
       expect(crypto.circulatingSupply).toBe(19625000);
       expect(crypto.totalSupply).toBe(21000000);
     });

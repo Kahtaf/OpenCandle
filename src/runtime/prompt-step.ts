@@ -1,4 +1,5 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { FreshnessStamp } from "../infra/freshness.js";
 import type { EvidenceRecord } from "./evidence.js";
 import type { StepOutput, WorkflowStep } from "./workflow-types.js";
 
@@ -89,12 +90,14 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
     const tool = pending?.tool ?? stringValue(message.toolName);
     if (!tool) continue;
     const resultValue = message.details ?? message.content ?? "";
+    const freshness = extractFreshness(resultValue);
     const serializedResult = serialize(resultValue);
     evidence.push({
       label: `tool:${tool}`,
       value: {
         tool,
         args: truncate(serialize(pending?.args ?? {}), 500),
+        ...(freshness ? { freshness } : {}),
         resultDigest: {
           preview: truncate(serializedResult, 500),
           totalLength: serializedResult.length,
@@ -104,7 +107,7 @@ export function captureToolEvidence(entries: SessionEntry[]): EvidenceRecord[] {
       },
       provenance: {
         source: "computed",
-        timestamp: entry.timestamp,
+        timestamp: freshness?.providerDataAt ?? freshness?.fetchedAt ?? entry.timestamp,
         provider: tool,
         confidence: message.isError === true ? 0.5 : undefined,
       },
@@ -164,4 +167,19 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function extractFreshness(value: unknown): FreshnessStamp | undefined {
+  const record = asRecord(value);
+  return isFreshnessStamp(record.freshness) ? record.freshness : undefined;
+}
+
+function isFreshnessStamp(value: unknown): value is FreshnessStamp {
+  const record = asRecord(value);
+  return (
+    typeof record.fetchedAt === "string" &&
+    typeof record.cacheStatus === "string" &&
+    typeof record.marketSession === "string" &&
+    typeof record.isStaleForSession === "boolean"
+  );
 }

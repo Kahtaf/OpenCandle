@@ -19,6 +19,7 @@
         "quote": {
           "symbol": "AAPL",
           "regularMarketPrice": 248.8,
+          "regularMarketTime": 1711137600,
           "regularMarketChange": -4.09,
           "regularMarketChangePercent": -1.6173,
           "shortName": "Apple Inc."

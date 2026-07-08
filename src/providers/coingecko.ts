@@ -19,6 +19,7 @@ interface CoinGeckoDetailResponse {
     low_24h: { usd: number };
     ath: { usd: number };
     ath_date: { usd: string };
+    last_updated?: string;
     circulating_supply: number;
     total_supply: number | null;
   };
@@ -52,6 +53,7 @@ export async function getCryptoPrice(id: string): Promise<CryptoPrice> {
       circulatingSupply: md.circulating_supply,
       totalSupply: md.total_supply,
       timestamp: Date.now(),
+      asOf: md.last_updated,
     };
 
     cache.set(cacheKey, result, TTL.QUOTE);

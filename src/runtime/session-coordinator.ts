@@ -6,6 +6,14 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { isAnalystSplit, parseAnalystOutput, parseDebateOutput } from "../analysts/contracts.js";
 import { buildAnalystVoteTallyBlock } from "../analysts/orchestrator.js";
+import type { FreshnessStamp } from "../infra/freshness.js";
+import { MarketStateService } from "../market-state/service.js";
+import {
+  formatJsonSummary,
+  formatLatestReportSummary,
+  formatPortfolioSummary,
+  formatWatchlistSummary,
+} from "../market-state/summaries.js";
 import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/index.js";
 
 /**
@@ -17,7 +25,6 @@ import { getAllDefaults, initDefaultDatabase, MemoryStorage } from "../memory/in
 type ReadonlySessionManager = ExtensionContext["sessionManager"];
 
 import type Database from "better-sqlite3";
-import { MarketStateService } from "../market-state/service.js";
 import type { FilteredMemoryEntry } from "../memory/manager.js";
 import { MemoryManager } from "../memory/manager.js";
 import { extractPreferences } from "../memory/preference-extractor.js";
@@ -779,11 +786,13 @@ function toolEvidenceRecord(input: {
   isError: boolean;
 }): EvidenceRecord {
   const serializedResult = serialize(input.result);
+  const freshness = extractFreshness(input.result);
   return {
     label: `tool:${input.tool}`,
     value: {
       tool: input.tool,
       args: truncate(serialize(input.args), 500),
+      ...(freshness ? { freshness } : {}),
       resultDigest: {
         preview: truncate(serializedResult, 500),
         totalLength: serializedResult.length,
@@ -793,7 +802,7 @@ function toolEvidenceRecord(input: {
     },
     provenance: {
       source: "computed",
-      timestamp: input.completedAt,
+      timestamp: freshness?.providerDataAt ?? freshness?.fetchedAt ?? input.completedAt,
       provider: input.tool,
       confidence: input.isError ? 0.5 : undefined,
     },
@@ -815,6 +824,24 @@ function serialize(value: unknown): string {
 
 function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? value.slice(0, maxLength) : value;
+}
+
+function extractFreshness(value: unknown): FreshnessStamp | undefined {
+  const record = isPlainObject(value) ? value : {};
+  const direct = record.freshness;
+  if (isFreshnessStamp(direct)) return direct;
+  const details = isPlainObject(record.details) ? record.details : {};
+  return isFreshnessStamp(details.freshness) ? details.freshness : undefined;
+}
+
+function isFreshnessStamp(value: unknown): value is FreshnessStamp {
+  const record = isPlainObject(value) ? value : {};
+  return (
+    typeof record.fetchedAt === "string" &&
+    typeof record.cacheStatus === "string" &&
+    typeof record.marketSession === "string" &&
+    typeof record.isStaleForSession === "boolean"
+  );
 }
 
 function formatToolDefaultsForPrompt(): string[] {
@@ -955,34 +982,11 @@ function buildSavedMarketStateContext(db: Database.Database): string {
     ];
 
     if (lots.length > 0) {
-      lines.push("Portfolio lots:");
-      for (const lot of lots.slice(0, 8)) {
-        const costBasis = formatMoney(lot.quantity * lot.avgCost, lot.currency);
-        const name = lot.name ? ` (${lot.name})` : "";
-        lines.push(
-          `- ${lot.symbol}: ${lot.quantity} @ ${formatMoney(lot.avgCost, lot.currency)}, cost basis ${costBasis}${name}`,
-        );
-      }
+      lines.push(...formatPortfolioSummary(lots));
     }
 
     if (watchlist.length > 0) {
-      lines.push("Watchlist:");
-      for (const item of watchlist.slice(0, 8)) {
-        const parts = [
-          item.targetPrice == null
-            ? null
-            : `target ${formatMoney(item.targetPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
-          item.stopPrice == null
-            ? null
-            : `stop ${formatMoney(item.stopPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
-          item.thesis ? `thesis: ${item.thesis}` : null,
-          item.tags && item.tags.length > 0 ? `tags: ${item.tags.join(", ")}` : null,
-          item.notes ? `notes: ${item.notes}` : null,
-        ].filter((part): part is string => part != null);
-        lines.push(
-          `- ${item.symbol}${item.name ? ` (${item.name})` : ""}${parts.length > 0 ? ` — ${parts.join("; ")}` : ""}`,
-        );
-      }
+      lines.push(...formatWatchlistSummary(watchlist));
     }
 
     if (alerts.length > 0) {
@@ -1006,10 +1010,7 @@ function buildSavedMarketStateContext(db: Database.Database): string {
     }
 
     if (reportRuns.length > 0) {
-      const latest = reportRuns[0];
-      lines.push(
-        `Latest report run: ${latest.status} at ${latest.completedAt ?? latest.startedAt}`,
-      );
+      lines.push(...formatLatestReportSummary(reportRuns[0], { includeSummary: false }));
     }
 
     return lines.join("\n");
@@ -1029,19 +1030,6 @@ function shouldIncludeSavedMarketStateContext(
   // A pending fallback context only exists for routed finance turns (rules-mode
   // general finance or LLM-router fallback), never for pass-through prompts.
   return workflowType != null || fallbackContext != null;
-}
-
-function formatMoney(value: number, currency: string): string {
-  const normalized = currency.toUpperCase();
-  if (normalized === "USD") return `$${value.toFixed(2)}`;
-  return `${normalized} ${value.toFixed(2)}`;
-}
-
-function formatJsonSummary(value: unknown): string {
-  if (value == null) return "";
-  const json = JSON.stringify(value);
-  if (json.length <= 90) return json;
-  return `${json.slice(0, 87)}...`;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Cache } from "../../../src/infra/cache.js";
 import { ProviderCredentialError } from "../../../src/providers/provider-credential-error.js";
 import { wrapProvider } from "../../../src/providers/wrap-provider.js";
 
@@ -69,6 +70,20 @@ describe("wrapProvider", () => {
     expect(result.status).toBe("unavailable");
     if (result.status === "unavailable") {
       expect(result.reason).toBe("network timeout");
+    }
+  });
+
+  it("marks fresh cache hits as cached provider results", async () => {
+    const cache = new Cache();
+    cache.set("quote:AAPL", { price: 185 }, 60_000);
+
+    const result = await wrapProvider("yahoo-finance", async () => cache.get("quote:AAPL"));
+
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.data).toEqual({ price: 185 });
+      expect(result.cached).toBe(true);
+      expect(result.stale).toBeUndefined();
     }
   });
 });

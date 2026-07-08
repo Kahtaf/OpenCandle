@@ -48,6 +48,9 @@ describe("get_option_chain tool", () => {
   });
 
   it("returns formatted text with strikes, Greeks, and summary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-05T16:00:00.000Z"));
+    rateLimiter.configure("yahoo", 1000, 1000);
     mockCrumbAndOptions();
     const result = await optionChainTool.execute("call-1", { symbol: "AAPL" });
     const text = (result.content[0] as any).text;
@@ -58,6 +61,9 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("Rho");
     expect(text).toContain("IV");
     expect(text).toContain("Put/Call");
+    expect(text.split("\n").at(-1)).toMatch(
+      /^Last available price as of 2024-03-22(?: \(market closed — .+\))?\. This is not a live quote\.$/,
+    );
   });
 
   it("labels option premiums as per-share quotes with standard-contract total math", async () => {
@@ -77,6 +83,7 @@ describe("get_option_chain tool", () => {
     expect(result.details.calls.length).toBeGreaterThan(0);
     expect(result.details.puts.length).toBeGreaterThan(0);
     expect(result.details.underlyingPrice).toBe(248.8);
+    expect(result.details.freshness.providerDataAt).toBe("2024-03-22T20:00:00.000Z");
   });
 
   it("uppercases the symbol", async () => {
@@ -157,5 +164,6 @@ describe("get_option_chain tool", () => {
     expect(text).toContain("do not treat zero bid/ask as confirmed live illiquidity");
     expect(text).toContain("do not stop at the stale quote caveat");
     expect(text).toContain("finish the strategy explanation");
+    expect(text).toContain("Last available price as of 2024-03-22");
   });
 });

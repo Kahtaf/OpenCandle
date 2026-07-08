@@ -50,6 +50,7 @@ describe("TradingView provider", () => {
       values: { "RSI|60": 29.4, market_cap_basic: 2900000000000 },
       sourceProvider: "tradingview",
     });
+    expect("asOf" in rows[0]).toBe(false);
     expect(fetch).toHaveBeenCalledWith(
       "https://scanner.tradingview.com/america/scan2?label-product=screener-stock",
       expect.objectContaining({
@@ -89,6 +90,7 @@ describe("TradingView provider", () => {
       "NYSE:BRK.A",
       "AMEX:SPY",
     ]);
+    expect(quotes.some((quote) => "asOf" in quote)).toBe(false);
     expect(fetch).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
     expect(body.symbols).toEqual({ query: { types: [] } });

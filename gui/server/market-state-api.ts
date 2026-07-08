@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { buildFreshnessStamp } from "../../src/infra/freshness.js";
 import { isZeroFilledQuote, searchYahooInstruments } from "../../src/market-state/resolve.js";
 import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
@@ -37,12 +38,12 @@ export interface MarketStateQuoteSnapshot {
     instrumentId: number;
     symbol: string;
     status: "ok" | "unavailable";
-    currentPrice?: number;
+    currentPrice?: number | null;
     changePercent?: number;
-    marketValue?: number;
+    marketValue?: number | null;
     totalCost: number;
-    pnl?: number;
-    pnlPercent?: number;
+    pnl?: number | null;
+    pnlPercent?: number | null;
     allocationPercent?: number;
     currency: string;
     includedInTotals: boolean;
@@ -59,6 +60,30 @@ export interface MarketStateQuoteSnapshot {
     excludedFromTotals: Array<{ symbol: string; currency: string; reason: string }>;
   };
 }
+
+interface SavedSymbolsMemoOptions {
+  ttlMs?: number;
+  now?: () => number;
+}
+
+export function createSavedSymbolsMemo(
+  load: () => string[],
+  options: SavedSymbolsMemoOptions = {},
+): () => string[] {
+  const ttlMs = options.ttlMs ?? 30_000;
+  const now = options.now ?? Date.now;
+  let cachedAt = 0;
+  let cached: string[] | null = null;
+  return () => {
+    const current = now();
+    if (cached && current - cachedAt < ttlMs) return cached;
+    cached = load();
+    cachedAt = current;
+    return cached;
+  };
+}
+
+export const getSavedMarketStateSymbols = createSavedSymbolsMemo(loadSavedMarketStateSymbols);
 
 export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSnapshot {
   const ownedDb = db ?? initDefaultDatabase();
@@ -86,6 +111,30 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
   } finally {
     if (!db) ownedDb.close();
   }
+}
+
+function loadSavedMarketStateSymbols(): string[] {
+  const db = initDefaultDatabase();
+  const service = new MarketStateService(db);
+  try {
+    const symbols = [
+      ...service.listWatchlistItems().map((item) => item.symbol),
+      ...service.listPortfolioLots().map((lot) => lot.symbol),
+    ];
+    return normalizeSymbols(symbols);
+  } finally {
+    db.close();
+  }
+}
+
+function normalizeSymbols(symbols: string[]): string[] {
+  const normalized: string[] = [];
+  for (const symbol of symbols) {
+    const next = symbol.trim().toUpperCase();
+    if (!next || normalized.includes(next)) continue;
+    normalized.push(next);
+  }
+  return normalized;
 }
 
 export async function buildMarketStateQuoteSnapshot(
@@ -262,11 +311,20 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
   if (isZeroFilledQuote(result.data)) {
     return { status: "unavailable", reason: "Yahoo returned no valid market data." };
   }
+  const freshness = buildFreshnessStamp({
+    asOf: result.data.asOf,
+    cached: result.cached,
+    stale: result.stale,
+    cachedAt: result.timestamp,
+  });
+  if (freshness.isStaleForSession) {
+    return { status: "unavailable", reason: "provider returned stale market data" };
+  }
   return {
     status: "ok",
     price: result.data.price,
     changePercent: result.data.changePercent,
-    fetchedAt: result.timestamp,
+    fetchedAt: freshness.providerDataAt ?? result.timestamp,
     stale: result.stale,
     currency: result.data.currency ?? null,
   };

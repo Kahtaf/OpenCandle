@@ -30,9 +30,10 @@ try {
     );
   } else {
     linkInstallArtifacts(cwd, baseWorktree);
-    baseRun = productEvalSupported(baseWorktree)
-      ? runProductEval(baseWorktree, baseRef)
-      : unsupportedProductReplayRun(baseRef, "package.json does not define test:evals:product");
+    const baseProductEvalCommand = productEvalCommand(baseWorktree);
+    baseRun = baseProductEvalCommand
+      ? runProductEval(baseWorktree, baseRef, baseProductEvalCommand)
+      : unsupportedProductReplayRun(baseRef, "package.json does not define a product eval script");
   }
 } finally {
   rmSync(baseWorktree, { recursive: true, force: true });
@@ -56,9 +57,14 @@ if (comparison.status === "compared") {
 }
 console.log(`Report: ${outputPath}`);
 
-function runProductEval(workdir: string, ref: string) {
+function runProductEval(
+  workdir: string,
+  ref: string,
+  command: string[] = ["npm", "run", "eval", "--", "product"],
+) {
   const before = findLatestProductEvalReport(workdir);
-  const result = run("npm", ["run", "test:evals:product"], workdir, "inherit", {
+  const [executable, ...args] = command;
+  const result = run(executable, args, workdir, "inherit", {
     timeoutMs: productReplayTimeoutMs,
   });
   if (result.timedOut) {
@@ -78,13 +84,17 @@ function runProductEval(workdir: string, ref: string) {
   return summarizeProductReplayReport({ ref, reportPath, report });
 }
 
-function productEvalSupported(workdir: string): boolean {
+function productEvalCommand(workdir: string): string[] | null {
   const packagePath = join(workdir, "package.json");
-  if (!existsSync(packagePath)) return false;
+  if (!existsSync(packagePath)) return null;
   const packageJson = JSON.parse(readFileSync(packagePath, "utf-8")) as {
     scripts?: Record<string, string>;
   };
-  return typeof packageJson.scripts?.["test:evals:product"] === "string";
+  if (typeof packageJson.scripts?.eval === "string") return ["npm", "run", "eval", "--", "product"];
+  if (typeof packageJson.scripts?.["test:evals:product"] === "string") {
+    return ["npm", "run", "test:evals:product"];
+  }
+  return null;
 }
 
 function linkInstallArtifacts(source: string, target: string): void {

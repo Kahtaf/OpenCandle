@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildMarketStateQuoteSnapshot,
   buildMarketStateSnapshot,
+  createSavedSymbolsMemo,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
 import { cache } from "../../../src/infra/cache.js";
@@ -117,6 +118,25 @@ describe("market-state API helpers", () => {
       }),
     ]);
     db.close();
+  });
+
+  it("memoizes saved symbols for 30 seconds", () => {
+    let calls = 0;
+    let now = 1_000;
+    const memo = createSavedSymbolsMemo(
+      () => {
+        calls += 1;
+        return [`SYM${calls}`];
+      },
+      { ttlMs: 30_000, now: () => now },
+    );
+
+    expect(memo()).toEqual(["SYM1"]);
+    expect(memo()).toEqual(["SYM1"]);
+
+    now += 30_000;
+    expect(memo()).toEqual(["SYM2"]);
+    expect(calls).toBe(2);
   });
 
   it("returns resolver candidates for GUI autocomplete", async () => {
@@ -297,6 +317,62 @@ describe("market-state API helpers", () => {
       excludedFromTotals: [
         expect.objectContaining({ symbol: "AAPL", reason: "provider returned stale market data" }),
       ],
+    });
+    db.close();
+  });
+
+  it("marks stale provider as-of quote snapshot rows unavailable", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-06T14:00:00.000Z"));
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    const watchlist = service.addWatchlistItem({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+    });
+    const lot = service.addPortfolioLot({
+      instrument: {
+        symbol: "AAPL",
+        assetType: "equity",
+        name: "Apple Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 150,
+      currency: "USD",
+    });
+    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 200, { asOf: "2026-07-02T20:00:00.000Z" }));
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.watchlistQuotes).toEqual([
+      expect.objectContaining({
+        itemId: watchlist.id,
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+      }),
+    ]);
+    expect(snapshot.portfolioQuotes).toEqual([
+      expect.objectContaining({
+        lotId: lot.id,
+        symbol: "AAPL",
+        status: "unavailable",
+        reason: "provider returned stale market data",
+        includedInTotals: false,
+      }),
+    ]);
+    expect(snapshot.portfolioSummary).toMatchObject({
+      totalValue: 0,
+      totalCost: 0,
     });
     db.close();
   });

@@ -38,7 +38,7 @@ Each fixture is a JSON file with the following shape:
 ## Running
 
 - `npm test` includes the deterministic suite (`tests/unit/routing/router-fixtures.test.ts`). The runner loads each fixture, constructs a mock LLM client that returns `expectedRouterOutput`, runs `route()`, and asserts structural equality (the `reasoning` field is exempt from exact match).
-- `npm run eval:router-live` (not wired in CI) runs the same fixtures against the real LLM and reports pass/fail + p50/p95 latency.
+- `npm run eval -- router-live` (not wired in CI) runs the same fixtures against the real LLM and reports pass/fail + p50/p95 latency.
 
 ## When to run live
 

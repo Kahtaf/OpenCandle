@@ -4,6 +4,7 @@ import { cache, STALE_LIMIT, TTL } from "../infra/cache.js";
 import { HttpError, httpGet } from "../infra/http-client.js";
 import { rateLimiter } from "../infra/rate-limiter.js";
 import { computeGreeks } from "../tools/options/greeks.js";
+import type { CompanyOverview, FinancialStatement } from "../types/fundamentals.js";
 import type { OHLCV, StockQuote } from "../types/market.js";
 import type {
   OptionContract,
@@ -51,25 +52,105 @@ interface YahooChartResponse {
 
 interface YahooQuoteSummaryResponse {
   quoteSummary: {
-    result?: Array<{
-      price?: {
-        symbol?: string;
-        shortName?: string;
-        longName?: string;
-      };
-      topHoldings?: {
-        holdings?: Array<{
-          symbol?: string;
-          holdingName?: string;
-          holdingPercent?: YahooNumber;
-        }>;
-        equityHoldings?: {
-          sectorWeightings?: Array<Record<string, YahooNumber>>;
-        };
-      };
-    }>;
+    result?: Array<YahooQuoteSummaryResult>;
     error?: { code?: string; description?: string } | null;
   };
+}
+
+interface YahooQuoteSummaryResult {
+  price?: {
+    symbol?: string;
+    shortName?: string;
+    longName?: string;
+    exchangeName?: string;
+    marketCap?: YahooNumber;
+  };
+  assetProfile?: {
+    longBusinessSummary?: string;
+    sector?: string;
+    industry?: string;
+  };
+  summaryProfile?: {
+    longBusinessSummary?: string;
+    sector?: string;
+    industry?: string;
+  };
+  summaryDetail?: {
+    trailingPE?: YahooNumber;
+    forwardPE?: YahooNumber;
+    dividendYield?: YahooNumber;
+    beta?: YahooNumber;
+    fiftyTwoWeekHigh?: YahooNumber;
+    fiftyTwoWeekLow?: YahooNumber;
+    averageVolume?: YahooNumber;
+  };
+  defaultKeyStatistics?: {
+    trailingEps?: YahooNumber;
+    forwardEps?: YahooNumber;
+    beta?: YahooNumber;
+  };
+  financialData?: {
+    profitMargins?: YahooNumber;
+    revenueGrowth?: YahooNumber;
+    totalRevenue?: YahooNumber;
+  };
+  topHoldings?: {
+    holdings?: Array<{
+      symbol?: string;
+      holdingName?: string;
+      holdingPercent?: YahooNumber;
+    }>;
+    equityHoldings?: {
+      sectorWeightings?: Array<Record<string, YahooNumber>>;
+    };
+  };
+}
+
+export async function getYahooCompanyOverview(symbol: string): Promise<CompanyOverview> {
+  const normalizedSymbol = symbol.toUpperCase();
+  const cacheKey = `yahoo:overview:${normalizedSymbol}`;
+  const cached = cache.get<CompanyOverview>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("yahoo");
+    const result = await getYahooCompanySummary(normalizedSymbol);
+    if (!result?.price?.symbol) {
+      throw new Error(`Yahoo Finance: no company fundamentals returned for ${normalizedSymbol}`);
+    }
+
+    const profile = result.assetProfile ?? result.summaryProfile;
+    const overview: CompanyOverview = {
+      symbol: result.price.symbol.toUpperCase(),
+      name: result.price.longName ?? result.price.shortName ?? result.price.symbol,
+      description: profile?.longBusinessSummary ?? "",
+      exchange: result.price.exchangeName ?? "",
+      sector: profile?.sector ?? "",
+      industry: profile?.industry ?? "",
+      marketCap: yahooNumber(result.price.marketCap) ?? 0,
+      pe: yahooNullableNumber(result.summaryDetail?.trailingPE),
+      forwardPe: yahooNullableNumber(result.summaryDetail?.forwardPE),
+      eps:
+        yahooNullableNumber(result.defaultKeyStatistics?.trailingEps) ??
+        yahooNullableNumber(result.defaultKeyStatistics?.forwardEps),
+      dividendYield: yahooNullableNumber(result.summaryDetail?.dividendYield),
+      beta:
+        yahooNullableNumber(result.summaryDetail?.beta) ??
+        yahooNullableNumber(result.defaultKeyStatistics?.beta),
+      week52High: yahooNumber(result.summaryDetail?.fiftyTwoWeekHigh) ?? 0,
+      week52Low: yahooNumber(result.summaryDetail?.fiftyTwoWeekLow) ?? 0,
+      avgVolume: yahooNumber(result.summaryDetail?.averageVolume) ?? 0,
+      profitMargin: yahooNullableNumber(result.financialData?.profitMargins),
+      revenueGrowth: yahooNullableNumber(result.financialData?.revenueGrowth),
+    };
+
+    cache.set(cacheKey, overview, TTL.FUNDAMENTALS);
+    return overview;
+  } catch (error) {
+    const stale = cache.getStale<CompanyOverview>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
+    if (stale) return stale.value;
+    throw error;
+  }
 }
 
 export async function getQuote(symbol: string): Promise<StockQuote> {
@@ -117,6 +198,7 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       week52High: meta.fiftyTwoWeekHigh ?? 0,
       week52Low: meta.fiftyTwoWeekLow ?? 0,
       timestamp: Date.now(),
+      asOf: yahooMarketTimeToIso(meta.regularMarketTime),
       currency:
         typeof meta.currency === "string" && meta.currency.trim() !== ""
           ? meta.currency.trim().toUpperCase()
@@ -134,6 +216,174 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
     if (stale) return stale.value;
     throw error;
   }
+}
+
+type YahooFundamentalsRow = {
+  date?: Date | string | number;
+  totalRevenue?: number;
+  annualTotalRevenue?: number;
+  grossProfit?: number;
+  annualGrossProfit?: number;
+  operatingIncome?: number;
+  annualOperatingIncome?: number;
+  netIncome?: number;
+  annualNetIncome?: number;
+  netIncomeCommonStockholders?: number;
+  annualNetIncomeCommonStockholders?: number;
+  basicEPS?: number;
+  annualBasicEPS?: number;
+  dilutedEPS?: number;
+  annualDilutedEPS?: number;
+  totalAssets?: number;
+  annualTotalAssets?: number;
+  totalLiabilitiesNetMinorityInterest?: number;
+  annualTotalLiabilitiesNetMinorityInterest?: number;
+  totalLiabilities?: number;
+  annualTotalLiabilities?: number;
+  stockholdersEquity?: number;
+  annualStockholdersEquity?: number;
+  commonStockEquity?: number;
+  annualCommonStockEquity?: number;
+  cashFlowFromContinuingOperatingActivities?: number;
+  annualCashFlowFromContinuingOperatingActivities?: number;
+  operatingCashFlow?: number;
+  annualOperatingCashFlow?: number;
+  freeCashFlow?: number;
+  annualFreeCashFlow?: number;
+  capitalExpenditure?: number;
+  annualCapitalExpenditure?: number;
+  capitalExpenditures?: number;
+  annualCapitalExpenditures?: number;
+  totalDebt?: number;
+  annualTotalDebt?: number;
+  cashAndCashEquivalents?: number;
+  annualCashAndCashEquivalents?: number;
+  ordinarySharesNumber?: number;
+  annualOrdinarySharesNumber?: number;
+  shareIssued?: number;
+  annualShareIssued?: number;
+  dilutedAverageShares?: number;
+  annualDilutedAverageShares?: number;
+  basicAverageShares?: number;
+  annualBasicAverageShares?: number;
+};
+
+export async function getYahooFinancials(symbol: string): Promise<FinancialStatement[]> {
+  const normalizedSymbol = symbol.toUpperCase();
+  const cacheKey = `yahoo:financials:${normalizedSymbol}`;
+  const cached = cache.get<FinancialStatement[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    await rateLimiter.acquire("yahoo");
+
+    const period1 = new Date();
+    period1.setUTCFullYear(period1.getUTCFullYear() - 6);
+    const rows = (await getYahooFinance2Client().fundamentalsTimeSeries(
+      normalizedSymbol,
+      {
+        period1,
+        period2: new Date(),
+        type: "annual",
+        module: "all",
+      },
+      { validateResult: false },
+    )) as YahooFundamentalsRow[];
+
+    const statements = rows
+      .map((row) => yahooFundamentalsRowToStatement(row))
+      .filter((statement): statement is FinancialStatement => statement !== null)
+      .sort((a, b) => b.fiscalDate.localeCompare(a.fiscalDate))
+      .slice(0, 4);
+
+    if (statements.length === 0) {
+      throw new Error(`Yahoo Finance: no financial statements returned for ${normalizedSymbol}`);
+    }
+
+    cache.set(cacheKey, statements, TTL.FUNDAMENTALS);
+    return statements;
+  } catch (error) {
+    const stale = cache.getStale<FinancialStatement[]>(cacheKey, STALE_LIMIT.FUNDAMENTALS);
+    if (stale) return stale.value;
+    throw error;
+  }
+}
+
+function yahooFundamentalsRowToStatement(row: YahooFundamentalsRow): FinancialStatement | null {
+  const fiscalDate = normalizeYahooDate(row.date);
+  if (!fiscalDate) return null;
+
+  const operatingCashFlowValue =
+    row.annualCashFlowFromContinuingOperatingActivities ??
+    row.cashFlowFromContinuingOperatingActivities ??
+    row.annualOperatingCashFlow ??
+    row.operatingCashFlow;
+  const capitalExpenditureValue =
+    row.annualCapitalExpenditure ??
+    row.capitalExpenditure ??
+    row.annualCapitalExpenditures ??
+    row.capitalExpenditures;
+  const operatingCashFlow = operatingCashFlowValue ?? 0;
+  const capitalExpenditure = capitalExpenditureValue ?? 0;
+  const freeCashFlow =
+    row.annualFreeCashFlow ??
+    row.freeCashFlow ??
+    (operatingCashFlowValue !== undefined && capitalExpenditureValue !== undefined
+      ? operatingCashFlow + capitalExpenditure
+      : 0);
+
+  return {
+    fiscalDate,
+    revenue: row.annualTotalRevenue ?? row.totalRevenue ?? 0,
+    grossProfit: row.annualGrossProfit ?? row.grossProfit ?? 0,
+    operatingIncome: row.annualOperatingIncome ?? row.operatingIncome ?? 0,
+    netIncome:
+      row.annualNetIncome ??
+      row.netIncome ??
+      row.annualNetIncomeCommonStockholders ??
+      row.netIncomeCommonStockholders ??
+      0,
+    eps: row.annualDilutedEPS ?? row.dilutedEPS ?? row.annualBasicEPS ?? row.basicEPS ?? 0,
+    totalAssets: row.annualTotalAssets ?? row.totalAssets ?? 0,
+    totalLiabilities:
+      row.annualTotalLiabilitiesNetMinorityInterest ??
+      row.totalLiabilitiesNetMinorityInterest ??
+      row.annualTotalLiabilities ??
+      row.totalLiabilities ??
+      0,
+    totalEquity:
+      row.annualStockholdersEquity ??
+      row.stockholdersEquity ??
+      row.annualCommonStockEquity ??
+      row.commonStockEquity ??
+      0,
+    operatingCashFlow,
+    freeCashFlow,
+    totalDebt: row.annualTotalDebt ?? row.totalDebt,
+    cashAndEquivalents: row.annualCashAndCashEquivalents ?? row.cashAndCashEquivalents,
+    sharesOutstanding:
+      row.annualOrdinarySharesNumber ??
+      row.ordinarySharesNumber ??
+      row.annualShareIssued ??
+      row.shareIssued ??
+      row.annualDilutedAverageShares ??
+      row.dilutedAverageShares ??
+      row.annualBasicAverageShares ??
+      row.basicAverageShares,
+  };
+}
+
+function normalizeYahooDate(value: Date | string | number | undefined): string | null {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    const timestampMs = Math.abs(value) < 1_000_000_000_000 ? value * 1000 : value;
+    const date = new Date(timestampMs);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  }
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
 }
 
 function isZeroResultQuote(quote: StockQuote): boolean {
@@ -243,28 +493,65 @@ export async function getFundHoldings(symbol: string): Promise<FundHoldings> {
 }
 
 async function getFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
+  return getYahooQuoteSummary(symbol, "price,topHoldings");
+}
+
+async function getYahooCompanySummary(symbol: string): Promise<YahooQuoteSummaryResult> {
+  const modules = [
+    "price",
+    "assetProfile",
+    "summaryProfile",
+    "summaryDetail",
+    "defaultKeyStatistics",
+    "financialData",
+  ] as const;
   try {
-    return await fetchFundHoldingsSummary(symbol);
+    return (await getYahooFinance2Client().quoteSummary(
+      symbol,
+      { modules: [...modules] },
+      { validateResult: false },
+    )) as YahooQuoteSummaryResult;
   } catch (error) {
-    if (!isYahooAuthError(error)) throw error;
-    return fetchFundHoldingsSummaryWithCrumb(symbol);
+    const data = await getYahooQuoteSummary(symbol, modules.join(","));
+    if (data.quoteSummary.error) {
+      throw new Error(
+        `Yahoo Finance: ${data.quoteSummary.error.description ?? data.quoteSummary.error.code ?? "quoteSummary error"}`,
+      );
+    }
+    return data.quoteSummary.result?.[0] ?? {};
   }
 }
 
-async function fetchFundHoldingsSummary(symbol: string): Promise<YahooQuoteSummaryResponse> {
-  const modules = encodeURIComponent("price,topHoldings");
-  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}`;
+async function getYahooQuoteSummary(
+  symbol: string,
+  modules: string,
+): Promise<YahooQuoteSummaryResponse> {
+  try {
+    return await fetchYahooQuoteSummary(symbol, modules);
+  } catch (error) {
+    if (!isYahooAuthError(error)) throw error;
+    return fetchYahooQuoteSummaryWithCrumb(symbol, modules);
+  }
+}
+
+async function fetchYahooQuoteSummary(
+  symbol: string,
+  modules: string,
+): Promise<YahooQuoteSummaryResponse> {
+  const encodedModules = encodeURIComponent(modules);
+  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${encodedModules}`;
   return httpGet<YahooQuoteSummaryResponse>(url, {
     headers: { "User-Agent": "OpenCandle/1.0" },
   });
 }
 
-async function fetchFundHoldingsSummaryWithCrumb(
+async function fetchYahooQuoteSummaryWithCrumb(
   symbol: string,
+  modules: string,
 ): Promise<YahooQuoteSummaryResponse> {
-  const modules = encodeURIComponent("price,topHoldings");
+  const encodedModules = encodeURIComponent(modules);
   const { crumb, cookie } = await getYahooCrumb();
-  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(crumb)}`;
+  const url = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${encodedModules}&crumb=${encodeURIComponent(crumb)}`;
   try {
     return await httpGet<YahooQuoteSummaryResponse>(url, {
       headers: { "User-Agent": BROWSER_UA, Cookie: cookie },
@@ -273,7 +560,7 @@ async function fetchFundHoldingsSummaryWithCrumb(
     if (!isYahooAuthError(error)) throw error;
     clearCrumbCache();
     const fresh = await getYahooCrumb();
-    const retryUrl = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${modules}&crumb=${encodeURIComponent(fresh.crumb)}`;
+    const retryUrl = `${QUOTE_SUMMARY_URL}/${encodeURIComponent(symbol)}?modules=${encodedModules}&crumb=${encodeURIComponent(fresh.crumb)}`;
     return httpGet<YahooQuoteSummaryResponse>(retryUrl, {
       headers: { "User-Agent": BROWSER_UA, Cookie: fresh.cookie },
     });
@@ -285,9 +572,18 @@ function isYahooAuthError(error: unknown): boolean {
 }
 
 function normalizeHoldingWeight(value: YahooNumber | undefined): number | undefined {
-  const numeric = typeof value === "number" ? value : value?.raw;
+  const numeric = yahooNumber(value);
   if (numeric === undefined || !Number.isFinite(numeric) || numeric <= 0) return undefined;
   return numeric > 1 ? roundWeight(numeric / 100) : roundWeight(numeric);
+}
+
+function yahooNumber(value: YahooNumber | undefined): number | undefined {
+  const numeric = typeof value === "number" ? value : value?.raw;
+  return numeric !== undefined && Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function yahooNullableNumber(value: YahooNumber | undefined): number | null {
+  return yahooNumber(value) ?? null;
 }
 
 function normalizeSectorWeights(
@@ -608,6 +904,7 @@ function parseOptionsResponse(data: YahooOptionsResponse): OptionsChain {
     putCallRatio: totalCallVolume > 0 ? totalPutVolume / totalCallVolume : 0,
     quoteStatus,
     fetchedAt: new Date().toISOString(),
+    asOf: yahooMarketTimeToIso(quote.regularMarketTime),
   };
 }
 
@@ -669,4 +966,19 @@ function toYahooUnixSeconds(value: Date | number | string): number {
     return value > 1_000_000_000_000 ? Math.floor(value / 1000) : value;
   }
   return Math.floor(new Date(value).getTime() / 1000);
+}
+
+function yahooMarketTimeToIso(value: unknown): string | undefined {
+  let date: Date | undefined;
+  if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    date = new Date(value < 10_000_000_000 ? value * 1000 : value);
+  } else if (typeof value === "string" && value.trim() !== "") {
+    const numeric = Number(value);
+    date = Number.isFinite(numeric)
+      ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+      : new Date(value);
+  }
+  return date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }

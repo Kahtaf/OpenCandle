@@ -12,7 +12,7 @@ import { getConfig, loadFileConfig } from "../config.js";
 
 export type ApiKeyProviderId = "alpha_vantage" | "fred" | "finnhub" | "brave" | "exa";
 export type ExternalToolProviderId = "twitter" | "reddit";
-export type PublicHttpProviderId = "yahoo";
+export type PublicHttpProviderId = "polymarket" | "tradingview" | "yahoo";
 export type ProviderId = ApiKeyProviderId | ExternalToolProviderId | PublicHttpProviderId;
 
 export type ProviderCategory =
@@ -200,6 +200,34 @@ export const PROVIDERS = [
     fallbackDescription: null,
     snoozeDurationDays: 7,
     instructionsHint: "No account needed; OpenCandle checks public Yahoo Finance reachability",
+  },
+  {
+    id: "polymarket",
+    kind: "public-http",
+    displayName: "Polymarket",
+    category: "macro",
+    tier: "hard",
+    aliases: ["polymarket", "prediction-markets", "event-probabilities"],
+    probeUrl: "https://gamma-api.polymarket.com/public-search?q=fed%20rate%20cut&limit=1",
+    unlocks: ["market-implied event probabilities", "prediction-market resolution criteria"],
+    fallbackDescription: null,
+    snoozeDurationDays: 7,
+    instructionsHint: "No account needed; OpenCandle checks public Polymarket Gamma reachability",
+  },
+  {
+    id: "tradingview",
+    kind: "public-http",
+    displayName: "TradingView Scanner",
+    category: "market",
+    tier: "soft",
+    aliases: ["tradingview", "tradingview-scanner", "screener"],
+    probeUrl: "https://scanner.tradingview.com/america/scan2?label-product=screener-stock",
+    unlocks: ["stock screens", "ticker search fallback", "watchlist quote fallback"],
+    fallbackDescription:
+      "Core market quote/history tools continue through Yahoo and Alpha Vantage when TradingView scanner is unavailable",
+    snoozeDurationDays: 7,
+    instructionsHint:
+      "No account needed; OpenCandle checks the public TradingView scanner endpoint",
   },
   {
     id: "twitter",

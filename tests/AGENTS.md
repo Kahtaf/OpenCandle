@@ -25,6 +25,8 @@ tests/
 │   ├── prompts/      # Workflow prompt templates
 │   └── onboarding/   # Setup flow
 ├── harness/          # Agent test harness (file-based IPC) → see tests/harness/README.md
+├── evals/            # Agent/session eval cases, scoring, and report helpers
+├── scripts/          # Eval front door and long-running opt-in eval runners
 ├── e2e/              # End-to-end workflow + CLI tests
 ├── integration/      # Cross-module integration tests
 └── fixtures/         # Mock JSON responses
@@ -55,6 +57,14 @@ globalThis.fetch = vi.fn().mockResolvedValue({
 - Unit tests mirror `src/` structure: `tests/unit/<module>/` maps to `src/<module>/`.
 - Mock fetch at `globalThis.fetch` level. Never stub provider internals.
 - Use `:memory:` SQLite for memory/storage tests.
+
+## EVALS AND SCRIPTS
+- Use `npm run eval -- <suite>` as the eval front door. It prints the delegated command/env flags and appends run metadata to `tests/evals/runs/index.jsonl`.
+- Keep suite logic in the existing runner or scorer files; `tests/scripts/run-evals.ts` only dispatches and maps CLI options onto existing env flags.
+- `cases` uses `EVAL_TIER`; `--known-fail e1` and `--known-fail e2` are opt-in usually-tier paths for tracked failures, not default CI coverage.
+- Product eval opt-in cases stay behind `--include-opt-in`. Do not promote a case by editing runner filters; change the case tier intentionally.
+- Use `// PROMOTE:` comments near known-fail or opt-in eval cases when the intended promotion condition is important for future cleanup.
+- Do not commit raw files from `tests/evals/runs/`; `.gitkeep` is the only tracked file there.
 
 ## ANTI-PATTERNS
 - Never write implementation before a failing test.

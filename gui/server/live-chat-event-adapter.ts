@@ -1,6 +1,11 @@
 import type { AssistantMessage, Message } from "@earendil-works/pi-ai";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { ChatEvent, MessageContent, ToolOutput } from "../shared/chat-events.js";
+import type {
+  ChatEvent,
+  MessageAttachmentChip,
+  MessageContent,
+  ToolOutput,
+} from "../shared/chat-events.js";
 
 export interface LiveChatEventAdapterOptions {
   runId: string;
@@ -12,6 +17,7 @@ export interface LiveChatEventAdapterOptions {
    * message with an expanded prompt; the live view renders this instead.
    */
   originalPrompt?: string;
+  originalAttachments?: MessageAttachmentChip[];
 }
 
 export interface LiveChatEventAdapter {
@@ -77,7 +83,12 @@ export function createLiveChatEventAdapter(
               type: "message.completed",
               runId: options.runId,
               messageId,
-              content: [{ type: "text", text }],
+              content: userMessageContent(message.content, text),
+              ...(userCount === 1 &&
+              options.originalAttachments &&
+              options.originalAttachments.length > 0
+                ? { attachments: options.originalAttachments }
+                : {}),
             });
             return;
           }
@@ -190,6 +201,30 @@ function messageText(content: unknown): string {
         : "",
     )
     .join("");
+}
+
+function userMessageContent(content: unknown, text: string): MessageContent[] {
+  const parts: MessageContent[] = [{ type: "text", text }];
+  if (!Array.isArray(content)) return parts;
+  for (const part of content) {
+    const record = asRecord(part);
+    if (record.type !== "image") continue;
+    const alt = typeof record.alt === "string" ? record.alt : undefined;
+    if (typeof record.url === "string") {
+      parts.push({ type: "image", url: record.url, alt });
+      continue;
+    }
+    if (typeof record.data === "string" && typeof record.mimeType === "string") {
+      parts.push({
+        type: "image",
+        url: `data:${record.mimeType};base64,${record.data}`,
+        data: record.data,
+        mimeType: record.mimeType,
+        alt,
+      });
+    }
+  }
+  return parts;
 }
 
 function toolOutput(result: unknown, isError: boolean): ToolOutput {

@@ -134,6 +134,72 @@ describe("live chat event adapter", () => {
     });
   });
 
+  it("renders attachment chips on the first live user message", () => {
+    const events: ChatEvent[] = [];
+    const adapter = createLiveChatEventAdapter({
+      runId: "run-1",
+      sessionId: "session-1",
+      startSeq: 1,
+      emit: (event) => events.push(event),
+      originalPrompt: "am I too concentrated?",
+      originalAttachments: [{ kind: "portfolio", label: "Portfolio" }],
+    });
+
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: {
+          role: "user",
+          content: "am I too concentrated?\n\n[Attached by user — portfolio]\nPortfolio lots:",
+          timestamp: Date.now(),
+        },
+      }),
+    );
+
+    expect(events.find((event) => event.type === "message.completed")).toMatchObject({
+      content: [{ type: "text", text: "am I too concentrated?" }],
+      attachments: [{ kind: "portfolio", label: "Portfolio" }],
+    });
+  });
+
+  it("keeps live user image thumbnails beside the typed prompt", () => {
+    const events: ChatEvent[] = [];
+    const adapter = createLiveChatEventAdapter({
+      runId: "run-1",
+      sessionId: "session-1",
+      startSeq: 1,
+      emit: (event) => events.push(event),
+      originalPrompt: "What does this chart show?",
+    });
+
+    adapter.handle(
+      agentEvent({
+        type: "message_start",
+        message: {
+          role: "user",
+          content: [
+            { type: "text", text: "What does this chart show?" },
+            { type: "image", data: "base64", mimeType: "image/png", alt: "chart.png" },
+          ],
+          timestamp: Date.now(),
+        },
+      }),
+    );
+
+    expect(events.find((event) => event.type === "message.completed")).toMatchObject({
+      content: [
+        { type: "text", text: "What does this chart show?" },
+        {
+          type: "image",
+          url: "data:image/png;base64,base64",
+          data: "base64",
+          mimeType: "image/png",
+          alt: "chart.png",
+        },
+      ],
+    });
+  });
+
   it("emits compact thinking events from Pi reasoning deltas", () => {
     const events: ChatEvent[] = [];
     const adapter = createLiveChatEventAdapter({

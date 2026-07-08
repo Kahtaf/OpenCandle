@@ -505,7 +505,20 @@ describe("SessionCoordinator workflow runtime ownership", () => {
           emit("tool_execution_end", {
             toolCallId: "tc-live",
             toolName: "get_stock_quote",
-            result: { symbol: "NVDA", price: 123 },
+            result: {
+              content: [{ type: "text", text: "NVDA quote" }],
+              details: {
+                symbol: "NVDA",
+                price: 123,
+                freshness: {
+                  fetchedAt: "2026-07-05T19:00:00.000Z",
+                  providerDataAt: "2026-07-02T20:00:00.000Z",
+                  cacheStatus: "live",
+                  marketSession: "closed_weekend",
+                  isStaleForSession: false,
+                },
+              },
+            },
             isError: false,
           });
           emit("message_update", {
@@ -535,10 +548,20 @@ describe("SessionCoordinator workflow runtime ownership", () => {
       value: {
         tool: "get_stock_quote",
         args: '{"symbol":"NVDA"}',
-        resultDigest: {
-          preview: '{"symbol":"NVDA","price":123}',
-          totalLength: 29,
+        freshness: {
+          fetchedAt: "2026-07-05T19:00:00.000Z",
+          providerDataAt: "2026-07-02T20:00:00.000Z",
+          cacheStatus: "live",
+          marketSession: "closed_weekend",
+          isStaleForSession: false,
         },
+        resultDigest: {
+          preview: expect.stringContaining('"symbol":"NVDA"'),
+          totalLength: expect.any(Number),
+        },
+      },
+      provenance: {
+        timestamp: "2026-07-02T20:00:00.000Z",
       },
     });
     expect(output?.analystOutput?.signal).toBe("BUY");
@@ -553,9 +576,16 @@ describe("SessionCoordinator workflow runtime ownership", () => {
         expect.objectContaining({
           tool: "get_stock_quote",
           args: '{"symbol":"NVDA"}',
+          freshness: {
+            fetchedAt: "2026-07-05T19:00:00.000Z",
+            providerDataAt: "2026-07-02T20:00:00.000Z",
+            cacheStatus: "live",
+            marketSession: "closed_weekend",
+            isStaleForSession: false,
+          },
           resultDigest: {
-            preview: '{"symbol":"NVDA","price":123}',
-            totalLength: 29,
+            preview: expect.stringContaining('"symbol":"NVDA"'),
+            totalLength: expect.any(Number),
           },
         }),
       ],

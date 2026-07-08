@@ -4,6 +4,7 @@ export { FRED_SERIES } from "./macro.js";
 export type { CryptoPrice, OHLCV, StockQuote } from "./market.js";
 export type { Greeks, OptionContract, OptionsChain } from "./options.js";
 export type { PortfolioSummary, Position, RiskMetrics, TechnicalIndicators } from "./portfolio.js";
+export type { PredictionMarketQuote } from "./prediction-markets.js";
 export type {
   FearGreedData,
   RedditSentimentResult,

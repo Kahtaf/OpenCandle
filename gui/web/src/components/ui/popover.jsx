@@ -122,6 +122,10 @@ export const PopoverContent = forwardRef(function PopoverContent(
   );
 });
 
-export function PopoverAnchor({ children, className }) {
-  return <div className={cn("relative inline-block", className)}>{children}</div>;
+export function PopoverAnchor({ children, className, style }) {
+  return (
+    <div className={cn("relative inline-block", className)} style={style}>
+      {children}
+    </div>
+  );
 }

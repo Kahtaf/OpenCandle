@@ -450,7 +450,7 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
       summary: ok ? "Reachable" : `Not reachable (${status.state})`,
       remediation: ok
         ? undefined
-        : "Check network connectivity and retry. Core quote and market-data workflows depend on Yahoo Finance reachability.",
+        : `Check network connectivity and retry. OpenCandle uses ${provider.displayName} through a public HTTP endpoint.`,
       metadata: { ...metadata, statusCode: status.statusCode ?? null },
     };
   }

@@ -1,7 +1,21 @@
-import { ArrowUp, BarChart3, Plus, Square } from "lucide-react";
+import { ArrowUp, Eye, Square } from "lucide-react";
+import { useRef, useState } from "react";
+import { AttachMenu, PendingAttachmentRail } from "../../features/chat/attach-menu.jsx";
+import {
+  attachmentsFromImageFiles,
+  imageFilesFromClipboardData,
+  validateImageFiles,
+} from "../../features/chat/attachments.js";
+import {
+  CashtagAutocomplete,
+  useCashtagAutocomplete,
+} from "../../features/chat/cashtag-autocomplete.jsx";
+import { insertAcceptedCashtag } from "../../features/chat/cashtag-autocomplete-helpers.js";
 import { ModelSelector } from "../../features/chat/model-selector.jsx";
 import { Button } from "../ui/button.jsx";
 import { Textarea } from "../ui/textarea.jsx";
+
+const EMPTY_ATTACHMENTS = [];
 
 export function ChatComposer({
   draft,
@@ -19,21 +33,79 @@ export function ChatComposer({
   role,
   send,
   setToast,
+  pendingAttachments = EMPTY_ATTACHMENTS,
+  onAddAttachment,
+  onRemoveAttachment,
 }) {
+  const imageCount = pendingAttachments.filter((attachment) => attachment.kind === "image").length;
+  const textareaRef = useRef(null);
+  const [caretIndex, setCaretIndex] = useState(0);
+  const updateCaret = (target) => {
+    if (target && typeof target.selectionStart === "number") setCaretIndex(target.selectionStart);
+  };
+
+  async function onPaste(event) {
+    if (disabled) return;
+    const files = imageFilesFromClipboardData(event.clipboardData);
+    if (files.length === 0) return;
+    event.preventDefault();
+    const errors = validateImageFiles(files, imageCount);
+    if (errors.length > 0) {
+      setToast?.(errors[0], { destructive: true });
+      return;
+    }
+    for (const attachment of await attachmentsFromImageFiles(files)) {
+      onAddAttachment?.(attachment);
+    }
+    setToast?.(files.length === 1 ? "Pasted image attached." : `Pasted ${files.length} images.`);
+  }
+
+  const autocomplete = useCashtagAutocomplete({
+    text: draft,
+    caretIndex,
+    disabled,
+    onAccept: (symbol, match) => {
+      const next = insertAcceptedCashtag(draft, match, symbol);
+      setDraft(next.text);
+      setCaretIndex(next.caretIndex);
+      window.requestAnimationFrame(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(next.caretIndex, next.caretIndex);
+      });
+    },
+  });
+
   return (
     <div className="bg-background px-3 pb-4 pt-2 sm:px-6 md:px-12">
-      <div className="mx-auto w-full max-w-[760px] rounded-2xl border border-border bg-card shadow-subtle-xs">
+      <div className="relative mx-auto w-full max-w-[760px] rounded-2xl border border-border bg-card shadow-subtle-xs">
+        <CashtagAutocomplete controller={autocomplete} />
         <label className="sr-only" htmlFor="chat-composer">
           Message OpenCandle
         </label>
+        <PendingAttachmentRail
+          attachments={pendingAttachments}
+          onRemoveAttachment={onRemoveAttachment}
+        />
         <Textarea
+          ref={textareaRef}
           id="chat-composer"
           value={draft}
           disabled={disabled}
           placeholder={placeholder}
           className="min-h-[60px] rounded-2xl rounded-b-none px-4 py-3"
-          onChange={(event) => setDraft(event.target.value)}
+          aria-controls={autocomplete.open ? "cashtag-autocomplete-list" : undefined}
+          aria-autocomplete="list"
+          onChange={(event) => {
+            setDraft(event.target.value);
+            updateCaret(event.target);
+          }}
+          onPaste={onPaste}
+          onClick={(event) => updateCaret(event.currentTarget)}
+          onKeyUp={(event) => updateCaret(event.currentTarget)}
           onKeyDown={(event) => {
+            if (autocomplete.handleKeyDown(event)) return;
             if (
               event.key === "/" &&
               !event.metaKey &&
@@ -60,27 +132,23 @@ export function ChatComposer({
             disabled={disabled}
           />
           <div className="ml-1 flex items-center">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              rounded="full"
-              tooltip="Catalog"
-              aria-label="Open catalog"
-              onClick={() => onOpenCatalog?.()}
+            <AttachMenu
               disabled={disabled}
-            >
-              <Plus />
-            </Button>
+              pendingAttachments={pendingAttachments}
+              onAddAttachment={onAddAttachment}
+              onRemoveAttachment={onRemoveAttachment}
+              setToast={setToast}
+            />
             <Button
               variant="ghost"
               size="icon-sm"
               rounded="full"
-              tooltip="Context"
-              aria-label="Open context"
+              tooltip="What the agent sees"
+              aria-label="What the agent sees"
               onClick={() => onOpenContext?.()}
               disabled={disabled}
             >
-              <BarChart3 />
+              <Eye />
             </Button>
           </div>
           <div className="ml-auto">

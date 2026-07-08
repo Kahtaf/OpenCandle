@@ -15,7 +15,7 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Crypto | `get_crypto_price`, `get_crypto_history` | CoinGecko |
 | Options | `get_option_chain` with Greeks computed inside the result | Yahoo Finance plus local calculations |
 | Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage |
-| Macro | `get_economic_data`, `get_fear_greed` | FRED, alternative.me crypto Fear & Greed |
+| Macro | `get_economic_data`, `get_event_probabilities`, `get_fear_greed` | FRED, [Polymarket](https://polymarket.com) Gamma API, alternative.me crypto Fear & Greed |
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
 | Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, DuckDuckGo, Brave, Exa |
 | Filings | `get_sec_filings` | SEC EDGAR |
@@ -27,6 +27,7 @@ Keyless by default:
 
 - [Yahoo Finance](https://finance.yahoo.com)
 - [TradingView](https://www.tradingview.com) scanner (unofficial, delayed scanner endpoint; used read-only and batch-first)
+- [Polymarket](https://polymarket.com) Gamma API for read-only prediction-market probabilities and resolution criteria
 - [CoinGecko](https://www.coingecko.com)
 - [SEC EDGAR](https://www.sec.gov/edgar/search/)
 - [DuckDuckGo](https://duckduckgo.com) search
@@ -56,6 +57,10 @@ External provider calls go through OpenCandle's shared cache and rate limiter. W
 - Circuit breakers avoid repeatedly calling failing providers.
 
 TradingView scanner data is keyless but unofficial and can be delayed by about 15 minutes. `screen_stocks` is intended for broad filtered scans such as market movers, oversold lists, or large-cap screens; single-security quotes, history, options, and company analysis use the Yahoo-backed quote/history tools and the fundamentals/options workflow tools. Watchlist checks use TradingView batch quotes for equity-like symbols and fill unresolved or unsupported symbols through Yahoo.
+
+Polymarket probabilities are market-implied prices from a crypto-settled venue, not calibrated forecasts. `get_event_probabilities` reports the market question, per-outcome probability, volume/liquidity, close date, and the market's resolution criteria so the model can compare the market wording with the user's question.
+
+Kalshi is intentionally deferred. Its market-data API has attractive macro contracts, but the Kalshi Data Terms prohibit feeding the data to an AI/ML system and providing cached data sets without prior written consent. Do not add a Kalshi provider until the maintainer records written clearance or a legal review that clears OpenCandle's AI-ingestion and cache usage.
 
 ## Local State
 

@@ -1,5 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
+import { buildFreshnessStamp, type FreshnessStamp, formatAsOfLine } from "../../infra/freshness.js";
 import { getCryptoPrice } from "../../providers/coingecko.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
 import type { CryptoPrice } from "../../types/market.js";
@@ -10,7 +11,10 @@ const params = Type.Object({
   }),
 });
 
-export const cryptoPriceTool: AgentTool<typeof params, CryptoPrice> = {
+export const cryptoPriceTool: AgentTool<
+  typeof params,
+  CryptoPrice & { freshness: FreshnessStamp }
+> = {
   name: "get_crypto_price",
   label: "Crypto Price",
   description: "Get current crypto price, 24h change, market cap, volume, ATH, and supply data",
@@ -26,6 +30,13 @@ export const cryptoPriceTool: AgentTool<typeof params, CryptoPrice> = {
       };
     }
     const crypto = result.data;
+    const freshness = buildFreshnessStamp({
+      asOf: crypto.asOf,
+      cached: result.cached,
+      stale: result.stale,
+      cachedAt: result.cached || result.stale ? result.timestamp : undefined,
+      assetClass: "crypto",
+    });
     const sign = crypto.changePercent24h >= 0 ? "+" : "";
     const text = [
       `${crypto.name} (${crypto.symbol.toUpperCase()}): $${formatPrice(crypto.price)} (${sign}${crypto.changePercent24h.toFixed(2)}%)`,
@@ -33,9 +44,10 @@ export const cryptoPriceTool: AgentTool<typeof params, CryptoPrice> = {
       `Market Cap: $${formatLargeNumber(crypto.marketCap)} | 24h Volume: $${formatLargeNumber(crypto.volume24h)}`,
       `ATH: $${formatPrice(crypto.ath)} (${crypto.athDate.split("T")[0]})`,
       `Circulating: ${formatLargeNumber(crypto.circulatingSupply)} ${crypto.symbol.toUpperCase()}`,
+      formatAsOfLine(freshness),
     ].join("\n");
 
-    return { content: [{ type: "text", text }], details: crypto };
+    return { content: [{ type: "text", text }], details: { ...crypto, freshness } };
   },
 };
 

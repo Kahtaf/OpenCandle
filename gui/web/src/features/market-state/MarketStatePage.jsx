@@ -4,8 +4,15 @@ import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Textarea } from "../../components/ui/textarea.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
-import { searchInstruments, useMarketState } from "../../hooks/useMarketState.jsx";
+import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
+import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
+import {
+  clampInstrumentActiveIndex,
+  instrumentSuggestionOptionId,
+  nextInstrumentActiveIndex,
+} from "../instruments/instrument-search-helpers.js";
+import { useInstrumentSearch } from "../instruments/use-instrument-search.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
 import { quoteFreshness } from "./format.js";
@@ -584,12 +591,20 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
 export function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
   const inputId = useId();
   const listboxId = useId();
-  const [candidates, setCandidates] = useState([]);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const { candidates, setCandidates, activeIndex, setActiveIndex } = useInstrumentSearch({
+    query,
+    enabled: query.trim().length >= 2 && !selected,
+    minLength: 2,
+    limit: 5,
+    debounceMs: 180,
+    initialActiveIndex: -1,
+  });
   const visibleCandidates = query.trim().length >= 2 && !selected ? candidates : [];
-  const clampedActiveIndex = clampComboboxActiveIndex(activeIndex, visibleCandidates.length);
+  const clampedActiveIndex = clampInstrumentActiveIndex(activeIndex, visibleCandidates.length);
   const activeCandidate = clampedActiveIndex >= 0 ? visibleCandidates[clampedActiveIndex] : null;
-  const activeOptionId = activeCandidate ? `${listboxId}-option-${clampedActiveIndex}` : undefined;
+  const activeOptionId = activeCandidate
+    ? instrumentSuggestionOptionId(listboxId, clampedActiveIndex)
+    : undefined;
 
   const selectCandidate = (candidate) => {
     onSelectedChange(candidate.symbol);
@@ -597,24 +612,6 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
     setCandidates([]);
     setActiveIndex(-1);
   };
-
-  useEffect(() => {
-    if (query.trim().length < 2 || selected) return undefined;
-    let disposed = false;
-    const timer = window.setTimeout(() => {
-      searchInstruments(query)
-        .then((items) => {
-          if (!disposed) setCandidates(items.slice(0, 5));
-        })
-        .catch(() => {
-          if (!disposed) setCandidates([]);
-        });
-    }, 180);
-    return () => {
-      disposed = true;
-      window.clearTimeout(timer);
-    };
-  }, [query, selected]);
 
   return (
     <div className="relative">
@@ -641,13 +638,13 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
             event.preventDefault();
             if (visibleCandidates.length === 0) return;
             setActiveIndex((index) =>
-              nextComboboxActiveIndex(index, visibleCandidates.length, "next"),
+              nextInstrumentActiveIndex(index, visibleCandidates.length, "next"),
             );
           } else if (event.key === "ArrowUp") {
             event.preventDefault();
             if (visibleCandidates.length === 0) return;
             setActiveIndex((index) =>
-              nextComboboxActiveIndex(index, visibleCandidates.length, "previous"),
+              nextInstrumentActiveIndex(index, visibleCandidates.length, "previous"),
             );
           } else if (event.key === "Enter" && activeCandidate) {
             event.preventDefault();
@@ -666,51 +663,23 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
         }}
       />
       {visibleCandidates.length ? (
-        <div
+        <InstrumentSuggestionList
           id={listboxId}
-          role="listbox"
-          aria-label="Ticker suggestions"
+          optionIdPrefix={listboxId}
+          candidates={visibleCandidates}
+          activeIndex={clampedActiveIndex}
           className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-subtle-md"
-        >
-          {visibleCandidates.map((candidate, index) => (
-            <button
-              key={`${candidate.provider}:${candidate.symbol}:${candidate.exchange}`}
-              id={`${listboxId}-option-${index}`}
-              type="button"
-              role="option"
-              aria-selected={index === clampedActiveIndex}
-              className={cn(
-                "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-secondary",
-                index === clampedActiveIndex && "bg-secondary",
-              )}
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setActiveIndex(index)}
-              onClick={() => selectCandidate(candidate)}
-            >
-              <span className="font-medium text-foreground">{candidate.symbol}</span>
-              <span className="truncate text-muted-foreground">
-                {candidate.name || candidate.quoteType}
-              </span>
-            </button>
-          ))}
-        </div>
+          rowClassName="text-xs"
+          onActiveIndexChange={setActiveIndex}
+          onSelect={selectCandidate}
+        />
       ) : null}
     </div>
   );
 }
 
-export function clampComboboxActiveIndex(activeIndex, candidateCount) {
-  if (candidateCount <= 0) return -1;
-  if (activeIndex < 0) return -1;
-  return Math.min(activeIndex, candidateCount - 1);
-}
-
-export function nextComboboxActiveIndex(activeIndex, candidateCount, direction) {
-  if (candidateCount <= 0) return -1;
-  const current = clampComboboxActiveIndex(activeIndex, candidateCount);
-  if (direction === "next") return (current + 1) % candidateCount;
-  return current <= 0 ? candidateCount - 1 : current - 1;
-}
+export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
+export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
 
 export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
   const [draft, setDraft] = useState({

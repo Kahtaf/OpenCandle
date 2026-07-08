@@ -16,6 +16,7 @@ import type { ChatEvent } from "../shared/chat-events.js";
 import type { BackgroundQuoteRefreshes } from "./background-quotes.js";
 import { sessionEntriesToChatEvents } from "./chat-event-adapter.js";
 import type { ToolInvokeController } from "./invoke-tool.js";
+import { getSavedMarketStateSymbols } from "./market-state-api.js";
 import type { ModelSetupController } from "./model-setup.js";
 import { projectDashboard } from "./projector.js";
 import type { SessionActionsController } from "./session-actions.js";
@@ -284,7 +285,11 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
-      state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
+      state: projectDashboard(
+        backgroundQuoteRefreshes.withEntries(entries),
+        sessionId,
+        getSavedMarketStateSymbols(),
+      ),
       entries,
       events: currentChatEvents(entries),
       // Ownership can change mid-run (e.g. a TUI takes over the session), so
@@ -298,7 +303,11 @@ export function createWsHub({
     const entries = sessionManager.getEntries();
     return {
       sessionId,
-      state: projectDashboard(backgroundQuoteRefreshes.withEntries(entries), sessionId),
+      state: projectDashboard(
+        backgroundQuoteRefreshes.withEntries(entries),
+        sessionId,
+        getSavedMarketStateSymbols(),
+      ),
       entries,
       events: sessionEntriesToChatEvents(entries, {
         sessionId,

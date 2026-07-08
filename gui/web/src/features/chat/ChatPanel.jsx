@@ -13,15 +13,25 @@ import { Input } from "../../components/ui/input.jsx";
 import { Skeleton } from "../../components/ui/skeleton.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
+import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { ModelSetupCard } from "../onboarding/ModelSetupCard.jsx";
 import { ToolResultCard } from "../renderers/ToolResultCard.jsx";
+import { attachmentsForOptimisticMessage, attachmentsForRequest } from "./attachments.js";
 import { chatRowsFromEvents } from "./chat-rows.js";
+import { EntityPopover } from "./entity-popover.jsx";
+import { collectSessionMarketFacts, enrichGroupedRows } from "./session-market-facts.js";
 import { StepsCard } from "./steps-card.jsx";
 import { useToolDrawer } from "./tool-drawer-context.jsx";
 import { groupToolRuns } from "./tool-run-grouper.js";
+import { useSymbolResolution } from "./use-symbol-resolution.js";
 
+const EMPTY_KNOWN_SYMBOLS = [];
+
+// React Doctor still flags this pre-existing shell as a giant component. New
+// async symbol-resolution state lives in a hook while the broader split remains
+// outside this review-focused change.
 export function ChatPanel({
   events = [],
   liveEvents = [],
@@ -35,6 +45,7 @@ export function ChatPanel({
   send,
   startChatRun,
   stopRun,
+  invokeTool,
   setToast,
   draft: draftProp,
   setDraft: setDraftProp,
@@ -46,19 +57,36 @@ export function ChatPanel({
   onExpandSidebar,
   sessionId = "",
   scrollAnchorId = "",
+  dashboard,
 }) {
   // Allow App.jsx to lift draft state for cross-component pre-fill (e.g. catalog "Send to chat").
   // Falls back to local state when used standalone (older callers, tests).
   const [localDraft, setLocalDraft] = useState("");
+  const [pendingAttachmentState, setPendingAttachmentState] = useState({
+    sessionId,
+    attachments: [],
+  });
   const [allowToolAutoOpen, setAllowToolAutoOpen] = useState(false);
+  const [selectedSymbol, setSelectedSymbol] = useState("");
+  const [selectedSymbolAnchor, setSelectedSymbolAnchor] = useState(null);
+  const symbolResolution = useSymbolResolution(selectedSymbol);
   const draft = draftProp !== undefined ? draftProp : localDraft;
   const setDraft = setDraftProp ?? setLocalDraft;
+  const marketState = useMarketState();
   const liveState = useMemo(() => reduceChatEvents(liveEvents), [liveEvents]);
   const visibleRows = useMemo(
     () => chatRowsFromEvents(events, liveEvents, sessionId),
     [events, liveEvents, sessionId],
   );
-  const groupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
+  const rawGroupedRows = useMemo(() => groupToolRuns(visibleRows), [visibleRows]);
+  const sessionMarketFacts = useMemo(
+    () => collectSessionMarketFacts(rawGroupedRows),
+    [rawGroupedRows],
+  );
+  const groupedRows = useMemo(
+    () => enrichGroupedRows(rawGroupedRows, sessionMarketFacts),
+    [rawGroupedRows, sessionMarketFacts],
+  );
   const activity = useMemo(() => buildAgentActivity(liveState, runState), [liveState, runState]);
   const hasAskUserPrompts = askUserPrompts.length > 0;
   const autoOpenRunId = useMemo(() => {
@@ -79,6 +107,49 @@ export function ChatPanel({
     drawerOpen: drawerOpenForSession,
   });
   const rowAnchorId = scrollAnchorId || latestUserRowIdFromRows(groupedRows);
+  const knownSymbols = useMemo(
+    () => (Array.isArray(dashboard?.knownSymbols) ? dashboard.knownSymbols : []),
+    [dashboard?.knownSymbols],
+  );
+
+  const onTranscriptClick = useCallback((event) => {
+    const chip = event.target?.closest?.("[data-symbol]");
+    const symbol = chip?.getAttribute?.("data-symbol");
+    if (!symbol) return;
+    event.preventDefault();
+    const rect = chip.getBoundingClientRect?.();
+    setSelectedSymbolAnchor(rect ? rectToPlainObject(rect) : null);
+    setSelectedSymbol(symbol.toUpperCase());
+  }, []);
+
+  const addSelectedToWatchlist = useCallback(
+    async (symbol) => {
+      if (!symbol || !invokeTool) return;
+      const saved = await invokeTool("manage_watchlist", { action: "add", symbol });
+      if (saved) {
+        await marketState.refresh();
+        await marketState.refreshQuotes();
+        setSelectedSymbol("");
+      }
+    },
+    [invokeTool, marketState],
+  );
+
+  const askAboutSymbol = useCallback(
+    (symbol) => {
+      const text = `$${symbol} `;
+      setDraft(text);
+      setSelectedSymbol("");
+      window.setTimeout(() => {
+        const composer = document.getElementById("chat-composer");
+        composer?.focus?.();
+        if (composer instanceof HTMLTextAreaElement) {
+          composer.setSelectionRange(text.length, text.length);
+        }
+      }, 0);
+    },
+    [setDraft],
+  );
   // Keep the open drawer in sync as the active run streams in new steps.
   useEffect(() => {
     if (!drawer.run) return;
@@ -108,6 +179,8 @@ export function ChatPanel({
   const composerDisabled = inputDisabled;
   const chatDisabled = composerDisabled || needsSetup;
   const canStopRun = runState === "connecting" || runState === "streaming";
+  const pendingAttachments =
+    pendingAttachmentState.sessionId === sessionId ? pendingAttachmentState.attachments : [];
 
   const submit = (value = draft) => {
     const prompt = String(value || "").trim();
@@ -119,8 +192,37 @@ export function ChatPanel({
     if (chatDisabled) return;
     setAllowToolAutoOpen(true);
     setDraft("");
-    void startChatRun(prompt);
+    const attachments = pendingAttachments;
+    setPendingAttachmentState({ sessionId, attachments: [] });
+    void startChatRun(prompt, {
+      ...attachmentsForRequest(attachments),
+      optimisticAttachments: attachmentsForOptimisticMessage(attachments),
+    });
   };
+
+  const addAttachment = useCallback(
+    (attachment) => {
+      setPendingAttachmentState((current) => ({
+        sessionId,
+        attachments:
+          current.sessionId === sessionId ? [...current.attachments, attachment] : [attachment],
+      }));
+    },
+    [sessionId],
+  );
+
+  const removeAttachment = useCallback(
+    (index) => {
+      setPendingAttachmentState((current) => ({
+        sessionId,
+        attachments:
+          current.sessionId === sessionId
+            ? current.attachments.filter((_, itemIndex) => itemIndex !== index)
+            : [],
+      }));
+    },
+    [sessionId],
+  );
 
   const stop = () => {
     if (!canStopRun) return;
@@ -150,6 +252,7 @@ export function ChatPanel({
           onMouseDown={transcript.onReaderIntent}
           onTouchStart={transcript.onReaderIntent}
           onKeyDown={transcript.onReaderIntent}
+          onClick={onTranscriptClick}
         >
           {needsSetup ? (
             <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
@@ -171,6 +274,7 @@ export function ChatPanel({
                   autoOpenToolRun={entry.id === autoOpenRunId}
                   anchorRowId={rowAnchorId}
                   anchorRef={transcript.anchorRowRef}
+                  knownSymbols={knownSymbols}
                 />
               ))}
               {askUserPrompts.map((prompt) => (
@@ -195,6 +299,24 @@ export function ChatPanel({
           </Button>
         ) : null}
       </div>
+      <EntityPopover
+        open={Boolean(selectedSymbol)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedSymbol("");
+            setSelectedSymbolAnchor(null);
+          }
+        }}
+        symbol={selectedSymbol}
+        marketState={marketState.state}
+        sessionMarketFacts={sessionMarketFacts}
+        anchorRect={selectedSymbolAnchor}
+        resolvedCandidate={symbolResolution.candidate}
+        resolutionError={symbolResolution.error}
+        resolving={symbolResolution.resolving}
+        onAddToWatchlist={addSelectedToWatchlist}
+        onAskAbout={askAboutSymbol}
+      />
       <ChatComposer
         draft={draft}
         setDraft={setDraft}
@@ -211,9 +333,23 @@ export function ChatPanel({
         role={role}
         send={send}
         setToast={setToast}
+        pendingAttachments={pendingAttachments}
+        onAddAttachment={addAttachment}
+        onRemoveAttachment={removeAttachment}
       />
     </section>
   );
+}
+
+function rectToPlainObject(rect) {
+  return {
+    left: rect.left,
+    right: rect.right,
+    top: rect.top,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height,
+  };
 }
 
 function useTranscriptScroller({ rows, sessionId, scrollAnchorId, drawerOpen }) {
@@ -588,7 +724,14 @@ function AgentActivity({ activity }) {
   );
 }
 
-function MessageRow({ entry, catalog, autoOpenToolRun = false, anchorRowId = "", anchorRef }) {
+function MessageRow({
+  entry,
+  catalog,
+  autoOpenToolRun = false,
+  anchorRowId = "",
+  anchorRef,
+  knownSymbols = EMPTY_KNOWN_SYMBOLS,
+}) {
   const messageId =
     entry.messageId || (String(entry.id || "").startsWith("message-") ? entry.id.slice(8) : "");
   const isAnchorRow =
@@ -605,23 +748,41 @@ function MessageRow({ entry, catalog, autoOpenToolRun = false, anchorRowId = "",
       data-scroll-anchor={entry.type === "user_message" ? "true" : undefined}
       className="min-w-0 scroll-mt-6"
     >
-      <MessageRowContent entry={entry} catalog={catalog} autoOpenToolRun={autoOpenToolRun} />
+      <MessageRowContent
+        entry={entry}
+        catalog={catalog}
+        autoOpenToolRun={autoOpenToolRun}
+        knownSymbols={knownSymbols}
+      />
     </div>
   );
   return row;
 }
 
-function MessageRowContent({ entry, catalog, autoOpenToolRun = false }) {
+function MessageRowContent({
+  entry,
+  catalog,
+  autoOpenToolRun = false,
+  knownSymbols = EMPTY_KNOWN_SYMBOLS,
+}) {
   if (entry.type === "tool_run") {
     return <StepsCard run={entry} autoOpen={autoOpenToolRun} />;
   }
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;
   }
-  if (entry.type === "user_message") return <UserMessage content={entry.content} />;
+  if (entry.type === "user_message")
+    return (
+      <UserMessage
+        content={entry.content}
+        attachments={entry.attachments}
+        knownSymbols={knownSymbols}
+      />
+    );
   if (entry.type === "tool_result")
     return <ToolResultCard message={entry.message} catalog={catalog} />;
-  if (entry.type === "assistant_message") return <AssistantMessage content={entry.content} />;
+  if (entry.type === "assistant_message")
+    return <AssistantMessage content={entry.content} knownSymbols={knownSymbols} />;
   return (
     <div className="rounded-lg border border-border bg-card p-4 text-sm">
       {JSON.stringify(entry)}

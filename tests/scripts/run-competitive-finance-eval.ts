@@ -50,6 +50,7 @@ import {
   resolveRequestAuthWithEnvApiKeyFallback,
   selectCliFailureMessage,
   selectCompetitiveCodexModel,
+  selectCompetitiveGeminiBaseline,
   selectDefaultCompetitiveModel,
   shouldRetryCompetitiveModelCall,
 } from "../evals/competitive-finance.js";
@@ -79,7 +80,7 @@ interface CompetitorRunner {
   label: string;
   provider: string;
   model: string;
-  run(prompt: string, options?: CompetitorRunOptions): CompetitorRunResult;
+  run(prompt: string, options?: CompetitorRunOptions): Promise<CompetitorRunResult>;
 }
 
 interface CompetitorRunResult {
@@ -183,7 +184,7 @@ const competitorsNeedingLiveRun = allCompetitors.filter((competitor) =>
       (prompt) => !findCachedCompetitorAnswer(competitorAnswerCache, prompt.prompt, competitor.id),
     ),
 );
-const preflight = preflightCompetitors(competitorsNeedingLiveRun);
+const preflight = await preflightCompetitors(competitorsNeedingLiveRun);
 const activeLiveCompetitors = new Map(
   preflight.active.map((competitor) => [competitor.id, competitor]),
 );
@@ -218,7 +219,7 @@ for (const prompt of prompts.slice(0, promptCount)) {
     if (!activeLiveCompetitors.has(competitor.id)) continue;
     console.log(`--- ${competitor.label} baseline (${competitor.provider}/${competitor.model})`);
     try {
-      const result = competitor.run(
+      const result = await competitor.run(
         buildGenericAgentPrompt(prompt.prompt, {
           agentName: competitor.label,
           asOfDate,
@@ -426,10 +427,10 @@ async function runOpenCandle(prompt: string): Promise<EvalTrace> {
   return result.evalTrace;
 }
 
-function preflightCompetitors(competitors: CompetitorRunner[]): {
+async function preflightCompetitors(competitors: CompetitorRunner[]): Promise<{
   active: CompetitorRunner[];
   skipped: Array<{ id: string; label: string; reason: string }>;
-} {
+}> {
   if (process.env.OPENCANDLE_COMPETITIVE_PREFLIGHT === "0") {
     return { active: competitors, skipped: [] };
   }
@@ -440,7 +441,7 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
       `Preflight ${competitor.label} baseline (${competitor.provider}/${competitor.model})`,
     );
     try {
-      const result = competitor.run("Reply exactly: OK", {
+      const result = await competitor.run("Reply exactly: OK", {
         timeout: competitivePreflightTimeoutMs(process.env),
       });
       if (!result.answer.trim()) {
@@ -459,18 +460,37 @@ function preflightCompetitors(competitors: CompetitorRunner[]): {
   return { active, skipped };
 }
 
-function runClaudeAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
+async function runClaudeAcp(
+  prompt: string,
+  options: CompetitorRunOptions = {},
+): Promise<CompetitorRunResult> {
   const answer = runAcpx("claude", prompt, options);
   return { answer, provider: "acpx/claude", model: "subscription" };
 }
 
-function runCodexAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
+async function runCodexAcp(
+  prompt: string,
+  options: CompetitorRunOptions = {},
+): Promise<CompetitorRunResult> {
   const model = selectCompetitiveCodexModel(process.env);
   const answer = runAcpx("codex", prompt, { ...options, model });
   return { answer, provider: "acpx/codex", model };
 }
 
-function runGeminiAcp(prompt: string, options: CompetitorRunOptions = {}): CompetitorRunResult {
+async function runGeminiBaseline(
+  prompt: string,
+  options: CompetitorRunOptions = {},
+): Promise<CompetitorRunResult> {
+  const baseline = selectCompetitiveGeminiBaseline(process.env);
+  if (baseline.mode === "api") {
+    const resolvedModel = await resolveModelWithAuth(
+      "google",
+      baseline.model,
+      "Set GEMINI_API_KEY or GOOGLE_API_KEY for the Gemini competitive baseline, or set OPENCANDLE_COMPETITIVE_GEMINI_AGENT=acpx to force the legacy Gemini CLI ACP path.",
+    );
+    const answer = await completeText(resolvedModel, prompt, { temperature: 0.2, maxTokens: 3000 });
+    return { answer, provider: baseline.provider, model: resolvedModel.model.id };
+  }
   const answer = runAcpx("gemini", prompt, {
     ...options,
     env: { GEMINI_CLI_TRUST_WORKSPACE: "true", TERM: "xterm-256color" },
@@ -705,6 +725,7 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function resolveCompetitors(): CompetitorRunner[] {
+  const geminiBaseline = selectCompetitiveGeminiBaseline(process.env);
   return [
     {
       id: "claude",
@@ -723,9 +744,9 @@ function resolveCompetitors(): CompetitorRunner[] {
     {
       id: "gemini",
       label: "Gemini",
-      provider: "acpx/gemini",
-      model: "subscription",
-      run: runGeminiAcp,
+      provider: geminiBaseline.provider,
+      model: geminiBaseline.model,
+      run: runGeminiBaseline,
     },
   ];
 }

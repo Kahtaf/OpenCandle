@@ -2,6 +2,7 @@ import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export interface DashboardState {
+  knownSymbols: string[];
   watchlist: Array<{
     symbol: string;
     quote: Record<string, unknown> | null;
@@ -26,6 +27,16 @@ export interface DashboardState {
     softGaps: Array<{ provider: string; lastSeen: string }>;
     hardSkips: Array<{ provider: string; lastSeen: string }>;
   };
+  lastTurn?: {
+    routeKind: string;
+    workflow?: string;
+    symbols: string[];
+    slotSources: Record<string, number>;
+    priorTurnCount: number;
+    savedStateIncluded?: boolean;
+    attachmentCount?: number;
+    validation?: { passed: boolean; mismatchCount: number };
+  };
 }
 
 const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
@@ -41,6 +52,7 @@ const DIRECT_TOOL_GAP_PROVIDERS: Record<string, string> = {
 
 export function createEmptyDashboardState(): DashboardState {
   return {
+    knownSymbols: [],
     watchlist: [],
     activeAnalyses: [],
     recentResearch: [],
@@ -48,12 +60,26 @@ export function createEmptyDashboardState(): DashboardState {
   };
 }
 
-export function projectDashboard(entries: SessionEntry[], sessionId = "local"): DashboardState {
+export function projectDashboard(
+  entries: SessionEntry[],
+  sessionId = "local",
+  savedSymbols: string[] = [],
+): DashboardState {
   const state = createEmptyDashboardState();
+  let pendingAttachmentCount: number | undefined;
+  let pendingAttachmentUserSeen = false;
 
   for (const entry of entries) {
     if (entry.type === "message") {
       projectMessage(state, entry.message as Message, entry.timestamp, sessionId);
+      const message = entry.message as Message;
+      if (pendingAttachmentCount !== undefined) {
+        if (message.role === "user") pendingAttachmentUserSeen = true;
+        else if (pendingAttachmentUserSeen) {
+          pendingAttachmentCount = undefined;
+          pendingAttachmentUserSeen = false;
+        }
+      }
       continue;
     }
 
@@ -70,6 +96,42 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
         analystsDone: 0,
         startedAt: entry.timestamp,
       });
+      continue;
+    }
+
+    if (entry.type === "custom" && entry.customType === "opencandle-user-input") {
+      const attachments = asArray(asRecord(entry.data).attachments);
+      pendingAttachmentCount = attachments.length > 0 ? attachments.length : undefined;
+      pendingAttachmentUserSeen = false;
+      if (state.lastTurn) {
+        if (pendingAttachmentCount !== undefined)
+          state.lastTurn.attachmentCount = pendingAttachmentCount;
+        else delete state.lastTurn.attachmentCount;
+      }
+      continue;
+    }
+
+    if (entry.type === "custom" && entry.customType === "opencandle-route-context") {
+      state.lastTurn = projectRouteContext(entry.data, pendingAttachmentCount);
+      addKnownSymbols(state, asArray(asRecord(asRecord(entry.data).entities).symbols));
+      pendingAttachmentCount = undefined;
+      pendingAttachmentUserSeen = false;
+      continue;
+    }
+
+    if (pendingAttachmentUserSeen) {
+      pendingAttachmentCount = undefined;
+      pendingAttachmentUserSeen = false;
+    }
+
+    if (entry.type === "custom" && entry.customType === "opencandle-validation") {
+      if (state.lastTurn) {
+        const data = asRecord(entry.data);
+        state.lastTurn.validation = {
+          passed: Boolean(data.passed),
+          mismatchCount: asArray(data.mismatches).length,
+        };
+      }
       continue;
     }
 
@@ -117,7 +179,38 @@ export function projectDashboard(entries: SessionEntry[], sessionId = "local"): 
     }
   }
 
+  addKnownSymbols(state, savedSymbols);
   return state;
+}
+
+function projectRouteContext(
+  data: unknown,
+  attachmentCount: number | undefined,
+): DashboardState["lastTurn"] {
+  const record = asRecord(data);
+  const entities = asRecord(record.entities);
+  const routeKind = stringValue(record.routeKind) ?? "unknown";
+  const workflow = stringValue(record.workflow);
+  const slots = asRecord(record.slots);
+  const slotSources: Record<string, number> = {};
+  for (const slot of Object.values(slots)) {
+    const source = stringValue(asRecord(slot).source);
+    if (!source) continue;
+    slotSources[source] = (slotSources[source] ?? 0) + 1;
+  }
+  const symbols = stringArray(entities.symbols);
+  const priorTurnCount = asArray(record.priorTurns).length;
+  return {
+    routeKind,
+    ...(workflow ? { workflow } : {}),
+    symbols,
+    slotSources,
+    priorTurnCount,
+    ...(typeof record.savedStateIncluded === "boolean"
+      ? { savedStateIncluded: record.savedStateIncluded }
+      : {}),
+    ...(attachmentCount !== undefined ? { attachmentCount } : {}),
+  };
 }
 
 function projectMessage(
@@ -197,10 +290,13 @@ function projectQuote(
 ): void {
   const symbol = symbolHint ?? inferSymbolFromContent(content);
   if (!symbol) return;
+  const normalizedSymbol = normalizeSymbol(symbol);
+  if (!normalizedSymbol) return;
+  addKnownSymbols(state, [normalizedSymbol]);
 
-  const existing = state.watchlist.find((row) => row.symbol === symbol);
+  const existing = state.watchlist.find((row) => row.symbol === normalizedSymbol);
   const row = {
-    symbol,
+    symbol: normalizedSymbol,
     quote: Object.keys(details).length > 0 ? details : null,
     pinned: existing?.pinned ?? false,
     lastSeen: timestamp,
@@ -252,6 +348,21 @@ function inferSymbolFromContent(content: ToolResultMessage["content"]): string |
   return match?.[1];
 }
 
+function addKnownSymbols(state: DashboardState, values: unknown[]): void {
+  for (const value of values) {
+    const symbol = normalizeSymbol(value);
+    if (!symbol || state.knownSymbols.includes(symbol)) continue;
+    if (state.knownSymbols.length >= 100) return;
+    state.knownSymbols.push(symbol);
+  }
+}
+
+function normalizeSymbol(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized ? normalized : null;
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -268,6 +379,12 @@ function stringValue(value: unknown): string | undefined {
 
 function firstString(value: unknown): string | undefined {
   return Array.isArray(value) ? value.find((item) => typeof item === "string") : undefined;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
 }
 
 function numberValue(value: unknown): number | undefined {

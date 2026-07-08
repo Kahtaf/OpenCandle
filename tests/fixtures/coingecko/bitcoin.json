@@ -12,6 +12,7 @@
     "low_24h": { "usd": 67800.00 },
     "ath": { "usd": 73750.00 },
     "ath_date": { "usd": "2024-03-14T07:10:36.635Z" },
+    "last_updated": "2026-07-03T18:50:00.000Z",
     "circulating_supply": 19625000,
     "total_supply": 21000000
   }
