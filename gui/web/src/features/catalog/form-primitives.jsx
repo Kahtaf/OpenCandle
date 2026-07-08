@@ -1,5 +1,5 @@
 import { Check, ChevronDown, Plus, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { cn } from "../../lib/utils.js";
@@ -10,6 +10,7 @@ import { cn } from "../../lib/utils.js";
 
 export function Field({ label, hint, required = false, children, className }) {
   return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: children are input/select primitives supplied by the schema renderer.
     <label className={cn("grid gap-1.5", className)}>
       <span className="flex items-baseline justify-between gap-3 text-xs font-medium text-foreground">
         <span>
@@ -35,6 +36,7 @@ export function Field({ label, hint, required = false, children, className }) {
 // ---------------------------------------------------------------------------
 
 export function SegmentedControl({ value, onChange, options, ariaLabel }) {
+  const groupName = useId();
   return (
     <div
       role="radiogroup"
@@ -44,21 +46,25 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
       {options.map((option) => {
         const selected = option.value === value;
         return (
-          <button
+          <label
             key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex h-8 min-w-9 items-center justify-center rounded-[4px] px-2.5 text-xs font-medium tabular-nums transition-colors",
+              "inline-flex h-8 min-w-9 cursor-pointer items-center justify-center rounded-[4px] px-2.5 text-xs font-medium tabular-nums transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-card",
               selected
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
+            <input
+              type="radio"
+              name={groupName}
+              value={option.value}
+              checked={selected}
+              onChange={() => onChange(option.value)}
+              className="sr-only"
+            />
             {option.label}
-          </button>
+          </label>
         );
       })}
     </div>

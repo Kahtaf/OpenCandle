@@ -104,6 +104,8 @@ function PriceChart({ series }) {
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
         className="block h-40 w-full"
+        role="img"
+        aria-label="Price, moving average, and Bollinger band chart"
       >
         {envelope ? (
           <path d={envelope} fill="hsl(var(--tw-foreground) / 0.06)" stroke="none" />
@@ -169,6 +171,8 @@ function RsiChart({ series }) {
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
         className="block h-14 w-full"
+        role="img"
+        aria-label="RSI chart"
       >
         <line
           x1="0"
@@ -245,6 +249,8 @@ function MacdChart({ series }) {
         viewBox={`0 0 ${width} ${height}`}
         preserveAspectRatio="none"
         className="block h-[70px] w-full"
+        role="img"
+        aria-label="MACD chart"
       >
         <line
           x1="0"
@@ -263,7 +269,7 @@ function MacdChart({ series }) {
           const positive = value >= 0;
           return (
             <line
-              key={index}
+              key={`${x.toFixed(1)}:${value.toFixed(3)}`}
               x1={x.toFixed(1)}
               y1={y0.toFixed(1)}
               x2={x.toFixed(1)}

@@ -1,3 +1,5 @@
+// biome-ignore-all lint/security/noDangerouslySetInnerHtml: renderInline escapes user text before adding known safe entity-chip markup.
+
 import { renderInline, textContent } from "../../rendering/text.js";
 
 const EMPTY_ATTACHMENTS = [];

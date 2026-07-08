@@ -1,3 +1,5 @@
+// biome-ignore-all lint/security/noDangerouslySetInnerHtml: renderRichText escapes user content before adding known safe markup.
+
 import { renderRichText, textContent } from "../../rendering/text.js";
 
 const EMPTY_KNOWN_SYMBOLS = [];

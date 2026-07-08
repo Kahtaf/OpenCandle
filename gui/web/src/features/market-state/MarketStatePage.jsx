@@ -322,6 +322,7 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
 }
 
 function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
+  const reportTimeId = useId();
   const [localTime, setLocalTime] = useState("08:00");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -342,10 +343,13 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
         The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}
         ).
       </p>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label
+        htmlFor={reportTimeId}
+        className="grid gap-1 text-xs font-medium text-muted-foreground"
+      >
         Run at
         <Input
-          aria-label="Report time"
+          id={reportTimeId}
           type="time"
           value={localTime}
           disabled={disabled}
@@ -363,6 +367,7 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
 function ContextPanel({ title, onClose, children }) {
   const panelRef = useRef(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus/scroll should run when a different panel title is opened.
   useEffect(() => {
     const node = panelRef.current;
     if (!node) return;
@@ -406,6 +411,7 @@ function ContextPanel({ title, onClose, children }) {
 }
 
 export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubmit }) {
+  const fieldIdPrefix = useId();
   const [values, setValues] = useState(() =>
     Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])),
   );
@@ -438,53 +444,60 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
         onSelectedChange={setSelected}
       />
       <div className="grid gap-3">
-        {fields.map((field) => (
-          <label key={field.name} className="grid gap-1 text-xs font-medium text-muted-foreground">
-            {field.label}
-            {field.type === "select" ? (
-              <select
-                aria-label={field.label}
-                className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
-                value={values[field.name] || ""}
-                disabled={disabled}
-                required={field.required}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                }
-              >
-                {field.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            ) : field.multiline ? (
-              <Textarea
-                aria-label={field.label}
-                className="rounded-md border border-border bg-card px-3 py-2"
-                value={values[field.name] || ""}
-                disabled={disabled}
-                required={field.required}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                }
-              />
-            ) : (
-              <Input
-                aria-label={field.label}
-                type={field.type || "text"}
-                step={field.type === "number" ? "any" : undefined}
-                placeholder={field.placeholder}
-                value={values[field.name] || ""}
-                disabled={disabled}
-                required={field.required}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                }
-              />
-            )}
-          </label>
-        ))}
+        {fields.map((field) => {
+          const fieldId = `${fieldIdPrefix}-${field.name}`;
+          return (
+            <label
+              key={field.name}
+              htmlFor={fieldId}
+              className="grid gap-1 text-xs font-medium text-muted-foreground"
+            >
+              {field.label}
+              {field.type === "select" ? (
+                <select
+                  id={fieldId}
+                  className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
+                  value={values[field.name] || ""}
+                  disabled={disabled}
+                  required={field.required}
+                  onChange={(event) =>
+                    setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                  }
+                >
+                  {field.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              ) : field.multiline ? (
+                <Textarea
+                  id={fieldId}
+                  className="rounded-md border border-border bg-card px-3 py-2"
+                  value={values[field.name] || ""}
+                  disabled={disabled}
+                  required={field.required}
+                  onChange={(event) =>
+                    setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                  }
+                />
+              ) : (
+                <Input
+                  id={fieldId}
+                  type={field.type || "text"}
+                  step={field.type === "number" ? "any" : undefined}
+                  placeholder={field.placeholder}
+                  value={values[field.name] || ""}
+                  disabled={disabled}
+                  required={field.required}
+                  onChange={(event) =>
+                    setValues((current) => ({ ...current, [field.name]: event.target.value }))
+                  }
+                />
+              )}
+            </label>
+          );
+        })}
       </div>
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>
         {resolvedSymbol ? "Save" : "Select a ticker to save"}
@@ -509,6 +522,9 @@ export function buildWatchlistMutationArgs(panelType, values) {
 }
 
 export function HoldingForm({ disabled, lot, onSubmit }) {
+  const quantityId = useId();
+  const averageCostId = useId();
+  const currencyId = useId();
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
@@ -538,10 +554,10 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={quantityId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Quantity
         <Input
-          aria-label="Quantity"
+          id={quantityId}
           type="number"
           step="any"
           value={values.shares}
@@ -550,10 +566,13 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
           onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))}
         />
       </label>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label
+        htmlFor={averageCostId}
+        className="grid gap-1 text-xs font-medium text-muted-foreground"
+      >
         Average cost per share
         <Input
-          aria-label="Average cost"
+          id={averageCostId}
           type="number"
           step="any"
           value={values.avg_cost}
@@ -564,10 +583,10 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
           }
         />
       </label>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={currencyId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Currency
         <Input
-          aria-label="Currency"
+          id={currencyId}
           value={values.currency}
           disabled={disabled}
           onChange={(event) =>
@@ -680,6 +699,10 @@ export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
 export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
 
 export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
+  const conditionId = useId();
+  const thresholdId = useId();
+  const periodId = useId();
+  const cooldownId = useId();
   const [draft, setDraft] = useState({
     query: "",
     selected: "",
@@ -730,10 +753,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         onQueryChange={(value) => setDraftField("query", value)}
         onSelectedChange={(value) => setDraftField("selected", value)}
       />
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
         <select
-          aria-label="Alert condition"
+          id={conditionId}
           className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
           value={condition}
           disabled={disabled}
@@ -749,12 +772,15 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         </select>
       </label>
       {supportsThreshold ? (
-        <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+        <label
+          htmlFor={thresholdId}
+          className="grid gap-1 text-xs font-medium text-muted-foreground"
+        >
           {condition === "create_volume_spike"
             ? "Multiplier (× average volume, optional)"
             : "Threshold"}
           <Input
-            aria-label="Alert threshold"
+            id={thresholdId}
             type="number"
             step="any"
             value={threshold}
@@ -764,10 +790,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         </label>
       ) : null}
       {needsPeriod ? (
-        <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+        <label htmlFor={periodId} className="grid gap-1 text-xs font-medium text-muted-foreground">
           Period (days)
           <Input
-            aria-label="Alert period"
+            id={periodId}
             type="number"
             step="any"
             value={period}
@@ -776,10 +802,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
           />
         </label>
       ) : null}
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={cooldownId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Cooldown between triggers (seconds)
         <Input
-          aria-label="Alert cooldown seconds"
+          id={cooldownId}
           type="number"
           step="any"
           value={cooldown}

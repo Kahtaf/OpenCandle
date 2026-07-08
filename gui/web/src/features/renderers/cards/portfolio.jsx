@@ -197,8 +197,8 @@ export function CorrelationCard({ message, header, text }) {
       </p>
       {warnings.length > 0 ? (
         <ul className="grid gap-1 text-[11px] text-muted-foreground">
-          {warnings.map((w, index) => (
-            <li key={`${w}-${index}`}>· {w}</li>
+          {warnings.map((w) => (
+            <li key={w}>· {w}</li>
           ))}
         </ul>
       ) : null}
