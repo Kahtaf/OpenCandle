@@ -113,16 +113,16 @@ The GUI also has a Diagnostics page at `/diagnostics` with the same health repor
 
 | Area | Examples | Source |
 | --- | --- | --- |
-| Market data | Quotes, history, ticker search, crypto price and history | Yahoo Finance, Alpha Vantage fallback when configured, CoinGecko |
+| Market data | Quotes, history, ticker search, screeners, crypto price and history | Yahoo Finance, TradingView scanner, Alpha Vantage fallback when configured, CoinGecko |
 | Options | Chains, open interest, IV, locally computed Greeks | Yahoo Finance plus local calculations |
 | Fundamentals | Overview, financials, earnings, DCF, comparable companies | Alpha Vantage |
-| Macro | Rates, CPI, GDP, unemployment, crypto Fear & Greed | FRED, alternative.me |
+| Macro | Rates, CPI, GDP, unemployment, event probabilities, crypto Fear & Greed | FRED, Polymarket Gamma API, alternative.me |
 | Technical | Indicators and strategy backtests | Local calculations over market history |
 | Sentiment | Reddit, Twitter/X, Finnhub news, and web sentiment | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, Exa, Brave, DuckDuckGo |
 | Filings | SEC filing search | SEC EDGAR |
 | Portfolio | Watchlists, holdings, correlation, risk | Local state plus market data |
 
-Yahoo Finance, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Reddit sentiment requires `rdt-cli` (`uv tool install rdt-cli`) plus an active Reddit session in your normal browser. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
+Yahoo Finance, TradingView scanner, Polymarket Gamma, CoinGecko, SEC EDGAR, DuckDuckGo search, and the alternative.me crypto Fear & Greed index do not require OpenCandle provider keys. Reddit sentiment requires `rdt-cli` (`uv tool install rdt-cli`) plus an active Reddit session in your normal browser. Twitter/X sentiment requires `twitter-cli` (`uv tool install twitter-cli`) plus an active x.com session in your normal browser. Alpha Vantage, FRED, Brave, Exa, and Finnhub unlock deeper coverage when configured.
 
 ## Configuration
 
