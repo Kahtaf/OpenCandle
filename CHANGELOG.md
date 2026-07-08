@@ -5,6 +5,7 @@
 ### Added
 
 - Added a GUI cashtag entity layer: `$` autocomplete in the chat composer, dashboard-known symbol chips in chat text, and chip popovers that show cached quote/state context with watchlist and follow-up actions.
+- Added TradingView Scanner to diagnostics as a public market-data reachability provider.
 - Added a release-runnable frozen competitive adversarial panel for historical loss classes, runnable through `npm run eval -- competitive:frozen`, cached-baseline runner mode, prompt-policy hard assertions, and documentation separating frozen reruns from generated competitive discovery.
 - Added a single eval front door (`npm run eval -- <suite>`) with release cadence support (`npm run eval -- release`), command/env audit output, and a local JSONL run index under `tests/evals/runs/`.
 - Added an opt-in GUI/TUI parity eval that sends the same live prompt through `runOpenCandleSession()` and the GUI server chat-run API, diffs `opencandle-*` entry sequences, and asserts projector dashboard `analystsDone` matches emitted analyst-step entries; the case is recorded as an expected failure for the current GUI chat-run parity gap.
@@ -31,6 +32,10 @@
 
 ### Fixed
 
+- Ticker popovers now open next to the clicked symbol, clamp within mobile viewports, and reuse recent session quote/fundamental facts instead of showing an unhelpful empty cached-quote state.
+- Stock quote cards now backfill missing valuation fields such as P/E and market cap from later session fundamentals/comparison results when another provider supplies those facts.
+- Company comparison fundamentals now fall back from Alpha Vantage to Yahoo Finance per symbol and report per-symbol provider failure reasons.
+- Router title/model calls now retry without `temperature` when a provider rejects that option.
 - Prediction-market probability lookups now exclude closed/inactive Polymarket markets, preserve provider as-of timestamps, and delimit Polymarket market text as untrusted external content.
 - Freshness checks now treat prior-session equity quotes as stale during open or post-close market sessions, Alpha Vantage GLOBAL_QUOTE as-of values preserve date-only provider semantics, and empty screen results still disclose cached/stale data.
 - Competitive cached-answer fallback no longer reuses failed baseline answers: cached competitor answers carrying a recorded `error` (failure placeholders such as "baseline failed before answering") are skipped, so a crashed baseline is retried live or skipped at preflight on later runs instead of freezing the failure text into every subsequent comparison.
