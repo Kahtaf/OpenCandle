@@ -80,8 +80,8 @@ describe("initDatabase", () => {
     expect(tables).not.toContain("memory_facts");
   });
 
-  it("sets schema version to 8", () => {
-    expect(getSchemaVersion(db)).toBe(8);
+  it("sets schema version to 9", () => {
+    expect(getSchemaVersion(db)).toBe(9);
   });
 
   it("is idempotent — running again does not error", () => {
@@ -209,7 +209,7 @@ describe("initDatabase", () => {
     legacyDb.close();
 
     const resetDb = initDatabase(dbPath);
-    expect(getSchemaVersion(resetDb)).toBe(8);
+    expect(getSchemaVersion(resetDb)).toBe(9);
 
     const workflowRunsSql = resetDb
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'workflow_runs'")
@@ -322,7 +322,7 @@ describe("v2 → v3 additive migration", () => {
     // Run the migration.
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(8);
+    expect(getSchemaVersion(migrated)).toBe(9);
 
     // (a) zero row loss
     const prefCount = (
@@ -426,7 +426,7 @@ describe("v4 → v5 market-state migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(8);
+    expect(getSchemaVersion(migrated)).toBe(9);
     expect(getTableNames(migrated)).toContain("watchlist_items");
     expect(getTableNames(migrated)).toContain("portfolio_lots");
     expect(getTableNames(migrated)).not.toContain("prediction_records");
@@ -650,7 +650,7 @@ describe("v5 → v6 import provenance migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(8);
+    expect(getSchemaVersion(migrated)).toBe(9);
     expect(rowCount(migrated, "instruments")).toBe(1);
     expect(rowCount(migrated, "watchlist_items")).toBe(1);
     expect(rowCount(migrated, "portfolio_lots")).toBe(1);
@@ -662,13 +662,19 @@ describe("v5 → v6 import provenance migration", () => {
     expect(rowCount(migrated, "report_runs")).toBe(1);
     expect(rowCount(migrated, "import_rows")).toBe(1);
 
-    const watchlistItem = migrated
-      .prepare("SELECT notes, target_price FROM watchlist_items")
-      .get() as {
-      notes: string;
-      target_price: number;
+    const watchlistItem = migrated.prepare("SELECT id FROM watchlist_items").get() as {
+      id: number;
     };
-    expect(watchlistItem).toEqual({ notes: "core thesis", target_price: 220 });
+    expect(watchlistItem.id).toBe(1);
+    const watchlistColumns = (
+      migrated.pragma("table_info(watchlist_items)") as Array<{ name: string }>
+    ).map((column) => column.name);
+    expect(watchlistColumns).not.toContain("notes");
+    expect(watchlistColumns).not.toContain("target_price");
+    expect(watchlistColumns).not.toContain("stop_price");
+    expect(watchlistColumns).not.toContain("thesis");
+    expect(watchlistColumns).not.toContain("tags_json");
+    expect(watchlistColumns).not.toContain("price_currency");
 
     migrated.close();
     rmSync(base, { recursive: true, force: true });
@@ -716,7 +722,7 @@ describe("v5 → v6 import provenance migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(8);
+    expect(getSchemaVersion(migrated)).toBe(9);
 
     const cols = (migrated.pragma("table_info(import_rows)") as Array<{ name: string }>).map(
       (c) => c.name,
@@ -860,7 +866,7 @@ describe("v6 → v7 local automation migration", () => {
 
     const migrated = initDatabase(dbPath);
 
-    expect(getSchemaVersion(migrated)).toBe(8);
+    expect(getSchemaVersion(migrated)).toBe(9);
     expect(getTableNames(migrated)).toContain("automation_runner_leases");
     expect(getTableNames(migrated)).toContain("alert_check_runs");
     expect(getTableNames(migrated)).toContain("notification_events");

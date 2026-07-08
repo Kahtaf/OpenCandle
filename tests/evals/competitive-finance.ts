@@ -29,7 +29,7 @@ export interface SeededMarketStateFixture {
     quantity: number;
     avgCost: number;
   }>;
-  watchlist: Array<{ symbol: string; name: string; targetPrice?: number; thesis?: string }>;
+  watchlist: Array<{ symbol: string; name: string }>;
 }
 
 /**
@@ -50,13 +50,8 @@ export const COMPETITIVE_STATE_FIXTURE: SeededMarketStateFixture = {
     },
   ],
   watchlist: [
-    {
-      symbol: "MSFT",
-      name: "Microsoft Corporation",
-      targetPrice: 420,
-      thesis: "cloud margin expansion",
-    },
-    { symbol: "JPM", name: "JPMorgan Chase & Co.", thesis: "rate-cycle beneficiary" },
+    { symbol: "MSFT", name: "Microsoft Corporation" },
+    { symbol: "JPM", name: "JPMorgan Chase & Co." },
   ],
 };
 
@@ -134,13 +129,7 @@ export function buildSavedStateSummary(fixture: SeededMarketStateFixture): strin
   }
   lines.push("Watchlist:");
   for (const item of fixture.watchlist) {
-    const parts = [
-      item.targetPrice != null ? `target $${item.targetPrice.toFixed(2)}` : null,
-      item.thesis ? `thesis: ${item.thesis}` : null,
-    ]
-      .filter(Boolean)
-      .join("; ");
-    lines.push(`- ${item.symbol} (${item.name})${parts ? ` — ${parts}` : ""}`);
+    lines.push(`- ${item.symbol} (${item.name})`);
   }
   return lines.join("\n");
 }

@@ -51,11 +51,14 @@ describe("market-state GUI/TUI parity", () => {
     await invokeToolFromUi(
       sessionManager,
       watchlistTool,
-      { action: "add", symbol: "AAPL", target_price: 220 },
+      { action: "add", symbol: "AAPL", watchlist_name: "MAG7" },
       "ui",
     );
 
-    const tuiWatchlist = await watchlistTool.execute("test", { action: "check" });
+    const tuiWatchlist = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "MAG7",
+    });
     expect(tuiWatchlist.content[0].text).toContain("AAPL");
 
     await portfolioTrackerTool.execute("test", {
@@ -69,6 +72,7 @@ describe("market-state GUI/TUI parity", () => {
     const snapshot = buildMarketStateSnapshot(db);
     db.close();
 
+    expect(snapshot.watchlists.map((watchlist) => watchlist.name)).toEqual(["Default", "MAG7"]);
     expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
     expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
     expect(

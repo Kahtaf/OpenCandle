@@ -667,8 +667,6 @@ async function seedEvalMarketState(home: string): Promise<void> {
   for (const item of COMPETITIVE_STATE_FIXTURE.watchlist) {
     service.addWatchlistItem({
       instrument: instrument(item.symbol, item.name, "equity"),
-      targetPrice: item.targetPrice,
-      thesis: item.thesis,
     });
   }
   db.close();

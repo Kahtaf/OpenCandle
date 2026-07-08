@@ -56,8 +56,8 @@ describe("competitive finance benchmarking", () => {
         );
         expect(service.listWatchlistItems()).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({ symbol: "MSFT", targetPrice: 420 }),
-            expect.objectContaining({ symbol: "JPM", thesis: "rate-cycle beneficiary" }),
+            expect.objectContaining({ symbol: "MSFT" }),
+            expect.objectContaining({ symbol: "JPM" }),
           ]),
         );
       } finally {

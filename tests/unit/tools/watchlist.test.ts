@@ -56,21 +56,11 @@ describe("watchlistTool", () => {
     const result = await watchlistTool.execute("test", {
       action: "add",
       symbol: "AAPL",
-      target_price: 200,
-      stop_price: 150,
-      thesis: "Services growth offsets hardware cycles",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
     });
 
     expect(result.content[0].text).toContain("AAPL");
     expect(result.details).toMatchObject({
       symbol: "AAPL",
-      targetPrice: 200,
-      stopPrice: 150,
-      thesis: "Services growth offsets hardware cycles",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
     });
     expect(existsSync(join(openCandleHome, "state.db"))).toBe(true);
     expect(existsSync(join(openCandleHome, "watchlist.json"))).toBe(false);
@@ -89,80 +79,18 @@ describe("watchlistTool", () => {
     await watchlistTool.execute("test", {
       action: "add",
       symbol: "AAPL",
-      target_price: 200,
     });
     const result = await watchlistTool.execute("test", {
       action: "add",
       symbol: "AAPL",
-      stop_price: 150,
-      notes: "Updated thesis",
     });
 
     expect(result.details).toMatchObject({
       symbol: "AAPL",
-      targetPrice: 200,
-      stopPrice: 150,
-      notes: "Updated thesis",
     });
 
     const check = await watchlistTool.execute("test", { action: "check" });
     expect(check.content[0].text.match(/AAPL/g)).toHaveLength(1);
-  });
-
-  it("updates watchlist metadata through an explicit update action", async () => {
-    await watchlistTool.execute("test", {
-      action: "add",
-      symbol: "AAPL",
-      target_price: 200,
-      stop_price: 150,
-      notes: "Initial note",
-    });
-
-    const result = await watchlistTool.execute("test", {
-      action: "update",
-      symbol: "AAPL",
-      target_price: 220,
-      notes: "Revised thesis",
-    });
-
-    expect(result.content[0].text).toContain("Updated AAPL");
-    expect(result.details).toMatchObject({
-      symbol: "AAPL",
-      targetPrice: 220,
-      stopPrice: 150,
-      notes: "Revised thesis",
-    });
-  });
-
-  it("clears watchlist metadata through explicit null and empty tags", async () => {
-    await watchlistTool.execute("test", {
-      action: "add",
-      symbol: "AAPL",
-      target_price: 200,
-      stop_price: 150,
-      thesis: "Initial thesis",
-      notes: "Initial note",
-      tags: ["quality"],
-    });
-
-    const result = await watchlistTool.execute("test", {
-      action: "update",
-      symbol: "AAPL",
-      target_price: null,
-      stop_price: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
-
-    expect(result.details).toMatchObject({
-      symbol: "AAPL",
-      targetPrice: null,
-      stopPrice: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
   });
 
   it("removes a symbol from the SQLite watchlist", async () => {
@@ -182,8 +110,6 @@ describe("watchlistTool", () => {
     await watchlistTool.execute("test", {
       action: "add",
       symbol: "AAPL",
-      target_price: 200,
-      stop_price: 150,
     });
 
     const result = await watchlistTool.execute("test", { action: "check" });
@@ -191,8 +117,50 @@ describe("watchlistTool", () => {
     expect(result.content[0].text).toContain("180");
   });
 
+  it("creates and checks separate named watchlists", async () => {
+    const created = await watchlistTool.execute("test", {
+      action: "create",
+      watchlist_name: "MAG7",
+    });
+    expect(created.content[0].text).toContain("MAG7");
+
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
+    await watchlistTool.execute("test", { action: "add", symbol: "MSFT", watchlist_name: "MAG7" });
+    await watchlistTool.execute("test", { action: "create", watchlist_name: "ETFs" });
+    await watchlistTool.execute("test", { action: "add", symbol: "VOO", watchlist_name: "ETFs" });
+
+    const defaultList = await watchlistTool.execute("test", { action: "check" });
+    const mag7 = await watchlistTool.execute("test", { action: "check", watchlist_name: "MAG7" });
+    const etfs = await watchlistTool.execute("test", { action: "check", watchlist_name: "ETFs" });
+
+    expect(defaultList.content[0].text).toContain("Default is empty");
+    expect(mag7.content[0].text).toContain("**MAG7**");
+    expect(mag7.content[0].text).toContain("AAPL");
+    expect(mag7.content[0].text).toContain("MSFT");
+    expect(mag7.content[0].text).not.toContain("VOO");
+    expect(etfs.content[0].text).toContain("VOO");
+    expect(etfs.content[0].text).not.toContain("AAPL");
+  });
+
+  it("removes a symbol from only the selected named watchlist", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "ETFs" });
+
+    const removed = await watchlistTool.execute("test", {
+      action: "remove",
+      symbol: "AAPL",
+      watchlist_name: "MAG7",
+    });
+    const mag7 = await watchlistTool.execute("test", { action: "check", watchlist_name: "MAG7" });
+    const etfs = await watchlistTool.execute("test", { action: "check", watchlist_name: "ETFs" });
+
+    expect(removed.content[0].text).toContain("Removed AAPL from MAG7");
+    expect(mag7.content[0].text).toContain("MAG7 is empty");
+    expect(etfs.content[0].text).toContain("AAPL");
+  });
+
   it("checks equity watchlist symbols through a TradingView batch and fills suffix symbols with Yahoo", async () => {
-    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", target_price: 200 });
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
     await watchlistTool.execute("test", { action: "add", symbol: "BTC-USD" });
     vi.mocked(getQuote).mockClear();
     vi.mocked(getQuotes).mockResolvedValue([
@@ -269,8 +237,8 @@ describe("watchlistTool", () => {
     );
   });
 
-  it("labels stale TradingView watchlist quotes before using them for alerts", async () => {
-    await watchlistTool.execute("test", { action: "add", symbol: "AAPL", target_price: 100 });
+  it("labels stale TradingView watchlist quotes", async () => {
+    await watchlistTool.execute("test", { action: "add", symbol: "AAPL" });
     vi.mocked(getQuotes).mockResolvedValue([
       {
         requestedSymbol: "AAPL",
@@ -308,7 +276,6 @@ describe("watchlistTool", () => {
 
     expect(result.content[0].text).toContain("cached TradingView data from");
     expect(result.details?.items[0].dataCaveat).toContain("cached TradingView data from");
-    expect(result.content[0].text).toContain("TARGET HIT");
   });
 
   it("fills missing TradingView rows through Yahoo without discarding successful rows", async () => {
@@ -369,7 +336,6 @@ describe("watchlistTool", () => {
     await watchlistTool.execute("test", {
       action: "add",
       symbol: "AAPL",
-      target_price: 200,
     });
     vi.mocked(getQuotes).mockResolvedValue([]);
     vi.mocked(getQuote).mockResolvedValue(
@@ -386,7 +352,7 @@ describe("watchlistTool", () => {
     expect(result.details?.items[0]).toMatchObject({
       symbol: "AAPL",
       currentPrice: null,
-      alerts: ["UNAVAILABLE: Yahoo returned no valid market data."],
+      statuses: ["UNAVAILABLE: Yahoo returned no valid market data."],
     });
   });
 
@@ -394,7 +360,6 @@ describe("watchlistTool", () => {
     await watchlistTool.execute("test", {
       action: "add",
       symbol: "SHOP.TO",
-      target_price: 200,
     });
     vi.mocked(getQuotes).mockResolvedValue([]);
     cache.set("test-stale-watchlist-quote", quote("SHOP.TO", 210), -1);
@@ -406,27 +371,11 @@ describe("watchlistTool", () => {
     const result = await watchlistTool.execute("test", { action: "check" });
 
     expect(result.content[0].text).toContain("UNAVAILABLE: provider returned stale market data");
-    expect(result.content[0].text).not.toContain("TARGET HIT");
     expect(result.details?.items[0]).toMatchObject({
       symbol: "SHOP.TO",
       currentPrice: null,
-      alerts: ["UNAVAILABLE: provider returned stale market data"],
+      statuses: ["UNAVAILABLE: provider returned stale market data"],
     });
-  });
-
-  it("flags when target price is hit", async () => {
-    await watchlistTool.execute("test", {
-      action: "add",
-      symbol: "AAPL",
-      target_price: 200,
-      stop_price: 150,
-    });
-    vi.mocked(getQuotes).mockResolvedValue([]);
-    vi.mocked(getQuote).mockResolvedValue(quote("AAPL", 210));
-
-    const result = await watchlistTool.execute("test", { action: "check" });
-    expect(result.content[0].text.toLowerCase()).toMatch(/target|alert|hit/);
-    expect(result.content[0].text).toContain("Stop OK");
   });
 
   it("rejects zero-filled provider responses before saving", async () => {

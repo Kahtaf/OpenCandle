@@ -1285,11 +1285,6 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     };
     const item = service.addWatchlistItem({
       instrument: asts,
-      targetPrice: 55,
-      stopPrice: 22,
-      thesis: "Space-based broadband satellite network",
-      notes: "Watch launch cadence and carrier partnerships",
-      tags: ["space", "satellite"],
     });
     service.addPortfolioLot({
       instrument: asts,
@@ -1337,10 +1332,8 @@ describe("SessionCoordinator.buildSystemPrompt saved market state", () => {
     expect(prompt).toContain("40 @ $28.00");
     expect(prompt).toContain("cost basis $1120.00");
     expect(prompt).toContain("explicitly mention the saved quantity, average cost, and cost basis");
-    expect(prompt).toContain("target $55.00");
     expect(prompt).toContain("price_crosses_above");
     expect(prompt).toContain("Morning watchlist");
-    expect(prompt).toContain("space, satellite");
   });
 
   it("does not inject saved market state into unrelated prompts without route context", () => {

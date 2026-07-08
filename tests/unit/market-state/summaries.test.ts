@@ -31,11 +31,6 @@ describe("market-state summaries", () => {
     });
     service.addWatchlistItem({
       instrument: asts,
-      targetPrice: 55,
-      stopPrice: 22,
-      thesis: "Space-based broadband satellite network",
-      notes: "Watch launch cadence and carrier partnerships",
-      tags: ["space", "satellite"],
     });
     service.recordReportRun({
       status: "completed",
@@ -58,7 +53,7 @@ describe("market-state summaries", () => {
     ]);
     expect(watchlist).toEqual([
       "Watchlist:",
-      "- ASTS (AST SpaceMobile, Inc.) — target $55.00; stop $22.00; thesis: Space-based broadband satellite network; tags: space, satellite; notes: Watch launch cadence and carrier partnerships",
+      "- ASTS (AST SpaceMobile, Inc.)",
     ]);
     expect(report[0]).toContain("Latest report run: completed at 2026-07-05T14:30:00.000Z");
     expect(report[0]).toContain('"headline":"Launch cadence improved"');

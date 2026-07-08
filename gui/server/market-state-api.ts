@@ -8,6 +8,7 @@ import { getQuote } from "../../src/providers/yahoo-finance.js";
 
 export interface MarketStateSnapshot {
   instruments: Array<NonNullable<ReturnType<MarketStateService["getInstrument"]>>>;
+  watchlists: ReturnType<MarketStateService["listWatchlists"]>;
   watchlist: ReturnType<MarketStateService["listWatchlistItems"]>;
   portfolio: ReturnType<MarketStateService["listPortfolioLots"]>;
   alerts: ReturnType<MarketStateService["listAlertRules"]>;
@@ -97,7 +98,10 @@ export function buildMarketStateSnapshot(db?: Database.Database): MarketStateSna
       instruments: instrumentIds
         .map((id) => service.getInstrument(id))
         .filter((instrument) => instrument != null),
-      watchlist: service.listWatchlistItems(),
+      watchlists: service.listWatchlists(),
+      watchlist: service
+        .listWatchlists()
+        .flatMap((watchlist) => service.listWatchlistItems(watchlist.id)),
       portfolio: service.listPortfolioLots(),
       alerts,
       alertEvents: service.listAlertEvents(),
@@ -118,7 +122,9 @@ function loadSavedMarketStateSymbols(): string[] {
   const service = new MarketStateService(db);
   try {
     const symbols = [
-      ...service.listWatchlistItems().map((item) => item.symbol),
+      ...service.listWatchlists().flatMap((watchlist) =>
+        service.listWatchlistItems(watchlist.id).map((item) => item.symbol),
+      ),
       ...service.listPortfolioLots().map((lot) => lot.symbol),
     ];
     return normalizeSymbols(symbols);
@@ -143,7 +149,9 @@ export async function buildMarketStateQuoteSnapshot(
   const ownedDb = db ?? initDefaultDatabase();
   const service = new MarketStateService(ownedDb);
   try {
-    const watchlist = service.listWatchlistItems();
+    const watchlist = service
+      .listWatchlists()
+      .flatMap((watchlist) => service.listWatchlistItems(watchlist.id));
     const portfolio = service.listPortfolioLots();
     const symbols = [
       ...new Set([...watchlist.map((item) => item.symbol), ...portfolio.map((lot) => lot.symbol)]),

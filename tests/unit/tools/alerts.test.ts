@@ -128,44 +128,6 @@ describe("alertsTool", () => {
     expect(listed.content[0].text).toContain("manual checks available");
   });
 
-  it("does not wipe existing watchlist metadata when creating an alert", async () => {
-    const db = initDefaultDatabase();
-    const service = new MarketStateService(db);
-    service.addWatchlistItem({
-      instrument: {
-        symbol: "AAPL",
-        assetType: "equity",
-        name: "Apple Inc.",
-        exchange: "NMS",
-        currency: "USD",
-        provider: "yahoo",
-      },
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
-    db.close();
-
-    await alertsTool.execute("test", {
-      action: "create_price_above",
-      symbol: "AAPL",
-      threshold: 260,
-    });
-
-    const verifyDb = initDefaultDatabase();
-    const verifyService = new MarketStateService(verifyDb);
-    expect(verifyService.listWatchlistItems()[0]).toMatchObject({
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
-    verifyDb.close();
-  });
-
   it("creates instrument-scoped alerts without adding the symbol to the watchlist", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",

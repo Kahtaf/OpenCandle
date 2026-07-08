@@ -410,37 +410,23 @@ async function run() {
   // 9. Watchlist
   // ============================
   console.log("\n9. Watchlist:");
-  await test("watchlist: add → check → alert → remove", async () => {
+  await test("watchlist: create → add → check → remove", async () => {
     const tool = getTool("manage_watchlist");
 
-    // Add with alerts
-    let r = await tool.execute("e2e", {
-      action: "add",
-      symbol: "AAPL",
-      target_price: 99999,
-      stop_price: 1,
-    });
+    let r = await tool.execute("e2e", { action: "create", watchlist_name: "MAG7" });
+    assert(r.content[0].text.includes("MAG7"), "create failed");
+
+    r = await tool.execute("e2e", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
     assert(r.content[0].text.includes("AAPL"), "add failed");
 
-    // Check — price should be between 1 and 99999 so no alerts
-    r = await tool.execute("e2e", { action: "check" });
+    r = await tool.execute("e2e", { action: "check", watchlist_name: "MAG7" });
     assert(r.content[0].text.includes("AAPL"), "check missing AAPL");
+    assert(r.content[0].text.includes("MAG7"), "check missing watchlist name");
 
-    // Add with stop above current price to trigger alert
-    r = await tool.execute("e2e", { action: "add", symbol: "AAPL", stop_price: 99999 });
-    r = await tool.execute("e2e", { action: "check" });
-    assert(
-      r.content[0].text.toLowerCase().includes("stop") ||
-        r.content[0].text.toLowerCase().includes("alert"),
-      "stop alert not triggered when stop > current price",
-    );
-
-    // Remove
-    r = await tool.execute("e2e", { action: "remove", symbol: "AAPL" });
+    r = await tool.execute("e2e", { action: "remove", symbol: "AAPL", watchlist_name: "MAG7" });
     assert(r.content[0].text.includes("Removed"), "remove failed");
 
-    // Check empty
-    r = await tool.execute("e2e", { action: "check" });
+    r = await tool.execute("e2e", { action: "check", watchlist_name: "MAG7" });
     assert(r.content[0].text.toLowerCase().includes("empty"), "empty check failed");
   });
 

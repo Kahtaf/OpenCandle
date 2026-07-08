@@ -81,13 +81,13 @@ describe("schema-derived catalog forms", () => {
     expect(projectionYears?.kind).toBe("number-chips");
   });
 
-  it("maps nullable numeric params to number inputs", () => {
+  it("maps watchlist tool params to text inputs", () => {
     const fields = fieldsForTool(toolByName("manage_watchlist"));
-    const targetPrice = fields.find((field) => field.name === "target_price");
-    const stopPrice = fields.find((field) => field.name === "stop_price");
+    const symbol = fields.find((field) => field.name === "symbol");
+    const watchlistName = fields.find((field) => field.name === "watchlist_name");
 
-    expect(targetPrice?.kind).toBe("number-chips");
-    expect(stopPrice?.kind).toBe("number-chips");
+    expect(symbol?.kind).toBe("symbol");
+    expect(watchlistName?.kind).toBe("text");
   });
 
   it("marks required fields from the served schema", () => {

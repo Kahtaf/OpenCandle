@@ -62,12 +62,6 @@ export interface WatchlistItemRecord {
   assetType: string;
   exchange: string | null;
   currency: string | null;
-  targetPrice: number | null;
-  stopPrice: number | null;
-  priceCurrency: string | null;
-  thesis: string | null;
-  notes: string | null;
-  tags: string[] | null;
   source: string | null;
   sourceRowId: string | null;
   sourceMetadata: unknown;
@@ -282,12 +276,6 @@ type WatchlistItemRow = {
   asset_type: string;
   exchange: string | null;
   currency: string | null;
-  target_price: number | null;
-  stop_price: number | null;
-  price_currency: string | null;
-  thesis: string | null;
-  notes: string | null;
-  tags_json: string | null;
   source: string | null;
   source_row_id: string | null;
   source_metadata_json: string | null;
@@ -477,6 +465,43 @@ export class MarketStateService {
     return mapCollection(row);
   }
 
+  listWatchlists(): CollectionRecord[] {
+    this.getDefaultWatchlist();
+    const rows = this.db
+      .prepare("SELECT * FROM watchlists ORDER BY is_default DESC, name COLLATE NOCASE")
+      .all() as WatchlistRow[];
+    return rows.map(mapCollection);
+  }
+
+  createWatchlist(name: string): CollectionRecord {
+    const normalized = normalizeCollectionName(name);
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO watchlists (name, is_default, created_at, updated_at)
+         VALUES (?, 0, ?, ?)`,
+      )
+      .run(normalized, now, now);
+    const row = this.db
+      .prepare("SELECT * FROM watchlists WHERE name = ? LIMIT 1")
+      .get(normalized) as WatchlistRow;
+    return mapCollection(row);
+  }
+
+  getWatchlistByName(name: string): CollectionRecord | null {
+    const normalized = normalizeCollectionName(name);
+    const row = this.db
+      .prepare("SELECT * FROM watchlists WHERE name = ? LIMIT 1")
+      .get(normalized) as WatchlistRow | undefined;
+    return row == null ? null : mapCollection(row);
+  }
+
+  getOrCreateWatchlist(name?: string | null): CollectionRecord {
+    const normalized = normalizeNullable(name);
+    if (normalized == null) return this.getDefaultWatchlist();
+    return this.getWatchlistByName(normalized) ?? this.createWatchlist(normalized);
+  }
+
   getDefaultPortfolio(): CollectionRecord {
     const now = new Date().toISOString();
     this.db
@@ -535,12 +560,6 @@ export class MarketStateService {
   addWatchlistItem(params: {
     instrument: InstrumentInput;
     watchlistId?: number;
-    targetPrice?: number | null;
-    stopPrice?: number | null;
-    priceCurrency?: string | null;
-    thesis?: string | null;
-    notes?: string | null;
-    tags?: string[];
     source?: string;
     sourceRowId?: string;
     sourceMetadata?: unknown;
@@ -560,18 +579,10 @@ export class MarketStateService {
         this.db
           .prepare(
             `UPDATE watchlist_items
-             SET target_price = ?, stop_price = ?, price_currency = ?, thesis = ?,
-                 notes = ?, tags_json = ?, source = ?, source_row_id = ?,
-                 source_metadata_json = ?, updated_at = ?
+             SET source = ?, source_row_id = ?, source_metadata_json = ?, updated_at = ?
              WHERE id = ?`,
           )
           .run(
-            params.targetPrice === undefined ? existing.target_price : params.targetPrice,
-            params.stopPrice === undefined ? existing.stop_price : params.stopPrice,
-            params.priceCurrency === undefined ? existing.price_currency : params.priceCurrency,
-            params.thesis === undefined ? existing.thesis : params.thesis,
-            params.notes === undefined ? existing.notes : params.notes,
-            params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
             params.source === undefined ? existing.source : normalizeNullable(params.source),
             params.sourceRowId === undefined
               ? existing.source_row_id
@@ -590,21 +601,14 @@ export class MarketStateService {
       const result = this.db
         .prepare(
           `INSERT INTO watchlist_items (
-             watchlist_id, instrument_id, thesis, notes, tags_json,
-             target_price, stop_price, price_currency, source, source_row_id,
-             source_metadata_json, created_at, updated_at
+             watchlist_id, instrument_id, source, source_row_id, source_metadata_json,
+             created_at, updated_at
            )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           watchlistId,
           instrument.id,
-          params.thesis ?? null,
-          params.notes ?? null,
-          params.tags == null ? null : JSON.stringify(params.tags),
-          params.targetPrice ?? null,
-          params.stopPrice ?? null,
-          params.priceCurrency ?? params.instrument.currency ?? null,
           normalizeNullable(params.source),
           normalizeNullable(params.sourceRowId),
           params.sourceMetadata == null ? null : JSON.stringify(params.sourceMetadata),
@@ -642,51 +646,6 @@ export class MarketStateService {
       )
       .run(watchlistId, symbol.trim().toUpperCase());
     return result.changes > 0;
-  }
-
-  updateWatchlistItemBySymbol(
-    symbol: string,
-    params: {
-      watchlistId?: number;
-      targetPrice?: number | null;
-      stopPrice?: number | null;
-      priceCurrency?: string | null;
-      thesis?: string | null;
-      notes?: string | null;
-      tags?: string[];
-    },
-  ): WatchlistItemRecord | null {
-    const watchlistId = params.watchlistId ?? this.getDefaultWatchlist().id;
-    const existing = this.db
-      .prepare(
-        `SELECT wi.*
-         FROM watchlist_items wi
-         JOIN instruments i ON i.id = wi.instrument_id
-         WHERE wi.watchlist_id = ? AND i.symbol = ?
-         LIMIT 1`,
-      )
-      .get(watchlistId, symbol.trim().toUpperCase()) as WatchlistItemRow | undefined;
-    if (existing == null) return null;
-
-    const now = new Date().toISOString();
-    this.db
-      .prepare(
-        `UPDATE watchlist_items
-         SET target_price = ?, stop_price = ?, price_currency = ?, thesis = ?,
-             notes = ?, tags_json = ?, updated_at = ?
-         WHERE id = ?`,
-      )
-      .run(
-        params.targetPrice === undefined ? existing.target_price : params.targetPrice,
-        params.stopPrice === undefined ? existing.stop_price : params.stopPrice,
-        params.priceCurrency === undefined ? existing.price_currency : params.priceCurrency,
-        params.thesis === undefined ? existing.thesis : params.thesis,
-        params.notes === undefined ? existing.notes : params.notes,
-        params.tags == null ? existing.tags_json : JSON.stringify(params.tags),
-        now,
-        existing.id,
-      );
-    return this.getWatchlistItem(existing.id);
   }
 
   addPortfolioLot(params: {
@@ -1962,18 +1921,18 @@ function mapWatchlistItem(row: WatchlistItemRow): WatchlistItemRecord {
     assetType: row.asset_type,
     exchange: row.exchange,
     currency: row.currency,
-    targetPrice: row.target_price,
-    stopPrice: row.stop_price,
-    priceCurrency: row.price_currency,
-    thesis: row.thesis,
-    notes: row.notes,
-    tags: row.tags_json == null ? null : (JSON.parse(row.tags_json) as string[]),
     source: row.source,
     sourceRowId: row.source_row_id,
     sourceMetadata: row.source_metadata_json == null ? null : JSON.parse(row.source_metadata_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function normalizeCollectionName(name: string): string {
+  const normalized = name.trim();
+  if (!normalized) throw new Error("watchlist name is required.");
+  return normalized;
 }
 
 function mapPortfolioLot(row: PortfolioLotRow): PortfolioLotRecord {

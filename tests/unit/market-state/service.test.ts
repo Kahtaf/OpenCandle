@@ -83,8 +83,6 @@ describe("MarketStateService", () => {
         currency: "USD",
         provider: "yahoo",
       },
-      targetPrice: 250,
-      notes: "Initial thesis",
     });
 
     const second = service.addWatchlistItem({
@@ -96,15 +94,10 @@ describe("MarketStateService", () => {
         currency: "USD",
         provider: "yahoo",
       },
-      stopPrice: 180,
-      notes: "Updated thesis",
     });
 
     expect(second.id).toBe(first.id);
     expect(second.symbol).toBe("AAPL");
-    expect(second.targetPrice).toBe(250);
-    expect(second.stopPrice).toBe(180);
-    expect(second.notes).toBe("Updated thesis");
 
     const itemCount = db.prepare("SELECT COUNT(*) AS n FROM watchlist_items").get() as {
       n: number;
@@ -112,45 +105,10 @@ describe("MarketStateService", () => {
     expect(itemCount.n).toBe(1);
   });
 
-  it("preserves watchlist metadata when a duplicate add only supplies the instrument", () => {
-    const first = service.addWatchlistItem({
-      instrument: {
-        symbol: "AAPL",
-        assetType: "equity",
-        name: "Apple Inc.",
-        exchange: "NMS",
-        currency: "USD",
-        provider: "yahoo",
-      },
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
+  it("stores symbols in separate named watchlists", () => {
+    const mag7 = service.createWatchlist("MAG7");
+    const etfs = service.createWatchlist("ETFs");
 
-    const second = service.addWatchlistItem({
-      instrument: {
-        symbol: "AAPL",
-        assetType: "equity",
-        name: "Apple Inc.",
-        exchange: "NMS",
-        currency: "USD",
-        provider: "yahoo",
-      },
-    });
-
-    expect(second.id).toBe(first.id);
-    expect(second).toMatchObject({
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
-  });
-
-  it("clears watchlist metadata when update fields are explicitly null or empty", () => {
     service.addWatchlistItem({
       instrument: {
         symbol: "AAPL",
@@ -160,29 +118,32 @@ describe("MarketStateService", () => {
         currency: "USD",
         provider: "yahoo",
       },
-      targetPrice: 250,
-      stopPrice: 180,
-      thesis: "Initial thesis",
-      notes: "Initial note",
-      tags: ["quality"],
+      watchlistId: mag7.id,
+    });
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "VOO",
+        assetType: "etf",
+        name: "Vanguard S&P 500 ETF",
+        exchange: "PCX",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      watchlistId: etfs.id,
     });
 
-    const updated = service.updateWatchlistItemBySymbol("AAPL", {
-      targetPrice: null,
-      stopPrice: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
+    expect(service.listWatchlists().map((watchlist) => watchlist.name)).toEqual([
+      "Default",
+      "ETFs",
+      "MAG7",
+    ]);
+    expect(service.listWatchlistItems(mag7.id).map((item) => item.symbol)).toEqual(["AAPL"]);
+    expect(service.listWatchlistItems(etfs.id).map((item) => item.symbol)).toEqual(["VOO"]);
 
-    expect(updated).toMatchObject({
-      symbol: "AAPL",
-      targetPrice: null,
-      stopPrice: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
+    expect(service.removeWatchlistItemBySymbol("AAPL", mag7.id)).toBe(true);
+
+    expect(service.listWatchlistItems(mag7.id)).toEqual([]);
+    expect(service.listWatchlistItems(etfs.id).map((item) => item.symbol)).toEqual(["VOO"]);
   });
 
   it("stores portfolio lots under the default portfolio", () => {

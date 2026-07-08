@@ -3,8 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
   AlertCreateForm,
-  buildWatchlistMutationArgs,
-  buildWatchlistRowActions,
   clampComboboxActiveIndex,
   HoldingForm,
   invokeMarketStateMutation,
@@ -44,6 +42,26 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain('aria-label="Open sidebar"');
     expect(html).not.toContain('aria-label="Market state sections"');
+  });
+
+  it("renders named watchlists as tabs with a new-watchlist action", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "watchlists",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("New Watchlist");
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain("Default");
+    expect(html).toContain("Add ticker");
+    expect(html).not.toContain("To target");
+    expect(html).not.toContain("Thesis");
   });
 
   it("renders the report schedule and generate action as durable report state", () => {
@@ -156,47 +174,6 @@ describe("MarketStatePage rendering", () => {
     expect(nextComboboxActiveIndex(0, 3, "previous")).toBe(2);
   });
 
-  it("does not create a watchlist alert without an explicit target", () => {
-    const invokeTool = () => {
-      throw new Error("unexpected invoke");
-    };
-
-    const actions = buildWatchlistRowActions(
-      {
-        symbol: "AAPL",
-        targetPrice: null,
-      },
-      invokeTool,
-    );
-
-    expect(actions[0]).toEqual(
-      expect.objectContaining({
-        label: "Set target first",
-        disabled: true,
-      }),
-    );
-  });
-
-  it("creates a watchlist alert with the saved target as threshold", () => {
-    const calls = [];
-    const actions = buildWatchlistRowActions(
-      {
-        symbol: "AAPL",
-        targetPrice: 250,
-      },
-      (toolName, args) => calls.push({ toolName, args }),
-    );
-
-    actions[0].onClick();
-
-    expect(calls).toEqual([
-      {
-        toolName: "manage_alerts",
-        args: { action: "create_price_above", symbol: "AAPL", threshold: 250 },
-      },
-    ]);
-  });
-
   it("keeps holding forms out of the first viewport", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
@@ -260,44 +237,6 @@ describe("MarketStatePage rendering", () => {
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
 
-  it("sends explicit clear values for blank watchlist edit fields", () => {
-    const addArgs = buildWatchlistMutationArgs("watchlist-add", {
-      symbol: "AAPL",
-      target_price: "",
-      stop_price: "",
-      thesis: "",
-      notes: "",
-      tags: "",
-    });
-    const editArgs = buildWatchlistMutationArgs("watchlist-edit", {
-      symbol: "AAPL",
-      target_price: "",
-      stop_price: "",
-      thesis: "",
-      notes: "",
-      tags: "",
-    });
-
-    expect(addArgs).toMatchObject({
-      action: "add",
-      symbol: "AAPL",
-      target_price: undefined,
-      stop_price: undefined,
-      thesis: undefined,
-      notes: undefined,
-      tags: undefined,
-    });
-    expect(editArgs).toEqual({
-      action: "update",
-      symbol: "AAPL",
-      target_price: null,
-      stop_price: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
-  });
-
   it("names market-state form controls for assistive technology", () => {
     const alertHtml = renderToStaticMarkup(
       React.createElement(AlertCreateForm, {
@@ -308,12 +247,7 @@ describe("MarketStatePage rendering", () => {
     );
     const symbolHtml = renderToStaticMarkup(
       React.createElement(SymbolActionPanel, {
-        title: "Add ticker",
         disabled: false,
-        fields: [
-          { name: "target_price", label: "Target", type: "number" },
-          { name: "thesis", label: "Thesis", multiline: true },
-        ],
         onSubmit: () => true,
       }),
     );
@@ -330,8 +264,9 @@ describe("MarketStatePage rendering", () => {
     // condition hides it instead of showing a disabled field.
     expect(alertHtml).not.toContain('aria-label="Alert period"');
     expect(alertHtml).toContain('aria-label="Alert cooldown seconds"');
-    expect(symbolHtml).toContain('aria-label="Target"');
-    expect(symbolHtml).toContain('aria-label="Thesis"');
+    expect(symbolHtml).toContain("Search ticker or company");
+    expect(symbolHtml).not.toContain('aria-label="Target"');
+    expect(symbolHtml).not.toContain('aria-label="Thesis"');
     expect(holdingHtml).toContain('aria-label="Quantity"');
     expect(holdingHtml).toContain('aria-label="Average cost"');
     expect(holdingHtml).toContain('aria-label="Currency"');

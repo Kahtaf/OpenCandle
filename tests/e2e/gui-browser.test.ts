@@ -405,19 +405,16 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, { role: "follower" });
     await installMockMarketState(mocked, {
+      watchlists: [{ id: 1, name: "Default", isDefault: true }],
       watchlist: [
         {
           id: 1,
+          watchlistId: 1,
           instrumentId: 1,
           symbol: "AAPL",
           name: "Apple Inc.",
           assetType: "equity",
           exchange: "NMS",
-          targetPrice: 250,
-          stopPrice: null,
-          thesis: "AI device cycle",
-          notes: "Read-only detail should open.",
-          tags: ["mega-cap"],
         },
       ],
     });

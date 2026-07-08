@@ -2,7 +2,6 @@ import { Plus, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
-import { Textarea } from "../../components/ui/textarea.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
@@ -24,8 +23,8 @@ import { WatchlistPage } from "./WatchlistPage.jsx";
 const PAGE_META = {
   watchlists: {
     title: "Watchlists",
-    primaryLabel: "Add ticker",
-    primaryPanel: "watchlist-add",
+    primaryLabel: "New Watchlist",
+    primaryPanel: "watchlist-create",
   },
   portfolios: {
     title: "Portfolios",
@@ -256,31 +255,35 @@ function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
 function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
   const item = panel.data?.item;
   const lot = panel.data?.lot;
+  const watchlist = panel.data?.watchlist;
 
-  if (panel.type === "watchlist-add" || panel.type === "watchlist-edit") {
+  if (panel.type === "watchlist-create") {
+    return (
+      <WatchlistCreateForm
+        disabled={readOnly}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("manage_watchlist", {
+            action: "create",
+            watchlist_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
+  if (panel.type === "watchlist-add") {
     return (
       <SymbolActionPanel
-        key={`${panel.type}:${item?.id ?? item?.symbol ?? "new"}`}
-        title={panel.type === "watchlist-add" ? "Add ticker" : "Edit ticker"}
+        key={`${panel.type}:${watchlist?.id ?? "default"}`}
         disabled={readOnly}
-        initialSymbol={item?.symbol}
-        fields={[
-          {
-            name: "target_price",
-            label: "Target",
-            type: "number",
-            defaultValue: item?.targetPrice,
-          },
-          { name: "stop_price", label: "Stop", type: "number", defaultValue: item?.stopPrice },
-          { name: "thesis", label: "Thesis", multiline: true, defaultValue: item?.thesis },
-          { name: "notes", label: "Notes", multiline: true, defaultValue: item?.notes },
-          { name: "tags", label: "Tags", defaultValue: item?.tags?.join(", ") },
-        ]}
         onSubmit={async (values) => {
-          const saved = await invokeTool(
-            "manage_watchlist",
-            buildWatchlistMutationArgs(panel.type, values),
-          );
+          const saved = await invokeTool("manage_watchlist", {
+            action: "add",
+            symbol: values.symbol,
+            watchlist_name: watchlist?.name,
+          });
           if (saved) closePanel();
           return saved;
         }}
@@ -407,22 +410,50 @@ function ContextPanel({ title, onClose, children }) {
   );
 }
 
-export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubmit }) {
-  const [values, setValues] = useState(() =>
-    Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])),
+export function WatchlistCreateForm({ disabled, onSubmit }) {
+  const [name, setName] = useState("");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const saved = await onSubmit({ name: trimmed });
+    if (saved === false) return;
+    setName("");
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          aria-label="Watchlist name"
+          value={name}
+          disabled={disabled}
+          required
+          placeholder="ETFs"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !name.trim()}>
+        Create watchlist
+      </Button>
+    </form>
   );
-  const [query, setQuery] = useState(initialSymbol);
-  const [selected, setSelected] = useState(initialSymbol);
-  const resolvedSymbol = selected || initialSymbol;
+}
+
+export function SymbolActionPanel({ disabled, onSubmit }) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState("");
+  const resolvedSymbol = selected;
 
   const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol) return;
-    const saved = await onSubmit({ ...values, symbol: resolvedSymbol });
+    const saved = await onSubmit({ symbol: resolvedSymbol });
     if (saved === false) return;
-    setValues(Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])));
-    setQuery(initialSymbol);
-    setSelected(initialSymbol);
+    setQuery("");
+    setSelected("");
   };
 
   return (
@@ -435,79 +466,15 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
       <SymbolSearchInput
         query={query}
         selected={selected}
-        disabled={disabled || Boolean(initialSymbol)}
+        disabled={disabled}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
-      <div className="grid gap-3">
-        {fields.map((field) => (
-          <label key={field.name} className="grid gap-1 text-xs font-medium text-muted-foreground">
-            {field.label}
-            {field.type === "select" ? (
-              <select
-                aria-label={field.label}
-                className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
-                value={values[field.name] || ""}
-                disabled={disabled}
-                required={field.required}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                }
-              >
-                {field.options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            ) : field.multiline ? (
-              <Textarea
-                aria-label={field.label}
-                className="rounded-md border border-border bg-card px-3 py-2"
-                value={values[field.name] || ""}
-                disabled={disabled}
-                required={field.required}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                }
-              />
-            ) : (
-              <Input
-                aria-label={field.label}
-                type={field.type || "text"}
-                step={field.type === "number" ? "any" : undefined}
-                placeholder={field.placeholder}
-                value={values[field.name] || ""}
-                disabled={disabled}
-                required={field.required}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                }
-              />
-            )}
-          </label>
-        ))}
-      </div>
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>
         {resolvedSymbol ? "Save" : "Select a ticker to save"}
       </Button>
     </form>
   );
-}
-
-export function buildWatchlistMutationArgs(panelType, values) {
-  const isEdit = panelType === "watchlist-edit";
-  return {
-    action: isEdit ? "update" : "add",
-    symbol: values.symbol,
-    target_price: isEdit
-      ? numberOrNull(values.target_price)
-      : numberOrUndefined(values.target_price),
-    stop_price: isEdit ? numberOrNull(values.stop_price) : numberOrUndefined(values.stop_price),
-    thesis: isEdit ? blankToNull(values.thesis) : values.thesis || undefined,
-    notes: isEdit ? blankToNull(values.notes) : values.notes || undefined,
-    tags: isEdit ? (parseTags(values.tags) ?? []) : parseTags(values.tags),
-  };
 }
 
 export function HoldingForm({ disabled, lot, onSubmit }) {
@@ -811,36 +778,10 @@ function readOnlyMessage(role) {
   return "Saved-state changes are unavailable in this window while OpenCandle reconnects local access. Tables, summaries, and details remain available.";
 }
 
-export function buildWatchlistRowActions(item, invokeTool) {
-  const actions = [];
-  if (item.targetPrice == null) {
-    actions.push({
-      label: "Set target first",
-      disabled: true,
-      onClick: () => undefined,
-    });
-  } else {
-    actions.push({
-      label: "Create alert",
-      onClick: () =>
-        invokeTool("manage_alerts", {
-          action: "create_price_above",
-          symbol: item.symbol,
-          threshold: item.targetPrice,
-        }),
-    });
-  }
-  actions.push({
-    label: "Remove",
-    onClick: () => invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol }),
-  });
-  return actions;
-}
-
 function panelTitle(type) {
   const titles = {
+    "watchlist-create": "New Watchlist",
     "watchlist-add": "Add Ticker",
-    "watchlist-edit": "Edit Ticker",
     "holding-add": "Add Holding",
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",
@@ -862,24 +803,4 @@ function numberOrUndefined(value) {
   if (value === "" || value == null) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function numberOrNull(value) {
-  if (value === "" || value == null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function blankToNull(value) {
-  const text = String(value ?? "").trim();
-  return text ? value : null;
-}
-
-function parseTags(value) {
-  const tags = [];
-  for (const part of String(value ?? "").split(",")) {
-    const tag = part.trim();
-    if (tag) tags.push(tag);
-  }
-  return tags.length ? tags : undefined;
 }
