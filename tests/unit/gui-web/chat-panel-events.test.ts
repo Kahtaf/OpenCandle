@@ -202,6 +202,15 @@ describe("ChatPanel event transcript rendering", () => {
     expect(source).not.toContain("return false;\n      }\n      return gui.invokeTool(");
   });
 
+  it("preserves direct tool invocation options for market-state actions", () => {
+    const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+
+    expect(source).toContain("(toolName, args, targetSessionId, options) =>");
+    expect(source).toContain(
+      "return gui.invokeTool(toolName, args, targetSessionId ?? sessionView.activeSessionId, options);",
+    );
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,

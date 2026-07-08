@@ -306,6 +306,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
           toolName: String(body.toolName ?? ""),
           args: asRecord(body.args),
           allowProxy: false,
+          ...(body.recordTranscript === false ? { recordTranscript: false } : {}),
         },
       );
       const message = asRecord(ack);

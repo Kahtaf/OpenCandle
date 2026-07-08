@@ -5,6 +5,7 @@
 ### Fixed
 
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
+- Watchlist, portfolio, alert, and report form actions in the GUI now update saved market state without creating empty chat sessions.
 
 ## [0.11.1] - 2026-07-08
 

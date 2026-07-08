@@ -240,17 +240,22 @@ describe("MarketStatePage rendering", () => {
   it("refreshes quotes immediately after acknowledged market-state mutations", async () => {
     const refresh = vi.fn();
     const refreshQuotes = vi.fn();
+    const invokeToolRequest = vi.fn(async () => undefined);
 
     const saved = await invokeMarketStateMutation({
       readOnly: false,
       toolName: "manage_watchlist",
       args: { action: "add", symbol: "AAPL" },
-      invokeToolRequest: async () => undefined,
+      invokeToolRequest,
       refresh,
       refreshQuotes,
     });
 
     expect(saved).toBe(true);
+    expect(invokeToolRequest).toHaveBeenCalledWith("manage_watchlist", {
+      action: "add",
+      symbol: "AAPL",
+    }, "", { recordTranscript: false });
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });

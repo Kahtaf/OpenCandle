@@ -40,7 +40,7 @@ export interface ToolInvokeController {
     toolName: string,
     args: Record<string, unknown>,
     sessionId?: string,
-    options?: { actionId?: string; allowProxy?: boolean },
+    options?: { actionId?: string; allowProxy?: boolean; recordTranscript?: boolean },
   ): Promise<InvokeToolResult>;
   handleToolInvokeMessage(client: ToolInvokeClient, data: Record<string, unknown>): Promise<void>;
 }
@@ -84,7 +84,7 @@ export function createToolInvokeController({
     toolName: string,
     args: Record<string, unknown>,
     sessionId = "",
-    options: { actionId?: string; allowProxy?: boolean } = {},
+    options: { actionId?: string; allowProxy?: boolean; recordTranscript?: boolean } = {},
   ): Promise<InvokeToolResult> {
     const tool = getTools().find((candidate) => candidate.name === toolName);
     if (!tool) throw new Error(`Unknown tool: ${toolName}`);
@@ -107,6 +107,7 @@ export function createToolInvokeController({
         toolName,
         args,
         options.actionId,
+        options.recordTranscript,
       );
       if (proxied) return proxied;
       if (options.actionId && hasAcceptedSessionAction(runSessionManager, options.actionId)) {
@@ -162,6 +163,7 @@ export function createToolInvokeController({
               ? askUserHandlerForSessionId(runSessionId)
               : askUserHandler,
           onTranscriptStarted: recordAcceptedAction,
+          recordTranscript: options.recordTranscript,
         });
       } catch (error) {
         if (!actionAccepted) clearPendingSessionAction(runSessionManager, options.actionId ?? "");
@@ -196,15 +198,24 @@ export function createToolInvokeController({
     try {
       if (!sessionId.trim()) throw new Error("sessionId is required");
       if (!actionId.trim()) throw new Error("actionId is required");
+      const recordTranscript = data.recordTranscript === false ? false : undefined;
       const invoke = () =>
-        handleToolInvoke(toolName, requestArgs(data.args), sessionId, { actionId, allowProxy });
+        handleToolInvoke(toolName, requestArgs(data.args), sessionId, {
+          actionId,
+          allowProxy,
+          recordTranscript,
+        });
       const actionResult = localSessionCoordinator
         ? await localSessionCoordinator.runSessionAction(
             {
               sessionId,
               actionId,
               actionType: "tool.invoke",
-              payload: { toolName, args: requestArgs(data.args) },
+              payload: {
+                toolName,
+                args: requestArgs(data.args),
+                ...(recordTranscript === false ? { recordTranscript: false } : {}),
+              },
               source: "browser",
             },
             invoke,
@@ -255,6 +266,7 @@ async function proxyToolInvokeToCoordinator(
   toolName: string,
   args: Record<string, unknown>,
   actionId = "",
+  recordTranscript: boolean | undefined = undefined,
 ): Promise<InvokeToolResult | null> {
   const lock = readWriterLock(writerLockScopeForSession(runSessionManager));
   if (!lock?.coordinatorEndpoint || !lock.coordinatorSecret) return null;
@@ -272,6 +284,7 @@ async function proxyToolInvokeToCoordinator(
         actionId,
         toolName,
         args,
+        ...(recordTranscript === false ? { recordTranscript: false } : {}),
       }),
     });
   } catch {

@@ -367,13 +367,13 @@ export function AppShell() {
           : "workflows";
   const marketDomain = domainFromPath(pathname);
   const invokeToolForVisibleSession = useCallback(
-    (toolName, args) => {
+    (toolName, args, targetSessionId, options) => {
       if (nonChatActionsUnavailable) {
         const message = "OpenCandle is reconnecting to this session.";
         gui.setToast(message);
         return Promise.reject(new Error(message));
       }
-      return gui.invokeTool(toolName, args, sessionView.activeSessionId);
+      return gui.invokeTool(toolName, args, targetSessionId ?? sessionView.activeSessionId, options);
     },
     [gui.invokeTool, gui.setToast, nonChatActionsUnavailable, sessionView.activeSessionId],
   );

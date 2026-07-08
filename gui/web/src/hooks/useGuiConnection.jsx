@@ -406,7 +406,7 @@ export function useGuiConnection() {
   );
 
   const invokeTool = useCallback(
-    (toolName, args = {}, targetSessionId = "") => {
+    (toolName, args = {}, targetSessionId = "", options = {}) => {
       const socket = wsRef.current;
       if (socket?.readyState !== 1 || typeof socket.send !== "function") {
         const error = new Error("GUI connection is not open.");
@@ -428,7 +428,13 @@ export function useGuiConnection() {
         socket.send(
           JSON.stringify(
             buildToolInvokeSocketMessage(
-              { requestId, actionId, toolName, args },
+              {
+                requestId,
+                actionId,
+                toolName,
+                args,
+                ...(options.recordTranscript === false ? { recordTranscript: false } : {}),
+              },
               currentSessionId,
               targetSessionId,
             ),

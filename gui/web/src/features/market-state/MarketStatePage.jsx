@@ -67,7 +67,7 @@ export async function invokeMarketStateMutation({
     if (typeof invokeToolRequest !== "function") {
       throw new Error(UNSUPPORTED_MUTATION_FALLBACK_MESSAGE);
     }
-    await invokeToolRequest(toolName, args);
+    await invokeToolRequest(toolName, args, "", { recordTranscript: false });
     await refresh();
     await refreshQuotes?.();
     return true;
