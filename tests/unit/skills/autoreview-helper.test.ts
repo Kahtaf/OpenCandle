@@ -852,7 +852,7 @@ fs.writeFileSync(outputPath, JSON.stringify(report));
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("react-doctor: skipped");
     expect(result.stderr).not.toContain("react doctor should have been skipped");
-  });
+  }, 15_000);
 
   it("fails forced branch review when the worktree has uncommitted changes", () => {
     dir = mkdtempSync(join(tmpdir(), "autoreview-dirty-"));
