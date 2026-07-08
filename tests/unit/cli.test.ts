@@ -19,6 +19,7 @@ const piMocks = vi.hoisted(() => ({
   releaseSessionWriterLock: vi.fn(),
   startTuiSessionCoordinatorServer: vi.fn(),
   writerLockScopeForSession: vi.fn(),
+  existsSync: vi.fn(),
   remove: vi.fn(),
   removeSourceFromSettings: vi.fn(),
   renderDoctorReport: vi.fn(),
@@ -26,6 +27,14 @@ const piMocks = vi.hoisted(() => ({
   setProgressCallback: vi.fn(),
   update: vi.fn(),
 }));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    existsSync: piMocks.existsSync,
+  };
+});
 
 vi.mock("node:child_process", async () => {
   const { EventEmitter } = await import("node:events");
@@ -151,6 +160,7 @@ describe("opencandle package commands", () => {
     piMocks.removeSourceFromSettings.mockReturnValue(true);
     piMocks.update.mockResolvedValue(undefined);
     piMocks.ensureOpenCandleNativeDependencies.mockResolvedValue(undefined);
+    piMocks.existsSync.mockReturnValue(false);
     piMocks.acquireSessionWriterLock.mockResolvedValue({
       role: "writer",
       lock: {
@@ -191,12 +201,31 @@ describe("opencandle package commands", () => {
     expect(piMocks.ensureOpenCandleNativeDependencies).toHaveBeenCalled();
   });
 
-  it("spawns the foreground local automation monitor", async () => {
+  it("spawns the compiled foreground local automation monitor when built", async () => {
+    piMocks.existsSync.mockImplementation((path) => String(path).endsWith("dist/monitor.js"));
+
     await runCli(["monitor", "--once"]);
 
     expect(piMocks.spawn).toHaveBeenCalledWith(
       process.execPath,
       [expect.stringContaining("dist/monitor.js"), "--once"],
+      expect.objectContaining({
+        stdio: "inherit",
+      }),
+    );
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("spawns the source foreground local automation monitor in clean checkouts", async () => {
+    await runCli(["monitor", "--once"]);
+
+    expect(piMocks.spawn).toHaveBeenCalledWith(
+      process.execPath,
+      [
+        expect.stringContaining("node_modules/tsx/dist/cli.mjs"),
+        expect.stringContaining("src/monitor.ts"),
+        "--once",
+      ],
       expect.objectContaining({
         stdio: "inherit",
       }),
