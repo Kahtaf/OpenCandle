@@ -6,7 +6,7 @@ import type { FearGreedData } from "../../types/sentiment.js";
 
 const params = Type.Object({});
 
-export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
+export const fearGreedTool: AgentTool<typeof params, FearGreedData | null> = {
   name: "get_fear_greed",
   label: "Fear & Greed Index",
   description:
@@ -17,7 +17,7 @@ export const fearGreedTool: AgentTool<typeof params, FearGreedData> = {
     if (result.status === "unavailable") {
       return {
         content: [{ type: "text", text: `⚠ Fear & Greed Index unavailable (${result.reason}).` }],
-        details: null as any,
+        details: null,
       };
     }
     const fg = result.data;

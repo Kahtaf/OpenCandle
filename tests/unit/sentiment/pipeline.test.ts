@@ -5,9 +5,9 @@ import type { SentinelRecord } from "../../../src/sentiment/types.js";
 
 function makeRecord(overrides: Partial<SentinelRecord> = {}): SentinelRecord {
   return {
-    id: "test-" + Math.random().toString(36).slice(2, 8),
+    id: `test-${Math.random().toString(36).slice(2, 8)}`,
     source: "twitter",
-    sourceId: "src-" + Math.random().toString(36).slice(2, 8),
+    sourceId: `src-${Math.random().toString(36).slice(2, 8)}`,
     query: "AAPL",
     title: null,
     text: "bullish on AAPL",
@@ -93,7 +93,7 @@ describe("SentimentPipeline", () => {
     const freshRecords = [makeRecord({ text: "bullish on AAPL" })];
     const result = await pipeline.processRecords(freshRecords, "AAPL");
     expect(result.trend).not.toBeNull();
-    expect(result.trend!.length).toBeGreaterThanOrEqual(1);
+    expect(result.trend?.length).toBeGreaterThanOrEqual(1);
   });
 
   it("handles empty input", async () => {

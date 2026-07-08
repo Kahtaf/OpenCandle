@@ -1,3 +1,4 @@
+import type { Api, Model } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   buildComprehensiveAnalysisDefinition,
@@ -838,7 +839,8 @@ export default function openCandleExtension(
     ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
     originalText: string,
   ): Promise<{ action: "transform"; text: string } | false> {
-    const workflow = output.workflow!;
+    const workflow = output.workflow;
+    if (!workflow) return false;
     const storage = coordinator.getStorage();
     const workflowPrefs = storage?.getWorkflowPreferences("global") ?? {};
     const entities = mergeRouterSlotsIntoEntities(output);
@@ -1205,8 +1207,7 @@ export default function openCandleExtension(
     // default unrouted flow for the turn.
     const model = (ctx as { model?: unknown }).model;
     if (!model) return null;
-    // biome-ignore lint/suspicious/noExplicitAny: Pi typings keep Model generic
-    return createPiAiRouterClient(model as any);
+    return createPiAiRouterClient(model as Model<Api>);
   }
 
   // System prompt assembly — delegate to coordinator. When a fallback context

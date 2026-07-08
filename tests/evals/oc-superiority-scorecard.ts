@@ -87,7 +87,7 @@ export function writeOcSuperiorityScorecard(
   mkdirSync(runsDir, { recursive: true });
   const stamp = scorecard.generatedAt.replace(/[:.]/g, "-");
   const outputPath = join(runsDir, `${stamp}_oc-superiority-scorecard.json`);
-  writeFileSync(outputPath, JSON.stringify(scorecard, null, 2) + "\n", "utf-8");
+  writeFileSync(outputPath, `${JSON.stringify(scorecard, null, 2)}\n`, "utf-8");
   return outputPath;
 }
 
@@ -224,7 +224,7 @@ function blockersFromLayers(layers: Record<ScorecardLayerId, ScorecardLayer>): S
 }
 
 function productImprovements(report: ProductReplayComparison | undefined): string[] {
-  if (!report || report.status !== "compared") return [];
+  if (report?.status !== "compared") return [];
   const improvements: string[] = [];
   if ((report.aggregateDelta ?? 0) > 0)
     improvements.push(`product replay aggregate improved by ${report.aggregateDelta}`);
@@ -234,7 +234,7 @@ function productImprovements(report: ProductReplayComparison | undefined): strin
 }
 
 function competitiveImprovements(report: CompetitiveReplayComparison | undefined): string[] {
-  if (!report || report.status !== "compared") return [];
+  if (report?.status !== "compared") return [];
   const improvements: string[] = [];
   if ((report.openCandleWinDelta ?? 0) > 0)
     improvements.push(

@@ -43,7 +43,9 @@ export function getSentimentPipeline(): SentimentPipeline {
   if (!_pipeline) {
     const store = getSentimentStore();
     const config = getConfig();
-    _pipeline = new SentimentPipeline(store, config.sentiment!);
+    const sentimentConfig = config.sentiment;
+    if (!sentimentConfig) throw new Error("Sentiment configuration is missing.");
+    _pipeline = new SentimentPipeline(store, sentimentConfig);
   }
   return _pipeline;
 }

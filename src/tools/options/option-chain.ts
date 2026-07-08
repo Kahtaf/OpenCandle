@@ -25,7 +25,7 @@ const params = Type.Object({
 
 export const optionChainTool: AgentTool<
   typeof params,
-  OptionsChain & { freshness: FreshnessStamp }
+  (OptionsChain & { freshness: FreshnessStamp }) | null
 > = {
   name: "get_option_chain",
   label: "Options Chain",
@@ -43,7 +43,7 @@ export const optionChainTool: AgentTool<
         content: [
           { type: "text", text: `⚠ Options chain unavailable for ${symbol} (${result.reason}).` },
         ],
-        details: null as any,
+        details: null,
       };
     }
     const chain = result.data;

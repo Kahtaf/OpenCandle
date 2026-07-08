@@ -4,7 +4,7 @@
  * Uses synthetic session events (no LLM needed).
  */
 
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
@@ -114,7 +114,7 @@ describe("harness integration", () => {
     setTimeout(() => {
       expect(IpcChannel.readStatus(ipcDir)).toBe("waiting");
       const q = IpcChannel.readQuestion(ipcDir);
-      expect(q!.question).toBe("What is your risk tolerance?");
+      expect(q?.question).toBe("What is your risk tolerance?");
       IpcChannel.writeAnswer(ipcDir, "Moderate");
     }, 50);
 

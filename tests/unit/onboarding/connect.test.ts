@@ -198,7 +198,7 @@ describe("runProviderConnect", () => {
     const notifyCalls = ui.notify.mock.calls.map((call: any[]) => [call[0], call[1]]);
     const errorNotify = notifyCalls.find((c: any[]) => c[1] === "error");
     expect(errorNotify).toBeDefined();
-    expect(errorNotify![0].toLowerCase()).toMatch(/rejected|invalid/);
+    expect(errorNotify?.[0].toLowerCase()).toMatch(/rejected|invalid/);
   });
 
   it("returns invalid_key when Alpha Vantage responds 200 with an invalid-api Information body", async () => {
@@ -250,7 +250,7 @@ describe("runProviderConnect", () => {
     const notifyCalls = ui.notify.mock.calls.map((call: any[]) => [call[0], call[1]]);
     const warningNotify = notifyCalls.find((c: any[]) => c[1] === "warning");
     expect(warningNotify).toBeDefined();
-    expect(warningNotify![0]).toContain("ECONNRESET");
+    expect(warningNotify?.[0]).toContain("ECONNRESET");
   });
 
   it("calls validateCredential with the trimmed key and the correct provider id", async () => {

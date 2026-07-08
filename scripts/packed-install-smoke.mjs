@@ -55,6 +55,23 @@ async function waitForHealth(url, timeoutMs) {
   throw new Error(`Timed out waiting for ${url}: ${lastError?.message ?? "no response"}`);
 }
 
+async function waitForGuiShell(url, timeoutMs) {
+  const startedAt = Date.now();
+  let lastError;
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const response = await fetch(url);
+      const body = await response.text();
+      if (response.ok && body.includes('<div id="root"></div>')) return;
+      lastError = new Error(`HTTP ${response.status}, body=${body.slice(0, 80)}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolveWait) => setTimeout(resolveWait, 250));
+  }
+  throw new Error(`Timed out waiting for ${url}: ${lastError?.message ?? "no response"}`);
+}
+
 async function smokeGui(packageDir, env) {
   const port = String(19_000 + Math.floor(Math.random() * 20_000));
   const bin = join(
@@ -83,6 +100,7 @@ async function smokeGui(packageDir, env) {
   });
   try {
     await waitForHealth(`http://127.0.0.1:${port}/health`, 20_000);
+    await waitForGuiShell(`http://127.0.0.1:${port}/`, 20_000);
   } catch (error) {
     throw new Error(`${error.message}\nGUI output:\n${output}`);
   } finally {

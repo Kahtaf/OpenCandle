@@ -511,7 +511,7 @@ async function getYahooCompanySummary(symbol: string): Promise<YahooQuoteSummary
       { modules: [...modules] },
       { validateResult: false },
     )) as YahooQuoteSummaryResult;
-  } catch (error) {
+  } catch (_error) {
     const data = await getYahooQuoteSummary(symbol, modules.join(","));
     if (data.quoteSummary.error) {
       throw new Error(

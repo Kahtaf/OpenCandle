@@ -21,7 +21,8 @@ export const financialsTool: AgentTool<
   parameters: params,
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
-      const apiKey = getConfig().alphaVantageApiKey!;
+      const apiKey = getConfig().alphaVantageApiKey;
+      if (!apiKey) throw new Error("Alpha Vantage credential is missing.");
       const result = await wrapProvider("alphavantage", () =>
         getFinancials(args.symbol.toUpperCase(), apiKey),
       );

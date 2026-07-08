@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,7 +55,7 @@ const privateApiSessionToken = randomBytes(32).toString("base64url");
 const localCoordinatorSecret = randomBytes(32).toString("base64url");
 const localCoordinatorEndpoint = `http://${coordinatorEndpointHost(host)}:${port}`;
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
-const webDist = resolve(__dirname, "../web/dist");
+const webDist = resolveGuiWebDist(__dirname);
 
 const agentDir = getAgentDir();
 const authStorage = AuthStorage.create();
@@ -283,6 +284,14 @@ function coordinatorEndpointHost(bindHost: string): string {
   if (bindHost === "0.0.0.0") return "127.0.0.1";
   if (bindHost === "::") return "[::1]";
   return bindHost.includes(":") && !bindHost.startsWith("[") ? `[${bindHost}]` : bindHost;
+}
+
+function resolveGuiWebDist(serverDir: string): string {
+  const candidates = [
+    resolve(serverDir, "../web/dist"),
+    resolve(serverDir, "../../../gui/web/dist"),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? candidates[0];
 }
 
 process.once("SIGINT", shutdown);

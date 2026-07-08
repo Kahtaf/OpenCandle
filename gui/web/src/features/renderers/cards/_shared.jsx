@@ -1,3 +1,5 @@
+// biome-ignore-all lint/security/noDangerouslySetInnerHtml: PlainOutput renders sanitized rich text from renderRichText.
+
 import { Badge } from "../../../components/ui/badge.jsx";
 import { cn } from "../../../lib/utils.js";
 import { renderRichText } from "../../../rendering/text.js";
@@ -129,6 +131,7 @@ export function Sparkline({ values, height = 56, className, fill = true }) {
       viewBox={`0 0 ${width} ${height}`}
       className={cn("w-full", className)}
       preserveAspectRatio="none"
+      aria-hidden="true"
     >
       {fill ? <path d={area} fill={fillColor} stroke="none" /> : null}
       <path

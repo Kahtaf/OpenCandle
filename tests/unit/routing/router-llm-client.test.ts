@@ -22,7 +22,7 @@ describe("createPiAiRouterClient", () => {
 
     await expect(client.complete("title this session")).resolves.toBe("Memory Stock Selloff");
     expect(mockCompleteSimple).toHaveBeenCalledTimes(2);
-    expect(mockCompleteSimple.mock.calls[0]![2]).toMatchObject({ temperature: 0 });
-    expect(mockCompleteSimple.mock.calls[1]![2]).not.toHaveProperty("temperature");
+    expect(mockCompleteSimple.mock.calls[0]?.[2]).toMatchObject({ temperature: 0 });
+    expect(mockCompleteSimple.mock.calls[1]?.[2]).not.toHaveProperty("temperature");
   });
 });

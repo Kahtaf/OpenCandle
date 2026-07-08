@@ -236,9 +236,7 @@ record("session A: at least one Alpha Vantage prompt fired", () => {
 });
 
 record("session A: scripted answer was the Snooze option", () => {
-  const snoozedCall = askUserTranscriptA.find(
-    (c) => c.answer !== null && c.answer.startsWith("Snooze"),
-  );
+  const snoozedCall = askUserTranscriptA.find((c) => c.answer?.startsWith("Snooze"));
   assert(
     snoozedCall !== undefined,
     `expected a "Snooze …" answer to be recorded, got:\n${askUserTranscriptA
@@ -265,24 +263,25 @@ record("session A: onboarding.json records alpha_vantage status=snoozed", () => 
     `expected providers.alpha_vantage entry in ${onboardingPath}, got:\n${raw}`,
   );
   assert(
-    entry!.status === "snoozed",
-    `expected alpha_vantage.status === "snoozed", got: ${entry!.status}`,
+    entry?.status === "snoozed",
+    `expected alpha_vantage.status === "snoozed", got: ${entry?.status}`,
   );
   assert(
-    typeof entry!.snoozeUntil === "string",
-    `expected alpha_vantage.snoozeUntil to be a string, got: ${String(entry!.snoozeUntil)}`,
+    typeof entry?.snoozeUntil === "string",
+    `expected alpha_vantage.snoozeUntil to be a string, got: ${String(entry?.snoozeUntil)}`,
   );
-  const snoozeUntilMs = Date.parse(entry!.snoozeUntil!);
+  const snoozeUntil = entry.snoozeUntil;
+  const snoozeUntilMs = Date.parse(snoozeUntil);
   assert(
     !Number.isNaN(snoozeUntilMs),
-    `expected snoozeUntil to parse as a date, got: ${entry!.snoozeUntil}`,
+    `expected snoozeUntil to parse as a date, got: ${snoozeUntil}`,
   );
   const nowMs = Date.now();
   const sixDaysMs = 6 * 24 * 3600 * 1000;
   const eightDaysMs = 8 * 24 * 3600 * 1000;
   assert(
     snoozeUntilMs >= nowMs + sixDaysMs && snoozeUntilMs <= nowMs + eightDaysMs,
-    `expected snoozeUntil to be ~7 days in the future, got ${entry!.snoozeUntil} (delta=${
+    `expected snoozeUntil to be ~7 days in the future, got ${snoozeUntil} (delta=${
       (snoozeUntilMs - nowMs) / (24 * 3600 * 1000)
     } days)`,
   );

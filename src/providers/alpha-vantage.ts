@@ -214,7 +214,7 @@ export async function getGlobalQuote(symbol: string, apiKey: string): Promise<St
     throwIfApiMessage(data);
     const gq = data["Global Quote"];
 
-    if (!gq || !gq["05. price"]) {
+    if (!gq?.["05. price"]) {
       throw new Error(`Alpha Vantage: No quote data for ${symbol}`);
     }
 
@@ -336,5 +336,5 @@ function parseNum(s: string | undefined): number {
 function parseNullableNum(s: string | undefined): number | null {
   if (!s || s === "None" || s === "-") return null;
   const n = parseFloat(s);
-  return isNaN(n) ? null : n;
+  return Number.isNaN(n) ? null : n;
 }

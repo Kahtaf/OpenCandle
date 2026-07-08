@@ -85,8 +85,10 @@ describe("release readiness automation", () => {
     expect(packageCheck).not.toContain("--ignore-scripts");
     expect(packageCheck).toContain("deniedDirectorySegments");
     expect(packageCheck).toContain('"docs"');
+    expect(packageCheck).toContain('"src"');
     expect(packageCheck).toContain('".agents"');
     expect(packageCheck).toContain('"graphify-out"');
+    expect(packageCheck).toContain('"dist/gui/server/server.js"');
   });
 
   it("rejects denied package artifacts below published runtime directories", async () => {
@@ -100,9 +102,13 @@ describe("release readiness automation", () => {
     expect(isDeniedPackagePath("fixtures/provider/quote.json")).toBe(true);
     expect(isDeniedPackagePath("src/providers/yahoo/fixtures/quote.json")).toBe(true);
     expect(isDeniedPackagePath("src/tools/market/tests/quote.test.ts")).toBe(true);
+    expect(isDeniedPackagePath("src/providers/yahoo-finance.ts")).toBe(true);
+    expect(isDeniedPackagePath("gui/server/server.ts")).toBe(true);
+    expect(isDeniedPackagePath("gui/shared/chat-events.ts")).toBe(true);
     expect(isDeniedPackagePath("gui/server/.env.local")).toBe(true);
     expect(isDeniedPackagePath("website/dist/index.html")).toBe(true);
-    expect(isDeniedPackagePath("src/providers/yahoo-finance.ts")).toBe(false);
+    expect(isDeniedPackagePath("dist/providers/yahoo-finance.js")).toBe(false);
+    expect(isDeniedPackagePath("dist/gui/server/server.js")).toBe(false);
     expect(
       parsePackDryRunJson('> opencandle@0.7.0 prepare\n[{"files":[{"path":"dist/cli.js"}]}]'),
     ).toEqual([{ files: [{ path: "dist/cli.js" }] }]);

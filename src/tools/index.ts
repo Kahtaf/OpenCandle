@@ -1,4 +1,3 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { AskUserHandler } from "../types/index.js";
 import { companyOverviewTool } from "./fundamentals/company-overview.js";
 import { compsTool } from "./fundamentals/comps.js";
@@ -66,7 +65,7 @@ export { webSentimentTool } from "./sentiment/web-sentiment.js";
 export { backtestTool } from "./technical/backtest.js";
 export { technicalIndicatorsTool } from "./technical/indicators.js";
 
-export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}): AgentTool<any>[] {
+export function getAllTools(options: { askUserHandler?: AskUserHandler } = {}) {
   return [
     searchTickerTool,
     stockQuoteTool,

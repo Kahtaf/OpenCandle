@@ -36,7 +36,7 @@ export const webSentimentTool: AgentTool<typeof params> = {
             text: `⚠ Web sentiment unavailable for "${args.query}" (${providerResult.reason}).`,
           },
         ],
-        details: null as any,
+        details: null,
       };
     }
 

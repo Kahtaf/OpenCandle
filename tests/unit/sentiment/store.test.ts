@@ -5,9 +5,9 @@ import type { SentinelRecord } from "../../../src/sentiment/types.js";
 
 function makeRecord(overrides: Partial<SentinelRecord> = {}): SentinelRecord {
   return {
-    id: "test-" + Math.random().toString(36).slice(2, 8),
+    id: `test-${Math.random().toString(36).slice(2, 8)}`,
     source: "twitter",
-    sourceId: "tweet-" + Math.random().toString(36).slice(2, 8),
+    sourceId: `tweet-${Math.random().toString(36).slice(2, 8)}`,
     query: "AAPL",
     title: null,
     text: "AAPL is going to moon, very bullish",

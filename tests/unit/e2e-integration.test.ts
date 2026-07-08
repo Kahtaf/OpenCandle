@@ -18,11 +18,7 @@ import type Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildMemoryContext, initDatabase, MemoryStorage } from "../../src/memory/index.js";
 import { extractPreferences } from "../../src/memory/preference-extractor.js";
-import {
-  buildCompareAssetsPrompt,
-  buildOptionsScreenerPrompt,
-  buildPortfolioPrompt,
-} from "../../src/prompts/workflow-prompts.js";
+import { buildCompareAssetsPrompt } from "../../src/prompts/workflow-prompts.js";
 import { classifyIntent } from "../../src/routing/classify-intent.js";
 import { extractEntities } from "../../src/routing/entity-extractor.js";
 import {
@@ -258,11 +254,11 @@ describe("E2E integration: full orchestration pipeline", () => {
       // Step 3: Verify in DB
       const riskPref = storage.getPreference("global", "risk_profile");
       expect(riskPref).toBeTruthy();
-      expect(JSON.parse(riskPref!.value_json as string)).toBe("conservative");
+      expect(JSON.parse(riskPref?.value_json as string)).toBe("conservative");
 
       const assetPref = storage.getPreference("global", "asset_scope");
       expect(assetPref).toBeTruthy();
-      expect(JSON.parse(assetPref!.value_json as string)).toBe("etf_focused");
+      expect(JSON.parse(assetPref?.value_json as string)).toBe("etf_focused");
     });
 
     it("getWorkflowPreferences maps DB rows to typed shape", () => {

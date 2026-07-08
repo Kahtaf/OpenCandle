@@ -56,8 +56,20 @@ export function registerAskUserTool(pi: ExtensionAPI, askUserHandler?: AskUserHa
         };
       }
 
+      if (!ctx && !askUserHandler) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "UI not available (non-interactive mode). Proceed with your best judgment and clearly disclose your assumption.",
+            },
+          ],
+          details: { question, questionType, answer: null, cancelled: true } as AskUserDetails,
+        };
+      }
+
       const result = await promptUser(
-        ctx!,
+        ctx,
         {
           question,
           questionType,

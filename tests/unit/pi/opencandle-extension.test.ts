@@ -12,14 +12,8 @@ import {
 } from "../../../src/onboarding/state.js";
 import openCandleExtension from "../../../src/pi/opencandle-extension.js";
 import { getOpenCandleToolDefinitions } from "../../../src/pi/tool-adapter.js";
-import { resolveOptionsScreenerSlots, resolvePortfolioSlots } from "../../../src/routing/index.js";
 import type { RouterLlmClient, RouterOutput } from "../../../src/routing/router-types.js";
 import { SessionCoordinator } from "../../../src/runtime/session-coordinator.js";
-import {
-  buildCompareAssetsWorkflowDefinition,
-  buildOptionsScreenerWorkflowDefinition,
-  buildPortfolioWorkflowDefinition,
-} from "../../../src/workflows/index.js";
 
 vi.mock("../../../src/memory/index.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../src/memory/index.js")>();
@@ -104,10 +98,6 @@ function exactSymbolSearch(validSymbols: string[]) {
           },
         ]
       : [];
-}
-
-function firstWorkflowPrompt(definition: { steps: { prompt: string }[] }): string {
-  return definition.steps[0]?.prompt ?? "";
 }
 
 function comprehensiveAnalysisPrompts(symbol: string): string[] {

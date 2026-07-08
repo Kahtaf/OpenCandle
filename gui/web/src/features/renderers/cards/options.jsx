@@ -3,7 +3,7 @@ import { extractDetails, formatDateShort, formatLargeNumber, formatPrice } from 
 
 export function OptionsChainCard({ message, header, text }) {
   const d = extractDetails(message);
-  if (!d || !d.symbol) {
+  if (!d?.symbol) {
     return (
       <ToolCard>
         {header}

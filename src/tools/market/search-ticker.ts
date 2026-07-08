@@ -242,7 +242,7 @@ function normalizeTickerQuery(query: string): string | undefined {
 }
 
 function symbolFromTvSymbol(tvSymbol: string): string {
-  return tvSymbol.includes(":") ? tvSymbol.split(":").at(-1)! : tvSymbol;
+  return tvSymbol.includes(":") ? (tvSymbol.split(":").at(-1) ?? tvSymbol) : tvSymbol;
 }
 
 function exchangeFromTvSymbol(tvSymbol: string): string {

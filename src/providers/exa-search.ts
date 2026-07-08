@@ -140,14 +140,15 @@ interface ExaApiResponse {
 }
 
 function mapApiResults(results: ExaApiResult[]): ParsedResult[] {
-  return results
-    .filter((r) => r.url)
-    .map((r) => ({
+  return results.flatMap((r) => {
+    if (!r.url) return [];
+    return {
       title: r.title ?? "",
-      url: r.url!,
+      url: r.url,
       published: r.publishedDate ?? null,
       snippet: (r.highlights?.join(" ") || r.text || "").slice(0, SNIPPET_MAX_CHARS),
-    }));
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -162,7 +163,7 @@ function filterByFreshness(
   return results.filter((r) => {
     if (!r.published) return true; // benefit of the doubt
     const pubTime = new Date(r.published).getTime();
-    return !isNaN(pubTime) && pubTime >= cutoff;
+    return !Number.isNaN(pubTime) && pubTime >= cutoff;
   });
 }
 

@@ -331,7 +331,7 @@ function writeReport(report: ManifestReport): string {
     runsDir,
     `${new Date().toISOString().replace(/[:.]/g, "-")}_prompt-policy-manifest.json`,
   );
-  writeFileSync(path, JSON.stringify(report, null, 2) + "\n", "utf-8");
+  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   return path;
 }
 
