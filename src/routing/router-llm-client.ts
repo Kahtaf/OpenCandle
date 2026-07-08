@@ -1,4 +1,4 @@
-import type { Model } from "@earendil-works/pi-ai";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import type { RouterLlmClient } from "./router-types.js";
 
@@ -13,7 +13,7 @@ type CompleteSimpleResponse = Awaited<ReturnType<typeof completeSimple>>;
  * is pinned low for structured-output stability.
  */
 export function createPiAiRouterClient(
-  model: Model<"anthropic-messages"> | Model<any>,
+  model: Model<"anthropic-messages"> | Model<Api>,
 ): RouterLlmClient {
   return {
     async complete(prompt: string): Promise<string> {

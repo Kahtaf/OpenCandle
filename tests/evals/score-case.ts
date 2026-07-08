@@ -19,34 +19,34 @@ export function scoreCase(evalCase: EvalCase, trace: EvalTrace): EvalCaseResult 
   // Layer 1: Workflow classification
   if (assertions.expectedWorkflow) {
     const detail = scoreWorkflowClassification(trace, assertions.expectedWorkflow);
-    layers["workflow_classification"] = detail;
+    layers.workflow_classification = detail;
     scores.push(detail.score);
   }
 
   // Layer 2: Tool selection
   if (assertions.requiredTools || assertions.forbiddenTools) {
     const detail = scoreToolSelection(trace, assertions.requiredTools, assertions.forbiddenTools);
-    layers["tool_selection"] = detail;
+    layers.tool_selection = detail;
     scores.push(detail.score);
   }
 
   // Layer 3: Tool arguments
   if (assertions.requiredArgs) {
     const detail = scoreToolArguments(trace, assertions.requiredArgs);
-    layers["tool_arguments"] = detail;
+    layers.tool_arguments = detail;
     scores.push(detail.score);
   }
 
   // Layer 4: Data faithfulness
   if (assertions.dataFaithfulness) {
     const detail = scoreDataFaithfulness(trace);
-    layers["data_faithfulness"] = detail;
+    layers.data_faithfulness = detail;
     scores.push(detail.score);
   }
 
   if (assertions.savedMarketStateFidelity) {
     const detail = scoreSavedMarketStateFidelity(trace, assertions.savedMarketStateFidelity);
-    layers["saved_market_state_fidelity"] = detail;
+    layers.saved_market_state_fidelity = detail;
     scores.push(detail.score);
   }
 
@@ -63,7 +63,7 @@ export function scoreCase(evalCase: EvalCase, trace: EvalTrace): EvalCaseResult 
         assertions.responseContains,
         assertions.responseNotContains,
       );
-      layers["risk_disclosure"] = detail;
+      layers.risk_disclosure = detail;
       scores.push(detail.score);
     }
   }
@@ -73,7 +73,7 @@ export function scoreCase(evalCase: EvalCase, trace: EvalTrace): EvalCaseResult 
   // Safety-critical: Layer 4 or 5 score of 0 on always-tier
   const safetyCriticalFailure =
     evalCase.tier === "always" &&
-    (layers["data_faithfulness"]?.score === 0 || layers["risk_disclosure"]?.score === 0);
+    (layers.data_faithfulness?.score === 0 || layers.risk_disclosure?.score === 0);
 
   return {
     name: evalCase.name,

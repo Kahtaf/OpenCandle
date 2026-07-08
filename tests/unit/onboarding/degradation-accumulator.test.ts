@@ -51,7 +51,7 @@ describe("createDegradationAccumulator", () => {
 
     const annotation = acc.buildCombinedAnnotation(emptyState());
     expect(annotation).not.toBeNull();
-    const lines = annotation!.split("\n").filter((l) => l.length > 0);
+    const lines = annotation?.split("\n").filter((l) => l.length > 0);
     expect(lines).toHaveLength(3);
 
     const providers = new Set<string>();
@@ -109,7 +109,7 @@ describe("createDegradationAccumulator", () => {
 
     const annotation = acc.buildCombinedAnnotation(state);
     expect(annotation).not.toBeNull();
-    const lines = annotation!.split("\n").filter((l) => l.length > 0);
+    const lines = annotation?.split("\n").filter((l) => l.length > 0);
     const parsedByProvider = new Map<string, ReturnType<typeof parseToolTag>>();
     for (const line of lines) {
       const parsed = parseToolTag(line);

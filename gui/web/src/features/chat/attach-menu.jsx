@@ -2,12 +2,14 @@ import { Image, Newspaper, PieChart, Plus, WalletCards, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { attachmentLabel, attachmentsFromImageFiles, validateImageFiles } from "./attachments.js";
+import { normalizeWatchlistOptions, watchlistAttachmentForOption } from "./watchlist-options.js";
 
-export function AttachMenu({ disabled, pendingAttachments, onAddAttachment, setToast }) {
+export function AttachMenu({ disabled, pendingAttachments, watchlists, onAddAttachment, setToast }) {
   const [open, setOpen] = useState(false);
   const inputRef = useRef(null);
 
   const imageCount = pendingAttachments.filter((attachment) => attachment.kind === "image").length;
+  const watchlistOptions = normalizeWatchlistOptions(watchlists);
 
   async function onFilesSelected(event) {
     const files = Array.from(event.target.files ?? []);
@@ -65,14 +67,20 @@ export function AttachMenu({ disabled, pendingAttachments, onAddAttachment, setT
               setOpen(false);
             }}
           />
-          <AttachMenuItem
-            icon={<PieChart />}
-            label="Watchlist"
-            onClick={() => {
-              onAddAttachment?.({ kind: "watchlist", id: "default", label: "Watchlist" });
-              setOpen(false);
-            }}
-          />
+          <div className="px-2 pt-1 pb-0.5 text-[11px] font-medium uppercase text-muted-foreground">
+            Watchlists
+          </div>
+          {watchlistOptions.map((watchlist) => (
+            <AttachMenuItem
+              key={watchlist.id}
+              icon={<PieChart />}
+              label={watchlist.name}
+              onClick={() => {
+                onAddAttachment?.(watchlistAttachmentForOption(watchlist));
+                setOpen(false);
+              }}
+            />
+          ))}
           <AttachMenuItem
             icon={<Newspaper />}
             label="Latest report"

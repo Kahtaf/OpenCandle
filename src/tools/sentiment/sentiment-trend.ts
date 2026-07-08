@@ -3,6 +3,8 @@ import { Type } from "@sinclair/typebox";
 import { getSentimentStore } from "../../sentiment/index.js";
 import type { SentimentStore } from "../../sentiment/store.js";
 import { computeTrend } from "../../sentiment/trends.js";
+import type { SentimentSource, TrendBucket, TrendResult } from "../../sentiment/types.js";
+import { SENTIMENT_SOURCES } from "../../sentiment/types.js";
 
 const params = Type.Object({
   query: Type.String({ description: "Ticker or topic to look up sentiment history" }),
@@ -26,7 +28,7 @@ const params = Type.Object({
 
 interface TrendToolResult {
   content: Array<{ type: "text"; text: string }>;
-  details: any;
+  details: { trend: TrendResult; series: TrendBucket[] } | null;
 }
 
 export const sentimentTrendTool: AgentTool<typeof params> & {
@@ -61,7 +63,8 @@ export const sentimentTrendTool: AgentTool<typeof params> & {
       };
     }
 
-    const trend = computeTrend(series, (args.source as any) ?? "aggregate");
+    const source = isSentimentTrendSource(args.source) ? args.source : "aggregate";
+    const trend = computeTrend(series, source);
 
     const lines = [
       `**Sentiment trend for "${args.query}"** (${days}d):`,
@@ -73,3 +76,7 @@ export const sentimentTrendTool: AgentTool<typeof params> & {
     return { content: [{ type: "text", text: lines.join("\n") }], details: { trend, series } };
   },
 };
+
+function isSentimentTrendSource(source: string | undefined): source is SentimentSource {
+  return source !== undefined && SENTIMENT_SOURCES.includes(source as SentimentSource);
+}

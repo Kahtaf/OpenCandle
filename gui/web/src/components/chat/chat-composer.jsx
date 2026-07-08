@@ -34,6 +34,7 @@ export function ChatComposer({
   send,
   setToast,
   pendingAttachments = EMPTY_ATTACHMENTS,
+  watchlists,
   onAddAttachment,
   onRemoveAttachment,
 }) {
@@ -135,6 +136,7 @@ export function ChatComposer({
             <AttachMenu
               disabled={disabled}
               pendingAttachments={pendingAttachments}
+              watchlists={watchlists}
               onAddAttachment={onAddAttachment}
               onRemoveAttachment={onRemoveAttachment}
               setToast={setToast}

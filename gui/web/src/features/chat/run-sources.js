@@ -24,7 +24,7 @@ export function extractRunSources(run) {
   return out;
 }
 
-function collectFromTool(name, details) {
+function collectFromTool(_name, details) {
   if (!details || typeof details !== "object") return [];
 
   // search_web → { results: [{ url, title, snippet, source, ... }] }
@@ -94,7 +94,7 @@ function collectFromTool(name, details) {
   // sentiment_summary → maybe a per-source list with urls
   if (Array.isArray(details.sources) && details.sources.every((s) => typeof s === "object")) {
     return details.sources
-      .filter((s) => s && s.url)
+      .filter((s) => s?.url)
       .map((s) => ({ url: s.url, title: s.title, source: s.name, snippet: s.snippet }));
   }
 

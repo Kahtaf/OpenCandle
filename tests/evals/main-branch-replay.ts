@@ -124,7 +124,7 @@ export function writeProductReplayComparisonReport(
   mkdirSync(runsDir, { recursive: true });
   const stamp = report.generatedAt.replace(/[:.]/g, "-");
   const outputPath = join(runsDir, `${stamp}_product-replay-comparison.json`);
-  writeFileSync(outputPath, JSON.stringify(report, null, 2) + "\n", "utf-8");
+  writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   return outputPath;
 }
 

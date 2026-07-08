@@ -258,17 +258,17 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(alertHtml).toContain('aria-label="Alert condition"');
-    expect(alertHtml).toContain('aria-label="Alert threshold"');
+    expect(alertHtml).toContain(">Condition<select");
+    expect(alertHtml).toContain(">Threshold<input");
     // Period only renders for SMA/RSI/volume conditions; the default price-above
     // condition hides it instead of showing a disabled field.
-    expect(alertHtml).not.toContain('aria-label="Alert period"');
-    expect(alertHtml).toContain('aria-label="Alert cooldown seconds"');
+    expect(alertHtml).not.toContain(">Period (days)<input");
+    expect(alertHtml).toContain(">Cooldown between triggers (seconds)<input");
     expect(symbolHtml).toContain("Search ticker or company");
-    expect(symbolHtml).not.toContain('aria-label="Target"');
-    expect(symbolHtml).not.toContain('aria-label="Thesis"');
-    expect(holdingHtml).toContain('aria-label="Quantity"');
-    expect(holdingHtml).toContain('aria-label="Average cost"');
-    expect(holdingHtml).toContain('aria-label="Currency"');
+    expect(holdingHtml).toContain(">Quantity<input");
+    expect(holdingHtml).toContain(">Average cost per share<input");
+    expect(holdingHtml).toContain(">Currency<input");
+    expect(symbolHtml).not.toContain(">Target<input");
+    expect(symbolHtml).not.toContain(">Thesis<textarea");
   });
 });

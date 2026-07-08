@@ -5,7 +5,7 @@ import { ProviderTracker } from "../../../src/runtime/provider-tracker.js";
 import { WorkflowEventLogger } from "../../../src/runtime/workflow-events.js";
 import type { StepExecutor } from "../../../src/runtime/workflow-runner.js";
 import { WorkflowRunner } from "../../../src/runtime/workflow-runner.js";
-import type { StepOutput, WorkflowStep } from "../../../src/runtime/workflow-types.js";
+import type { WorkflowStep } from "../../../src/runtime/workflow-types.js";
 
 function makeSteps(...types: string[]): Omit<WorkflowStep, "status">[] {
   return types.map((stepType) => ({
@@ -104,12 +104,12 @@ describe("WorkflowRunner", () => {
   it("cancels the active run when a new run starts", async () => {
     // Start a run that we can observe was cancelled
     const steps = makeSteps("a", "b", "c");
-    let runRef: any;
+    let _runRef: any;
 
     const slowExecutor: StepExecutor = async (step, stepIndex) => {
       if (stepIndex === 1) {
         // Simulate cancellation by starting a new run from within
-        runRef = runner.getActiveRun();
+        _runRef = runner.getActiveRun();
         runner.cancel();
       }
       return { stepIndex, stepType: step.stepType, evidence: [] };

@@ -6,6 +6,8 @@ Unit + e2e tests for all OpenCandle modules. Fixtures prevent live API calls in 
 ```bash
 npm test                       # vitest run (unit only)
 npm run test:watch             # vitest watch mode
+npm run test:agent-tools       # maintainer/agent helper tests
+npm run test:scripts:typecheck # type-check opt-in eval/front-door scripts
 npm run test:e2e               # e2e tool tests
 npm run test:e2e:cli           # e2e CLI tests
 npm run test:e2e:providers     # e2e provider tests (hits live APIs)
@@ -24,6 +26,7 @@ tests/
 │   ├── pi/           # Pi extension, setup, session, tool adapter
 │   ├── prompts/      # Workflow prompt templates
 │   └── onboarding/   # Setup flow
+├── agent-tools/      # Repo-maintainer/agent helper tests, not default unit coverage
 ├── harness/          # Agent test harness (file-based IPC) → see tests/harness/README.md
 ├── evals/            # Agent/session eval cases, scoring, and report helpers
 ├── scripts/          # Eval front door and long-running opt-in eval runners
@@ -55,6 +58,7 @@ globalThis.fetch = vi.fn().mockResolvedValue({
 ## CONVENTIONS
 - **TDD mandatory.** Write the failing test first.
 - Unit tests mirror `src/` structure: `tests/unit/<module>/` maps to `src/<module>/`.
+- Keep repo-maintainer helper tests under `tests/agent-tools/`; they should run explicitly instead of bloating public `npm test`.
 - Mock fetch at `globalThis.fetch` level. Never stub provider internals.
 - Use `:memory:` SQLite for memory/storage tests.
 

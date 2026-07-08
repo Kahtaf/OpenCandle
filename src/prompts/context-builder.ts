@@ -79,8 +79,8 @@ export class PromptContextBuilder {
     const report: PromptSectionReport[] = [];
     let truncationMarkers = 0;
     for (const name of SECTION_ORDER) {
-      const section = this.sections.get(name)!;
-      if (!section.content) continue;
+      const section = this.sections.get(name);
+      if (!section?.content) continue;
       const truncated = truncateTobudget(section.content, section.characterBudget);
       const wasTruncated = truncated.includes("[...truncated]");
       if (wasTruncated) truncationMarkers += 1;

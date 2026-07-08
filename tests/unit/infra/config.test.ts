@@ -483,15 +483,15 @@ describe("loadConfig", () => {
         throw new Error("ENOENT");
       });
       const config = loadConfig();
-      expect(config.sentiment!.retentionDays).toBe(7);
-      expect(config.sentiment!.defaultSubreddits).toEqual([
+      expect(config.sentiment?.retentionDays).toBe(7);
+      expect(config.sentiment?.defaultSubreddits).toEqual([
         "wallstreetbets",
         "stocks",
         "investing",
         "options",
       ]);
-      expect(config.sentiment!.commentsPerPost).toBe(5);
-      expect(config.sentiment!.divergenceThreshold).toBe(0.4);
+      expect(config.sentiment?.commentsPerPost).toBe(5);
+      expect(config.sentiment?.divergenceThreshold).toBe(0.4);
     });
   });
 });

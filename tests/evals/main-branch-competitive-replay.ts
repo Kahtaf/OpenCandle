@@ -149,7 +149,7 @@ export function writeCompetitiveReplayComparisonReport(
   mkdirSync(runsDir, { recursive: true });
   const stamp = report.generatedAt.replace(/[:.]/g, "-");
   const outputPath = join(runsDir, `${stamp}_competitive-replay-comparison.json`);
-  writeFileSync(outputPath, JSON.stringify(report, null, 2) + "\n", "utf-8");
+  writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf-8");
   return outputPath;
 }
 

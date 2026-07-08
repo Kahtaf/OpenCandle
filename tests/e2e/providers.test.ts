@@ -4,7 +4,6 @@
  */
 
 import { loadEnv } from "../../src/config.js";
-import { cache } from "../../src/infra/cache.js";
 import { getEarnings, getFinancials, getOverview } from "../../src/providers/alpha-vantage.js";
 import { getCryptoHistory, getCryptoPrice } from "../../src/providers/coingecko.js";
 import { getFearGreedIndex } from "../../src/providers/fear-greed.js";
@@ -12,10 +11,7 @@ import { getSeries } from "../../src/providers/fred.js";
 import { searchPredictionMarkets } from "../../src/providers/polymarket.js";
 import { getPostComments, getSubredditPosts } from "../../src/providers/reddit.js";
 import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
-import {
-  computeDailyReturns,
-  computeRiskMetrics,
-} from "../../src/tools/portfolio/risk-analysis.js";
+import { computeRiskMetrics } from "../../src/tools/portfolio/risk-analysis.js";
 import {
   computeBollingerBands,
   computeMACD,
@@ -147,7 +143,7 @@ for (const t of riskTickers) {
     const closes = bars.map((b) => b.close);
     if (closes.length < 30) throw new Error("insufficient data");
     const metrics = computeRiskMetrics(t, closes);
-    if (isNaN(metrics.sharpeRatio)) throw new Error("NaN sharpe");
+    if (Number.isNaN(metrics.sharpeRatio)) throw new Error("NaN sharpe");
     return metrics;
   });
 }
@@ -262,7 +258,7 @@ if (failed.length > 0) {
 const byTool = new Map<string, Result[]>();
 for (const r of results) {
   if (!byTool.has(r.tool)) byTool.set(r.tool, []);
-  byTool.get(r.tool)!.push(r);
+  byTool.get(r.tool)?.push(r);
 }
 
 console.log("\nBy Tool:");

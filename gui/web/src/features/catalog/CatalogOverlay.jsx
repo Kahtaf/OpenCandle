@@ -66,6 +66,7 @@ export function CatalogOverlay({
     }
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scrolling must reset exactly when the active catalog view changes.
   useEffect(() => {
     if (bodyRef.current) bodyRef.current.scrollTop = 0;
   }, [selection, tab]);

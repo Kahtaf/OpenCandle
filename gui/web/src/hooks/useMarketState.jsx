@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const EMPTY_MARKET_STATE = {
   instruments: [],
+  watchlists: [],
   watchlist: [],
   portfolio: [],
   alerts: [],

@@ -211,6 +211,13 @@ describe("ChatPanel event transcript rendering", () => {
     );
   });
 
+  it("passes the selected watchlist name when a chat entity chip is added", () => {
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
+
+    expect(source).toContain("watchlist_name: watchlist.name");
+    expect(source).toContain("watchlists={marketState.state?.watchlists}");
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,

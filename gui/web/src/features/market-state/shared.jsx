@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { cn } from "../../lib/utils.js";
@@ -64,14 +64,16 @@ export function Panel({ title, count, meta, actions, children }) {
 }
 
 export function PanelSearch({ label, filter, setFilter }) {
+  const inputId = useId();
   return (
-    <label className="relative">
+    <label htmlFor={inputId} className="relative">
       <span className="sr-only">{label}</span>
       <Search
         className="pointer-events-none absolute left-2.5 top-2 size-3.5 text-muted-foreground"
         aria-hidden="true"
       />
       <Input
+        id={inputId}
         className="h-8 w-44 pl-8 text-xs"
         placeholder={label}
         value={filter}

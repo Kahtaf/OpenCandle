@@ -1,4 +1,5 @@
 import { Plus, Search } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import {
@@ -7,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover.jsx";
+import { normalizeWatchlistOptions } from "./watchlist-options.js";
 
 export function EntityPopover({
   open,
@@ -22,6 +24,21 @@ export function EntityPopover({
   viewportSize = null,
   sessionMarketFacts = {},
 }) {
+  const watchlistSelectId = useId();
+  const watchlistOptions = useMemo(
+    () => normalizeWatchlistOptions(marketState?.watchlists),
+    [marketState?.watchlists],
+  );
+  const [selectedWatchlistId, setSelectedWatchlistId] = useState(watchlistOptions[0]?.id ?? "default");
+  useEffect(() => {
+    if (!watchlistOptions.some((watchlist) => watchlist.id === selectedWatchlistId)) {
+      setSelectedWatchlistId(watchlistOptions[0]?.id ?? "default");
+    }
+  }, [selectedWatchlistId, watchlistOptions]);
+  const selectedWatchlist =
+    watchlistOptions.find((watchlist) => watchlist.id === selectedWatchlistId) ??
+    watchlistOptions[0] ??
+    { id: "default", name: "Default" };
   const normalized = String(symbol || "").toUpperCase();
   if (!normalized) return null;
 
@@ -106,15 +123,36 @@ export function EntityPopover({
               </div>
             )}
             <div className="grid gap-2">
+              <label
+                htmlFor={watchlistSelectId}
+                className="grid gap-1 text-xs font-medium text-muted-foreground"
+              >
+                Watchlist
+                <select
+                  id={watchlistSelectId}
+                  className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                  value={selectedWatchlist.id}
+                  disabled={!canAdd}
+                  onChange={(event) => setSelectedWatchlistId(event.target.value)}
+                >
+                  {watchlistOptions.map((watchlist) => (
+                    <option key={watchlist.id} value={watchlist.id}>
+                      {watchlist.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <Button
                 type="button"
                 size="sm"
                 variant="bordered"
                 disabled={!canAdd}
-                onClick={() => onAddToWatchlist?.(resolvedCandidate?.symbol || normalized)}
+                onClick={() =>
+                  onAddToWatchlist?.(resolvedCandidate?.symbol || normalized, selectedWatchlist)
+                }
               >
                 <Plus className="button-icon" />
-                Add to watchlist
+                Add to {selectedWatchlist.name}
               </Button>
               {!canAdd ? (
                 <div className="text-[11px] text-muted-foreground">{disabledHint}</div>

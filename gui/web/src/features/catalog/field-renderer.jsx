@@ -36,22 +36,6 @@ function resolveCollection(value) {
 
 export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
   const setValue = (next) => onChange(field.name, next);
-  const labelEl = (
-    <span className="flex items-baseline justify-between gap-3 text-xs font-medium text-foreground">
-      <span>
-        {field.label}
-        {field.required ? (
-          <span className="text-foreground/40" aria-hidden="true">
-            {" "}
-            *
-          </span>
-        ) : null}
-      </span>
-      {field.helper ? (
-        <span className="text-[11px] font-normal text-muted-foreground">{field.helper}</span>
-      ) : null}
-    </span>
-  );
 
   switch (field.kind) {
     case "symbol":
@@ -83,7 +67,7 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
 
     case "segmented":
       return (
-        <Field label={field.label} hint={field.helper} required={field.required}>
+        <Field as="div" label={field.label} hint={field.helper} required={field.required}>
           <SegmentedControl
             value={value}
             onChange={setValue}

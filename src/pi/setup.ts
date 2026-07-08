@@ -1,4 +1,4 @@
-import type { Model } from "@earendil-works/pi-ai";
+import type { Api, Model, OAuthProviderId } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -39,7 +39,7 @@ const API_KEY_PROVIDER_LABELS: Record<ApiKeyProviderId, string> = {
   anthropic: "Anthropic",
 };
 
-function sortModels(models: Model<any>[], preferredProvider?: string): Model<any>[] {
+function sortModels(models: Model<Api>[], preferredProvider?: string): Model<Api>[] {
   return [...models].sort((a, b) => {
     const aPreferred = preferredProvider && a.provider === preferredProvider ? -1 : 0;
     const bPreferred = preferredProvider && b.provider === preferredProvider ? -1 : 0;
@@ -49,7 +49,7 @@ function sortModels(models: Model<any>[], preferredProvider?: string): Model<any
   });
 }
 
-function getAvailableModels(ctx: ExtensionContext, preferredProvider?: string): Model<any>[] {
+function getAvailableModels(ctx: ExtensionContext, preferredProvider?: string): Model<Api>[] {
   ctx.modelRegistry.refresh();
   return sortModels(ctx.modelRegistry.getAvailable(), preferredProvider);
 }
@@ -145,7 +145,7 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
 
     // Cast required: advanced providers return dynamic IDs outside the SDK's static union type
     void ctx.modelRegistry.authStorage
-      .login(providerId as any, {
+      .login(providerId as OAuthProviderId, {
         onAuth: (info) => {
           dialog.showAuth(info.url, info.instructions);
           if (usesCallbackServer) {

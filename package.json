@@ -75,19 +75,17 @@
   "files": [
     "assets/logo.svg",
     "dist",
-    "gui/server",
-    "gui/shared",
-    "gui/web/dist",
-    "src"
+    "gui/web/dist"
   ],
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
     "prebuild": "npm run check:node && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "tsc && chmod +x dist/cli.js",
+    "build": "tsc && node scripts/build-gui-server.mjs && chmod +x dist/cli.js",
     "prepare": "npm run build && npm run gui:web:build",
     "prestart": "npm run check:node",
     "start": "tsx src/cli.ts",
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
+    "gui:server:build": "node scripts/build-gui-server.mjs",
     "docs:site:build": "npm --workspace @opencandle/website run build",
     "docs:site:serve": "node website/serve.mjs",
     "docs:links:check": "node scripts/check-public-doc-links.mjs",
@@ -98,6 +96,8 @@
     "pretest": "npm run check:node",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:agent-tools": "vitest run --config vitest.config.agent-tools.ts",
+    "test:scripts:typecheck": "tsc -p tsconfig.test-scripts.json",
     "test:e2e": "tsx tests/e2e/tools.test.ts",
     "test:e2e:cli": "tsx tests/e2e/cli.test.ts",
     "test:e2e:credential-prompt": "tsx tests/e2e/credential-prompt.test.ts",
@@ -110,7 +110,7 @@
     "test:e2e:harness-dcf": "tsx tests/e2e/harness-dcf.test.ts",
     "eval": "tsx tests/scripts/run-evals.ts",
     "test:packed-install": "node scripts/packed-install-smoke.mjs",
-    "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx biome ci . && npx vitest run\"",
+    "review:pr": ".agents/skills/autoreview/scripts/autoreview --mode branch --prompt-file .agents/skills/autoreview/references/opencandle-review.md --parallel-tests \"npx tsc --noEmit && npx biome ci . && npx vitest run && npm run test:agent-tools\"",
     "package:contents:check": "node scripts/check-package-contents.mjs",
     "version:patch": "npm version patch --no-git-tag-version",
     "version:minor": "npm version minor --no-git-tag-version",
@@ -118,7 +118,7 @@
     "version:set": "npm version",
     "prepublishOnly": "npm run release:check",
     "publish:dry": "npm run release:check && npm publish --access public --dry-run",
-    "release:check": "npx tsc --noEmit && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
+    "release:check": "npx tsc --noEmit && npm run test:scripts:typecheck && npx biome ci . && npm test && npm run test:gui:release-smoke && npm run docs:site:build && npm run package:contents:check && npm run test:packed-install && npm run docs:links:check",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major"
@@ -132,7 +132,6 @@
     "@earendil-works/pi-coding-agent": "^0.80.2",
     "better-sqlite3": "^12.11.1",
     "duck-duck-scrape": "^2.2.7",
-    "tsx": "^4.22.4",
     "yahoo-finance2": "^3.15.3"
   },
   "peerDependencies": {
@@ -147,6 +146,7 @@
     "@types/node": "^26.0.1",
     "acpx": "^0.12.0",
     "playwright-core": "^1.61.1",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"

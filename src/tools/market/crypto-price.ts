@@ -13,7 +13,7 @@ const params = Type.Object({
 
 export const cryptoPriceTool: AgentTool<
   typeof params,
-  CryptoPrice & { freshness: FreshnessStamp }
+  (CryptoPrice & { freshness: FreshnessStamp }) | null
 > = {
   name: "get_crypto_price",
   label: "Crypto Price",
@@ -26,7 +26,7 @@ export const cryptoPriceTool: AgentTool<
         content: [
           { type: "text", text: `⚠ Crypto price unavailable for ${args.id} (${result.reason}).` },
         ],
-        details: null as any,
+        details: null,
       };
     }
     const crypto = result.data;

@@ -43,7 +43,7 @@ describe("createIpcAskHandler", () => {
     setTimeout(() => {
       const q = IpcChannel.readQuestion(dir);
       expect(q).not.toBeNull();
-      expect(q!.question).toBe("Risk tolerance?");
+      expect(q?.question).toBe("Risk tolerance?");
       IpcChannel.writeAnswer(dir, "Moderate");
     }, 50);
 

@@ -14,7 +14,7 @@ describe("generateSessionTitle", () => {
     );
     expect(title).toBe("Dividend Basics Explained");
     expect(complete).toHaveBeenCalledTimes(1);
-    const prompt = complete.mock.calls[0]![0];
+    const prompt = complete.mock.calls[0]?.[0];
     expect(prompt).toContain("how do dividends work");
     expect(prompt).toContain("Dividends are cash payouts...");
     expect(prompt.toLowerCase()).toContain("title");
@@ -24,7 +24,7 @@ describe("generateSessionTitle", () => {
     const complete = stubCompletion("Market Overview Question");
     const title = await generateSessionTitle({ userText: "how are markets today" }, complete);
     expect(title).toBe("Market Overview Question");
-    expect(complete.mock.calls[0]![0]).not.toContain("Assistant:");
+    expect(complete.mock.calls[0]?.[0]).not.toContain("Assistant:");
   });
 
   it("strips surrounding quotes", async () => {
@@ -57,8 +57,8 @@ describe("generateSessionTitle", () => {
       stubCompletion("Long Horizon Allocation Review Across Several Accounts And Goals"),
     );
     expect(title).not.toBeNull();
-    expect(title!.length).toBeLessThanOrEqual(60);
-    expect(title!.endsWith(" ")).toBe(false);
+    expect(title?.length).toBeLessThanOrEqual(60);
+    expect(title?.endsWith(" ")).toBe(false);
     // Cut on a word boundary, not mid-word.
     expect("Long Horizon Allocation Review Across Several Accounts And Goals").toContain(title!);
   });

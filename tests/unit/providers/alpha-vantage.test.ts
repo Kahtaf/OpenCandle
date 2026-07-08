@@ -46,7 +46,7 @@ describe("alpha-vantage provider", () => {
 
     it("fetches income statement, balance sheet, and cash flow", async () => {
       mockThreeStatements();
-      const statements = await getFinancials("AAPL", "test-key");
+      const _statements = await getFinancials("AAPL", "test-key");
 
       expect(globalThis.fetch).toHaveBeenCalledTimes(3);
 

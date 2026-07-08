@@ -160,7 +160,7 @@ describe("Router fixtures drive prompt assembly correctly", () => {
             currentSection = s;
             sectionContents[s] += line;
           } else if (currentSection) {
-            sectionContents[currentSection] += " " + line;
+            sectionContents[currentSection] += ` ${line}`;
           }
         }
         for (const [key, slot] of Object.entries(slots)) {
@@ -210,7 +210,8 @@ describe("Router fixtures drive prompt assembly correctly", () => {
   it("full system prompt assembled for a fallback fixture contains analyst stance + playbook + assumptions", () => {
     const fallback = fixtures.find((f) => f.data.expectedRouterOutput.route === "fallback");
     expect(fallback, "need at least one fallback fixture").toBeDefined();
-    const { slots, missing_required, entities } = fallback!.data.expectedRouterOutput;
+    if (!fallback) throw new Error("need at least one fallback fixture");
+    const { slots, missing_required, entities } = fallback.data.expectedRouterOutput;
     const assumptionsBlock = buildAssumptionsBlockFromRouter(slots);
     const builder = new PromptContextBuilder();
     builder.populateFromOptions({

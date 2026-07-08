@@ -412,14 +412,14 @@ function extractMaxPremium(input: string): number | undefined {
   );
   if (under) {
     const base = parseFloat(under[1].replace(/,/g, ""));
-    if (isNaN(base)) return undefined;
+    if (Number.isNaN(base)) return undefined;
     return under[2] ? base * 1000 : base;
   }
 
   const trailing = input.match(/\$\s*([\d,]+(?:\.\d+)?)\s*([kK])?\s*(?:premium|max\s*premium)\b/i);
   if (trailing) {
     const base = parseFloat(trailing[1].replace(/,/g, ""));
-    if (isNaN(base)) return undefined;
+    if (Number.isNaN(base)) return undefined;
     return trailing[2] ? base * 1000 : base;
   }
 

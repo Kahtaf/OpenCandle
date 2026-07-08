@@ -33,8 +33,8 @@ npx tsx tests/screenshots/capture.ts <phase> [--viewport=...]  # screenshot harn
 
 ## TESTING
 - For server or shared-state changes, run `npm test` and ensure the relevant `tests/unit/gui-server/*.test.ts` coverage moves with the change.
-- For visual audits or before/after captures, rebuild first and use `tests/screenshots/capture.ts`.
-- Any UI change requires browser verification with `agent-browser` in both desktop and mobile viewports, not just code inspection.
+- UI changes require visual audits, before/after captures, rebuild first and use `tests/screenshots/capture.ts`. Then verify both for correctness.
+- Any UI change requires browser verification with `@browser` or `npx agent-browser` in both desktop and mobile viewports, not just code inspection.
 - Any UI change also requires an `impeccable` pass for UX correctness before closing the task.
 - For React UI changes, run a `vercel-react-best-practices` pass before closing the task.
 - For router/query/server-state changes in the GUI, run the relevant TanStack skill pass before closing the task: `tanstack-router-best-practices`, `tanstack-query-best-practices`, and `tanstack-start-best-practices` when applicable.

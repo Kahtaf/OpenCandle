@@ -1,3 +1,5 @@
+// biome-ignore-all lint/a11y/noStaticElementInteractions: chart hover handlers expose read-only pointer detail on a presentation surface.
+
 import { useRef, useState } from "react";
 import { enrichStockQuoteDetails } from "../../chat/session-market-facts.js";
 import { DeltaChip, MoneyTile, PlainOutput, RangeBar, ToolCard } from "./_shared.jsx";

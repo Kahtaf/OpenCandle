@@ -10,7 +10,7 @@ import {
 
 export function CompanyOverviewCard({ message, header }) {
   const d = extractDetails(message);
-  if (!d || !d.symbol)
+  if (!d?.symbol)
     return (
       <ToolCard>
         {header}

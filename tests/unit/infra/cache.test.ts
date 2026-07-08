@@ -65,9 +65,9 @@ describe("Cache", () => {
 
       const stale = cache.getStale<{ price: number }>("key", 1000); // stale limit 1000ms
       expect(stale).toBeDefined();
-      expect(stale!.value).toEqual({ price: 150 });
-      expect(stale!.stale).toBe(true);
-      expect(stale!.cachedAt).toBeGreaterThan(0);
+      expect(stale?.value).toEqual({ price: 150 });
+      expect(stale?.stale).toBe(true);
+      expect(stale?.cachedAt).toBeGreaterThan(0);
       vi.useRealTimers();
     });
 
@@ -101,7 +101,7 @@ describe("Cache", () => {
       expect(cache.get("key")).toBeUndefined();
       const stale = cache.getStale("key", 500);
       expect(stale).toBeDefined();
-      expect(stale!.value).toBe("data");
+      expect(stale?.value).toBe("data");
       vi.useRealTimers();
     });
   });

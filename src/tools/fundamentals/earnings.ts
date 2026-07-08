@@ -12,7 +12,7 @@ const params = Type.Object({
 
 export const earningsTool: AgentTool<
   typeof params,
-  EarningsData | { credentialRequired: unknown }
+  EarningsData | { credentialRequired: unknown } | null
 > = {
   name: "get_earnings",
   label: "Earnings History",
@@ -21,7 +21,8 @@ export const earningsTool: AgentTool<
   parameters: params,
   async execute(_toolCallId, args) {
     return withCredentialCheck("alpha_vantage", async () => {
-      const apiKey = getConfig().alphaVantageApiKey!;
+      const apiKey = getConfig().alphaVantageApiKey;
+      if (!apiKey) throw new Error("Alpha Vantage credential is missing.");
       const result = await wrapProvider("alphavantage", () =>
         getEarnings(args.symbol.toUpperCase(), apiKey),
       );
@@ -33,7 +34,7 @@ export const earningsTool: AgentTool<
               text: `⚠ Earnings data unavailable for ${args.symbol.toUpperCase()} (${result.reason}). Analysis will proceed without earnings history.`,
             },
           ],
-          details: null as any,
+          details: null,
         };
       }
       const earnings = result.data;

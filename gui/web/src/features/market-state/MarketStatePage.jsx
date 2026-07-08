@@ -86,7 +86,6 @@ export async function invokeMarketStateMutation({
 export function MarketStatePage({
   domain,
   role,
-  send,
   invokeTool: invokeToolRequest,
   navigate,
   setToast,
@@ -214,7 +213,6 @@ export function MarketStatePage({
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
                 <PanelContent
                   panel={panel}
-                  state={state}
                   readOnly={readOnly || mutationPending}
                   invokeTool={invokeTool}
                   closePanel={closePanel}
@@ -252,7 +250,7 @@ function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
   );
 }
 
-function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
+function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
   const item = panel.data?.item;
   const lot = panel.data?.lot;
   const watchlist = panel.data?.watchlist;
@@ -327,6 +325,7 @@ function PanelContent({ panel, state, readOnly, invokeTool, closePanel }) {
 }
 
 function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
+  const reportTimeId = useId();
   const [localTime, setLocalTime] = useState("08:00");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -347,10 +346,13 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
         The morning report runs daily while OpenCandle is open. Times use your timezone ({timezone}
         ).
       </p>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label
+        htmlFor={reportTimeId}
+        className="grid gap-1 text-xs font-medium text-muted-foreground"
+      >
         Run at
         <Input
-          aria-label="Report time"
+          id={reportTimeId}
           type="time"
           value={localTime}
           disabled={disabled}
@@ -368,6 +370,7 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
 function ContextPanel({ title, onClose, children }) {
   const panelRef = useRef(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus/scroll should run when a different panel title is opened.
   useEffect(() => {
     const node = panelRef.current;
     if (!node) return;
@@ -411,6 +414,7 @@ function ContextPanel({ title, onClose, children }) {
 }
 
 export function WatchlistCreateForm({ disabled, onSubmit }) {
+  const nameId = useId();
   const [name, setName] = useState("");
 
   const submit = async (event) => {
@@ -424,9 +428,10 @@ export function WatchlistCreateForm({ disabled, onSubmit }) {
 
   return (
     <form className="space-y-3" onSubmit={submit}>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Name
         <Input
+          id={nameId}
           aria-label="Watchlist name"
           value={name}
           disabled={disabled}
@@ -478,6 +483,9 @@ export function SymbolActionPanel({ disabled, onSubmit }) {
 }
 
 export function HoldingForm({ disabled, lot, onSubmit }) {
+  const quantityId = useId();
+  const averageCostId = useId();
+  const currencyId = useId();
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
@@ -507,10 +515,10 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={quantityId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Quantity
         <Input
-          aria-label="Quantity"
+          id={quantityId}
           type="number"
           step="any"
           value={values.shares}
@@ -519,10 +527,13 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
           onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))}
         />
       </label>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label
+        htmlFor={averageCostId}
+        className="grid gap-1 text-xs font-medium text-muted-foreground"
+      >
         Average cost per share
         <Input
-          aria-label="Average cost"
+          id={averageCostId}
           type="number"
           step="any"
           value={values.avg_cost}
@@ -533,10 +544,10 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
           }
         />
       </label>
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={currencyId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Currency
         <Input
-          aria-label="Currency"
+          id={currencyId}
           value={values.currency}
           disabled={disabled}
           onChange={(event) =>
@@ -649,6 +660,10 @@ export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
 export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
 
 export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
+  const conditionId = useId();
+  const thresholdId = useId();
+  const periodId = useId();
+  const cooldownId = useId();
   const [draft, setDraft] = useState({
     query: "",
     selected: "",
@@ -699,10 +714,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         onQueryChange={(value) => setDraftField("query", value)}
         onSelectedChange={(value) => setDraftField("selected", value)}
       />
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
         <select
-          aria-label="Alert condition"
+          id={conditionId}
           className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
           value={condition}
           disabled={disabled}
@@ -718,12 +733,15 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         </select>
       </label>
       {supportsThreshold ? (
-        <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+        <label
+          htmlFor={thresholdId}
+          className="grid gap-1 text-xs font-medium text-muted-foreground"
+        >
           {condition === "create_volume_spike"
             ? "Multiplier (× average volume, optional)"
             : "Threshold"}
           <Input
-            aria-label="Alert threshold"
+            id={thresholdId}
             type="number"
             step="any"
             value={threshold}
@@ -733,10 +751,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         </label>
       ) : null}
       {needsPeriod ? (
-        <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+        <label htmlFor={periodId} className="grid gap-1 text-xs font-medium text-muted-foreground">
           Period (days)
           <Input
-            aria-label="Alert period"
+            id={periodId}
             type="number"
             step="any"
             value={period}
@@ -745,10 +763,10 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
           />
         </label>
       ) : null}
-      <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+      <label htmlFor={cooldownId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Cooldown between triggers (seconds)
         <Input
-          aria-label="Alert cooldown seconds"
+          id={cooldownId}
           type="number"
           step="any"
           value={cooldown}

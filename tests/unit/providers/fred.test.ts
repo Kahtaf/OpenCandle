@@ -62,7 +62,7 @@ describe("fred provider", () => {
 
     const series = await getSeries("FEDFUNDS", "test-key");
     // The "." entry should be filtered out
-    expect(series.observations.every((o) => !isNaN(o.value))).toBe(true);
+    expect(series.observations.every((o) => !Number.isNaN(o.value))).toBe(true);
   });
 
   it("caches results", async () => {

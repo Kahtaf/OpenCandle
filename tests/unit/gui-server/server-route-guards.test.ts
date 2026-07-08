@@ -349,7 +349,9 @@ describe("GUI server route guards", () => {
 
     expect(source).toContain("inputAttachmentLabels");
     expect(source).toContain('kind: "image"');
-    expect(source).toContain('label: `${image.mimeType || "image"} #${index + 1}`');
+    expect(source).toContain(
+      "label: `" + "$" + '{image.mimeType || "image"} #' + "$" + "{index + 1}`",
+    );
     expect(source).toContain("attachments: inputAttachmentLabels");
     expect(source).not.toContain("attachments: promptImages");
   });

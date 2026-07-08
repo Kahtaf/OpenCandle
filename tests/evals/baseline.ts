@@ -21,7 +21,7 @@ export function saveBaseline(report: EvalReport): void {
     aggregate: report.aggregate,
     cases: Object.fromEntries(report.cases.map((c) => [c.name, c.score])),
   };
-  writeFileSync(BASELINE_PATH, JSON.stringify(data, null, 2) + "\n", "utf-8");
+  writeFileSync(BASELINE_PATH, `${JSON.stringify(data, null, 2)}\n`, "utf-8");
 }
 
 export function buildReport(results: EvalCaseResult[]): EvalReport {
@@ -100,7 +100,7 @@ export function saveRun(report: EvalReport, feature?: string): string {
     summary: formatReport(report),
   };
 
-  writeFileSync(filepath, JSON.stringify(runData, null, 2) + "\n", "utf-8");
+  writeFileSync(filepath, `${JSON.stringify(runData, null, 2)}\n`, "utf-8");
   return filepath;
 }
 
