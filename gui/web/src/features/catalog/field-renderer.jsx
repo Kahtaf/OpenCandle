@@ -67,7 +67,7 @@ export function FieldRenderer({ field, value, onChange, lookupSymbol }) {
 
     case "segmented":
       return (
-        <Field label={field.label} hint={field.helper} required={field.required}>
+        <Field as="div" label={field.label} hint={field.helper} required={field.required}>
           <SegmentedControl
             value={value}
             onChange={setValue}

@@ -8,10 +8,9 @@ import { cn } from "../../lib/utils.js";
 // Field — wraps every input with a hairline-spaced label, hint, and required mark
 // ---------------------------------------------------------------------------
 
-export function Field({ label, hint, required = false, children, className }) {
-  return (
-    // biome-ignore lint/a11y/noLabelWithoutControl: children are input/select primitives supplied by the schema renderer.
-    <label className={cn("grid gap-1.5", className)}>
+export function Field({ label, hint, required = false, children, className, as = "label" }) {
+  const content = (
+    <>
       <span className="flex items-baseline justify-between gap-3 text-xs font-medium text-foreground">
         <span>
           {label}
@@ -27,7 +26,16 @@ export function Field({ label, hint, required = false, children, className }) {
         ) : null}
       </span>
       {children}
-    </label>
+    </>
+  );
+
+  if (as === "div") {
+    return <div className={cn("grid gap-1.5", className)}>{content}</div>;
+  }
+
+  return (
+    // biome-ignore lint/a11y/noLabelWithoutControl: children are input/select primitives supplied by the schema renderer.
+    <label className={cn("grid gap-1.5", className)}>{content}</label>
   );
 }
 
