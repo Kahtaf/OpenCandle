@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
+
 ## [0.11.1] - 2026-07-08
 
 ### Added
