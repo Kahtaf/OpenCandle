@@ -5,6 +5,7 @@ import {
   buildGuiToastPayload,
   buildHttpFallbackMessageRequest,
   buildSessionActionSocketMessage,
+  buildToolInvokeHttpFallbackRequest,
   buildToolInvokeSocketMessage,
   mergeSessionSnapshotMap,
   rejectTimedOutToolInvoke,
@@ -86,6 +87,29 @@ describe("useGuiConnection helpers", () => {
     });
     expect(buildHttpFallbackMessageRequest("tool.invoke", { toolName: "get_stock_quote" })).toBe(
       null,
+    );
+  });
+
+  it("builds trusted HTTP fallback requests for tool invocation", () => {
+    const request = buildToolInvokeHttpFallbackRequest(
+      "manage_watchlist",
+      { action: "create", watchlist_name: "MAG7" },
+      "session-visible",
+      "",
+      { recordTranscript: false },
+    );
+
+    expect(request.path).toBe("/api/tool-invoke");
+    expect(request.body).toMatchObject({
+      sessionId: "session-visible",
+      toolName: "manage_watchlist",
+      args: { action: "create", watchlist_name: "MAG7" },
+      recordTranscript: false,
+    });
+    expect(request.body.actionId).toMatch(/^tool-/);
+
+    expect(() => buildToolInvokeHttpFallbackRequest("manage_watchlist", {}, "")).toThrow(
+      "sessionId is required",
     );
   });
 

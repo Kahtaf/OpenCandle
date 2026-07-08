@@ -2,10 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- Watchlists can now be created as named lists and managed independently from the GUI tabs or the `manage_watchlist` TUI/tool flow.
+
+### Changed
+
+- Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests.
+
 ### Fixed
 
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
 - Watchlist, portfolio, alert, and report form actions in the GUI now update saved market state without creating empty chat sessions.
+- GUI market-state tool buttons now fall back to trusted same-origin HTTP invocation when the WebSocket connection is unavailable after bootstrap.
 
 ## [0.11.1] - 2026-07-08
 

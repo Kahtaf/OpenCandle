@@ -292,6 +292,36 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/tool-invoke" && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Tool invoke API", options)) return;
+      const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, body)) return;
+      let ack: unknown;
+      await options.toolInvokeController.handleToolInvokeMessage(
+        { send: (message) => (ack = message) },
+        {
+          requestId: "http-tool",
+          actionId: String(body.actionId ?? ""),
+          sessionId: String(body.sessionId ?? ""),
+          toolName: String(body.toolName ?? ""),
+          args: asRecord(body.args),
+          ...(body.recordTranscript === false ? { recordTranscript: false } : {}),
+        },
+      );
+      const message = asRecord(ack);
+      const result = asRecord(message.result);
+      if (result.toolCallId) {
+        writeJson(res, { result });
+      } else {
+        writeJson(
+          res,
+          { error: String(asRecord(message.error).message ?? "Tool invocation failed") },
+          409,
+        );
+      }
+      return;
+    }
+
     if (url.pathname === "/api/local-coordinator/tool-invoke" && req.method === "POST") {
       if (!allowLocalCoordinatorRequest(req, res, options)) return;
       const body = asRecord(await readJsonBody(req));

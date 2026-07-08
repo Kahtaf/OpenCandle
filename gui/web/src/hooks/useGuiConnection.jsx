@@ -93,6 +93,27 @@ export function buildToolInvokeSocketMessage(payload, currentSessionId = "", tar
   };
 }
 
+export function buildToolInvokeHttpFallbackRequest(
+  toolName,
+  args = {},
+  currentSessionId = "",
+  targetSessionId = "",
+  options = {},
+) {
+  const sessionId = String(targetSessionId || currentSessionId || "").trim();
+  if (!sessionId) throw new Error("sessionId is required");
+  return {
+    path: "/api/tool-invoke",
+    body: {
+      actionId: createSessionActionId("tool"),
+      sessionId,
+      toolName,
+      args,
+      ...(options.recordTranscript === false ? { recordTranscript: false } : {}),
+    },
+  };
+}
+
 export function createSessionActionId(prefix = "action") {
   const random =
     globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -406,12 +427,30 @@ export function useGuiConnection() {
   );
 
   const invokeTool = useCallback(
-    (toolName, args = {}, targetSessionId = "", options = {}) => {
+    async (toolName, args = {}, targetSessionId = "", options = {}) => {
       const socket = wsRef.current;
       if (socket?.readyState !== 1 || typeof socket.send !== "function") {
-        const error = new Error("GUI connection is not open.");
-        setToast(error.message, { destructive: true });
-        return Promise.reject(error);
+        try {
+          const request = buildToolInvokeHttpFallbackRequest(
+            toolName,
+            args,
+            currentSessionId,
+            targetSessionId,
+            options,
+          );
+          const response = await fetch(request.path, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(request.body),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data?.error || response.statusText);
+          return data.result;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          setToast(message, { destructive: true });
+          return Promise.reject(new Error(message));
+        }
       }
 
       const requestId = `tool-${Date.now()}-${requestSeqRef.current++}`;
