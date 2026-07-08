@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Chromium for GUI smoke tests
+        run: npx playwright-core install --with-deps chromium
+
       - name: Verify release tag
         run: |
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
