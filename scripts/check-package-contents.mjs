@@ -15,11 +15,16 @@ const deniedDirectorySegments = new Set([
   "graphify-out",
   "openspec",
   "plans",
+  "src",
   "tests",
   "validation-output",
 ]);
 
-const deniedPathSequences = [["website", "dist"]];
+const deniedPathSequences = [
+  ["gui", "server"],
+  ["gui", "shared"],
+  ["website", "dist"],
+];
 
 const requiredFiles = [
   "package.json",
@@ -27,9 +32,9 @@ const requiredFiles = [
   "LICENSE",
   "dist/cli.js",
   "dist/index.js",
+  "dist/gui/server/server.js",
   "assets/logo.svg",
   "gui/web/dist/index.html",
-  "gui/server/server.ts",
 ];
 
 function runPackDryRun() {
@@ -56,10 +61,8 @@ export function parsePackDryRunJson(output) {
   throw new Error("Could not parse npm pack --dry-run --json output.");
 }
 
-function hasPathSequence(segments, sequence) {
-  return segments.some((_, index) =>
-    sequence.every((segment, sequenceIndex) => segments[index + sequenceIndex] === segment),
-  );
+function startsWithPathSequence(segments, sequence) {
+  return sequence.every((segment, index) => segments[index] === segment);
 }
 
 export function isDeniedPackagePath(path) {
@@ -67,7 +70,7 @@ export function isDeniedPackagePath(path) {
   return (
     segments.some((segment) => deniedDirectorySegments.has(segment)) ||
     segments.some((segment) => /^\.env(?:$|\.)/.test(segment)) ||
-    deniedPathSequences.some((sequence) => hasPathSequence(segments, sequence))
+    deniedPathSequences.some((sequence) => startsWithPathSequence(segments, sequence))
   );
 }
 

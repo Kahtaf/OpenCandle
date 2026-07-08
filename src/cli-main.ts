@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -125,9 +126,12 @@ async function handlePackageCommand(
 async function handleGuiCommand(args: string[], cwd: string): Promise<boolean> {
   if (args[0] !== "gui") return false;
 
-  const tsxCli = require.resolve("tsx/cli");
-  const serverPath = resolve(packageRoot, "gui/server/server.ts");
-  const child = spawn(process.execPath, [tsxCli, serverPath, ...args.slice(1)], {
+  const compiledServerPath = resolve(packageRoot, "dist/gui/server/server.js");
+  const sourceServerPath = resolve(packageRoot, "gui/server/server.ts");
+  const commandArgs = existsSync(compiledServerPath)
+    ? [compiledServerPath, ...args.slice(1)]
+    : [require.resolve("tsx/cli"), sourceServerPath, ...args.slice(1)];
+  const child = spawn(process.execPath, commandArgs, {
     cwd,
     env: process.env,
     stdio: "inherit",
@@ -149,9 +153,12 @@ async function handleGuiCommand(args: string[], cwd: string): Promise<boolean> {
 async function handleMonitorCommand(args: string[], cwd: string): Promise<boolean> {
   if (args[0] !== "monitor") return false;
 
-  const tsxCli = require.resolve("tsx/cli");
-  const monitorPath = resolve(packageRoot, "src/monitor.ts");
-  const child = spawn(process.execPath, [tsxCli, monitorPath, ...args.slice(1)], {
+  const compiledMonitorPath = resolve(packageRoot, "dist/monitor.js");
+  const sourceMonitorPath = resolve(packageRoot, "src/monitor.ts");
+  const commandArgs = existsSync(compiledMonitorPath)
+    ? [compiledMonitorPath, ...args.slice(1)]
+    : [require.resolve("tsx/cli"), sourceMonitorPath, ...args.slice(1)];
+  const child = spawn(process.execPath, commandArgs, {
     cwd,
     env: process.env,
     stdio: "inherit",

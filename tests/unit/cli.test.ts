@@ -196,11 +196,7 @@ describe("opencandle package commands", () => {
 
     expect(piMocks.spawn).toHaveBeenCalledWith(
       process.execPath,
-      expect.arrayContaining([
-        expect.stringContaining("tsx"),
-        expect.stringContaining("src/monitor.ts"),
-        "--once",
-      ]),
+      [expect.stringContaining("dist/monitor.js"), "--once"],
       expect.objectContaining({
         stdio: "inherit",
       }),

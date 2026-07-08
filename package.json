@@ -75,19 +75,17 @@
   "files": [
     "assets/logo.svg",
     "dist",
-    "gui/server",
-    "gui/shared",
-    "gui/web/dist",
-    "src"
+    "gui/web/dist"
   ],
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
     "prebuild": "npm run check:node && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "tsc && chmod +x dist/cli.js",
+    "build": "tsc && node scripts/build-gui-server.mjs && chmod +x dist/cli.js",
     "prepare": "npm run build && npm run gui:web:build",
     "prestart": "npm run check:node",
     "start": "tsx src/cli.ts",
     "gui:web:build": "npm --workspace @opencandle/gui-web run build",
+    "gui:server:build": "node scripts/build-gui-server.mjs",
     "docs:site:build": "npm --workspace @opencandle/website run build",
     "docs:site:serve": "node website/serve.mjs",
     "docs:links:check": "node scripts/check-public-doc-links.mjs",
@@ -132,7 +130,6 @@
     "@earendil-works/pi-coding-agent": "^0.80.2",
     "better-sqlite3": "^12.11.1",
     "duck-duck-scrape": "^2.2.7",
-    "tsx": "^4.22.4",
     "yahoo-finance2": "^3.15.3"
   },
   "peerDependencies": {
@@ -147,6 +144,7 @@
     "@types/node": "^26.0.1",
     "acpx": "^0.12.0",
     "playwright-core": "^1.61.1",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"
