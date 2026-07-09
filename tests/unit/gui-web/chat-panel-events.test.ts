@@ -207,7 +207,7 @@ describe("ChatPanel event transcript rendering", () => {
 
     expect(source).toContain("(toolName, args, targetSessionId, options) =>");
     expect(source).toContain(
-      "return gui.invokeTool(toolName, args, targetSessionId ?? sessionView.activeSessionId, options);",
+      "return gui.invokeTool(\n        toolName,\n        args,\n        targetSessionId ?? sessionView.activeSessionId,\n        options,\n      );",
     );
   });
 

@@ -52,15 +52,15 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
     () => filterItems(watchlistItems, filter, ["symbol", "name"]),
     [watchlistItems, filter],
   );
-  const activeWatchlistKey = activeWatchlist?.id;
   const [selectedId, setSelectedId] = useState(null);
   const selected = rows.find((item) => item.id === selectedId) ?? rows[0] ?? null;
 
-  useEffect(() => {
-    if (activeWatchlistKey == null) return;
+  const selectWatchlist = (watchlistId) => {
+    if (watchlistId === activeWatchlistId) return;
+    setActiveWatchlistId(watchlistId);
     setSelectedId(null);
     setFilter("");
-  }, [activeWatchlistKey, setFilter]);
+  };
 
   return (
     <div
@@ -97,7 +97,7 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
           counts={countItemsByWatchlist(state.watchlist ?? [])}
           readOnly={readOnly}
           renameLabel="Rename watchlist"
-          onSelect={setActiveWatchlistId}
+          onSelect={selectWatchlist}
           onRename={(watchlist) => openPanel("watchlist-rename", { watchlist })}
         />
         {rows.length === 0 ? (

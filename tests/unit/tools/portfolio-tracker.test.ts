@@ -160,6 +160,36 @@ describe("portfolioTrackerTool", () => {
     expect(speculative.content[0].text).not.toContain("VTI");
   });
 
+  it("does not create duplicate named portfolios", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Retirement",
+    });
+    await portfolioTrackerTool.execute("test", {
+      action: "create",
+      portfolio_name: "Retirement",
+    });
+
+    const db = initDefaultDatabase();
+    const portfolios = new MarketStateService(db).listPortfolios();
+    db.close();
+
+    expect(portfolios.filter((portfolio) => portfolio.name === "Retirement")).toHaveLength(1);
+  });
+
+  it("rejects renaming a portfolio to an existing name", async () => {
+    await portfolioTrackerTool.execute("test", { action: "create", portfolio_name: "Retirement" });
+    await portfolioTrackerTool.execute("test", { action: "create", portfolio_name: "Trading" });
+
+    await expect(
+      portfolioTrackerTool.execute("test", {
+        action: "rename",
+        portfolio_name: "Trading",
+        new_portfolio_name: "Retirement",
+      }),
+    ).rejects.toThrow("portfolio Retirement already exists");
+  });
+
   it("does not create a missing portfolio while renaming", async () => {
     await expect(
       portfolioTrackerTool.execute("test", {

@@ -317,7 +317,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       );
       const message = asRecord(ack);
       const result = asRecord(message.result);
-      if (result.toolCallId) {
+      if (message.ok === true && result.toolCallId) {
         writeJson(res, { result });
       } else {
         writeJson(
@@ -348,7 +348,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       );
       const message = asRecord(ack);
       const result = asRecord(message.result);
-      if (result.toolCallId) {
+      if (message.ok === true && result.toolCallId) {
         writeJson(res, { result });
       } else {
         writeJson(

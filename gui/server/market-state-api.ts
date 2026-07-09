@@ -135,9 +135,11 @@ function loadSavedMarketStateSymbols(): string[] {
   const service = new MarketStateService(db);
   try {
     const symbols = [
-      ...service.listWatchlists().flatMap((watchlist) =>
-        service.listWatchlistItems(watchlist.id).map((item) => item.symbol),
-      ),
+      ...service
+        .listWatchlists()
+        .flatMap((watchlist) =>
+          service.listWatchlistItems(watchlist.id).map((item) => item.symbol),
+        ),
       ...service
         .listPortfolios()
         .flatMap((portfolio) => service.listPortfolioLots(portfolio.id).map((lot) => lot.symbol)),
@@ -168,7 +170,9 @@ export async function buildMarketStateQuoteSnapshot(
       .listWatchlists()
       .flatMap((watchlist) => service.listWatchlistItems(watchlist.id));
     const portfolios = service.listPortfolios();
-    const portfolioLots = portfolios.flatMap((portfolio) => service.listPortfolioLots(portfolio.id));
+    const portfolioLots = portfolios.flatMap((portfolio) =>
+      service.listPortfolioLots(portfolio.id),
+    );
     const symbols = [
       ...new Set([
         ...watchlist.map((item) => item.symbol),
@@ -370,7 +374,9 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
   const normalized = symbol.trim().toUpperCase();
   if (!normalized) return { symbol: "", status: "unavailable", reason: "symbol is required" };
   const quote = await fetchQuoteSnapshot(normalized);
-  return quote.status === "ok" ? { symbol: normalized, ...quote } : { symbol: normalized, ...quote };
+  return quote.status === "ok"
+    ? { symbol: normalized, ...quote }
+    : { symbol: normalized, ...quote };
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<

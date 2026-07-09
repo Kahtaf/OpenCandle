@@ -373,7 +373,12 @@ export function AppShell() {
         gui.setToast(message);
         return Promise.reject(new Error(message));
       }
-      return gui.invokeTool(toolName, args, targetSessionId ?? sessionView.activeSessionId, options);
+      return gui.invokeTool(
+        toolName,
+        args,
+        targetSessionId ?? sessionView.activeSessionId,
+        options,
+      );
     },
     [gui.invokeTool, gui.setToast, nonChatActionsUnavailable, sessionView.activeSessionId],
   );

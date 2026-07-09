@@ -144,7 +144,11 @@ describe("watchlistTool", () => {
 
   it("renames a named watchlist for TUI and tool callers", async () => {
     await watchlistTool.execute("test", { action: "create", watchlist_name: "Growth" });
-    await watchlistTool.execute("test", { action: "add", symbol: "NVDA", watchlist_name: "Growth" });
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "NVDA",
+      watchlist_name: "Growth",
+    });
 
     const renamed = await watchlistTool.execute("test", {
       action: "rename",
@@ -160,7 +164,9 @@ describe("watchlistTool", () => {
     await expect(
       watchlistTool.execute("test", { action: "check", watchlist_name: "Growth" }),
     ).resolves.toMatchObject({
-      content: [expect.objectContaining({ text: "Growth is empty. Use add action to add symbols." })],
+      content: [
+        expect.objectContaining({ text: "Growth is empty. Use add action to add symbols." }),
+      ],
     });
   });
 
@@ -173,7 +179,10 @@ describe("watchlistTool", () => {
       }),
     ).rejects.toThrow("watchlist Missing not found");
 
-    const missing = await watchlistTool.execute("test", { action: "check", watchlist_name: "Missing" });
+    const missing = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "Missing",
+    });
     expect(missing.content[0].text).toContain("Missing is empty");
   });
 

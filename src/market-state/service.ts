@@ -546,6 +546,8 @@ export class MarketStateService {
 
   createPortfolio(name: string, baseCurrency = "USD"): CollectionRecord {
     const normalized = normalizeCollectionName(name);
+    const existing = this.getPortfolioByName(normalized);
+    if (existing != null) return existing;
     const normalizedCurrency = baseCurrency.trim().toUpperCase() || "USD";
     const now = new Date().toISOString();
     this.db
@@ -572,6 +574,10 @@ export class MarketStateService {
     const current = this.getPortfolioByName(currentName);
     if (current == null) throw new Error(`portfolio ${currentName.trim()} not found.`);
     const normalizedNext = normalizeCollectionName(nextName);
+    const existing = this.getPortfolioByName(normalizedNext);
+    if (existing != null && existing.id !== current.id) {
+      throw new Error(`portfolio ${normalizedNext} already exists.`);
+    }
     const now = new Date().toISOString();
     this.db
       .prepare("UPDATE portfolios SET name = ?, updated_at = ? WHERE id = ?")

@@ -401,7 +401,8 @@ export const alertsTool: AgentTool<typeof params> = {
           );
         }
         const payload = await buildAlertRulePayload(service, conditionAction, args, existing);
-        if (payload.status === "needs_selection") return candidateResult(payload.resolution, "alert");
+        if (payload.status === "needs_selection")
+          return candidateResult(payload.resolution, "alert");
         const rule = service.updateAlertRule(args.id, {
           ...payload.input,
           enabled: args.enabled,
@@ -501,7 +502,9 @@ async function buildAlertRulePayload(
   if (instrument.status === "needs_selection") return instrument;
   const existingCondition = conditionRecord(existing);
   const cooldownSeconds =
-    args.cooldown_seconds === undefined ? undefined : validateCooldownSeconds(args.cooldown_seconds);
+    args.cooldown_seconds === undefined
+      ? undefined
+      : validateCooldownSeconds(args.cooldown_seconds);
   const base = {
     scopeType: "instrument" as const,
     instrumentId: instrument.id,
@@ -550,7 +553,11 @@ async function buildAlertRulePayload(
       input: {
         ...base,
         conditionType: "rsi_threshold",
-        condition: rsiThreshold(period, threshold, action === "create_rsi_above" ? "above" : "below"),
+        condition: rsiThreshold(
+          period,
+          threshold,
+          action === "create_rsi_above" ? "above" : "below",
+        ),
         timeframe: "1d",
       },
     };
@@ -589,8 +596,20 @@ async function buildAlertRulePayload(
     };
   }
 
-  const fastPeriod = numberInput(args.fast_period, existingCondition, "fast_period", "fast_period", 50);
-  const slowPeriod = numberInput(args.slow_period, existingCondition, "slow_period", "slow_period", 200);
+  const fastPeriod = numberInput(
+    args.fast_period,
+    existingCondition,
+    "fast_period",
+    "fast_period",
+    50,
+  );
+  const slowPeriod = numberInput(
+    args.slow_period,
+    existingCondition,
+    "slow_period",
+    "slow_period",
+    200,
+  );
   if (!Number.isInteger(fastPeriod) || !Number.isInteger(slowPeriod)) {
     throw new Error(
       "fast_period and slow_period must be whole-number lookback periods for SMA-cross alert actions.",
@@ -644,7 +663,9 @@ async function resolveAlertInstrument(
     return { status: "ok", id: service.upsertInstrumentRecord(resolution.instrument).id };
   }
   if (existing?.instrumentId != null) return { status: "ok", id: existing.instrumentId };
-  throw new Error("symbol is required for update when the existing alert is not instrument-scoped.");
+  throw new Error(
+    "symbol is required for update when the existing alert is not instrument-scoped.",
+  );
 }
 
 function conditionRecord(rule?: AlertRuleRecord): Record<string, unknown> {

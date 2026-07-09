@@ -38,7 +38,10 @@ describe("GUI chat attachments", () => {
       ]),
     ).toEqual({
       images: [{ data: "base64", mimeType: "image/png" }],
-      attachments: [{ kind: "portfolio", id: "3" }, { kind: "watchlist", id: "7" }],
+      attachments: [
+        { kind: "portfolio", id: "3" },
+        { kind: "watchlist", id: "7" },
+      ],
     });
   });
 

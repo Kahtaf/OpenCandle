@@ -3,8 +3,8 @@ import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
 import {
-  MarketStateService,
   type CollectionRecord,
+  MarketStateService,
   type WatchlistItemRecord,
 } from "../../market-state/service.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
