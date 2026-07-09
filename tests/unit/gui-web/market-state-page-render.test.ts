@@ -1,9 +1,11 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { TooltipProvider } from "../../../gui/web/src/components/ui/tooltip.jsx";
 import {
   AlertCreateForm,
   clampComboboxActiveIndex,
+  ContextPanel,
   getHoldingAutofillValues,
   HoldingForm,
   invokeMarketStateMutation,
@@ -17,6 +19,27 @@ import {
 import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPage.jsx";
 
 describe("MarketStatePage rendering", () => {
+  it("renders market-state panels with the shared bottom-sheet chrome", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(
+          ContextPanel,
+          {
+            title: "Edit Alert",
+            onClose: () => undefined,
+          },
+          React.createElement("div", null, "Panel content"),
+        ),
+      ),
+    );
+
+    expect(html).toContain("inset-x-2");
+    expect(html).toContain("backdrop-blur-[2px]");
+    expect(html).toContain("h-1 w-9");
+  });
+
   it("autofills new holding quantity, average cost, and currency from selected quote data", () => {
     expect(
       getHoldingAutofillValues({

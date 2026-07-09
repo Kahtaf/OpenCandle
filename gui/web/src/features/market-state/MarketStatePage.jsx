@@ -2,6 +2,11 @@ import { Plus, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import {
+  BOTTOM_SHEET_HANDLE_CLASS,
+  BOTTOM_SHEET_SURFACE_CLASS,
+  SHEET_OVERLAY_CLASS,
+} from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
@@ -449,7 +454,7 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
   );
 }
 
-function ContextPanel({ title, onClose, children }) {
+export function ContextPanel({ title, onClose, children }) {
   const panelRef = useRef(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: focus/scroll should run when a different panel title is opened.
@@ -468,16 +473,20 @@ function ContextPanel({ title, onClose, children }) {
   return (
     <>
       <div
-        className="fixed inset-0 z-40 bg-foreground/25 xl:hidden"
+        className={cn(SHEET_OVERLAY_CLASS, "xl:hidden")}
         aria-hidden="true"
         onClick={onClose}
       />
       <aside
         ref={panelRef}
         tabIndex={-1}
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border bg-card shadow-subtle-md outline-none focus-visible:ring-2 focus-visible:ring-ring xl:sticky xl:top-0 xl:bottom-auto xl:inset-x-auto xl:z-auto xl:max-h-[calc(100vh-120px)] xl:rounded-md xl:shadow-subtle-xs"
+        className={cn(
+          BOTTOM_SHEET_SURFACE_CLASS,
+          "focus-visible:ring-2 focus-visible:ring-ring xl:sticky xl:top-0 xl:bottom-auto xl:inset-x-auto xl:z-auto xl:h-auto xl:max-h-[calc(100vh-120px)] xl:rounded-md xl:shadow-subtle-xs",
+        )}
       >
-        <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
+        <div className={cn(BOTTOM_SHEET_HANDLE_CLASS, "xl:hidden")} aria-hidden="true" />
+        <div className="sticky top-0 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
           <h2 className="text-sm font-semibold text-foreground">{title}</h2>
           <Button
             type="button"
@@ -489,7 +498,7 @@ function ContextPanel({ title, onClose, children }) {
             onClick={onClose}
           />
         </div>
-        <div className="p-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
       </aside>
     </>
   );

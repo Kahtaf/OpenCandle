@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import { Drawer } from "vaul";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import {
+  BOTTOM_SHEET_HANDLE_CLASS,
+  BOTTOM_SHEET_SURFACE_CLASS,
+  SHEET_OVERLAY_CLASS,
+} from "../../components/ui/sheet.jsx";
 import { SourceGrid } from "../../components/ui/source-grid.jsx";
+import { cn } from "../../lib/utils.js";
 import { ToolDrawerStep } from "../renderers/ToolDrawerStep.jsx";
 import { summarizeRunTitle } from "../renderers/tool-icon.jsx";
 import { extractRunSources } from "./run-sources.js";
@@ -45,23 +51,31 @@ export function ToolDrawerOverlay() {
       }}
     >
       <Drawer.Portal>
-        <Drawer.Overlay className="fixed inset-0 z-40 bg-foreground/40" />
-        <Drawer.Content
-          aria-describedby={undefined}
-          className="fixed inset-x-0 bottom-0 z-50 flex h-[min(90dvh,calc(100dvh-40px))] flex-col rounded-t-2xl bg-background outline-none shadow-subtle-md"
-        >
-          <VisuallyHidden.Root>
-            <Drawer.Title>Tool run timeline</Drawer.Title>
-          </VisuallyHidden.Root>
-          <div
-            className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border"
-            aria-hidden="true"
-          />
-          <DrawerHeader run={run} onClose={close} />
-          <DrawerBody run={run} />
-        </Drawer.Content>
+        <Drawer.Overlay className={SHEET_OVERLAY_CLASS} />
+        <MobileToolDrawerContent run={run} onClose={close} />
       </Drawer.Portal>
     </Drawer.Root>
+  );
+}
+
+export function MobileToolDrawerContent({
+  run,
+  onClose,
+  Surface = Drawer.Content,
+  Title = Drawer.Title,
+}) {
+  return (
+    <Surface
+      aria-describedby={undefined}
+      className={cn(BOTTOM_SHEET_SURFACE_CLASS, "bg-background")}
+    >
+      <VisuallyHidden.Root>
+        <Title>Tool run timeline</Title>
+      </VisuallyHidden.Root>
+      <div className={BOTTOM_SHEET_HANDLE_CLASS} aria-hidden="true" />
+      <DrawerHeader run={run} onClose={onClose} />
+      <DrawerBody run={run} />
+    </Surface>
   );
 }
 
