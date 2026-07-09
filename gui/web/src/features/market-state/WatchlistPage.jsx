@@ -1,9 +1,8 @@
-import { ListPlus, Pencil, Plus } from "lucide-react";
+import { ListPlus, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
-import { quoteFreshness } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
 import {
   Badge,
@@ -18,6 +17,7 @@ import {
   PanelSearch,
   SignedMoney,
   SignedPercent,
+  StateTabs,
   StatusDot,
   Sym,
 } from "./shared.jsx";
@@ -25,9 +25,7 @@ import {
 export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, invokeTool }) {
   const watchlists = useMemo(
     () =>
-      state.watchlists?.length
-        ? state.watchlists
-        : [{ id: 1, name: "Default", isDefault: true }],
+      state.watchlists?.length ? state.watchlists : [{ id: 1, name: "Default", isDefault: true }],
     [state.watchlists],
   );
   const [activeWatchlistId, setActiveWatchlistId] = useState(watchlists[0]?.id ?? null);
@@ -54,13 +52,15 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
     () => filterItems(watchlistItems, filter, ["symbol", "name"]),
     [watchlistItems, filter],
   );
+  const activeWatchlistKey = activeWatchlist?.id;
   const [selectedId, setSelectedId] = useState(null);
   const selected = rows.find((item) => item.id === selectedId) ?? rows[0] ?? null;
 
   useEffect(() => {
+    if (activeWatchlistKey == null) return;
     setSelectedId(null);
     setFilter("");
-  }, [activeWatchlist?.id, setFilter]);
+  }, [activeWatchlistKey, setFilter]);
 
   return (
     <div
@@ -91,11 +91,12 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
           </div>
         }
       >
-        <WatchlistTabs
-          watchlists={watchlists}
-          activeWatchlist={activeWatchlist}
+        <StateTabs
+          items={watchlists}
+          activeItem={activeWatchlist}
           counts={countItemsByWatchlist(state.watchlist ?? [])}
           readOnly={readOnly}
+          renameLabel="Rename watchlist"
           onSelect={setActiveWatchlistId}
           onRename={(watchlist) => openPanel("watchlist-rename", { watchlist })}
         />
@@ -180,48 +181,6 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
   );
 }
 
-function WatchlistTabs({ watchlists, activeWatchlist, counts, readOnly, onSelect, onRename }) {
-  return (
-    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist">
-        {watchlists.map((watchlist) => {
-          const active = watchlist.id === activeWatchlist?.id;
-          return (
-            <button
-              key={watchlist.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground",
-                active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
-              )}
-              onClick={() => onSelect(watchlist.id)}
-            >
-              <span>{watchlist.name}</span>
-              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-                {counts.get(watchlist.id) ?? 0}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {activeWatchlist ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          icon={Pencil}
-          title={`Rename ${activeWatchlist.name}`}
-          aria-label={`Rename ${activeWatchlist.name}`}
-          disabled={readOnly}
-          onClick={() => onRename(activeWatchlist)}
-        />
-      ) : null}
-    </div>
-  );
-}
-
 function countItemsByWatchlist(items) {
   const counts = new Map();
   for (const item of items) {
@@ -232,7 +191,6 @@ function countItemsByWatchlist(items) {
 
 function SignalBadge({ alerts, quote }) {
   if (quote && quote.status !== "ok") return <Badge tone="warn">Quote unavailable</Badge>;
-  if (quote?.stale) return <Badge tone="warn">Stale quote</Badge>;
   const active = (alerts ?? []).filter((alert) => alert.enabled !== false);
   if (active.length === 0) return <Badge>No alerts</Badge>;
   return (
@@ -243,7 +201,6 @@ function SignalBadge({ alerts, quote }) {
 }
 
 function SymbolInspector({ item, watchlist, quote, state, readOnly, invokeTool }) {
-  const freshness = quoteFreshness(quote);
   const positionRow = useMemo(() => {
     const rows = buildHoldingRows(
       (state.portfolio ?? []).filter((lot) => lot.symbol === item.symbol),
@@ -272,12 +229,9 @@ function SymbolInspector({ item, watchlist, quote, state, readOnly, invokeTool }
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           {quote?.status === "ok" ? <SignedPercent value={quote.changePercent} /> : null}
-          <span>
-            {quote?.status === "ok" || !quote
-              ? freshness.label
-              : quote.reason || "Quote unavailable"}
-          </span>
-          {freshness.stale ? <Badge tone="warn">stale</Badge> : null}
+          {quote && quote.status !== "ok" ? (
+            <span>{quote.reason || "Quote unavailable"}</span>
+          ) : null}
         </div>
       </div>
 
@@ -342,7 +296,7 @@ function SymbolInspector({ item, watchlist, quote, state, readOnly, invokeTool }
 function InspectorSection({ title, children }) {
   return (
     <section className="border-b border-border p-4 last:border-0">
-      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <h3 className="mb-2 text-balance text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
       {children}

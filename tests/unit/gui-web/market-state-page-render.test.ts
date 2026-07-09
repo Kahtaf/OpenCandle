@@ -2,21 +2,53 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "../../../gui/web/src/components/ui/tooltip.jsx";
+import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPage.jsx";
 import {
   AlertCreateForm,
-  clampComboboxActiveIndex,
   ContextPanel,
+  clampComboboxActiveIndex,
   getHoldingAutofillValues,
   HoldingForm,
   invokeMarketStateMutation,
   MarketStatePage,
   nextComboboxActiveIndex,
   PortfolioRenameForm,
+  StateTabs,
   SymbolActionPanel,
   SymbolSearchInput,
   WatchlistRenameForm,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
-import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPage.jsx";
+
+vi.mock("vaul", async () => {
+  const ReactModule = await import("react");
+  const createElement = ReactModule.createElement;
+  return {
+    Drawer: {
+      Root: ({ children }: { children: React.ReactNode }) =>
+        createElement(React.Fragment, null, children),
+      Portal: ({ children }: { children: React.ReactNode }) =>
+        createElement(React.Fragment, null, children),
+      Overlay: ({ className }: { className?: string }) =>
+        createElement("div", { className, "data-vaul-overlay": "" }),
+      Content: ({
+        children,
+        className,
+        ...props
+      }: React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode }) =>
+        createElement(
+          "div",
+          {
+            ...props,
+            className,
+            "data-vaul-drawer": "",
+            "data-vaul-drawer-direction": "bottom",
+          },
+          children,
+        ),
+      Title: ({ children }: { children: React.ReactNode }) => createElement("span", null, children),
+    },
+  };
+});
 
 describe("MarketStatePage rendering", () => {
   it("renders market-state panels with the shared bottom-sheet chrome", () => {
@@ -35,9 +67,41 @@ describe("MarketStatePage rendering", () => {
       ),
     );
 
+    expect(html).toContain("data-vaul-drawer");
     expect(html).toContain("inset-x-2");
     expect(html).toContain("backdrop-blur-[2px]");
     expect(html).toContain("h-1 w-9");
+    expect(html).toContain("bg-secondary");
+    expect(html).not.toContain("bg-card");
+  });
+
+  it("renders market-state tabs with shared tab chrome and touch-sized rename controls", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(StateTabs, {
+          items: [
+            { id: 1, name: "MAG7" },
+            { id: 2, name: "ETFs" },
+          ],
+          activeItem: { id: 1, name: "MAG7" },
+          counts: new Map([
+            [1, 7],
+            [2, 3],
+          ]),
+          readOnly: false,
+          renameLabel: "Rename watchlist",
+          onSelect: () => undefined,
+          onRename: () => undefined,
+        }),
+      ),
+    );
+
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain("min-h-10");
+    expect(html).toContain('aria-label="Rename watchlist MAG7"');
+    expect(html).toContain("size-10");
   });
 
   it("autofills new holding quantity, average cost, and currency from selected quote data", () => {
@@ -108,7 +172,7 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('role="tab"');
     expect(html).toContain("Default");
     expect(html).toContain("Add ticker");
-    expect(html).toContain('aria-label="Rename Default"');
+    expect(html).toContain('aria-label="Rename watchlist Default"');
     expect(html).not.toContain("To target");
     expect(html).not.toContain("Thesis");
   });
@@ -129,7 +193,20 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain('role="tab"');
     expect(html).toContain("Default");
     expect(html).toContain("Add holding");
-    expect(html).toContain('aria-label="Rename Default"');
+    expect(html).toContain('aria-label="Rename portfolio Default"');
+  });
+
+  it("uses shared select chrome in the alert condition form", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlertCreateForm, {
+        disabled: false,
+        invokeTool: () => true,
+      }),
+    );
+
+    expect(html).toContain("appearance-none");
+    expect(html).toContain("pointer-events-none");
+    expect(html).toContain("Condition");
   });
 
   it("renders a focused watchlist rename form", () => {
@@ -188,7 +265,9 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).not.toContain("Refresh prices");
     expect(html).not.toContain(">Refresh<");
-    expect(html).toContain("Awaiting quotes");
+    expect(html).not.toContain("Awaiting quotes");
+    expect(html).not.toContain("Updated ");
+    expect(html).not.toContain(">stale<");
     expect(html).not.toContain("SQLite-backed");
     expect(html).not.toContain("Search Yahoo candidates before saving");
   });
@@ -358,10 +437,15 @@ describe("MarketStatePage rendering", () => {
     });
 
     expect(saved).toBe(true);
-    expect(invokeToolRequest).toHaveBeenCalledWith("manage_watchlist", {
-      action: "add",
-      symbol: "AAPL",
-    }, "", { recordTranscript: false });
+    expect(invokeToolRequest).toHaveBeenCalledWith(
+      "manage_watchlist",
+      {
+        action: "add",
+        symbol: "AAPL",
+      },
+      "",
+      { recordTranscript: false },
+    );
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshQuotes).toHaveBeenCalledOnce();
   });
@@ -387,7 +471,8 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(alertHtml).toContain(">Condition<select");
+    expect(alertHtml).toContain(">Condition");
+    expect(alertHtml).toContain("<select");
     expect(alertHtml).toContain(">Threshold<input");
     // Period only renders for SMA/RSI/volume conditions; the default price-above
     // condition hides it instead of showing a disabled field.

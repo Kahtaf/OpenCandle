@@ -2,16 +2,13 @@ import { Plus, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
-import {
-  BOTTOM_SHEET_HANDLE_CLASS,
-  BOTTOM_SHEET_SURFACE_CLASS,
-  SHEET_OVERLAY_CLASS,
-} from "../../components/ui/sheet.jsx";
+import { Select } from "../../components/ui/select.jsx";
+import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
-import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import { getInstrumentQuote } from "../instruments/instrument-api.js";
+import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {
   clampInstrumentActiveIndex,
   instrumentSuggestionOptionId,
@@ -20,11 +17,12 @@ import {
 import { useInstrumentSearch } from "../instruments/use-instrument-search.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
-import { quoteFreshness } from "./format.js";
 import { PortfolioPage } from "./PortfolioPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
-import { Badge, StatusBand } from "./shared.jsx";
+import { StatusBand } from "./shared.jsx";
 import { WatchlistPage } from "./WatchlistPage.jsx";
+
+export { StateTabs } from "./shared.jsx";
 
 const PAGE_META = {
   watchlists: {
@@ -50,6 +48,24 @@ const PAGE_META = {
 
 const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
   "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mediaQuery = window.matchMedia(query);
+    const onChange = (event) => setMatches(event.matches);
+    setMatches(mediaQuery.matches);
+    mediaQuery.addEventListener("change", onChange);
+    return () => mediaQuery.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}
 
 export async function invokeMarketStateMutation({
   readOnly,
@@ -157,7 +173,6 @@ export function MarketStatePage({
             loading={loading}
             readOnly={readOnly || mutationPending}
             onPrimary={primaryAction}
-            quoteSnapshot={state.quoteSnapshot}
           />
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
           {mutationPending ? (
@@ -231,14 +246,11 @@ export function MarketStatePage({
   );
 }
 
-function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
-  const freshness = quoteFreshness({ fetchedAt: quoteSnapshot?.generatedAt });
+function PageHeader({ meta, loading, readOnly, onPrimary }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 px-1">
-      <h1 className="text-[17px] font-semibold text-foreground">{meta.title}</h1>
+      <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs text-muted-foreground">{freshness.label}</span>
-        {freshness.stale ? <Badge tone="warn">stale</Badge> : null}
         <Button
           type="button"
           variant="brand"
@@ -256,7 +268,6 @@ function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
 }
 
 function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
-  const item = panel.data?.item;
   const lot = panel.data?.lot;
   const alert = panel.data?.alert;
   const watchlist = panel.data?.watchlist;
@@ -456,50 +467,64 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
 
 export function ContextPanel({ title, onClose, children }) {
   const panelRef = useRef(null);
+  const isInlinePanel = useMediaQuery("(min-width: 1280px)");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: focus/scroll should run when a different panel title is opened.
   useEffect(() => {
+    if (!isInlinePanel) return;
     const node = panelRef.current;
     if (!node) return;
-    // At xl the panel is an in-flow column: scroll it into view. Below xl it is
-    // a fixed bottom sheet, so scrolling the document would just jump the page.
-    if (window.matchMedia("(min-width: 1280px)").matches) {
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      node.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
-    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
     node.focus({ preventScroll: true });
-  }, [title]);
+  }, [isInlinePanel, title]);
+
+  if (!isInlinePanel) {
+    return (
+      <Sheet
+        open
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      >
+        <SheetContent width="md" handleLabel={title}>
+          <ContextPanelFrame title={title} onClose={onClose}>
+            {children}
+          </ContextPanelFrame>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      className="sticky top-0 flex h-auto max-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-md border border-border bg-card shadow-subtle-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ContextPanelFrame title={title} onClose={onClose}>
+        {children}
+      </ContextPanelFrame>
+    </aside>
+  );
+}
+
+function ContextPanelFrame({ title, onClose, children }) {
+  return (
     <>
-      <div
-        className={cn(SHEET_OVERLAY_CLASS, "xl:hidden")}
-        aria-hidden="true"
-        onClick={onClose}
-      />
-      <aside
-        ref={panelRef}
-        tabIndex={-1}
-        className={cn(
-          BOTTOM_SHEET_SURFACE_CLASS,
-          "focus-visible:ring-2 focus-visible:ring-ring xl:sticky xl:top-0 xl:bottom-auto xl:inset-x-auto xl:z-auto xl:h-auto xl:max-h-[calc(100vh-120px)] xl:rounded-md xl:shadow-subtle-xs",
-        )}
-      >
-        <div className={cn(BOTTOM_SHEET_HANDLE_CLASS, "xl:hidden")} aria-hidden="true" />
-        <div className="sticky top-0 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            icon={X}
-            tooltip="Close panel"
-            aria-label="Close panel"
-            onClick={onClose}
-          />
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
-      </aside>
+      <div className="sticky top-0 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary px-4 py-3">
+        <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          icon={X}
+          tooltip="Close panel"
+          aria-label="Close panel"
+          onClick={onClose}
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
     </>
   );
 }
@@ -815,8 +840,7 @@ export function getHoldingAutofillValues({
   const defaults = getHoldingAutofillDefaults({ selectedSymbol, selectedQuote });
   const replaceableValue = (field) =>
     current[field] === "" ||
-    current[field] ===
-      String(previousAutofill?.[field] ?? (field === "currency" ? "USD" : ""));
+    current[field] === String(previousAutofill?.[field] ?? (field === "currency" ? "USD" : ""));
 
   return {
     shares: defaults.shares && replaceableValue("shares") ? defaults.shares : current.shares,
@@ -998,7 +1022,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
       />
       <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
-        <select
+        <Select
           id={conditionId}
           className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
           value={condition}
@@ -1016,7 +1040,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
           <option value="create_percent_move_down">Percent move down</option>
           <option value="create_sma_cross_above">Fast SMA crosses above slow SMA</option>
           <option value="create_sma_cross_below">Fast SMA crosses below slow SMA</option>
-        </select>
+        </Select>
       </label>
       {supportsThreshold ? (
         <label

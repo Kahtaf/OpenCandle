@@ -11,7 +11,7 @@ const baseMarketState = {
 };
 
 describe("EntityPopover", () => {
-  it("renders cached quote price, change, and freshness", () => {
+  it("renders cached quote price and change without freshness copy", () => {
     const html = renderToStaticMarkup(
       React.createElement(EntityPopover, {
         open: true,
@@ -41,7 +41,7 @@ describe("EntityPopover", () => {
     expect(html).toContain("NVIDIA Corp.");
     expect(html).toContain("$920.50");
     expect(html).toContain("+1.25%");
-    expect(html).toContain("As of 4:00 PM ET");
+    expect(html).not.toContain("As of 4:00 PM ET");
   });
 
   it("renders a held badge for portfolio symbols", () => {

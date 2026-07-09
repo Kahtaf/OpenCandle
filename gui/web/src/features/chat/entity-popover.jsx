@@ -8,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover.jsx";
+import { Select } from "../../components/ui/select.jsx";
 import { normalizeWatchlistOptions } from "./watchlist-options.js";
 
 export function EntityPopover({
@@ -29,16 +30,18 @@ export function EntityPopover({
     () => normalizeWatchlistOptions(marketState?.watchlists),
     [marketState?.watchlists],
   );
-  const [selectedWatchlistId, setSelectedWatchlistId] = useState(watchlistOptions[0]?.id ?? "default");
+  const [selectedWatchlistId, setSelectedWatchlistId] = useState(
+    watchlistOptions[0]?.id ?? "default",
+  );
   useEffect(() => {
     if (!watchlistOptions.some((watchlist) => watchlist.id === selectedWatchlistId)) {
       setSelectedWatchlistId(watchlistOptions[0]?.id ?? "default");
     }
   }, [selectedWatchlistId, watchlistOptions]);
-  const selectedWatchlist =
-    watchlistOptions.find((watchlist) => watchlist.id === selectedWatchlistId) ??
-    watchlistOptions[0] ??
-    { id: "default", name: "Default" };
+  const selectedWatchlist = watchlistOptions.find(
+    (watchlist) => watchlist.id === selectedWatchlistId,
+  ) ??
+    watchlistOptions[0] ?? { id: "default", name: "Default" };
   const normalized = String(symbol || "").toUpperCase();
   if (!normalized) return null;
 
@@ -95,19 +98,14 @@ export function EntityPopover({
                     <span
                       className={
                         quote.changePercent >= 0
-                          ? "text-sm font-medium text-emerald-600"
-                          : "text-sm font-medium text-red-600"
+                          ? "text-sm font-medium tabular-nums text-success"
+                          : "text-sm font-medium tabular-nums text-destructive"
                       }
                     >
                       {formatPercent(quote.changePercent)}
                     </span>
                   ) : null}
                 </div>
-                {freshnessLine(quote) ? (
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    {freshnessLine(quote)}
-                  </div>
-                ) : null}
                 <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
                   <QuoteFact label="Open" value={formatCurrency(quote.open)} />
                   <QuoteFact label="High" value={formatCurrency(quote.high)} />
@@ -128,9 +126,9 @@ export function EntityPopover({
                 className="grid gap-1 text-xs font-medium text-muted-foreground"
               >
                 Watchlist
-                <select
+                <Select
                   id={watchlistSelectId}
-                  className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                  size="sm"
                   value={selectedWatchlist.id}
                   disabled={!canAdd}
                   onChange={(event) => setSelectedWatchlistId(event.target.value)}
@@ -140,7 +138,7 @@ export function EntityPopover({
                       {watchlist.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <Button
                 type="button"
@@ -258,15 +256,6 @@ function formatLargeNumber(value) {
 function formatPercent(value) {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
-}
-
-function freshnessLine(quote) {
-  const freshness = quote?.freshness;
-  if (typeof freshness === "string") return freshness;
-  if (freshness && typeof freshness === "object") {
-    return freshness.line || freshness.asOfLine || freshness.label || "";
-  }
-  return quote?.fetchedAt ? `Fetched ${quote.fetchedAt}` : "";
 }
 
 function defaultViewportSize() {

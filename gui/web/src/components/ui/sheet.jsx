@@ -60,10 +60,9 @@ export const SHEET_OVERLAY_CLASS =
   "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain";
 
 export const BOTTOM_SHEET_SURFACE_CLASS =
-  "fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-card shadow-subtle-md outline-none overscroll-contain";
+  "fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md outline-none overscroll-contain";
 
-export const BOTTOM_SHEET_HANDLE_CLASS =
-  "mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard";
+export const BOTTOM_SHEET_HANDLE_CLASS = "mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard";
 
 export function SheetContent({ children, className, width = "md", handleLabel = "Panel" }) {
   const { isDesktop } = useContext(SheetContext);
@@ -110,10 +109,5 @@ export function SheetContent({ children, className, width = "md", handleLabel = 
 }
 
 function SheetHandle({ className }) {
-  return (
-    <div
-      className={cn(BOTTOM_SHEET_HANDLE_CLASS, className)}
-      aria-hidden="true"
-    />
-  );
+  return <div className={cn(BOTTOM_SHEET_HANDLE_CLASS, className)} aria-hidden="true" />;
 }

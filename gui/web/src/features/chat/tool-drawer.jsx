@@ -10,7 +10,6 @@ import {
   SHEET_OVERLAY_CLASS,
 } from "../../components/ui/sheet.jsx";
 import { SourceGrid } from "../../components/ui/source-grid.jsx";
-import { cn } from "../../lib/utils.js";
 import { ToolDrawerStep } from "../renderers/ToolDrawerStep.jsx";
 import { summarizeRunTitle } from "../renderers/tool-icon.jsx";
 import { extractRunSources } from "./run-sources.js";
@@ -65,10 +64,7 @@ export function MobileToolDrawerContent({
   Title = Drawer.Title,
 }) {
   return (
-    <Surface
-      aria-describedby={undefined}
-      className={cn(BOTTOM_SHEET_SURFACE_CLASS, "bg-background")}
-    >
+    <Surface aria-describedby={undefined} className={BOTTOM_SHEET_SURFACE_CLASS}>
       <VisuallyHidden.Root>
         <Title>Tool run timeline</Title>
       </VisuallyHidden.Root>

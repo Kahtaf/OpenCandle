@@ -20,5 +20,7 @@ describe("ToolDrawerOverlay", () => {
     expect(html).toContain("inset-x-2");
     expect(html).toContain("rounded-t-xl");
     expect(html).toContain("h-1 w-9");
+    expect(html).toContain("bg-secondary shadow-subtle-md");
+    expect(html).not.toContain("overscroll-contain bg-background");
   });
 });
