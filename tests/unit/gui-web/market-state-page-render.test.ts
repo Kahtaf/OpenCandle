@@ -114,6 +114,17 @@ describe("MarketStatePage rendering", () => {
     ).toEqual({ shares: "100", avg_cost: "42.37", currency: "USD" });
   });
 
+  it("replaces the untouched USD default with the selected quote currency", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "SHOP.TO",
+        currentValues: { shares: "100", avg_cost: "", currency: "USD" },
+        previousAutofill: { shares: "100", avg_cost: "", currency: "USD" },
+        selectedQuote: { status: "ok", price: 154.2, currency: "CAD" },
+      }),
+    ).toEqual({ shares: "100", avg_cost: "154.2", currency: "CAD" });
+  });
+
   it("does not overwrite holding fields the user has already edited", () => {
     expect(
       getHoldingAutofillValues({

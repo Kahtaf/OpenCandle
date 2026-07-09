@@ -822,7 +822,7 @@ function getHoldingAutofillDefaults({ selectedSymbol, selectedQuote }) {
   return {
     shares: "100",
     avg_cost: quote ? formatAutofillNumber(quote.price) : "",
-    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "",
+    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "USD",
   };
 }
 
