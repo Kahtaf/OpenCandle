@@ -17,20 +17,7 @@ export function formatWatchlistSummary(items: WatchlistItemRecord[], limit = 8):
   if (items.length === 0) return [];
   const lines = ["Watchlist:"];
   for (const item of items.slice(0, limit)) {
-    const parts = [
-      item.targetPrice == null
-        ? null
-        : `target ${formatMoney(item.targetPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
-      item.stopPrice == null
-        ? null
-        : `stop ${formatMoney(item.stopPrice, item.priceCurrency ?? item.currency ?? "USD")}`,
-      item.thesis ? `thesis: ${item.thesis}` : null,
-      item.tags && item.tags.length > 0 ? `tags: ${item.tags.join(", ")}` : null,
-      item.notes ? `notes: ${item.notes}` : null,
-    ].filter((part): part is string => part != null);
-    lines.push(
-      `- ${item.symbol}${item.name ? ` (${item.name})` : ""}${parts.length > 0 ? ` — ${parts.join("; ")}` : ""}`,
-    );
+    lines.push(`- ${item.symbol}${item.name ? ` (${item.name})` : ""}`);
   }
   return lines;
 }

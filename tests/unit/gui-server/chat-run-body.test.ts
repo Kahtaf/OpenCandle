@@ -48,6 +48,62 @@ describe("GUI chat-run body parsing", () => {
     }
   });
 
+  it("expands a selected portfolio attachment by id", async () => {
+    const originalHome = process.env.OPENCANDLE_HOME;
+    const home = mkdtempSync(join(tmpdir(), "opencandle-chat-run-body-"));
+    process.env.OPENCANDLE_HOME = home;
+    try {
+      const db = initDefaultDatabase();
+      const service = new MarketStateService(db);
+      const trading = service.createPortfolio("Trading");
+      service.addPortfolioLot({
+        portfolioId: trading.id,
+        instrument: {
+          symbol: "TSLA",
+          assetType: "equity",
+          name: "Tesla, Inc.",
+          exchange: "NMS",
+          currency: "USD",
+          provider: "yahoo",
+        },
+        quantity: 1,
+        avgCost: 200,
+        currency: "USD",
+      });
+      service.addPortfolioLot({
+        instrument: {
+          symbol: "VTI",
+          assetType: "etf",
+          name: "Vanguard Total Stock Market ETF",
+          exchange: "PCX",
+          currency: "USD",
+          provider: "yahoo",
+        },
+        quantity: 2,
+        avgCost: 250,
+        currency: "USD",
+      });
+      db.close();
+
+      const prompt = await buildDispatchedPrompt({
+        prompt: "review this",
+        images: [],
+        attachments: [{ kind: "portfolio", id: String(trading.id) }],
+      });
+
+      expect(prompt).toContain("[Attached by user — portfolio]");
+      expect(prompt).toContain("- TSLA: 1 @ $200.00, cost basis $200.00");
+      expect(prompt).not.toContain("VTI");
+    } finally {
+      if (originalHome == null) {
+        delete process.env.OPENCANDLE_HOME;
+      } else {
+        process.env.OPENCANDLE_HOME = originalHome;
+      }
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it("accepts prompt, valid images, and saved context attachments", () => {
     expect(
       parseChatRunBody({

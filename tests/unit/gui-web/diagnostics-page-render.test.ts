@@ -79,6 +79,9 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toContain("Model setup");
     expect(html).toContain("Providers");
     expect(html).toContain("Check sessions");
+    expect(html).toContain("rounded-xl");
+    expect(html).toContain("text-balance");
+    expect(html).toContain("tabular-nums");
   });
 
   it("uses the browser-session confirmation result", () => {

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Card } from "../../components/ui/card.jsx";
 import { Dialog, DialogContent } from "../../components/ui/dialog.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { Select } from "../../components/ui/select.jsx";
 
 export function ModelSetupCard({ modelSetup, role = "writer", send, setToast }) {
   return (
@@ -75,6 +76,7 @@ function ModelSetupHeader({ variant, hasReady, role, requirement }) {
 }
 
 function ModelSetupBody({ modelSetup, role, send, setToast }) {
+  const modelSelectId = useId();
   const [keys, setKeys] = useState({});
   const providers = modelSetup?.providers || [];
   const availableModels = modelSetup?.availableModels || [];
@@ -104,10 +106,10 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
         </div>
       ) : null}
       {availableModels.length > 0 ? (
-        <label className="grid max-w-[420px] gap-1.5">
+        <label htmlFor={modelSelectId} className="grid max-w-[420px] gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Available model</span>
-          <select
-            className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:h-9"
+          <Select
+            id={modelSelectId}
             value={modelSetup?.currentModel || ""}
             onChange={(event) => selectModel(send, event.target.value)}
             disabled={setupDisabled}
@@ -118,7 +120,7 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
                 {model.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       ) : null}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

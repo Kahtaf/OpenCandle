@@ -7,6 +7,12 @@
       "skillPath": "plugins/documentation-generation/skills/changelog-automation/SKILL.md",
       "computedHash": "b1dbf331730361654b2d50f6750c8bf055e8d3cd454f03496c87e87c5497d27c"
     },
+    "codex-first": {
+      "source": "steipete/agent-scripts",
+      "sourceType": "github",
+      "skillPath": "skills/codex-first/SKILL.md",
+      "computedHash": "1ff82a567f3a6e8a112df69cd9e1fcf0435753449670aa637fd9bc2c82bdf7d5"
+    },
     "git-advanced-workflows": {
       "source": "wshobson/agents",
       "sourceType": "github",

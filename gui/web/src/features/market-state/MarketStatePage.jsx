@@ -2,10 +2,12 @@ import { Plus, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
-import { Textarea } from "../../components/ui/textarea.jsx";
+import { Select } from "../../components/ui/select.jsx";
+import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
 import { cn } from "../../lib/utils.js";
+import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {
   clampInstrumentActiveIndex,
@@ -15,22 +17,23 @@ import {
 import { useInstrumentSearch } from "../instruments/use-instrument-search.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { AlertsPage } from "./AlertsPage.jsx";
-import { quoteFreshness } from "./format.js";
 import { PortfolioPage } from "./PortfolioPage.jsx";
 import { ReportsPage } from "./ReportsPage.jsx";
-import { Badge, StatusBand } from "./shared.jsx";
+import { StatusBand } from "./shared.jsx";
 import { WatchlistPage } from "./WatchlistPage.jsx";
+
+export { StateTabs } from "./shared.jsx";
 
 const PAGE_META = {
   watchlists: {
     title: "Watchlists",
-    primaryLabel: "Add ticker",
-    primaryPanel: "watchlist-add",
+    primaryLabel: "New Watchlist",
+    primaryPanel: "watchlist-create",
   },
   portfolios: {
     title: "Portfolios",
-    primaryLabel: "Add holding",
-    primaryPanel: "holding-add",
+    primaryLabel: "New Portfolio",
+    primaryPanel: "portfolio-create",
   },
   alerts: {
     title: "Alerts",
@@ -45,6 +48,24 @@ const PAGE_META = {
 
 const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
   "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
+
+function useMediaQuery(query) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mediaQuery = window.matchMedia(query);
+    const onChange = (event) => setMatches(event.matches);
+    setMatches(mediaQuery.matches);
+    mediaQuery.addEventListener("change", onChange);
+    return () => mediaQuery.removeEventListener("change", onChange);
+  }, [query]);
+
+  return matches;
+}
 
 export async function invokeMarketStateMutation({
   readOnly,
@@ -67,7 +88,7 @@ export async function invokeMarketStateMutation({
     if (typeof invokeToolRequest !== "function") {
       throw new Error(UNSUPPORTED_MUTATION_FALLBACK_MESSAGE);
     }
-    await invokeToolRequest(toolName, args);
+    await invokeToolRequest(toolName, args, "", { recordTranscript: false });
     await refresh();
     await refreshQuotes?.();
     return true;
@@ -88,7 +109,6 @@ export function MarketStatePage({
   domain,
   role,
   invokeTool: invokeToolRequest,
-  navigate,
   setToast,
   onOpenSidebar,
   onOpenHome,
@@ -153,7 +173,6 @@ export function MarketStatePage({
             loading={loading}
             readOnly={readOnly || mutationPending}
             onPrimary={primaryAction}
-            quoteSnapshot={state.quoteSnapshot}
           />
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
           {mutationPending ? (
@@ -188,7 +207,6 @@ export function MarketStatePage({
                   readOnly={readOnly || mutationPending}
                   openPanel={openPanel}
                   invokeTool={invokeTool}
-                  navigate={navigate}
                 />
               ) : null}
               {activeId === "alerts" ? (
@@ -213,6 +231,7 @@ export function MarketStatePage({
             {panel ? (
               <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
                 <PanelContent
+                  state={state}
                   panel={panel}
                   readOnly={readOnly || mutationPending}
                   invokeTool={invokeTool}
@@ -227,14 +246,11 @@ export function MarketStatePage({
   );
 }
 
-function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
-  const freshness = quoteFreshness({ fetchedAt: quoteSnapshot?.generatedAt });
+function PageHeader({ meta, loading, readOnly, onPrimary }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 px-1">
-      <h1 className="text-[17px] font-semibold text-foreground">{meta.title}</h1>
+      <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs text-muted-foreground">{freshness.label}</span>
-        {freshness.stale ? <Badge tone="warn">stale</Badge> : null}
         <Button
           type="button"
           variant="brand"
@@ -251,34 +267,99 @@ function PageHeader({ meta, loading, readOnly, onPrimary, quoteSnapshot }) {
   );
 }
 
-function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
-  const item = panel.data?.item;
+function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
   const lot = panel.data?.lot;
+  const alert = panel.data?.alert;
+  const watchlist = panel.data?.watchlist;
+  const portfolio = panel.data?.portfolio;
 
-  if (panel.type === "watchlist-add" || panel.type === "watchlist-edit") {
+  if (panel.type === "watchlist-create") {
+    return (
+      <WatchlistCreateForm
+        disabled={readOnly}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("manage_watchlist", {
+            action: "create",
+            watchlist_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
+  if (panel.type === "watchlist-add") {
     return (
       <SymbolActionPanel
-        key={`${panel.type}:${item?.id ?? item?.symbol ?? "new"}`}
-        title={panel.type === "watchlist-add" ? "Add ticker" : "Edit ticker"}
+        key={`${panel.type}:${watchlist?.id ?? "default"}`}
         disabled={readOnly}
-        initialSymbol={item?.symbol}
-        fields={[
-          {
-            name: "target_price",
-            label: "Target",
-            type: "number",
-            defaultValue: item?.targetPrice,
-          },
-          { name: "stop_price", label: "Stop", type: "number", defaultValue: item?.stopPrice },
-          { name: "thesis", label: "Thesis", multiline: true, defaultValue: item?.thesis },
-          { name: "notes", label: "Notes", multiline: true, defaultValue: item?.notes },
-          { name: "tags", label: "Tags", defaultValue: item?.tags?.join(", ") },
-        ]}
         onSubmit={async (values) => {
-          const saved = await invokeTool(
-            "manage_watchlist",
-            buildWatchlistMutationArgs(panel.type, values),
-          );
+          const saved = await invokeTool("manage_watchlist", {
+            action: "add",
+            symbol: values.symbol,
+            watchlist_name: watchlist?.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
+  if (panel.type === "watchlist-rename") {
+    if (!watchlist) {
+      return <p className="text-sm text-muted-foreground">Select a watchlist to rename.</p>;
+    }
+    return (
+      <WatchlistRenameForm
+        key={`${panel.type}:${watchlist.id}`}
+        disabled={readOnly}
+        watchlist={watchlist}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("manage_watchlist", {
+            action: "rename",
+            watchlist_name: watchlist.name,
+            new_watchlist_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
+  if (panel.type === "portfolio-create") {
+    return (
+      <PortfolioCreateForm
+        disabled={readOnly}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("track_portfolio", {
+            action: "create",
+            portfolio_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+      />
+    );
+  }
+
+  if (panel.type === "portfolio-rename") {
+    if (!portfolio) {
+      return <p className="text-sm text-muted-foreground">Select a portfolio to rename.</p>;
+    }
+    return (
+      <PortfolioRenameForm
+        key={`${panel.type}:${portfolio.id}`}
+        disabled={readOnly}
+        portfolio={portfolio}
+        onSubmit={async (values) => {
+          const saved = await invokeTool("track_portfolio", {
+            action: "rename",
+            portfolio_name: portfolio.name,
+            new_portfolio_name: values.name,
+          });
           if (saved) closePanel();
           return saved;
         }}
@@ -300,6 +381,7 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
             shares: Number(values.shares),
             avg_cost: Number(values.avg_cost),
             currency: values.currency || undefined,
+            portfolio_name: portfolio?.name,
           });
           if (saved) closePanel();
           return saved;
@@ -310,6 +392,25 @@ function PanelContent({ panel, readOnly, invokeTool, closePanel }) {
 
   if (panel.type === "alert-create") {
     return <AlertCreateForm disabled={readOnly} invokeTool={invokeTool} onSaved={closePanel} />;
+  }
+
+  if (panel.type === "alert-edit") {
+    if (!alert) {
+      return <p className="text-sm text-muted-foreground">Select an alert to edit.</p>;
+    }
+    return (
+      <AlertCreateForm
+        key={`${panel.type}:${alert.id}`}
+        disabled={readOnly}
+        invokeTool={invokeTool}
+        alert={alert}
+        symbol={
+          panel.data?.symbol ??
+          state?.instruments?.find((instrument) => instrument.id === alert.instrumentId)?.symbol
+        }
+        onSaved={closePanel}
+      />
+    );
   }
 
   if (panel.type === "report-configure") {
@@ -364,69 +465,212 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
   );
 }
 
-function ContextPanel({ title, onClose, children }) {
+export function ContextPanel({ title, onClose, children }) {
   const panelRef = useRef(null);
+  const isInlinePanel = useMediaQuery("(min-width: 1280px)");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: focus/scroll should run when a different panel title is opened.
   useEffect(() => {
+    if (!isInlinePanel) return;
     const node = panelRef.current;
     if (!node) return;
-    // At xl the panel is an in-flow column: scroll it into view. Below xl it is
-    // a fixed bottom sheet, so scrolling the document would just jump the page.
-    if (window.matchMedia("(min-width: 1280px)").matches) {
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      node.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
-    }
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    node.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
     node.focus({ preventScroll: true });
-  }, [title]);
+  }, [isInlinePanel, title]);
+
+  if (!isInlinePanel) {
+    return (
+      <Sheet
+        open
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+      >
+        <SheetContent width="md" handleLabel={title}>
+          <ContextPanelFrame title={title} onClose={onClose}>
+            {children}
+          </ContextPanelFrame>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   return (
+    <aside
+      ref={panelRef}
+      tabIndex={-1}
+      className="sticky top-0 flex h-auto max-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-md border border-border bg-card shadow-subtle-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <ContextPanelFrame title={title} onClose={onClose}>
+        {children}
+      </ContextPanelFrame>
+    </aside>
+  );
+}
+
+function ContextPanelFrame({ title, onClose, children }) {
+  return (
     <>
-      <div
-        className="fixed inset-0 z-40 bg-foreground/25 xl:hidden"
-        aria-hidden="true"
-        onClick={onClose}
-      />
-      <aside
-        ref={panelRef}
-        tabIndex={-1}
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-y-auto rounded-t-xl border border-border bg-card shadow-subtle-md outline-none focus-visible:ring-2 focus-visible:ring-ring xl:sticky xl:top-0 xl:bottom-auto xl:inset-x-auto xl:z-auto xl:max-h-[calc(100vh-120px)] xl:rounded-md xl:shadow-subtle-xs"
-      >
-        <div className="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            icon={X}
-            tooltip="Close panel"
-            aria-label="Close panel"
-            onClick={onClose}
-          />
-        </div>
-        <div className="p-4">{children}</div>
-      </aside>
+      <div className="sticky top-0 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-secondary px-4 py-3">
+        <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          icon={X}
+          tooltip="Close panel"
+          aria-label="Close panel"
+          onClick={onClose}
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
     </>
   );
 }
 
-export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubmit }) {
-  const fieldIdPrefix = useId();
-  const [values, setValues] = useState(() =>
-    Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])),
+export function WatchlistCreateForm({ disabled, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState("");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const saved = await onSubmit({ name: trimmed });
+    if (saved === false) return;
+    setName("");
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Watchlist name"
+          value={name}
+          disabled={disabled}
+          required
+          placeholder="ETFs"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !name.trim()}>
+        Create watchlist
+      </Button>
+    </form>
   );
-  const [query, setQuery] = useState(initialSymbol);
-  const [selected, setSelected] = useState(initialSymbol);
-  const resolvedSymbol = selected || initialSymbol;
+}
+
+export function PortfolioCreateForm({ disabled, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState("");
+  const trimmed = name.trim();
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!trimmed) return;
+    await onSubmit({ name: trimmed });
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Portfolio name"
+          value={name}
+          disabled={disabled}
+          required
+          placeholder="Trading"
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !trimmed}>
+        Create portfolio
+      </Button>
+    </form>
+  );
+}
+
+export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState(watchlist?.name ?? "");
+  const trimmed = name.trim();
+  const unchanged = trimmed === (watchlist?.name ?? "");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!trimmed || unchanged) return;
+    await onSubmit({ name: trimmed });
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Watchlist name"
+          value={name}
+          disabled={disabled}
+          required
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
+        Rename watchlist
+      </Button>
+    </form>
+  );
+}
+
+export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
+  const nameId = useId();
+  const [name, setName] = useState(portfolio?.name ?? "");
+  const trimmed = name.trim();
+  const unchanged = trimmed === (portfolio?.name ?? "");
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!trimmed || unchanged) return;
+    await onSubmit({ name: trimmed });
+  };
+
+  return (
+    <form className="space-y-3" onSubmit={submit}>
+      <label htmlFor={nameId} className="grid gap-1 text-xs font-medium text-muted-foreground">
+        Name
+        <Input
+          id={nameId}
+          aria-label="Portfolio name"
+          value={name}
+          disabled={disabled}
+          required
+          onChange={(event) => setName(event.target.value)}
+        />
+      </label>
+      <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
+        Rename portfolio
+      </Button>
+    </form>
+  );
+}
+
+export function SymbolActionPanel({ disabled, onSubmit }) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState("");
+  const resolvedSymbol = selected;
 
   const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol) return;
-    const saved = await onSubmit({ ...values, symbol: resolvedSymbol });
+    const saved = await onSubmit({ symbol: resolvedSymbol });
     if (saved === false) return;
-    setValues(Object.fromEntries(fields.map((field) => [field.name, field.defaultValue ?? ""])));
-    setQuery(initialSymbol);
-    setSelected(initialSymbol);
+    setQuery("");
+    setSelected("");
   };
 
   return (
@@ -439,66 +683,10 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
       <SymbolSearchInput
         query={query}
         selected={selected}
-        disabled={disabled || Boolean(initialSymbol)}
+        disabled={disabled}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
-      <div className="grid gap-3">
-        {fields.map((field) => {
-          const fieldId = `${fieldIdPrefix}-${field.name}`;
-          return (
-            <label
-              key={field.name}
-              htmlFor={fieldId}
-              className="grid gap-1 text-xs font-medium text-muted-foreground"
-            >
-              {field.label}
-              {field.type === "select" ? (
-                <select
-                  id={fieldId}
-                  className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
-                  value={values[field.name] || ""}
-                  disabled={disabled}
-                  required={field.required}
-                  onChange={(event) =>
-                    setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                  }
-                >
-                  {field.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              ) : field.multiline ? (
-                <Textarea
-                  id={fieldId}
-                  className="rounded-md border border-border bg-card px-3 py-2"
-                  value={values[field.name] || ""}
-                  disabled={disabled}
-                  required={field.required}
-                  onChange={(event) =>
-                    setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                  }
-                />
-              ) : (
-                <Input
-                  id={fieldId}
-                  type={field.type || "text"}
-                  step={field.type === "number" ? "any" : undefined}
-                  placeholder={field.placeholder}
-                  value={values[field.name] || ""}
-                  disabled={disabled}
-                  required={field.required}
-                  onChange={(event) =>
-                    setValues((current) => ({ ...current, [field.name]: event.target.value }))
-                  }
-                />
-              )}
-            </label>
-          );
-        })}
-      </div>
       <Button type="submit" variant="brand" disabled={disabled || !resolvedSymbol}>
         {resolvedSymbol ? "Save" : "Select a ticker to save"}
       </Button>
@@ -506,25 +694,15 @@ export function SymbolActionPanel({ fields, disabled, initialSymbol = "", onSubm
   );
 }
 
-export function buildWatchlistMutationArgs(panelType, values) {
-  const isEdit = panelType === "watchlist-edit";
-  return {
-    action: isEdit ? "update" : "add",
-    symbol: values.symbol,
-    target_price: isEdit
-      ? numberOrNull(values.target_price)
-      : numberOrUndefined(values.target_price),
-    stop_price: isEdit ? numberOrNull(values.stop_price) : numberOrUndefined(values.stop_price),
-    thesis: isEdit ? blankToNull(values.thesis) : values.thesis || undefined,
-    notes: isEdit ? blankToNull(values.notes) : values.notes || undefined,
-    tags: isEdit ? (parseTags(values.tags) ?? []) : parseTags(values.tags),
-  };
-}
-
 export function HoldingForm({ disabled, lot, onSubmit }) {
   const quantityId = useId();
   const averageCostId = useId();
   const currencyId = useId();
+  const previousAutofillRef = useRef({
+    shares: "",
+    avg_cost: "",
+    currency: lot?.currency ?? "USD",
+  });
   const [values, setValues] = useState({
     shares: lot?.quantity ?? "",
     avg_cost: lot?.avgCost ?? "",
@@ -533,6 +711,38 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
   const [query, setQuery] = useState(lot?.symbol ?? "");
   const [selected, setSelected] = useState(lot?.symbol ?? "");
   const resolvedSymbol = selected || lot?.symbol;
+
+  useEffect(() => {
+    if (lot || !resolvedSymbol) return undefined;
+
+    let disposed = false;
+    const applyAutofill = (selectedQuote) => {
+      const defaults = getHoldingAutofillDefaults({
+        selectedSymbol: resolvedSymbol,
+        selectedQuote,
+      });
+      setValues((current) =>
+        getHoldingAutofillValues({
+          selectedSymbol: resolvedSymbol,
+          currentValues: current,
+          previousAutofill: previousAutofillRef.current,
+          selectedQuote,
+        }),
+      );
+      previousAutofillRef.current = defaults;
+    };
+
+    applyAutofill(null);
+    getInstrumentQuote(resolvedSymbol)
+      .then((quote) => {
+        if (!disposed) applyAutofill(quote);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+    };
+  }, [lot, resolvedSymbol]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -603,6 +813,46 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
       </Button>
     </form>
   );
+}
+
+function getHoldingAutofillDefaults({ selectedSymbol, selectedQuote }) {
+  if (!selectedSymbol) return { shares: "", avg_cost: "", currency: "" };
+  const quote =
+    selectedQuote?.status === "ok" && Number.isFinite(selectedQuote.price) ? selectedQuote : null;
+  return {
+    shares: "100",
+    avg_cost: quote ? formatAutofillNumber(quote.price) : "",
+    currency: quote?.currency ? String(quote.currency).trim().toUpperCase() : "USD",
+  };
+}
+
+export function getHoldingAutofillValues({
+  selectedSymbol,
+  currentValues,
+  previousAutofill,
+  selectedQuote,
+}) {
+  const current = {
+    shares: String(currentValues?.shares ?? ""),
+    avg_cost: String(currentValues?.avg_cost ?? ""),
+    currency: String(currentValues?.currency ?? ""),
+  };
+  const defaults = getHoldingAutofillDefaults({ selectedSymbol, selectedQuote });
+  const replaceableValue = (field) =>
+    current[field] === "" ||
+    current[field] === String(previousAutofill?.[field] ?? (field === "currency" ? "USD" : ""));
+
+  return {
+    shares: defaults.shares && replaceableValue("shares") ? defaults.shares : current.shares,
+    avg_cost:
+      defaults.avg_cost && replaceableValue("avg_cost") ? defaults.avg_cost : current.avg_cost,
+    currency:
+      defaults.currency && replaceableValue("currency") ? defaults.currency : current.currency,
+  };
+}
+
+function formatAutofillNumber(value) {
+  return Number.parseFloat(String(value)).toString();
 }
 
 export function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
@@ -698,30 +948,41 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
 export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
 
-export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
+export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }) {
   const conditionId = useId();
   const thresholdId = useId();
   const periodId = useId();
+  const fastPeriodId = useId();
+  const slowPeriodId = useId();
   const cooldownId = useId();
-  const [draft, setDraft] = useState({
-    query: "",
-    selected: "",
-    threshold: "",
-    condition: "create_price_above",
-    period: "14",
-    cooldown: "3600",
-  });
+  const isEditing = Boolean(alert);
+  const [draft, setDraft] = useState(() => initialAlertDraft(alert, symbol));
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
-  const { query, selected, threshold, condition, period, cooldown } = draft;
-  const needsThreshold = !condition.includes("_sma") && condition !== "create_volume_spike";
+  const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
+    draft;
+  const needsThreshold = [
+    "create_price_above",
+    "create_price_below",
+    "create_rsi_above",
+    "create_rsi_below",
+    "create_percent_move_up",
+    "create_percent_move_down",
+  ].includes(condition);
   const supportsThreshold = needsThreshold || condition === "create_volume_spike";
   const needsPeriod =
     condition.includes("_sma") ||
     condition.includes("_rsi_") ||
     condition === "create_volume_spike";
+  const needsFastSlow = condition.includes("sma_cross");
   const resolvedSymbol = selected;
   const summary = resolvedSymbol
-    ? `Notify once when ${resolvedSymbol} ${conditionSummary(condition, threshold, period)} during a manual or local-runner check.`
+    ? `Notify once when ${resolvedSymbol} ${conditionSummary(
+        condition,
+        threshold,
+        period,
+        fast_period,
+        slow_period,
+      )} during a manual or local-runner check.`
     : "Select an instrument to preview the alert rule.";
 
   return (
@@ -731,14 +992,20 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         event.preventDefault();
         if (!resolvedSymbol || (needsThreshold && !threshold)) return;
         const saved = await invokeTool("manage_alerts", {
-          action: condition,
+          action: isEditing ? "update" : condition,
+          id: alert?.id,
+          condition_action: isEditing ? condition : undefined,
           symbol: resolvedSymbol,
           threshold: supportsThreshold && threshold ? Number(threshold) : undefined,
           period: needsPeriod ? Number(period) : undefined,
+          fast_period: needsFastSlow ? Number(fast_period) : undefined,
+          slow_period: needsFastSlow ? Number(slow_period) : undefined,
           cooldown_seconds: numberOrUndefined(cooldown),
         });
         if (saved) {
-          setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
+          if (!isEditing) {
+            setDraft((current) => ({ ...current, query: "", selected: "", threshold: "" }));
+          }
           onSaved?.();
         }
       }}
@@ -755,7 +1022,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
       />
       <label htmlFor={conditionId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Condition
-        <select
+        <Select
           id={conditionId}
           className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground md:h-9"
           value={condition}
@@ -769,7 +1036,11 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
           <option value="create_rsi_above">RSI above</option>
           <option value="create_rsi_below">RSI below</option>
           <option value="create_volume_spike">Volume spike</option>
-        </select>
+          <option value="create_percent_move_up">Percent move up</option>
+          <option value="create_percent_move_down">Percent move down</option>
+          <option value="create_sma_cross_above">Fast SMA crosses above slow SMA</option>
+          <option value="create_sma_cross_below">Fast SMA crosses below slow SMA</option>
+        </Select>
       </label>
       {supportsThreshold ? (
         <label
@@ -789,7 +1060,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
           />
         </label>
       ) : null}
-      {needsPeriod ? (
+      {needsPeriod && !needsFastSlow ? (
         <label htmlFor={periodId} className="grid gap-1 text-xs font-medium text-muted-foreground">
           Period (days)
           <Input
@@ -801,6 +1072,38 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
             onChange={(event) => setDraftField("period", event.target.value)}
           />
         </label>
+      ) : null}
+      {needsFastSlow ? (
+        <div className="grid grid-cols-2 gap-2">
+          <label
+            htmlFor={fastPeriodId}
+            className="grid gap-1 text-xs font-medium text-muted-foreground"
+          >
+            Fast period
+            <Input
+              id={fastPeriodId}
+              type="number"
+              step="1"
+              value={fast_period}
+              disabled={disabled}
+              onChange={(event) => setDraftField("fast_period", event.target.value)}
+            />
+          </label>
+          <label
+            htmlFor={slowPeriodId}
+            className="grid gap-1 text-xs font-medium text-muted-foreground"
+          >
+            Slow period
+            <Input
+              id={slowPeriodId}
+              type="number"
+              step="1"
+              value={slow_period}
+              disabled={disabled}
+              onChange={(event) => setDraftField("slow_period", event.target.value)}
+            />
+          </label>
+        </div>
       ) : null}
       <label htmlFor={cooldownId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Cooldown between triggers (seconds)
@@ -821,7 +1124,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved }) {
         variant="brand"
         disabled={disabled || !resolvedSymbol || (needsThreshold && !threshold)}
       >
-        Create alert
+        {isEditing ? "Save alert" : "Create alert"}
       </Button>
     </form>
   );
@@ -835,45 +1138,88 @@ function readOnlyMessage(role) {
   return "Saved-state changes are unavailable in this window while OpenCandle reconnects local access. Tables, summaries, and details remain available.";
 }
 
-export function buildWatchlistRowActions(item, invokeTool) {
-  const actions = [];
-  if (item.targetPrice == null) {
-    actions.push({
-      label: "Set target first",
-      disabled: true,
-      onClick: () => undefined,
-    });
-  } else {
-    actions.push({
-      label: "Create alert",
-      onClick: () =>
-        invokeTool("manage_alerts", {
-          action: "create_price_above",
-          symbol: item.symbol,
-          threshold: item.targetPrice,
-        }),
-    });
-  }
-  actions.push({
-    label: "Remove",
-    onClick: () => invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol }),
-  });
-  return actions;
-}
-
 function panelTitle(type) {
   const titles = {
+    "watchlist-create": "New Watchlist",
     "watchlist-add": "Add Ticker",
-    "watchlist-edit": "Edit Ticker",
+    "watchlist-rename": "Rename Watchlist",
+    "portfolio-create": "New Portfolio",
+    "portfolio-rename": "Rename Portfolio",
     "holding-add": "Add Holding",
     "holding-edit": "Edit Holding",
     "alert-create": "Create Alert",
+    "alert-edit": "Edit Alert",
     "report-configure": "Configure Report",
   };
   return titles[type] || "Details";
 }
-function conditionSummary(condition, threshold, period) {
+function initialAlertDraft(alert, symbol) {
+  const condition = alert ? conditionActionFromAlert(alert) : "create_price_above";
+  const conditionJson =
+    alert?.conditionJson && typeof alert.conditionJson === "object" ? alert.conditionJson : {};
+  return {
+    query: symbol ?? "",
+    selected: symbol ?? "",
+    threshold: alertThresholdValue(condition, conditionJson),
+    condition,
+    period: alertPeriodValue(condition, conditionJson),
+    fast_period: stringifyDraftValue(conditionJson.fast_period ?? 50),
+    slow_period: stringifyDraftValue(conditionJson.slow_period ?? 200),
+    cooldown: stringifyDraftValue(alert?.cooldownSeconds ?? 3600),
+  };
+}
+
+function conditionActionFromAlert(alert) {
+  const condition =
+    alert?.conditionJson && typeof alert.conditionJson === "object" ? alert.conditionJson : {};
+  const direction = condition.direction;
+  if (alert?.conditionType === "price_crosses_below") return "create_price_below";
+  if (alert?.conditionType === "price_crosses_above") return "create_price_above";
+  if (alert?.conditionType === "price_crosses_sma") {
+    return direction === "below" ? "create_price_below_sma" : "create_price_above_sma";
+  }
+  if (alert?.conditionType === "rsi_threshold") {
+    return direction === "below" ? "create_rsi_below" : "create_rsi_above";
+  }
+  if (alert?.conditionType === "volume_spike") return "create_volume_spike";
+  if (alert?.conditionType === "percent_move") {
+    return direction === "down" ? "create_percent_move_down" : "create_percent_move_up";
+  }
+  if (alert?.conditionType === "sma_cross") {
+    return direction === "below" ? "create_sma_cross_below" : "create_sma_cross_above";
+  }
+  return "create_price_above";
+}
+
+function alertThresholdValue(condition, conditionJson) {
+  if (condition === "create_volume_spike") {
+    return stringifyDraftValue(conditionJson.multiplier ?? 2);
+  }
+  if (condition === "create_percent_move_up" || condition === "create_percent_move_down") {
+    return stringifyDraftValue(conditionJson.percent ?? "");
+  }
+  return stringifyDraftValue(conditionJson.threshold ?? "");
+}
+
+function alertPeriodValue(condition, conditionJson) {
+  if (condition === "create_volume_spike") {
+    return stringifyDraftValue(conditionJson.lookback_period ?? 20);
+  }
+  if (condition.includes("_rsi_")) return stringifyDraftValue(conditionJson.period ?? 14);
+  if (condition.includes("_sma")) return stringifyDraftValue(conditionJson.period ?? 50);
+  return "14";
+}
+
+function stringifyDraftValue(value) {
+  return value == null ? "" : String(value);
+}
+
+function conditionSummary(condition, threshold, period, fastPeriod, slowPeriod) {
   const label = condition.replace("create_", "").replaceAll("_", " ");
+  if (condition.includes("sma_cross")) {
+    return `${label} using ${fastPeriod || "fast"} and ${slowPeriod || "slow"} periods`;
+  }
+  if (condition.includes("percent_move")) return `${label} ${threshold || "the threshold"}%`;
   if (condition.includes("_sma")) return `${label} over ${period || "the selected"} periods`;
   if (condition.includes("_rsi_"))
     return `${label} ${threshold || "the threshold"} over ${period || "the selected"} periods`;
@@ -886,24 +1232,4 @@ function numberOrUndefined(value) {
   if (value === "" || value == null) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function numberOrNull(value) {
-  if (value === "" || value == null) return null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function blankToNull(value) {
-  const text = String(value ?? "").trim();
-  return text ? value : null;
-}
-
-function parseTags(value) {
-  const tags = [];
-  for (const part of String(value ?? "").split(",")) {
-    const tag = part.trim();
-    if (tag) tags.push(tag);
-  }
-  return tags.length ? tags : undefined;
 }

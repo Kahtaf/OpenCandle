@@ -87,8 +87,10 @@ export function DiagnosticsPage({
         <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-3">
           <header className="flex flex-wrap items-center justify-between gap-3 px-1">
             <div className="min-w-0">
-              <h1 className="m-0 text-[17px] font-semibold text-foreground">Diagnostics</h1>
-              <p className="m-0 mt-1 text-xs text-muted-foreground">
+              <h1 className="m-0 text-balance text-[17px] font-semibold text-foreground">
+                Diagnostics
+              </h1>
+              <p className="m-0 mt-1 text-pretty text-xs text-muted-foreground">
                 {report?.summary || "Checking OpenCandle health..."}
               </p>
             </div>
@@ -142,10 +144,12 @@ export function DiagnosticsPage({
               {(report?.sections || []).map((section) => (
                 <section
                   key={section.id}
-                  className="rounded-md border border-border bg-card p-3 shadow-subtle-xs"
+                  className="rounded-xl border border-border bg-card p-3 shadow-subtle-xs"
                 >
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="m-0 text-sm font-semibold text-foreground">{section.label}</h2>
+                    <h2 className="m-0 text-balance text-sm font-semibold text-foreground">
+                      {section.label}
+                    </h2>
                     <Badge tone={badgeTone(STATUS_META[section.status]?.tone)}>
                       {STATUS_META[section.status]?.label}
                     </Badge>
@@ -173,11 +177,11 @@ export function DiagnosticsPage({
 
 function Metric({ label, value, tone }) {
   return (
-    <div className="rounded-md border border-border bg-card p-3">
+    <div className="rounded-xl border border-border bg-card p-3 shadow-subtle-xs">
       <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className={cn("mt-1 text-2xl font-semibold", toneClass(tone))}>{value}</div>
+      <div className={cn("mt-1 text-2xl font-semibold tabular-nums", toneClass(tone))}>{value}</div>
     </div>
   );
 }
@@ -191,18 +195,24 @@ function DiagnosticCheck({ check, onOpenProviders, onOpenModelSetup, onCheckSess
   const isUncheckedSession = check.id?.endsWith(".session") && check.status === "unknown";
 
   return (
-    <div className="grid gap-2 rounded-md border border-border bg-background p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+    <div className="grid gap-2 rounded-lg border border-border bg-background p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
       <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-2">
           {Icon ? (
             <Icon className={cn("h-4 w-4 shrink-0", toneClass(meta.tone))} aria-hidden="true" />
           ) : null}
-          <h3 className="m-0 truncate text-sm font-medium text-foreground">{check.label}</h3>
+          <h3 className="m-0 truncate text-balance text-sm font-medium text-foreground">
+            {check.label}
+          </h3>
           <Badge tone={badgeTone(meta.tone)}>{meta.label}</Badge>
         </div>
-        <p className="m-0 mt-1 text-sm leading-5 text-muted-foreground">{check.summary}</p>
+        <p className="m-0 mt-1 text-pretty text-sm leading-5 text-muted-foreground">
+          {check.summary}
+        </p>
         {check.remediation ? (
-          <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">{check.remediation}</p>
+          <p className="m-0 mt-1 text-pretty text-xs leading-5 text-muted-foreground">
+            {check.remediation}
+          </p>
         ) : null}
       </div>
       <div className="flex flex-wrap gap-2 sm:justify-end">

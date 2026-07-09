@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Pencil, Search } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
@@ -48,7 +48,7 @@ export function Panel({ title, count, meta, actions, children }) {
     <section className="rounded-xl border border-border bg-card shadow-subtle-xs">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
           {count !== undefined ? (
             <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
               {count}
@@ -200,6 +200,57 @@ export function Badge({ tone = "neutral", children }) {
     >
       {children}
     </span>
+  );
+}
+
+export function StateTabs({
+  items,
+  activeItem,
+  counts,
+  readOnly,
+  renameLabel,
+  onSelect,
+  onRename,
+}) {
+  return (
+    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist">
+        {items.map((item) => {
+          const active = item.id === activeItem?.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={cn(
+                "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] md:min-h-8",
+                active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
+              )}
+              onClick={() => onSelect(item.id)}
+            >
+              <span>{item.name}</span>
+              <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                {counts.get(item.id) ?? 0}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {activeItem ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          icon={Pencil}
+          title={`${renameLabel} ${activeItem.name}`}
+          aria-label={`${renameLabel} ${activeItem.name}`}
+          disabled={readOnly}
+          className="size-10 md:size-8"
+          onClick={() => onRename(activeItem)}
+        />
+      ) : null}
+    </div>
   );
 }
 

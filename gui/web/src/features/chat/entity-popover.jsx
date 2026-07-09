@@ -1,4 +1,5 @@
 import { Plus, Search } from "lucide-react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import {
@@ -7,6 +8,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "../../components/ui/popover.jsx";
+import { Select } from "../../components/ui/select.jsx";
+import { normalizeWatchlistOptions } from "./watchlist-options.js";
 
 export function EntityPopover({
   open,
@@ -22,6 +25,23 @@ export function EntityPopover({
   viewportSize = null,
   sessionMarketFacts = {},
 }) {
+  const watchlistSelectId = useId();
+  const watchlistOptions = useMemo(
+    () => normalizeWatchlistOptions(marketState?.watchlists),
+    [marketState?.watchlists],
+  );
+  const [selectedWatchlistId, setSelectedWatchlistId] = useState(
+    watchlistOptions[0]?.id ?? "default",
+  );
+  useEffect(() => {
+    if (!watchlistOptions.some((watchlist) => watchlist.id === selectedWatchlistId)) {
+      setSelectedWatchlistId(watchlistOptions[0]?.id ?? "default");
+    }
+  }, [selectedWatchlistId, watchlistOptions]);
+  const selectedWatchlist = watchlistOptions.find(
+    (watchlist) => watchlist.id === selectedWatchlistId,
+  ) ??
+    watchlistOptions[0] ?? { id: "default", name: "Default" };
   const normalized = String(symbol || "").toUpperCase();
   if (!normalized) return null;
 
@@ -78,19 +98,14 @@ export function EntityPopover({
                     <span
                       className={
                         quote.changePercent >= 0
-                          ? "text-sm font-medium text-emerald-600"
-                          : "text-sm font-medium text-red-600"
+                          ? "text-sm font-medium tabular-nums text-success"
+                          : "text-sm font-medium tabular-nums text-destructive"
                       }
                     >
                       {formatPercent(quote.changePercent)}
                     </span>
                   ) : null}
                 </div>
-                {freshnessLine(quote) ? (
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    {freshnessLine(quote)}
-                  </div>
-                ) : null}
                 <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
                   <QuoteFact label="Open" value={formatCurrency(quote.open)} />
                   <QuoteFact label="High" value={formatCurrency(quote.high)} />
@@ -106,15 +121,36 @@ export function EntityPopover({
               </div>
             )}
             <div className="grid gap-2">
+              <label
+                htmlFor={watchlistSelectId}
+                className="grid gap-1 text-xs font-medium text-muted-foreground"
+              >
+                Watchlist
+                <Select
+                  id={watchlistSelectId}
+                  size="sm"
+                  value={selectedWatchlist.id}
+                  disabled={!canAdd}
+                  onChange={(event) => setSelectedWatchlistId(event.target.value)}
+                >
+                  {watchlistOptions.map((watchlist) => (
+                    <option key={watchlist.id} value={watchlist.id}>
+                      {watchlist.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
               <Button
                 type="button"
                 size="sm"
                 variant="bordered"
                 disabled={!canAdd}
-                onClick={() => onAddToWatchlist?.(resolvedCandidate?.symbol || normalized)}
+                onClick={() =>
+                  onAddToWatchlist?.(resolvedCandidate?.symbol || normalized, selectedWatchlist)
+                }
               >
                 <Plus className="button-icon" />
-                Add to watchlist
+                Add to {selectedWatchlist.name}
               </Button>
               {!canAdd ? (
                 <div className="text-[11px] text-muted-foreground">{disabledHint}</div>
@@ -220,15 +256,6 @@ function formatLargeNumber(value) {
 function formatPercent(value) {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(2)}%`;
-}
-
-function freshnessLine(quote) {
-  const freshness = quote?.freshness;
-  if (typeof freshness === "string") return freshness;
-  if (freshness && typeof freshness === "object") {
-    return freshness.line || freshness.asOfLine || freshness.label || "";
-  }
-  return quote?.fetchedAt ? `Fetched ${quote.fetchedAt}` : "";
 }
 
 function defaultViewportSize() {

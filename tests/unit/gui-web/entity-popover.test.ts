@@ -4,13 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { EntityPopover } from "../../../gui/web/src/features/chat/entity-popover.jsx";
 
 const baseMarketState = {
+  watchlists: [],
   watchlist: [],
   portfolio: [],
   quoteSnapshot: { watchlistQuotes: [], portfolioQuotes: [] },
 };
 
 describe("EntityPopover", () => {
-  it("renders cached quote price, change, and freshness", () => {
+  it("renders cached quote price and change without freshness copy", () => {
     const html = renderToStaticMarkup(
       React.createElement(EntityPopover, {
         open: true,
@@ -40,7 +41,7 @@ describe("EntityPopover", () => {
     expect(html).toContain("NVIDIA Corp.");
     expect(html).toContain("$920.50");
     expect(html).toContain("+1.25%");
-    expect(html).toContain("As of 4:00 PM ET");
+    expect(html).not.toContain("As of 4:00 PM ET");
   });
 
   it("renders a held badge for portfolio symbols", () => {
@@ -74,8 +75,33 @@ describe("EntityPopover", () => {
     );
 
     expect(html).toContain("No recent quote in this session");
-    expect(html).toContain("Add to watchlist");
+    expect(html).toContain("Watchlist");
+    expect(html).toContain("Default");
+    expect(html).toContain("Add to Default");
     expect(html).toContain("Ask about $AA");
+  });
+
+  it("lets add-to-watchlist choose a named watchlist", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(EntityPopover, {
+        open: true,
+        symbol: "AA",
+        marketState: {
+          ...baseMarketState,
+          watchlists: [
+            { id: 1, name: "MAG7" },
+            { id: 2, name: "ETFs" },
+          ],
+        },
+        resolvedCandidate: { symbol: "AA" },
+        onAddToWatchlist: vi.fn(),
+        onAskAbout: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain(">MAG7</option>");
+    expect(html).toContain(">ETFs</option>");
+    expect(html).toContain("Add to MAG7");
   });
 
   it("renders recent session quote details when the symbol is not in saved state", () => {

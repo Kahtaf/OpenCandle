@@ -74,9 +74,6 @@ export function seedOpenCandleHomeMarketState(fixture: SeededMarketStateFixture)
           currency: "USD",
           provider: "eval-fixture",
         },
-        targetPrice: item.targetPrice,
-        thesis: item.thesis,
-        priceCurrency: "USD",
         source: "eval-fixture",
       });
     }

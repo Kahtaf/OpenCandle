@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+export const MARKET_STATE_POLL_MS = 4000;
+export const QUOTE_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
 const EMPTY_MARKET_STATE = {
   instruments: [],
+  watchlists: [],
+  portfolios: [],
   watchlist: [],
   portfolio: [],
   alerts: [],
@@ -49,7 +54,10 @@ function portfolioSignature(portfolio) {
     .join("|");
 }
 
-export function useMarketState({ pollMs = 4000, quotePollMs = 20000 } = {}) {
+export function useMarketState({
+  pollMs = MARKET_STATE_POLL_MS,
+  quotePollMs = QUOTE_REFRESH_INTERVAL_MS,
+} = {}) {
   const [state, setState] = useState(EMPTY_MARKET_STATE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -93,8 +101,8 @@ export function useMarketState({ pollMs = 4000, quotePollMs = 20000 } = {}) {
     };
   }, [pollMs, refresh]);
 
-  // Quotes refresh in the background; the server store revalidates at most
-  // once per TTL, so this poll is a cheap in-memory read between refreshes.
+  // Fetch quotes as soon as a price-aware surface renders, then keep long-lived
+  // pages fresh without surfacing age badges in the UI.
   useEffect(() => {
     let disposed = false;
     const run = async () => {

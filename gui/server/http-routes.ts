@@ -29,6 +29,7 @@ import type {
 } from "./local-session-coordinator.js";
 import {
   buildMarketStateSnapshot,
+  getInstrumentQuoteSnapshot,
   getSavedMarketStateSymbols,
   searchInstrumentCandidates,
 } from "./market-state-api.js";
@@ -249,6 +250,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/instruments/quote" && req.method === "GET") {
+      if (!allowTrustedGuiRequest(req, res, "Market-state API", options)) return;
+      writeJson(res, await getInstrumentQuoteSnapshot(url.searchParams.get("symbol") ?? ""));
+      return;
+    }
+
     if (url.pathname === "/api/diagnostics/twitter-cli" && req.method === "GET") {
       if (!allowTrustedGuiRequest(req, res, "Diagnostics API", options)) return;
       const mode = url.searchParams.get("mode") === "session" ? "session" : "install";
@@ -292,6 +299,36 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       return;
     }
 
+    if (url.pathname === "/api/tool-invoke" && req.method === "POST") {
+      if (!allowTrustedGuiRequest(req, res, "Tool invoke API", options)) return;
+      const body = asRecord(await readJsonBody(req));
+      if (!requireSessionActionFields(res, body)) return;
+      let ack: unknown;
+      await options.toolInvokeController.handleToolInvokeMessage(
+        { send: (message) => (ack = message) },
+        {
+          requestId: "http-tool",
+          actionId: String(body.actionId ?? ""),
+          sessionId: String(body.sessionId ?? ""),
+          toolName: String(body.toolName ?? ""),
+          args: asRecord(body.args),
+          ...(body.recordTranscript === false ? { recordTranscript: false } : {}),
+        },
+      );
+      const message = asRecord(ack);
+      const result = asRecord(message.result);
+      if (message.ok === true && result.toolCallId) {
+        writeJson(res, { result });
+      } else {
+        writeJson(
+          res,
+          { error: String(asRecord(message.error).message ?? "Tool invocation failed") },
+          409,
+        );
+      }
+      return;
+    }
+
     if (url.pathname === "/api/local-coordinator/tool-invoke" && req.method === "POST") {
       if (!allowLocalCoordinatorRequest(req, res, options)) return;
       const body = asRecord(await readJsonBody(req));
@@ -306,11 +343,12 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
           toolName: String(body.toolName ?? ""),
           args: asRecord(body.args),
           allowProxy: false,
+          ...(body.recordTranscript === false ? { recordTranscript: false } : {}),
         },
       );
       const message = asRecord(ack);
       const result = asRecord(message.result);
-      if (result.toolCallId) {
+      if (message.ok === true && result.toolCallId) {
         writeJson(res, { result });
       } else {
         writeJson(
@@ -1011,11 +1049,14 @@ function attachmentSummaryLines(
   attachment: ChatRunAttachmentInput,
 ): string[] {
   if (attachment.kind === "portfolio") {
-    const portfolioId = attachment.id ? Number(attachment.id) : undefined;
+    const portfolioId =
+      attachment.id === "default" ? service.getDefaultPortfolio().id : Number(attachment.id);
     if (attachment.id && !Number.isFinite(portfolioId)) {
       throw new Error("Unknown portfolio attachment");
     }
-    return formatPortfolioSummary(service.listPortfolioLots(portfolioId));
+    return formatPortfolioSummary(
+      service.listPortfolioLots(attachment.id ? portfolioId : undefined),
+    );
   }
   if (attachment.kind === "watchlist") {
     const watchlistId =

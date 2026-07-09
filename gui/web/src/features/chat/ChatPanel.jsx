@@ -123,9 +123,14 @@ export function ChatPanel({
   }, []);
 
   const addSelectedToWatchlist = useCallback(
-    async (symbol) => {
+    async (symbol, watchlist) => {
       if (!symbol || !invokeTool) return;
-      const saved = await invokeTool("manage_watchlist", { action: "add", symbol });
+      const args = {
+        action: "add",
+        symbol,
+        ...(watchlist?.name ? { watchlist_name: watchlist.name } : {}),
+      };
+      const saved = await invokeTool("manage_watchlist", args);
       if (saved) {
         await marketState.refresh();
         await marketState.refreshQuotes();
@@ -334,6 +339,8 @@ export function ChatPanel({
         send={send}
         setToast={setToast}
         pendingAttachments={pendingAttachments}
+        portfolios={marketState.state?.portfolios}
+        watchlists={marketState.state?.watchlists}
         onAddAttachment={addAttachment}
         onRemoveAttachment={removeAttachment}
       />

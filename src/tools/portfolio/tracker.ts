@@ -25,8 +25,26 @@ async function getCurrentPrice(
 
 const params = Type.Object({
   action: Type.Union(
-    [Type.Literal("add"), Type.Literal("update"), Type.Literal("remove"), Type.Literal("view")],
-    { description: "Action: add a position, update a lot, remove a position, or view portfolio" },
+    [
+      Type.Literal("create"),
+      Type.Literal("rename"),
+      Type.Literal("add"),
+      Type.Literal("update"),
+      Type.Literal("remove"),
+      Type.Literal("view"),
+    ],
+    {
+      description:
+        "Action: create or rename a portfolio, add a position, update a lot, remove a position, or view portfolio",
+    },
+  ),
+  portfolio_name: Type.Optional(
+    Type.String({
+      description: "Portfolio name. Defaults to the Default portfolio when omitted.",
+    }),
+  ),
+  new_portfolio_name: Type.Optional(
+    Type.String({ description: "New portfolio name (required for rename)." }),
   ),
   lot_id: Type.Optional(
     Type.Integer({
@@ -61,13 +79,42 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
   name: "track_portfolio",
   label: "Portfolio Tracker",
   description:
-    "Track your portfolio of stocks and crypto. Add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker.",
+    "Track named portfolios of stocks and crypto. Create or rename portfolios, add/remove positions with cost basis, or view current holdings with live P&L. For stocks use standard tickers (AAPL, MSFT). For crypto use the -USD suffix (BTC-USD, ETH-USD, SOL-USD). Use search_ticker first if you're unsure of the exact ticker.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
 
     try {
+      if (args.action === "create") {
+        if (!args.portfolio_name) throw new Error("portfolio_name is required for create action.");
+        const portfolio = service.createPortfolio(args.portfolio_name);
+        return {
+          content: [{ type: "text", text: `Created portfolio ${portfolio.name}` }],
+          details: portfolio,
+        };
+      }
+
+      if (args.action === "rename") {
+        if (!args.new_portfolio_name) {
+          throw new Error("new_portfolio_name is required for rename action.");
+        }
+        const currentName = args.portfolio_name?.trim() || service.getDefaultPortfolio().name;
+        const current = args.portfolio_name
+          ? service.getPortfolioByName(currentName)
+          : service.getDefaultPortfolio();
+        if (current == null) {
+          throw new Error(`portfolio ${currentName} not found.`);
+        }
+        const portfolio = service.renamePortfolio(current.name, args.new_portfolio_name);
+        return {
+          content: [{ type: "text", text: `Renamed ${current.name} to ${portfolio.name}` }],
+          details: portfolio,
+        };
+      }
+
+      const portfolio = service.getOrCreatePortfolio(args.portfolio_name);
+
       if (args.action === "add") {
         if (!args.symbol || args.shares == null || args.avg_cost == null) {
           throw new Error("symbol, shares, and avg_cost are required for add action.");
@@ -104,6 +151,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         const currency = resolvedCurrency.toUpperCase();
         const lot = service.addPortfolioLot({
           instrument: instrument.instrument,
+          portfolioId: portfolio.id,
           quantity: args.shares,
           avgCost: args.avg_cost,
           currency,
@@ -139,10 +187,12 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
           throw new Error("lot_id or symbol is required for remove action.");
         }
         const symbol = args.symbol.toUpperCase();
-        const removedLots = service.listPortfolioLots().filter((lot) => lot.symbol === symbol);
-        if (!service.removePortfolioLotsBySymbol(symbol)) {
+        const removedLots = service
+          .listPortfolioLots(portfolio.id)
+          .filter((lot) => lot.symbol === symbol);
+        if (!service.removePortfolioLotsBySymbol(symbol, portfolio.id)) {
           return {
-            content: [{ type: "text", text: `${symbol} not found in portfolio` }],
+            content: [{ type: "text", text: `${symbol} not found in ${portfolio.name}` }],
             details: null,
           };
         }
@@ -199,15 +249,20 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         };
       }
 
-      const lots = service.listPortfolioLots();
+      const lots = service.listPortfolioLots(portfolio.id);
+      const displayPortfolioName = portfolio.isDefault ? "Portfolio" : portfolio.name;
       if (lots.length === 0) {
         return {
-          content: [{ type: "text", text: "Portfolio is empty. Use add action to add positions." }],
+          content: [
+            {
+              type: "text",
+              text: `${displayPortfolioName} is empty. Use add action to add positions.`,
+            },
+          ],
           details: null,
         };
       }
 
-      const portfolio = service.getDefaultPortfolio();
       const baseCurrency = portfolio.baseCurrency ?? "USD";
       const enriched = await Promise.all(
         lots.map(async (p) => {
@@ -276,7 +331,7 @@ export const portfolioTrackerTool: AgentTool<typeof params> = {
         excludedFromTotals,
       };
 
-      const header = `**Portfolio** — ${enriched.length} positions | Value: ${formatMoney(totalValue, baseCurrency)} | P&L: ${formatMoney(summary.totalPnl, baseCurrency)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
+      const header = `**${displayPortfolioName}** — ${enriched.length} positions | Value: ${formatMoney(totalValue, baseCurrency)} | P&L: ${formatMoney(summary.totalPnl, baseCurrency)} (${summary.totalPnlPercent >= 0 ? "+" : ""}${summary.totalPnlPercent.toFixed(2)}%)`;
       const rows = enriched.map((p) => {
         const excluded = p.includedInTotals
           ? ""

@@ -1,21 +1,142 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { TooltipProvider } from "../../../gui/web/src/components/ui/tooltip.jsx";
+import { AlertsPage } from "../../../gui/web/src/features/market-state/AlertsPage.jsx";
 import {
   AlertCreateForm,
-  buildWatchlistMutationArgs,
-  buildWatchlistRowActions,
+  ContextPanel,
   clampComboboxActiveIndex,
+  getHoldingAutofillValues,
   HoldingForm,
   invokeMarketStateMutation,
   MarketStatePage,
   nextComboboxActiveIndex,
+  PortfolioRenameForm,
+  StateTabs,
   SymbolActionPanel,
   SymbolSearchInput,
+  WatchlistRenameForm,
 } from "../../../gui/web/src/features/market-state/MarketStatePage.jsx";
 
+vi.mock("vaul", async () => {
+  const ReactModule = await import("react");
+  const createElement = ReactModule.createElement;
+  return {
+    Drawer: {
+      Root: ({ children }: { children: React.ReactNode }) =>
+        createElement(React.Fragment, null, children),
+      Portal: ({ children }: { children: React.ReactNode }) =>
+        createElement(React.Fragment, null, children),
+      Overlay: ({ className }: { className?: string }) =>
+        createElement("div", { className, "data-vaul-overlay": "" }),
+      Content: ({
+        children,
+        className,
+        ...props
+      }: React.HTMLAttributes<HTMLDivElement> & { children: React.ReactNode }) =>
+        createElement(
+          "div",
+          {
+            ...props,
+            className,
+            "data-vaul-drawer": "",
+            "data-vaul-drawer-direction": "bottom",
+          },
+          children,
+        ),
+      Title: ({ children }: { children: React.ReactNode }) => createElement("span", null, children),
+    },
+  };
+});
+
 describe("MarketStatePage rendering", () => {
-  it("offers a skip-for-now path on the empty portfolio page", () => {
+  it("renders market-state panels with the shared bottom-sheet chrome", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(
+          ContextPanel,
+          {
+            title: "Edit Alert",
+            onClose: () => undefined,
+          },
+          React.createElement("div", null, "Panel content"),
+        ),
+      ),
+    );
+
+    expect(html).toContain("data-vaul-drawer");
+    expect(html).toContain("inset-x-2");
+    expect(html).toContain("backdrop-blur-[2px]");
+    expect(html).toContain("h-1 w-9");
+    expect(html).toContain("bg-secondary");
+    expect(html).not.toContain("bg-card");
+  });
+
+  it("renders market-state tabs with shared tab chrome and touch-sized rename controls", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(StateTabs, {
+          items: [
+            { id: 1, name: "MAG7" },
+            { id: 2, name: "ETFs" },
+          ],
+          activeItem: { id: 1, name: "MAG7" },
+          counts: new Map([
+            [1, 7],
+            [2, 3],
+          ]),
+          readOnly: false,
+          renameLabel: "Rename watchlist",
+          onSelect: () => undefined,
+          onRename: () => undefined,
+        }),
+      ),
+    );
+
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain("min-h-10");
+    expect(html).toContain('aria-label="Rename watchlist MAG7"');
+    expect(html).toContain("size-10");
+  });
+
+  it("autofills new holding quantity, average cost, and currency from selected quote data", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "ASTS",
+        currentValues: { shares: "", avg_cost: "", currency: "USD" },
+        selectedQuote: { status: "ok", price: 42.37, currency: "USD" },
+      }),
+    ).toEqual({ shares: "100", avg_cost: "42.37", currency: "USD" });
+  });
+
+  it("replaces the untouched USD default with the selected quote currency", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "SHOP.TO",
+        currentValues: { shares: "100", avg_cost: "", currency: "USD" },
+        previousAutofill: { shares: "100", avg_cost: "", currency: "USD" },
+        selectedQuote: { status: "ok", price: 154.2, currency: "CAD" },
+      }),
+    ).toEqual({ shares: "100", avg_cost: "154.2", currency: "CAD" });
+  });
+
+  it("does not overwrite holding fields the user has already edited", () => {
+    expect(
+      getHoldingAutofillValues({
+        selectedSymbol: "ASTS",
+        currentValues: { shares: "25", avg_cost: "40", currency: "CAD" },
+        previousAutofill: { shares: "100", avg_cost: "42.37", currency: "USD" },
+        selectedQuote: { status: "ok", price: 45, currency: "USD" },
+      }),
+    ).toEqual({ shares: "25", avg_cost: "40", currency: "CAD" });
+  });
+
+  it("renders an empty portfolio page without a skip action", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
         domain: "portfolios",
@@ -27,7 +148,7 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("No holdings yet");
-    expect(html).toContain("Skip For Now");
+    expect(html).not.toContain("Skip For Now");
   });
 
   it("uses the shared app shell chrome without duplicate section tabs", () => {
@@ -44,6 +165,87 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain('aria-label="Open sidebar"');
     expect(html).not.toContain('aria-label="Market state sections"');
+  });
+
+  it("renders named watchlists as tabs with a new-watchlist action", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "watchlists",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("New Watchlist");
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain("Default");
+    expect(html).toContain("Add ticker");
+    expect(html).toContain('aria-label="Rename watchlist Default"');
+    expect(html).not.toContain("To target");
+    expect(html).not.toContain("Thesis");
+  });
+
+  it("renders named portfolios as tabs with create, rename, and add-holding actions", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(MarketStatePage, {
+        domain: "portfolios",
+        role: "writer",
+        send: () => false,
+        navigate: () => undefined,
+        setToast: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("New Portfolio");
+    expect(html).toContain('role="tablist"');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain("Default");
+    expect(html).toContain("Add holding");
+    expect(html).toContain('aria-label="Rename portfolio Default"');
+  });
+
+  it("uses shared select chrome in the alert condition form", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlertCreateForm, {
+        disabled: false,
+        invokeTool: () => true,
+      }),
+    );
+
+    expect(html).toContain("appearance-none");
+    expect(html).toContain("pointer-events-none");
+    expect(html).toContain("Condition");
+  });
+
+  it("renders a focused watchlist rename form", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(WatchlistRenameForm, {
+        disabled: false,
+        watchlist: { id: 1, name: "MAG7", isDefault: false },
+        onSubmit: () => true,
+      }),
+    );
+
+    expect(html).toContain("Name");
+    expect(html).toContain('value="MAG7"');
+    expect(html).toContain("Rename watchlist");
+  });
+
+  it("renders a focused portfolio rename form", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PortfolioRenameForm, {
+        disabled: false,
+        portfolio: { id: 1, name: "Trading", isDefault: false, baseCurrency: "USD" },
+        onSubmit: () => true,
+      }),
+    );
+
+    expect(html).toContain("Name");
+    expect(html).toContain('value="Trading"');
+    expect(html).toContain("Rename portfolio");
   });
 
   it("renders the report schedule and generate action as durable report state", () => {
@@ -74,7 +276,9 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).not.toContain("Refresh prices");
     expect(html).not.toContain(">Refresh<");
-    expect(html).toContain("Awaiting quotes");
+    expect(html).not.toContain("Awaiting quotes");
+    expect(html).not.toContain("Updated ");
+    expect(html).not.toContain(">stale<");
     expect(html).not.toContain("SQLite-backed");
     expect(html).not.toContain("Search Yahoo candidates before saving");
   });
@@ -93,6 +297,39 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Active rules");
     expect(html).toContain("Alert log");
     expect(html).not.toContain("Instrument #");
+  });
+
+  it("renders edit and delete actions for alert rows", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(AlertsPage, {
+        state: {
+          alerts: [
+            {
+              id: 1,
+              scopeType: "instrument",
+              instrumentId: 7,
+              conditionType: "price_crosses_above",
+              conditionJson: { threshold: 50, field: "last_price" },
+              enabled: true,
+              retriggerMode: "recurring",
+            },
+          ],
+          alertEvents: [],
+          alertCheckRuns: [],
+          instruments: [{ id: 7, symbol: "RKLB" }],
+          notifications: [],
+          notificationDeliveryAttempts: [],
+        },
+        filter: "",
+        setFilter: () => undefined,
+        readOnly: false,
+        openPanel: () => undefined,
+        invokeTool: () => undefined,
+      }),
+    );
+
+    expect(html).toContain(">Edit<");
+    expect(html).toContain(">Delete<");
   });
 
   it("keeps reconnecting market-state pages readable while disabling mutation actions", () => {
@@ -156,47 +393,6 @@ describe("MarketStatePage rendering", () => {
     expect(nextComboboxActiveIndex(0, 3, "previous")).toBe(2);
   });
 
-  it("does not create a watchlist alert without an explicit target", () => {
-    const invokeTool = () => {
-      throw new Error("unexpected invoke");
-    };
-
-    const actions = buildWatchlistRowActions(
-      {
-        symbol: "AAPL",
-        targetPrice: null,
-      },
-      invokeTool,
-    );
-
-    expect(actions[0]).toEqual(
-      expect.objectContaining({
-        label: "Set target first",
-        disabled: true,
-      }),
-    );
-  });
-
-  it("creates a watchlist alert with the saved target as threshold", () => {
-    const calls = [];
-    const actions = buildWatchlistRowActions(
-      {
-        symbol: "AAPL",
-        targetPrice: 250,
-      },
-      (toolName, args) => calls.push({ toolName, args }),
-    );
-
-    actions[0].onClick();
-
-    expect(calls).toEqual([
-      {
-        toolName: "manage_alerts",
-        args: { action: "create_price_above", symbol: "AAPL", threshold: 250 },
-      },
-    ]);
-  });
-
   it("keeps holding forms out of the first viewport", () => {
     const html = renderToStaticMarkup(
       React.createElement(MarketStatePage, {
@@ -209,7 +405,7 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Add holding");
-    expect(html).toContain("Holdings");
+    expect(html).toContain("Portfolios");
     expect(html).not.toContain("Use the lot id shown in the portfolio table");
   });
 
@@ -240,57 +436,29 @@ describe("MarketStatePage rendering", () => {
   it("refreshes quotes immediately after acknowledged market-state mutations", async () => {
     const refresh = vi.fn();
     const refreshQuotes = vi.fn();
+    const invokeToolRequest = vi.fn(async () => undefined);
 
     const saved = await invokeMarketStateMutation({
       readOnly: false,
       toolName: "manage_watchlist",
       args: { action: "add", symbol: "AAPL" },
-      invokeToolRequest: async () => undefined,
+      invokeToolRequest,
       refresh,
       refreshQuotes,
     });
 
     expect(saved).toBe(true);
+    expect(invokeToolRequest).toHaveBeenCalledWith(
+      "manage_watchlist",
+      {
+        action: "add",
+        symbol: "AAPL",
+      },
+      "",
+      { recordTranscript: false },
+    );
     expect(refresh).toHaveBeenCalledOnce();
     expect(refreshQuotes).toHaveBeenCalledOnce();
-  });
-
-  it("sends explicit clear values for blank watchlist edit fields", () => {
-    const addArgs = buildWatchlistMutationArgs("watchlist-add", {
-      symbol: "AAPL",
-      target_price: "",
-      stop_price: "",
-      thesis: "",
-      notes: "",
-      tags: "",
-    });
-    const editArgs = buildWatchlistMutationArgs("watchlist-edit", {
-      symbol: "AAPL",
-      target_price: "",
-      stop_price: "",
-      thesis: "",
-      notes: "",
-      tags: "",
-    });
-
-    expect(addArgs).toMatchObject({
-      action: "add",
-      symbol: "AAPL",
-      target_price: undefined,
-      stop_price: undefined,
-      thesis: undefined,
-      notes: undefined,
-      tags: undefined,
-    });
-    expect(editArgs).toEqual({
-      action: "update",
-      symbol: "AAPL",
-      target_price: null,
-      stop_price: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
   });
 
   it("names market-state form controls for assistive technology", () => {
@@ -303,12 +471,7 @@ describe("MarketStatePage rendering", () => {
     );
     const symbolHtml = renderToStaticMarkup(
       React.createElement(SymbolActionPanel, {
-        title: "Add ticker",
         disabled: false,
-        fields: [
-          { name: "target_price", label: "Target", type: "number" },
-          { name: "thesis", label: "Thesis", multiline: true },
-        ],
         onSubmit: () => true,
       }),
     );
@@ -319,16 +482,18 @@ describe("MarketStatePage rendering", () => {
       }),
     );
 
-    expect(alertHtml).toContain(">Condition<select");
+    expect(alertHtml).toContain(">Condition");
+    expect(alertHtml).toContain("<select");
     expect(alertHtml).toContain(">Threshold<input");
     // Period only renders for SMA/RSI/volume conditions; the default price-above
     // condition hides it instead of showing a disabled field.
     expect(alertHtml).not.toContain(">Period (days)<input");
     expect(alertHtml).toContain(">Cooldown between triggers (seconds)<input");
-    expect(symbolHtml).toContain(">Target<input");
-    expect(symbolHtml).toContain(">Thesis<textarea");
+    expect(symbolHtml).toContain("Search ticker or company");
     expect(holdingHtml).toContain(">Quantity<input");
     expect(holdingHtml).toContain(">Average cost per share<input");
     expect(holdingHtml).toContain(">Currency<input");
+    expect(symbolHtml).not.toContain(">Target<input");
+    expect(symbolHtml).not.toContain(">Thesis<textarea");
   });
 });

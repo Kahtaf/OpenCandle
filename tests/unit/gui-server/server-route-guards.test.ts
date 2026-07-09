@@ -130,6 +130,29 @@ describe("GUI server route guards", () => {
     expect(routeBlock).toContain("allowLocalCoordinatorRequest(req, res, options)");
   });
 
+  it("requires trusted GUI authorization before accepting HTTP fallback tool invokes", () => {
+    const routeBlock = routeBlockBefore(
+      'url.pathname === "/api/tool-invoke"',
+      "const body = asRecord(await readJsonBody(req));",
+    );
+
+    expect(routeBlock).toContain('allowTrustedGuiRequest(req, res, "Tool invoke API", options)');
+  });
+
+  it("requires HTTP fallback tool invokes to carry session and action ids", () => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf('url.pathname === "/api/tool-invoke"');
+    const routeEnd = source.indexOf(
+      'url.pathname === "/api/local-coordinator/tool-invoke"',
+      routeStart,
+    );
+    const routeSource = source.slice(routeStart, routeEnd);
+
+    expect(routeSource).toContain("requireSessionActionFields");
+    expect(sessionActionFieldHelperSource()).toContain('"sessionId is required"');
+    expect(sessionActionFieldHelperSource()).toContain('"actionId is required"');
+  });
+
   it("requires proxied tool invokes to carry session and action ids", () => {
     const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
     const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"');
@@ -144,18 +167,23 @@ describe("GUI server route guards", () => {
     expect(sessionActionFieldHelperSource()).toContain('"actionId is required"');
   });
 
-  it("returns proxied tool results even when the tool result is an error", () => {
-    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
-    const routeStart = source.indexOf('url.pathname === "/api/local-coordinator/tool-invoke"');
-    const routeEnd = source.indexOf(
+  it.each([
+    [
+      'url.pathname === "/api/tool-invoke"',
+      'url.pathname === "/api/local-coordinator/tool-invoke"',
+    ],
+    [
+      'url.pathname === "/api/local-coordinator/tool-invoke"',
       'url.pathname === "/api/local-coordinator/ask-user"',
-      routeStart,
-    );
+    ],
+  ])("returns an error response when $route reports a failed tool invocation", (route, nextRoute) => {
+    const source = readFileSync(resolve("gui/server/http-routes.ts"), "utf-8");
+    const routeStart = source.indexOf(route);
+    const routeEnd = source.indexOf(nextRoute, routeStart + route.length);
     const routeSource = source.slice(routeStart, routeEnd);
 
     expect(routeSource).toContain("const result = asRecord(message.result);");
-    expect(routeSource).toContain("if (result.toolCallId)");
-    expect(routeSource).not.toContain("if (message.ok)");
+    expect(routeSource).toContain("if (message.ok === true && result.toolCallId)");
   });
 
   it("requires local coordinator authorization before accepting proxied ask_user actions", () => {

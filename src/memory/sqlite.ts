@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import Database from "better-sqlite3";
 import { ensureOpenCandleHomeDir, getStateDbPath } from "../infra/opencandle-paths.js";
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 const CURRENT_SCHEMA = `
   CREATE TABLE IF NOT EXISTS schema_version (
@@ -107,7 +107,8 @@ const CURRENT_SCHEMA = `
     name TEXT NOT NULL,
     is_default INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    UNIQUE(name)
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS idx_watchlists_one_default
@@ -118,12 +119,6 @@ const CURRENT_SCHEMA = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     watchlist_id INTEGER NOT NULL,
     instrument_id INTEGER NOT NULL,
-    thesis TEXT,
-    notes TEXT,
-    tags_json TEXT,
-    target_price REAL,
-    stop_price REAL,
-    price_currency TEXT,
     source TEXT,
     source_row_id TEXT,
     source_metadata_json TEXT,
@@ -363,14 +358,21 @@ function ensureCurrentSchema(db: Database.Database): void {
     return;
   }
 
+  if (currentVersion === 8) {
+    migrateV8ToV9(db);
+    return;
+  }
+
   if (currentVersion === 7) {
     migrateV7ToV8(db);
+    migrateV8ToV9(db);
     return;
   }
 
   if (currentVersion === 6) {
     migrateV6ToV7(db);
     migrateV7ToV8(db);
+    migrateV8ToV9(db);
     return;
   }
 
@@ -378,6 +380,7 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV5ToV6(db);
     migrateV6ToV7(db);
     migrateV7ToV8(db);
+    migrateV8ToV9(db);
     return;
   }
 
@@ -386,6 +389,7 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV5ToV6(db);
     migrateV6ToV7(db);
     migrateV7ToV8(db);
+    migrateV8ToV9(db);
     return;
   }
 
@@ -395,11 +399,13 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV5ToV6(db);
     migrateV6ToV7(db);
     migrateV7ToV8(db);
+    migrateV8ToV9(db);
     return;
   }
 
-  // Additive v2 → v3 → ... → v7 migration without dropping data (v8 drops
-  // prediction_records as the explicit removal of the predictions feature).
+  // Additive v2 → v3 → ... migration without dropping data (v8 drops
+  // prediction_records and v9 drops watchlist item annotation columns as
+  // explicit feature removals).
   if (currentVersion === 2) {
     migrateV2ToV3(db);
     migrateV3ToV4(db);
@@ -407,6 +413,7 @@ function ensureCurrentSchema(db: Database.Database): void {
     migrateV5ToV6(db);
     migrateV6ToV7(db);
     migrateV7ToV8(db);
+    migrateV8ToV9(db);
     return;
   }
 
@@ -489,6 +496,52 @@ function migrateV7ToV8(db: Database.Database): void {
   // Predictions feature removal: dropping prediction_records is the explicit,
   // documented destructive step for this table; all other rows are preserved.
   db.exec("DROP TABLE IF EXISTS prediction_records");
+  db.exec(CURRENT_SCHEMA);
+
+  db.prepare("DELETE FROM schema_version").run();
+  db.prepare("INSERT INTO schema_version (version) VALUES (?)").run(8);
+}
+
+function migrateV8ToV9(db: Database.Database): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS watchlists_v9 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(name)
+    );
+
+    INSERT OR IGNORE INTO watchlists_v9 (id, name, is_default, created_at, updated_at)
+      SELECT id, name, is_default, created_at, updated_at FROM watchlists;
+
+    DROP TABLE IF EXISTS watchlist_items_v9;
+    CREATE TABLE watchlist_items_v9 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      watchlist_id INTEGER NOT NULL,
+      instrument_id INTEGER NOT NULL,
+      source TEXT,
+      source_row_id TEXT,
+      source_metadata_json TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(watchlist_id, instrument_id),
+      FOREIGN KEY (watchlist_id) REFERENCES watchlists_v9(id) ON DELETE CASCADE,
+      FOREIGN KEY (instrument_id) REFERENCES instruments(id) ON DELETE RESTRICT
+    );
+
+    INSERT OR IGNORE INTO watchlist_items_v9 (
+      id, watchlist_id, instrument_id, source, source_row_id, source_metadata_json, created_at, updated_at
+    )
+      SELECT id, watchlist_id, instrument_id, source, source_row_id, source_metadata_json, created_at, updated_at
+      FROM watchlist_items;
+
+    DROP TABLE watchlist_items;
+    DROP TABLE watchlists;
+    ALTER TABLE watchlists_v9 RENAME TO watchlists;
+    ALTER TABLE watchlist_items_v9 RENAME TO watchlist_items;
+  `);
   db.exec(CURRENT_SCHEMA);
 
   db.prepare("DELETE FROM schema_version").run();

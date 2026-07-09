@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { mergeMarketStateSnapshot } from "../../../gui/web/src/hooks/useMarketState.jsx";
+import {
+  MARKET_STATE_POLL_MS,
+  mergeMarketStateSnapshot,
+  QUOTE_REFRESH_INTERVAL_MS,
+} from "../../../gui/web/src/hooks/useMarketState.jsx";
+
+describe("market-state refresh intervals", () => {
+  it("refreshes quotes immediately on render and every five minutes after that", () => {
+    expect(MARKET_STATE_POLL_MS).toBe(4000);
+    expect(QUOTE_REFRESH_INTERVAL_MS).toBe(5 * 60 * 1000);
+  });
+});
 
 describe("mergeMarketStateSnapshot", () => {
   it("preserves refreshed quote snapshots across regular state polls", () => {

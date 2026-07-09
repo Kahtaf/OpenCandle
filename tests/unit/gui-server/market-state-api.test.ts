@@ -3,6 +3,7 @@ import {
   buildMarketStateQuoteSnapshot,
   buildMarketStateSnapshot,
   createSavedSymbolsMemo,
+  getInstrumentQuoteSnapshot,
   searchInstrumentCandidates,
 } from "../../../gui/server/market-state-api.js";
 import { cache } from "../../../src/infra/cache.js";
@@ -99,6 +100,7 @@ describe("market-state API helpers", () => {
     vi.setSystemTime(new Date("2026-06-01T12:00:30.000Z"));
     const snapshot = buildMarketStateSnapshot(db);
 
+    expect(snapshot.portfolios.map((portfolio) => portfolio.name)).toEqual(["Default"]);
     expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
     expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
     expect(snapshot.alerts).toEqual([]);
@@ -165,6 +167,20 @@ describe("market-state API helpers", () => {
           score: 101,
         },
       ],
+    });
+  });
+
+  it("returns a one-symbol quote snapshot for holding autofill", async () => {
+    vi.mocked(getQuote).mockResolvedValue(quote("ASTS", 42.37, { currency: "USD" }));
+
+    await expect(getInstrumentQuoteSnapshot(" asts ")).resolves.toEqual({
+      symbol: "ASTS",
+      status: "ok",
+      price: 42.37,
+      changePercent: 0.5,
+      fetchedAt: expect.any(String),
+      stale: false,
+      currency: "USD",
     });
   });
 
@@ -257,6 +273,65 @@ describe("market-state API helpers", () => {
       totalCost: 850,
       totalPnl: 150,
     });
+    db.close();
+  });
+
+  it("builds quote snapshots and summaries across named portfolios", async () => {
+    const db = initDatabase(":memory:");
+    const service = new MarketStateService(db);
+    const trading = service.createPortfolio("Trading");
+    const defaultLot = service.addPortfolioLot({
+      instrument: {
+        symbol: "VTI",
+        assetType: "etf",
+        name: "Vanguard Total Stock Market ETF",
+        exchange: "PCX",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 250,
+      currency: "USD",
+    });
+    const tradingLot = service.addPortfolioLot({
+      portfolioId: trading.id,
+      instrument: {
+        symbol: "TSLA",
+        assetType: "equity",
+        name: "Tesla, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 1,
+      avgCost: 200,
+      currency: "USD",
+    });
+    vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
+      quote(symbol, symbol === "TSLA" ? 300 : 275),
+    );
+
+    const snapshot = await buildMarketStateQuoteSnapshot(db);
+
+    expect(snapshot.portfolioQuotes).toEqual([
+      expect.objectContaining({
+        lotId: defaultLot.id,
+        symbol: "VTI",
+        marketValue: 550,
+        allocationPercent: 100,
+      }),
+      expect.objectContaining({
+        lotId: tradingLot.id,
+        symbol: "TSLA",
+        marketValue: 300,
+        allocationPercent: 100,
+      }),
+    ]);
+    expect(snapshot.portfolioSummary).toMatchObject({ totalValue: 550 });
+    expect(snapshot.portfolioSummaries).toEqual([
+      expect.objectContaining({ portfolioId: defaultLot.portfolioId, totalValue: 550 }),
+      expect.objectContaining({ portfolioId: trading.id, totalValue: 300 }),
+    ]);
     db.close();
   });
 

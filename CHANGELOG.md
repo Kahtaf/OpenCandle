@@ -2,15 +2,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- Watchlists can now be created as named lists and managed independently from the GUI tabs or the `manage_watchlist` TUI/tool flow.
+- Watchlists can now be renamed through the GUI and the `manage_watchlist` TUI/tool flow.
+- Portfolios can now be created and renamed as named lists from GUI tabs, chat attachments, and the `track_portfolio` TUI/tool flow.
+
 ### Changed
 
 - Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees.
 - Biome release-check noise is reduced with mechanical lint fixes plus scoped test/provider overrides for intentional mock and raw-response patterns.
+- Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests.
 
 ### Fixed
 
 - README setup/data-source guidance now includes TradingView scanner and Polymarket Gamma as keyless public sources.
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
+- Watchlist, portfolio, alert, and report form actions in the GUI now update saved market state without creating empty chat sessions.
+- GUI market-state tool buttons now fall back to trusted same-origin HTTP invocation when the WebSocket connection is unavailable after bootstrap.
 
 ## [0.11.1] - 2026-07-08
 

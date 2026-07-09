@@ -42,7 +42,7 @@ export function SessionDrawer({ open, onClose, ...rest }) {
         if (!nextOpen) onClose();
       }}
     >
-      <SheetContent width="sm" handleLabel="Sessions" className="bg-secondary p-0">
+      <SheetContent width="sm" handleLabel="Sessions" className="p-0">
         <div className="flex h-full min-h-0 flex-col">
           <SidebarBody {...rest} showHeader={false} />
         </div>

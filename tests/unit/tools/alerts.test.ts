@@ -128,42 +128,37 @@ describe("alertsTool", () => {
     expect(listed.content[0].text).toContain("manual checks available");
   });
 
-  it("does not wipe existing watchlist metadata when creating an alert", async () => {
-    const db = initDefaultDatabase();
-    const service = new MarketStateService(db);
-    service.addWatchlistItem({
-      instrument: {
-        symbol: "AAPL",
-        assetType: "equity",
-        name: "Apple Inc.",
-        exchange: "NMS",
-        currency: "USD",
-        provider: "yahoo",
-      },
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
-    db.close();
-
+  it("updates and deletes alert rules through the shared TUI tool", async () => {
     await alertsTool.execute("test", {
       action: "create_price_above",
       symbol: "AAPL",
-      threshold: 260,
+      threshold: 250,
     });
 
-    const verifyDb = initDefaultDatabase();
-    const verifyService = new MarketStateService(verifyDb);
-    expect(verifyService.listWatchlistItems()[0]).toMatchObject({
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
+    const updated = await alertsTool.execute("test", {
+      action: "update",
+      id: 1,
+      condition_action: "create_price_below",
+      threshold: 150,
+      cooldown_seconds: 120,
     });
-    verifyDb.close();
+
+    expect(updated.content[0].text).toContain("Updated alert #1");
+    expect(updated.details).toMatchObject({
+      id: 1,
+      conditionType: "price_crosses_below",
+      conditionJson: { threshold: 150, field: "last_price" },
+      cooldownSeconds: 120,
+      lastCheckedAt: null,
+      lastObservedJson: null,
+    });
+
+    const deleted = await alertsTool.execute("test", { action: "delete", id: 1 });
+    expect(deleted.content[0].text).toContain("Deleted alert #1");
+    expect(deleted.details).toMatchObject({ id: 1 });
+
+    const listed = await alertsTool.execute("test", { action: "list" });
+    expect(listed.content[0].text).toContain("No alert rules");
   });
 
   it("creates instrument-scoped alerts without adding the symbol to the watchlist", async () => {

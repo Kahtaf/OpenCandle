@@ -1,9 +1,8 @@
-import { ListPlus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ListPlus, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import { buildAlertSentenceRows } from "./alert-view-model.js";
-import { quoteFreshness } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
 import {
   Badge,
@@ -18,22 +17,50 @@ import {
   PanelSearch,
   SignedMoney,
   SignedPercent,
+  StateTabs,
   StatusDot,
   Sym,
 } from "./shared.jsx";
 
 export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, invokeTool }) {
+  const watchlists = useMemo(
+    () =>
+      state.watchlists?.length ? state.watchlists : [{ id: 1, name: "Default", isDefault: true }],
+    [state.watchlists],
+  );
+  const [activeWatchlistId, setActiveWatchlistId] = useState(watchlists[0]?.id ?? null);
+  const activeWatchlist =
+    watchlists.find((watchlist) => watchlist.id === activeWatchlistId) ?? watchlists[0] ?? null;
+
+  useEffect(() => {
+    if (!activeWatchlist) return;
+    if (!watchlists.some((watchlist) => watchlist.id === activeWatchlistId)) {
+      setActiveWatchlistId(activeWatchlist.id);
+    }
+  }, [activeWatchlist, activeWatchlistId, watchlists]);
+
   const quotesByItem = useMemo(
     () => groupByOne(state.quoteSnapshot?.watchlistQuotes, "itemId"),
     [state.quoteSnapshot],
   );
   const alertsByInstrument = useMemo(() => groupBy(state.alerts, "instrumentId"), [state.alerts]);
+  const watchlistItems = useMemo(
+    () => (state.watchlist ?? []).filter((item) => item.watchlistId === activeWatchlist?.id),
+    [state.watchlist, activeWatchlist],
+  );
   const rows = useMemo(
-    () => filterItems(state.watchlist, filter, ["symbol", "name", "thesis", "notes", "tags"]),
-    [state.watchlist, filter],
+    () => filterItems(watchlistItems, filter, ["symbol", "name"]),
+    [watchlistItems, filter],
   );
   const [selectedId, setSelectedId] = useState(null);
   const selected = rows.find((item) => item.id === selectedId) ?? rows[0] ?? null;
+
+  const selectWatchlist = (watchlistId) => {
+    if (watchlistId === activeWatchlistId) return;
+    setActiveWatchlistId(watchlistId);
+    setSelectedId(null);
+    setFilter("");
+  };
 
   return (
     <div
@@ -43,36 +70,59 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
       )}
     >
       <Panel
-        title="Watchlist"
+        title="Watchlists"
         count={rows.length}
         actions={
-          state.watchlist.length > 0 ? (
-            <PanelSearch label="Search symbols" filter={filter} setFilter={setFilter} />
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            {watchlistItems.length > 0 ? (
+              <PanelSearch label="Search symbols" filter={filter} setFilter={setFilter} />
+            ) : null}
+            <Button
+              type="button"
+              variant="brand"
+              size="sm"
+              rounded="full"
+              prefixIcon={Plus}
+              disabled={readOnly || !activeWatchlist}
+              onClick={() => openPanel("watchlist-add", { watchlist: activeWatchlist })}
+            >
+              Add ticker
+            </Button>
+          </div>
         }
       >
+        <StateTabs
+          items={watchlists}
+          activeItem={activeWatchlist}
+          counts={countItemsByWatchlist(state.watchlist ?? [])}
+          readOnly={readOnly}
+          renameLabel="Rename watchlist"
+          onSelect={selectWatchlist}
+          onRename={(watchlist) => openPanel("watchlist-rename", { watchlist })}
+        />
         {rows.length === 0 ? (
           <EmptyState
             icon={ListPlus}
-            title={state.watchlist.length === 0 ? "No tickers yet" : "No symbols match this search"}
-            action="Add a ticker to start the watchlist, then keep thesis, targets, stops, and alerts on its row."
+            title={watchlistItems.length === 0 ? "No tickers yet" : "No symbols match this search"}
+            action={
+              watchlistItems.length === 0
+                ? "Add a ticker to this watchlist."
+                : "Try a different symbol search."
+            }
             cta={{
               label: "Add ticker",
-              disabled: readOnly,
-              onClick: () => openPanel("watchlist-add"),
+              disabled: readOnly || !activeWatchlist,
+              onClick: () => openPanel("watchlist-add", { watchlist: activeWatchlist }),
             }}
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left text-sm sm:min-w-[560px]">
+            <table className="w-full border-collapse text-left text-sm sm:min-w-[480px]">
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground">
                   <th className="px-4 py-2 font-medium">Symbol</th>
                   <th className="px-4 py-2 text-right font-medium">Last</th>
                   <th className="px-4 py-2 text-right font-medium">Today</th>
-                  <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">
-                    To target
-                  </th>
                   <th className="hidden px-4 py-2 font-medium sm:table-cell">Signals</th>
                 </tr>
               </thead>
@@ -94,15 +144,12 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
                         <Sym symbol={item.symbol} name={item.name} />
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">
-                        {quote?.status === "ok" ? money(quote.price) : "—"}
+                        {quote?.status === "ok" ? money(quote.price) : "-"}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         <SignedPercent
                           value={quote?.status === "ok" ? quote.changePercent : null}
                         />
-                      </td>
-                      <td className="hidden px-4 py-2.5 text-right tabular-nums text-muted-foreground sm:table-cell">
-                        {toTargetLabel(item, quote)}
                       </td>
                       <td className="hidden px-4 py-2.5 sm:table-cell">
                         <SignalBadge
@@ -123,10 +170,10 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
         <SymbolInspector
           key={selected.id}
           item={selected}
+          watchlist={activeWatchlist}
           quote={quotesByItem.get(selected.id)}
           state={state}
           readOnly={readOnly}
-          openPanel={openPanel}
           invokeTool={invokeTool}
         />
       ) : null}
@@ -134,19 +181,16 @@ export function WatchlistPage({ state, filter, setFilter, readOnly, openPanel, i
   );
 }
 
-function toTargetLabel(item, quote) {
-  if (typeof item.targetPrice !== "number") return "No target";
-  if (quote?.status !== "ok" || typeof quote.price !== "number" || quote.price <= 0) {
-    return money(item.targetPrice);
+function countItemsByWatchlist(items) {
+  const counts = new Map();
+  for (const item of items) {
+    counts.set(item.watchlistId, (counts.get(item.watchlistId) ?? 0) + 1);
   }
-  const percent = ((item.targetPrice - quote.price) / quote.price) * 100;
-  const sign = percent > 0 ? "+" : percent < 0 ? "−" : "";
-  return `${sign}${Math.abs(percent).toFixed(1)}% to ${money(item.targetPrice)}`;
+  return counts;
 }
 
 function SignalBadge({ alerts, quote }) {
   if (quote && quote.status !== "ok") return <Badge tone="warn">Quote unavailable</Badge>;
-  if (quote?.stale) return <Badge tone="warn">Stale quote</Badge>;
   const active = (alerts ?? []).filter((alert) => alert.enabled !== false);
   if (active.length === 0) return <Badge>No alerts</Badge>;
   return (
@@ -156,8 +200,7 @@ function SignalBadge({ alerts, quote }) {
   );
 }
 
-function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }) {
-  const freshness = quoteFreshness(quote);
+function SymbolInspector({ item, watchlist, quote, state, readOnly, invokeTool }) {
   const positionRow = useMemo(() => {
     const rows = buildHoldingRows(
       (state.portfolio ?? []).filter((lot) => lot.symbol === item.symbol),
@@ -182,34 +225,15 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
       <div className="border-b border-border p-4">
         <Sym symbol={item.symbol} name={[item.name, item.exchange].filter(Boolean).join(" · ")} />
         <div className="mt-2 text-[28px] font-semibold leading-tight tabular-nums text-foreground">
-          {quote?.status === "ok" ? money(quote.price) : "—"}
+          {quote?.status === "ok" ? money(quote.price) : "-"}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           {quote?.status === "ok" ? <SignedPercent value={quote.changePercent} /> : null}
-          <span>
-            {quote?.status === "ok" || !quote
-              ? freshness.label
-              : quote.reason || "Quote unavailable"}
-          </span>
-          {freshness.stale ? <Badge tone="warn">stale</Badge> : null}
+          {quote && quote.status !== "ok" ? (
+            <span>{quote.reason || "Quote unavailable"}</span>
+          ) : null}
         </div>
-        <TargetRange item={item} quote={quote} />
       </div>
-
-      {item.thesis || item.tags?.length ? (
-        <InspectorSection title="Thesis">
-          {item.thesis ? (
-            <p className="text-[13px] leading-5 text-foreground">{item.thesis}</p>
-          ) : null}
-          {item.tags?.length ? (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {item.tags.map((tag) => (
-                <Badge key={tag}>{tag}</Badge>
-              ))}
-            </div>
-          ) : null}
-        </InspectorSection>
-      ) : null}
 
       {positionRow ? (
         <InspectorSection title="Position">
@@ -248,44 +272,20 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
             ))}
           </ul>
         )}
-        <Button
-          type="button"
-          variant="bordered"
-          size="sm"
-          className="mt-3 w-full"
-          disabled={readOnly || item.targetPrice == null}
-          onClick={() =>
-            invokeTool("manage_alerts", {
-              action: "create_price_above",
-              symbol: item.symbol,
-              threshold: item.targetPrice,
-            })
-          }
-        >
-          {item.targetPrice == null
-            ? "Set a target to enable alerts"
-            : `Alert at target ${money(item.targetPrice)}`}
-        </Button>
       </InspectorSection>
 
       <div className="flex gap-2 p-4">
-        <Button
-          type="button"
-          variant="bordered"
-          size="sm"
-          className="flex-1"
-          disabled={readOnly}
-          onClick={() => openPanel("watchlist-edit", { item })}
-        >
-          Edit
-        </Button>
         <ConfirmButton
           label="Remove"
           confirmLabel={`Remove ${item.symbol}?`}
           size="sm"
           disabled={readOnly}
           onConfirm={() =>
-            invokeTool("manage_watchlist", { action: "remove", symbol: item.symbol })
+            invokeTool("manage_watchlist", {
+              action: "remove",
+              symbol: item.symbol,
+              watchlist_name: watchlist?.name,
+            })
           }
         />
       </div>
@@ -293,47 +293,10 @@ function SymbolInspector({ item, quote, state, readOnly, openPanel, invokeTool }
   );
 }
 
-function TargetRange({ item, quote }) {
-  const target = item.targetPrice;
-  const stop = item.stopPrice;
-  if (typeof target !== "number" && typeof stop !== "number") return null;
-  const price = quote?.status === "ok" ? quote.price : null;
-  const low =
-    typeof stop === "number" ? stop : Math.min(price ?? target, target ?? price ?? 0) * 0.8;
-  const high =
-    typeof target === "number" ? target : Math.max(price ?? stop, stop ?? price ?? 0) * 1.2;
-  const span = high - low;
-  const position =
-    price != null && span > 0 ? Math.min(1, Math.max(0, (price - low) / span)) : null;
-
-  return (
-    <div className="mt-3">
-      <div className="relative h-[5px] rounded-full bg-tertiary">
-        {position != null ? (
-          <>
-            <div
-              className="absolute inset-y-0 left-0 rounded-full bg-hard"
-              style={{ width: `${position * 100}%` }}
-            />
-            <div
-              className="absolute top-[-3px] h-[11px] w-[2px] rounded-sm bg-foreground"
-              style={{ left: `${position * 100}%` }}
-            />
-          </>
-        ) : null}
-      </div>
-      <div className="mt-1.5 flex justify-between text-[11px] tabular-nums text-muted-foreground">
-        <span>{typeof stop === "number" ? `Stop ${money(stop)}` : ""}</span>
-        <span>{typeof target === "number" ? `Target ${money(target)}` : ""}</span>
-      </div>
-    </div>
-  );
-}
-
 function InspectorSection({ title, children }) {
   return (
     <section className="border-b border-border p-4 last:border-0">
-      <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <h3 className="mb-2 text-balance text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
       {children}

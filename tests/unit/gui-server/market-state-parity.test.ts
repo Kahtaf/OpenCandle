@@ -51,11 +51,14 @@ describe("market-state GUI/TUI parity", () => {
     await invokeToolFromUi(
       sessionManager,
       watchlistTool,
-      { action: "add", symbol: "AAPL", target_price: 220 },
+      { action: "add", symbol: "AAPL", watchlist_name: "MAG7" },
       "ui",
     );
 
-    const tuiWatchlist = await watchlistTool.execute("test", { action: "check" });
+    const tuiWatchlist = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "MAG7",
+    });
     expect(tuiWatchlist.content[0].text).toContain("AAPL");
 
     await portfolioTrackerTool.execute("test", {
@@ -69,6 +72,7 @@ describe("market-state GUI/TUI parity", () => {
     const snapshot = buildMarketStateSnapshot(db);
     db.close();
 
+    expect(snapshot.watchlists.map((watchlist) => watchlist.name)).toEqual(["Default", "MAG7"]);
     expect(snapshot.watchlist.map((item) => item.symbol)).toEqual(["AAPL"]);
     expect(snapshot.portfolio.map((lot) => lot.symbol)).toEqual(["VTI"]);
     expect(
@@ -79,6 +83,45 @@ describe("market-state GUI/TUI parity", () => {
           message.details?.stateChange?.source === "ui" &&
           typeof message.details.stateChange.targetId === "number" &&
           typeof message.details.stateChange.instrumentId === "number",
+      ),
+    ).toBe(true);
+  });
+
+  it("shares GUI-originated watchlist renames with later TUI reads", async () => {
+    await watchlistTool.execute("test", {
+      action: "create",
+      watchlist_name: "Growth",
+    });
+    await watchlistTool.execute("test", {
+      action: "add",
+      symbol: "NVDA",
+      watchlist_name: "Growth",
+    });
+
+    await invokeToolFromUi(
+      sessionManager,
+      watchlistTool,
+      { action: "rename", watchlist_name: "Growth", new_watchlist_name: "AI" },
+      "ui",
+    );
+
+    const tuiWatchlist = await watchlistTool.execute("test", {
+      action: "check",
+      watchlist_name: "AI",
+    });
+    const db = initDefaultDatabase();
+    const snapshot = buildMarketStateSnapshot(db);
+    db.close();
+
+    expect(tuiWatchlist.content[0].text).toContain("NVDA");
+    expect(snapshot.watchlists.map((watchlist) => watchlist.name)).toEqual(["Default", "AI"]);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "toolResult" &&
+          message.toolName === "manage_watchlist" &&
+          message.details?.stateChange?.source === "ui" &&
+          message.details.stateChange.targetType === "watchlist",
       ),
     ).toBe(true);
   });
@@ -115,6 +158,47 @@ describe("market-state GUI/TUI parity", () => {
           message.details.stateChange.domain === "portfolio" &&
           typeof message.details.stateChange.targetId === "number" &&
           typeof message.details.stateChange.instrumentId === "number",
+      ),
+    ).toBe(true);
+  });
+
+  it("shares GUI-originated portfolio renames with later TUI reads", async () => {
+    await portfolioTrackerTool.execute("test", {
+      action: "add",
+      portfolio_name: "Trading",
+      symbol: "TSLA",
+      shares: 1,
+      avg_cost: 200,
+    });
+
+    await invokeToolFromUi(
+      sessionManager,
+      portfolioTrackerTool,
+      { action: "rename", portfolio_name: "Trading", new_portfolio_name: "Speculative" },
+      "ui",
+    );
+
+    const tuiPortfolio = await portfolioTrackerTool.execute("test", {
+      action: "view",
+      portfolio_name: "Speculative",
+    });
+    const db = initDefaultDatabase();
+    const snapshot = buildMarketStateSnapshot(db);
+    db.close();
+
+    expect(tuiPortfolio.content[0].text).toContain("TSLA");
+    expect(snapshot.portfolios.map((portfolio) => portfolio.name)).toEqual([
+      "Default",
+      "Speculative",
+    ]);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "toolResult" &&
+          message.toolName === "track_portfolio" &&
+          message.details?.stateChange?.source === "ui" &&
+          message.details.stateChange.domain === "portfolio" &&
+          message.details.stateChange.targetType === "portfolio",
       ),
     ).toBe(true);
   });

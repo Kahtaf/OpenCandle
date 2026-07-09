@@ -202,6 +202,22 @@ describe("ChatPanel event transcript rendering", () => {
     expect(source).not.toContain("return false;\n      }\n      return gui.invokeTool(");
   });
 
+  it("preserves direct tool invocation options for market-state actions", () => {
+    const source = readFileSync(resolve("gui/web/src/App.jsx"), "utf-8");
+
+    expect(source).toContain("(toolName, args, targetSessionId, options) =>");
+    expect(source).toContain(
+      "return gui.invokeTool(\n        toolName,\n        args,\n        targetSessionId ?? sessionView.activeSessionId,\n        options,\n      );",
+    );
+  });
+
+  it("passes the selected watchlist name when a chat entity chip is added", () => {
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
+
+    expect(source).toContain("watchlist_name: watchlist.name");
+    expect(source).toContain("watchlists={marketState.state?.watchlists}");
+  });
+
   it("renders a loading state instead of home suggestions while switching sessions", () => {
     const html = renderChatPanelHtml({
       inputDisabled: true,

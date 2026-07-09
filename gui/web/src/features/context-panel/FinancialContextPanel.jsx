@@ -38,7 +38,7 @@ export function FinancialContextDrawer({
         if (!nextOpen) onClose();
       }}
     >
-      <SheetContent width="sm" handleLabel="What the agent sees" className="bg-card p-0">
+      <SheetContent width="sm" handleLabel="What the agent sees" className="p-0">
         <FinancialContextContent
           state={state}
           catalog={catalog}
@@ -310,11 +310,6 @@ function QuoteRow({ row }) {
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold tabular-nums text-foreground">{row.symbol}</span>
-          {row.lastSeen ? (
-            <span className="text-[11px] text-muted-foreground/70">
-              {relativeTime(row.lastSeen)}
-            </span>
-          ) : null}
         </div>
         <div className="text-xs tabular-nums text-muted-foreground">
           {hasQuote ? (

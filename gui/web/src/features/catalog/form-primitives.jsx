@@ -1,7 +1,8 @@
-import { Check, ChevronDown, Plus, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
+import { Select } from "../../components/ui/select.jsx";
 import { cn } from "../../lib/utils.js";
 
 // ---------------------------------------------------------------------------
@@ -85,29 +86,23 @@ export function SegmentedControl({ value, onChange, options, ariaLabel }) {
 
 export function EnumSelect({ value, onChange, options, placeholder, ariaLabel }) {
   return (
-    <div className="relative">
-      <select
-        aria-label={ariaLabel}
-        value={value ?? ""}
-        onChange={(event) => onChange(event.target.value || undefined)}
-        className="h-9 w-full appearance-none rounded-md border border-border bg-card px-3 pr-9 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        {placeholder ? (
-          <option value="" disabled hidden>
-            {placeholder}
-          </option>
-        ) : null}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown
-        aria-hidden="true"
-        className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-      />
-    </div>
+    <Select
+      aria-label={ariaLabel}
+      value={value ?? ""}
+      size="sm"
+      onChange={(event) => onChange(event.target.value || undefined)}
+    >
+      {placeholder ? (
+        <option value="" disabled hidden>
+          {placeholder}
+        </option>
+      ) : null}
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 

@@ -2,7 +2,11 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { isZeroFilledQuote } from "../../market-state/resolve.js";
 import { resolveInstrumentForMutation } from "../../market-state/resolve-for-mutation.js";
-import { MarketStateService, type WatchlistItemRecord } from "../../market-state/service.js";
+import {
+  type CollectionRecord,
+  MarketStateService,
+  type WatchlistItemRecord,
+} from "../../market-state/service.js";
 import { initDefaultDatabase } from "../../memory/sqlite.js";
 import { getQuotes, type TradingViewQuote } from "../../providers/tradingview.js";
 import { wrapProvider } from "../../providers/wrap-provider.js";
@@ -10,7 +14,6 @@ import { getQuote } from "../../providers/yahoo-finance.js";
 
 interface WatchlistCheck extends WatchlistItemRecord {
   currentPrice: number | null;
-  alerts: string[];
   statuses: string[];
   sourceProvider?: "tradingview" | "yahoo";
   dataCaveat?: string;
@@ -18,36 +21,23 @@ interface WatchlistCheck extends WatchlistItemRecord {
 
 const params = Type.Object({
   action: Type.Union(
-    [Type.Literal("add"), Type.Literal("update"), Type.Literal("remove"), Type.Literal("check")],
-    { description: "One of: 'add', 'update', 'remove', or 'check'" },
+    [
+      Type.Literal("create"),
+      Type.Literal("rename"),
+      Type.Literal("add"),
+      Type.Literal("remove"),
+      Type.Literal("check"),
+    ],
+    { description: "One of: 'create', 'rename', 'add', 'remove', or 'check'" },
+  ),
+  watchlist_name: Type.Optional(
+    Type.String({
+      description: "Named watchlist to create or use. Omit to use the default watchlist.",
+    }),
   ),
   symbol: Type.Optional(Type.String({ description: "Ticker symbol (required for add/remove)" })),
-  target_price: Type.Optional(
-    Type.Union([
-      Type.Number({ description: "Alert when price rises above this level" }),
-      Type.Null({ description: "Clear the existing target price during update" }),
-    ]),
-  ),
-  stop_price: Type.Optional(
-    Type.Union([
-      Type.Number({ description: "Alert when price falls below this level" }),
-      Type.Null({ description: "Clear the existing stop price during update" }),
-    ]),
-  ),
-  notes: Type.Optional(
-    Type.Union([
-      Type.String({ description: "Optional notes for why you're watching this" }),
-      Type.Null({ description: "Clear existing notes during update" }),
-    ]),
-  ),
-  thesis: Type.Optional(
-    Type.Union([
-      Type.String({ description: "Optional thesis for why you're watching this" }),
-      Type.Null({ description: "Clear the existing thesis during update" }),
-    ]),
-  ),
-  tags: Type.Optional(
-    Type.Array(Type.String(), { description: "Optional tags for organizing the watchlist item" }),
+  new_watchlist_name: Type.Optional(
+    Type.String({ description: "New watchlist name (required for rename)." }),
   ),
 });
 
@@ -55,13 +45,44 @@ export const watchlistTool: AgentTool<typeof params> = {
   name: "manage_watchlist",
   label: "Watchlist",
   description:
-    "Manage your watchlist of stocks and crypto. Add symbols with optional target and stop prices, remove symbols, or check current prices against your watchlist levels.",
+    "Manage named watchlists of stocks and crypto. Create or rename watchlists, add symbols, remove symbols, or check current prices.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
     const service = new MarketStateService(db);
 
     try {
+      if (args.action === "create") {
+        if (!args.watchlist_name) {
+          throw new Error("watchlist_name is required for create action.");
+        }
+        const watchlist = service.createWatchlist(args.watchlist_name);
+        return {
+          content: [{ type: "text", text: `Created watchlist ${watchlist.name}` }],
+          details: watchlist,
+        };
+      }
+
+      if (args.action === "rename") {
+        if (!args.new_watchlist_name) {
+          throw new Error("new_watchlist_name is required for rename action.");
+        }
+        const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
+        const current = args.watchlist_name
+          ? service.getWatchlistByName(currentName)
+          : service.getDefaultWatchlist();
+        if (current == null) {
+          throw new Error(`watchlist ${currentName} not found.`);
+        }
+        const watchlist = service.renameWatchlist(current.name, args.new_watchlist_name);
+        return {
+          content: [{ type: "text", text: `Renamed ${current.name} to ${watchlist.name}` }],
+          details: watchlist,
+        };
+      }
+
+      const watchlist = service.getOrCreateWatchlist(args.watchlist_name);
+
       if (args.action === "add") {
         if (!args.symbol) {
           throw new Error("symbol is required for add action.");
@@ -72,7 +93,7 @@ export const watchlistTool: AgentTool<typeof params> = {
             content: [
               {
                 type: "text",
-                text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to the watchlist.`,
+                text: `Could not verify ${instrument.query}. Choose one of the returned candidates before adding it to ${watchlist.name}.`,
               },
             ],
             details: instrument,
@@ -80,18 +101,10 @@ export const watchlistTool: AgentTool<typeof params> = {
         }
         const item = service.addWatchlistItem({
           instrument: instrument.instrument,
-          targetPrice: args.target_price,
-          stopPrice: args.stop_price,
-          thesis: args.thesis,
-          notes: args.notes,
-          tags: args.tags,
+          watchlistId: watchlist.id,
         });
-        const alerts = [];
-        if (args.target_price) alerts.push(`target: $${args.target_price}`);
-        if (args.stop_price) alerts.push(`stop: $${args.stop_price}`);
-        const alertStr = alerts.length > 0 ? ` (${alerts.join(", ")})` : "";
         return {
-          content: [{ type: "text", text: `Added ${item.symbol} to watchlist${alertStr}` }],
+          content: [{ type: "text", text: `Added ${item.symbol} to ${watchlist.name}` }],
           details: item,
         };
       }
@@ -101,96 +114,70 @@ export const watchlistTool: AgentTool<typeof params> = {
           throw new Error("symbol is required for remove action.");
         }
         const symbol = args.symbol.toUpperCase();
-        if (!service.removeWatchlistItemBySymbol(symbol)) {
+        if (!service.removeWatchlistItemBySymbol(symbol, watchlist.id)) {
           return {
-            content: [{ type: "text", text: `${symbol} not found in watchlist` }],
+            content: [{ type: "text", text: `${symbol} not found in ${watchlist.name}` }],
             details: null,
           };
         }
         return {
-          content: [{ type: "text", text: `Removed ${symbol} from watchlist` }],
+          content: [{ type: "text", text: `Removed ${symbol} from ${watchlist.name}` }],
           details: null,
         };
       }
 
-      if (args.action === "update") {
-        if (!args.symbol) {
-          throw new Error("symbol is required for update action.");
-        }
-        const symbol = args.symbol.toUpperCase();
-        const item = service.updateWatchlistItemBySymbol(symbol, {
-          targetPrice: args.target_price,
-          stopPrice: args.stop_price,
-          notes: args.notes,
-          thesis: args.thesis,
-          tags: args.tags,
-        });
-        if (item == null) {
-          return {
-            content: [{ type: "text", text: `${symbol} not found in watchlist` }],
-            details: null,
-          };
-        }
-        return {
-          content: [{ type: "text", text: `Updated ${item.symbol} in watchlist` }],
-          details: item,
-        };
-      }
-
-      const items = service.listWatchlistItems();
+      const items = service.listWatchlistItems(watchlist.id);
       if (items.length === 0) {
         return {
-          content: [{ type: "text", text: "Watchlist is empty. Use add action to add symbols." }],
-          details: null,
+          content: [
+            {
+              type: "text",
+              text: `${watchlist.name} is empty. Use add action to add symbols.`,
+            },
+          ],
+          details: { watchlist, items: [] },
         };
       }
 
       const checks = await checkWatchlistPrices(items);
-      const alertItems = checks.filter((c) => c.alerts.length > 0);
-      const lines = [
-        `**Watchlist** — ${items.length} symbols${alertItems.length > 0 ? ` | ${alertItems.length} ALERT(S)` : ""}`,
-        "",
-      ];
-
-      const tradingViewCaveats = Array.from(
-        new Set(
-          checks
-            .filter((c) => c.sourceProvider === "tradingview")
-            .map(
-              (c) =>
-                c.dataCaveat ??
-                "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
-            ),
-        ),
-      );
-      if (tradingViewCaveats.length > 0) {
-        lines.push(...tradingViewCaveats.map((caveat) => `Data caveat: ${caveat}`), "");
-      }
-
-      for (const c of checks) {
-        const alertStr = c.alerts.length > 0 ? ` ** ${c.alerts.join(" | ")} **` : "";
-        const statusStr = c.statuses.length > 0 ? ` | ${c.statuses.join(" | ")}` : "";
-        const targetStr = c.targetPrice ? ` | Target: $${c.targetPrice}` : "";
-        const stopStr = c.stopPrice ? ` | Stop: $${c.stopPrice}` : "";
-        const sourceStr = c.sourceProvider
-          ? ` | Source: ${c.sourceProvider === "tradingview" ? "TradingView" : "Yahoo"}`
-          : "";
-        const priceStr =
-          typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
-        lines.push(
-          `  ${c.symbol}: ${priceStr}${targetStr}${stopStr}${sourceStr}${statusStr}${alertStr}`,
-        );
-      }
-
       return {
-        content: [{ type: "text", text: lines.join("\n") }],
-        details: { items: checks },
+        content: [{ type: "text", text: formatWatchlistCheck(watchlist, checks) }],
+        details: { watchlist, items: checks },
       };
     } finally {
       db.close();
     }
   },
 };
+
+function formatWatchlistCheck(watchlist: CollectionRecord, checks: WatchlistCheck[]): string {
+  const lines = [`**${watchlist.name}** — ${checks.length} symbols`, ""];
+  const tradingViewCaveats = Array.from(
+    new Set(
+      checks
+        .filter((c) => c.sourceProvider === "tradingview")
+        .map(
+          (c) =>
+            c.dataCaveat ??
+            "TradingView scanner data may be delayed about 15 minutes and comes from an unofficial endpoint.",
+        ),
+    ),
+  );
+  if (tradingViewCaveats.length > 0) {
+    lines.push(...tradingViewCaveats.map((caveat) => `Data caveat: ${caveat}`), "");
+  }
+
+  for (const c of checks) {
+    const statusStr = c.statuses.length > 0 ? ` | ${c.statuses.join(" | ")}` : "";
+    const sourceStr = c.sourceProvider
+      ? ` | Source: ${c.sourceProvider === "tradingview" ? "TradingView" : "Yahoo"}`
+      : "";
+    const priceStr =
+      typeof c.currentPrice === "number" ? `$${c.currentPrice.toFixed(2)}` : "Unavailable";
+    lines.push(`  ${c.symbol}: ${priceStr}${sourceStr}${statusStr}`);
+  }
+  return lines.join("\n");
+}
 
 async function checkWatchlistPrices(items: WatchlistItemRecord[]): Promise<WatchlistCheck[]> {
   const tradingViewSymbols = items
@@ -229,16 +216,14 @@ async function checkWatchlistPrices(items: WatchlistItemRecord[]): Promise<Watch
         return {
           ...item,
           currentPrice: null,
-          alerts: [`UNAVAILABLE: ${result.reason}`],
-          statuses: [],
+          statuses: [`UNAVAILABLE: ${result.reason}`],
         };
       }
       if (result.stale) {
         return {
           ...item,
           currentPrice: null,
-          alerts: ["UNAVAILABLE: provider returned stale market data"],
-          statuses: [],
+          statuses: ["UNAVAILABLE: provider returned stale market data"],
         };
       }
       const quote = result.data;
@@ -246,8 +231,7 @@ async function checkWatchlistPrices(items: WatchlistItemRecord[]): Promise<Watch
         return {
           ...item,
           currentPrice: null,
-          alerts: ["UNAVAILABLE: Yahoo returned no valid market data."],
-          statuses: [],
+          statuses: ["UNAVAILABLE: Yahoo returned no valid market data."],
         };
       }
       return buildCheckResult(item, quote.price, "yahoo");
@@ -261,23 +245,10 @@ function buildCheckResult(
   sourceProvider: "tradingview" | "yahoo",
   dataCaveat?: string,
 ): WatchlistCheck {
-  const alerts: string[] = [];
-  const statuses: string[] = [];
-  if (item.targetPrice && price >= item.targetPrice) {
-    alerts.push(`TARGET HIT: $${price.toFixed(2)} >= $${item.targetPrice}`);
-  } else if (item.targetPrice) {
-    statuses.push(`Target pending: $${price.toFixed(2)} < $${item.targetPrice}`);
-  }
-  if (item.stopPrice && price <= item.stopPrice) {
-    alerts.push(`STOP ALERT: $${price.toFixed(2)} fell below $${item.stopPrice}`);
-  } else if (item.stopPrice) {
-    statuses.push(`Stop OK: $${price.toFixed(2)} > $${item.stopPrice}`);
-  }
   return {
     ...item,
     currentPrice: price,
-    alerts,
-    statuses,
+    statuses: [],
     sourceProvider,
     dataCaveat,
   };

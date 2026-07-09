@@ -9,6 +9,10 @@ import {
   MAX_IMAGE_BYTES,
   validateImageFiles,
 } from "../../../gui/web/src/features/chat/attachments.js";
+import {
+  normalizePortfolioOptions,
+  portfolioAttachmentForOption,
+} from "../../../gui/web/src/features/chat/watchlist-options.js";
 
 describe("GUI chat attachments", () => {
   it("validates image mime type, size, and total count", () => {
@@ -29,12 +33,15 @@ describe("GUI chat attachments", () => {
     expect(
       attachmentsForRequest([
         { kind: "image", name: "chart.png", data: "base64", mimeType: "image/png" },
-        { kind: "portfolio", label: "Portfolio" },
+        { kind: "portfolio", id: "3", label: "Portfolio: Trading" },
         { kind: "watchlist", id: "7", label: "Watchlist 7" },
       ]),
     ).toEqual({
       images: [{ data: "base64", mimeType: "image/png" }],
-      attachments: [{ kind: "portfolio" }, { kind: "watchlist", id: "7" }],
+      attachments: [
+        { kind: "portfolio", id: "3" },
+        { kind: "watchlist", id: "7" },
+      ],
     });
   });
 
@@ -42,6 +49,17 @@ describe("GUI chat attachments", () => {
     expect(attachmentLabel({ kind: "portfolio" })).toBe("Portfolio");
     expect(attachmentLabel({ kind: "report" })).toBe("Latest report");
     expect(attachmentLabel({ kind: "image", name: "chart.webp" })).toBe("chart.webp");
+  });
+
+  it("normalizes portfolio attachment options with labels and ids", () => {
+    const options = normalizePortfolioOptions([{ id: 3, name: "Trading" }]);
+
+    expect(options).toEqual([{ id: "3", name: "Trading" }]);
+    expect(portfolioAttachmentForOption(options[0])).toEqual({
+      kind: "portfolio",
+      id: "3",
+      label: "Portfolio: Trading",
+    });
   });
 
   it("builds optimistic message attachment chips without image bytes", () => {

@@ -190,6 +190,63 @@ describe("invokeToolFromUi", () => {
     });
   });
 
+  it("can invoke direct UI tools without recording synthetic chat transcript messages", async () => {
+    const messages: Message[] = [];
+    const sentMessages: unknown[] = [];
+    const broadcastState = vi.fn();
+    const sessionManager = {
+      getSessionId: () => "session-1",
+      appendMessage(message: Message) {
+        messages.push(message);
+      },
+    } as unknown as SessionManager;
+    const params = Type.Object({
+      action: Type.String(),
+      symbol: Type.String(),
+    });
+    const tool: AgentTool<typeof params> = {
+      name: "manage_watchlist",
+      label: "Watchlist",
+      description: "test",
+      parameters: params,
+      async execute() {
+        return {
+          content: [{ type: "text", text: "Added AAPL" }],
+          details: { id: 7, instrumentId: 3, symbol: "AAPL" },
+        };
+      },
+    };
+    const controller = createToolInvokeController({
+      role: "writer",
+      getSessionManager: () => sessionManager,
+      broadcastState,
+      getTools: () => [tool],
+    });
+
+    await controller.handleToolInvokeMessage(
+      { send: (message: unknown) => sentMessages.push(message) },
+      {
+        requestId: "req-quiet",
+        sessionId: "session-1",
+        actionId: "tool-action-quiet",
+        toolName: "manage_watchlist",
+        args: { action: "add", symbol: "AAPL" },
+        recordTranscript: false,
+      },
+    );
+
+    expect(messages).toEqual([]);
+    expect(broadcastState).toHaveBeenCalledOnce();
+    expect(sentMessages[0]).toMatchObject({
+      ok: true,
+      toolName: "manage_watchlist",
+      result: {
+        details: { id: 7, instrumentId: 3, symbol: "AAPL" },
+        isError: false,
+      },
+    });
+  });
+
   it("aborts writer-path tool invocations when the writer lock scope is lost", async () => {
     const messages: Message[] = [];
     const sessionManager = {

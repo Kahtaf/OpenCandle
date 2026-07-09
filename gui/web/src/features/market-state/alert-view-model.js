@@ -28,6 +28,7 @@ export function buildAlertSentenceRows(
       tone: rowTone(rule, enabled, event),
       retriggerMode: rule.retriggerMode ?? "recurring",
       enabled,
+      rule,
     };
   });
 }

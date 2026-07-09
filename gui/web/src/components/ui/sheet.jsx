@@ -56,6 +56,14 @@ const mobileWidthClasses = {
   xl: "md:left-1/2 md:right-auto md:w-[920px] md:-translate-x-1/2",
 };
 
+export const SHEET_OVERLAY_CLASS =
+  "fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain";
+
+export const BOTTOM_SHEET_SURFACE_CLASS =
+  "fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-secondary shadow-subtle-md outline-none overscroll-contain";
+
+export const BOTTOM_SHEET_HANDLE_CLASS = "mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard";
+
 export function SheetContent({ children, className, width = "md", handleLabel = "Panel" }) {
   const { isDesktop } = useContext(SheetContext);
   if (isDesktop) {
@@ -80,11 +88,12 @@ export function SheetContent({ children, className, width = "md", handleLabel = 
   }
   return (
     <Drawer.Portal>
-      <Drawer.Overlay className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain" />
+      <Drawer.Overlay className={SHEET_OVERLAY_CLASS} />
       <Drawer.Content
         aria-describedby={undefined}
         className={cn(
-          "fixed inset-x-2 bottom-0 z-50 flex h-[min(88dvh,calc(100dvh-64px))] max-h-[min(88dvh,calc(100dvh-64px))] flex-col overflow-hidden rounded-t-xl border border-border bg-card shadow-subtle-md outline-none overscroll-contain md:inset-x-auto md:bottom-4 md:h-auto md:max-h-[84vh] md:rounded-xl",
+          BOTTOM_SHEET_SURFACE_CLASS,
+          "md:inset-x-auto md:bottom-4 md:h-auto md:max-h-[84vh] md:rounded-xl",
           mobileWidthClasses[width] ?? mobileWidthClasses.md,
           className,
         )}
@@ -100,10 +109,5 @@ export function SheetContent({ children, className, width = "md", handleLabel = 
 }
 
 function SheetHandle({ className }) {
-  return (
-    <div
-      className={cn("mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard", className)}
-      aria-hidden="true"
-    />
-  );
+  return <div className={cn(BOTTOM_SHEET_HANDLE_CLASS, className)} aria-hidden="true" />;
 }

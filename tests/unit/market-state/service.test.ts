@@ -83,8 +83,6 @@ describe("MarketStateService", () => {
         currency: "USD",
         provider: "yahoo",
       },
-      targetPrice: 250,
-      notes: "Initial thesis",
     });
 
     const second = service.addWatchlistItem({
@@ -96,15 +94,10 @@ describe("MarketStateService", () => {
         currency: "USD",
         provider: "yahoo",
       },
-      stopPrice: 180,
-      notes: "Updated thesis",
     });
 
     expect(second.id).toBe(first.id);
     expect(second.symbol).toBe("AAPL");
-    expect(second.targetPrice).toBe(250);
-    expect(second.stopPrice).toBe(180);
-    expect(second.notes).toBe("Updated thesis");
 
     const itemCount = db.prepare("SELECT COUNT(*) AS n FROM watchlist_items").get() as {
       n: number;
@@ -112,45 +105,10 @@ describe("MarketStateService", () => {
     expect(itemCount.n).toBe(1);
   });
 
-  it("preserves watchlist metadata when a duplicate add only supplies the instrument", () => {
-    const first = service.addWatchlistItem({
-      instrument: {
-        symbol: "AAPL",
-        assetType: "equity",
-        name: "Apple Inc.",
-        exchange: "NMS",
-        currency: "USD",
-        provider: "yahoo",
-      },
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
+  it("stores symbols in separate named watchlists", () => {
+    const mag7 = service.createWatchlist("MAG7");
+    const etfs = service.createWatchlist("ETFs");
 
-    const second = service.addWatchlistItem({
-      instrument: {
-        symbol: "AAPL",
-        assetType: "equity",
-        name: "Apple Inc.",
-        exchange: "NMS",
-        currency: "USD",
-        provider: "yahoo",
-      },
-    });
-
-    expect(second.id).toBe(first.id);
-    expect(second).toMatchObject({
-      targetPrice: 260,
-      stopPrice: 175,
-      thesis: "Services growth",
-      notes: "Core watch",
-      tags: ["mega-cap", "quality"],
-    });
-  });
-
-  it("clears watchlist metadata when update fields are explicitly null or empty", () => {
     service.addWatchlistItem({
       instrument: {
         symbol: "AAPL",
@@ -160,29 +118,54 @@ describe("MarketStateService", () => {
         currency: "USD",
         provider: "yahoo",
       },
-      targetPrice: 250,
-      stopPrice: 180,
-      thesis: "Initial thesis",
-      notes: "Initial note",
-      tags: ["quality"],
+      watchlistId: mag7.id,
+    });
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "VOO",
+        assetType: "etf",
+        name: "Vanguard S&P 500 ETF",
+        exchange: "PCX",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      watchlistId: etfs.id,
     });
 
-    const updated = service.updateWatchlistItemBySymbol("AAPL", {
-      targetPrice: null,
-      stopPrice: null,
-      thesis: null,
-      notes: null,
-      tags: [],
+    expect(service.listWatchlists().map((watchlist) => watchlist.name)).toEqual([
+      "Default",
+      "ETFs",
+      "MAG7",
+    ]);
+    expect(service.listWatchlistItems(mag7.id).map((item) => item.symbol)).toEqual(["AAPL"]);
+    expect(service.listWatchlistItems(etfs.id).map((item) => item.symbol)).toEqual(["VOO"]);
+
+    expect(service.removeWatchlistItemBySymbol("AAPL", mag7.id)).toBe(true);
+
+    expect(service.listWatchlistItems(mag7.id)).toEqual([]);
+    expect(service.listWatchlistItems(etfs.id).map((item) => item.symbol)).toEqual(["VOO"]);
+  });
+
+  it("renames a watchlist without moving its symbols", () => {
+    const growth = service.createWatchlist("Growth");
+    service.addWatchlistItem({
+      instrument: {
+        symbol: "NVDA",
+        assetType: "equity",
+        name: "NVIDIA Corporation",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      watchlistId: growth.id,
     });
 
-    expect(updated).toMatchObject({
-      symbol: "AAPL",
-      targetPrice: null,
-      stopPrice: null,
-      thesis: null,
-      notes: null,
-      tags: [],
-    });
+    const renamed = service.renameWatchlist("Growth", "AI");
+
+    expect(renamed).toMatchObject({ id: growth.id, name: "AI", isDefault: false });
+    expect(service.getWatchlistByName("Growth")).toBeNull();
+    expect(service.listWatchlistItems(renamed.id).map((item) => item.symbol)).toEqual(["NVDA"]);
+    expect(service.listWatchlists().map((watchlist) => watchlist.name)).toEqual(["Default", "AI"]);
   });
 
   it("stores portfolio lots under the default portfolio", () => {
@@ -209,6 +192,52 @@ describe("MarketStateService", () => {
     const lots = service.listPortfolioLots();
     expect(lots).toHaveLength(1);
     expect(lots[0].symbol).toBe("VTI");
+  });
+
+  it("stores lots in separate named portfolios and renames a portfolio without moving lots", () => {
+    const retirement = service.createPortfolio("Retirement");
+    const trading = service.createPortfolio("Trading");
+
+    service.addPortfolioLot({
+      portfolioId: retirement.id,
+      instrument: {
+        symbol: "VTI",
+        assetType: "etf",
+        name: "Vanguard Total Stock Market ETF",
+        exchange: "PCX",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 2,
+      avgCost: 250,
+      currency: "USD",
+    });
+    service.addPortfolioLot({
+      portfolioId: trading.id,
+      instrument: {
+        symbol: "TSLA",
+        assetType: "equity",
+        name: "Tesla, Inc.",
+        exchange: "NMS",
+        currency: "USD",
+        provider: "yahoo",
+      },
+      quantity: 1,
+      avgCost: 200,
+      currency: "USD",
+    });
+
+    const renamed = service.renamePortfolio("Trading", "Speculative");
+
+    expect(service.listPortfolios().map((portfolio) => portfolio.name)).toEqual([
+      "Default",
+      "Retirement",
+      "Speculative",
+    ]);
+    expect(renamed).toMatchObject({ id: trading.id, name: "Speculative", baseCurrency: "USD" });
+    expect(service.getPortfolioByName("Trading")).toBeNull();
+    expect(service.listPortfolioLots(retirement.id).map((lot) => lot.symbol)).toEqual(["VTI"]);
+    expect(service.listPortfolioLots(renamed.id).map((lot) => lot.symbol)).toEqual(["TSLA"]);
   });
 
   it("rejects non-positive or non-finite portfolio lot quantities and costs", () => {

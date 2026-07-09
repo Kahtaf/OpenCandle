@@ -88,7 +88,7 @@ export function CatalogOverlay({
         if (!next) close();
       }}
     >
-      <SheetContent width="xl" handleLabel="Catalog" className="bg-card p-0">
+      <SheetContent width="xl" handleLabel="Catalog" className="p-0">
         <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
           {selection ? (
             <BuilderHeader

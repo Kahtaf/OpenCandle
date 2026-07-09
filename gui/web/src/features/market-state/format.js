@@ -1,5 +1,4 @@
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const STALE_AFTER_MS = 15 * 60 * 1000;
 
 export function relativeTime(iso, nowMs = Date.now()) {
   const ts = Date.parse(iso ?? "");
@@ -20,14 +19,4 @@ export function shortDateLabel(iso, nowMs = Date.now()) {
   return date.getUTCFullYear() === new Date(nowMs).getUTCFullYear()
     ? label
     : `${label}, ${date.getUTCFullYear()}`;
-}
-
-export function quoteFreshness(quote, nowMs = Date.now()) {
-  const ts = Date.parse(quote?.fetchedAt ?? "");
-  if (!Number.isFinite(ts)) return { label: "Awaiting quotes", stale: null };
-  const ageMs = nowMs - ts;
-  if (ageMs >= STALE_AFTER_MS) {
-    return { label: `Quote ${Math.floor(ageMs / 60_000)}m old`, stale: true };
-  }
-  return { label: `Updated ${relativeTime(quote.fetchedAt, nowMs)}`, stale: false };
 }

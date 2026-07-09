@@ -31,11 +31,6 @@ describe("market-state summaries", () => {
     });
     service.addWatchlistItem({
       instrument: asts,
-      targetPrice: 55,
-      stopPrice: 22,
-      thesis: "Space-based broadband satellite network",
-      notes: "Watch launch cadence and carrier partnerships",
-      tags: ["space", "satellite"],
     });
     service.recordReportRun({
       status: "completed",
@@ -56,10 +51,7 @@ describe("market-state summaries", () => {
       "Portfolio lots:",
       "- ASTS: 40 @ $28.00, cost basis $1120.00 (AST SpaceMobile, Inc.)",
     ]);
-    expect(watchlist).toEqual([
-      "Watchlist:",
-      "- ASTS (AST SpaceMobile, Inc.) — target $55.00; stop $22.00; thesis: Space-based broadband satellite network; tags: space, satellite; notes: Watch launch cadence and carrier partnerships",
-    ]);
+    expect(watchlist).toEqual(["Watchlist:", "- ASTS (AST SpaceMobile, Inc.)"]);
     expect(report[0]).toContain("Latest report run: completed at 2026-07-05T14:30:00.000Z");
     expect(report[0]).toContain('"headline":"Launch cadence improved"');
     expect(report).toContain("Report text:");
