@@ -75,9 +75,27 @@ function resolveProbeUrl(probeUrl: string): string {
   const override = process.env[MODEL_KEY_PROBE_BASE_URL_ENV]?.trim();
   if (!override) return probeUrl;
 
+  // Test-support hook only. Overrides are limited to loopback hosts because
+  // the probe request carries the typed API key in its headers; honoring an
+  // arbitrary origin (for example from a poisoned .env) would forward that
+  // key to a foreign host.
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(override);
+  } catch {
+    return probeUrl;
+  }
+  if (!isLoopbackHostname(baseUrl.hostname)) return probeUrl;
+
   const url = new URL(probeUrl);
-  const baseUrl = new URL(override);
   url.protocol = baseUrl.protocol;
   url.host = baseUrl.host;
   return url.toString();
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" || host === "::1" || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host)
+  );
 }

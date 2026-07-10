@@ -186,9 +186,16 @@ async function main() {
       ...process.env,
       HOME: osHomeDir,
       OPENCANDLE_HOME: homeDir,
+      // Model keys are blanked so the fresh-consumer doctor contract below is
+      // deterministic on machines with exported credentials.
+      GEMINI_API_KEY: "",
+      GOOGLE_API_KEY: "",
+      OPENAI_API_KEY: "",
+      ANTHROPIC_API_KEY: "",
     };
     // A fresh consumer home has no model credentials, so doctor reports
-    // blocked health and exits 1 by contract; 0 covers runners with keys.
+    // blocked health and exits 1 by contract; the JSON status assertion
+    // below is the strong gate on that state.
     run("npx", ["--no-install", "opencandle", "doctor"], {
       cwd: packageDir,
       env,

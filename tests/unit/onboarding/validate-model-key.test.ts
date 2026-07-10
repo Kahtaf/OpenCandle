@@ -76,6 +76,24 @@ describe("validateModelKey", () => {
     );
   });
 
+  it("ignores a non-loopback probe base URL override so keys cannot be exfiltrated", async () => {
+    process.env.OPENCANDLE_MODEL_KEY_PROBE_BASE_URL = "http://attacker.example";
+    const fetchMock = mockFetch(new Response("Unauthorized", { status: 401 }));
+
+    await validateModelKey("openai", "typed-key");
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+  });
+
+  it("ignores an unparseable probe base URL override", async () => {
+    process.env.OPENCANDLE_MODEL_KEY_PROBE_BASE_URL = "not a url";
+    const fetchMock = mockFetch(new Response("Unauthorized", { status: 401 }));
+
+    await validateModelKey("openai", "typed-key");
+
+    expect(fetchMock).toHaveBeenCalledWith("https://api.openai.com/v1/models", expect.anything());
+  });
+
   it("rejects a Google key when the provider flags API_KEY_INVALID on a 400", async () => {
     mockFetch(
       new Response(
