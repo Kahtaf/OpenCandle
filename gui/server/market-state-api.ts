@@ -28,10 +28,24 @@ export interface MarketStateQuoteSnapshot {
     itemId: number;
     instrumentId: number;
     symbol: string;
+    name?: string;
     status: "ok" | "unavailable";
     price?: number;
+    change?: number;
     changePercent?: number;
+    volume?: number;
+    dayHigh?: number;
+    dayLow?: number;
+    week52High?: number;
+    week52Low?: number;
+    currency?: string | null;
     fetchedAt?: string;
+    dataAsOf?: string;
+    marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
+    extendedPrice?: number;
+    extendedChange?: number;
+    extendedChangePercent?: number;
+    extendedAsOf?: string;
     stale?: boolean;
     reason?: string;
   }>;
@@ -40,6 +54,7 @@ export interface MarketStateQuoteSnapshot {
     portfolioId: number;
     instrumentId: number;
     symbol: string;
+    name?: string;
     status: "ok" | "unavailable";
     currentPrice?: number | null;
     changePercent?: number;
@@ -51,6 +66,12 @@ export interface MarketStateQuoteSnapshot {
     currency: string;
     includedInTotals: boolean;
     fetchedAt?: string;
+    dataAsOf?: string;
+    marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
+    extendedPrice?: number;
+    extendedChange?: number;
+    extendedChangePercent?: number;
+    extendedAsOf?: string;
     stale?: boolean;
     reason?: string;
   }>;
@@ -200,10 +221,24 @@ export async function buildMarketStateQuoteSnapshot(
         itemId: item.id,
         instrumentId: item.instrumentId,
         symbol: item.symbol,
+        name: quote.name,
         status: "ok" as const,
         price: quote.price,
+        change: quote.change,
         changePercent: quote.changePercent,
+        volume: quote.volume,
+        dayHigh: quote.high,
+        dayLow: quote.low,
+        week52High: quote.week52High,
+        week52Low: quote.week52Low,
+        currency: quote.currency,
         fetchedAt: quote.fetchedAt,
+        dataAsOf: quote.dataAsOf,
+        marketState: quote.marketState,
+        extendedPrice: quote.extendedPrice,
+        extendedChange: quote.extendedChange,
+        extendedChangePercent: quote.extendedChangePercent,
+        extendedAsOf: quote.extendedAsOf,
         stale: quote.stale,
       };
     });
@@ -256,6 +291,7 @@ function buildPortfolioQuoteResult({
         portfolioId: lot.portfolioId,
         instrumentId: lot.instrumentId,
         symbol: lot.symbol,
+        name: quote.name,
         status: "unavailable" as const,
         totalCost,
         currency: lotCurrency,
@@ -280,6 +316,12 @@ function buildPortfolioQuoteResult({
         includedInTotals: false,
         reason: `No FX conversion from ${resolvedQuoteCurrency} to ${lotCurrency}`,
         fetchedAt: quote.fetchedAt,
+        dataAsOf: quote.dataAsOf,
+        marketState: quote.marketState,
+        extendedPrice: quote.extendedPrice,
+        extendedChange: quote.extendedChange,
+        extendedChangePercent: quote.extendedChangePercent,
+        extendedAsOf: quote.extendedAsOf,
         stale: quote.stale,
       };
     }
@@ -289,6 +331,7 @@ function buildPortfolioQuoteResult({
       portfolioId: lot.portfolioId,
       instrumentId: lot.instrumentId,
       symbol: lot.symbol,
+      name: quote.name,
       status: "ok" as const,
       currentPrice: quote.price,
       changePercent: quote.changePercent,
@@ -299,6 +342,12 @@ function buildPortfolioQuoteResult({
       currency: lotCurrency,
       includedInTotals,
       fetchedAt: quote.fetchedAt,
+      dataAsOf: quote.dataAsOf,
+      marketState: quote.marketState,
+      extendedPrice: quote.extendedPrice,
+      extendedChange: quote.extendedChange,
+      extendedChangePercent: quote.extendedChangePercent,
+      extendedAsOf: quote.extendedAsOf,
       stale: quote.stale,
       reason: includedInTotals
         ? undefined
@@ -363,9 +412,22 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
   | {
       symbol: string;
       status: "ok";
+      name?: string;
       price: number;
+      change: number;
       changePercent: number;
+      volume: number;
+      high: number;
+      low: number;
+      week52High: number;
+      week52Low: number;
       fetchedAt: string;
+      dataAsOf?: string;
+      marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
+      extendedPrice?: number;
+      extendedChange?: number;
+      extendedChangePercent?: number;
+      extendedAsOf?: string;
       stale: boolean;
       currency: string | null;
     }
@@ -374,17 +436,50 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
   const normalized = symbol.trim().toUpperCase();
   if (!normalized) return { symbol: "", status: "unavailable", reason: "symbol is required" };
   const quote = await fetchQuoteSnapshot(normalized);
-  return quote.status === "ok"
-    ? { symbol: normalized, ...quote }
-    : { symbol: normalized, ...quote };
+  if (quote.status === "unavailable") return { symbol: normalized, ...quote };
+  return {
+    symbol: normalized,
+    status: quote.status,
+    name: quote.name,
+    price: quote.price,
+    change: quote.change,
+    changePercent: quote.changePercent,
+    volume: quote.volume,
+    high: quote.high,
+    low: quote.low,
+    week52High: quote.week52High,
+    week52Low: quote.week52Low,
+    fetchedAt: quote.fetchedAt,
+    dataAsOf: quote.dataAsOf,
+    marketState: quote.marketState,
+    extendedPrice: quote.extendedPrice,
+    extendedChange: quote.extendedChange,
+    extendedChangePercent: quote.extendedChangePercent,
+    extendedAsOf: quote.extendedAsOf,
+    stale: quote.stale,
+    currency: quote.currency,
+  };
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<
   | {
       status: "ok";
+      name?: string;
       price: number;
+      change: number;
       changePercent: number;
+      volume: number;
+      high: number;
+      low: number;
+      week52High: number;
+      week52Low: number;
       fetchedAt: string;
+      dataAsOf?: string;
+      marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
+      extendedPrice?: number;
+      extendedChange?: number;
+      extendedChangePercent?: number;
+      extendedAsOf?: string;
       stale: boolean;
       currency: string | null;
     }
@@ -407,9 +502,22 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
   }
   return {
     status: "ok",
+    name: result.data.name,
     price: result.data.price,
+    change: result.data.change,
     changePercent: result.data.changePercent,
-    fetchedAt: freshness.providerDataAt ?? result.timestamp,
+    volume: result.data.volume,
+    high: result.data.high,
+    low: result.data.low,
+    week52High: result.data.week52High,
+    week52Low: result.data.week52Low,
+    fetchedAt: result.timestamp,
+    dataAsOf: freshness.providerDataAt,
+    marketState: result.data.marketState,
+    extendedPrice: result.data.extendedPrice,
+    extendedChange: result.data.extendedChange,
+    extendedChangePercent: result.data.extendedChangePercent,
+    extendedAsOf: result.data.extendedAsOf,
     stale: Boolean(result.stale),
     currency: result.data.currency ?? null,
   };

@@ -47,8 +47,7 @@ export function EntityPopover({
 
   const quote =
     findSessionQuote(sessionMarketFacts, normalized) || findQuote(marketState, normalized);
-  const name =
-    quote?.name || findName(marketState, normalized) || resolvedCandidate?.name || normalized;
+  const name = quote?.name || findName(marketState, normalized) || resolvedCandidate?.name || "";
   const held = hasSymbol(marketState?.portfolio, normalized);
   const watched = hasSymbol(marketState?.watchlist, normalized);
   const canAdd = Boolean(resolvedCandidate?.symbol) && !resolving;
@@ -77,7 +76,7 @@ export function EntityPopover({
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-sm font-semibold text-foreground">${normalized}</div>
-                <div className="truncate text-xs text-muted-foreground">{name}</div>
+                {name ? <div className="truncate text-xs text-muted-foreground">{name}</div> : null}
               </div>
               <div className="flex shrink-0 gap-1">
                 {held ? <Badge size="sm">Held</Badge> : null}
@@ -106,7 +105,7 @@ export function EntityPopover({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px]">
+                <div className="mt-2 divide-y divide-border text-[11px]">
                   <QuoteFact label="Open" value={formatCurrency(quote.open)} />
                   <QuoteFact label="High" value={formatCurrency(quote.high)} />
                   <QuoteFact label="Low" value={formatCurrency(quote.low)} />
@@ -197,9 +196,9 @@ export function computeEntityPopoverPlacement(anchorRect, viewportSize) {
 function QuoteFact({ label, value }) {
   if (!value || value === "--" || value === "—") return null;
   return (
-    <div className="rounded bg-card/70 px-2 py-1">
-      <div className="uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="truncate font-mono text-foreground">{value}</div>
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 py-1.5">
+      <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
+      <div className="truncate text-right font-mono tabular-nums text-foreground">{value}</div>
     </div>
   );
 }

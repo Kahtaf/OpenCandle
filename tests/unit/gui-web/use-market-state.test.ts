@@ -46,12 +46,40 @@ describe("mergeMarketStateSnapshot", () => {
         quoteSnapshot: { watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 190 }] },
       },
       {
-        quoteSnapshot: { watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 191 }] },
+        quoteSnapshot: {
+          watchlistQuotes: [
+            {
+              itemId: 1,
+              symbol: "AAPL",
+              price: 191,
+              fetchedAt: "2026-06-12T20:20:00.000Z",
+              dataAsOf: "2026-06-12T20:00:00.000Z",
+              marketState: "POST",
+              extendedPrice: 191.5,
+              extendedChange: 0.5,
+              extendedChangePercent: 0.26,
+              extendedAsOf: "2026-06-12T20:14:00.000Z",
+            },
+          ],
+        },
       },
     );
 
     expect(next.quoteSnapshot).toEqual({
-      watchlistQuotes: [{ itemId: 1, symbol: "AAPL", price: 191 }],
+      watchlistQuotes: [
+        {
+          itemId: 1,
+          symbol: "AAPL",
+          price: 191,
+          fetchedAt: "2026-06-12T20:20:00.000Z",
+          dataAsOf: "2026-06-12T20:00:00.000Z",
+          marketState: "POST",
+          extendedPrice: 191.5,
+          extendedChange: 0.5,
+          extendedChangePercent: 0.26,
+          extendedAsOf: "2026-06-12T20:14:00.000Z",
+        },
+      ],
     });
   });
 

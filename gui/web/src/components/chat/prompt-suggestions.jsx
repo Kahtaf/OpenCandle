@@ -1,15 +1,7 @@
 import { BookOpen } from "lucide-react";
 import { Button } from "../ui/button.jsx";
 import { Kbd } from "../ui/kbd.jsx";
-
-// Fast, keyless prompts lead; /analyze is the deep-research option and is
-// labeled as the longer multi-analyst run it is.
-const DEFAULT_PROMPTS = [
-  ["What is NVDA trading at?", "What is NVDA trading at?"],
-  ["Compare NVDA and AMD", "Compare NVDA and AMD using latest quotes."],
-  ["Options chain for NVDA", "Show options chain for NVDA"],
-  ["Deep research: NVDA (multi-analyst, takes a few minutes)", "/analyze NVDA"],
-];
+import { DEFAULT_PROMPTS } from "./home-prompts.js";
 
 export function EmptyThread({
   prompts = DEFAULT_PROMPTS,
@@ -18,7 +10,7 @@ export function EmptyThread({
   disabled = false,
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-[760px] animate-fade-in-once justify-items-center gap-6 px-2 pb-20 pt-16 text-center sm:pt-24">
+    <div className="mx-auto grid w-full max-w-[760px] animate-fade-in-once justify-items-center gap-6 px-2 py-6 text-center sm:py-8">
       <div className="grid gap-2">
         <h1 className="m-0 text-3xl font-semibold leading-tight tracking-tight text-foreground">
           What are we watching?
@@ -45,14 +37,14 @@ export function EmptyThread({
 
 function PromptSuggestions({ prompts = DEFAULT_PROMPTS, onPrompt, disabled = false }) {
   return (
-    <div className="flex w-full flex-wrap justify-center gap-2">
+    <div className="flex w-full min-w-0 flex-wrap justify-center gap-2">
       {prompts.map(([label, prompt]) => (
         <Button
           key={label}
           variant="bordered"
           size="sm"
           rounded="full"
-          className="font-normal text-muted-foreground"
+          className="h-auto max-w-full whitespace-normal break-words px-3 py-1.5 text-center font-normal text-muted-foreground"
           disabled={disabled}
           onClick={() => {
             if (!disabled) onPrompt(prompt);

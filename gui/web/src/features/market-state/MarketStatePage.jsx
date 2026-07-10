@@ -1,12 +1,22 @@
-import { Plus, Search, X } from "lucide-react";
+import { Loader2, Plus, Search, X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../../components/ui/alert-dialog.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Select } from "../../components/ui/select.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { TOOL_INVOKE_TIMEOUT_MESSAGE } from "../../hooks/useGuiConnection.jsx";
 import { useMarketState } from "../../hooks/useMarketState.jsx";
-import { cn } from "../../lib/utils.js";
 import { getInstrumentQuote } from "../instruments/instrument-api.js";
 import { InstrumentSuggestionList } from "../instruments/instrument-search.jsx";
 import {
@@ -22,7 +32,7 @@ import { ReportsPage } from "./ReportsPage.jsx";
 import { StatusBand } from "./shared.jsx";
 import { WatchlistPage } from "./WatchlistPage.jsx";
 
-export { StateTabs } from "./shared.jsx";
+export { nextStateTabIndex, StateTabs } from "./shared.jsx";
 
 const PAGE_META = {
   watchlists: {
@@ -37,35 +47,17 @@ const PAGE_META = {
   },
   alerts: {
     title: "Alerts",
-    primaryLabel: "Create alert",
-    primaryPanel: "alert-create",
+    primaryLabel: "Check alerts",
   },
   reports: {
     title: "Reports",
-    primaryLabel: "Generate today",
+    primaryLabel: "Configure report",
+    primaryPanel: "report-configure",
   },
 };
 
 const UNSUPPORTED_MUTATION_FALLBACK_MESSAGE =
   "Market-state mutations require acknowledged tool invocation support. Reconnect the GUI and try again.";
-
-function useMediaQuery(query) {
-  const [matches, setMatches] = useState(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return false;
-    return window.matchMedia(query).matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return undefined;
-    const mediaQuery = window.matchMedia(query);
-    const onChange = (event) => setMatches(event.matches);
-    setMatches(mediaQuery.matches);
-    mediaQuery.addEventListener("change", onChange);
-    return () => mediaQuery.removeEventListener("change", onChange);
-  }, [query]);
-
-  return matches;
-}
 
 export async function invokeMarketStateMutation({
   readOnly,
@@ -149,14 +141,16 @@ export function MarketStatePage({
     const opener = panelOpenerRef.current;
     setPanel(null);
     panelOpenerRef.current = null;
-    window.setTimeout(() => {
-      if (opener?.isConnected) opener.focus();
-    }, 0);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        if (opener?.isConnected) opener.focus();
+      }, 0);
+    }
   };
 
   const primaryAction = () => {
-    if (activeId === "reports") {
-      invokeTool("daily_watchlist_report", { action: "run" });
+    if (activeId === "alerts") {
+      invokeTool("manage_alerts", { action: "check" });
       return;
     }
     openPanel(active.primaryPanel);
@@ -168,12 +162,14 @@ export function MarketStatePage({
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
       <main className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-3">
-          <PageHeader
-            meta={active}
-            loading={loading}
-            readOnly={readOnly || mutationPending}
-            onPrimary={primaryAction}
-          />
+          {activeId !== "watchlists" && activeId !== "portfolios" ? (
+            <PageHeader
+              meta={active}
+              loading={loading}
+              readOnly={readOnly || mutationPending}
+              onPrimary={primaryAction}
+            />
+          ) : null}
           {error ? <StatusBand tone="error">{error}</StatusBand> : null}
           {mutationPending ? (
             <StatusBand>
@@ -182,75 +178,87 @@ export function MarketStatePage({
             </StatusBand>
           ) : null}
           {readOnly ? <StatusBand>{readOnlyMessage(role)}</StatusBand> : null}
-          <div
-            className={cn(
-              "grid min-h-0 gap-3",
-              panel ? "xl:grid-cols-[minmax(0,1fr)_380px]" : "grid-cols-1",
-            )}
-          >
-            <div className="flex min-w-0 flex-col gap-3">
-              {activeId === "watchlists" ? (
-                <WatchlistPage
-                  state={state}
-                  filter={filter}
-                  setFilter={setFilter}
-                  readOnly={readOnly || mutationPending}
-                  openPanel={openPanel}
-                  invokeTool={invokeTool}
-                />
-              ) : null}
-              {activeId === "portfolios" ? (
-                <PortfolioPage
-                  state={state}
-                  filter={filter}
-                  setFilter={setFilter}
-                  readOnly={readOnly || mutationPending}
-                  openPanel={openPanel}
-                  invokeTool={invokeTool}
-                />
-              ) : null}
-              {activeId === "alerts" ? (
-                <AlertsPage
-                  state={state}
-                  filter={filter}
-                  setFilter={setFilter}
-                  readOnly={readOnly || mutationPending}
-                  openPanel={openPanel}
-                  invokeTool={invokeTool}
-                />
-              ) : null}
-              {activeId === "reports" ? (
-                <ReportsPage
-                  state={state}
-                  readOnly={readOnly || mutationPending}
-                  openPanel={openPanel}
-                  invokeTool={invokeTool}
-                />
-              ) : null}
-            </div>
-            {panel ? (
-              <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
-                <PanelContent
-                  state={state}
-                  panel={panel}
-                  readOnly={readOnly || mutationPending}
-                  invokeTool={invokeTool}
-                  closePanel={closePanel}
-                />
-              </ContextPanel>
+          <div className="flex min-w-0 flex-col gap-3">
+            {activeId === "watchlists" ? (
+              <WatchlistPage
+                state={state}
+                loading={loading}
+                filter={filter}
+                setFilter={setFilter}
+                readOnly={readOnly || mutationPending}
+                openPanel={openPanel}
+                invokeTool={invokeTool}
+                renderPageHeader={(tabs) => (
+                  <PageHeader
+                    meta={active}
+                    loading={loading}
+                    readOnly={readOnly || mutationPending}
+                    onPrimary={primaryAction}
+                    tabs={tabs}
+                  />
+                )}
+              />
+            ) : null}
+            {activeId === "portfolios" ? (
+              <PortfolioPage
+                state={state}
+                loading={loading}
+                filter={filter}
+                setFilter={setFilter}
+                readOnly={readOnly || mutationPending}
+                openPanel={openPanel}
+                invokeTool={invokeTool}
+                renderPageHeader={(tabs) => (
+                  <PageHeader
+                    meta={active}
+                    loading={loading}
+                    readOnly={readOnly || mutationPending}
+                    onPrimary={primaryAction}
+                    tabs={tabs}
+                  />
+                )}
+              />
+            ) : null}
+            {activeId === "alerts" ? (
+              <AlertsPage
+                state={state}
+                filter={filter}
+                setFilter={setFilter}
+                readOnly={readOnly || mutationPending}
+                openPanel={openPanel}
+                invokeTool={invokeTool}
+              />
+            ) : null}
+            {activeId === "reports" ? (
+              <ReportsPage
+                state={state}
+                readOnly={readOnly || mutationPending}
+                invokeTool={invokeTool}
+              />
             ) : null}
           </div>
+          {panel ? (
+            <ContextPanel title={panelTitle(panel.type)} onClose={closePanel}>
+              <PanelContent
+                state={state}
+                panel={panel}
+                readOnly={readOnly || mutationPending}
+                invokeTool={invokeTool}
+                closePanel={closePanel}
+              />
+            </ContextPanel>
+          ) : null}
         </div>
       </main>
     </section>
   );
 }
 
-function PageHeader({ meta, loading, readOnly, onPrimary }) {
+function PageHeader({ meta, loading, readOnly, onPrimary, tabs }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 px-1">
-      <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
-      <div className="flex flex-wrap items-center gap-3">
+    <header className="flex flex-col gap-2 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-balance text-[17px] font-semibold text-foreground">{meta.title}</h1>
         <Button
           type="button"
           variant="brand"
@@ -263,6 +271,7 @@ function PageHeader({ meta, loading, readOnly, onPrimary }) {
           {meta.primaryLabel}
         </Button>
       </div>
+      {tabs ? <div className="border-t border-border">{tabs}</div> : null}
     </header>
   );
 }
@@ -321,6 +330,14 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
             action: "rename",
             watchlist_name: watchlist.name,
             new_watchlist_name: values.name,
+          });
+          if (saved) closePanel();
+          return saved;
+        }}
+        onDelete={async () => {
+          const saved = await invokeTool("manage_watchlist", {
+            action: "delete",
+            watchlist_name: watchlist.name,
           });
           if (saved) closePanel();
           return saved;
@@ -391,7 +408,14 @@ function PanelContent({ state, panel, readOnly, invokeTool, closePanel }) {
   }
 
   if (panel.type === "alert-create") {
-    return <AlertCreateForm disabled={readOnly} invokeTool={invokeTool} onSaved={closePanel} />;
+    return (
+      <AlertCreateForm
+        disabled={readOnly}
+        invokeTool={invokeTool}
+        onSaved={closePanel}
+        symbol={panel.data?.symbol}
+      />
+    );
   }
 
   if (panel.type === "alert-edit") {
@@ -466,46 +490,20 @@ function ReportScheduleForm({ disabled, invokeTool, closePanel }) {
 }
 
 export function ContextPanel({ title, onClose, children }) {
-  const panelRef = useRef(null);
-  const isInlinePanel = useMediaQuery("(min-width: 1280px)");
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: focus/scroll should run when a different panel title is opened.
-  useEffect(() => {
-    if (!isInlinePanel) return;
-    const node = panelRef.current;
-    if (!node) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    node.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
-    node.focus({ preventScroll: true });
-  }, [isInlinePanel, title]);
-
-  if (!isInlinePanel) {
-    return (
-      <Sheet
-        open
-        onOpenChange={(open) => {
-          if (!open) onClose();
-        }}
-      >
-        <SheetContent width="md" handleLabel={title}>
-          <ContextPanelFrame title={title} onClose={onClose}>
-            {children}
-          </ContextPanelFrame>
-        </SheetContent>
-      </Sheet>
-    );
-  }
-
   return (
-    <aside
-      ref={panelRef}
-      tabIndex={-1}
-      className="sticky top-0 flex h-auto max-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-md border border-border bg-card shadow-subtle-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    <Sheet
+      open
+      autoFocus
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <ContextPanelFrame title={title} onClose={onClose}>
-        {children}
-      </ContextPanelFrame>
-    </aside>
+      <SheetContent side="right" handleLabel={title}>
+        <ContextPanelFrame title={title} onClose={onClose}>
+          {children}
+        </ContextPanelFrame>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -519,7 +517,6 @@ function ContextPanelFrame({ title, onClose, children }) {
           variant="ghost"
           size="xs"
           icon={X}
-          tooltip="Close panel"
           aria-label="Close panel"
           onClick={onClose}
         />
@@ -566,12 +563,18 @@ export function WatchlistCreateForm({ disabled, onSubmit }) {
 export function PortfolioCreateForm({ disabled, onSubmit }) {
   const nameId = useId();
   const [name, setName] = useState("");
+  const [pending, setPending] = useState(false);
   const trimmed = name.trim();
 
   const submit = async (event) => {
     event.preventDefault();
     if (!trimmed) return;
-    await onSubmit({ name: trimmed });
+    setPending(true);
+    try {
+      await onSubmit({ name: trimmed });
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -588,14 +591,14 @@ export function PortfolioCreateForm({ disabled, onSubmit }) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <Button type="submit" variant="brand" disabled={disabled || !trimmed}>
+      <PendingSubmitButton pending={pending} disabled={disabled || !trimmed}>
         Create portfolio
-      </Button>
+      </PendingSubmitButton>
     </form>
   );
 }
 
-export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
+export function WatchlistRenameForm({ disabled, watchlist, onSubmit, onDelete }) {
   const nameId = useId();
   const [name, setName] = useState(watchlist?.name ?? "");
   const trimmed = name.trim();
@@ -620,9 +623,42 @@ export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
-        Rename watchlist
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
+          Rename watchlist
+        </Button>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              disabled={disabled || !onDelete}
+            >
+              Delete watchlist
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {watchlist?.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tickers in this watchlist will be removed. OpenCandle will keep another watchlist
+                active.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => onDelete?.()}
+              >
+                Delete watchlist
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </form>
   );
 }
@@ -630,13 +666,19 @@ export function WatchlistRenameForm({ disabled, watchlist, onSubmit }) {
 export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
   const nameId = useId();
   const [name, setName] = useState(portfolio?.name ?? "");
+  const [pending, setPending] = useState(false);
   const trimmed = name.trim();
   const unchanged = trimmed === (portfolio?.name ?? "");
 
   const submit = async (event) => {
     event.preventDefault();
     if (!trimmed || unchanged) return;
-    await onSubmit({ name: trimmed });
+    setPending(true);
+    try {
+      await onSubmit({ name: trimmed });
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -652,9 +694,9 @@ export function PortfolioRenameForm({ disabled, portfolio, onSubmit }) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <Button type="submit" variant="brand" disabled={disabled || !trimmed || unchanged}>
+      <PendingSubmitButton pending={pending} disabled={disabled || !trimmed || unchanged}>
         Rename portfolio
-      </Button>
+      </PendingSubmitButton>
     </form>
   );
 }
@@ -710,6 +752,7 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
   });
   const [query, setQuery] = useState(lot?.symbol ?? "");
   const [selected, setSelected] = useState(lot?.symbol ?? "");
+  const [pending, setPending] = useState(false);
   const resolvedSymbol = selected || lot?.symbol;
 
   useEffect(() => {
@@ -747,7 +790,12 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
   const submit = async (event) => {
     event.preventDefault();
     if (!resolvedSymbol || !values.shares || !values.avg_cost) return;
-    await onSubmit({ ...values, symbol: resolvedSymbol });
+    setPending(true);
+    try {
+      await onSubmit({ ...values, symbol: resolvedSymbol });
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
@@ -755,12 +803,12 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
       <p className="text-xs text-muted-foreground">
         {resolvedSymbol
           ? `Selected ${resolvedSymbol}`
-          : "Search provider-backed candidates and select a resolved ticker before saving."}
+          : "Search for a stock or fund, then select a match before saving."}
       </p>
       <SymbolSearchInput
         query={query}
         selected={selected}
-        disabled={disabled || Boolean(lot)}
+        disabled={disabled || pending || Boolean(lot)}
         onQueryChange={setQuery}
         onSelectedChange={setSelected}
       />
@@ -771,7 +819,7 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
           type="number"
           step="any"
           value={values.shares}
-          disabled={disabled}
+          disabled={disabled || pending}
           required
           onChange={(event) => setValues((current) => ({ ...current, shares: event.target.value }))}
         />
@@ -786,7 +834,7 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
           type="number"
           step="any"
           value={values.avg_cost}
-          disabled={disabled}
+          disabled={disabled || pending}
           required
           onChange={(event) =>
             setValues((current) => ({ ...current, avg_cost: event.target.value }))
@@ -795,23 +843,53 @@ export function HoldingForm({ disabled, lot, onSubmit }) {
       </label>
       <label htmlFor={currencyId} className="grid gap-1 text-xs font-medium text-muted-foreground">
         Currency
-        <Input
+        <Select
           id={currencyId}
           value={values.currency}
-          disabled={disabled}
+          disabled={disabled || pending}
           onChange={(event) =>
             setValues((current) => ({ ...current, currency: event.target.value }))
           }
-        />
+        >
+          {holdingCurrencyOptions(lot?.currency, values.currency).map((currency) => (
+            <option key={currency} value={currency}>
+              {currency}
+            </option>
+          ))}
+        </Select>
       </label>
-      <Button
-        type="submit"
-        variant="brand"
+      <PendingSubmitButton
+        pending={pending}
         disabled={disabled || !resolvedSymbol || !values.shares || !values.avg_cost}
       >
         Save
-      </Button>
+      </PendingSubmitButton>
     </form>
+  );
+}
+
+const HOLDING_CURRENCIES = ["USD", "CAD", "EUR", "GBP", "JPY", "CHF", "AUD"];
+
+function holdingCurrencyOptions(...currencies) {
+  return [
+    ...new Set([...HOLDING_CURRENCIES, ...currencies.map((currency) => currency?.trim())]),
+  ].filter(Boolean);
+}
+
+export function PendingSubmitButton({ pending, disabled, children }) {
+  return (
+    <Button
+      type="submit"
+      variant="brand"
+      className="relative"
+      aria-busy={pending || undefined}
+      disabled={disabled || pending}
+    >
+      <span className={pending ? "invisible" : undefined}>{children}</span>
+      {pending ? (
+        <Loader2 aria-label="Saving" className="absolute size-4 animate-spin" role="status" />
+      ) : null}
+    </Button>
   );
 }
 
@@ -858,6 +936,7 @@ function formatAutofillNumber(value) {
 export function SymbolSearchInput({ query, selected, disabled, onQueryChange, onSelectedChange }) {
   const inputId = useId();
   const listboxId = useId();
+  const searchRef = useRef(null);
   const { candidates, setCandidates, activeIndex, setActiveIndex } = useInstrumentSearch({
     query,
     enabled: query.trim().length >= 2 && !selected,
@@ -881,7 +960,7 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
   };
 
   return (
-    <div className="relative">
+    <div ref={searchRef} className="relative">
       <label className="sr-only" htmlFor={inputId}>
         Search ticker or company
       </label>
@@ -935,7 +1014,8 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
           optionIdPrefix={listboxId}
           candidates={visibleCandidates}
           activeIndex={clampedActiveIndex}
-          className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-subtle-md"
+          portalAnchor={searchRef.current}
+          className="max-h-64 overflow-y-auto rounded-md border border-border bg-card shadow-subtle-md"
           rowClassName="text-xs"
           onActiveIndexChange={setActiveIndex}
           onSelect={selectCandidate}
@@ -947,6 +1027,105 @@ export function SymbolSearchInput({ query, selected, disabled, onQueryChange, on
 
 export const clampComboboxActiveIndex = clampInstrumentActiveIndex;
 export const nextComboboxActiveIndex = nextInstrumentActiveIndex;
+
+const ALERT_COOLDOWN_OPTIONS = [
+  { value: 900, label: "15 minutes" },
+  { value: 3600, label: "1 hour" },
+  { value: 14_400, label: "4 hours" },
+  { value: 86_400, label: "1 day" },
+];
+
+export function alertConditionFormFields(condition) {
+  if (condition === "create_price_above" || condition === "create_price_below") {
+    return {
+      threshold: { min: undefined, max: undefined, step: "0.01" },
+      thresholdLabel: "Price threshold ($)",
+      thresholdPlaceholder: "80.00",
+      thresholdRequired: true,
+    };
+  }
+  if (condition === "create_rsi_above" || condition === "create_rsi_below") {
+    return {
+      threshold: { min: 0, max: 100, step: "0.1" },
+      thresholdLabel: "RSI level (0–100)",
+      thresholdPlaceholder: "30",
+      thresholdRequired: true,
+      period: { label: "RSI period (days)", min: 1, max: 100 },
+    };
+  }
+  if (condition === "create_percent_move_up" || condition === "create_percent_move_down") {
+    return {
+      threshold: { min: 0, max: undefined, step: "0.1" },
+      thresholdLabel: "Move threshold (%)",
+      thresholdPlaceholder: "3.0",
+      thresholdRequired: true,
+    };
+  }
+  if (condition === "create_volume_spike") {
+    return {
+      threshold: { min: undefined, max: undefined, step: "0.1" },
+      thresholdLabel: "Volume multiple (× average)",
+      thresholdPlaceholder: "2.0",
+      thresholdRequired: false,
+      period: { label: "Average volume period (days)", min: 1, max: 100 },
+    };
+  }
+  if (condition === "create_sma_cross_above" || condition === "create_sma_cross_below") {
+    return {
+      fastPeriod: { label: "Fast SMA period (days)", min: 1, max: 399 },
+      slowPeriod: { label: "Slow SMA period (days)", min: 1, max: 400 },
+    };
+  }
+  return {
+    period: { label: "SMA period (days)", min: 1, max: 200 },
+  };
+}
+
+function cooldownOptions(value) {
+  const selected = numberOrUndefined(value) ?? 3600;
+  if (ALERT_COOLDOWN_OPTIONS.some((option) => option.value === selected)) {
+    return ALERT_COOLDOWN_OPTIONS;
+  }
+  return [...ALERT_COOLDOWN_OPTIONS, { value: selected, label: `Custom (${selected}s)` }];
+}
+
+export function isAlertDraftValid(draft, fields) {
+  const threshold = numberOrUndefined(draft.threshold);
+  const period = numberOrUndefined(draft.period);
+  const fastPeriod = numberOrUndefined(draft.fast_period);
+  const slowPeriod = numberOrUndefined(draft.slow_period);
+  if (fields.thresholdRequired && threshold == null) return false;
+  if (
+    fields.threshold &&
+    threshold != null &&
+    ((fields.threshold.min != null && threshold < fields.threshold.min) ||
+      (fields.threshold.max != null && threshold > fields.threshold.max))
+  ) {
+    return false;
+  }
+  if (draft.condition.includes("percent_move") && (threshold == null || threshold <= 0))
+    return false;
+  if (
+    fields.period &&
+    (period == null || period < fields.period.min || period > fields.period.max)
+  ) {
+    return false;
+  }
+  if (
+    fields.fastPeriod &&
+    (fastPeriod == null || fastPeriod < fields.fastPeriod.min || fastPeriod > fields.fastPeriod.max)
+  ) {
+    return false;
+  }
+  if (
+    fields.slowPeriod &&
+    (slowPeriod == null || slowPeriod < fields.slowPeriod.min || slowPeriod > fields.slowPeriod.max)
+  ) {
+    return false;
+  }
+  if (fields.fastPeriod && fields.slowPeriod && fastPeriod >= slowPeriod) return false;
+  return true;
+}
 
 export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }) {
   const conditionId = useId();
@@ -960,20 +1139,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
   const setDraftField = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
   const { query, selected, threshold, condition, period, fast_period, slow_period, cooldown } =
     draft;
-  const needsThreshold = [
-    "create_price_above",
-    "create_price_below",
-    "create_rsi_above",
-    "create_rsi_below",
-    "create_percent_move_up",
-    "create_percent_move_down",
-  ].includes(condition);
-  const supportsThreshold = needsThreshold || condition === "create_volume_spike";
-  const needsPeriod =
-    condition.includes("_sma") ||
-    condition.includes("_rsi_") ||
-    condition === "create_volume_spike";
-  const needsFastSlow = condition.includes("sma_cross");
+  const fields = alertConditionFormFields(condition);
   const resolvedSymbol = selected;
   const summary = resolvedSymbol
     ? `Notify once when ${resolvedSymbol} ${conditionSummary(
@@ -990,16 +1156,16 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
       className="space-y-3"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (!resolvedSymbol || (needsThreshold && !threshold)) return;
+        if (!resolvedSymbol || !isAlertDraftValid(draft, fields)) return;
         const saved = await invokeTool("manage_alerts", {
           action: isEditing ? "update" : condition,
           id: alert?.id,
           condition_action: isEditing ? condition : undefined,
           symbol: resolvedSymbol,
-          threshold: supportsThreshold && threshold ? Number(threshold) : undefined,
-          period: needsPeriod ? Number(period) : undefined,
-          fast_period: needsFastSlow ? Number(fast_period) : undefined,
-          slow_period: needsFastSlow ? Number(slow_period) : undefined,
+          threshold: fields.threshold && threshold ? Number(threshold) : undefined,
+          period: fields.period ? numberOrUndefined(period) : undefined,
+          fast_period: fields.fastPeriod ? numberOrUndefined(fast_period) : undefined,
+          slow_period: fields.slowPeriod ? numberOrUndefined(slow_period) : undefined,
           cooldown_seconds: numberOrUndefined(cooldown),
         });
         if (saved) {
@@ -1042,47 +1208,52 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
           <option value="create_sma_cross_below">Fast SMA crosses below slow SMA</option>
         </Select>
       </label>
-      {supportsThreshold ? (
+      {fields.threshold ? (
         <label
           htmlFor={thresholdId}
           className="grid gap-1 text-xs font-medium text-muted-foreground"
         >
-          {condition === "create_volume_spike"
-            ? "Multiplier (× average volume, optional)"
-            : "Threshold"}
+          {fields.thresholdLabel}
           <Input
             id={thresholdId}
             type="number"
-            step="any"
+            min={fields.threshold.min}
+            max={fields.threshold.max}
+            step={fields.threshold.step}
+            placeholder={fields.thresholdPlaceholder}
             value={threshold}
             disabled={disabled}
             onChange={(event) => setDraftField("threshold", event.target.value)}
           />
         </label>
       ) : null}
-      {needsPeriod && !needsFastSlow ? (
+      {fields.period ? (
         <label htmlFor={periodId} className="grid gap-1 text-xs font-medium text-muted-foreground">
-          Period (days)
+          {fields.period.label}
           <Input
             id={periodId}
             type="number"
-            step="any"
+            min={fields.period.min}
+            max={fields.period.max}
+            step="1"
             value={period}
             disabled={disabled}
             onChange={(event) => setDraftField("period", event.target.value)}
           />
         </label>
       ) : null}
-      {needsFastSlow ? (
+      {fields.fastPeriod && fields.slowPeriod ? (
         <div className="grid grid-cols-2 gap-2">
           <label
             htmlFor={fastPeriodId}
             className="grid gap-1 text-xs font-medium text-muted-foreground"
           >
-            Fast period
+            {fields.fastPeriod.label}
             <Input
               id={fastPeriodId}
               type="number"
+              min={fields.fastPeriod.min}
+              max={fields.fastPeriod.max}
               step="1"
               value={fast_period}
               disabled={disabled}
@@ -1093,10 +1264,12 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
             htmlFor={slowPeriodId}
             className="grid gap-1 text-xs font-medium text-muted-foreground"
           >
-            Slow period
+            {fields.slowPeriod.label}
             <Input
               id={slowPeriodId}
               type="number"
+              min={fields.slowPeriod.min}
+              max={fields.slowPeriod.max}
               step="1"
               value={slow_period}
               disabled={disabled}
@@ -1106,15 +1279,19 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
         </div>
       ) : null}
       <label htmlFor={cooldownId} className="grid gap-1 text-xs font-medium text-muted-foreground">
-        Cooldown between triggers (seconds)
-        <Input
+        Re-alert at most every
+        <Select
           id={cooldownId}
-          type="number"
-          step="any"
           value={cooldown}
           disabled={disabled}
           onChange={(event) => setDraftField("cooldown", event.target.value)}
-        />
+        >
+          {cooldownOptions(cooldown).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
       </label>
       <div className="rounded-md border border-border bg-secondary px-3 py-2 text-xs text-muted-foreground">
         {summary}
@@ -1122,7 +1299,7 @@ export function AlertCreateForm({ disabled, invokeTool, onSaved, alert, symbol }
       <Button
         type="submit"
         variant="brand"
-        disabled={disabled || !resolvedSymbol || (needsThreshold && !threshold)}
+        disabled={disabled || !resolvedSymbol || !isAlertDraftValid(draft, fields)}
       >
         {isEditing ? "Save alert" : "Create alert"}
       </Button>

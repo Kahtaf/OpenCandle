@@ -24,11 +24,12 @@ const params = Type.Object({
     [
       Type.Literal("create"),
       Type.Literal("rename"),
+      Type.Literal("delete"),
       Type.Literal("add"),
       Type.Literal("remove"),
       Type.Literal("check"),
     ],
-    { description: "One of: 'create', 'rename', 'add', 'remove', or 'check'" },
+    { description: "One of: 'create', 'rename', 'delete', 'add', 'remove', or 'check'" },
   ),
   watchlist_name: Type.Optional(
     Type.String({
@@ -45,7 +46,7 @@ export const watchlistTool: AgentTool<typeof params> = {
   name: "manage_watchlist",
   label: "Watchlist",
   description:
-    "Manage named watchlists of stocks and crypto. Create or rename watchlists, add symbols, remove symbols, or check current prices.",
+    "Manage named watchlists of stocks and crypto. Create, rename, or delete watchlists, add symbols, remove symbols, or check current prices.",
   parameters: params,
   async execute(_toolCallId, args) {
     const db = initDefaultDatabase();
@@ -77,6 +78,27 @@ export const watchlistTool: AgentTool<typeof params> = {
         const watchlist = service.renameWatchlist(current.name, args.new_watchlist_name);
         return {
           content: [{ type: "text", text: `Renamed ${current.name} to ${watchlist.name}` }],
+          details: watchlist,
+        };
+      }
+
+      if (args.action === "delete") {
+        service.listWatchlists();
+        const currentName = args.watchlist_name?.trim() || service.getDefaultWatchlist().name;
+        const current = args.watchlist_name
+          ? service.getWatchlistByName(currentName)
+          : service.getDefaultWatchlist();
+        if (current == null) {
+          throw new Error(`watchlist ${currentName} not found.`);
+        }
+        const watchlist = service.deleteWatchlist(current.name);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Deleted ${current.name}. ${watchlist.name} is now active.`,
+            },
+          ],
           details: watchlist,
         };
       }

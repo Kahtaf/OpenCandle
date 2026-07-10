@@ -18,6 +18,14 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "../../components/ui/command.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { Sheet, SheetContent } from "../../components/ui/sheet.jsx";
 import { cn } from "../../lib/utils.js";
@@ -88,29 +96,19 @@ export function CatalogOverlay({
         if (!next) close();
       }}
     >
-      <SheetContent width="xl" handleLabel="Catalog" className="p-0">
-        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
-          {selection ? (
+      <SheetContent
+        width="xl"
+        handleLabel="Catalog"
+        className="!h-[min(34rem,calc(100dvh-2rem))] p-0 md:!h-[min(34rem,calc(100dvh-2rem))]"
+      >
+        {selection ? (
+          <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
             <BuilderHeader
               selection={selection}
               catalog={catalog}
               onBack={() => setSelection(null)}
             />
-          ) : (
-            <ListHeader
-              tab={tab}
-              setTab={setTab}
-              query={query}
-              setQuery={setQuery}
-              counts={{
-                workflows: catalog?.workflows?.length ?? 0,
-                tools: catalog?.tools?.length ?? 0,
-                providers: catalog?.providers?.length ?? 0,
-              }}
-            />
-          )}
-          <div ref={bodyRef} className="min-h-0 overflow-y-auto overscroll-contain">
-            {selection ? (
+            <div ref={bodyRef} className="min-h-0 overflow-y-auto overscroll-contain">
               <BuilderBody
                 selection={selection}
                 catalog={catalog}
@@ -122,16 +120,19 @@ export function CatalogOverlay({
                 lookupSymbol={lookupSymbol}
                 sessionId={sessionId}
               />
-            ) : (
-              <ListBody
-                tab={tab}
-                query={query}
-                catalog={catalog}
-                onSelect={(next) => setSelection(next)}
-              />
-            )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <CatalogList
+            tab={tab}
+            setTab={setTab}
+            query={query}
+            setQuery={setQuery}
+            catalog={catalog}
+            onSelect={(next) => setSelection(next)}
+            bodyRef={bodyRef}
+          />
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -177,15 +178,13 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
           })}
         </div>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 sm:px-4">
-        <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
-        <Input
-          variant="ghost"
+      <div className="relative">
+        <CommandInput
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onValueChange={setQuery}
           placeholder={searchPlaceholder(tab)}
           autoFocus
-          className="h-8 px-0 text-sm shadow-none"
+          className="h-8 pr-8 text-sm"
         />
         {query ? (
           <Button
@@ -193,6 +192,7 @@ function ListHeader({ tab, setTab, query, setQuery, counts }) {
             size="icon-xs"
             aria-label="Clear search"
             onClick={() => setQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2"
           >
             <X />
           </Button>
@@ -208,33 +208,80 @@ function searchPlaceholder(tab) {
   return "Search tools by name, label, or domain";
 }
 
+export function CatalogList({
+  tab,
+  setTab = () => {},
+  query,
+  setQuery = () => {},
+  catalog,
+  onSelect,
+  bodyRef,
+}) {
+  return (
+    <Command shouldFilter={false} className="h-full min-h-0 flex-1 rounded-none">
+      <ListHeader
+        tab={tab}
+        setTab={setTab}
+        query={query}
+        setQuery={setQuery}
+        counts={{
+          workflows: catalog?.workflows?.length ?? 0,
+          tools: catalog?.tools?.length ?? 0,
+          providers: catalog?.providers?.length ?? 0,
+        }}
+      />
+      <CommandList ref={bodyRef} className="min-h-0 !max-h-none flex-1 overscroll-contain">
+        <ListBody tab={tab} query={query} catalog={catalog} onSelect={onSelect} />
+      </CommandList>
+    </Command>
+  );
+}
+
 function ListBody({ tab, query, catalog, onSelect }) {
   if (tab === "workflows") {
     const workflows = filterWorkflows(catalog?.workflows ?? [], query);
-    if (workflows.length === 0) return <EmptyState query={query} kind="workflows" />;
+    if (workflows.length === 0) {
+      return (
+        <CommandEmpty>
+          <EmptyState query={query} kind="workflows" />
+        </CommandEmpty>
+      );
+    }
     return (
-      <ul className="grid divide-y divide-border">
+      <div className="grid divide-y divide-border">
         {workflows.map((workflow) => (
           <WorkflowRow key={workflow.id} workflow={workflow} onSelect={onSelect} />
         ))}
-      </ul>
+      </div>
     );
   }
 
   if (tab === "providers") {
     const providers = filterProviders(catalog?.providers ?? [], query);
-    if (providers.length === 0) return <EmptyState query={query} kind="providers" />;
+    if (providers.length === 0) {
+      return (
+        <CommandEmpty>
+          <EmptyState query={query} kind="providers" />
+        </CommandEmpty>
+      );
+    }
     return (
-      <ul className="grid divide-y divide-border">
+      <div className="grid divide-y divide-border">
         {providers.map((provider) => (
           <ProviderRow key={provider.id} provider={provider} onSelect={onSelect} />
         ))}
-      </ul>
+      </div>
     );
   }
 
   const tools = filterTools(catalog?.tools ?? [], query);
-  if (tools.length === 0) return <EmptyState query={query} kind="tools" />;
+  if (tools.length === 0) {
+    return (
+      <CommandEmpty>
+        <EmptyState query={query} kind="tools" />
+      </CommandEmpty>
+    );
+  }
   const grouped = groupBy(tools, (tool) => tool.domain ?? "tool");
   const order = [
     "market",
@@ -254,16 +301,18 @@ function ListBody({ tab, query, catalog, onSelect }) {
   return (
     <div className="grid">
       {sortedDomains.map((domain, index) => (
-        <section key={domain} className={cn(index === 0 ? "" : "mt-2")}>
-          <h4 className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            {DOMAIN_LABELS[domain] ?? domain}
-          </h4>
-          <ul className="grid divide-y divide-border border-y border-border">
-            {grouped.get(domain).map((tool) => (
-              <ToolRow key={tool.name} tool={tool} onSelect={onSelect} />
-            ))}
-          </ul>
-        </section>
+        <CommandGroup
+          key={domain}
+          heading={DOMAIN_LABELS[domain] ?? domain}
+          className={cn(
+            "divide-y divide-border border-y border-border p-0 [&_[cmdk-group-heading]]:px-4 [&_[cmdk-group-heading]]:pb-1 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em]",
+            index === 0 ? "" : "mt-2",
+          )}
+        >
+          {grouped.get(domain).map((tool) => (
+            <ToolRow key={tool.name} tool={tool} onSelect={onSelect} />
+          ))}
+        </CommandGroup>
       ))}
     </div>
   );
@@ -271,65 +320,59 @@ function ListBody({ tab, query, catalog, onSelect }) {
 
 function WorkflowRow({ workflow, onSelect }) {
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect({ kind: "workflow", id: workflow.id })}
-        className="group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary"
-      >
-        <Sparkles aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{workflow.name}</span>
-          </div>
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-            {workflow.description}
-          </p>
+    <CommandItem
+      value={`workflow:${workflow.id}`}
+      onSelect={() => onSelect({ kind: "workflow", id: workflow.id })}
+      className="group w-full items-start gap-3 rounded-none px-4 py-3 text-left hover:bg-secondary"
+    >
+      <Sparkles aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">{workflow.name}</span>
         </div>
-        <ArrowRight
-          aria-hidden="true"
-          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        />
-      </button>
-    </li>
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{workflow.description}</p>
+      </div>
+      <ArrowRight
+        aria-hidden="true"
+        className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </CommandItem>
   );
 }
 
 function ToolRow({ tool, onSelect }) {
   const disabled = tool.enabled === false;
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect({ kind: "tool", id: tool.name })}
-        className={cn(
-          "group flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-secondary",
-          disabled && "opacity-60",
-        )}
-      >
-        <Wrench aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">
-              {tool.label || prettyToolName(tool.name)}
-            </span>
-            <code className="hidden truncate text-[11px] tabular-nums text-muted-foreground/70 sm:inline">
-              {tool.name}
-            </code>
-            {disabled ? (
-              <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                disabled
-              </Badge>
-            ) : null}
-          </div>
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{tool.description}</p>
+    <CommandItem
+      value={`tool:${tool.name}`}
+      onSelect={() => onSelect({ kind: "tool", id: tool.name })}
+      className={cn(
+        "group w-full items-start gap-3 rounded-none px-4 py-2.5 text-left hover:bg-secondary",
+        disabled && "opacity-60",
+      )}
+    >
+      <Wrench aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">
+            {tool.label || prettyToolName(tool.name)}
+          </span>
+          <code className="hidden truncate text-[11px] tabular-nums text-muted-foreground/70 sm:inline">
+            {tool.name}
+          </code>
+          {disabled ? (
+            <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+              disabled
+            </Badge>
+          ) : null}
         </div>
-        <ArrowRight
-          aria-hidden="true"
-          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        />
-      </button>
-    </li>
+        <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{tool.description}</p>
+      </div>
+      <ArrowRight
+        aria-hidden="true"
+        className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </CommandItem>
   );
 }
 
@@ -337,29 +380,27 @@ function ProviderRow({ provider, onSelect }) {
   const status = providerStatus(provider);
   const Icon = providerIcon(provider);
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect({ kind: "provider", id: provider.id })}
-        className="group flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-secondary"
-      >
-        <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">{provider.displayName}</span>
-            <ProviderStatusDot status={status} />
-            <span className={cn("text-[11px]", statusColor(status))}>{statusLabel(status)}</span>
-          </div>
-          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-            {(provider.unlocks || []).join(" · ")}
-          </p>
+    <CommandItem
+      value={`provider:${provider.id}`}
+      onSelect={() => onSelect({ kind: "provider", id: provider.id })}
+      className="group w-full items-start gap-3 rounded-none px-4 py-3 text-left hover:bg-secondary"
+    >
+      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground">{provider.displayName}</span>
+          <ProviderStatusDot status={status} />
+          <span className={cn("text-[11px]", statusColor(status))}>{statusLabel(status)}</span>
         </div>
-        <ArrowRight
-          aria-hidden="true"
-          className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-        />
-      </button>
-    </li>
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+          {(provider.unlocks || []).join(" · ")}
+        </p>
+      </div>
+      <ArrowRight
+        aria-hidden="true"
+        className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+      />
+    </CommandItem>
   );
 }
 
@@ -1123,7 +1164,7 @@ function statusLabel(status) {
   if (status === "reachable") return "Reachable";
   if (status === "unreachable") return "Unreachable";
   if (status === "error") return "Needs attention";
-  if (status === "unknown") return "Not checked";
+  if (status === "unknown") return "Not verified yet";
   return "Not configured";
 }
 

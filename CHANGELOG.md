@@ -4,18 +4,42 @@
 
 ### Added
 
+- Watchlists can now be deleted from the GUI (guarded so the last remaining watchlist cannot be removed), alongside the existing create and rename flows.
+- Failed GUI tool/workflow runs now show the failure reason on the run card and offer a Retry action that re-sends the original prompt.
+- The GUI component library gained shadcn-style table, tabs, dropdown menu, alert dialog, scroll area, separator, command, and chart primitives for upcoming page overhauls.
 - Watchlists can now be created as named lists and managed independently from the GUI tabs or the `manage_watchlist` TUI/tool flow.
 - Watchlists can now be renamed through the GUI and the `manage_watchlist` TUI/tool flow.
 - Portfolios can now be created and renamed as named lists from GUI tabs, chat attachments, and the `track_portfolio` TUI/tool flow.
 
 ### Changed
 
+- The GUI Watchlists page is now a quote board: company names under tickers, change $ and %, volume, per-row action menus with confirmed removal, and a symbol inspector with day/52-week ranges.
+- Stock quotes now carry the provider company name (Yahoo long/short name) through saved market-state snapshots, shown under tickers in watchlist and portfolio tables and inspectors.
+- Watchlist and portfolio rows now show pre-market and after-hours quotes when the market is in an extended session: a session-labeled line ("Pre-market" in amber, "After hours" in blue) with the extended price and signed change renders under the regular price in tables and the inspector, sourced from Yahoo's quote endpoint; regular-session prices remain the basis for all P&L math and alert evaluation.
+- Watchlist and portfolio quotes stay silent while fresh and announce their age only when degraded: an amber badge reads "Quotes Nm old" only when the refresh pipeline itself is stale (fetch time, not the provider's last-trade time — evenings after the close no longer read as degraded) or "As of <date>" for prior-day data with no extended-session quote, per the freshness decision in docs/internal/gui-ux-audit-2026-07.md.
+- Watchlist and portfolio rows flash a brief green/red tint when a background refresh changes their price, suppressed under reduced-motion preferences.
+- GUI market-state create/edit forms open as right-side overlay sheets on desktop instead of reflowing the page (mobile keeps bottom sheets); page headers were consolidated to one title, tab strip, and primary action, and list tabs support arrow-key navigation.
+- GUI Diagnostics renders grouped status rows instead of one bordered card per check, zero counts stay neutral, and "Degraded" is reserved for real warnings or failures — unchecked optional capabilities now report as ready in both the GUI and `opencandle doctor`.
+- The ⌘K catalog list supports arrow-key and Enter navigation with a visible selection and a stable overlay height across tabs.
+- GUI portfolio allocation renders distinct per-holding segments with matching legend dots, portfolio forms use a currency select and show in-button pending states, and lot ledgers animate open.
+- GUI alert rules describe their last observed state in plain English per condition (for example price versus the 20-day SMA) instead of appending a bare number; cooldowns are edited in human units and threshold fields adapt to the selected condition.
+- The GUI home empty state centers the hero, suggestions, and composer as one block, wraps suggestion chips at narrow widths, and personalizes suggestions from saved watchlists and portfolios.
+- GUI market-state pages show first-load skeletons and no longer flash empty states while data is loading.
+- Markdown tables in GUI chat answers now follow the app's data-table styling, with muted headers and numeric columns right-aligned in tabular numerals.
+- The GUI ticker popover renders quote facts as a flat divided stat grid with the company name when available, and the chat composer's touch targets meet minimum hit-area sizing.
+- GUI ticker search suggestions now show human-readable exchange and instrument-type names ("Nasdaq · Stock") instead of raw provider codes ("NMS · EQUITY").
+- GUI copy no longer leaks internal vocabulary: diagnostics session checks point at the Check button (the CLI keeps its `opencandle doctor --sessions` remediation), the GUI server check reads "GUI server is running and can run sessions", catalog provider status "Not checked" is now "Not verified yet", and the Add Holding helper uses plain language.
+- The "What the agent sees" context drawer and its composer eye toggle were removed per the GUI UX audit decision; its data-quality warning now surfaces on the Diagnostics page, and per-turn context surfaces will return in later work.
 - Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees.
 - Biome release-check noise is reduced with mechanical lint fixes plus scoped test/provider overrides for intentional mock and raw-response patterns.
 - Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests.
 
 ### Fixed
 
+- Empty chat sessions no longer clutter the GUI sidebar as "(no messages)" rows; message-less sessions are filtered from session lists at read time without deleting data.
+- GUI ticker suggestion dropdowns no longer clip at panel edges; the list portals above the sheet boundary.
+- SMA alert checks now persist the price and SMA leg values needed to describe observed state honestly on later reads.
+- Opening the mobile session drawer no longer leaves a focused element under aria-hidden content, clearing the browser accessibility warning.
 - README setup/data-source guidance now includes TradingView scanner and Polymarket Gamma as keyless public sources.
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
 - Watchlist, portfolio, alert, and report form actions in the GUI now update saved market state without creating empty chat sessions.

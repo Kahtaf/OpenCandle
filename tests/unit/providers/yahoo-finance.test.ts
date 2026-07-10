@@ -5,17 +5,22 @@ import { InvalidSymbolError } from "../../../src/providers/errors.js";
 import { getHistory, getQuote, getYahooFinancials } from "../../../src/providers/yahoo-finance.js";
 import type { StockQuote } from "../../../src/types/market.js";
 import historyFixture from "../../fixtures/yahoo/AAPL-history.json";
+import postMarketQuoteFixture from "../../fixtures/yahoo/AAPL-post-market-quote.json";
 import quoteFixture from "../../fixtures/yahoo/AAPL-quote.json";
 import weekendStaleQuoteFixture from "../../fixtures/yahoo/weekend-stale-quote.json";
 import invalidQuoteFixture from "../../fixtures/yahoo/XXFAKEXX-quote.json";
 
 const yahooFinanceMock = vi.hoisted(() => ({
   fundamentalsTimeSeries: vi.fn(),
+  quote: vi.fn(),
 }));
 
 vi.mock("yahoo-finance2", () => ({
   default: vi.fn(function YahooFinance() {
-    return { fundamentalsTimeSeries: yahooFinanceMock.fundamentalsTimeSeries };
+    return {
+      fundamentalsTimeSeries: yahooFinanceMock.fundamentalsTimeSeries,
+      quote: yahooFinanceMock.quote,
+    };
   }),
 }));
 
@@ -26,6 +31,7 @@ describe("yahoo-finance provider", () => {
     cache.clear();
     rateLimiter.configure("yahoo", 1000, 1000);
     yahooFinanceMock.fundamentalsTimeSeries.mockReset();
+    yahooFinanceMock.quote.mockReset();
   });
 
   afterEach(() => {
@@ -43,6 +49,7 @@ describe("yahoo-finance provider", () => {
 
       const quote = await getQuote("AAPL");
       expect(quote.symbol).toBe("AAPL");
+      expect(quote.name).toBe("Apple Inc.");
       expect(quote.price).toBe(178.72);
       expect(quote.open).toBe(176.15);
       expect(quote.high).toBe(179.5);
@@ -79,6 +86,36 @@ describe("yahoo-finance provider", () => {
       expect(quote.asOf).toBe("2024-03-22T20:00:00.000Z");
       expect(quote.timestamp).toBeGreaterThanOrEqual(before);
       expect(quote.timestamp).toBeLessThanOrEqual(after);
+    });
+
+    it("enriches a regular quote with Yahoo post-market data", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(quoteFixture),
+      });
+      yahooFinanceMock.quote.mockResolvedValue(postMarketQuoteFixture);
+
+      await expect(getQuote("AAPL")).resolves.toMatchObject({
+        marketState: "POST",
+        extendedPrice: 83.02,
+        extendedChange: -0.53,
+        extendedChangePercent: -0.64,
+        extendedAsOf: "2026-06-12T20:14:00.000Z",
+      });
+      expect(yahooFinanceMock.quote).toHaveBeenCalledWith("AAPL");
+    });
+
+    it("returns the chart quote when extended-hours enrichment fails", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(quoteFixture),
+      });
+      yahooFinanceMock.quote.mockRejectedValueOnce(new Error("Yahoo quote unavailable"));
+
+      await expect(getQuote("AAPL")).resolves.toMatchObject({
+        symbol: "AAPL",
+        price: 178.72,
+      });
     });
 
     it("uses cache on second call", async () => {

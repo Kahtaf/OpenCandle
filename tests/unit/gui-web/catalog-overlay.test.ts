@@ -1,6 +1,9 @@
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   buildCatalogToolInvokePayload,
+  CatalogList,
   formatArgsForPrompt,
 } from "../../../gui/web/src/features/catalog/CatalogOverlay.jsx";
 
@@ -24,5 +27,32 @@ describe("CatalogOverlay helpers", () => {
     ).toBe(
       ' with filter=[{"field":"market_cap","op":"greater","value":1000000000}], sort={"field":"volume","direction":"desc"}',
     );
+  });
+
+  it("renders grouped cmdk options inside an internal scroll region", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(CatalogList, {
+        tab: "tools",
+        query: "",
+        catalog: {
+          tools: [
+            {
+              name: "get_stock_quote",
+              label: "Stock quote",
+              description: "Get the latest stock price.",
+              domain: "market",
+            },
+          ],
+        },
+        onSelect: () => {},
+      }),
+    );
+
+    expect(html).toContain('data-slot="command-list"');
+    expect(html).toContain('data-slot="command-item"');
+    expect(html).toContain('role="option"');
+    expect(html).toContain("Market");
+    expect(html).toContain("get_stock_quote");
+    expect(html).toContain("!max-h-none flex-1");
   });
 });

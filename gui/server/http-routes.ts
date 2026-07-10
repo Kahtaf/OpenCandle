@@ -40,6 +40,7 @@ import { createPromptObservation, observePromptEvent } from "./prompt-observatio
 import type { QuoteSnapshotStore } from "./quote-snapshot-store.js";
 import { promptAndSettle, type SessionActionsController } from "./session-actions.js";
 import { waitForNewEntryId } from "./session-entry-wait.js";
+import { listDisplaySessions } from "./session-list.js";
 import { buildCatalog } from "./tool-metadata.js";
 import {
   acquireWriterLock,
@@ -139,7 +140,7 @@ export function createHttpRequestHandler(options: GuiHttpRouteOptions) {
       writeJson(res, {
         currentSessionId: options.getSessionManager().getSessionId(),
         role: options.role,
-        sessions: await SessionManager.list(options.cwd, options.sessionDir),
+        sessions: await listDisplaySessions(options.cwd, options.sessionDir),
       });
       return;
     }
@@ -876,7 +877,7 @@ export async function buildSessionBootstrapPayload(
     catalog: buildCatalog(),
     modelSetup: options.modelSetupController.buildCurrentModelSetupState(),
     askUserPrompts: Array.isArray(bootstrap.askUserPrompts) ? bootstrap.askUserPrompts : [],
-    sessions: await SessionManager.list(options.cwd, options.sessionDir),
+    sessions: await listDisplaySessions(options.cwd, options.sessionDir),
     snapshot: {
       sessionId,
       state: projectDashboard(entries, sessionId, getSavedMarketStateSymbols()),

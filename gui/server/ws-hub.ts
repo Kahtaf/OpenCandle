@@ -1,10 +1,6 @@
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import {
-  type AgentSession,
-  type SessionEntry,
-  SessionManager,
-} from "@earendil-works/pi-coding-agent";
+import type { AgentSession, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { probeProviderStatus } from "../../src/onboarding/provider-status.js";
 import { getProvider, type ProviderId } from "../../src/onboarding/providers.js";
 import {
@@ -20,6 +16,7 @@ import { getSavedMarketStateSymbols } from "./market-state-api.js";
 import type { ModelSetupController } from "./model-setup.js";
 import { projectDashboard } from "./projector.js";
 import type { SessionActionsController } from "./session-actions.js";
+import { listDisplaySessions } from "./session-list.js";
 import { buildCatalog, setToolEnabled } from "./tool-metadata.js";
 import { acceptWebSocket, type WsClient } from "./websocket.js";
 import { readWriterLock, writerLockScopeForSession } from "./writer-lock.js";
@@ -239,7 +236,7 @@ export function createWsHub({
       type: "state.snapshot",
       ...snapshot,
     });
-    void SessionManager.list(cwd, sessionDir).then((sessions) =>
+    void listDisplaySessions(cwd, sessionDir).then((sessions) =>
       client.send({ type: "sessions", sessions }),
     );
   }
@@ -253,7 +250,7 @@ export function createWsHub({
       catalog: buildCatalog(),
       modelSetup: modelSetupController.buildCurrentModelSetupState(),
       askUserPrompts: askUserBridge.getPrompts(),
-      sessions: await SessionManager.list(cwd, sessionDir),
+      sessions: await listDisplaySessions(cwd, sessionDir),
       snapshot: buildStateSnapshot(),
     };
   }
@@ -327,7 +324,7 @@ export function createWsHub({
   }
 
   function broadcastSessions(): void {
-    void SessionManager.list(cwd, sessionDir).then((sessions) =>
+    void listDisplaySessions(cwd, sessionDir).then((sessions) =>
       broadcast({ type: "sessions", sessions }),
     );
   }

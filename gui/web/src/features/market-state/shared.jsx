@@ -1,8 +1,9 @@
 import { Pencil, Search } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { cn } from "../../lib/utils.js";
+import { quoteChangeDirections } from "./format.js";
 
 // Two-step inline confirm for destructive actions; arms on first click, resets after 4s.
 export function ConfirmButton({
@@ -44,20 +45,29 @@ export function ConfirmButton({
 }
 
 export function Panel({ title, count, meta, actions, children }) {
+  const hasDetails = title || count !== undefined || meta;
+  const hasHeader = hasDetails || actions;
+
   return (
     <section className="rounded-xl border border-border bg-card shadow-subtle-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
-          {count !== undefined ? (
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-              {count}
-            </span>
+      {hasHeader ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+          {hasDetails ? (
+            <div className="flex min-w-0 items-center gap-2">
+              {title ? (
+                <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
+              ) : null}
+              {count !== undefined ? (
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {count}
+                </span>
+              ) : null}
+              {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+            </div>
           ) : null}
-          {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-      </div>
+      ) : null}
       {children}
     </section>
   );
@@ -171,6 +181,54 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
   );
 }
 
+export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
+  if (
+    !quote ||
+    (quote.marketState !== "PRE" && quote.marketState !== "POST") ||
+    typeof quote.extendedPrice !== "number" ||
+    !Number.isFinite(quote.extendedPrice)
+  ) {
+    return null;
+  }
+  const isPreMarket = quote.marketState === "PRE";
+  return (
+    <div
+      data-slot="extended-hours-quote"
+      className={cn("mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px]", className)}
+    >
+      <Badge tone={isPreMarket ? "warn" : "info"} className="h-[18px] px-1.5 text-[10px]">
+        {isPreMarket ? "Pre-market" : "After hours"}
+      </Badge>
+      <span className="tabular-nums text-muted-foreground">
+        {money(quote.extendedPrice, currency)}
+      </span>
+      <ExtendedHoursChange
+        change={quote.extendedChange}
+        changePercent={quote.extendedChangePercent}
+      />
+    </div>
+  );
+}
+
+function ExtendedHoursChange({ change, changePercent }) {
+  if (!Number.isFinite(change) && !Number.isFinite(changePercent)) return null;
+  const signedValue = Number.isFinite(change) ? change : changePercent;
+  const sign = signedValue > 0 ? "+" : signedValue < 0 ? "−" : "";
+  const tone =
+    signedValue > 0
+      ? "text-success"
+      : signedValue < 0
+        ? "text-destructive"
+        : "text-muted-foreground";
+  return (
+    <span className={cn("tabular-nums font-medium", tone)}>
+      {Number.isFinite(change) ? `${sign}${Math.abs(change).toFixed(2)}` : null}
+      {Number.isFinite(change) && Number.isFinite(changePercent) ? " " : null}
+      {Number.isFinite(changePercent) ? `(${sign}${Math.abs(changePercent).toFixed(2)}%)` : null}
+    </span>
+  );
+}
+
 export function StatusDot({ tone, label }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -186,7 +244,7 @@ export function StatusDot({ tone, label }) {
   );
 }
 
-export function Badge({ tone = "neutral", children }) {
+export function Badge({ tone = "neutral", children, className }) {
   return (
     <span
       className={cn(
@@ -195,11 +253,41 @@ export function Badge({ tone = "neutral", children }) {
           ? "border-warning/30 bg-warning/10 text-warning"
           : tone === "ok"
             ? "border-success/30 bg-success/10 text-success"
-            : "border-transparent bg-secondary text-muted-foreground",
+            : tone === "info"
+              ? "border-info/30 bg-info/10 text-info"
+              : "border-transparent bg-secondary text-muted-foreground",
+        className,
       )}
     >
       {children}
     </span>
+  );
+}
+
+export function useQuoteChangeFlash(quotes) {
+  const previousQuotes = useRef(null);
+  const [directions, setDirections] = useState(() => new Map());
+
+  useEffect(() => {
+    const previous = previousQuotes.current;
+    previousQuotes.current = quotes;
+    if (!previous) return undefined;
+
+    const nextDirections = quoteChangeDirections(previous, quotes);
+    if (nextDirections.size === 0) return undefined;
+    setDirections(nextDirections);
+    const timer = window.setTimeout(() => setDirections(new Map()), 200);
+    return () => window.clearTimeout(timer);
+  }, [quotes]);
+
+  return directions;
+}
+
+export function quoteFlashClass(direction) {
+  if (!direction) return "";
+  return cn(
+    "transition-colors duration-200 ease-out motion-reduce:transition-none motion-reduce:bg-transparent",
+    direction === "up" ? "bg-success/[0.08]" : "bg-destructive/[0.08]",
   );
 }
 
@@ -212,10 +300,25 @@ export function StateTabs({
   onSelect,
   onRename,
 }) {
+  const tabRefs = useRef(new Map());
+
+  const onTabKeyDown = (event, index) => {
+    const nextIndex = nextStateTabIndex(index, items.length, event.key);
+    if (nextIndex === index) return;
+    event.preventDefault();
+    const nextItem = items[nextIndex];
+    onSelect(nextItem.id);
+    tabRefs.current.get(nextItem.id)?.focus();
+  };
+
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist">
-        {items.map((item) => {
+      <div
+        className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        role="tablist"
+        aria-orientation="horizontal"
+      >
+        {items.map((item, index) => {
           const active = item.id === activeItem?.id;
           return (
             <button
@@ -223,11 +326,17 @@ export function StateTabs({
               type="button"
               role="tab"
               aria-selected={active}
+              tabIndex={active ? 0 : -1}
+              ref={(node) => {
+                if (node) tabRefs.current.set(item.id, node);
+                else tabRefs.current.delete(item.id);
+              }}
               className={cn(
                 "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] md:min-h-8",
                 active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
               )}
               onClick={() => onSelect(item.id)}
+              onKeyDown={(event) => onTabKeyDown(event, index)}
             >
               <span>{item.name}</span>
               <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
@@ -252,6 +361,15 @@ export function StateTabs({
       ) : null}
     </div>
   );
+}
+
+export function nextStateTabIndex(currentIndex, itemCount, key) {
+  if (itemCount < 1) return -1;
+  if (key === "ArrowRight") return (currentIndex + 1) % itemCount;
+  if (key === "ArrowLeft") return (currentIndex - 1 + itemCount) % itemCount;
+  if (key === "Home") return 0;
+  if (key === "End") return itemCount - 1;
+  return currentIndex;
 }
 
 export function RowActions({ actions, disabled }) {

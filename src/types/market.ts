@@ -1,5 +1,6 @@
 export interface StockQuote {
   symbol: string;
+  name?: string;
   price: number;
   change: number;
   changePercent: number;
@@ -15,6 +16,11 @@ export interface StockQuote {
   timestamp: number;
   asOf?: string;
   currency?: string | null;
+  marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
+  extendedPrice?: number;
+  extendedChange?: number;
+  extendedChangePercent?: number;
+  extendedAsOf?: string;
 }
 
 export interface OHLCV {

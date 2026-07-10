@@ -43,18 +43,20 @@ export function AlertsPage({ state, filter, setFilter, readOnly, openPanel, invo
         meta={monitoringMeta}
         actions={
           <>
+            {state.alerts.length > 0 ? (
+              <Button
+                type="button"
+                variant="bordered"
+                size="sm"
+                disabled={readOnly}
+                onClick={() => openPanel("alert-create")}
+              >
+                Create alert
+              </Button>
+            ) : null}
             {state.alerts.length > 3 ? (
               <PanelSearch label="Search alerts" filter={filter} setFilter={setFilter} />
             ) : null}
-            <Button
-              type="button"
-              variant="bordered"
-              size="sm"
-              disabled={readOnly}
-              onClick={() => invokeTool("manage_alerts", { action: "check" })}
-            >
-              Check now
-            </Button>
           </>
         }
       >

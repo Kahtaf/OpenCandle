@@ -244,7 +244,7 @@ Components are shadcn/ui constructions (cva variants, Radix primitives where int
 
 - **Do** treat `packages/ui/src/styles.css` and `packages/ui/src/` as the normative token and primitive source; GUI-only components in `gui/web/src/components/ui/` build on the same tokens.
 - **Do** keep one primary (Research Ink) action per region; everything else bordered or ghost.
-- **Do** show data freshness in plain language ("Updated 2m ago", "Quote 26m old") with Amber Caveat when stale.
+- **Do** let healthy quotes update silently in the background with no age chrome; age appears only as a caveat — an Amber Caveat badge in plain language ("Quote 26m old", "As of Fri close") when data is stale, from a prior market session, or a provider check failed.
 - **Do** use relative, human timestamps in UI surfaces; raw ISO strings belong in tool output only.
 - **Do** layer Paper → Zinc Mist → Zinc Sunk before reaching for shadow.
 
@@ -255,4 +255,4 @@ Components are shadcn/ui constructions (cva variants, Radix primitives where int
 - **Don't** communicate market direction through color alone; every red/green value carries its sign.
 - **Don't** add a second display font, gradient text, side-stripe borders, or decorative card shadows.
 - **Don't** leak internal vocabulary (`price_crosses_above`, "Instrument #1", "SQLite-backed") into user-facing copy.
-- **Don't** ship manual refresh buttons; data updates in the background and announces its own age.
+- **Don't** ship manual refresh buttons; data updates in the background and announces its age only when degraded.

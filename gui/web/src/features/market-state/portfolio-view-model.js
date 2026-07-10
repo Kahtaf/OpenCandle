@@ -20,6 +20,11 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
         changePercent: null,
         allocationPercent: null,
         fetchedAt: null,
+        marketState: null,
+        extendedPrice: null,
+        extendedChange: null,
+        extendedChangePercent: null,
+        extendedAsOf: null,
         excludedLotCount: 0,
         lots: [],
       };
@@ -28,6 +33,7 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
 
     row.totalQuantity += lot.quantity;
     row.lots.push({ ...lot, quote });
+    row.name = quote?.name ?? row.name;
 
     if (quote?.status === "ok" && quote.includedInTotals) {
       row.totalCost += quote.totalCost;
@@ -37,6 +43,11 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
       row.currentPrice = quote.currentPrice ?? row.currentPrice;
       row.changePercent = quote.changePercent ?? row.changePercent;
       row.fetchedAt = quote.fetchedAt ?? row.fetchedAt;
+      row.marketState = quote.marketState ?? row.marketState;
+      row.extendedPrice = quote.extendedPrice ?? row.extendedPrice;
+      row.extendedChange = quote.extendedChange ?? row.extendedChange;
+      row.extendedChangePercent = quote.extendedChangePercent ?? row.extendedChangePercent;
+      row.extendedAsOf = quote.extendedAsOf ?? row.extendedAsOf;
     } else {
       // No usable quote: still count cost from lot fields so blended cost stays meaningful.
       row.totalCost += lot.avgCost * lot.quantity;

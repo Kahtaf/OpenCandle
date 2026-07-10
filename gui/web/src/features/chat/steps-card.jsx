@@ -1,6 +1,7 @@
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { useEffect } from "react";
 import { Badge } from "../../components/ui/badge.jsx";
+import { Button } from "../../components/ui/button.jsx";
 import { SourceStack } from "../../components/ui/source-stack.jsx";
 import { StatusDot } from "../../components/ui/status-dot.jsx";
 import { TextShimmer } from "../../components/ui/text-shimmer.jsx";
@@ -13,7 +14,7 @@ import { useToolDrawer } from "./tool-drawer-context.jsx";
 // full timeline. Layout follows llmchat's pattern: small eyebrow ("Working"
 // or "Answer"), then a row of icon + title + step badge + caret. While the
 // run is still pending the title shimmers and the icon spins.
-export function StepsCard({ run, autoOpen = false }) {
+export function StepsCard({ run, autoOpen = false, onRetry, retryDisabled = false }) {
   const { open, requestAutoOpen, run: openRun } = useToolDrawer();
   const isOpen = openRun?.id === run.id && (openRun?.sessionId || "") === (run.sessionId || "");
   const stepCount = run.steps.length;
@@ -22,6 +23,7 @@ export function StepsCard({ run, autoOpen = false }) {
   const isError = run.status === "error";
   const completedCount = run.steps.filter((s) => s.status === "completed").length;
   const sources = extractRunSources(run);
+  const canRetry = isError && Boolean(run.retryPrompt) && Boolean(onRetry);
 
   useEffect(() => {
     if (!autoOpen) return;
@@ -39,46 +41,62 @@ export function StepsCard({ run, autoOpen = false }) {
         {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
         <span>{isPending ? "Working" : isError ? "Tool error" : "Answer"}</span>
       </div>
-      <button
-        type="button"
-        onClick={() => open(run)}
-        className={cn(
-          "group flex w-full items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left shadow-subtle-xs transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          isOpen && "bg-secondary",
-        )}
-        aria-expanded={isOpen}
-      >
-        <RunLeadingIcon run={run} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium text-foreground">{title}</div>
-          {isPending ? (
-            <TextShimmer className="block truncate text-[11px]">
-              {activeMeta
-                ? `Calling ${activeMeta.label.toLowerCase()}${argSummary(activeStep) ? ` · ${argSummary(activeStep)}` : ""}`
-                : `Working · ${completedCount} of ${stepCount} ${stepCount === 1 ? "step" : "steps"} done`}
-            </TextShimmer>
-          ) : (
-            <div className="truncate text-[11px] text-muted-foreground">
-              {completedCount} of {stepCount} {stepCount === 1 ? "step" : "steps"}
-              {sources.length > 0
-                ? ` · ${sources.length} ${sources.length === 1 ? "source" : "sources"}`
-                : ""}
-            </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => open(run)}
+          className={cn(
+            "group flex min-w-0 flex-1 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left shadow-subtle-xs transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+            isOpen && "bg-secondary",
           )}
-        </div>
-        {sources.length > 0 && !isPending ? (
-          <span className="hidden sm:inline-flex">
-            <SourceStack sources={sources} />
-          </span>
+          aria-expanded={isOpen}
+        >
+          <RunLeadingIcon run={run} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-foreground">{title}</div>
+            {isPending ? (
+              <TextShimmer className="block truncate text-[11px]">
+                {activeMeta
+                  ? `Calling ${activeMeta.label.toLowerCase()}${argSummary(activeStep) ? ` · ${argSummary(activeStep)}` : ""}`
+                  : `Working · ${completedCount} of ${stepCount} ${stepCount === 1 ? "step" : "steps"} done`}
+              </TextShimmer>
+            ) : isError && run.failureReason ? (
+              <div className="truncate text-[11px] text-destructive">{run.failureReason}</div>
+            ) : (
+              <div className="truncate text-[11px] text-muted-foreground">
+                {completedCount} of {stepCount} {stepCount === 1 ? "step" : "steps"}
+                {sources.length > 0
+                  ? ` · ${sources.length} ${sources.length === 1 ? "source" : "sources"}`
+                  : ""}
+              </div>
+            )}
+          </div>
+          {sources.length > 0 && !isPending ? (
+            <span className="hidden sm:inline-flex">
+              <SourceStack sources={sources} />
+            </span>
+          ) : null}
+          <Badge variant="outline" size="sm" className="shrink-0 font-mono">
+            {stepCount} {stepCount === 1 ? "step" : "steps"}
+          </Badge>
+          <ChevronRight
+            className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+            aria-hidden="true"
+          />
+        </button>
+        {canRetry ? (
+          <Button
+            type="button"
+            variant="bordered"
+            size="sm"
+            prefixIcon={RotateCcw}
+            disabled={retryDisabled}
+            onClick={() => onRetry(run.retryPrompt)}
+          >
+            Retry
+          </Button>
         ) : null}
-        <Badge variant="outline" size="sm" className="shrink-0 font-mono">
-          {stepCount} {stepCount === 1 ? "step" : "steps"}
-        </Badge>
-        <ChevronRight
-          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-          aria-hidden="true"
-        />
-      </button>
+      </div>
     </div>
   );
 }

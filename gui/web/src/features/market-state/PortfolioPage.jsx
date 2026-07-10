@@ -1,25 +1,46 @@
-import { BriefcaseBusiness, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { BriefcaseBusiness, ChevronRight, Plus } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
-import { shortDateLabel } from "./format.js";
+import { cn } from "../../lib/utils.js";
+import { degradedQuoteBadge, shortDateLabel } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
 import {
+  Badge,
   ConfirmButton,
   EmptyState,
+  ExtendedHoursQuote,
   filterItems,
   money,
   moneyOrDash,
   Panel,
   PanelSearch,
+  quoteFlashClass,
   SignedMoney,
   SignedPercent,
   StateTabs,
   Sym,
+  useQuoteChangeFlash,
 } from "./shared.jsx";
 
-const ALLOCATION_RAMP = ["#18181b", "#52525b", "#71717a", "#a1a1aa", "#d4d4d8", "#e4e4e7"];
+const ALLOCATION_COLORS = [
+  "oklch(0.62 0.1 250)",
+  "oklch(0.66 0.09 175)",
+  "oklch(0.7 0.1 65)",
+  "oklch(0.64 0.1 330)",
+  "oklch(0.66 0.09 145)",
+  "oklch(0.62 0.1 35)",
+];
 
-export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, invokeTool }) {
+export function PortfolioPage({
+  state,
+  loading = false,
+  filter,
+  setFilter,
+  readOnly,
+  openPanel,
+  invokeTool,
+  renderPageHeader,
+}) {
   const portfolios = useMemo(() => {
     const saved = state.portfolios ?? [];
     return saved.length > 0 ? saved : [{ id: "default", name: "Default", isDefault: true }];
@@ -49,6 +70,21 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
     () => filterItems(holdings, filter, ["symbol", "name", "currency"]),
     [holdings, filter],
   );
+  const quotesBySymbol = useMemo(
+    () =>
+      new Map((state.quoteSnapshot?.portfolioQuotes ?? []).map((quote) => [quote.symbol, quote])),
+    [state.quoteSnapshot],
+  );
+  const quoteFlashes = useQuoteChangeFlash(quotesBySymbol);
+  const quoteBadge = useMemo(
+    () =>
+      degradedQuoteBadge(
+        (state.quoteSnapshot?.portfolioQuotes ?? []).filter(
+          (quote) => quote.portfolioId === activePortfolio?.id,
+        ),
+      ),
+    [state.quoteSnapshot, activePortfolio?.id],
+  );
   const summary =
     state.quoteSnapshot?.portfolioSummaries?.find(
       (candidate) => candidate.portfolioId === activePortfolio?.id,
@@ -73,23 +109,7 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
 
   return (
     <div className="flex flex-col gap-3">
-      <Panel
-        title="Portfolios"
-        meta={`${lotCount} ${lotCount === 1 ? "lot" : "lots"}`}
-        actions={
-          <Button
-            type="button"
-            variant="brand"
-            size="sm"
-            rounded="full"
-            prefixIcon={Plus}
-            disabled={readOnly}
-            onClick={addHolding}
-          >
-            Add holding
-          </Button>
-        }
-      >
+      {renderPageHeader?.(
         <StateTabs
           items={portfolios}
           activeItem={activePortfolio}
@@ -98,8 +118,24 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
           renameLabel="Rename portfolio"
           onSelect={setActivePortfolioId}
           onRename={(portfolio) => openPanel("portfolio-rename", { portfolio })}
-        />
-        {lotCount === 0 ? (
+        />,
+      )}
+      <Panel
+        actions={
+          <Button
+            type="button"
+            variant="bordered"
+            size="sm"
+            prefixIcon={Plus}
+            disabled={readOnly}
+            onClick={addHolding}
+          >
+            Add holding
+          </Button>
+        }
+      >
+        {loading ? <PortfolioSkeleton /> : null}
+        {!loading && lotCount === 0 ? (
           <EmptyState
             icon={BriefcaseBusiness}
             title="No holdings yet"
@@ -108,8 +144,10 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
         ) : null}
       </Panel>
 
-      {lotCount > 0 ? <ValueHeader summary={summary} holdings={holdings} /> : null}
-      {lotCount > 0 ? (
+      {!loading && lotCount > 0 ? (
+        <ValueHeader summary={summary} holdings={holdings} quoteBadge={quoteBadge} />
+      ) : null}
+      {!loading && lotCount > 0 ? (
         <Panel
           title="Holdings"
           meta={`${holdings.length} ${holdings.length === 1 ? "symbol" : "symbols"} · ${lotCount} ${lotCount === 1 ? "lot" : "lots"}`}
@@ -145,7 +183,10 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
                   {rows.map((row) => (
                     <Fragment key={row.symbol}>
                       <tr
-                        className="cursor-pointer border-b border-border/70 last:border-0 hover:bg-secondary/60"
+                        className={cn(
+                          "cursor-pointer border-b border-border/70 last:border-0 hover:bg-secondary/60",
+                          quoteFlashClass(quoteFlashes.get(row.symbol)),
+                        )}
                         onClick={() => toggleExpanded(row.symbol)}
                       >
                         <td className="px-2 py-2.5">
@@ -161,11 +202,11 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
                               toggleExpanded(row.symbol);
                             }}
                           >
-                            {expanded.has(row.symbol) ? (
-                              <ChevronDown className="size-3.5" />
-                            ) : (
-                              <ChevronRight className="size-3.5" />
-                            )}
+                            <ChevronRight
+                              className={`size-3.5 transition-transform duration-150 ease-out ${
+                                expanded.has(row.symbol) ? "rotate-90" : "rotate-0"
+                              }`}
+                            />
                           </Button>
                         </td>
                         <td className="px-2 py-2.5">
@@ -175,7 +216,10 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
                           {row.totalQuantity.toLocaleString()}
                         </td>
                         <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">
-                          {moneyOrDash(row.currentPrice, row.currency)}
+                          <div className="flex flex-col items-end">
+                            <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
+                            <ExtendedHoursQuote quote={row} currency={row.currency} />
+                          </div>
                         </td>
                         <td className="px-2 py-2.5 text-right tabular-nums">
                           {moneyOrDash(row.marketValue, row.currency)}
@@ -196,69 +240,78 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
                             : "—"}
                         </td>
                       </tr>
-                      {expanded.has(row.symbol)
-                        ? row.lots.map((lot) => (
-                            <tr
-                              key={lot.id}
-                              className="border-b border-border/70 bg-secondary/60 text-[13px] last:border-0"
-                            >
-                              <td className="px-2 py-2" />
-                              <td className="px-2 py-2">
-                                <div className="font-mono text-xs text-muted-foreground">
-                                  Lot · {shortDateLabel(lot.openedAt) || "—"}
-                                  {lot.notes ? ` · ${lot.notes}` : ""}
+                      <tr inert={!expanded.has(row.symbol)}>
+                        <td colSpan={8} className="p-0">
+                          <div
+                            data-slot="portfolio-lot-reveal"
+                            className={`grid transition-[grid-template-rows] duration-150 ease-out ${
+                              expanded.has(row.symbol) ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                            }`}
+                          >
+                            <div className="min-h-0 overflow-hidden">
+                              {row.lots.map((lot) => (
+                                <div
+                                  key={lot.id}
+                                  className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-x-2 border-b border-border/70 bg-secondary/60 px-2 py-2 text-[13px] md:grid-cols-[2rem_minmax(0,1fr)_5rem_7rem_7rem_4rem_9rem_auto]"
+                                >
+                                  <div />
+                                  <div>
+                                    <div className="font-mono text-xs text-muted-foreground">
+                                      Lot · {shortDateLabel(lot.openedAt) || "—"}
+                                      {lot.notes ? ` · ${lot.notes}` : ""}
+                                    </div>
+                                    <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
+                                      {lot.quantity.toLocaleString()} @{" "}
+                                      {money(lot.avgCost, lot.currency)}
+                                    </div>
+                                    <div className="mt-1 flex gap-1 md:hidden">
+                                      <LotActions
+                                        lot={lot}
+                                        portfolio={activePortfolio}
+                                        readOnly={readOnly || !expanded.has(row.symbol)}
+                                        openPanel={openPanel}
+                                        invokeTool={invokeTool}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="hidden text-right tabular-nums md:block">
+                                    {lot.quantity.toLocaleString()}
+                                  </div>
+                                  <div className="hidden text-right font-mono text-xs text-muted-foreground md:block">
+                                    cost {money(lot.avgCost, lot.currency)}
+                                  </div>
+                                  <div className="text-right tabular-nums">
+                                    {moneyOrDash(lot.quote?.marketValue, lot.currency)}
+                                  </div>
+                                  <div className="hidden md:block" />
+                                  <div className="hidden text-right sm:block">
+                                    {lot.quote?.status === "ok" ? (
+                                      <SignedMoney
+                                        value={lot.quote.pnl}
+                                        percent={lot.quote.pnlPercent}
+                                        currency={lot.currency}
+                                      />
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground">
+                                        {lot.quote?.reason ?? "Awaiting quote"}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="hidden justify-end gap-1 md:flex">
+                                    <LotActions
+                                      lot={lot}
+                                      portfolio={activePortfolio}
+                                      readOnly={readOnly || !expanded.has(row.symbol)}
+                                      openPanel={openPanel}
+                                      invokeTool={invokeTool}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="mt-0.5 font-mono text-xs text-muted-foreground md:hidden">
-                                  {lot.quantity.toLocaleString()} @{" "}
-                                  {money(lot.avgCost, lot.currency)}
-                                </div>
-                                <div className="mt-1 flex gap-1 md:hidden">
-                                  <LotActions
-                                    lot={lot}
-                                    portfolio={activePortfolio}
-                                    readOnly={readOnly}
-                                    openPanel={openPanel}
-                                    invokeTool={invokeTool}
-                                  />
-                                </div>
-                              </td>
-                              <td className="hidden px-2 py-2 text-right tabular-nums md:table-cell">
-                                {lot.quantity.toLocaleString()}
-                              </td>
-                              <td className="hidden px-2 py-2 text-right font-mono text-xs text-muted-foreground md:table-cell">
-                                cost {money(lot.avgCost, lot.currency)}
-                              </td>
-                              <td className="px-2 py-2 text-right tabular-nums">
-                                {moneyOrDash(lot.quote?.marketValue, lot.currency)}
-                              </td>
-                              <td className="px-2 py-2" />
-                              <td className="hidden px-2 py-2 text-right sm:table-cell">
-                                {lot.quote?.status === "ok" ? (
-                                  <SignedMoney
-                                    value={lot.quote.pnl}
-                                    percent={lot.quote.pnlPercent}
-                                    currency={lot.currency}
-                                  />
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">
-                                    {lot.quote?.reason ?? "Awaiting quote"}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="hidden px-2 py-2 pr-4 text-right md:table-cell">
-                                <div className="flex justify-end gap-1">
-                                  <LotActions
-                                    lot={lot}
-                                    portfolio={activePortfolio}
-                                    readOnly={readOnly}
-                                    openPanel={openPanel}
-                                    invokeTool={invokeTool}
-                                  />
-                                </div>
-                              </td>
-                            </tr>
-                          ))
-                        : null}
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     </Fragment>
                   ))}
                 </tbody>
@@ -273,6 +326,27 @@ export function PortfolioPage({ state, filter, setFilter, readOnly, openPanel, i
           ) : null}
         </Panel>
       ) : null}
+    </div>
+  );
+}
+
+function PortfolioSkeleton() {
+  return (
+    <div
+      data-slot="portfolio-skeleton"
+      role="status"
+      aria-label="Loading portfolio"
+      className="p-4"
+    >
+      <div className="space-y-3">
+        {["first", "second", "third", "fourth"].map((key) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <div className="h-8 w-28 animate-pulse rounded bg-secondary" />
+            <div className="h-4 w-20 animate-pulse rounded bg-secondary" />
+            <div className="h-4 w-16 animate-pulse rounded bg-secondary" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -307,7 +381,7 @@ function LotActions({ lot, portfolio, readOnly, openPanel, invokeTool }) {
   );
 }
 
-function ValueHeader({ summary, holdings }) {
+function ValueHeader({ summary, holdings, quoteBadge }) {
   const todayPnl = useMemo(() => {
     let total = 0;
     let any = false;
@@ -326,13 +400,16 @@ function ValueHeader({ summary, holdings }) {
     .map((row, index) => ({
       symbol: row.symbol,
       percent: row.allocationPercent,
-      color: ALLOCATION_RAMP[Math.min(index, ALLOCATION_RAMP.length - 1)],
+      color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
     }));
 
   return (
     <section className="rounded-xl border border-border bg-card p-4 shadow-subtle-xs sm:p-5">
-      <div className="text-[32px] font-semibold leading-tight tabular-nums text-foreground">
-        {summary ? money(summary.totalValue, summary.baseCurrency) : "—"}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="text-[32px] font-semibold leading-tight tabular-nums text-foreground">
+          {summary ? money(summary.totalValue, summary.baseCurrency) : "—"}
+        </div>
+        {quoteBadge ? <Badge tone="warn">{quoteBadge}</Badge> : null}
       </div>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2 text-[13px]">
         {todayPnl != null && summary ? (
@@ -362,7 +439,11 @@ function ValueHeader({ summary, holdings }) {
       </div>
       {segments.length > 0 ? (
         <>
-          <div className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
+          <div
+            data-slot="portfolio-allocation"
+            className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full"
+            aria-hidden="true"
+          >
             {segments.map((segment) => (
               <div
                 key={segment.symbol}

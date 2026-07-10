@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildAlertSentenceRows } from "../../../gui/web/src/features/market-state/alert-view-model.js";
+import {
+  buildAlertSentenceRows,
+  formatAlertObservedValue,
+} from "../../../gui/web/src/features/market-state/alert-view-model.js";
 
 const NOW = Date.parse("2026-06-12T15:00:00Z");
 const INSTRUMENTS = [
@@ -31,7 +34,7 @@ describe("buildAlertSentenceRows", () => {
 
     expect(row.symbol).toBe("NVDA");
     expect(row.sentence).toBe("Price crosses above $220.00");
-    expect(row.detail).toBe("Armed · last checked 4m ago at $204.25");
+    expect(row.detail).toBe("Armed · last checked 4m ago · price $204.25 vs threshold $220.00");
     expect(row.tone).toBe("armed");
     expect(row.enabled).toBe(true);
   });
@@ -99,5 +102,69 @@ describe("buildAlertSentenceRows", () => {
   it("falls back to the scope label when the instrument is unknown", () => {
     const [row] = buildAlertSentenceRows([rule({ instrumentId: 99 })], [], INSTRUMENTS, NOW);
     expect(row.symbol).toBe("Unknown");
+  });
+});
+
+describe("formatAlertObservedValue", () => {
+  it("uses condition context and human units for every alert condition", () => {
+    expect(
+      formatAlertObservedValue(
+        "price_crosses_above",
+        { threshold: 80 },
+        { field: "last_price", value: 83.55 },
+      ),
+    ).toBe("price $83.55 vs threshold $80.00");
+    expect(
+      formatAlertObservedValue(
+        "price_crosses_below",
+        { threshold: 80 },
+        { field: "last_price", value: 78.25 },
+      ),
+    ).toBe("price $78.25 vs threshold $80.00");
+    expect(
+      formatAlertObservedValue(
+        "price_crosses_sma",
+        { direction: "below", period: 20 },
+        { field: "price_sma_spread", value: -12.9, price: 82.62, sma: 95.52 },
+      ),
+    ).toBe("price $82.62 is 13.5% below the 20-day SMA");
+    expect(
+      formatAlertObservedValue(
+        "rsi_threshold",
+        { direction: "below", threshold: 30, period: 14 },
+        { field: "rsi", value: 32.8 },
+      ),
+    ).toBe("RSI 32.8 vs threshold 30");
+    expect(
+      formatAlertObservedValue(
+        "volume_spike",
+        { lookback_period: 20, multiplier: 2 },
+        { field: "volume_ratio", value: 2.1 },
+      ),
+    ).toBe("volume 2.1x its average");
+    expect(
+      formatAlertObservedValue(
+        "percent_move",
+        { direction: "up", percent: 3, window: "1d" },
+        { field: "percent_move", value: 3.2 },
+      ),
+    ).toBe("moved +3.2% today");
+    expect(
+      formatAlertObservedValue(
+        "sma_cross",
+        { direction: "above", fast_period: 20, slow_period: 50 },
+        { field: "sma_spread", value: -1.5, fast_sma: 98.5, slow_sma: 100 },
+      ),
+    ).toBe("20-day SMA $98.50 is 1.5% below 50-day SMA $100.00");
+  });
+
+  it("keeps incomplete historical observations explained instead of exposing a raw spread", () => {
+    expect(
+      formatAlertObservedValue(
+        "price_crosses_sma",
+        { direction: "below", period: 20 },
+        { field: "price_sma_spread", value: -13.53 },
+      ),
+    ).toBe("price is below the 20-day SMA (exact values unavailable)");
   });
 });

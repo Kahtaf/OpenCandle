@@ -41,7 +41,7 @@ describe("alert view model", () => {
         scope: "Instrument #42",
         mode: "Manual",
         lastChecked: "2026-05-31 12:00:00Z",
-        lastObserved: "last_price: 251.25 at 2026-05-31 12:00:00Z",
+        lastObserved: "price $251.25 vs threshold $250.00",
         latestEvent: "2026-05-31 12:00:00Z triggered: AAPL price crossed above $250",
         status: "triggered",
         enabled: true,

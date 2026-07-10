@@ -2,6 +2,7 @@ import { ArrowDown, CircleHelp, Send, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
+import { homePromptsForMarketState } from "../../components/chat/home-prompts.js";
 import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import {
   AssistantMessage,
@@ -52,7 +53,6 @@ export function ChatPanel({
   onOpenCommandPalette,
   onOpenSidebar,
   onOpenHome,
-  onOpenContext,
   sidebarCollapsed,
   onExpandSidebar,
   sessionId = "",
@@ -187,7 +187,7 @@ export function ChatPanel({
   const pendingAttachments =
     pendingAttachmentState.sessionId === sessionId ? pendingAttachmentState.attachments : [];
 
-  const submit = (value = draft) => {
+  const submit = (value = draft, { includePendingAttachments = true } = {}) => {
     const prompt = String(value || "").trim();
     if (!prompt) return;
     if (needsSetup) {
@@ -197,12 +197,17 @@ export function ChatPanel({
     if (chatDisabled) return;
     setAllowToolAutoOpen(true);
     setDraft("");
-    const attachments = pendingAttachments;
-    setPendingAttachmentState({ sessionId, attachments: [] });
+    const attachments = includePendingAttachments ? pendingAttachments : [];
+    if (includePendingAttachments) setPendingAttachmentState({ sessionId, attachments: [] });
     void startChatRun(prompt, {
       ...attachmentsForRequest(attachments),
       optimisticAttachments: attachmentsForOptimisticMessage(attachments),
     });
+  };
+
+  const retryFailedRun = (prompt) => {
+    if (chatDisabled || canStopRun) return;
+    submit(prompt, { includePendingAttachments: false });
   };
 
   const addAttachment = useCallback(
@@ -237,6 +242,37 @@ export function ChatPanel({
   const placeholder = needsSetup
     ? "Draft a question, then connect a model to send"
     : "Ask anything";
+  const isEmptyThread =
+    !needsSetup && !sessionLoading && visibleRows.length === 0 && !activity && !hasAskUserPrompts;
+  const homePrompts = homePromptsForMarketState({
+    watchlists: marketState.state?.watchlists,
+    watchlistItems: marketState.state?.watchlist,
+    portfolios: marketState.state?.portfolios,
+    portfolioLots: marketState.state?.portfolio,
+  });
+  const composer = (
+    <ChatComposer
+      draft={draft}
+      setDraft={setDraft}
+      disabled={composerDisabled}
+      setupBlocked={needsSetup}
+      placeholder={placeholder}
+      canSend={Boolean(draft.trim()) && !chatDisabled}
+      canStop={canStopRun}
+      onSubmit={() => submit()}
+      onStop={stop}
+      onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
+      modelSetup={modelSetup}
+      role={role}
+      send={send}
+      setToast={setToast}
+      pendingAttachments={pendingAttachments}
+      portfolios={marketState.state?.portfolios}
+      watchlists={marketState.state?.watchlists}
+      onAddAttachment={addAttachment}
+      onRemoveAttachment={removeAttachment}
+    />
+  );
 
   return (
     <section
@@ -245,10 +281,15 @@ export function ChatPanel({
     >
       <MobileHeader onOpenSidebar={onOpenSidebar} onOpenHome={onOpenHome} />
       {sidebarCollapsed ? <DesktopSidebarRestore onExpandSidebar={onExpandSidebar} /> : null}
-      <div className="relative min-h-0 flex-1">
+      <div
+        className={cn("relative min-h-0 flex-1", isEmptyThread && "flex flex-col justify-center")}
+      >
         <section
           ref={transcript.viewportRef}
-          className="h-full overflow-y-auto px-3 py-6 sm:px-6 md:px-12"
+          className={cn(
+            "h-full overflow-y-auto px-3 py-6 sm:px-6 md:px-12",
+            isEmptyThread && "h-auto flex-none overflow-visible",
+          )}
           data-chat-transcript
           data-scroll-anchor-id={scrollAnchorId || undefined}
           aria-label="Chat transcript"
@@ -263,8 +304,9 @@ export function ChatPanel({
             <ModelSetupCard modelSetup={modelSetup} role={role} send={send} setToast={setToast} />
           ) : sessionLoading ? (
             <SessionLoadingState />
-          ) : visibleRows.length === 0 && !activity && !hasAskUserPrompts ? (
+          ) : isEmptyThread ? (
             <EmptyThread
+              prompts={homePrompts}
               onPrompt={submit}
               onOpenCatalog={onOpenCommandPalette}
               disabled={chatDisabled}
@@ -280,6 +322,8 @@ export function ChatPanel({
                   anchorRowId={rowAnchorId}
                   anchorRef={transcript.anchorRowRef}
                   knownSymbols={knownSymbols}
+                  onRetryToolRun={retryFailedRun}
+                  retryDisabled={chatDisabled || canStopRun}
                 />
               ))}
               {askUserPrompts.map((prompt) => (
@@ -290,6 +334,7 @@ export function ChatPanel({
             </div>
           )}
         </section>
+        {isEmptyThread ? composer : null}
         {transcript.showJumpToLatest ? (
           <Button
             type="button"
@@ -322,28 +367,7 @@ export function ChatPanel({
         onAddToWatchlist={addSelectedToWatchlist}
         onAskAbout={askAboutSymbol}
       />
-      <ChatComposer
-        draft={draft}
-        setDraft={setDraft}
-        disabled={composerDisabled}
-        setupBlocked={needsSetup}
-        placeholder={placeholder}
-        canSend={Boolean(draft.trim()) && !chatDisabled}
-        canStop={canStopRun}
-        onSubmit={() => submit()}
-        onStop={stop}
-        onOpenCatalog={() => onOpenCommandPalette?.("catalog")}
-        onOpenContext={onOpenContext}
-        modelSetup={modelSetup}
-        role={role}
-        send={send}
-        setToast={setToast}
-        pendingAttachments={pendingAttachments}
-        portfolios={marketState.state?.portfolios}
-        watchlists={marketState.state?.watchlists}
-        onAddAttachment={addAttachment}
-        onRemoveAttachment={removeAttachment}
-      />
+      {!isEmptyThread ? composer : null}
     </section>
   );
 }
@@ -738,6 +762,8 @@ function MessageRow({
   anchorRowId = "",
   anchorRef,
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
+  onRetryToolRun,
+  retryDisabled = false,
 }) {
   const messageId =
     entry.messageId || (String(entry.id || "").startsWith("message-") ? entry.id.slice(8) : "");
@@ -760,6 +786,8 @@ function MessageRow({
         catalog={catalog}
         autoOpenToolRun={autoOpenToolRun}
         knownSymbols={knownSymbols}
+        onRetryToolRun={onRetryToolRun}
+        retryDisabled={retryDisabled}
       />
     </div>
   );
@@ -771,9 +799,18 @@ function MessageRowContent({
   catalog,
   autoOpenToolRun = false,
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
+  onRetryToolRun,
+  retryDisabled = false,
 }) {
   if (entry.type === "tool_run") {
-    return <StepsCard run={entry} autoOpen={autoOpenToolRun} />;
+    return (
+      <StepsCard
+        run={entry}
+        autoOpen={autoOpenToolRun}
+        onRetry={onRetryToolRun}
+        retryDisabled={retryDisabled}
+      />
+    );
   }
   if (entry.type === "custom_message") {
     return <CustomMessage customType={entry.customType} content={entry.content} />;

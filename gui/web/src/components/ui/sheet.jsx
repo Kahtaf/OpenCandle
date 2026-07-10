@@ -30,12 +30,12 @@ function useIsDesktop() {
 
 const SheetContext = createContext({ isDesktop: false });
 
-export function Sheet({ open, onOpenChange, children }) {
+export function Sheet({ open, onOpenChange, children, autoFocus = false }) {
   const isDesktop = useIsDesktop();
   const Root = isDesktop ? DialogPrimitive.Root : Drawer.Root;
   return (
     <SheetContext.Provider value={{ isDesktop }}>
-      <Root open={open} onOpenChange={onOpenChange}>
+      <Root open={open} onOpenChange={onOpenChange} autoFocus={isDesktop ? undefined : autoFocus}>
         {children}
       </Root>
     </SheetContext.Provider>
@@ -64,7 +64,13 @@ export const BOTTOM_SHEET_SURFACE_CLASS =
 
 export const BOTTOM_SHEET_HANDLE_CLASS = "mx-auto mb-2 mt-3 h-1 w-9 shrink-0 rounded-full bg-hard";
 
-export function SheetContent({ children, className, width = "md", handleLabel = "Panel" }) {
+export function SheetContent({
+  children,
+  className,
+  width = "md",
+  handleLabel = "Panel",
+  side = "center",
+}) {
   const { isDesktop } = useContext(SheetContext);
   if (isDesktop) {
     return (
@@ -72,9 +78,12 @@ export function SheetContent({ children, className, width = "md", handleLabel = 
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-[2px] overscroll-contain data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
+          data-side={side}
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 flex max-h-[min(84dvh,720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
-            desktopWidthClasses[width] ?? desktopWidthClasses.md,
+            side === "right"
+              ? "fixed inset-y-0 right-0 z-50 flex h-dvh w-[min(400px,calc(100vw-16px))] max-w-[400px] flex-col overflow-hidden rounded-l-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:slide-in-from-right data-[state=open]:duration-200 data-[state=open]:ease-out data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=closed]:duration-150 data-[state=closed]:ease-in"
+              : "fixed left-1/2 top-1/2 z-50 flex max-h-[min(84dvh,720px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-subtle-md outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            side === "right" ? null : (desktopWidthClasses[width] ?? desktopWidthClasses.md),
             className,
           )}
         >
@@ -91,6 +100,7 @@ export function SheetContent({ children, className, width = "md", handleLabel = 
       <Drawer.Overlay className={SHEET_OVERLAY_CLASS} />
       <Drawer.Content
         aria-describedby={undefined}
+        data-side={side}
         className={cn(
           BOTTOM_SHEET_SURFACE_CLASS,
           "md:inset-x-auto md:bottom-4 md:h-auto md:max-h-[84vh] md:rounded-xl",

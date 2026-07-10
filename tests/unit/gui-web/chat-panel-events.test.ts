@@ -230,6 +230,15 @@ describe("ChatPanel event transcript rendering", () => {
     expect(html).not.toContain("Compare NVDA and AMD");
   });
 
+  it("keeps the composer in the centered empty-home block only before the first message", () => {
+    const source = readFileSync(resolve("gui/web/src/features/chat/ChatPanel.jsx"), "utf-8");
+
+    expect(source).toContain("const isEmptyThread =");
+    expect(source).toContain('isEmptyThread && "flex flex-col justify-center"');
+    expect(source).toContain("{isEmptyThread ? composer : null}");
+    expect(source).toContain("{!isEmptyThread ? composer : null}");
+  });
+
   it("renders scoped live thinking text for the active run", () => {
     const html = renderChatPanelHtml({
       runState: "streaming",

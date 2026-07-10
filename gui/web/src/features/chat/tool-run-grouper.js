@@ -1,3 +1,5 @@
+import { textContent } from "../../rendering/text.js";
+
 // Local text extractor that ignores toolCall parts. The shared `textContent`
 // includes a `part.name` fallback (used to render assistant tool-call shells
 // elsewhere), which would let tool names like "get_sentiment_summary" leak
@@ -35,10 +37,12 @@ export function groupToolRuns(rows) {
   const out = [];
   let run = null;
   let pendingNarration = "";
+  let lastUserPrompt = "";
 
   const flushRun = () => {
     if (!run) return;
     run.status = aggregateStatus(run.steps);
+    run.failureReason = failureReasonForRun(run);
     out.push(run);
     run = null;
   };
@@ -57,6 +61,7 @@ export function groupToolRuns(rows) {
     if (row.type === "user_message") {
       flushRun();
       pendingNarration = "";
+      lastUserPrompt = textContent(row.content).trim();
       out.push(row);
       continue;
     }
@@ -77,7 +82,7 @@ export function groupToolRuns(rows) {
       // The assistant emitted tool calls. Start a run if there isn't one;
       // otherwise continue the existing run.
       if (!run) {
-        run = startRun(toolCalls[0], row.sessionId);
+        run = startRun(toolCalls[0], row.sessionId, lastUserPrompt);
         run.narrationBefore = (pendingNarration || text || "").trim();
         pendingNarration = "";
       } else if (text) {
@@ -116,6 +121,7 @@ export function groupToolRuns(rows) {
           steps: [],
           status: "pending",
           narrationBefore: "",
+          retryPrompt: "",
           entryRange: [out.length, out.length],
         };
         run.steps.push({
@@ -157,7 +163,7 @@ export function groupToolRuns(rows) {
   return out;
 }
 
-function startRun(firstCall, fallbackSessionId = "") {
+function startRun(firstCall, fallbackSessionId = "", retryPrompt = "") {
   return {
     type: "tool_run",
     id: `run-${firstCall.id}`,
@@ -165,6 +171,7 @@ function startRun(firstCall, fallbackSessionId = "") {
     steps: [],
     status: "pending",
     narrationBefore: "",
+    retryPrompt,
     entryRange: [],
   };
 }
@@ -173,4 +180,10 @@ function aggregateStatus(steps) {
   if (steps.some((s) => s.status === "pending")) return "pending";
   if (steps.some((s) => s.status === "error")) return "error";
   return "completed";
+}
+
+function failureReasonForRun(run) {
+  const failedStep = run.steps.find((step) => step.status === "error");
+  if (!failedStep?.result?.content) return "";
+  return textContent(failedStep.result.content).replace(/\s+/g, " ").trim();
 }

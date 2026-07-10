@@ -137,6 +137,29 @@ describe("EntityPopover", () => {
     expect(html).toContain("Open");
     expect(html).toContain("P/E");
     expect(html).not.toContain("No cached quote");
+    expect(html).toContain("grid-cols-[auto_minmax(0,1fr)]");
+    expect(html).not.toContain("bg-card/70");
+  });
+
+  it("omits the company-name line when quote and saved state have no name", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(EntityPopover, {
+        open: true,
+        symbol: "AA",
+        marketState: {
+          ...baseMarketState,
+          quoteSnapshot: {
+            watchlistQuotes: [{ symbol: "AA", status: "ok", price: 30 }],
+            portfolioQuotes: [],
+          },
+        },
+        resolvedCandidate: { symbol: "AA" },
+        onAddToWatchlist: vi.fn(),
+        onAskAbout: vi.fn(),
+      }),
+    );
+
+    expect(html).not.toContain('class="truncate text-xs text-muted-foreground">AA</div>');
   });
 
   it("disables add-to-watchlist when resolution failed", () => {

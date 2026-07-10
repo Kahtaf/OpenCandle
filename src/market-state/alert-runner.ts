@@ -10,6 +10,7 @@ import type { AlertRuleRecord, InstrumentRecord, MarketStateService } from "./se
 export interface AlertQuoteObservation {
   symbol: string;
   value: number;
+  observationDetails?: Record<string, number>;
   sourceProvider: string;
   observedAt: string;
   providerDataAt?: string | null;
@@ -255,6 +256,7 @@ export async function runAlertChecks(
       const observed = {
         value: observation.value,
         field: observationField(item.rule),
+        ...observation.observationDetails,
         at: now,
         observedAt: now,
         providerDataAt: observation.providerDataAt ?? null,
@@ -471,6 +473,7 @@ async function loadHistoricalObservation(
         latestClose - latestSma,
         bars.at(-1)?.date ?? null,
         now,
+        { price: latestClose, sma: latestSma },
       );
     }
 
@@ -518,6 +521,7 @@ async function loadHistoricalObservation(
         roundObservation(fast - slow),
         bars.at(-1)?.date ?? null,
         now,
+        { fast_sma: fast, slow_sma: slow },
       );
     }
 
@@ -627,10 +631,12 @@ function historicalObservation(
   value: number,
   providerDataAt: string | null,
   now: string,
+  observationDetails?: Record<string, number>,
 ): AlertQuoteObservation {
   return {
     symbol,
     value,
+    observationDetails,
     sourceProvider: "yahoo",
     observedAt: now,
     providerDataAt,

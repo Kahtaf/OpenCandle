@@ -4,6 +4,7 @@
       {
         "meta": {
           "symbol": "AAPL",
+          "longName": "Apple Inc.",
           "regularMarketPrice": 178.72,
           "previousClose": 175.10,
           "regularMarketOpen": 176.15,

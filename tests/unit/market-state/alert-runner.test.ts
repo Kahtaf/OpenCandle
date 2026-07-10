@@ -4,6 +4,7 @@ import {
   ALERT_CONDITION_VERSION,
   percentMove,
   priceCrossesAbove,
+  priceCrossesSma,
   rsiThreshold,
   smaCross,
   volumeSpike,
@@ -900,9 +901,55 @@ describe("alert runner", () => {
     expect(service.listAlertEvents()).toEqual([
       expect.objectContaining({
         message: "AAPL fast SMA crossed above slow SMA at +$1.00",
-        observedValueJson: expect.objectContaining({ field: "sma_spread", value: 1 }),
+        observedValueJson: expect.objectContaining({
+          field: "sma_spread",
+          value: 1,
+          fast_sma: 102,
+          slow_sma: 101,
+        }),
       }),
     ]);
+  });
+
+  it("stores the price and SMA legs behind a price-versus-SMA observation", async () => {
+    const instrument = service.upsertInstrumentRecord({
+      symbol: "AAPL",
+      assetType: "equity",
+      name: "Apple Inc.",
+      exchange: "NMS",
+      currency: "USD",
+      provider: "yahoo",
+    });
+    const rule = service.createAlertRule({
+      scopeType: "instrument",
+      instrumentId: instrument.id,
+      conditionType: "price_crosses_sma",
+      conditionVersion: ALERT_CONDITION_VERSION,
+      condition: priceCrossesSma(2, "below"),
+      timeframe: "1d",
+      cooldownSeconds: 0,
+    });
+    const providers: AlertRunnerProviders = {
+      getTradingViewQuotes: vi.fn(),
+      getYahooQuote: vi.fn(),
+      getHistory: vi.fn(async () => [
+        { date: "2026-06-01", open: 100, high: 100, low: 100, close: 100, volume: 1_000 },
+        { date: "2026-06-02", open: 80, high: 80, low: 80, close: 80, volume: 1_000 },
+      ]),
+    };
+
+    await runAlertChecks(service, {
+      triggerType: "manual",
+      now: "2026-06-02T12:00:00.000Z",
+      providers,
+    });
+
+    expect(service.getAlertRule(rule.id).lastObservedJson).toMatchObject({
+      field: "price_sma_spread",
+      value: -10,
+      price: 80,
+      sma: 90,
+    });
   });
 
   it("shares daily history observations across indicator alerts for the same symbol", async () => {
