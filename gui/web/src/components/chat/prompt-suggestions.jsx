@@ -1,48 +1,7 @@
 import { BookOpen } from "lucide-react";
 import { Button } from "../ui/button.jsx";
 import { Kbd } from "../ui/kbd.jsx";
-
-// Fast, keyless prompts lead; /analyze is the deep-research option and is
-// labeled as the longer multi-analyst run it is.
-export const DEFAULT_PROMPTS = [
-  ["What is NVDA trading at?", "What is NVDA trading at?"],
-  ["Compare NVDA and AMD", "Compare NVDA and AMD using latest quotes."],
-  ["Options chain for NVDA", "Show options chain for NVDA"],
-  ["Deep research: NVDA (multi-analyst, takes a few minutes)", "/analyze NVDA"],
-];
-
-export function homePromptsForMarketState({
-  watchlists = [],
-  watchlistItems = [],
-  portfolios = [],
-  portfolioLots = [],
-} = {}) {
-  const watchlist = namedCollectionWithItems(watchlists, watchlistItems, "watchlistId");
-  const portfolio = namedCollectionWithItems(portfolios, portfolioLots, "portfolioId");
-  const prompts = [];
-
-  if (watchlist) {
-    prompts.push([
-      `What's moving in ${watchlist.name}?`,
-      `What's moving in my ${watchlist.name} watchlist?`,
-    ]);
-  }
-  if (portfolio) {
-    prompts.push([
-      `How is ${portfolio.name} doing?`,
-      `How is my ${portfolio.name} portfolio doing?`,
-    ]);
-  }
-  return prompts.length > 0 ? prompts : DEFAULT_PROMPTS;
-}
-
-function namedCollectionWithItems(collections, items, collectionId) {
-  const idsWithItems = new Set(items.map((item) => String(item?.[collectionId] ?? "")));
-  return collections.find((collection) => {
-    const name = String(collection?.name ?? "").trim();
-    return name && idsWithItems.has(String(collection?.id ?? ""));
-  });
-}
+import { DEFAULT_PROMPTS } from "./home-prompts.js";
 
 export function EmptyThread({
   prompts = DEFAULT_PROMPTS,

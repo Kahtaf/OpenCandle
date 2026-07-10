@@ -382,6 +382,7 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
   | {
       symbol: string;
       status: "ok";
+      name?: string;
       price: number;
       change: number;
       changePercent: number;
@@ -403,8 +404,15 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
   return {
     symbol: normalized,
     status: quote.status,
+    name: quote.name,
     price: quote.price,
+    change: quote.change,
     changePercent: quote.changePercent,
+    volume: quote.volume,
+    high: quote.high,
+    low: quote.low,
+    week52High: quote.week52High,
+    week52Low: quote.week52Low,
     fetchedAt: quote.fetchedAt,
     stale: quote.stale,
     currency: quote.currency,
@@ -416,7 +424,13 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
       status: "ok";
       name?: string;
       price: number;
+      change: number;
       changePercent: number;
+      volume: number;
+      high: number;
+      low: number;
+      week52High: number;
+      week52Low: number;
       fetchedAt: string;
       stale: boolean;
       currency: string | null;

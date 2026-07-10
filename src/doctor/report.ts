@@ -146,7 +146,8 @@ export function deriveDoctorStatus(checks: readonly DoctorCheck[]): DoctorOveral
     checks.some(
       (candidate) =>
         candidate.status === "warn" ||
-        (candidate.capability === "optional" && candidate.status === "fail"),
+        (candidate.capability === "optional" && candidate.status === "fail") ||
+        (candidate.capability === "core" && candidate.status === "unknown"),
     )
   ) {
     return "degraded";

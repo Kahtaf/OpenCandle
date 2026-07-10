@@ -54,6 +54,9 @@ describe("doctor report", () => {
     expect(deriveDoctorStatus([check({ status: "unknown", capability: "optional" })])).toBe(
       "ready",
     );
+    // Unverified CORE setup must never read as ready — only unchecked
+    // optional capabilities do.
+    expect(deriveDoctorStatus([check({ status: "unknown", capability: "core" })])).toBe("degraded");
     expect(deriveDoctorStatus([check({ status: "skip", capability: "optional" })])).toBe("ready");
   });
 

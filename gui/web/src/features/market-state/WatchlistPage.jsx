@@ -87,15 +87,17 @@ export function WatchlistPage({
     [state.quoteSnapshot],
   );
   const quoteFlashes = useQuoteChangeFlash(quotesBySymbol);
-  const quoteBadge = useMemo(
-    () => degradedQuoteBadge(state.quoteSnapshot?.watchlistQuotes ?? []),
-    [state.quoteSnapshot],
-  );
   const alertsByInstrument = useMemo(() => groupBy(state.alerts, "instrumentId"), [state.alerts]);
   const watchlistItems = useMemo(
     () => (state.watchlist ?? []).filter((item) => item.watchlistId === activeWatchlist?.id),
     [state.watchlist, activeWatchlist],
   );
+  const quoteBadge = useMemo(() => {
+    const itemIds = new Set(watchlistItems.map((item) => item.id));
+    return degradedQuoteBadge(
+      (state.quoteSnapshot?.watchlistQuotes ?? []).filter((quote) => itemIds.has(quote.itemId)),
+    );
+  }, [state.quoteSnapshot, watchlistItems]);
   const rows = useMemo(
     () => filterItems(watchlistItems, filter, ["symbol", "name"]),
     [watchlistItems, filter],
@@ -278,7 +280,10 @@ function QuoteBoard({
                 {quote?.status === "ok" ? money(quote.price, quote.currency ?? item.currency) : "—"}
               </TableCell>
               <TableCell className="hidden py-2.5 text-right md:table-cell">
-                <SignedMoney value={quote?.status === "ok" ? quote.change : null} />
+                <SignedMoney
+                  value={quote?.status === "ok" ? quote.change : null}
+                  currency={quote?.currency ?? item.currency ?? "USD"}
+                />
               </TableCell>
               <TableCell className="py-2.5 text-right">
                 <SignedPercent value={quote?.status === "ok" ? quote.changePercent : null} />

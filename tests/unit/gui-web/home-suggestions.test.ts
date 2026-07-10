@@ -1,10 +1,8 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import {
-  EmptyThread,
-  homePromptsForMarketState,
-} from "../../../gui/web/src/components/chat/prompt-suggestions.jsx";
+import { homePromptsForMarketState } from "../../../gui/web/src/components/chat/home-prompts.js";
+import { EmptyThread } from "../../../gui/web/src/components/chat/prompt-suggestions.jsx";
 
 describe("homePromptsForMarketState", () => {
   it("uses the existing generic prompts when there is no saved state", () => {

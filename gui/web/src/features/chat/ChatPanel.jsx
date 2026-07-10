@@ -2,10 +2,8 @@ import { ArrowDown, CircleHelp, Send, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { reduceChatEvents } from "../../../../shared/event-reducer.ts";
 import { ChatComposer } from "../../components/chat/chat-composer.jsx";
-import {
-  EmptyThread,
-  homePromptsForMarketState,
-} from "../../components/chat/prompt-suggestions.jsx";
+import { homePromptsForMarketState } from "../../components/chat/home-prompts.js";
+import { EmptyThread } from "../../components/chat/prompt-suggestions.jsx";
 import {
   AssistantMessage,
   CustomMessage,

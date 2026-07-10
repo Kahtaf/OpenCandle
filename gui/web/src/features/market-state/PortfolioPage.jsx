@@ -76,8 +76,13 @@ export function PortfolioPage({
   );
   const quoteFlashes = useQuoteChangeFlash(quotesBySymbol);
   const quoteBadge = useMemo(
-    () => degradedQuoteBadge(state.quoteSnapshot?.portfolioQuotes ?? []),
-    [state.quoteSnapshot],
+    () =>
+      degradedQuoteBadge(
+        (state.quoteSnapshot?.portfolioQuotes ?? []).filter(
+          (quote) => quote.portfolioId === activePortfolio?.id,
+        ),
+      ),
+    [state.quoteSnapshot, activePortfolio?.id],
   );
   const summary =
     state.quoteSnapshot?.portfolioSummaries?.find(
@@ -231,7 +236,7 @@ export function PortfolioPage({
                             : "—"}
                         </td>
                       </tr>
-                      <tr aria-hidden={!expanded.has(row.symbol)}>
+                      <tr inert={!expanded.has(row.symbol)}>
                         <td colSpan={8} className="p-0">
                           <div
                             data-slot="portfolio-lot-reveal"
