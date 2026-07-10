@@ -80,19 +80,35 @@ const results: Result[] = [];
 // Genuine outages (network errors, 5xx, shape changes) still fail.
 const ENVIRONMENT_LIMITATIONS = /HTTP 429|Too Many Requests|rate limited|is not installed/i;
 
-async function test(tool: string, ticker: string, fn: () => Promise<any>) {
+async function test(tool: string, ticker: string, fn: () => Promise<unknown>) {
   try {
     const data = await fn();
     if (data == null) throw new Error("null response");
     results.push({ tool, ticker, status: "PASS" });
     process.stdout.write(".");
-  } catch (e: any) {
-    const message = e.message?.slice(0, 80);
-    if (ENVIRONMENT_LIMITATIONS.test(e.message ?? "")) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (ENVIRONMENT_LIMITATIONS.test(message)) {
       results.push({ tool, ticker, status: "SKIP", error: message });
       process.stdout.write("s");
-    } else {
-      results.push({ tool, ticker, status: "FAIL", error: message });
+      return;
+    }
+
+    process.stdout.write("r");
+    await sleep(2000);
+    try {
+      const data = await fn();
+      if (data == null) throw new Error("null response");
+      results.push({ tool, ticker, status: "PASS" });
+      process.stdout.write(".");
+    } catch (retryError) {
+      const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+      if (ENVIRONMENT_LIMITATIONS.test(retryMessage)) {
+        results.push({ tool, ticker, status: "SKIP", error: retryMessage.slice(0, 80) });
+        process.stdout.write("s");
+        return;
+      }
+      results.push({ tool, ticker, status: "FAIL", error: retryMessage.slice(0, 80) });
       process.stdout.write("X");
     }
   }

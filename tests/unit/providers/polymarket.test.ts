@@ -63,6 +63,72 @@ describe("Polymarket provider", () => {
     );
   });
 
+  it("keeps explicitly open markets despite stale end dates while using end dates for flagless markets", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          markets: [
+            {
+              id: "explicitly-open-stale-date",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-stale-date",
+              outcomes: '["Yes","No"]',
+              outcomePrices: '["0.0485","0.9515"]',
+              closed: false,
+              active: true,
+              endDate: "2020-01-01T00:00:00Z",
+            },
+            {
+              id: "explicitly-closed",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-closed",
+              outcomes: '["Yes"]',
+              outcomePrices: '["1"]',
+              closed: true,
+              active: true,
+            },
+            {
+              id: "flagless-stale-date",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-flagless-stale",
+              outcomes: '["Yes"]',
+              outcomePrices: '["0.5"]',
+              endDate: "2020-01-01T00:00:00Z",
+            },
+            {
+              id: "flagless-future-date",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-flagless-future",
+              outcomes: '["Yes"]',
+              outcomePrices: '["0.5"]',
+              endDate: "2030-01-01T00:00:00Z",
+            },
+            {
+              id: "flagless-no-date",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-flagless-no-date",
+              outcomes: '["Yes"]',
+              outcomePrices: '["0.5"]',
+            },
+          ],
+        }),
+    });
+
+    const quotes = await searchPredictionMarkets("fed rate cut market status", 8);
+
+    expect(quotes.map((quote) => quote.marketId)).toEqual(
+      expect.arrayContaining([
+        "explicitly-open-stale-date",
+        "flagless-future-date",
+        "flagless-no-date",
+      ]),
+    );
+    const marketIds = quotes.map((quote) => quote.marketId);
+    expect(marketIds).not.toContain("explicitly-closed");
+    expect(marketIds).not.toContain("flagless-stale-date");
+  });
+
   it("preserves outcome-price positions when skipping malformed Polymarket prices", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,

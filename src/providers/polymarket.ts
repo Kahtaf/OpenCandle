@@ -132,8 +132,12 @@ function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMark
 }
 
 function isOpenMarket(market: GammaMarket): boolean {
-  if (booleanValue(market.closed) === true) return false;
-  if (booleanValue(market.active) === false) return false;
+  const closed = booleanValue(market.closed);
+  const active = booleanValue(market.active);
+  if (closed === true) return false;
+  if (active === false) return false;
+  if (closed !== undefined || active !== undefined) return true;
+
   const endDate = stringValue(market.endDate) ?? stringValue(market.endDateIso);
   if (!endDate) return true;
   const parsed = new Date(endDate);
