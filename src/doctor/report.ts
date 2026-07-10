@@ -146,7 +146,6 @@ export function deriveDoctorStatus(checks: readonly DoctorCheck[]): DoctorOveral
     checks.some(
       (candidate) =>
         candidate.status === "warn" ||
-        candidate.status === "unknown" ||
         (candidate.capability === "optional" && candidate.status === "fail"),
     )
   ) {
@@ -512,7 +511,11 @@ async function buildGuiChecks(options: BuildDoctorReportOptions): Promise<Doctor
         label: "GUI server",
         status: reachable ? (role === "follower" ? "warn" : "pass") : "skip",
         capability: "optional",
-        summary: reachable ? `GUI server is ${role}` : "GUI server is not running",
+        summary: reachable
+          ? role === "writer"
+            ? "GUI server is running and can run sessions"
+            : `GUI server is ${role}`
+          : "GUI server is not running",
         remediation:
           role === "follower"
             ? "Open the writer GUI process to perform setup mutations."
@@ -545,7 +548,9 @@ async function buildGuiChecks(options: BuildDoctorReportOptions): Promise<Doctor
         status: verified ? (role === "follower" ? "warn" : "pass") : "warn",
         capability: "optional",
         summary: verified
-          ? `GUI server is ${role}`
+          ? role === "writer"
+            ? "GUI server is running and can run sessions"
+            : `GUI server is ${role}`
           : response.ok
             ? "OpenCandle GUI health payload was not verified"
             : `GUI health returned HTTP ${response.status}`,
@@ -580,7 +585,14 @@ function sessionRemediation(providerId: ProviderId, installCmd: string | undefin
 }
 
 function buildSummary(status: DoctorOverallStatus, checks: readonly DoctorCheck[]): string {
-  if (status === "ready") return "OpenCandle core health is ready.";
+  if (status === "ready") {
+    const unchecked = checks.filter((candidate) => candidate.status === "unknown");
+    if (unchecked.length === 0) return "OpenCandle core health is ready.";
+    if (unchecked.every((candidate) => candidate.capability === "optional")) {
+      return `OpenCandle core health is ready with ${unchecked.length} optional ${unchecked.length === 1 ? "capability" : "capabilities"} unchecked.`;
+    }
+    return `OpenCandle is usable with ${unchecked.length} unchecked ${unchecked.length === 1 ? "capability" : "capabilities"}.`;
+  }
   const firstBlocking = checks.find(
     (candidate) => candidate.capability === "core" && candidate.status === "fail",
   );

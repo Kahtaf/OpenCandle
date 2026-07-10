@@ -28,9 +28,17 @@ export interface MarketStateQuoteSnapshot {
     itemId: number;
     instrumentId: number;
     symbol: string;
+    name?: string;
     status: "ok" | "unavailable";
     price?: number;
+    change?: number;
     changePercent?: number;
+    volume?: number;
+    dayHigh?: number;
+    dayLow?: number;
+    week52High?: number;
+    week52Low?: number;
+    currency?: string | null;
     fetchedAt?: string;
     stale?: boolean;
     reason?: string;
@@ -40,6 +48,7 @@ export interface MarketStateQuoteSnapshot {
     portfolioId: number;
     instrumentId: number;
     symbol: string;
+    name?: string;
     status: "ok" | "unavailable";
     currentPrice?: number | null;
     changePercent?: number;
@@ -200,9 +209,17 @@ export async function buildMarketStateQuoteSnapshot(
         itemId: item.id,
         instrumentId: item.instrumentId,
         symbol: item.symbol,
+        name: quote.name,
         status: "ok" as const,
         price: quote.price,
+        change: quote.change,
         changePercent: quote.changePercent,
+        volume: quote.volume,
+        dayHigh: quote.high,
+        dayLow: quote.low,
+        week52High: quote.week52High,
+        week52Low: quote.week52Low,
+        currency: quote.currency,
         fetchedAt: quote.fetchedAt,
         stale: quote.stale,
       };
@@ -256,6 +273,7 @@ function buildPortfolioQuoteResult({
         portfolioId: lot.portfolioId,
         instrumentId: lot.instrumentId,
         symbol: lot.symbol,
+        name: quote.name,
         status: "unavailable" as const,
         totalCost,
         currency: lotCurrency,
@@ -289,6 +307,7 @@ function buildPortfolioQuoteResult({
       portfolioId: lot.portfolioId,
       instrumentId: lot.instrumentId,
       symbol: lot.symbol,
+      name: quote.name,
       status: "ok" as const,
       currentPrice: quote.price,
       changePercent: quote.changePercent,
@@ -364,7 +383,13 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
       symbol: string;
       status: "ok";
       price: number;
+      change: number;
       changePercent: number;
+      volume: number;
+      high: number;
+      low: number;
+      week52High: number;
+      week52Low: number;
       fetchedAt: string;
       stale: boolean;
       currency: string | null;
@@ -374,14 +399,22 @@ export async function getInstrumentQuoteSnapshot(symbol: string): Promise<
   const normalized = symbol.trim().toUpperCase();
   if (!normalized) return { symbol: "", status: "unavailable", reason: "symbol is required" };
   const quote = await fetchQuoteSnapshot(normalized);
-  return quote.status === "ok"
-    ? { symbol: normalized, ...quote }
-    : { symbol: normalized, ...quote };
+  if (quote.status === "unavailable") return { symbol: normalized, ...quote };
+  return {
+    symbol: normalized,
+    status: quote.status,
+    price: quote.price,
+    changePercent: quote.changePercent,
+    fetchedAt: quote.fetchedAt,
+    stale: quote.stale,
+    currency: quote.currency,
+  };
 }
 
 async function fetchQuoteSnapshot(symbol: string): Promise<
   | {
       status: "ok";
+      name?: string;
       price: number;
       changePercent: number;
       fetchedAt: string;
@@ -407,8 +440,15 @@ async function fetchQuoteSnapshot(symbol: string): Promise<
   }
   return {
     status: "ok",
+    name: result.data.name,
     price: result.data.price,
+    change: result.data.change,
     changePercent: result.data.changePercent,
+    volume: result.data.volume,
+    high: result.data.high,
+    low: result.data.low,
+    week52High: result.data.week52High,
+    week52Low: result.data.week52Low,
     fetchedAt: freshness.providerDataAt ?? result.timestamp,
     stale: Boolean(result.stale),
     currency: result.data.currency ?? null,

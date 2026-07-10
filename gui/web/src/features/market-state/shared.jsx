@@ -1,8 +1,9 @@
 import { Pencil, Search } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
 import { Input } from "../../components/ui/input.jsx";
 import { cn } from "../../lib/utils.js";
+import { quoteChangeDirections } from "./format.js";
 
 // Two-step inline confirm for destructive actions; arms on first click, resets after 4s.
 export function ConfirmButton({
@@ -44,20 +45,29 @@ export function ConfirmButton({
 }
 
 export function Panel({ title, count, meta, actions, children }) {
+  const hasDetails = title || count !== undefined || meta;
+  const hasHeader = hasDetails || actions;
+
   return (
     <section className="rounded-xl border border-border bg-card shadow-subtle-xs">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
-          {count !== undefined ? (
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
-              {count}
-            </span>
+      {hasHeader ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+          {hasDetails ? (
+            <div className="flex min-w-0 items-center gap-2">
+              {title ? (
+                <h2 className="text-balance text-sm font-semibold text-foreground">{title}</h2>
+              ) : null}
+              {count !== undefined ? (
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {count}
+                </span>
+              ) : null}
+              {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+            </div>
           ) : null}
-          {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
+          {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
-      </div>
+      ) : null}
       {children}
     </section>
   );
@@ -203,6 +213,33 @@ export function Badge({ tone = "neutral", children }) {
   );
 }
 
+export function useQuoteChangeFlash(quotes) {
+  const previousQuotes = useRef(null);
+  const [directions, setDirections] = useState(() => new Map());
+
+  useEffect(() => {
+    const previous = previousQuotes.current;
+    previousQuotes.current = quotes;
+    if (!previous) return undefined;
+
+    const nextDirections = quoteChangeDirections(previous, quotes);
+    if (nextDirections.size === 0) return undefined;
+    setDirections(nextDirections);
+    const timer = window.setTimeout(() => setDirections(new Map()), 200);
+    return () => window.clearTimeout(timer);
+  }, [quotes]);
+
+  return directions;
+}
+
+export function quoteFlashClass(direction) {
+  if (!direction) return "";
+  return cn(
+    "transition-colors duration-200 ease-out motion-reduce:transition-none motion-reduce:bg-transparent",
+    direction === "up" ? "bg-success/[0.08]" : "bg-destructive/[0.08]",
+  );
+}
+
 export function StateTabs({
   items,
   activeItem,
@@ -212,10 +249,25 @@ export function StateTabs({
   onSelect,
   onRename,
 }) {
+  const tabRefs = useRef(new Map());
+
+  const onTabKeyDown = (event, index) => {
+    const nextIndex = nextStateTabIndex(index, items.length, event.key);
+    if (nextIndex === index) return;
+    event.preventDefault();
+    const nextItem = items[nextIndex];
+    onSelect(nextItem.id);
+    tabRefs.current.get(nextItem.id)?.focus();
+  };
+
   return (
     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto" role="tablist">
-        {items.map((item) => {
+      <div
+        className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
+        role="tablist"
+        aria-orientation="horizontal"
+      >
+        {items.map((item, index) => {
           const active = item.id === activeItem?.id;
           return (
             <button
@@ -223,11 +275,17 @@ export function StateTabs({
               type="button"
               role="tab"
               aria-selected={active}
+              tabIndex={active ? 0 : -1}
+              ref={(node) => {
+                if (node) tabRefs.current.set(item.id, node);
+                else tabRefs.current.delete(item.id);
+              }}
               className={cn(
                 "inline-flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] md:min-h-8",
                 active ? "bg-background text-foreground shadow-subtle-xs" : "hover:bg-secondary",
               )}
               onClick={() => onSelect(item.id)}
+              onKeyDown={(event) => onTabKeyDown(event, index)}
             >
               <span>{item.name}</span>
               <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
@@ -252,6 +310,15 @@ export function StateTabs({
       ) : null}
     </div>
   );
+}
+
+export function nextStateTabIndex(currentIndex, itemCount, key) {
+  if (itemCount < 1) return -1;
+  if (key === "ArrowRight") return (currentIndex + 1) % itemCount;
+  if (key === "ArrowLeft") return (currentIndex - 1 + itemCount) % itemCount;
+  if (key === "Home") return 0;
+  if (key === "End") return itemCount - 1;
+  return currentIndex;
 }
 
 export function RowActions({ actions, disabled }) {

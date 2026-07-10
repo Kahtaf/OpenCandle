@@ -21,7 +21,6 @@ describe("ChatComposer", () => {
           canSend: true,
           onSubmit: vi.fn(),
           onOpenCatalog: vi.fn(),
-          onOpenContext: vi.fn(),
           modelSetup: { requirement: "ready" },
           role: "writer",
           send: vi.fn(),
@@ -35,13 +34,21 @@ describe("ChatComposer", () => {
     );
   }
 
-  it("uses plus for attachments and eye wording for the context drawer", () => {
+  it("uses plus for attachments without a context drawer trigger", () => {
     const html = renderComposer();
 
     expect(html).toContain('aria-label="Attach context"');
     expect(html).toContain("Attach");
     expect(html).not.toContain('aria-label="Open catalog"');
-    expect(html).toContain('aria-label="What the agent sees"');
+    expect(html).not.toContain('aria-label="What the agent sees"');
+  });
+
+  it("keeps the composer controls at touch-sized hit areas without enlarging desktop controls", () => {
+    const source = readFileSync(resolve("gui/web/src/components/chat/chat-composer.jsx"), "utf-8");
+
+    expect(source).toContain("[&>div>button]:h-10");
+    expect(source).toContain("[&>div>button]:h-11");
+    expect(source).toContain('className="h-11 w-11 md:h-8 md:w-8"');
   });
 
   it("renders pending saved-context chips and image thumbnails", () => {

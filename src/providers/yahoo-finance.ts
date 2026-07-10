@@ -185,6 +185,12 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
 
     const quote: StockQuote = {
       symbol: meta.symbol,
+      name:
+        typeof meta.longName === "string" && meta.longName.trim() !== ""
+          ? meta.longName.trim()
+          : typeof meta.shortName === "string" && meta.shortName.trim() !== ""
+            ? meta.shortName.trim()
+            : undefined,
       price,
       change,
       changePercent,

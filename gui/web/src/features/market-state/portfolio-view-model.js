@@ -28,6 +28,7 @@ export function buildHoldingRows(lots = [], portfolioQuotes = []) {
 
     row.totalQuantity += lot.quantity;
     row.lots.push({ ...lot, quote });
+    row.name = quote?.name ?? row.name;
 
     if (quote?.status === "ok" && quote.includedInTotals) {
       row.totalCost += quote.totalCost;

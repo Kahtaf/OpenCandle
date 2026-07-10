@@ -43,6 +43,7 @@ describe("yahoo-finance provider", () => {
 
       const quote = await getQuote("AAPL");
       expect(quote.symbol).toBe("AAPL");
+      expect(quote.name).toBe("Apple Inc.");
       expect(quote.price).toBe(178.72);
       expect(quote.open).toBe(176.15);
       expect(quote.high).toBe(179.5);

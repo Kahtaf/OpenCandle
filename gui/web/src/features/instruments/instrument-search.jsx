@@ -1,3 +1,5 @@
+import { useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "../../components/ui/button.jsx";
 import { cn } from "../../lib/utils.js";
 import {
@@ -18,13 +20,45 @@ export function InstrumentSuggestionList({
   detailsAlign = "right",
   symbolPrefix = "",
   ariaLabel = "Ticker suggestions",
+  portalAnchor,
   onActiveIndexChange,
   onSelect,
 }) {
+  const [position, setPosition] = useState(null);
+
+  const candidateCount = candidates?.length ?? 0;
+
+  // Re-measure whenever the list re-renders, not just on anchor mount: the
+  // anchor can be measured mid sheet-enter animation, which would freeze the
+  // portal at a stale position.
+  useLayoutEffect(() => {
+    if (!portalAnchor || candidateCount === 0) return undefined;
+    let frame = 0;
+    const update = () => {
+      const rect = portalAnchor.getBoundingClientRect();
+      setPosition((prev) => {
+        const next = { left: rect.left, top: rect.bottom + 4, width: rect.width };
+        return prev && prev.left === next.left && prev.top === next.top && prev.width === next.width
+          ? prev
+          : next;
+      });
+    };
+    update();
+    // One extra post-paint pass catches enter animations settling this frame.
+    frame = requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [portalAnchor, candidateCount]);
+
   if (!candidates?.length) return null;
   const prefix = optionIdPrefix || id || "instrument-suggestion";
 
-  return (
+  const list = (
     <div
       id={id}
       role="listbox"
@@ -72,5 +106,13 @@ export function InstrumentSuggestionList({
         </Button>
       ))}
     </div>
+  );
+
+  if (!portalAnchor || !position || typeof document === "undefined") return list;
+  return createPortal(
+    <div className="fixed z-50" style={position}>
+      {list}
+    </div>,
+    document.body,
   );
 }

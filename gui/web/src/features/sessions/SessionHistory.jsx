@@ -38,6 +38,7 @@ export function SessionDrawer({ open, onClose, ...rest }) {
   return (
     <Sheet
       open={open}
+      autoFocus
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onClose();
       }}

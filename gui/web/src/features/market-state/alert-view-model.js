@@ -58,12 +58,14 @@ function conditionSentence(conditionType, condition = {}) {
 function detailLine(rule, enabled, nowMs) {
   if (!enabled) return "Paused";
   if (!rule.lastCheckedAt) return "Armed · not checked yet";
-  const observed = rule.lastObservedJson;
-  const observedValue =
-    observed && typeof observed === "object" && typeof observed.value === "number"
-      ? ` at ${observed.field === "price" ? moneyLabel(observed.value) : formatNumber(observed.value)}`
-      : "";
-  return `Armed · last checked ${relativeTime(rule.lastCheckedAt, nowMs)}${observedValue}`;
+  const observedValue = formatAlertObservedValue(
+    rule.conditionType,
+    rule.conditionJson,
+    rule.lastObservedJson,
+  );
+  return `Armed · last checked ${relativeTime(rule.lastCheckedAt, nowMs)}${
+    observedValue ? ` · ${observedValue}` : ""
+  }`;
 }
 
 function rowTone(rule, enabled, event) {
@@ -86,6 +88,53 @@ function moneyLabel(value) {
   return `$${value.toFixed(2)}`;
 }
 
+export function formatAlertObservedValue(conditionType, condition, observed) {
+  const c = record(condition);
+  const observation = record(observed);
+  const value = numberValue(observation.value);
+  if (value == null) return null;
+
+  if (conditionType === "price_crosses_above" || conditionType === "price_crosses_below") {
+    return `price ${moneyLabel(value)} vs threshold ${moneyLabel(numberValue(c.threshold))}`;
+  }
+
+  if (conditionType === "price_crosses_sma") {
+    const period = integerValue(c.period) ?? 50;
+    const price = numberValue(observation.price);
+    const sma = numberValue(observation.sma);
+    if (price == null || sma == null || sma === 0) {
+      return `price is ${value < 0 ? "below" : "above"} the ${period}-day SMA (exact values unavailable)`;
+    }
+    return `price ${moneyLabel(price)} is ${formatPercent(Math.abs((price / sma - 1) * 100))} ${
+      price < sma ? "below" : "above"
+    } the ${period}-day SMA`;
+  }
+
+  if (conditionType === "rsi_threshold") {
+    return `RSI ${formatDecimal(value)} vs threshold ${formatDecimal(numberValue(c.threshold))}`;
+  }
+
+  if (conditionType === "volume_spike") return `volume ${formatDecimal(value)}x its average`;
+
+  if (conditionType === "percent_move") return `moved ${formatSignedPercent(value)} today`;
+
+  if (conditionType === "sma_cross") {
+    const fastPeriod = integerValue(c.fast_period) ?? 50;
+    const slowPeriod = integerValue(c.slow_period) ?? 200;
+    const fastSma = numberValue(observation.fast_sma);
+    const slowSma = numberValue(observation.slow_sma);
+    const relation = value < 0 ? "below" : "above";
+    if (fastSma == null || slowSma == null || slowSma === 0) {
+      return `${fastPeriod}-day SMA is ${relation} ${slowPeriod}-day SMA (exact values unavailable)`;
+    }
+    return `${fastPeriod}-day SMA ${moneyLabel(fastSma)} is ${formatPercent(
+      Math.abs((fastSma / slowSma - 1) * 100),
+    )} ${fastSma < slowSma ? "below" : "above"} ${slowPeriod}-day SMA ${moneyLabel(slowSma)}`;
+  }
+
+  return null;
+}
+
 export function buildAlertRows(alerts = [], alertEvents = []) {
   const latestEvents = new Map();
   for (const event of alertEvents) {
@@ -103,7 +152,7 @@ export function buildAlertRows(alerts = [], alertEvents = []) {
       scope: rule.instrumentId ? `Instrument #${rule.instrumentId}` : rule.scopeType,
       mode: modeLabel(rule),
       lastChecked: shortDate(rule.lastCheckedAt),
-      lastObserved: observedLabel(rule.lastObservedJson),
+      lastObserved: observedLabel(rule),
       latestEvent: eventLabel(event),
       status: statusLabel(rule, event),
       enabled: rule.enabled !== false,
@@ -125,12 +174,14 @@ function statusLabel(rule, event) {
   return "Pending";
 }
 
-function observedLabel(observed) {
+function observedLabel(rule) {
+  const observed = rule.lastObservedJson;
   if (!observed || typeof observed !== "object") return "Not checked";
-  const field = typeof observed.field === "string" ? observed.field : "value";
-  const value = typeof observed.value === "number" ? formatNumber(observed.value) : "N/A";
   const at = observed.at ? ` at ${shortDate(observed.at)}` : "";
-  return `${field}: ${value}${at}`;
+  return (
+    formatAlertObservedValue(rule.conditionType, rule.conditionJson, observed) ??
+    `Observation unavailable${at}`
+  );
 }
 
 function eventLabel(event) {
@@ -145,8 +196,29 @@ function describeCondition(condition) {
   return JSON.stringify(condition);
 }
 
-function formatNumber(value) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+function record(value) {
+  return value && typeof value === "object" ? value : {};
+}
+
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function integerValue(value) {
+  return Number.isInteger(value) ? value : null;
+}
+
+function formatDecimal(value, maximumFractionDigits = 1) {
+  if (value == null) return "N/A";
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(value);
+}
+
+function formatPercent(value) {
+  return `${formatDecimal(value)}%`;
+}
+
+function formatSignedPercent(value) {
+  return `${value >= 0 ? "+" : "-"}${formatPercent(Math.abs(value))}`;
 }
 
 function compareIso(a, b) {

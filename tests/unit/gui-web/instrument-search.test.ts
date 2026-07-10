@@ -37,13 +37,13 @@ describe("instrument search UI helpers", () => {
     expect(html).toContain('id="ticker-suggestion-option-0"');
     expect(html).toContain("$AAPL");
     expect(html).toContain("Apple Inc.");
-    expect(html).toContain("NMS");
-    expect(html).toContain("EQUITY");
+    expect(html).toContain("Nasdaq");
+    expect(html).toContain("Stock");
   });
 
   it("formats candidate labels and keyboard movement consistently", () => {
     expect(formatInstrumentCandidateLabel({ symbol: "MSFT", quoteType: "EQUITY" })).toBe("EQUITY");
-    expect(formatInstrumentCandidateMeta(candidates[0])).toBe("NMS · EQUITY");
+    expect(formatInstrumentCandidateMeta(candidates[0])).toBe("Nasdaq · Stock");
 
     expect(nextInstrumentActiveIndex(-1, 3, "next")).toBe(0);
     expect(nextInstrumentActiveIndex(2, 3, "next")).toBe(0);

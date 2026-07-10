@@ -5,7 +5,6 @@ import { ChatPanel } from "./features/chat/ChatPanel.jsx";
 import { createOptimisticUserMessageEvents } from "./features/chat/optimistic-user-message.js";
 import { ToolDrawerInline, ToolDrawerOverlay } from "./features/chat/tool-drawer.jsx";
 import { ToolDrawerProvider } from "./features/chat/tool-drawer-context.jsx";
-import { FinancialContextDrawer } from "./features/context-panel/FinancialContextPanel.jsx";
 import { DiagnosticsPage } from "./features/diagnostics/DiagnosticsPage.jsx";
 import { MarketStatePage } from "./features/market-state/MarketStatePage.jsx";
 import { ModelSetupDialog } from "./features/onboarding/ModelSetupDialog.jsx";
@@ -86,7 +85,6 @@ export function AppShell() {
   const activeDrawer = search?.drawer;
   const catalogOpen = CATALOG_DRAWERS.has(activeDrawer);
   const sessionsOpen = activeDrawer === "history" || pathname === "/history";
-  const contextOpen = activeDrawer === "context";
   // Composer draft is lifted here so the catalog can pre-fill it via fillComposer.
   const [draft, setDraft] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -399,6 +397,7 @@ export function AppShell() {
             onOpenModelSetup={() => setModelSetupOpen(true)}
             onOpenHome={openHome}
             setToast={gui.setToast}
+            dataQuality={visibleDashboard?.dataQuality}
           />
         ) : marketDomain ? (
           <MarketStatePage
@@ -429,14 +428,12 @@ export function AppShell() {
             startChatRun={startRoutedChatRun}
             stopRun={chatRun.stopRun}
             invokeTool={invokeToolForVisibleSession}
-            retryRun={chatRun.retryRun}
             setToast={gui.setToast}
             draft={draft}
             setDraft={setDraft}
             onOpenCommandPalette={openCatalog}
             onOpenSidebar={() => openDrawer("history")}
             onOpenHome={openHome}
-            onOpenContext={() => openDrawer("context")}
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}
             sessionId={sessionView.activeSessionId}
@@ -448,20 +445,6 @@ export function AppShell() {
       </div>
       <ToolDrawerOverlay />
       <SessionDrawer open={sessionsOpen} {...sidebarProps} onClose={closeDrawer} />
-      <FinancialContextDrawer
-        open={contextOpen}
-        state={visibleDashboard}
-        catalog={gui.catalog}
-        onClose={closeDrawer}
-        onOpenMarketState={(path) => {
-          closeDrawer();
-          void navigate({ to: path, search: (current) => ({ ...current, drawer: undefined }) });
-        }}
-        onConfigureProvider={() => {
-          closeDrawer();
-          openCatalog("providers");
-        }}
-      />
       <Suspense fallback={null}>
         {catalogOpen ? (
           <CatalogOverlay

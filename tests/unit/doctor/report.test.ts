@@ -51,6 +51,9 @@ describe("doctor report", () => {
       "degraded",
     );
     expect(deriveDoctorStatus([check({ status: "warn", capability: "core" })])).toBe("degraded");
+    expect(deriveDoctorStatus([check({ status: "unknown", capability: "optional" })])).toBe(
+      "ready",
+    );
     expect(deriveDoctorStatus([check({ status: "skip", capability: "optional" })])).toBe("ready");
   });
 
@@ -90,6 +93,31 @@ describe("doctor report", () => {
         .filter((candidate) => candidate.id.endsWith(".session"))
         .map((candidate) => candidate.status),
     ).toEqual(["unknown", "unknown"]);
+  });
+
+  it("reports ready core health while naming unchecked optional sessions", async () => {
+    const home = useTempOpenCandleHome();
+    const installed = (providerId: "twitter" | "reddit"): ExternalToolProviderStatus => ({
+      providerId,
+      kind: "external-tool",
+      mode: "install",
+      state: "installed",
+      installCmd: providerId === "twitter" ? "uv tool install twitter-cli" : "uv tool install rdt",
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    });
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: home,
+      providerStatuses: [installed("twitter"), installed("reddit")],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    expect(report.status).toBe("ready");
+    expect(report.summary).toBe(
+      "OpenCandle core health is ready with 2 optional capabilities unchecked.",
+    );
   });
 
   it("warns when state directory paths point at files", async () => {

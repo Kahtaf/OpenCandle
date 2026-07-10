@@ -1,4 +1,5 @@
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const QUOTE_STALE_MS = 15 * 60_000;
 
 export function relativeTime(iso, nowMs = Date.now()) {
   const ts = Date.parse(iso ?? "");
@@ -19,4 +20,52 @@ export function shortDateLabel(iso, nowMs = Date.now()) {
   return date.getUTCFullYear() === new Date(nowMs).getUTCFullYear()
     ? label
     : `${label}, ${date.getUTCFullYear()}`;
+}
+
+export function degradedQuoteBadge(quotes = [], nowMs = Date.now()) {
+  if (quotes.some((quote) => quote?.status === "unavailable")) return "Quotes unavailable";
+
+  const fetchedAtMs = quotes
+    .map((quote) => Date.parse(quote?.fetchedAt ?? ""))
+    .filter(Number.isFinite);
+  if (fetchedAtMs.length === 0) return null;
+
+  const oldestMs = Math.min(...fetchedAtMs);
+  const fetchedAt = new Date(oldestMs);
+  const now = new Date(nowMs);
+  if (
+    fetchedAt.getFullYear() !== now.getFullYear() ||
+    fetchedAt.getMonth() !== now.getMonth() ||
+    fetchedAt.getDate() !== now.getDate()
+  ) {
+    return `As of ${MONTHS[fetchedAt.getMonth()]} ${fetchedAt.getDate()}`;
+  }
+
+  const ageMs = nowMs - oldestMs;
+  if (ageMs < QUOTE_STALE_MS) return null;
+  return `Quotes ${Math.floor(ageMs / 60_000)}m old`;
+}
+
+export function quoteChangeDirections(previousQuotes = new Map(), nextQuotes = new Map()) {
+  const directions = new Map();
+  if (!(previousQuotes instanceof Map) || !(nextQuotes instanceof Map)) return directions;
+  for (const [symbol, nextQuote] of nextQuotes) {
+    const previousQuote = previousQuotes.get(symbol);
+    const previousPrice = quotePrice(previousQuote);
+    const nextPrice = quotePrice(nextQuote);
+    if (
+      !Number.isFinite(previousPrice) ||
+      !Number.isFinite(nextPrice) ||
+      previousPrice === nextPrice
+    ) {
+      continue;
+    }
+    directions.set(symbol, nextPrice > previousPrice ? "up" : "down");
+  }
+  return directions;
+}
+
+function quotePrice(quote) {
+  const value = quote?.price ?? quote?.currentPrice;
+  return typeof value === "number" ? value : Number.NaN;
 }

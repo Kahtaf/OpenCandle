@@ -1,4 +1,4 @@
-import { ArrowUp, Eye, Square } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 import { useRef, useState } from "react";
 import { AttachMenu, PendingAttachmentRail } from "../../features/chat/attach-menu.jsx";
 import {
@@ -28,7 +28,6 @@ export function ChatComposer({
   onSubmit,
   onStop,
   onOpenCatalog,
-  onOpenContext,
   modelSetup,
   role,
   send,
@@ -126,14 +125,16 @@ export function ChatComposer({
           }}
         />
         <div className="flex items-center gap-1 border-t border-dashed border-border px-2 py-2">
-          <ModelSelector
-            modelSetup={modelSetup}
-            role={role}
-            send={send}
-            setToast={setToast}
-            disabled={disabled}
-          />
-          <div className="ml-1 flex items-center">
+          <div className="[&>div>button]:h-10 [&>div>button]:min-h-10 md:[&>div>button]:h-7 md:[&>div>button]:min-h-0">
+            <ModelSelector
+              modelSetup={modelSetup}
+              role={role}
+              send={send}
+              setToast={setToast}
+              disabled={disabled}
+            />
+          </div>
+          <div className="ml-1 flex items-center [&>div>button]:h-11 [&>div>button]:w-11 md:[&>div>button]:h-8 md:[&>div>button]:w-8">
             <AttachMenu
               disabled={disabled}
               pendingAttachments={pendingAttachments}
@@ -143,23 +144,13 @@ export function ChatComposer({
               onRemoveAttachment={onRemoveAttachment}
               setToast={setToast}
             />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              rounded="full"
-              tooltip="What the agent sees"
-              aria-label="What the agent sees"
-              onClick={() => onOpenContext?.()}
-              disabled={disabled}
-            >
-              <Eye />
-            </Button>
           </div>
           <div className="ml-auto">
             <Button
               variant={canStop ? "secondary" : canSend ? "brand" : "secondary"}
               size="icon-sm"
               rounded="full"
+              className="h-11 w-11 md:h-8 md:w-8"
               tooltip={
                 canStop
                   ? "Stop response"

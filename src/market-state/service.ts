@@ -511,6 +511,31 @@ export class MarketStateService {
     return mapCollection(row);
   }
 
+  deleteWatchlist(name: string): CollectionRecord {
+    const watchlists = this.listWatchlists();
+    const current = this.getWatchlistByName(name);
+    if (current == null) throw new Error(`watchlist ${name.trim()} not found.`);
+    if (watchlists.length <= 1) throw new Error("cannot delete the last remaining watchlist.");
+
+    const selected = watchlists.find((watchlist) => watchlist.id !== current.id);
+    if (selected == null) throw new Error("replacement watchlist could not be selected.");
+
+    const selectAndDelete = this.db.transaction(() => {
+      if (current.isDefault) {
+        this.db.prepare("UPDATE watchlists SET is_default = 0 WHERE id = ?").run(current.id);
+        this.db.prepare("UPDATE watchlists SET is_default = 1 WHERE id = ?").run(selected.id);
+      }
+      this.db.prepare("DELETE FROM watchlists WHERE id = ?").run(current.id);
+    });
+    selectAndDelete();
+
+    const row = this.db.prepare("SELECT * FROM watchlists WHERE id = ? LIMIT 1").get(selected.id) as
+      | WatchlistRow
+      | undefined;
+    if (row == null) throw new Error("replacement watchlist could not be loaded.");
+    return mapCollection(row);
+  }
+
   getOrCreateWatchlist(name?: string | null): CollectionRecord {
     const normalized = normalizeNullable(name);
     if (normalized == null) return this.getDefaultWatchlist();

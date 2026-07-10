@@ -1,3 +1,5 @@
+import { formatExchangeLabel, formatInstrumentTypeLabel } from "./exchange-labels.js";
+
 export function instrumentSuggestionOptionId(optionIdPrefix, index) {
   return `${optionIdPrefix || "instrument-suggestion"}-option-${index}`;
 }
@@ -16,7 +18,9 @@ export function formatInstrumentCandidateLabel(candidate) {
 }
 
 export function formatInstrumentCandidateMeta(candidate) {
-  return [candidate?.exchange, candidate?.quoteType].filter(Boolean).join(" · ");
+  return [formatExchangeLabel(candidate?.exchange), formatInstrumentTypeLabel(candidate?.quoteType)]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function clampInstrumentActiveIndex(activeIndex, candidateCount) {

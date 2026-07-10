@@ -244,7 +244,14 @@ describe("market-state API helpers", () => {
         itemId: watchlist.id,
         symbol: "AAPL",
         status: "ok",
+        name: "AAPL Holdings",
         price: 190,
+        change: 1,
+        volume: 1_000,
+        dayHigh: 191,
+        dayLow: 188,
+        week52High: 200,
+        week52Low: 180,
       }),
     ]);
     expect(snapshot.portfolioQuotes).toEqual([
@@ -252,6 +259,7 @@ describe("market-state API helpers", () => {
         lotId: lot.id,
         symbol: "VTI",
         status: "ok",
+        name: "VTI Holdings",
         currentPrice: 300,
         marketValue: 600,
         pnl: 100,
@@ -261,6 +269,7 @@ describe("market-state API helpers", () => {
         lotId: secondLot.id,
         symbol: "MSFT",
         status: "ok",
+        name: "MSFT Holdings",
         currentPrice: 400,
         marketValue: 400,
         pnl: 50,
@@ -551,6 +560,7 @@ describe("market-state API helpers", () => {
 function quote(symbol: string, price: number, overrides: Partial<StockQuote> = {}): StockQuote {
   return {
     symbol,
+    name: `${symbol} Holdings`,
     price,
     change: 1,
     changePercent: 0.5,

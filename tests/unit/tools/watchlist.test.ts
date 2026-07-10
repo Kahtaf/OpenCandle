@@ -186,6 +186,18 @@ describe("watchlistTool", () => {
     expect(missing.content[0].text).toContain("Missing is empty");
   });
 
+  it("deletes a named watchlist through the tool and selects another list", async () => {
+    await watchlistTool.execute("test", { action: "create", watchlist_name: "Growth" });
+    const deleted = await watchlistTool.execute("test", {
+      action: "delete",
+      watchlist_name: "Default",
+    });
+
+    expect(deleted.content[0].text).toContain("Deleted Default");
+    expect(deleted.content[0].text).toContain("Growth is now active");
+    expect(deleted.details).toMatchObject({ name: "Growth", isDefault: true });
+  });
+
   it("removes a symbol from only the selected named watchlist", async () => {
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "MAG7" });
     await watchlistTool.execute("test", { action: "add", symbol: "AAPL", watchlist_name: "ETFs" });

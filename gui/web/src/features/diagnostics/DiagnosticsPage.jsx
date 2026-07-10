@@ -8,6 +8,14 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../../components/ui/button.jsx";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../../components/ui/table.jsx";
 import { cn } from "../../lib/utils.js";
 import { DesktopSidebarRestore, MobileHeader } from "../layout/AppShellChrome.jsx";
 import { Badge, StatusBand } from "../market-state/shared.jsx";
@@ -39,6 +47,7 @@ export function DiagnosticsPage({
   onOpenModelSetup,
   setToast,
   initialReport,
+  dataQuality,
 }) {
   const [report, setReport] = useState(initialReport ?? null);
   const [loading, setLoading] = useState(!initialReport);
@@ -78,6 +87,14 @@ export function DiagnosticsPage({
   }, [loadReport]);
 
   const counts = useMemo(() => summarizeChecks(report), [report]);
+  const dataQualityMessage = useMemo(() => {
+    const missing = dataQuality?.hardSkips?.length || 0;
+    const gaps = dataQuality?.softGaps?.length || 0;
+    if (!missing && !gaps) return "";
+    return missing
+      ? `Data quality: ${missing} provider${missing === 1 ? " needs" : "s need"} setup.`
+      : `Data quality: ${gaps} provider data gap${gaps === 1 ? "" : "s"} this session.`;
+  }, [dataQuality]);
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
@@ -129,6 +146,7 @@ export function DiagnosticsPage({
               Some setup changes are unavailable while OpenCandle reconnects local access.
             </StatusBand>
           ) : null}
+          {dataQualityMessage ? <StatusBand tone="warn">{dataQualityMessage}</StatusBand> : null}
 
           <div className="grid gap-3 md:grid-cols-4">
             <Metric label="Passed" value={counts.pass} tone="success" />
@@ -144,9 +162,9 @@ export function DiagnosticsPage({
               {(report?.sections || []).map((section) => (
                 <section
                   key={section.id}
-                  className="rounded-xl border border-border bg-card p-3 shadow-subtle-xs"
+                  className="overflow-hidden rounded-xl border border-border bg-card shadow-subtle-xs"
                 >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-3">
                     <h2 className="m-0 text-balance text-sm font-semibold text-foreground">
                       {section.label}
                     </h2>
@@ -154,17 +172,26 @@ export function DiagnosticsPage({
                       {STATUS_META[section.status]?.label}
                     </Badge>
                   </div>
-                  <div className="grid gap-2">
-                    {section.checks.map((check) => (
-                      <DiagnosticCheck
-                        key={check.id}
-                        check={check}
-                        onOpenProviders={onOpenProviders}
-                        onOpenModelSetup={onOpenModelSetup}
-                        onCheckSessions={checkSessions}
-                      />
-                    ))}
-                  </div>
+                  <Table>
+                    <TableHeader className="sr-only">
+                      <TableRow>
+                        <TableHead>Check</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {section.checks.map((check) => (
+                        <DiagnosticCheck
+                          key={check.id}
+                          check={check}
+                          onOpenProviders={onOpenProviders}
+                          onOpenModelSetup={onOpenModelSetup}
+                          onCheckSessions={checkSessions}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
                 </section>
               ))}
             </div>
@@ -181,7 +208,14 @@ function Metric({ label, value, tone }) {
       <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className={cn("mt-1 text-2xl font-semibold tabular-nums", toneClass(tone))}>{value}</div>
+      <div
+        className={cn(
+          "mt-1 text-2xl font-semibold tabular-nums",
+          toneClass(value ? tone : "muted"),
+        )}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -193,10 +227,13 @@ function DiagnosticCheck({ check, onOpenProviders, onOpenModelSetup, onCheckSess
   const isProvider = Boolean(providerId);
   const isModel = check.id === "model.readiness";
   const isUncheckedSession = check.id?.endsWith(".session") && check.status === "unknown";
+  const remediation = isUncheckedSession
+    ? "Use Check to verify session readiness."
+    : check.remediation;
 
   return (
-    <div className="grid gap-2 rounded-lg border border-border bg-background p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-      <div className="min-w-0">
+    <TableRow>
+      <TableCell className="min-w-[16rem] py-3">
         <div className="flex min-w-0 items-center gap-2">
           {Icon ? (
             <Icon className={cn("h-4 w-4 shrink-0", toneClass(meta.tone))} aria-hidden="true" />
@@ -204,40 +241,44 @@ function DiagnosticCheck({ check, onOpenProviders, onOpenModelSetup, onCheckSess
           <h3 className="m-0 truncate text-balance text-sm font-medium text-foreground">
             {check.label}
           </h3>
-          <Badge tone={badgeTone(meta.tone)}>{meta.label}</Badge>
         </div>
         <p className="m-0 mt-1 text-pretty text-sm leading-5 text-muted-foreground">
           {check.summary}
         </p>
-        {check.remediation ? (
+        {remediation ? (
           <p className="m-0 mt-1 text-pretty text-xs leading-5 text-muted-foreground">
-            {check.remediation}
+            {remediation}
           </p>
         ) : null}
-      </div>
-      <div className="flex flex-wrap gap-2 sm:justify-end">
-        {isProvider ? (
-          <Button
-            type="button"
-            variant="bordered"
-            size="sm"
-            onClick={() => onOpenProviders?.(providerId)}
-          >
-            Providers
-          </Button>
-        ) : null}
-        {isModel ? (
-          <Button type="button" variant="bordered" size="sm" onClick={onOpenModelSetup}>
-            Model setup
-          </Button>
-        ) : null}
-        {isUncheckedSession ? (
-          <Button type="button" variant="bordered" size="sm" onClick={onCheckSessions}>
-            Check
-          </Button>
-        ) : null}
-      </div>
-    </div>
+      </TableCell>
+      <TableCell className="w-px py-3 whitespace-nowrap">
+        <Badge tone={badgeTone(meta.tone)}>{meta.label}</Badge>
+      </TableCell>
+      <TableCell className="w-px py-3">
+        <div className="flex flex-wrap gap-2 justify-end">
+          {isProvider ? (
+            <Button
+              type="button"
+              variant="bordered"
+              size="sm"
+              onClick={() => onOpenProviders?.(providerId)}
+            >
+              Providers
+            </Button>
+          ) : null}
+          {isModel ? (
+            <Button type="button" variant="bordered" size="sm" onClick={onOpenModelSetup}>
+              Model setup
+            </Button>
+          ) : null}
+          {isUncheckedSession ? (
+            <Button type="button" variant="bordered" size="sm" onClick={onCheckSessions}>
+              Check
+            </Button>
+          ) : null}
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 

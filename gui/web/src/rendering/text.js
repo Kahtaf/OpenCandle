@@ -32,8 +32,13 @@ export function renderRichText(markdown, options = {}) {
     );
     const cells = rows.map(splitTableRow);
     const [head, ...body] = cells;
+    const numericColumns = head.map((_, columnIndex) => {
+      const columnCells = body.map((row) => row[columnIndex] ?? "");
+      const meaningful = columnCells.filter((cell) => !isNeutralTableCell(cell));
+      return meaningful.length > 0 && meaningful.every(isNumericTableCell);
+    });
     html.push(
-      `<div class="rich-table"><table><thead><tr>${head.map((cell) => `<th>${renderInline(cell, options)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell, options)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
+      `<div class="rich-table"><table><thead><tr>${head.map((cell, index) => `<th${numericColumns[index] ? ' class="rich-table__numeric"' : ""}>${renderInline(cell, options)}</th>`).join("")}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell, index) => `<td${numericColumns[index] ? ' class="rich-table__numeric"' : ""}>${renderInline(cell, options)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`,
     );
     table = [];
   };
@@ -89,6 +94,20 @@ function splitTableRow(line) {
     .replace(/\|$/, "")
     .split("|")
     .map((cell) => cell.trim());
+}
+
+// Placeholder cells (N/A, dashes, empty) neither qualify nor disqualify a
+// column as numeric — a mostly-numeric column with one "N/A" stays aligned.
+function isNeutralTableCell(value) {
+  return /^(?:n\/a|na|—|–|-|)$/i.test(String(value).trim());
+}
+
+function isNumericTableCell(value) {
+  const normalized = String(value)
+    .trim()
+    .replace(/[,$%+]/g, "")
+    .replaceAll("−", "-");
+  return normalized.length > 0 && Number.isFinite(Number(normalized));
 }
 
 export function renderInline(value, options = {}) {

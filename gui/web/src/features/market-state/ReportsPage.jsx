@@ -4,7 +4,7 @@ import { NotificationsPanel } from "./AlertsPage.jsx";
 import { relativeTime, shortDateLabel } from "./format.js";
 import { Badge, EmptyState, Panel } from "./shared.jsx";
 
-export function ReportsPage({ state, readOnly, openPanel, invokeTool }) {
+export function ReportsPage({ state, readOnly, invokeTool }) {
   const template =
     state.reportTemplates.find((candidate) => candidate.enabled) ??
     state.reportTemplates[0] ??
@@ -26,15 +26,17 @@ export function ReportsPage({ state, readOnly, openPanel, invokeTool }) {
         title="Morning report"
         meta={scheduleMeta}
         actions={
-          <Button
-            type="button"
-            variant="bordered"
-            size="sm"
-            disabled={readOnly}
-            onClick={() => openPanel("report-configure")}
-          >
-            Edit schedule
-          </Button>
+          reportText ? (
+            <Button
+              type="button"
+              variant="bordered"
+              size="sm"
+              disabled={readOnly}
+              onClick={() => invokeTool("daily_watchlist_report", { action: "run" })}
+            >
+              Generate today
+            </Button>
+          ) : null
         }
       >
         {reportText ? (

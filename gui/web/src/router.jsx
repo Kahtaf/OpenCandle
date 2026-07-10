@@ -76,7 +76,7 @@ export const router = createRouter({
   defaultPreload: "intent",
 });
 
-const VALID_DRAWERS = new Set(["history", "context", "catalog", "tools", "providers", "workflows"]);
+const VALID_DRAWERS = new Set(["history", "catalog", "tools", "providers", "workflows"]);
 
 function validateGuiSearch(search) {
   return {

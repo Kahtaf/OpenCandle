@@ -168,6 +168,23 @@ describe("MarketStateService", () => {
     expect(service.listWatchlists().map((watchlist) => watchlist.name)).toEqual(["Default", "AI"]);
   });
 
+  it("deletes a watchlist, promotes another list, and keeps its other symbols intact", () => {
+    service.createWatchlist("Growth");
+    const etfs = service.createWatchlist("ETFs");
+
+    const selected = service.deleteWatchlist("Default");
+
+    expect(selected).toMatchObject({ id: etfs.id, name: "ETFs", isDefault: true });
+    expect(service.getWatchlistByName("Default")).toBeNull();
+    expect(service.listWatchlists().map((watchlist) => watchlist.name)).toEqual(["ETFs", "Growth"]);
+  });
+
+  it("does not delete the final remaining watchlist", () => {
+    expect(() => service.deleteWatchlist("Default")).toThrow(
+      "cannot delete the last remaining watchlist.",
+    );
+  });
+
   it("stores portfolio lots under the default portfolio", () => {
     const lot = service.addPortfolioLot({
       instrument: {
