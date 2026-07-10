@@ -5,6 +5,10 @@ import {
   isApiKeyProvider,
   PROVIDERS,
 } from "../../src/onboarding/providers.js";
+import {
+  type ModelKeyProviderId,
+  validateModelKey,
+} from "../../src/onboarding/validate-model-key.js";
 import { validateCredential } from "../../src/onboarding/validation.js";
 
 export type ModelSetupRequirement = "ready" | "select_model" | "connect_auth";
@@ -118,7 +122,12 @@ export function buildModelSetupState(
 
   return {
     requirement,
-    currentModel: currentModel ? `${currentModel.provider}/${currentModel.id}` : undefined,
+    // A fresh session still carries a placeholder model with no usable
+    // credentials; reporting it would render its raw id as the composer label.
+    currentModel:
+      currentModel && registry.hasConfiguredAuth(currentModel)
+        ? `${currentModel.provider}/${currentModel.id}`
+        : undefined,
     providers: modelSetupProviders,
     availableModels,
   };
@@ -170,6 +179,13 @@ export function createModelSetupController({
     const trimmed = apiKey.trim();
     if (!trimmed) throw new Error(`Paste a ${provider.label} API key first.`);
 
+    const validation = await validateModelKey(provider.id as ModelKeyProviderId, trimmed);
+    if (validation.status === "invalid") {
+      throw new Error(
+        `Key was rejected by ${validation.providerLabel}. The existing configuration was not changed.`,
+      );
+    }
+
     const session = getSession();
     session.modelRegistry.authStorage.set(provider.id, { type: "api_key", key: trimmed });
     session.modelRegistry.refresh();
@@ -185,7 +201,9 @@ export function createModelSetupController({
     await session.settingsManager.flush();
     getSessionManager().appendCustomMessageEntry(
       "opencandle-model-setup",
-      `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
+      validation.status === "transient"
+        ? `Saved — couldn't verify (network issue). Connected ${provider.label} and selected ${model.provider}/${model.id}.`
+        : `Connected ${provider.label} and selected ${model.provider}/${model.id}.`,
       true,
       { source: "gui", provider: provider.id, model: `${model.provider}/${model.id}` },
     );

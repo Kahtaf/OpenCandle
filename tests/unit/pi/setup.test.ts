@@ -1,11 +1,15 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../src/infra/open-url.js", async () => ({
   openInBrowser: vi.fn(async () => {}),
 }));
 
 import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { getLlmSetupRequirement, runOpenCandleSetup } from "../../../src/pi/setup.js";
+import {
+  getLlmSetupRequirement,
+  runApiKeySetup,
+  runOpenCandleSetup,
+} from "../../../src/pi/setup.js";
 
 function createUi(overrides: Partial<any> = {}) {
   return {
@@ -22,10 +26,18 @@ function createUi(overrides: Partial<any> = {}) {
 describe("OpenCandle setup", () => {
   const originalEnv = { ...process.env };
   const originalCwd = process.cwd();
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("{}", { status: 200 }),
+    ) as unknown as typeof fetch;
+  });
 
   afterEach(() => {
     process.env = { ...originalEnv };
     process.chdir(originalCwd);
+    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
@@ -47,6 +59,23 @@ describe("OpenCandle setup", () => {
     const modelRegistry = ModelRegistry.inMemory(authStorage);
 
     expect(getLlmSetupRequirement({ model: undefined, modelRegistry })).toBe("select_model");
+  });
+
+  it("rejects a pasted model key and leaves the TUI ready to re-prompt", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("Forbidden", { status: 403 }),
+    ) as unknown as typeof fetch;
+    const authStorage = AuthStorage.inMemory();
+    const ui = createUi({ input: vi.fn().mockResolvedValue("bad-key") });
+    const ctx = { ui, modelRegistry: ModelRegistry.inMemory(authStorage) };
+
+    await expect(runApiKeySetup(ctx as any, "openai")).resolves.toBe(false);
+
+    expect(authStorage.get("openai")).toBeUndefined();
+    expect(ui.notify).toHaveBeenCalledWith(
+      "Key was rejected by OpenAI. Paste a different key.",
+      "error",
+    );
   });
 
   it("writes an API key to Pi auth and auto-activates the default model without opening a picker", async () => {

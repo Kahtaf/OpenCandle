@@ -4,6 +4,7 @@ import {
   type ExtensionContext,
   LoginDialogComponent,
 } from "@earendil-works/pi-coding-agent";
+import { validateModelKey } from "../onboarding/validate-model-key.js";
 
 type SetupMode = "startup" | "manual";
 type SetupRequirement = "ready" | "select_model" | "connect_auth";
@@ -208,7 +209,10 @@ async function runLoginDialog(ctx: ExtensionContext, providerId: string): Promis
   return false;
 }
 
-async function runApiKeySetup(ctx: ExtensionContext, provider: ApiKeyProviderId): Promise<boolean> {
+export async function runApiKeySetup(
+  ctx: ExtensionContext,
+  provider: ApiKeyProviderId,
+): Promise<boolean> {
   const label = API_KEY_PROVIDER_LABELS[provider];
   ctx.ui.notify(
     `OpenCandle stores your ${label} API key locally. After saving it, OpenCandle will select a fast default model when one is available.`,
@@ -220,9 +224,22 @@ async function runApiKeySetup(ctx: ExtensionContext, provider: ApiKeyProviderId)
     ctx.ui.notify("No API key entered.", "warning");
     return false;
   }
+  const validation = await validateModelKey(provider, trimmed);
+  if (validation.status === "invalid") {
+    ctx.ui.notify(
+      `Key was rejected by ${validation.providerLabel}. Paste a different key.`,
+      "error",
+    );
+    return false;
+  }
   ctx.modelRegistry.authStorage.set(provider, { type: "api_key", key: trimmed });
   ctx.modelRegistry.refresh();
-  ctx.ui.notify(`${label} API key saved to OpenCandle.`, "info");
+  ctx.ui.notify(
+    validation.status === "transient"
+      ? `Saved — couldn't verify (network issue). ${label} API key saved to OpenCandle.`
+      : `${label} API key saved to OpenCandle.`,
+    "info",
+  );
   return true;
 }
 
