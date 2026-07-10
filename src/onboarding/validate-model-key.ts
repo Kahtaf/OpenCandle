@@ -1,4 +1,5 @@
 const VALIDATION_TIMEOUT_MS = 5_000;
+const MODEL_KEY_PROBE_BASE_URL_ENV = "OPENCANDLE_MODEL_KEY_PROBE_BASE_URL";
 
 export type ModelKeyProviderId = "google" | "openai" | "anthropic";
 
@@ -41,10 +42,15 @@ export async function validateModelKey(
 ): Promise<ModelKeyValidationResult> {
   const probe = MODEL_KEY_PROBES[providerId];
   try {
-    const response = await fetch(probe.url, {
+    const response = await fetch(resolveProbeUrl(probe.url), {
       method: "GET",
       headers: probe.headers(key),
       signal: AbortSignal.timeout(VALIDATION_TIMEOUT_MS),
+      // Probes carry the typed key in headers that survive cross-origin
+      // redirects (x-goog-api-key, x-api-key); provider probe endpoints do
+      // not redirect, so any redirect is treated as a transient failure
+      // rather than followed.
+      redirect: "error",
     });
     if (response.status === 401 || response.status === 403) {
       return { status: "invalid", providerLabel: probe.label };
@@ -68,4 +74,33 @@ export async function validateModelKey(
       reason: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function resolveProbeUrl(probeUrl: string): string {
+  const override = process.env[MODEL_KEY_PROBE_BASE_URL_ENV]?.trim();
+  if (!override) return probeUrl;
+
+  // Test-support hook only. Overrides are limited to loopback hosts because
+  // the probe request carries the typed API key in its headers; honoring an
+  // arbitrary origin (for example from a poisoned .env) would forward that
+  // key to a foreign host.
+  let baseUrl: URL;
+  try {
+    baseUrl = new URL(override);
+  } catch {
+    return probeUrl;
+  }
+  if (!isLoopbackHostname(baseUrl.hostname)) return probeUrl;
+
+  const url = new URL(probeUrl);
+  url.protocol = baseUrl.protocol;
+  url.host = baseUrl.host;
+  return url.toString();
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === "localhost" || host === "::1" || host === "[::1]" || /^127(\.\d{1,3}){3}$/.test(host)
+  );
 }

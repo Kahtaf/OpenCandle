@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- A non-gating nightly GitHub Actions drift canary now runs live provider checks and, when `GEMINI_API_KEY` is configured, deterministic and advisory live-router evals.
+- GUI release smoke coverage now exercises first-run invalid OpenAI and Google model-key feedback, cold diagnostics readiness, and composer key management without relying on third-party APIs.
+- `OPENCANDLE_MODEL_KEY_PROBE_BASE_URL` provides a test-support override for routing model-key validation probes to a local server while retaining each provider's probe path; only loopback override hosts are honored so the probe's key-bearing headers cannot be redirected to a foreign host.
+
+### Changed
+
+- CI now keeps the full validation gate on Node 24.x while Node 22.19.0 and 26.x run install/build, packed-install, and CLI boot envelope checks.
+- The packed-install smoke now verifies the packed CLI version, help usage, and blocked JSON doctor report in a fresh consumer home.
+
 ## [0.12.0] - 2026-07-10
 
 ### Added

@@ -1,0 +1,67 @@
+name: Nightly drift canary
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    env:
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run live provider checks
+        run: npm run test:e2e:providers
+
+      - name: Report missing Gemini API key
+        if: env.GEMINI_API_KEY == ''
+        run: |
+          {
+            echo "## :warning: GEMINI_API_KEY is not configured"
+            echo
+            echo "The deterministic eval and advisory live-router eval were skipped. Add the repository secret to enable the full nightly drift canary."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run deterministic eval cases
+        if: env.GEMINI_API_KEY != ''
+        run: npm run eval -- cases
+
+      - name: Run advisory live router eval
+        if: env.GEMINI_API_KEY != ''
+        continue-on-error: true
+        shell: bash
+        run: |
+          # Explicit `shell: bash` runs with -e -o pipefail; capture the eval's
+          # exit code without aborting so the summary below is still written.
+          status=0
+          OPENCANDLE_ROUTER_PROVIDER=google OPENCANDLE_ROUTER_MODEL=gemini-2.5-flash npm run eval -- router-live 2>&1 | tee /tmp/router-live.log || status=$?
+          pass_rate="$(grep '^pass: ' /tmp/router-live.log | tail -n 1 || true)"
+          {
+            echo "## Advisory live-router eval"
+            echo
+            echo "${pass_rate:-Pass rate unavailable (the eval did not reach its summary).}"
+            if [ "$status" -ne 0 ]; then
+              echo
+              echo "This is advisory because known Gemini drift fixtures may fail."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

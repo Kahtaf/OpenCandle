@@ -34,7 +34,8 @@ function capture(command, args, options = {}) {
   });
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
-  if (result.status !== 0) {
+  const allowed = options.allowedExitCodes ?? [0];
+  if (!allowed.includes(result.status)) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}`);
   }
   return result.stdout.trim();
@@ -185,14 +186,54 @@ async function main() {
       ...process.env,
       HOME: osHomeDir,
       OPENCANDLE_HOME: homeDir,
+      // Model keys are blanked so the fresh-consumer doctor contract below is
+      // deterministic on machines with exported credentials.
+      GEMINI_API_KEY: "",
+      GOOGLE_API_KEY: "",
+      OPENAI_API_KEY: "",
+      ANTHROPIC_API_KEY: "",
     };
     // A fresh consumer home has no model credentials, so doctor reports
-    // blocked health and exits 1 by contract; 0 covers runners with keys.
+    // blocked health and exits 1 by contract; the JSON status assertion
+    // below is the strong gate on that state.
     run("npx", ["--no-install", "opencandle", "doctor"], {
       cwd: packageDir,
       env,
       allowedExitCodes: [0, 1],
     });
+
+    const packedPackageJson = JSON.parse(
+      readFileSync(join(packageDir, "node_modules", packageJson.name, "package.json"), "utf8"),
+    );
+    const version = capture("npx", ["--no-install", "opencandle", "--version"], {
+      cwd: packageDir,
+      env,
+    });
+    if (version !== packedPackageJson.version) {
+      throw new Error(
+        `Expected packed CLI version ${packedPackageJson.version}, received ${version}`,
+      );
+    }
+
+    const help = capture("npx", ["--no-install", "opencandle", "--help"], { cwd: packageDir, env });
+    if (!help.includes("Usage: opencandle")) {
+      throw new Error("Packed CLI help did not include usage information");
+    }
+
+    const doctorJson = capture("npx", ["--no-install", "opencandle", "doctor", "--json"], {
+      cwd: packageDir,
+      env,
+      allowedExitCodes: [0, 1],
+    });
+    const doctorReport = JSON.parse(doctorJson);
+    if (!doctorReport.schemaVersion) {
+      throw new Error("Packed CLI doctor JSON did not include schemaVersion");
+    }
+    if (doctorReport.status !== "blocked") {
+      throw new Error(
+        `Expected fresh packed CLI doctor status blocked, received ${doctorReport.status}`,
+      );
+    }
     await smokeGui(packageDir, env);
     console.log("Packed install smoke passed.");
   } finally {

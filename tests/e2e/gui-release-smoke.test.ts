@@ -1,6 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:net";
+import { createServer as createHttpServer, type Server as HttpServer } from "node:http";
+import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Browser, chromium, type Locator, type Page } from "playwright-core";
@@ -20,6 +21,8 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
   let page: Page;
   let serverProcess: ChildProcessWithoutNullStreams;
   let baseUrl: string;
+  let probeBaseUrl: string;
+  let probeServer: HttpServer;
   let smokeHome: string;
   let serverLog = "";
 
@@ -27,6 +30,7 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     smokeHome = mkdtempSync(join(tmpdir(), "opencandle-gui-release-smoke-"));
     const port = await allocatePort();
     baseUrl = `http://127.0.0.1:${port}`;
+    ({ server: probeServer, baseUrl: probeBaseUrl } = await startModelKeyProbeStub());
     serverProcess = spawn("npm", ["run", "gui"], {
       cwd: process.cwd(),
       env: {
@@ -39,6 +43,12 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
         GOOGLE_API_KEY: "",
         OPENAI_API_KEY: "",
         ANTHROPIC_API_KEY: "",
+        // Keyed data providers are blanked too: the GUI server loads the
+        // repo .env, and the diagnostics journey asserts the cold-home
+        // never-configured provider presentation.
+        ALPHA_VANTAGE_API_KEY: "",
+        FRED_API_KEY: "",
+        OPENCANDLE_MODEL_KEY_PROBE_BASE_URL: probeBaseUrl,
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -65,6 +75,7 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
       serverProcess.kill("SIGTERM");
       await waitForExit(serverProcess);
     }
+    await closeServer(probeServer);
     if (smokeHome) rmSync(smokeHome, { recursive: true, force: true });
   });
 
@@ -100,10 +111,83 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     const screenshot = await page.screenshot({ fullPage: true });
     writeEvidence("first-run-home.png", screenshot);
   });
+
+  it("rejects an invalid OpenAI key inline without connecting a model", async () => {
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+    const setupCard = page
+      .getByRole("heading", { name: "Connect an AI model" })
+      .locator("xpath=../..");
+    // The provider heading sits in an inner wrapper div; the card with the
+    // key textbox and Save button is one level further up.
+    const openAiCard = setupCard
+      .getByRole("heading", { name: "OpenAI", exact: true })
+      .locator("xpath=../..");
+    await openAiCard.getByRole("textbox", { name: "API key" }).fill("garbage-openai-key");
+    await openAiCard.getByRole("button", { name: "Save key" }).click();
+
+    await expectVisible(
+      setupCard.getByRole("alert").filter({ hasText: "Key was rejected by OpenAI" }),
+    );
+    await expectVisible(page.getByRole("button", { name: "No model connected" }));
+  });
+
+  it("rejects a Google API_KEY_INVALID response from the local probe stub", async () => {
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+    const setupCard = page
+      .getByRole("heading", { name: "Connect an AI model" })
+      .locator("xpath=../..");
+    const googleCard = setupCard
+      .getByRole("heading", { name: "Google Gemini", exact: true })
+      .locator("xpath=../..");
+    await googleCard.getByRole("textbox", { name: "API key" }).fill("garbage-google-key");
+    await googleCard.getByRole("button", { name: "Save key" }).click();
+
+    await expectVisible(
+      setupCard.getByRole("alert").filter({ hasText: "Key was rejected by Google Gemini" }),
+    );
+    await expectVisible(page.getByRole("button", { name: "No model connected" }));
+  });
+
+  it("reports a blocked cold home while optional providers are ready", async () => {
+    await page.goto(`${baseUrl}/diagnostics`, { waitUntil: "networkidle" });
+
+    const warnings = page.getByText("Warnings", { exact: true }).locator("xpath=..");
+    await expectVisible(warnings.getByText("0", { exact: true }));
+
+    // Never-configured optional keyed providers report skip (0.12.0), not a
+    // warning: the Alpha Vantage credential row reads as optional with a
+    // Connect action. The section-level badge is deliberately not asserted —
+    // it folds in live public-provider reachability probes (Yahoo,
+    // TradingView, Polymarket), which this smoke must not depend on.
+    const providersSection = page
+      .getByRole("heading", { name: "Providers", exact: true })
+      .locator("xpath=../..");
+    const alphaVantageRow = providersSection.getByRole("row").filter({ hasText: "Alpha Vantage" });
+    await expectVisible(alphaVantageRow.getByText("Not connected — optional."));
+    await expectVisible(alphaVantageRow.getByRole("button", { name: "Connect" }));
+    await expectVisible(
+      page.getByRole("main").locator("header").getByText("Blocked", { exact: true }),
+    );
+  });
+
+  it("opens model-key management from the disconnected composer", async () => {
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+
+    await page.getByRole("button", { name: "No model connected" }).click();
+    const manageKeys = page.getByRole("menuitem", { name: "Manage model keys…" });
+    await expectVisible(manageKeys);
+    await manageKeys.click();
+
+    await expect(
+      page.getByRole("dialog").getByRole("textbox", { name: "API key" }).count(),
+    ).resolves.toBeGreaterThanOrEqual(3);
+  });
 });
 
 async function allocatePort(): Promise<number> {
-  const server = createServer();
+  const server = createNetServer();
   return await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
@@ -113,6 +197,34 @@ async function allocatePort(): Promise<number> {
         else reject(new Error("Failed to allocate a local port"));
       });
     });
+  });
+}
+
+async function startModelKeyProbeStub(): Promise<{ server: HttpServer; baseUrl: string }> {
+  const server = createHttpServer((request, response) => {
+    if (request.url === "/v1beta/models") {
+      response.writeHead(400, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { details: [{ reason: "API_KEY_INVALID" }] } }));
+      return;
+    }
+    response.writeHead(401, { "content-type": "text/plain" });
+    response.end("Unauthorized");
+  });
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (address && typeof address === "object") resolve(address.port);
+      else reject(new Error("Failed to start model-key probe stub"));
+    });
+  });
+  return { server, baseUrl: `http://127.0.0.1:${port}` };
+}
+
+async function closeServer(server: HttpServer | undefined): Promise<void> {
+  if (!server?.listening) return;
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
   });
 }
 
