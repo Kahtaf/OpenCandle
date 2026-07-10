@@ -1,4 +1,5 @@
 const VALIDATION_TIMEOUT_MS = 5_000;
+const MODEL_KEY_PROBE_BASE_URL_ENV = "OPENCANDLE_MODEL_KEY_PROBE_BASE_URL";
 
 export type ModelKeyProviderId = "google" | "openai" | "anthropic";
 
@@ -41,7 +42,7 @@ export async function validateModelKey(
 ): Promise<ModelKeyValidationResult> {
   const probe = MODEL_KEY_PROBES[providerId];
   try {
-    const response = await fetch(probe.url, {
+    const response = await fetch(resolveProbeUrl(probe.url), {
       method: "GET",
       headers: probe.headers(key),
       signal: AbortSignal.timeout(VALIDATION_TIMEOUT_MS),
@@ -68,4 +69,15 @@ export async function validateModelKey(
       reason: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+function resolveProbeUrl(probeUrl: string): string {
+  const override = process.env[MODEL_KEY_PROBE_BASE_URL_ENV]?.trim();
+  if (!override) return probeUrl;
+
+  const url = new URL(probeUrl);
+  const baseUrl = new URL(override);
+  url.protocol = baseUrl.protocol;
+  url.host = baseUrl.host;
+  return url.toString();
 }
