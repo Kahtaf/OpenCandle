@@ -30,9 +30,9 @@
 - GUI ticker search suggestions now show human-readable exchange and instrument-type names ("Nasdaq · Stock") instead of raw provider codes ("NMS · EQUITY").
 - GUI copy no longer leaks internal vocabulary: diagnostics session checks point at the Check button (the CLI keeps its `opencandle doctor --sessions` remediation), the GUI server check reads "GUI server is running and can run sessions", catalog provider status "Not checked" is now "Not verified yet", and the Add Holding helper uses plain language.
 - The "What the agent sees" context drawer and its composer eye toggle were removed per the GUI UX audit decision; its data-quality warning now surfaces on the Diagnostics page, and per-turn context surfaces will return in later work.
-- Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees.
+- **BREAKING**: Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees; deep imports into those source trees from the published package no longer resolve.
 - Biome release-check noise is reduced with mechanical lint fixes plus scoped test/provider overrides for intentional mock and raw-response patterns.
-- Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests.
+- **BREAKING**: Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests. Existing saved watchlists keep their symbols through the v9 schema migration; the removed annotation fields are dropped.
 
 ### Fixed
 
