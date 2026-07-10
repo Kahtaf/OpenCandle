@@ -1,9 +1,39 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+
+const dialogMocks = vi.hoisted(() => ({
+  Action: vi.fn(),
+  Root: vi.fn(),
+}));
+
+vi.mock("../../../gui/web/src/components/ui/alert-dialog.jsx", async () => {
+  const ReactModule = await import("react");
+  const element =
+    (tag) =>
+    ({ children, ...props }) =>
+      ReactModule.createElement(tag, props, children);
+  return {
+    AlertDialog: (props) => {
+      dialogMocks.Root(props);
+      return ReactModule.createElement("div", { "data-dialog": "root" }, props.children);
+    },
+    AlertDialogAction: (props) => {
+      dialogMocks.Action(props);
+      return ReactModule.createElement("button", props, props.children);
+    },
+    AlertDialogCancel: element("button"),
+    AlertDialogContent: element("div"),
+    AlertDialogDescription: element("p"),
+    AlertDialogFooter: element("footer"),
+    AlertDialogHeader: element("header"),
+    AlertDialogTitle: element("h2"),
+  };
+});
+
 import {
-  confirmSessionCheck,
   DiagnosticsPage,
+  SessionCheckDialog,
 } from "../../../gui/web/src/features/diagnostics/DiagnosticsPage.jsx";
 
 describe("DiagnosticsPage rendering", () => {
@@ -58,6 +88,18 @@ describe("DiagnosticsPage rendering", () => {
               status: "degraded",
               checks: [
                 {
+                  id: "provider.alpha_vantage.credential",
+                  label: "Alpha Vantage",
+                  status: "skip",
+                  capability: "optional",
+                  summary: "Not connected — optional.",
+                  remediation: "Free, about 30 seconds. Run /connect alpha_vantage.",
+                  metadata: {
+                    providerId: "alpha_vantage",
+                    unlocks: ["company fundamentals"],
+                  },
+                },
+                {
                   id: "provider.reddit.session",
                   label: "Reddit browser session",
                   status: "unknown",
@@ -79,6 +121,9 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toContain("Model");
     expect(html).toContain("Providers");
     expect(html).toContain("Model setup");
+    expect(html).toContain("Connect");
+    expect(html).toContain("Connect in OpenCandle to enable company fundamentals.");
+    expect(html).not.toContain("Run /connect alpha_vantage");
     expect(html).toContain("Providers");
     expect(html).toContain("Check sessions");
     expect(html).toContain("Data quality: 1 provider needs setup.");
@@ -87,9 +132,22 @@ describe("DiagnosticsPage rendering", () => {
     expect(html).toContain("tabular-nums");
   });
 
-  it("uses the browser-session confirmation result", () => {
-    expect(confirmSessionCheck(vi.fn(() => true))).toBe(true);
-    expect(confirmSessionCheck(vi.fn(() => false))).toBe(false);
+  it("renders the sessions warning with cancel and confirm actions", () => {
+    dialogMocks.Action.mockClear();
+    dialogMocks.Root.mockClear();
+    const onOpenChange = vi.fn();
+    const onConfirm = vi.fn();
+    const html = renderToStaticMarkup(
+      React.createElement(SessionCheckDialog, { open: true, onOpenChange, onConfirm }),
+    );
+
+    expect(html).toContain("Session checks may read browser cookies");
+    expect(html).toContain("Cancel");
+    expect(html).toContain("Continue");
+    dialogMocks.Action.mock.calls[0][0].onClick();
+    dialogMocks.Root.mock.calls[0][0].onOpenChange(false);
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("renders unknown-only checks as ready grouped rows with neutral zero counts", () => {

@@ -783,6 +783,29 @@ async function streamAcceptedSseChatRun({
     if (!actionAccepted) clearPendingSessionAction(runSessionManager, actionId);
     seq = liveAdapter.nextSeq();
     const message = error instanceof Error ? error.message : String(error);
+    if (isModelAuthenticationFailure(error)) {
+      runSessionManager.appendCustomMessageEntry(
+        "opencandle-model-run-failed",
+        `Chat could not authenticate the configured model key. ${message}`,
+        true,
+        // prompt lets the failure card's Retry re-send this run's prompt even
+        // after later prompts change the session's most-recent input.
+        { source: "gui", reason: "model_auth", prompt },
+      );
+      const failureEntry = runSessionManager.getEntries().at(-1);
+      if (failureEntry) {
+        const failureEvents = sessionEntriesToChatEvents([failureEntry], {
+          sessionId,
+          updatedAt: new Date().toISOString(),
+          startSeq: seq,
+        });
+        for (const failureEvent of failureEvents) {
+          writeSse(res, failureEvent);
+          seq = failureEvent.seq + 1;
+        }
+      }
+      await broadcastRunSessionSnapshot(options, runSessionManager, useCurrentSession);
+    }
     writeSse(res, { type: "run.failed", runId, sessionId, error: { message }, seq });
   } finally {
     activeRunSessionIds.delete(sessionId);
@@ -796,6 +819,13 @@ async function streamAcceptedSseChatRun({
 }
 
 class SessionActionNotAdmitted extends Error {}
+
+export function isModelAuthenticationFailure(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(?:401|403|unauthorized|forbidden|authentication|invalid[_ -]?api[_ -]?key|api[_ -]?key[_ -]?invalid|api key not valid)\b/i.test(
+    message,
+  );
+}
 
 async function broadcastRunSessionSnapshot(
   options: GuiHttpRouteOptions,

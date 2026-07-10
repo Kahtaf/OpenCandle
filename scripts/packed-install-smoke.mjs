@@ -17,7 +17,8 @@ function run(command, args, options = {}) {
     stdio: "inherit",
     shell: process.platform === "win32",
   });
-  if (result.status !== 0) {
+  const allowed = options.allowedExitCodes ?? [0];
+  if (!allowed.includes(result.status)) {
     throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}`);
   }
 }
@@ -185,7 +186,13 @@ async function main() {
       HOME: osHomeDir,
       OPENCANDLE_HOME: homeDir,
     };
-    run("npx", ["--no-install", "opencandle", "doctor"], { cwd: packageDir, env });
+    // A fresh consumer home has no model credentials, so doctor reports
+    // blocked health and exits 1 by contract; 0 covers runners with keys.
+    run("npx", ["--no-install", "opencandle", "doctor"], {
+      cwd: packageDir,
+      env,
+      allowedExitCodes: [0, 1],
+    });
     await smokeGui(packageDir, env);
     console.log("Packed install smoke passed.");
   } finally {

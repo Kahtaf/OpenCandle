@@ -42,6 +42,7 @@ export function ChatPanel({
   inputDisabled = false,
   sessionLoading = false,
   runState,
+  lastPrompt = "",
   catalog,
   send,
   startChatRun,
@@ -51,6 +52,7 @@ export function ChatPanel({
   draft: draftProp,
   setDraft: setDraftProp,
   onOpenCommandPalette,
+  onOpenModelSetup,
   onOpenSidebar,
   onOpenHome,
   sidebarCollapsed,
@@ -323,6 +325,12 @@ export function ChatPanel({
                   anchorRef={transcript.anchorRowRef}
                   knownSymbols={knownSymbols}
                   onRetryToolRun={retryFailedRun}
+                  onRetryFailedRun={(failedPrompt) =>
+                    retryFailedRun(
+                      typeof failedPrompt === "string" && failedPrompt ? failedPrompt : lastPrompt,
+                    )
+                  }
+                  onFixModelKey={onOpenModelSetup}
                   retryDisabled={chatDisabled || canStopRun}
                 />
               ))}
@@ -763,6 +771,8 @@ function MessageRow({
   anchorRef,
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
   onRetryToolRun,
+  onRetryFailedRun,
+  onFixModelKey,
   retryDisabled = false,
 }) {
   const messageId =
@@ -787,6 +797,8 @@ function MessageRow({
         autoOpenToolRun={autoOpenToolRun}
         knownSymbols={knownSymbols}
         onRetryToolRun={onRetryToolRun}
+        onRetryFailedRun={onRetryFailedRun}
+        onFixModelKey={onFixModelKey}
         retryDisabled={retryDisabled}
       />
     </div>
@@ -800,6 +812,8 @@ function MessageRowContent({
   autoOpenToolRun = false,
   knownSymbols = EMPTY_KNOWN_SYMBOLS,
   onRetryToolRun,
+  onRetryFailedRun,
+  onFixModelKey,
   retryDisabled = false,
 }) {
   if (entry.type === "tool_run") {
@@ -813,7 +827,14 @@ function MessageRowContent({
     );
   }
   if (entry.type === "custom_message") {
-    return <CustomMessage customType={entry.customType} content={entry.content} />;
+    return (
+      <CustomMessage
+        customType={entry.customType}
+        content={entry.content}
+        onRetry={() => onRetryFailedRun?.(entry.details?.prompt)}
+        onFixModelKey={onFixModelKey}
+      />
+    );
   }
   if (entry.type === "user_message")
     return (

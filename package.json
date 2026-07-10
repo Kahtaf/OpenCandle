@@ -1,7 +1,7 @@
 {
   "name": "opencandle",
   "version": "0.11.1",
-  "description": "Financial trading & investing agent",
+  "description": "Open source financial investigator: evidence-first market research agent for your terminal and local GUI",
   "license": "MIT",
   "homepage": "https://opencandle.app",
   "repository": {
@@ -61,7 +61,6 @@
     "finance",
     "stock",
     "investing",
-    "trading",
     "options",
     "market-data",
     "portfolio",
@@ -80,7 +79,7 @@
   "scripts": {
     "check:node": "node scripts/check-node-version.mjs",
     "prebuild": "npm run check:node && node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "tsc && node scripts/build-gui-server.mjs && chmod +x dist/cli.js",
+    "build": "tsc && node scripts/build-gui-server.mjs && node scripts/make-cli-executable.mjs",
     "prepare": "npm run build && npm run gui:web:build",
     "prestart": "npm run check:node",
     "start": "tsx src/cli.ts",
@@ -124,7 +123,7 @@
     "release:major": "node scripts/release.mjs major"
   },
   "engines": {
-    "node": ">=22.19.0 <27"
+    "node": "^22.19.0 || >=24.0.0 <27"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.80.2",

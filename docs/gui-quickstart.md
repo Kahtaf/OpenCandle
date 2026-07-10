@@ -8,11 +8,11 @@ description: Run the local OpenCandle browser workbench and understand local ses
 ![The OpenCandle GUI workbench with a chat thread, tool calls, and market context](./images/gui-workbench.png)
 
 1. Start the local GUI with `opencandle gui` from an installed package, or `npm install` followed by `npm run gui` from a source checkout.
-3. Open `http://127.0.0.1:14567`.
-4. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
-5. Start with a keyless market-data prompt such as `What is AAPL trading at?` or the empty-state action cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
-6. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
-7. Use the composer plus button to attach images or saved context such as your portfolio, watchlist, or latest report before sending a prompt.
+1. Open `http://127.0.0.1:14567`.
+1. If the model setup panel appears, connect a model API key first. Chat cannot run without model access. If you want Pi sign-in instead of an API key, complete terminal `/setup` first and then refresh the GUI.
+1. Start with a keyless market-data prompt such as `What is AAPL trading at?` or the empty-state action cards. When you want deep research, run `/analyze NVDA` — the multi-analyst debate takes a few minutes.
+1. Open the catalog with `⌘K` on macOS, `Ctrl+K` on Windows/Linux, or the top-bar catalog button. Use Tools to run a single tool, Workflows to submit a workflow prompt, and Providers to inspect missing credentials.
+1. Use the composer plus button to attach images or saved context such as your portfolio, watchlist, or latest report before sending a prompt.
 
 The GUI binds to `127.0.0.1:14567` by default. Override with `OPENCANDLE_GUI_HOST` and `OPENCANDLE_GUI_PORT`; set `OPENCANDLE_GUI_HOST=0.0.0.0` only when you intentionally want LAN or [Tailscale](https://tailscale.com) access.
 
@@ -31,7 +31,7 @@ Other useful local endpoints:
 - `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
 - `GET /api/sessions` lists saved sessions.
 - `GET /api/session/events` returns the current projected chat events.
-- `POST /api/chat/run` streams one chat run.
+- `POST /api/local-coordinator/chat-run` submits one session-addressed chat run through the local coordinator. The [System Architecture](./system-architecture.md#gui-runtime-and-local-state) page is the canonical local-endpoint list.
 - `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
 ## Tailscale Access
@@ -62,13 +62,13 @@ The GUI is a local investigation workbench. It keeps the transcript, tool catalo
 - Launch a workflow from the catalog, such as Comprehensive Analysis, Compare Assets, Portfolio Builder, or Options Screener.
 - Run one tool directly when you only need a quote, option chain, filing lookup, or macro series.
 - Connect provider keys from the Providers tab instead of editing config files.
-- Inspect tool cards and the drawer to see arguments, results, sources, and warnings.
+- Inspect tool cards and their details to see arguments, results, sources, and warnings.
 - Reopen previous sessions and continue the investigation.
 - Answer focused follow-up questions when OpenCandle needs a ticker, goal, horizon, budget, or risk preference before proceeding.
 
 Workflow catalog entries prefill a structured chat prompt. They do not switch the GUI into a separate mode; the result still appears in the same chat timeline with the same tool cards and session history.
 
-The "What the agent sees" drawer summarizes the latest routed turn before the saved-state shortcuts and session context: route/workflow, resolved symbols, slot provenance, prior-turn count, saved-state injection, attachment count, validation receipts, active analyst progress, recent quotes, research, and provider data gaps. Treat it as a transparency panel for the current session, not a separate source of truth.
+Data-quality warnings and provider gaps are available on the Diagnostics page.
 
 ## When To Use The GUI
 

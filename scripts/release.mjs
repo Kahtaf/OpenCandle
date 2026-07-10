@@ -2,13 +2,19 @@
 
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { addUnreleasedSection, updateChangelogForRelease } from "./release-lib.mjs";
+import {
+  addUnreleasedSection,
+  confirmReleaseEvals,
+  updateChangelogForRelease,
+} from "./release-lib.mjs";
 
-const bumpType = process.argv[2];
+const args = process.argv.slice(2);
+const bumpType = args.find((arg) => !arg.startsWith("-"));
+const skipEvalConfirm = args.includes("--skip-eval-confirm");
 const supportedBumpTypes = new Set(["major", "minor", "patch"]);
 
 if (!supportedBumpTypes.has(bumpType)) {
-  console.error("Usage: node scripts/release.mjs <major|minor|patch>");
+  console.error("Usage: node scripts/release.mjs <major|minor|patch> [--skip-eval-confirm]");
   process.exit(1);
 }
 
@@ -97,6 +103,11 @@ console.log(" Release branch is current\n");
 console.log("Running release preflight...");
 run("npm run release:check");
 console.log(" Release preflight passed\n");
+
+if (!(await confirmReleaseEvals({ skip: skipEvalConfirm }))) {
+  fail("Release eval confirmation not received. Aborting before version or tag mutation.");
+}
+console.log();
 
 console.log(`Bumping version (${bumpType})...`);
 run(`npm run version:${bumpType}`);

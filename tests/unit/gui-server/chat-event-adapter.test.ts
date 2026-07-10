@@ -396,3 +396,28 @@ function usage() {
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
 }
+
+describe("custom message details", () => {
+  it("passes entry details through to the custom.message event", () => {
+    const events = sessionEntriesToChatEvents(
+      [
+        {
+          type: "custom_message",
+          id: "cm1",
+          parentId: null,
+          timestamp: new Date().toISOString(),
+          customType: "opencandle-model-run-failed",
+          content: "Chat could not authenticate the configured model key.",
+          details: { source: "gui", reason: "model_auth", prompt: "quote NVDA" },
+        } as unknown as SessionEntry,
+      ],
+      { sessionId: "s1", startSeq: 1 },
+    );
+
+    const custom = events.find((event) => event.type === "custom.message");
+    expect(custom).toMatchObject({
+      customType: "opencandle-model-run-failed",
+      details: { source: "gui", reason: "model_auth", prompt: "quote NVDA" },
+    });
+  });
+});

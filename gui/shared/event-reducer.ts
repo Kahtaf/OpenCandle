@@ -76,6 +76,7 @@ export function applyChatEvent(state: ChatRenderState, event: ChatEvent): ChatRe
       message.content = event.content;
       message.text = contentText(event.content);
       message.customType = event.customType;
+      message.details = event.details;
       break;
     }
 

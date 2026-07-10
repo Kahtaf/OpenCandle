@@ -16,7 +16,7 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
   const [setupOpen, setSetupOpen] = useState(false);
   const availableModels = modelSetup?.availableModels || [];
   const currentModel = modelSetup?.currentModel || "";
-  const triggerLabel = formatModelLabel(currentModel) || "Connect a model";
+  const triggerLabel = formatModelLabel(currentModel) || "No model connected";
 
   const onSelect = (model) => {
     send?.("model.setup.select_model", { provider: model.provider, modelId: model.id });
@@ -98,7 +98,7 @@ export function ModelSelector({ modelSetup, role = "writer", send, setToast, dis
                 aria-hidden="true"
                 strokeWidth={2}
               />
-              <span>Connect more models</span>
+              <span>Manage model keys…</span>
             </button>
           </div>
         </PopoverContent>

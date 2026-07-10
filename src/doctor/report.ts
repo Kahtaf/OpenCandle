@@ -23,6 +23,7 @@ import {
   type ProviderDescriptor,
   type ProviderId,
 } from "../onboarding/providers.js";
+import { loadOnboardingState } from "../onboarding/state.js";
 
 export const DOCTOR_REPORT_SCHEMA_VERSION = 1;
 
@@ -421,17 +422,23 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
     tier: provider.tier,
     kind: status.kind,
     state: status.state,
+    unlocks: provider.unlocks,
   };
   if (status.kind === "api-key") {
+    const configuredBefore = wasProviderConfigured(status.providerId);
+    const missing = status.state === "missing";
+    const neverConnected = missing && !configuredBefore;
     return {
       id: `provider.${status.providerId}.credential`,
       label: provider.displayName,
-      status: status.state === "configured" ? "pass" : "warn",
+      status: status.state === "configured" ? "pass" : neverConnected ? "skip" : "warn",
       capability,
       summary:
         status.state === "configured"
           ? `Configured via ${status.credentialSource}`
-          : "Credential is missing",
+          : neverConnected
+            ? "Not connected — optional."
+            : "Credential is missing",
       remediation:
         status.state === "configured"
           ? undefined
@@ -469,6 +476,8 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
   }
 
   const installed = status.state === "installed";
+  const missingBeforeSetup =
+    status.state === "missing" && !wasProviderConfigured(status.providerId);
   return {
     id: `provider.${status.providerId}.binary`,
     label: `${provider.displayName} CLI`,
@@ -477,10 +486,16 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
       : status.state === "skipped"
         ? "skip"
         : status.state === "missing"
-          ? "warn"
+          ? missingBeforeSetup
+            ? "skip"
+            : "warn"
           : "unknown",
     capability: "optional",
-    summary: installed ? "Installed" : (status.message ?? `CLI ${status.state}`),
+    summary: installed
+      ? "Installed"
+      : missingBeforeSetup
+        ? "Not connected — optional."
+        : (status.message ?? `CLI ${status.state}`),
     remediation: installed
       ? undefined
       : status.state === "skipped"
@@ -488,6 +503,10 @@ function providerStatusCheck(status: ProviderStatus, modeOverride?: "session"): 
         : status.installCmd,
     metadata,
   };
+}
+
+function wasProviderConfigured(providerId: ProviderId): boolean {
+  return loadOnboardingState().providers[providerId]?.status === "completed";
 }
 
 function sessionNotCheckedCheck(provider: ProviderDescriptor): DoctorCheck {

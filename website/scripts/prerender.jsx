@@ -804,7 +804,7 @@ export const twitterSentimentTool: AgentTool<typeof params> = {
                   Bring a model key from Anthropic, OpenAI, or Google. Market data needs no keys.
                 </p>
                 <p className="mt-3 text-muted-foreground text-xs">
-                  MIT licensed · Node.js 22+ · macOS, Windows, Linux
+                  MIT licensed · Node.js 22.19+ or 24–26 · macOS, Windows, Linux
                 </p>
               </div>
               <div className="space-y-2 font-mono text-sm">

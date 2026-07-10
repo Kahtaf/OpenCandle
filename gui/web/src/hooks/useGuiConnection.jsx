@@ -185,6 +185,10 @@ export function useGuiConnection() {
     toast(payload);
   }, []);
 
+  const setModelSetupError = useCallback((message) => {
+    setModelSetup((current) => ({ ...current, error: String(message) }));
+  }, []);
+
   const settleToolInvoke = useCallback((requestId, settle, payload) => {
     settlePendingToolInvoke(pendingToolInvokesRef.current, requestId, settle, payload);
   }, []);
@@ -330,6 +334,9 @@ export function useGuiConnection() {
             );
           }
         } else if (message.type === "error") {
+          if (String(message.message || "").startsWith("Key was rejected by ")) {
+            setModelSetupError(message.message);
+          }
           setToast(message.message, { destructive: true });
         }
       };
@@ -377,7 +384,7 @@ export function useGuiConnection() {
       document.removeEventListener("visibilitychange", reconnectOnForeground);
       wsRef.current?.close();
     };
-  }, [applyBootstrap, setToast, settleToolInvoke]);
+  }, [applyBootstrap, setModelSetupError, setToast, settleToolInvoke]);
 
   const sendHttpFallbackMessage = useCallback(
     async (request) => {
@@ -391,10 +398,12 @@ export function useGuiConnection() {
         if (!response.ok) throw new Error(data?.error || response.statusText);
         applyBootstrap(data);
       } catch (error) {
-        setToast(error instanceof Error ? error.message : String(error), { destructive: true });
+        const message = error instanceof Error ? error.message : String(error);
+        if (request.type === "model.setup.save_api_key") setModelSetupError(message);
+        setToast(message, { destructive: true });
       }
     },
-    [applyBootstrap, setToast],
+    [applyBootstrap, setModelSetupError, setToast],
   );
 
   const send = useCallback(
@@ -406,7 +415,7 @@ export function useGuiConnection() {
           setToast("GUI connection is not open.", { destructive: true });
           return false;
         }
-        void sendHttpFallbackMessage(request);
+        void sendHttpFallbackMessage({ ...request, type });
         return true;
       }
       try {

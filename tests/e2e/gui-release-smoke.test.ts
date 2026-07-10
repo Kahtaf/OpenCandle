@@ -79,6 +79,7 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
 
     await expectVisible(page.getByText("OpenCandle").first());
     await expectVisible(page.getByText("Connect an AI model"));
+    await expectVisible(page.getByRole("button", { name: "No model connected" }));
 
     const bootstrap = await page.evaluate(async () => {
       const response = await fetch("/api/bootstrap");

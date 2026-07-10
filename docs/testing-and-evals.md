@@ -30,7 +30,7 @@ For release-facing changes, run the same local gate that release and publish pat
 npm run release:check
 ```
 
-That command runs typecheck, Biome CI, unit tests, docs build, package-content validation, packed-install smoke, and public-doc link checks.
+That command runs typecheck, `test:scripts:typecheck`, Biome CI, unit tests, `test:gui:release-smoke`, docs build, package-content validation, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. Before version or tag mutation, `scripts/release.mjs` also asks you to confirm that `npm run eval -- release` was run and its results were acceptable; `--skip-eval-confirm` is an emergency bypass.
 
 ## First-Run Release Smoke
 
@@ -97,7 +97,7 @@ For release preparation, run the full manual eval cadence:
 npm run eval -- release
 ```
 
-This gate is deliberately not part of `release:check` or CI because it requires live credentials and can run external agent baselines.
+This gate is deliberately not part of `release:check` or CI because it requires live credentials and can run external agent baselines. The release script records it as a manual confirmation checkpoint before version or tag mutation.
 
 Eval reports are written under `tests/evals/runs/` when a runner produces a JSON report. The front-door index at `tests/evals/runs/index.jsonl` records suite id, timestamps, exit code, argv, and report paths. Treat those run files as local evidence, not committed documentation.
 

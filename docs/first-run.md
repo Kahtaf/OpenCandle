@@ -40,7 +40,7 @@ Compare BTC and ETH over the last month
 What is the latest SEC filing for AAPL?
 ```
 
-[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
+[Yahoo Finance](https://finance.yahoo.com), [TradingView](https://www.tradingview.com) scanner, [Polymarket](https://polymarket.com) Gamma API, [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) work without OpenCandle-specific provider keys. Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) plus your normal x.com browser session. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the canonical keyless-source list and caveats.
 
 4. Add provider keys only when needed.
 
@@ -71,7 +71,7 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 | Symptom | What to do |
 | --- | --- |
 | Setup exits before chat starts | Start OpenCandle again and complete model setup. Chat requires a connected model. |
-| No models appear after adding a key | Check that the key matches the selected provider, then rerun `/setup`. |
+| A model key was rejected during setup | Check that the key matches the selected provider and paste a fresh key; rejected keys are not saved. |
 | A provider key was rejected | Re-run the suggested `/connect ...` command and paste a fresh key. Rejected keys are not saved. |
 | `/connect` says a provider is set by an environment variable | Update or unset that environment variable in your shell profile, or in the `.env` file in the launch directory if it is set there. Environment variables override `~/.opencandle/config.json`. |
 | Fundamentals, macro, or premium news are missing | Connect the matching data provider. Alpha Vantage covers many fundamentals, FRED covers macro series, and Finnhub/Brave/Exa expand news or search coverage. |
@@ -81,7 +81,9 @@ Use `/setup` later if you want to reconnect auth or choose a different model set
 
 OpenCandle stores local state with [`better-sqlite3`](https://github.com/WiseLibs/better-sqlite3), which uses a native module. Most users get a prebuilt binary during install. If npm reports a native build, ABI mismatch, or `node-gyp` failure:
 
-1. Use a supported Node.js version: `>=22.19.0 <27`.
+1. Use a supported Node.js version: 22.19+ or 24–26.
 2. Retry a clean install.
 3. Run `npm rebuild better-sqlite3` after switching Node versions.
 4. Install platform build tools if npm has to compile native modules locally.
+
+On first launch, Pi downloads its `fd` and `ripgrep` helper binaries into `~/.pi/agent/bin`; that first launch needs network access.

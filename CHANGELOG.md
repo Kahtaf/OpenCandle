@@ -30,12 +30,18 @@
 - GUI ticker search suggestions now show human-readable exchange and instrument-type names ("Nasdaq · Stock") instead of raw provider codes ("NMS · EQUITY").
 - GUI copy no longer leaks internal vocabulary: diagnostics session checks point at the Check button (the CLI keeps its `opencandle doctor --sessions` remediation), the GUI server check reads "GUI server is running and can run sessions", catalog provider status "Not checked" is now "Not verified yet", and the Add Holding helper uses plain language.
 - The "What the agent sees" context drawer and its composer eye toggle were removed per the GUI UX audit decision; its data-quality warning now surfaces on the Diagnostics page, and per-turn context surfaces will return in later work.
-- Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees.
+- **BREAKING**: Published package contents now ship compiled GUI server/runtime artifacts instead of raw `src`, `gui/server`, and `gui/shared` trees; deep imports into those source trees from the published package no longer resolve.
 - Biome release-check noise is reduced with mechanical lint fixes plus scoped test/provider overrides for intentional mock and raw-response patterns.
-- Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests.
+- **BREAKING**: Watchlist items now store only the instrument membership and provenance; target, stop, thesis, notes, and tags fields have been removed from watchlist state, tools, GUI forms, prompt summaries, and related tests. Existing saved watchlists keep their symbols through the v9 schema migration; the removed annotation fields are dropped.
 
 ### Fixed
 
+- Model API keys are now validated before GUI or TUI setup saves them: rejected keys stay unsaved, while offline verification saves with an explicit network notice.
+- The GUI composer now labels an unconfigured model honestly, offers persistent model-key management, and shows failed model-auth chat runs with retry and key-repair actions.
+- Public documentation now reflects session-addressed GUI chat runs, current keyless sources and provider links, Node/platform support, and release-check requirements.
+- Published TypeScript artifacts no longer include dangling source maps.
+- Release preparation now requires an explicit release-eval confirmation before version or tag mutation, unless the emergency skip flag is used.
+- CI now runs agent-tool tests and the Chromium-backed GUI release smoke on Node 24.
 - Empty chat sessions no longer clutter the GUI sidebar as "(no messages)" rows; message-less sessions are filtered from session lists at read time without deleting data.
 - GUI ticker suggestion dropdowns no longer clip at panel edges; the list portals above the sheet boundary.
 - SMA alert checks now persist the price and SMA leg values needed to describe observed state honestly on later reads.
@@ -44,6 +50,8 @@
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
 - Watchlist, portfolio, alert, and report form actions in the GUI now update saved market state without creating empty chat sessions.
 - GUI market-state tool buttons now fall back to trusted same-origin HTTP invocation when the WebSocket connection is unavailable after bootstrap.
+- Doctor and GUI Diagnostics now treat never-configured optional providers as skipped, offer in-GUI provider setup, use an in-app session-check confirmation, and return exit code 1 only for blocked health.
+- CLI help and version flags now exit before interactive startup; package metadata reflects OpenCandle's research-only positioning, supported Node versions, and cross-platform source builds.
 
 ## [0.11.1] - 2026-07-08
 

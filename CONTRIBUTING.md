@@ -38,7 +38,7 @@ Before opening a release-facing PR, run the CI-equivalent local gate:
 npm run release:check
 ```
 
-That gate runs typecheck, [Biome](https://biomejs.dev) CI, unit tests, docs build, package-content validation, packed-install smoke, and public-doc link checks. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials.
+That gate runs typecheck, `test:scripts:typecheck`, [Biome](https://biomejs.dev) CI, unit tests, `test:gui:release-smoke`, docs build, package-content validation, packed-install smoke, and public-doc link checks. The GUI smoke requires `npx playwright-core install chromium` locally. Use the focused e2e/provider/GUI browser checks when your change touches those flows or depends on live credentials. Before version or tag mutation, the release script asks you to confirm that `npm run eval -- release` was run and acceptable; `--skip-eval-confirm` is an emergency bypass.
 
 ## Contribution Rules
 

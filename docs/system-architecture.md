@@ -109,13 +109,13 @@ The model synthesizes after evidence is gathered. It should answer directly, nam
 
 The GUI server serves the built browser app, reads the current Pi session, and streams chat/session updates. Browser and terminal surfaces coordinate through authenticated local forwarding, session-scoped action IDs, and stale-lock recovery so supported actions can stay attached to the active session without exposing ownership roles in the UI. See [GUI Quickstart](./gui-quickstart.md) for local usage and Tailscale access.
 
-Useful local endpoints:
+Useful local endpoints (canonical list):
 
 - `GET /health` returns whether the process is alive plus diagnostic coordination metadata.
 - `GET /api/bootstrap` returns the initial catalog, setup state, sessions, prompts, and current snapshot.
 - `GET /api/sessions` lists saved sessions.
 - `GET /api/session/events` returns the current projected chat events.
-- `POST /api/chat/run` streams one chat run.
+- `POST /api/local-coordinator/chat-run` submits one session-addressed chat run through the local coordinator.
 - `GET /ws` provides live updates for setup, catalog, session, and ask-user events.
 
 ## Local State

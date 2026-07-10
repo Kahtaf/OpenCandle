@@ -1,12 +1,14 @@
 # OpenCandle
 
+OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for market research that starts from real provider data, shows source gaps, and keeps risk visible.
+
+Requires Node.js 22.19+ or 24–26. macOS and Linux are fully supported; Windows is best-effort (WSL recommended).
+
 ```bash
 npx opencandle
 # or
 npx opencandle gui
 ```
-
-OpenCandle is an open source financial investigator: a terminal agent and local browser workbench for market research that starts from real provider data, shows source gaps, and keeps risk visible.
 
 [![CI](https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml/badge.svg)](https://github.com/Kahtaf/OpenCandle/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/opencandle)](https://www.npmjs.com/package/opencandle)
@@ -18,15 +20,15 @@ OpenCandle is an open source financial investigator: a terminal agent and local 
 
 ### Terminal UI
 
-[![OpenCandle terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4)
+[![OpenCandle terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-tui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-tui.mp4)
 
-[Watch the terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
+[Watch the terminal UI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-tui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-tui.mp4)
 
 ### Local GUI
 
-[![OpenCandle local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4)
+[![OpenCandle local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-gui-poster.png)](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-gui.mp4)
 
-[Watch the local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
+[Watch the local GUI demo](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@v0.11.1/assets/opencandle-gui.mp4) | [Download MP4](https://github.com/Kahtaf/OpenCandle/raw/refs/heads/main/assets/opencandle-gui.mp4)
 
 ## Why OpenCandle
 
@@ -46,24 +48,18 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 | Capability | What it gives you |
 | --- | --- |
-| Terminal agent | Fast keyboard-driven research inside Pi's local TUI, with sessions, slash commands, model setup, and saved transcripts. |
+| Terminal agent | Fast keyboard-driven research inside the bundled [Pi](https://github.com/earendil-works/pi) local TUI, with sessions, slash commands, model setup, and saved transcripts. Pi is the bundled agent runtime; no separate Pi install is needed. |
 | Local browser GUI | Chat, session history, provider setup, tool discovery, workflow launches, and richer financial result cards at `http://127.0.0.1:14567`. |
 | Evidence-first answers | Tools fetch and format data; the model synthesizes only after evidence is gathered. |
 | Finance routing | Quote lookup, comparison, portfolio review, options strategy, filing checks, macro questions, sentiment reads, and educational prompts route differently. |
 | Provider transparency | Missing keys, degraded sources, stale cache, and unavailable data are surfaced instead of hidden. |
-| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set; durable market state is stored in SQLite at `state.db`. |
+| Local state | OpenCandle user state lives under `~/.opencandle/` unless `OPENCANDLE_HOME` is set; durable market state is stored in SQLite at `~/.opencandle/state.db` (or `$OPENCANDLE_HOME/state.db`). |
 | Extensible tools | TypeScript tool APIs, provider boundaries, workflow builders, and package exports for add-on tools. |
 | Eval harness | Unit tests, live provider checks, CLI e2e, GUI browser smoke tests, and competitive finance evals. |
 
 ## Quick Start
 
-Requires Node.js `>=22.19.0 <27`.
-
-```bash
-npx opencandle
-```
-
-On first run, OpenCandle walks you through model setup. In the terminal, you can use Pi sign-in when available or provide a model API key. In the GUI, use the API-key setup panel or complete terminal `/setup` first and refresh the browser. Data-provider keys are separate and optional.
+On first run, OpenCandle walks you through model setup. [Pi](https://github.com/earendil-works/pi) is the bundled agent runtime that handles model setup, the terminal shell, and saved sessions; no separate Pi install is needed. In the terminal, you can use Pi sign-in when available or provide a model API key. In the GUI, use the API-key setup panel or complete terminal `/setup` first and refresh the browser. Data-provider keys are separate and optional.
 
 Start the GUI instead:
 
@@ -100,11 +96,11 @@ Useful slash commands:
 Health diagnostics run from your shell:
 
 ```bash
-opencandle doctor
-opencandle doctor --json
-opencandle doctor --sessions
-opencandle doctor --full
-opencandle doctor --enable twitter
+npx opencandle doctor
+npx opencandle doctor --json
+npx opencandle doctor --sessions
+npx opencandle doctor --full
+npx opencandle doctor --enable twitter
 ```
 
 The GUI also has a Diagnostics page at `/diagnostics` with the same health report, provider setup links, model setup actions, and an explicit browser-session check for Reddit and Twitter/X.
@@ -165,7 +161,7 @@ npm run gui
 
 ## How It Fits Together
 
-![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](assets/opencandle-architecture.png)
+![OpenCandle architecture diagram showing the user prompt flowing through OpenCandle routing, saved market state, finance data tools, evidence trace, a configured AI model, and external data sources.](https://cdn.jsdelivr.net/gh/Kahtaf/OpenCandle@main/assets/opencandle-architecture.png)
 
 ```text
 User prompt
