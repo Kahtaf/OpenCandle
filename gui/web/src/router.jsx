@@ -84,6 +84,7 @@ function validateGuiSearch(search) {
       typeof search.drawer === "string" && VALID_DRAWERS.has(search.drawer)
         ? search.drawer
         : undefined,
+    provider: typeof search.provider === "string" ? search.provider : undefined,
     prompt: typeof search.prompt === "string" ? search.prompt : undefined,
     messageId: typeof search.messageId === "string" ? search.messageId : undefined,
     researchId: typeof search.researchId === "string" ? search.researchId : undefined,

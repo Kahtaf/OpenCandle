@@ -46,6 +46,7 @@ const INITIAL_TAB = "workflows";
 export function CatalogOverlay({
   open,
   initialTab,
+  initialProviderId,
   catalog,
   onClose,
   send,
@@ -55,7 +56,8 @@ export function CatalogOverlay({
   sessionId,
 }) {
   const activeInitialTab = initialTab ?? INITIAL_TAB;
-  const openStateKey = open ? `open:${activeInitialTab}` : "closed";
+  const initialSelection = initialProviderId ? { kind: "provider", id: initialProviderId } : null;
+  const openStateKey = open ? `open:${activeInitialTab}:${initialProviderId || ""}` : "closed";
   const [lastOpenStateKey, setLastOpenStateKey] = useState(openStateKey);
   const [tab, setTab] = useState(activeInitialTab);
   const [query, setQuery] = useState("");
@@ -70,7 +72,7 @@ export function CatalogOverlay({
     if (open) {
       setTab(activeInitialTab);
       setQuery("");
-      setSelection(null);
+      setSelection(initialSelection);
     }
   }
 

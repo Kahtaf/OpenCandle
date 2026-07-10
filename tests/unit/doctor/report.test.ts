@@ -14,7 +14,11 @@ import {
   type ExternalToolProviderStatus,
   type PublicHttpProviderStatus,
 } from "../../../src/onboarding/provider-status.js";
-import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
+import {
+  markProviderCompleted,
+  markProviderNeverAsk,
+  saveOnboardingState,
+} from "../../../src/onboarding/state.js";
 
 const tempHomes: string[] = [];
 
@@ -253,6 +257,7 @@ describe("doctor report", () => {
   });
 
   it("does not add session checks when the external CLI is missing", async () => {
+    useTempOpenCandleHome();
     const missing = (providerId: "twitter" | "reddit"): ExternalToolProviderStatus => ({
       providerId,
       kind: "external-tool",
@@ -277,9 +282,17 @@ describe("doctor report", () => {
     expect(checkIds).toContain("provider.reddit.binary");
     expect(checkIds).not.toContain("provider.twitter.session");
     expect(checkIds).not.toContain("provider.reddit.session");
+    expect(report.status).toBe("ready");
+    expect(
+      report.sections
+        .flatMap((section) => section.checks)
+        .filter((check) => check.id.endsWith(".binary"))
+        .map((check) => check.status),
+    ).toEqual(["skip", "skip"]);
   });
 
-  it("treats missing keyed data providers as degraded rather than blocked", async () => {
+  it("skips never-connected keyed providers without degrading their section", async () => {
+    useTempOpenCandleHome();
     const missingKey = (providerId: "alpha_vantage" | "fred"): ApiKeyProviderStatus => ({
       providerId,
       kind: "api-key",
@@ -304,13 +317,44 @@ describe("doctor report", () => {
       modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
     });
 
-    expect(report.status).toBe("degraded");
+    expect(report.status).toBe("ready");
+    expect(report.sections.find((section) => section.id === "providers")?.status).toBe("ready");
     expect(
       report.sections
         .flatMap((section) => section.checks)
         .filter((check) => check.id.endsWith(".credential"))
         .map((check) => check.status),
-    ).toEqual(["warn", "warn"]);
+    ).toEqual(["skip", "skip"]);
+  });
+
+  it("warns when a previously configured provider credential is now missing", async () => {
+    const home = useTempOpenCandleHome();
+    saveOnboardingState(markProviderCompleted({ version: 2, providers: {} }, "alpha_vantage"));
+    const missingKey: ApiKeyProviderStatus = {
+      providerId: "alpha_vantage",
+      kind: "api-key",
+      state: "missing",
+      credentialSource: "absent",
+      checkedAt: "2026-06-22T12:00:00.000Z",
+      cacheHit: false,
+    };
+
+    const report = await buildDoctorReport({
+      cwd: process.cwd(),
+      agentDir: home,
+      providerStatuses: [missingKey],
+      modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+    });
+
+    expect(report.status).toBe("degraded");
+    expect(report.sections.find((section) => section.id === "providers")?.status).toBe("degraded");
+    expect(report.sections.flatMap((section) => section.checks)).toContainEqual(
+      expect.objectContaining({
+        id: "provider.alpha_vantage.credential",
+        status: "warn",
+        summary: "Credential is missing",
+      }),
+    );
   });
 
   it("forces fresh provider probes for each doctor report", async () => {
