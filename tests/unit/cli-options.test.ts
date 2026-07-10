@@ -12,9 +12,12 @@ describe("CLI front-door options", () => {
     expect(frontDoorCommand(["doctor"])).toBeUndefined();
   });
 
+  const packageVersion = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string })
+    .version;
+
   it.each([
     ["--help", "Usage: opencandle [command]"],
-    ["--version", "0.11.1"],
+    ["--version", packageVersion],
   ])("prints %s without starting the TUI", (arg, expectedOutput) => {
     const result = spawnSync(
       process.execPath,
