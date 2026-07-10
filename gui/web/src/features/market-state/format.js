@@ -28,22 +28,35 @@ export function degradedQuoteBadge(quotes = [], nowMs = Date.now()) {
   const fetchedAtMs = quotes
     .map((quote) => Date.parse(quote?.fetchedAt ?? ""))
     .filter(Number.isFinite);
-  if (fetchedAtMs.length === 0) return null;
-
-  const oldestMs = Math.min(...fetchedAtMs);
-  const fetchedAt = new Date(oldestMs);
-  const now = new Date(nowMs);
-  if (
-    fetchedAt.getFullYear() !== now.getFullYear() ||
-    fetchedAt.getMonth() !== now.getMonth() ||
-    fetchedAt.getDate() !== now.getDate()
-  ) {
-    return `As of ${MONTHS[fetchedAt.getMonth()]} ${fetchedAt.getDate()}`;
+  if (fetchedAtMs.length > 0) {
+    const ageMs = nowMs - Math.min(...fetchedAtMs);
+    if (ageMs > QUOTE_STALE_MS) return `Quotes ${Math.floor(ageMs / 60_000)}m old`;
   }
 
-  const ageMs = nowMs - oldestMs;
-  if (ageMs < QUOTE_STALE_MS) return null;
-  return `Quotes ${Math.floor(ageMs / 60_000)}m old`;
+  if (quotes.some((quote) => hasExtendedQuote(quote))) return null;
+  const dataAsOfMs = quotes
+    .map((quote) => Date.parse(quote?.dataAsOf ?? ""))
+    .filter(Number.isFinite);
+  if (dataAsOfMs.length === 0) return null;
+
+  const oldestMs = Math.min(...dataAsOfMs);
+  if (!isPriorCalendarDay(oldestMs, nowMs)) return null;
+  const dataAsOf = new Date(oldestMs);
+  return `As of ${MONTHS[dataAsOf.getUTCMonth()]} ${dataAsOf.getUTCDate()}`;
+}
+
+function hasExtendedQuote(quote) {
+  return typeof quote?.extendedPrice === "number" && Number.isFinite(quote.extendedPrice);
+}
+
+function isPriorCalendarDay(timestampMs, nowMs) {
+  const timestamp = new Date(timestampMs);
+  const now = new Date(nowMs);
+  return (
+    timestamp.getUTCFullYear() !== now.getUTCFullYear() ||
+    timestamp.getUTCMonth() !== now.getUTCMonth() ||
+    timestamp.getUTCDate() !== now.getUTCDate()
+  );
 }
 
 export function quoteChangeDirections(previousQuotes = new Map(), nextQuotes = new Map()) {

@@ -27,16 +27,41 @@ describe("shortDateLabel", () => {
 });
 
 describe("degradedQuoteBadge", () => {
-  it("stays silent for healthy quotes and labels only degraded snapshots", () => {
+  it("uses fetch time for pipeline staleness and provider time for prior-day data", () => {
     expect(
       degradedQuoteBadge([{ status: "ok", fetchedAt: "2026-06-12T14:50:00Z" }], NOW),
+    ).toBeNull();
+    expect(
+      degradedQuoteBadge([{ status: "ok", fetchedAt: "2026-06-12T14:45:00Z" }], NOW),
     ).toBeNull();
     expect(degradedQuoteBadge([{ status: "ok", fetchedAt: "2026-06-12T14:34:00Z" }], NOW)).toBe(
       "Quotes 26m old",
     );
-    expect(degradedQuoteBadge([{ status: "ok", fetchedAt: "2026-06-11T18:00:00Z" }], NOW)).toBe(
-      "As of Jun 11",
-    );
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            fetchedAt: "2026-06-12T14:59:00Z",
+            dataAsOf: "2026-06-11T18:00:00Z",
+          },
+        ],
+        NOW,
+      ),
+    ).toBe("As of Jun 11");
+    expect(
+      degradedQuoteBadge(
+        [
+          {
+            status: "ok",
+            fetchedAt: "2026-06-12T14:59:00Z",
+            dataAsOf: "2026-06-11T18:00:00Z",
+            extendedPrice: 83.02,
+          },
+        ],
+        NOW,
+      ),
+    ).toBeNull();
     expect(degradedQuoteBadge([{ status: "unavailable" }], NOW)).toBe("Quotes unavailable");
   });
 });

@@ -106,6 +106,22 @@ interface YahooQuoteSummaryResult {
   };
 }
 
+interface YahooFinance2Quote {
+  marketState?: string;
+  extendedMarketPrice?: number;
+  extendedMarketChange?: number;
+  extendedMarketChangePercent?: number;
+  extendedMarketTime?: Date | string | number;
+  preMarketPrice?: number;
+  preMarketChange?: number;
+  preMarketChangePercent?: number;
+  preMarketTime?: Date | string | number;
+  postMarketPrice?: number;
+  postMarketChange?: number;
+  postMarketChangePercent?: number;
+  postMarketTime?: Date | string | number;
+}
+
 export async function getYahooCompanyOverview(symbol: string): Promise<CompanyOverview> {
   const normalizedSymbol = symbol.toUpperCase();
   const cacheKey = `yahoo:overview:${normalizedSymbol}`;
@@ -215,13 +231,75 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
       throw new InvalidSymbolError(symbol.toUpperCase(), "yahoo");
     }
 
-    cache.set(cacheKey, quote, TTL.QUOTE);
-    return quote;
+    const enrichedQuote = await enrichQuoteWithExtendedHours(symbol, quote);
+    cache.set(cacheKey, enrichedQuote, TTL.QUOTE);
+    return enrichedQuote;
   } catch (error) {
     const stale = cache.getStale<StockQuote>(cacheKey, STALE_LIMIT.QUOTE);
     if (stale) return stale.value;
     throw error;
   }
+}
+
+async function enrichQuoteWithExtendedHours(
+  symbol: string,
+  quote: StockQuote,
+): Promise<StockQuote> {
+  try {
+    await rateLimiter.acquire("yahoo");
+    const yahooQuote = (await getYahooFinance2Client().quote(symbol)) as YahooFinance2Quote | null;
+    if (!yahooQuote) return quote;
+
+    const marketState = normalizeMarketState(yahooQuote.marketState);
+    if (!marketState) return quote;
+    const withMarketState: StockQuote = { ...quote, marketState };
+    if (marketState !== "PRE" && marketState !== "POST") return withMarketState;
+
+    const extended =
+      marketState === "PRE" ? preMarketFields(yahooQuote) : postMarketFields(yahooQuote);
+    if (!Number.isFinite(extended.price)) return withMarketState;
+
+    return {
+      ...withMarketState,
+      extendedPrice: extended.price,
+      extendedChange: extended.change,
+      extendedChangePercent: extended.changePercent,
+      extendedAsOf: toIsoString(extended.time),
+    };
+  } catch {
+    return quote;
+  }
+}
+
+function normalizeMarketState(value: string | undefined): StockQuote["marketState"] | undefined {
+  if (value === "PRE" || value === "PREPRE") return "PRE";
+  if (value === "POST" || value === "POSTPOST") return "POST";
+  if (value === "REGULAR" || value === "CLOSED") return value;
+  return undefined;
+}
+
+function preMarketFields(quote: YahooFinance2Quote) {
+  return {
+    price: quote.extendedMarketPrice ?? quote.preMarketPrice,
+    change: quote.extendedMarketChange ?? quote.preMarketChange,
+    changePercent: quote.extendedMarketChangePercent ?? quote.preMarketChangePercent,
+    time: quote.extendedMarketTime ?? quote.preMarketTime,
+  };
+}
+
+function postMarketFields(quote: YahooFinance2Quote) {
+  return {
+    price: quote.extendedMarketPrice ?? quote.postMarketPrice,
+    change: quote.extendedMarketChange ?? quote.postMarketChange,
+    changePercent: quote.extendedMarketChangePercent ?? quote.postMarketChangePercent,
+    time: quote.extendedMarketTime ?? quote.postMarketTime,
+  };
+}
+
+function toIsoString(value: Date | string | number | undefined): string | undefined {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  const timestamp = typeof value === "number" ? value : Date.parse(value ?? "");
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
 type YahooFundamentalsRow = {

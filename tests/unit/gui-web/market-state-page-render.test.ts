@@ -104,6 +104,11 @@ describe("MarketStatePage rendering", () => {
                   dayHigh: 191,
                   week52Low: 150,
                   week52High: 220,
+                  marketState: "POST",
+                  extendedPrice: 83.02,
+                  extendedChange: -0.53,
+                  extendedChangePercent: -0.64,
+                  extendedAsOf: "2026-06-12T20:14:00.000Z",
                 },
               ],
               portfolioQuotes: [],
@@ -125,6 +130,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("Volume");
     expect(html).toContain("1.25");
     expect(html).toContain("+0.66%");
+    expect(html).toContain("After hours");
+    expect(html).toContain("$83.02");
+    expect(html).toContain("−0.53");
+    expect(html).toContain("−0.64%");
     expect(html).toContain("Day range");
     expect(html).toContain("52-week range");
     expect(html).toContain("Create alert");
@@ -207,6 +216,10 @@ describe("MarketStatePage rendering", () => {
                 currentPrice: 150,
                 changePercent: 1,
                 currency: "USD",
+                marketState: "PRE",
+                extendedPrice: 151.25,
+                extendedChange: 1.25,
+                extendedChangePercent: 0.83,
               },
               {
                 lotId: 2,
@@ -245,6 +258,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("NVDA 40.0%");
     expect(html).toContain("Apple Inc. quote name");
     expect(html).toContain("NVIDIA Corporation quote name");
+    expect(html).toContain("Pre-market");
+    expect(html).toContain("$151.25");
+    expect(html).toContain("+1.25");
+    expect(html).toContain("+0.83%");
     expect(html).toContain("transition-transform duration-150");
     expect(html).toContain('data-slot="portfolio-lot-reveal"');
     expect(html).toContain("transition-[grid-template-rows] duration-150");

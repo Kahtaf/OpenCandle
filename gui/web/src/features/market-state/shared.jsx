@@ -181,6 +181,54 @@ export function SignedMoney({ value, percent, currency = "USD" }) {
   );
 }
 
+export function ExtendedHoursQuote({ quote, currency = "USD", className }) {
+  if (
+    !quote ||
+    (quote.marketState !== "PRE" && quote.marketState !== "POST") ||
+    typeof quote.extendedPrice !== "number" ||
+    !Number.isFinite(quote.extendedPrice)
+  ) {
+    return null;
+  }
+  const isPreMarket = quote.marketState === "PRE";
+  return (
+    <div
+      data-slot="extended-hours-quote"
+      className={cn("mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px]", className)}
+    >
+      <Badge tone={isPreMarket ? "warn" : "info"} className="h-[18px] px-1.5 text-[10px]">
+        {isPreMarket ? "Pre-market" : "After hours"}
+      </Badge>
+      <span className="tabular-nums text-muted-foreground">
+        {money(quote.extendedPrice, currency)}
+      </span>
+      <ExtendedHoursChange
+        change={quote.extendedChange}
+        changePercent={quote.extendedChangePercent}
+      />
+    </div>
+  );
+}
+
+function ExtendedHoursChange({ change, changePercent }) {
+  if (!Number.isFinite(change) && !Number.isFinite(changePercent)) return null;
+  const signedValue = Number.isFinite(change) ? change : changePercent;
+  const sign = signedValue > 0 ? "+" : signedValue < 0 ? "−" : "";
+  const tone =
+    signedValue > 0
+      ? "text-success"
+      : signedValue < 0
+        ? "text-destructive"
+        : "text-muted-foreground";
+  return (
+    <span className={cn("tabular-nums font-medium", tone)}>
+      {Number.isFinite(change) ? `${sign}${Math.abs(change).toFixed(2)}` : null}
+      {Number.isFinite(change) && Number.isFinite(changePercent) ? " " : null}
+      {Number.isFinite(changePercent) ? `(${sign}${Math.abs(changePercent).toFixed(2)}%)` : null}
+    </span>
+  );
+}
+
 export function StatusDot({ tone, label }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -196,7 +244,7 @@ export function StatusDot({ tone, label }) {
   );
 }
 
-export function Badge({ tone = "neutral", children }) {
+export function Badge({ tone = "neutral", children, className }) {
   return (
     <span
       className={cn(
@@ -205,7 +253,10 @@ export function Badge({ tone = "neutral", children }) {
           ? "border-warning/30 bg-warning/10 text-warning"
           : tone === "ok"
             ? "border-success/30 bg-success/10 text-success"
-            : "border-transparent bg-secondary text-muted-foreground",
+            : tone === "info"
+              ? "border-info/30 bg-info/10 text-info"
+              : "border-transparent bg-secondary text-muted-foreground",
+        className,
       )}
     >
       {children}

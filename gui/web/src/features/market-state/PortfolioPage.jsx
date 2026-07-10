@@ -8,6 +8,7 @@ import {
   Badge,
   ConfirmButton,
   EmptyState,
+  ExtendedHoursQuote,
   filterItems,
   money,
   moneyOrDash,
@@ -215,7 +216,10 @@ export function PortfolioPage({
                           {row.totalQuantity.toLocaleString()}
                         </td>
                         <td className="hidden px-2 py-2.5 text-right tabular-nums md:table-cell">
-                          {moneyOrDash(row.currentPrice, row.currency)}
+                          <div className="flex flex-col items-end">
+                            <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
+                            <ExtendedHoursQuote quote={row} currency={row.currency} />
+                          </div>
                         </td>
                         <td className="px-2 py-2.5 text-right tabular-nums">
                           {moneyOrDash(row.marketValue, row.currency)}

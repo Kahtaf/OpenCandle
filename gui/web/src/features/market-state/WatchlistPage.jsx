@@ -32,6 +32,7 @@ import { buildHoldingRows } from "./portfolio-view-model.js";
 import {
   Badge,
   EmptyState,
+  ExtendedHoursQuote,
   filterItems,
   formatNumber,
   groupBy,
@@ -277,7 +278,14 @@ function QuoteBoard({
                 <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
               </TableCell>
               <TableCell className="py-2.5 text-right tabular-nums">
-                {quote?.status === "ok" ? money(quote.price, quote.currency ?? item.currency) : "—"}
+                {quote?.status === "ok" ? (
+                  <div className="flex flex-col items-end">
+                    <span>{money(quote.price, quote.currency ?? item.currency)}</span>
+                    <ExtendedHoursQuote quote={quote} currency={quote.currency ?? item.currency} />
+                  </div>
+                ) : (
+                  "—"
+                )}
               </TableCell>
               <TableCell className="hidden py-2.5 text-right md:table-cell">
                 <SignedMoney
@@ -434,6 +442,7 @@ function SymbolInspector({ item, quote, state, readOnly, onRemove, onCreateAlert
             <span>{quote.reason || "Quote unavailable"}</span>
           ) : null}
         </div>
+        <ExtendedHoursQuote quote={quote} currency={currency} className="mt-1.5 text-xs" />
       </div>
 
       {quote?.status === "ok" ? <QuoteRanges quote={quote} currency={currency} /> : null}

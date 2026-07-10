@@ -171,7 +171,19 @@ describe("market-state API helpers", () => {
   });
 
   it("returns a one-symbol quote snapshot for holding autofill", async () => {
-    vi.mocked(getQuote).mockResolvedValue(quote("ASTS", 42.37, { currency: "USD" }));
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-12T20:20:00.000Z"));
+    vi.mocked(getQuote).mockResolvedValue(
+      quote("ASTS", 42.37, {
+        currency: "USD",
+        asOf: "2026-06-12T20:00:00.000Z",
+        marketState: "POST",
+        extendedPrice: 42.8,
+        extendedChange: 0.43,
+        extendedChangePercent: 1.02,
+        extendedAsOf: "2026-06-12T20:14:00.000Z",
+      }),
+    );
 
     await expect(getInstrumentQuoteSnapshot(" asts ")).resolves.toEqual({
       symbol: "ASTS",
@@ -185,7 +197,13 @@ describe("market-state API helpers", () => {
       low: 40.37,
       week52High: 52.37,
       week52Low: 32.37,
-      fetchedAt: expect.any(String),
+      fetchedAt: "2026-06-12T20:20:00.000Z",
+      dataAsOf: "2026-06-12T20:00:00.000Z",
+      marketState: "POST",
+      extendedPrice: 42.8,
+      extendedChange: 0.43,
+      extendedChangePercent: 1.02,
+      extendedAsOf: "2026-06-12T20:14:00.000Z",
       stale: false,
       currency: "USD",
     });
@@ -202,6 +220,8 @@ describe("market-state API helpers", () => {
   });
 
   it("builds explicit quote snapshots for watchlist and portfolio rows", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-12T20:20:00.000Z"));
     const db = initDatabase(":memory:");
     const service = new MarketStateService(db);
     const watchlist = service.addWatchlistItem({
@@ -241,7 +261,14 @@ describe("market-state API helpers", () => {
       currency: "USD",
     });
     vi.mocked(getQuote).mockImplementation(async (symbol: string) =>
-      quote(symbol, symbol === "AAPL" ? 190 : symbol === "MSFT" ? 400 : 300),
+      quote(symbol, symbol === "AAPL" ? 190 : symbol === "MSFT" ? 400 : 300, {
+        asOf: "2026-06-12T20:00:00.000Z",
+        marketState: "POST",
+        extendedPrice: 83.02,
+        extendedChange: -0.53,
+        extendedChangePercent: -0.64,
+        extendedAsOf: "2026-06-12T20:14:00.000Z",
+      }),
     );
 
     const snapshot = await buildMarketStateQuoteSnapshot(db);
@@ -259,6 +286,13 @@ describe("market-state API helpers", () => {
         dayLow: 188,
         week52High: 200,
         week52Low: 180,
+        fetchedAt: "2026-06-12T20:20:00.000Z",
+        dataAsOf: "2026-06-12T20:00:00.000Z",
+        marketState: "POST",
+        extendedPrice: 83.02,
+        extendedChange: -0.53,
+        extendedChangePercent: -0.64,
+        extendedAsOf: "2026-06-12T20:14:00.000Z",
       }),
     ]);
     expect(snapshot.portfolioQuotes).toEqual([
@@ -271,6 +305,9 @@ describe("market-state API helpers", () => {
         marketValue: 600,
         pnl: 100,
         allocationPercent: 60,
+        dataAsOf: "2026-06-12T20:00:00.000Z",
+        marketState: "POST",
+        extendedPrice: 83.02,
       }),
       expect.objectContaining({
         lotId: secondLot.id,
