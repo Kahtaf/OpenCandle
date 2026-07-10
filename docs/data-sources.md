@@ -14,12 +14,12 @@ OpenCandle combines free public sources, optional keyed APIs, and local state. T
 | Market | `search_ticker`, `screen_stocks`, `get_stock_quote`, `get_stock_history` | Yahoo Finance; TradingView scanner for breadth screening and watchlist batch quotes; Alpha Vantage fallback for quote/history when configured |
 | Crypto | `get_crypto_price`, `get_crypto_history` | CoinGecko |
 | Options | `get_option_chain` with Greeks computed inside the result | Yahoo Finance plus local calculations |
-| Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage |
+| Fundamentals | `get_company_overview`, `get_financials`, `get_earnings`, `compute_dcf`, `compare_companies` | Alpha Vantage; Yahoo Finance fallbacks for comparison fundamentals and DCF statements |
 | Macro | `get_economic_data`, `get_event_probabilities`, `get_fear_greed` | FRED, [Polymarket](https://polymarket.com) Gamma API, alternative.me crypto Fear & Greed |
 | Technical | `get_technical_indicators`, `backtest_strategy` | Local calculations over market history |
 | Sentiment | `get_reddit_sentiment`, `get_twitter_sentiment`, `search_web`, `get_web_sentiment`, `get_sentiment_summary`, `get_sentiment_trend` | `rdt-cli` and `twitter-cli` using your normal browser sessions, Finnhub, DuckDuckGo, Brave, Exa |
 | Filings | `get_sec_filings` | SEC EDGAR |
-| Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation` | Local state plus market providers |
+| Portfolio | `track_portfolio`, `analyze_risk`, `manage_watchlist`, `analyze_correlation`, `analyze_holdings_overlap`, `daily_watchlist_report`, `manage_alerts`, `manage_notifications` | Local state plus market providers |
 
 ## Keyed and Keyless Sources
 
@@ -35,8 +35,8 @@ Keyless by default:
 
 External local tools:
 
-- Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
-- Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
+- Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) and the user's normal Reddit browser session. Install with `uv tool install rdt-cli`, then run `rdt login` if prompted. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
+- Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) and the user's normal x.com browser session. Install with `uv tool install twitter-cli`. `opencandle doctor` checks install status; `opencandle doctor --sessions` or the GUI Diagnostics page explicitly checks browser-session readiness.
 
 Optional keys:
 

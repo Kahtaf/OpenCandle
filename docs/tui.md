@@ -69,6 +69,8 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 | `news`, `finnhub` | Finnhub | Company news in sentiment summaries |
 | `search` (category), `brave`, `exa` | Brave Search, Exa | Expanded web search beyond keyless DuckDuckGo |
 | `yahoo`, `market-data` | Yahoo Finance | Keyless; listed for diagnostics |
+| `polymarket`, `prediction-markets`, `event-probabilities` | Polymarket Gamma API | Keyless event probabilities |
+| `tradingview`, `tradingview-scanner`, `screener` | TradingView scanner | Keyless stock screening |
 | `reddit`, `twitter` / `x` | Reddit, X/Twitter | Sentiment via `rdt-cli` / `twitter-cli` browser sessions |
 
 `/setup` and `/model` are about the AI model. `/connect` is about market-data providers. Keeping those separate makes setup easier to debug.
@@ -76,6 +78,8 @@ If a provider key would improve the result, OpenCandle should name the gap and s
 ## Sessions
 
 OpenCandle stores session history through Pi and keeps OpenCandle user state under `~/.opencandle/` unless `OPENCANDLE_HOME` is set. A session can include normal chat messages, slash-command output, tool results, provider-gap notes, and the always-visible financial disclaimer.
+
+Running plain `opencandle` resumes the most recent Pi session for the current working directory. To start a fresh session from inside the TUI, run `/new`.
 
 The local GUI reads the same Pi session state as the terminal UI. OpenCandle coordinates local browser and terminal surfaces so prompts and supported session actions are forwarded to the active session owner when needed. If a view is reconnecting or syncing, wait for the current run to settle and retry.
 

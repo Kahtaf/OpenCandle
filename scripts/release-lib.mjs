@@ -1,4 +1,28 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
+
+export async function confirmReleaseEvals({
+  skip = false,
+  input = process.stdin,
+  output = process.stdout,
+} = {}) {
+  if (skip) {
+    console.warn(
+      "WARNING: --skip-eval-confirm supplied; proceeding without release eval confirmation.",
+    );
+    return true;
+  }
+
+  const readline = createInterface({ input, output });
+  try {
+    const answer = await readline.question(
+      "Release evals: run `npm run eval -- release` and review results. Confirm evals were run and acceptable? [y/N] ",
+    );
+    return /^(y|yes)$/i.test(answer.trim());
+  } finally {
+    readline.close();
+  }
+}
 
 export function updateChangelogForRelease(
   changelogPath,

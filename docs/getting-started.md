@@ -11,7 +11,7 @@ OpenCandle is read-only research software. It does not place trades, route order
 
 ## Requirements
 
-- [Node.js](https://nodejs.org) `>=22.19.0 <27`
+- [Node.js](https://nodejs.org) 22.19+ or 24–26
 - One supported model provider configured through Pi: OpenAI, Anthropic, or Google
 - Optional market data provider keys for expanded coverage
 
@@ -32,7 +32,7 @@ From a source checkout:
 
 ```bash
 npm install
-cp .env.example .env
+cp .env.example .env # optional
 npm start
 ```
 
@@ -71,7 +71,7 @@ Good first GUI flow:
 1. Ask `What is AAPL trading at?`
 2. Open the catalog with `⌘K` on macOS or `Ctrl+K` on Windows/Linux.
 3. Pick a workflow such as Comprehensive Analysis or Compare Assets.
-4. Inspect the tool card or drawer to see what data was used.
+4. Inspect the tool card details to see what data was used.
 5. Open the provider tab if the answer says a data source is missing.
 
 See [GUI Quickstart](./gui-quickstart.md) for catalog usage, health checks, Tailscale access, and local session coordination.
@@ -98,7 +98,7 @@ Data-provider keys, from environment variables or `~/.opencandle/config.json`:
 | `EXA_API_KEY` | No | Exa web search |
 | `FINNHUB_API_KEY` | No | Finnhub company news for sentiment summaries |
 
-[Yahoo Finance](https://finance.yahoo.com), [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) do not require keys. Reddit sentiment uses [`rdt-cli`](https://github.com/jackwener/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/jackwener/twitter-cli) plus your normal x.com browser session.
+[Yahoo Finance](https://finance.yahoo.com), [TradingView](https://www.tradingview.com) scanner, [Polymarket](https://polymarket.com) Gamma API, [CoinGecko](https://www.coingecko.com), [SEC EDGAR](https://www.sec.gov/edgar/search/), [DuckDuckGo](https://duckduckgo.com) search, and the [alternative.me crypto Fear & Greed index](https://alternative.me/crypto/fear-and-greed-index/) do not require keys. Reddit sentiment uses [`rdt-cli`](https://github.com/public-clis/rdt-cli) plus your normal Reddit browser session; Twitter/X sentiment uses [`twitter-cli`](https://github.com/public-clis/twitter-cli) plus your normal x.com browser session. See [Data Sources](./data-sources.md#keyed-and-keyless-sources) for the canonical keyless-source list and caveats.
 
 Example config:
 

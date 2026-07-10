@@ -42,10 +42,10 @@ It is read-only research software. It does not place trades, route orders, or pr
 
 | Area | Examples |
 | --- | --- |
-| Market data | Quotes, price history, ticker lookup, crypto price and history |
+| Market data | Quotes, price history, ticker lookup, stock screening (`screen_stocks`), crypto price and history |
 | Options | Option chains, open interest, implied volatility, locally computed Greeks |
 | Fundamentals | Company overview, financial statements, earnings, DCF, comparable companies |
-| Macro | FRED series, rates, inflation, GDP, unemployment, crypto Fear & Greed |
+| Macro | FRED series, rates, inflation, GDP, unemployment, Polymarket event probabilities (`get_event_probabilities`), crypto Fear & Greed |
 | Sentiment | Reddit via `rdt-cli`, Twitter/X via `twitter-cli`, web search, and cross-source sentiment summaries |
 | Filings | SEC EDGAR filing search |
 | Portfolio | Watchlists, holdings, correlation, risk analysis |
