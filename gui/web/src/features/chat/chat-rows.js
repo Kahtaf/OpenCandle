@@ -17,6 +17,7 @@ export function chatRowsFromEvents(events = [], liveEvents = [], defaultSessionI
         sessionId,
         customType: message.customType,
         content: message.content,
+        details: message.details,
       });
       continue;
     }
