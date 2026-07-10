@@ -13,6 +13,10 @@
 - CI now keeps the full validation gate on Node 24.x while Node 22.19.0 and 26.x run install/build, packed-install, and CLI boot envelope checks.
 - The packed-install smoke now verifies the packed CLI version, help usage, and blocked JSON doctor report in a fresh consumer home.
 
+### Fixed
+
+- The live provider e2e suite (used by the nightly drift canary) now records CI environment limitations — shared-runner HTTP 429 rate limits and missing external CLI tools such as `rdt` — as skips with a labeled summary section instead of failures, so a red nightly means provider drift rather than runner noise.
+
 ## [0.12.0] - 2026-07-10
 
 ### Added
