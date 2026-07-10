@@ -52,6 +52,7 @@ export async function handleDoctorCommand(
     modelSetup: buildCliModelSetupState(modelRegistry, settingsManager),
   });
   console.log(json ? JSON.stringify(report, null, 2) : renderDoctorReport(report));
+  if (report.status === "blocked") process.exitCode = 1;
   return true;
 }
 

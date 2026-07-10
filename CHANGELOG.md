@@ -44,6 +44,8 @@
 - Publish workflow now installs the Chromium browser binary required by the GUI release smoke before running `release:check`.
 - Watchlist, portfolio, alert, and report form actions in the GUI now update saved market state without creating empty chat sessions.
 - GUI market-state tool buttons now fall back to trusted same-origin HTTP invocation when the WebSocket connection is unavailable after bootstrap.
+- Doctor and GUI Diagnostics now treat never-configured optional providers as skipped, offer in-GUI provider setup, use an in-app session-check confirmation, and return exit code 1 only for blocked health.
+- CLI help and version flags now exit before interactive startup; package metadata reflects OpenCandle's research-only positioning, supported Node versions, and cross-platform source builds.
 
 ## [0.11.1] - 2026-07-08
 

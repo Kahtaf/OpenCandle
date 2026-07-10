@@ -243,6 +243,29 @@ describe("opencandle package commands", () => {
     expect(piMocks.ensureOpenCandleNativeDependencies).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["blocked", 1],
+    ["degraded", 0],
+    ["ready", 0],
+  ] as const)("exits %i for a %s doctor report", async (status, expectedExitCode) => {
+    piMocks.buildDoctorReport.mockResolvedValueOnce({
+      schemaVersion: 1,
+      generatedAt: "2026-06-22T12:00:00.000Z",
+      status,
+      summary: "doctor summary",
+      sections: [],
+      metadata: {
+        cwd: "/repo",
+        opencandleHome: "/tmp/opencandle",
+        opencandleHomeSource: "default",
+      },
+    });
+
+    await runCli(["doctor"]);
+
+    expect(process.exitCode ?? 0).toBe(expectedExitCode);
+  });
+
   it("prints structured JSON for doctor --json", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
 

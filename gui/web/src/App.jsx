@@ -142,7 +142,9 @@ export function AppShell() {
   }, []);
 
   const closeDrawer = useCallback(() => {
-    void navigate({ search: (current) => ({ ...current, drawer: undefined }) });
+    void navigate({
+      search: (current) => ({ ...current, drawer: undefined, provider: undefined }),
+    });
   }, [navigate]);
 
   useEffect(() => {
@@ -213,12 +215,14 @@ export function AppShell() {
   ]);
 
   const openCatalog = useCallback(
-    (target = "catalog") => {
+    (target = "catalog", providerId) => {
       loadCatalogOverlay();
       const drawer = CATALOG_DRAWERS.has(target) ? target : "catalog";
-      openDrawer(drawer);
+      void navigate({
+        search: (current) => ({ ...current, drawer, provider: providerId || undefined }),
+      });
     },
-    [openDrawer],
+    [navigate],
   );
 
   const fillComposer = useCallback((text) => {
@@ -393,7 +397,7 @@ export function AppShell() {
             onOpenSidebar={() => openDrawer("history")}
             sidebarCollapsed={sidebarCollapsed}
             onExpandSidebar={() => setSidebarCollapsed(false)}
-            onOpenProviders={() => openCatalog("providers")}
+            onOpenProviders={(providerId) => openCatalog("providers", providerId)}
             onOpenModelSetup={() => setModelSetupOpen(true)}
             onOpenHome={openHome}
             setToast={gui.setToast}
@@ -450,6 +454,7 @@ export function AppShell() {
           <CatalogOverlay
             open={catalogOpen}
             initialTab={initialCatalogTab}
+            initialProviderId={search?.provider}
             catalog={gui.catalog}
             onClose={closeDrawer}
             send={gui.send}

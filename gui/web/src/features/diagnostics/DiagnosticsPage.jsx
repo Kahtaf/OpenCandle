@@ -7,6 +7,16 @@ import {
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../../components/ui/alert-dialog.jsx";
 import { Button } from "../../components/ui/button.jsx";
 import {
   Table,
@@ -31,9 +41,31 @@ const STATUS_META = {
   unknown: { label: "Info", tone: "muted", icon: CircleHelp },
 };
 
-export function confirmSessionCheck(confirmImpl = window.confirm) {
-  return confirmImpl(
-    "Session checks may read browser cookies or trigger platform permission prompts for Reddit and X/Twitter. Continue?",
+const SESSION_CHECK_WARNING =
+  "Session checks may read browser cookies or trigger platform permission prompts for Reddit and X/Twitter. Continue?";
+
+export function SessionCheckDialog({ open, onOpenChange, onConfirm }) {
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <SessionCheckDialogContent onConfirm={onConfirm} />
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+export function SessionCheckDialogContent({ onConfirm }) {
+  return (
+    <>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Check browser sessions?</AlertDialogTitle>
+        <AlertDialogDescription>{SESSION_CHECK_WARNING}</AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogCancel>Cancel</AlertDialogCancel>
+        <AlertDialogAction onClick={onConfirm}>Continue</AlertDialogAction>
+      </AlertDialogFooter>
+    </>
   );
 }
 
@@ -52,6 +84,7 @@ export function DiagnosticsPage({
   const [report, setReport] = useState(initialReport ?? null);
   const [loading, setLoading] = useState(!initialReport);
   const [checkingSessions, setCheckingSessions] = useState(false);
+  const [sessionCheckDialogOpen, setSessionCheckDialogOpen] = useState(false);
   const [error, setError] = useState("");
 
   const loadReport = useCallback(
@@ -83,7 +116,12 @@ export function DiagnosticsPage({
   }, [initialReport, loadReport]);
 
   const checkSessions = useCallback(() => {
-    if (confirmSessionCheck()) void loadReport({ sessions: true });
+    setSessionCheckDialogOpen(true);
+  }, []);
+
+  const confirmSessionCheck = useCallback(() => {
+    setSessionCheckDialogOpen(false);
+    void loadReport({ sessions: true });
   }, [loadReport]);
 
   const counts = useMemo(() => summarizeChecks(report), [report]);
@@ -198,6 +236,11 @@ export function DiagnosticsPage({
           )}
         </div>
       </main>
+      <SessionCheckDialog
+        open={sessionCheckDialogOpen}
+        onOpenChange={setSessionCheckDialogOpen}
+        onConfirm={confirmSessionCheck}
+      />
     </section>
   );
 }
@@ -225,11 +268,17 @@ function DiagnosticCheck({ check, onOpenProviders, onOpenModelSetup, onCheckSess
   const Icon = meta.icon;
   const providerId = check.metadata?.providerId;
   const isProvider = Boolean(providerId);
+  const isMissingProvider =
+    isProvider &&
+    check.status === "skip" &&
+    (check.id?.endsWith(".credential") || check.id?.endsWith(".binary"));
   const isModel = check.id === "model.readiness";
   const isUncheckedSession = check.id?.endsWith(".session") && check.status === "unknown";
-  const remediation = isUncheckedSession
-    ? "Use Check to verify session readiness."
-    : check.remediation;
+  const remediation = isMissingProvider
+    ? `Connect in OpenCandle to enable ${(check.metadata?.unlocks || []).join(", ") || "this provider"}.`
+    : isUncheckedSession
+      ? "Use Check to verify session readiness."
+      : check.remediation;
 
   return (
     <TableRow>
@@ -263,7 +312,7 @@ function DiagnosticCheck({ check, onOpenProviders, onOpenModelSetup, onCheckSess
               size="sm"
               onClick={() => onOpenProviders?.(providerId)}
             >
-              Providers
+              {isMissingProvider ? "Connect" : "Providers"}
             </Button>
           ) : null}
           {isModel ? (
