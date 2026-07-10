@@ -1,5 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildModelSetupState,
   createModelSetupController,
@@ -25,13 +25,28 @@ function registry(available: Model<Api>[], configured = new Set<string>()): Mode
 }
 
 describe("GUI model setup", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("{}", { status: 200 }),
+    ) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
   it("requires auth when the active model is not configured and no models are available", () => {
     const active = model("google", "gemini-2.5-flash");
 
     const state = buildModelSetupState(registry([]), active);
 
     expect(state.requirement).toBe("connect_auth");
-    expect(state.currentModel).toBe("google/gemini-2.5-flash");
+    // The placeholder model has no usable credentials, so it must not be
+    // reported as the current model (the composer would render its raw id).
+    expect(state.currentModel).toBeUndefined();
     expect(state.providers.map((provider) => provider.envVar)).toEqual([
       "GEMINI_API_KEY",
       "OPENAI_API_KEY",
@@ -116,6 +131,65 @@ describe("GUI model setup", () => {
       true,
       { source: "gui", provider: "google", model: "google/gemini-2.5-flash" },
     ]);
+  });
+
+  it("does not save a model key rejected by its provider", async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response("Unauthorized", { status: 401 }),
+    ) as unknown as typeof fetch;
+    const auth = new Map<string, unknown>();
+    const session = {
+      modelRegistry: {
+        ...registry([model("openai", "gpt-5-mini")]),
+        authStorage: {
+          set: (provider: string, credential: unknown) => auth.set(provider, credential),
+        },
+        find: () => model("openai", "gpt-5-mini"),
+      },
+      setModel: async () => {},
+      settingsManager: { flush: async () => {} },
+    };
+    const controller = createModelSetupController({
+      role: "writer",
+      getSession: () => session,
+      getSessionManager: () => ({ appendCustomMessageEntry: () => {} }),
+      broadcastState: () => {},
+    });
+
+    await expect(controller.handleSaveModelApiKey("openai", "bad-key")).rejects.toThrow(
+      "Key was rejected by OpenAI",
+    );
+    expect(auth).toHaveLength(0);
+  });
+
+  it("saves a model key with an honest notice when its probe has a network failure", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error("offline");
+    }) as unknown as typeof fetch;
+    const entries: unknown[] = [];
+    const session = {
+      modelRegistry: {
+        ...registry([model("anthropic", "claude-haiku-4-5")]),
+        authStorage: { set: () => {} },
+        find: () => model("anthropic", "claude-haiku-4-5"),
+      },
+      setModel: async () => {},
+      settingsManager: { flush: async () => {} },
+    };
+    const controller = createModelSetupController({
+      role: "writer",
+      getSession: () => session,
+      getSessionManager: () => ({
+        appendCustomMessageEntry: (...args: unknown[]) => entries.push(args),
+      }),
+      broadcastState: () => {},
+    });
+
+    await controller.handleSaveModelApiKey("anthropic", "network-key");
+
+    expect(entries[0]).toEqual(
+      expect.arrayContaining([expect.stringContaining("Saved — couldn't verify (network issue)")]),
+    );
   });
 
   it("rejects model selection in follower mode", async () => {

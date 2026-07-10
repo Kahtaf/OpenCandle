@@ -432,6 +432,7 @@ export function AppShell() {
             draft={draft}
             setDraft={setDraft}
             onOpenCommandPalette={openCatalog}
+            onOpenModelSetup={() => setModelSetupOpen(true)}
             onOpenSidebar={() => openDrawer("history")}
             onOpenHome={openHome}
             sidebarCollapsed={sidebarCollapsed}

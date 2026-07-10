@@ -123,6 +123,33 @@ describe.skipIf(!runGuiBrowser)("GUI browser smoke", () => {
     await mocked.close();
   });
 
+  it("lets users manage model keys from the composer selector", async () => {
+    const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
+    await installMockSocket(mocked, {
+      modelSetup: {
+        requirement: "ready",
+        currentModel: "openai/gpt-5-mini",
+        providers: [
+          {
+            id: "openai",
+            label: "OpenAI",
+            envVar: "OPENAI_API_KEY",
+            defaultModel: "gpt-5-mini",
+            signupUrl: "https://platform.openai.com/api-keys",
+          },
+        ],
+        availableModels: [{ provider: "openai", id: "gpt-5-mini", label: "openai/gpt-5-mini" }],
+      },
+    });
+
+    await mocked.goto(guiUrl, { waitUntil: "networkidle" });
+    await mocked.getByRole("button", { name: "gpt-5-mini" }).click();
+    await expectVisible(mocked.getByRole("menuitem", { name: "Manage model keys…" }));
+    await mocked.getByRole("menuitem", { name: "Manage model keys…" }).click();
+    await expectVisible(mocked.getByRole("dialog", { name: "Connect a model" }));
+    await mocked.close();
+  });
+
   it("explains unavailable onboarding while setup access reconnects", async () => {
     const mocked = await browser.newPage({ viewport: { width: 1024, height: 720 } });
     await installMockSocket(mocked, {

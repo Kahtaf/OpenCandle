@@ -80,6 +80,7 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
   const [keys, setKeys] = useState({});
   const providers = modelSetup?.providers || [];
   const availableModels = modelSetup?.availableModels || [];
+  const setupError = modelSetup?.error || "";
   const setupDisabled = role === "follower";
 
   const saveKey = (provider) => {
@@ -103,6 +104,14 @@ function ModelSetupBody({ modelSetup, role, send, setToast }) {
         <div className="rounded-md border border-amber-700/30 bg-amber-100/60 px-3 py-2 text-sm leading-relaxed text-amber-900 dark:border-amber-300/30 dark:bg-amber-950/30 dark:text-amber-200">
           Model setup changes are unavailable in this window while OpenCandle reconnects local setup
           access.
+        </div>
+      ) : null}
+      {setupError ? (
+        <div
+          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm leading-relaxed text-destructive"
+          role="alert"
+        >
+          {setupError}
         </div>
       ) : null}
       {availableModels.length > 0 ? (
