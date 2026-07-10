@@ -52,6 +52,18 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run agent tool tests
+        if: matrix.node-version == '24.x'
+        run: npm run test:agent-tools
+
+      - name: Install Chromium for GUI release smoke
+        if: matrix.node-version == '24.x'
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Run GUI release smoke
+        if: matrix.node-version == '24.x'
+        run: npm run test:gui:release-smoke
+
       - name: Packed install smoke
         if: matrix.node-version == '24.x'
         run: npm run test:packed-install

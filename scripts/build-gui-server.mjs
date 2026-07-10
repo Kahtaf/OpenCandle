@@ -29,7 +29,6 @@ execFileSync(
     "--rootDir",
     ".",
     "--declaration",
-    "--sourceMap",
     "--resolveJsonModule",
     "--forceConsistentCasingInFileNames",
     "gui/server/server.ts",

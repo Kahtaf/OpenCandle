@@ -38,6 +38,10 @@
 
 - Model API keys are now validated before GUI or TUI setup saves them: rejected keys stay unsaved, while offline verification saves with an explicit network notice.
 - The GUI composer now labels an unconfigured model honestly, offers persistent model-key management, and shows failed model-auth chat runs with retry and key-repair actions.
+- Public documentation now reflects session-addressed GUI chat runs, current keyless sources and provider links, Node/platform support, and release-check requirements.
+- Published TypeScript artifacts no longer include dangling source maps.
+- Release preparation now requires an explicit release-eval confirmation before version or tag mutation, unless the emergency skip flag is used.
+- CI now runs agent-tool tests and the Chromium-backed GUI release smoke on Node 24.
 - Empty chat sessions no longer clutter the GUI sidebar as "(no messages)" rows; message-less sessions are filtered from session lists at read time without deleting data.
 - GUI ticker suggestion dropdowns no longer clip at panel edges; the list portals above the sheet boundary.
 - SMA alert checks now persist the price and SMA leg values needed to describe observed state honestly on later reads.

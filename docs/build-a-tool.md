@@ -133,7 +133,7 @@ const cached = cache.get<MyData>("my-tool:AAPL");
 if (cached) return cached;
 
 const fresh = await fetchData("AAPL");
-cache.set("my-tool:AAPL", fresh, TTL.MINUTES_15);
+cache.set("my-tool:AAPL", fresh, TTL.SENTIMENT);
 ```
 
 For providers that may fail intermittently, use `cache.getStale()` to return the last known value within a longer window:

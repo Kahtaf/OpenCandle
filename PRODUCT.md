@@ -32,7 +32,7 @@ The GUI should also avoid terminal cosplay. It can be dense and technical, but i
 
 1. Make tools visible. A financial agent is more trustworthy when users can see which tools exist, what they need, and when they are being used.
 2. Keep chat and dashboard in balance. The transcript carries reasoning and conversation, while the dashboard reflects the accumulating research context without competing for attention.
-3. Preserve session continuity. Pi sessions are the source of truth, so the GUI and TUI should share live sessions while respecting the writer/follower lock.
+3. Preserve session continuity. Pi sessions are the source of truth, so the GUI and TUI should share live sessions while coordinating which surface applies each action.
 4. Show evidence before confidence. Tool output, data quality gaps, missing credentials, stale data, and warnings should remain visible enough for users to audit conclusions.
 5. Prefer familiar product patterns. Sidebars, command palettes, sheets, explicit forms, and inspector panels are affordances, not decoration.
 

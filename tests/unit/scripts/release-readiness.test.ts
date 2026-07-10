@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -10,6 +11,40 @@ function read(path: string): string {
 }
 
 describe("release readiness automation", () => {
+  it("requires release-eval confirmation unless an emergency skip is explicit", async () => {
+    const { confirmReleaseEvals } = (await import(
+      pathToFileURL(join(root, "scripts/release-lib.mjs")).href
+    )) as {
+      confirmReleaseEvals: (options: {
+        input: PassThrough;
+        output: PassThrough;
+        skip?: boolean;
+      }) => Promise<boolean>;
+    };
+    const input = new PassThrough();
+    const output = new PassThrough();
+    let prompt = "";
+    output.setEncoding("utf8");
+    output.on("data", (chunk: string) => {
+      prompt += chunk;
+    });
+
+    input.end("no\n");
+    await expect(confirmReleaseEvals({ input, output })).resolves.toBe(false);
+    expect(prompt).toContain("npm run eval -- release");
+
+    await expect(
+      confirmReleaseEvals({ input: new PassThrough(), output: new PassThrough(), skip: true }),
+    ).resolves.toBe(true);
+
+    const releaseScript = read("scripts/release.mjs");
+    expect(releaseScript).toContain('args.includes("--skip-eval-confirm")');
+    expect(releaseScript).toContain("Release eval confirmation not received");
+    expect(releaseScript.indexOf("confirmReleaseEvals")).toBeLessThan(
+      releaseScript.indexOf("Bumping version"),
+    );
+  });
+
   it("runs release checks before mutating version or changelog state", () => {
     const releaseScript = read("scripts/release.mjs");
 
@@ -89,6 +124,14 @@ describe("release readiness automation", () => {
     expect(packageCheck).toContain('".agents"');
     expect(packageCheck).toContain('"graphify-out"');
     expect(packageCheck).toContain('"dist/gui/server/server.js"');
+  });
+
+  it("builds published runtime artifacts without source maps", () => {
+    const tsconfig = read("tsconfig.json");
+    const guiServerBuild = read("scripts/build-gui-server.mjs");
+
+    expect(tsconfig).toContain('"sourceMap": false');
+    expect(guiServerBuild).not.toContain('"--sourceMap"');
   });
 
   it("rejects denied package artifacts below published runtime directories", async () => {
