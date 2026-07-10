@@ -72,6 +72,9 @@ describe("validateModelKey", () => {
       expect.objectContaining({
         method: "GET",
         headers: expect.objectContaining({ Authorization: "Bearer bad-key" }),
+        // A loopback probe stub must not be able to bounce the key-bearing
+        // request to a foreign host via a 3xx.
+        redirect: "error",
       }),
     );
   });

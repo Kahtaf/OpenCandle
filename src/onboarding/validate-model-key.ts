@@ -46,6 +46,11 @@ export async function validateModelKey(
       method: "GET",
       headers: probe.headers(key),
       signal: AbortSignal.timeout(VALIDATION_TIMEOUT_MS),
+      // Probes carry the typed key in headers that survive cross-origin
+      // redirects (x-goog-api-key, x-api-key); provider probe endpoints do
+      // not redirect, so any redirect is treated as a transient failure
+      // rather than followed.
+      redirect: "error",
     });
     if (response.status === 401 || response.status === 403) {
       return { status: "invalid", providerLabel: probe.label };
