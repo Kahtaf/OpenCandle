@@ -43,6 +43,11 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
         GOOGLE_API_KEY: "",
         OPENAI_API_KEY: "",
         ANTHROPIC_API_KEY: "",
+        // Keyed data providers are blanked too: the GUI server loads the
+        // repo .env, and the diagnostics journey asserts the cold-home
+        // never-configured provider presentation.
+        ALPHA_VANTAGE_API_KEY: "",
+        FRED_API_KEY: "",
         OPENCANDLE_MODEL_KEY_PROBE_BASE_URL: probeBaseUrl,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -151,10 +156,17 @@ describe.skipIf(!runGuiReleaseSmoke)("GUI release-gate smoke", () => {
     const warnings = page.getByText("Warnings", { exact: true }).locator("xpath=..");
     await expectVisible(warnings.getByText("0", { exact: true }));
 
+    // Never-configured optional keyed providers report skip (0.12.0), not a
+    // warning: the Alpha Vantage credential row reads as optional with a
+    // Connect action. The section-level badge is deliberately not asserted —
+    // it folds in live public-provider reachability probes (Yahoo,
+    // TradingView, Polymarket), which this smoke must not depend on.
     const providersSection = page
       .getByRole("heading", { name: "Providers", exact: true })
       .locator("xpath=../..");
-    await expectVisible(providersSection.getByText("Ready", { exact: true }));
+    const alphaVantageRow = providersSection.getByRole("row").filter({ hasText: "Alpha Vantage" });
+    await expectVisible(alphaVantageRow.getByText("Not connected — optional."));
+    await expectVisible(alphaVantageRow.getByRole("button", { name: "Connect" }));
     await expectVisible(
       page.getByRole("main").locator("header").getByText("Blocked", { exact: true }),
     );
