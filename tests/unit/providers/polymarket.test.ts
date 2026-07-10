@@ -97,6 +97,15 @@ describe("Polymarket provider", () => {
               endDate: "2020-01-01T00:00:00Z",
             },
             {
+              id: "not-settled-but-unconfirmed-stale-date",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-not-settled-stale",
+              outcomes: '["Yes"]',
+              outcomePrices: '["0.5"]',
+              closed: false,
+              endDate: "2020-01-01T00:00:00Z",
+            },
+            {
               id: "flagless-future-date",
               question: "Will the Fed cut rates?",
               slug: "fed-cut-flagless-future",
@@ -127,6 +136,7 @@ describe("Polymarket provider", () => {
     const marketIds = quotes.map((quote) => quote.marketId);
     expect(marketIds).not.toContain("explicitly-closed");
     expect(marketIds).not.toContain("flagless-stale-date");
+    expect(marketIds).not.toContain("not-settled-but-unconfirmed-stale-date");
   });
 
   it("preserves outcome-price positions when skipping malformed Polymarket prices", async () => {

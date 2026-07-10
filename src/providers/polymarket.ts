@@ -136,7 +136,11 @@ function isOpenMarket(market: GammaMarket): boolean {
   const active = booleanValue(market.active);
   if (closed === true) return false;
   if (active === false) return false;
-  if (closed !== undefined || active !== undefined) return true;
+  // An explicit affirmative active flag is Gamma's authoritative openness
+  // signal and beats the endDate heuristic, whose metadata is demonstrably
+  // stale on live markets. A lone `closed: false` only says "not settled",
+  // so it still falls through to the date check.
+  if (active === true) return true;
 
   const endDate = stringValue(market.endDate) ?? stringValue(market.endDateIso);
   if (!endDate) return true;
