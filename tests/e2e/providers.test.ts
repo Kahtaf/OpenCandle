@@ -71,8 +71,14 @@ const CRYPTO_YAHOO = [
 const avKey = process.env.ALPHA_VANTAGE_API_KEY;
 const fredKey = process.env.FRED_API_KEY;
 
-type Result = { tool: string; ticker: string; status: "PASS" | "FAIL"; error?: string };
+type Result = { tool: string; ticker: string; status: "PASS" | "FAIL" | "SKIP"; error?: string };
 const results: Result[] = [];
+
+// Environment limitations, not provider drift: shared CI runner IPs get
+// rate-limited (the provider is reachable, which is what the canary tracks),
+// and external CLI tools such as rdt need a browser session no runner has.
+// Genuine outages (network errors, 5xx, shape changes) still fail.
+const ENVIRONMENT_LIMITATIONS = /HTTP 429|Too Many Requests|rate limited|is not installed/i;
 
 async function test(tool: string, ticker: string, fn: () => Promise<any>) {
   try {
@@ -81,8 +87,14 @@ async function test(tool: string, ticker: string, fn: () => Promise<any>) {
     results.push({ tool, ticker, status: "PASS" });
     process.stdout.write(".");
   } catch (e: any) {
-    results.push({ tool, ticker, status: "FAIL", error: e.message?.slice(0, 80) });
-    process.stdout.write("X");
+    const message = e.message?.slice(0, 80);
+    if (ENVIRONMENT_LIMITATIONS.test(e.message ?? "")) {
+      results.push({ tool, ticker, status: "SKIP", error: message });
+      process.stdout.write("s");
+    } else {
+      results.push({ tool, ticker, status: "FAIL", error: message });
+      process.stdout.write("X");
+    }
   }
 }
 
@@ -244,13 +256,23 @@ console.log("\n\n=== RESULTS ===\n");
 
 const passed = results.filter((r) => r.status === "PASS");
 const failed = results.filter((r) => r.status === "FAIL");
+const skipped = results.filter((r) => r.status === "SKIP");
 
-console.log(`Total: ${results.length} | PASS: ${passed.length} | FAIL: ${failed.length}\n`);
+console.log(
+  `Total: ${results.length} | PASS: ${passed.length} | FAIL: ${failed.length} | SKIP: ${skipped.length}\n`,
+);
 
 if (failed.length > 0) {
   console.log("FAILURES:");
   for (const f of failed) {
     console.log(`  ❌ ${f.tool} [${f.ticker}]: ${f.error}`);
+  }
+}
+
+if (skipped.length > 0) {
+  console.log("SKIPPED (environment limitation, not provider drift):");
+  for (const s of skipped) {
+    console.log(`  ⏭️ ${s.tool} [${s.ticker}]: ${s.error}`);
   }
 }
 
@@ -265,7 +287,9 @@ console.log("\nBy Tool:");
 for (const [tool, toolResults] of byTool) {
   const p = toolResults.filter((r) => r.status === "PASS").length;
   const f = toolResults.filter((r) => r.status === "FAIL").length;
-  const tickers = toolResults.map((r) => (r.status === "PASS" ? "✅" : "❌") + r.ticker).join(" ");
+  const tickers = toolResults
+    .map((r) => (r.status === "PASS" ? "✅" : r.status === "SKIP" ? "⏭️" : "❌") + r.ticker)
+    .join(" ");
   console.log(`  ${p}/${p + f} ${tool}: ${tickers}`);
 }
 
