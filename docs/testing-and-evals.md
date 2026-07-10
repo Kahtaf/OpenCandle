@@ -24,6 +24,8 @@ npm run docs:site:build
 
 `npm test` runs the [Vitest](https://vitest.dev) suite. Unit tests should be fixture-backed and should not call live APIs.
 
+CI runs the full gate on Node 24.x and install/packed/CLI envelope checks on Node 22.19.0 and 26.x; the scheduled nightly drift canary is non-gating and reports live-provider and eval results in the repository's Actions tab.
+
 For release-facing changes, run the same local gate that release and publish paths use:
 
 ```bash

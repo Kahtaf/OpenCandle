@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- A non-gating nightly GitHub Actions drift canary now runs live provider checks and, when `GEMINI_API_KEY` is configured, deterministic and advisory live-router evals.
+
+### Changed
+
+- CI now keeps the full validation gate on Node 24.x while Node 22.19.0 and 26.x run install/build, packed-install, and CLI boot envelope checks.
+
 ## [0.12.0] - 2026-07-10
 
 ### Added

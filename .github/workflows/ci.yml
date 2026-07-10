@@ -35,14 +35,17 @@ jobs:
         run: npm ci
 
       - name: Typecheck
+        if: matrix.node-version == '24.x'
         run: npx tsc --noEmit
 
       - name: Lint
+        if: matrix.node-version == '24.x'
         run: npx biome ci .
 
-      # Every matrix leg builds the site: the public-site build contract
-      # tests in `npm test` read website/dist output.
+      # The full Node 24.x leg builds the site because the public-site build
+      # contract tests in `npm test` read website/dist output.
       - name: Build public docs
+        if: matrix.node-version == '24.x'
         run: npm run docs:site:build
 
       - name: Validate package contents
@@ -50,6 +53,7 @@ jobs:
         run: npm run package:contents:check
 
       - name: Run tests
+        if: matrix.node-version == '24.x'
         run: npm test
 
       - name: Run agent tool tests
@@ -65,8 +69,13 @@ jobs:
         run: npm run test:gui:release-smoke
 
       - name: Packed install smoke
-        if: matrix.node-version == '24.x'
         run: npm run test:packed-install
+
+      - name: Verify packaged CLI boots
+        run: |
+          expected_version="$(node -p "require('./package.json').version")"
+          test "$(node dist/cli.js --version)" = "$expected_version"
+          node dist/cli.js --help > /dev/null
 
       - name: Check public docs external links
         if: matrix.node-version == '24.x'
