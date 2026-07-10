@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-10
+
 ### Added
 
 - Watchlists can now be deleted from the GUI (guarded so the last remaining watchlist cannot be removed), alongside the existing create and rename flows.
