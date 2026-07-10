@@ -52,4 +52,35 @@ describe("validateModelKey", () => {
       }),
     );
   });
+
+  it("rejects a Google key when the provider flags API_KEY_INVALID on a 400", async () => {
+    mockFetch(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 400,
+            message: "API key not valid. Please pass a valid API key.",
+            status: "INVALID_ARGUMENT",
+            details: [{ reason: "API_KEY_INVALID" }],
+          },
+        }),
+        { status: 400 },
+      ),
+    );
+
+    await expect(validateModelKey("google", "bad-key")).resolves.toEqual({
+      status: "invalid",
+      providerLabel: "Google Gemini",
+    });
+  });
+
+  it("keeps unrelated 400 responses transient so provider hiccups do not block saving", async () => {
+    mockFetch(new Response("Bad Request", { status: 400 }));
+
+    await expect(validateModelKey("openai", "some-key")).resolves.toEqual({
+      status: "transient",
+      providerLabel: "OpenAI",
+      reason: "HTTP 400",
+    });
+  });
 });

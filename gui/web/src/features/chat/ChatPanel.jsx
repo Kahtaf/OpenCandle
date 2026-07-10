@@ -325,7 +325,11 @@ export function ChatPanel({
                   anchorRef={transcript.anchorRowRef}
                   knownSymbols={knownSymbols}
                   onRetryToolRun={retryFailedRun}
-                  onRetryFailedRun={() => retryFailedRun(lastPrompt)}
+                  onRetryFailedRun={(failedPrompt) =>
+                    retryFailedRun(
+                      typeof failedPrompt === "string" && failedPrompt ? failedPrompt : lastPrompt,
+                    )
+                  }
                   onFixModelKey={onOpenModelSetup}
                   retryDisabled={chatDisabled || canStopRun}
                 />
@@ -827,7 +831,7 @@ function MessageRowContent({
       <CustomMessage
         customType={entry.customType}
         content={entry.content}
-        onRetry={onRetryFailedRun}
+        onRetry={() => onRetryFailedRun?.(entry.details?.prompt)}
         onFixModelKey={onFixModelKey}
       />
     );

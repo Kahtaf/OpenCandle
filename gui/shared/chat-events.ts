@@ -78,6 +78,7 @@ export type ChatEvent =
       messageId: string;
       customType: string;
       content: MessageContent[];
+      details?: unknown;
     } & ChatEventBase)
   | ({
       type: "tool.started";
@@ -108,6 +109,7 @@ export interface RenderMessage {
   text: string;
   attachments?: MessageAttachmentChip[];
   customType?: string;
+  details?: unknown;
 }
 
 export interface RenderToolCall {

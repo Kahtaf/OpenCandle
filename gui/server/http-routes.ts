@@ -788,7 +788,9 @@ async function streamAcceptedSseChatRun({
         "opencandle-model-run-failed",
         `Chat could not authenticate the configured model key. ${message}`,
         true,
-        { source: "gui", reason: "model_auth" },
+        // prompt lets the failure card's Retry re-send this run's prompt even
+        // after later prompts change the session's most-recent input.
+        { source: "gui", reason: "model_auth", prompt },
       );
       const failureEntry = runSessionManager.getEntries().at(-1);
       if (failureEntry) {
@@ -820,7 +822,7 @@ class SessionActionNotAdmitted extends Error {}
 
 export function isModelAuthenticationFailure(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /\b(?:401|403|unauthorized|forbidden|authentication|invalid[_ -]?api[_ -]?key)\b/i.test(
+  return /\b(?:401|403|unauthorized|forbidden|authentication|invalid[_ -]?api[_ -]?key|api[_ -]?key[_ -]?invalid|api key not valid)\b/i.test(
     message,
   );
 }

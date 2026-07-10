@@ -11,4 +11,11 @@ describe("GUI model authentication failures", () => {
       isModelAuthenticationFailure(new Error("Timed out waiting for the session turn to settle")),
     ).toBe(false);
   });
+
+  it("classifies Google's 400-style invalid-key errors", () => {
+    expect(
+      isModelAuthenticationFailure(new Error("API key not valid. Please pass a valid API key.")),
+    ).toBe(true);
+    expect(isModelAuthenticationFailure(new Error("Gemini rejected: API_KEY_INVALID"))).toBe(true);
+  });
 });

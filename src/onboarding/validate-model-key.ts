@@ -50,6 +50,14 @@ export async function validateModelKey(
       return { status: "invalid", providerLabel: probe.label };
     }
     if (!response.ok) {
+      // Google reports bad keys as 400 INVALID_ARGUMENT / API_KEY_INVALID
+      // rather than 401.
+      if (response.status === 400) {
+        const body = await response.text().catch(() => "");
+        if (/API_KEY_INVALID|API key not valid/i.test(body)) {
+          return { status: "invalid", providerLabel: probe.label };
+        }
+      }
       return { status: "transient", providerLabel: probe.label, reason: `HTTP ${response.status}` };
     }
     return { status: "valid", providerLabel: probe.label };

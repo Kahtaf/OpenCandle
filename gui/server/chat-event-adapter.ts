@@ -58,6 +58,7 @@ export function sessionEntriesToChatEvents(
         messageId,
         customType: String((entry as { customType?: unknown }).customType || "custom"),
         content: [{ type: "text", text: customMessageText(entry.content) }],
+        details: (entry as { details?: unknown }).details,
         seq: seq++,
       });
       continue;

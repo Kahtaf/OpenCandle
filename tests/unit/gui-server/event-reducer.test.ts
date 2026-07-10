@@ -357,3 +357,24 @@ function genericOutput(): ToolOutput {
     details: { ok: true },
   };
 }
+
+describe("custom message details reduction", () => {
+  it("keeps custom.message details on the rendered message for per-entry actions", () => {
+    const state = reduceChatEvents([
+      {
+        type: "custom.message",
+        sessionId: "s1",
+        messageId: "cm1",
+        customType: "opencandle-model-run-failed",
+        content: [{ type: "text", text: "Chat could not authenticate the configured model key." }],
+        details: { source: "gui", reason: "model_auth", prompt: "quote NVDA" },
+        seq: 1,
+      },
+    ]);
+
+    expect(state.messages[0]).toMatchObject({
+      customType: "opencandle-model-run-failed",
+      details: { prompt: "quote NVDA" },
+    });
+  });
+});
