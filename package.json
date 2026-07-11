@@ -137,7 +137,7 @@
     "@sinclair/typebox": "*"
   },
   "devDependencies": {
-    "@agentclientprotocol/claude-agent-acp": "^0.55.0",
+    "@agentclientprotocol/claude-agent-acp": "^0.58.1",
     "@agentclientprotocol/codex-acp": "^1.0.1",
     "@biomejs/biome": "^2.5.1",
     "@sinclair/typebox": "^0.34.49",
@@ -146,7 +146,7 @@
     "acpx": "^0.12.0",
     "playwright-core": "^1.61.1",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.1.0",
     "vitest": "^4.1.9"
   }
