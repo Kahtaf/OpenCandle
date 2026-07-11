@@ -789,7 +789,7 @@ export function postProcessRouterOutput(
 }
 
 function isExplicitMacroDataRequest(text: string): boolean {
-  return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro)\b/i.test(
+  return /\b(?:get_economic_data|fred|cpi|inflation|fed\s+funds?|unemployment|gdp|macro|fear\s*(?:&|and)\s*greed)\b/i.test(
     text,
   );
 }

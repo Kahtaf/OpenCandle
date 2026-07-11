@@ -1375,6 +1375,32 @@ describe("route()", () => {
     );
   });
 
+  it("recovers the macro tool bundle for a current Fear and Greed request when the router omits a workflow", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Show me the current Fear and Greed index",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          route: "fallback",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["core_market"],
+          diagnostics: [],
+          reasoning: "simple market sentiment request",
+        }),
+      ),
+    );
+
+    expect(result.workflow).toBe("general_finance_qa");
+    expect(result.tool_bundles).toContain("macro");
+    expect(activeToolsForBundles(result.tool_bundles)).toContain("get_fear_greed");
+  });
+
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },
