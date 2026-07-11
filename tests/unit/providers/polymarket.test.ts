@@ -80,6 +80,16 @@ describe("Polymarket provider", () => {
               endDate: "2020-01-01T00:00:00Z",
             },
             {
+              id: "explicitly-open-future-date",
+              question: "Will the Fed cut rates?",
+              slug: "fed-cut-future-date",
+              outcomes: '["Yes"]',
+              outcomePrices: '["0.5"]',
+              closed: false,
+              active: true,
+              endDate: "2030-01-01T00:00:00Z",
+            },
+            {
               id: "explicitly-closed",
               question: "Will the Fed cut rates?",
               slug: "fed-cut-closed",
@@ -129,6 +139,7 @@ describe("Polymarket provider", () => {
     expect(quotes.map((quote) => quote.marketId)).toEqual(
       expect.arrayContaining([
         "explicitly-open-stale-date",
+        "explicitly-open-future-date",
         "flagless-future-date",
         "flagless-no-date",
       ]),
@@ -137,6 +148,15 @@ describe("Polymarket provider", () => {
     expect(marketIds).not.toContain("explicitly-closed");
     expect(marketIds).not.toContain("flagless-stale-date");
     expect(marketIds).not.toContain("not-settled-but-unconfirmed-stale-date");
+
+    // A past close date on an explicitly active market is the same stale
+    // metadata the filter ignores; it must not surface as a "Close:" line.
+    const staleDateQuote = quotes.find((quote) => quote.marketId === "explicitly-open-stale-date");
+    expect(staleDateQuote?.closeDate).toBeUndefined();
+    const futureDateQuote = quotes.find(
+      (quote) => quote.marketId === "explicitly-open-future-date",
+    );
+    expect(futureDateQuote?.closeDate).toBe("2030-01-01T00:00:00Z");
   });
 
   it("preserves outcome-price positions when skipping malformed Polymarket prices", async () => {

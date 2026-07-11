@@ -15,7 +15,7 @@
 
 ### Fixed
 
-- Polymarket searches no longer drop explicitly open markets when Gamma supplies stale past end dates; authoritative `closed` and `active` flags now take precedence.
+- Polymarket searches no longer drop explicitly open markets when Gamma supplies stale past end dates; an explicit `active` flag now takes precedence over the date heuristic, and the stale past close date is omitted from those quotes instead of being shown as if an open market had already closed.
 - The live provider e2e harness now retries one non-environment-limited failure after a short delay before recording it as failed.
 - The live provider e2e suite (used by the nightly drift canary) now records CI environment limitations — shared-runner HTTP 429 rate limits and missing external CLI tools such as `rdt` — as skips with a labeled summary section instead of failures, so a red nightly means provider drift rather than runner noise.
 
