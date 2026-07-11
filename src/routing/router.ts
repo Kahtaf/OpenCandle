@@ -764,6 +764,13 @@ export function postProcessRouterOutput(
   const selectedToolBundles = isConceptualEducationRequest(text, next)
     ? []
     : selectToolBundles(next);
+  if (isExplicitMacroDataRequest(text) && !selectedToolBundles.includes("macro")) {
+    selectedToolBundles.push("macro");
+    diagnostics.push({
+      code: "macro_tool_bundle_recovered",
+      message: "explicit macro data request retained the macro tool bundle",
+    });
+  }
   if (selectedToolBundles.length === 0 && isConceptualEducationRequest(text, next)) {
     diagnostics.push({
       code: "conceptual_education_no_tools",

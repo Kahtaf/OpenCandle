@@ -1401,6 +1401,32 @@ describe("route()", () => {
     expect(activeToolsForBundles(result.tool_bundles)).toContain("get_fear_greed");
   });
 
+  it("retains the Fear and Greed tool when the router assigns a non-macro workflow", async () => {
+    const result = await route(
+      {
+        ...BASE_INPUT,
+        text: "Show me the current Fear and Greed index",
+      },
+      fixedClient(
+        JSON.stringify({
+          routeKind: "agent_task",
+          route: "fallback",
+          workflow: "watchlist_or_tracking",
+          entities: { symbols: [] },
+          slots: {},
+          preference_updates: [],
+          missing_required: [],
+          tool_bundles: ["core_market"],
+          diagnostics: [],
+          reasoning: "misclassified current index request",
+        }),
+      ),
+    );
+
+    expect(result.tool_bundles).toContain("macro");
+    expect(activeToolsForBundles(result.tool_bundles)).toContain("get_fear_greed");
+  });
+
   it("routes missing options symbol to clarification with ask_user bundle", async () => {
     const result = await route(
       { ...BASE_INPUT, text: "build me an options setup" },
