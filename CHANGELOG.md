@@ -10,6 +10,7 @@
 
 ### Changed
 
+- The nightly drift canary now reports Gemini-backed agent evals as advisory, keeping provider and deterministic test gates blocking while surfacing live-model wording drift and slow workflow traces in the run summary.
 - CI now keeps the full validation gate on Node 24.x while Node 22.19.0 and 26.x run install/build, packed-install, and CLI boot envelope checks.
 - The packed-install smoke now verifies the packed CLI version, help usage, and blocked JSON doctor report in a fresh consumer home.
 
