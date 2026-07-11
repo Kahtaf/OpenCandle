@@ -105,8 +105,15 @@ function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMark
     numberValue(market.liquidityNum) ??
     numberValue(market.liquidity) ??
     numberValue(event?.liquidity);
-  const closeDate =
+  const rawCloseDate =
     stringValue(market.endDate) ?? normalizeDateOnly(market.endDateIso ?? event?.endDate);
+  // A past close date on a market Gamma explicitly marks active is the same
+  // stale metadata isOpenMarket ignores; presenting it as a close date would
+  // tell users an open market already closed, so it is omitted instead.
+  const closeDate =
+    rawCloseDate !== undefined && booleanValue(market.active) === true && isPastDate(rawCloseDate)
+      ? undefined
+      : rawCloseDate;
   const url = marketUrl(market, event);
   const asOf = stringValue(market.updatedAt) ?? stringValue(event?.updatedAt);
 
@@ -132,12 +139,24 @@ function marketToQuotes(market: GammaMarket, event?: GammaEvent): PredictionMark
 }
 
 function isOpenMarket(market: GammaMarket): boolean {
-  if (booleanValue(market.closed) === true) return false;
-  if (booleanValue(market.active) === false) return false;
+  const closed = booleanValue(market.closed);
+  const active = booleanValue(market.active);
+  if (closed === true) return false;
+  if (active === false) return false;
+  // An explicit affirmative active flag is Gamma's authoritative openness
+  // signal and beats the endDate heuristic, whose metadata is demonstrably
+  // stale on live markets. A lone `closed: false` only says "not settled",
+  // so it still falls through to the date check.
+  if (active === true) return true;
+
   const endDate = stringValue(market.endDate) ?? stringValue(market.endDateIso);
   if (!endDate) return true;
-  const parsed = new Date(endDate);
-  return Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now();
+  return !isPastDate(endDate);
+}
+
+function isPastDate(value: string): boolean {
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.getTime() <= Date.now();
 }
 
 function normalizeLimit(limit: number): number {
