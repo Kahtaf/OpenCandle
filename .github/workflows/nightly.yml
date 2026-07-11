@@ -38,12 +38,26 @@ jobs:
           {
             echo "## :warning: GEMINI_API_KEY is not configured"
             echo
-            echo "The deterministic eval and advisory live-router eval were skipped. Add the repository secret to enable the full nightly drift canary."
+            echo "The advisory live-agent and live-router evals were skipped. Add the repository secret to enable the full nightly drift canary."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Run deterministic eval cases
+      - name: Run advisory live agent eval cases
         if: env.GEMINI_API_KEY != ''
-        run: npm run eval -- cases
+        continue-on-error: true
+        shell: bash
+        run: |
+          status=0
+          npm run eval -- cases 2>&1 | tee /tmp/live-agent-eval.log || status=$?
+          {
+            echo "## Advisory live-agent eval"
+            echo
+            if [ "$status" -eq 0 ]; then
+              echo "All live-agent eval cases passed."
+            else
+              echo "Live-model drift was detected; the blocking provider and deterministic test gates still passed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       - name: Run advisory live router eval
         if: env.GEMINI_API_KEY != ''
