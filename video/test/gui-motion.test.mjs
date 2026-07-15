@@ -136,6 +136,14 @@ test("frozen research values are identified as a recorded demo", () => {
   assert.match(guiSource, /Recorded demo/);
 });
 
+test("recorded browser evidence does not present missing values or unsupported conclusions", () => {
+  assert.match(guiSource, /\["AVG VOLUME", "Unavailable"\]/);
+  assert.match(guiSource, /Price sits below SMA\(20\) and SMA\(50\)/);
+  assert.match(guiSource, /verify portfolio concentration before sizing/);
+  assert.doesNotMatch(guiSource, /Adds diversification beyond AAPL and TSLA/);
+  assert.doesNotMatch(guiSource, /Valuation favors a gradual entry/);
+});
+
 test("the replica removes invented research cards that do not exist in the app", () => {
   assert.doesNotMatch(guiSource, /Normalized trend/);
   assert.doesNotMatch(guiSource, /Normalized by moneyness/);

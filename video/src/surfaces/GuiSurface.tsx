@@ -28,13 +28,15 @@ const viewportScale = 1920 / 1152;
 const userPrompt = "I have $50k to invest for 5+ years and already own AAPL and TSLA. Does adding NVDA make sense right now, and what should I be worried about?";
 const finalAnswerText = `Research complete.
 
-NVDA can fit a 5+ year horizon—but sizing matters.
+NVDA shows strong long-term demand, but the near-term setup is mixed.
 
-• Adds diversification beyond AAPL and TSLA
 • AI and data-center demand support the long-term case
-• Valuation favors a gradual entry
+• Price sits below SMA(20) and SMA(50)
+• RSI is neutral; MACD remains bearish
 
-Watch concentration, power constraints, and hyperscaler spending.`;
+Options activity is call-heavy, with a 0.70 put/call ratio.
+
+Consider a gradual entry—and verify portfolio concentration before sizing.`;
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
 const events = motion.events;
 
@@ -469,7 +471,7 @@ const CompanyOverviewCard = () => (
     <div style={{marginTop: 6, color: C.muted, fontSize: 9.5}}>TECHNOLOGY · SEMICONDUCTORS</div>
     <p style={{margin: "11px 0", color: C.muted, fontSize: 10.7, lineHeight: 1.5}}>Nvidia designs graphics processing units and accelerated computing platforms for data centers, gaming, and professional markets.</p>
     <div style={{display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 7}}>
-      {[["MARKET CAP", "$4.72T"], ["P/E", "29.88"], ["FORWARD P/E", "22.52"], ["EPS", "6.52"], ["BETA", "2.20"], ["DIVIDEND YIELD", "0.02%"], ["PROFIT MARGIN", "63.00%"], ["REVENUE GROWTH", "85.20%"], ["AVG VOLUME", "0"]].map(([label, value]) => <MoneyTile key={label} label={label} value={value} />)}
+      {[["MARKET CAP", "$4.72T"], ["P/E", "29.88"], ["FORWARD P/E", "22.52"], ["EPS", "6.52"], ["BETA", "2.20"], ["DIVIDEND YIELD", "0.02%"], ["PROFIT MARGIN", "63.00%"], ["REVENUE GROWTH", "85.20%"], ["AVG VOLUME", "Unavailable"]].map(([label, value]) => <MoneyTile key={label} label={label} value={value} />)}
     </div>
     <div style={{marginTop: 9, color: C.muted, fontSize: 9.5}}>52-week range $157.13 – $236.26</div>
   </ToolCardShell>
