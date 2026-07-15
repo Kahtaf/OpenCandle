@@ -38,7 +38,7 @@
     "render:approved-tour": "remotion render OpenCandleArchitecture public/approved/architecture.mp4 --codec=h264 --crf=18",
     "render:approved-tui": "remotion render OpenCandleTUI public/approved/tui.mp4 --codec=h264 --crf=18",
     "still:approved-gui-start": "remotion still OpenCandleGUI public/approved/gui-start.png --frame=0",
-    "still:approved-gui-final": "remotion still OpenCandleGUI public/approved/gui-final.png --frame=650",
+    "still:approved-gui-final": "remotion still OpenCandleGUI public/approved/gui-final.png --frame=1000",
     "still:approved-tui-final": "remotion still OpenCandleTUI public/approved/tui-final.png --frame=179",
     "render:approved-surfaces": "npm run render:approved-gui && npm run render:approved-tour && npm run render:approved-tui && npm run still:approved-gui-start && npm run still:approved-gui-final && npm run still:approved-tui-final",
     "still": "remotion still OpenCandleLaunch stills/preview.png --frame=1050",
