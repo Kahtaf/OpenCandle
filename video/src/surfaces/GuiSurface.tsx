@@ -526,7 +526,11 @@ const TechnicalIndicatorsCard = ({frame, start}: {frame: number; start: number})
   const signalLine = macdBars.map((value, index) => value * 0.75 + Math.sin(index / 3));
   return (
     <div data-research-card="rsi" style={{border: `1px solid ${C.border}`, borderRadius: 7, background: C.bg, padding: "12px 13px"}}>
-      <div style={{fontSize: 10.7, lineHeight: 1.5}}><strong>NVDA Technical Analysis</strong> <span>(2025-07-03 to 2026-07-02) Price: $194.83</span><br />SMA(20): $203.48 | SMA(50): $209.80 RSI(14): 41.2 (Neutral)</div>
+      <div style={{fontSize: 10.7, lineHeight: 1.5}}>
+        <strong>NVDA Technical Analysis</strong>
+        <div style={{color: C.muted, fontSize: 8.7, letterSpacing: 0.2}}>Recorded values · illustrative chart</div>
+        <span>(2025-07-03 to 2026-07-02) Price: $194.83</span><br />SMA(20): $203.48 | SMA(50): $209.80 RSI(14): 41.2 (Neutral)
+      </div>
       <div style={{display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 6, marginTop: 10, padding: "8px 9px", borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, color: C.muted, fontSize: 9.2}}><span>MACD: -4.09</span><span>Signal: -3.09</span><span>Histogram: -1.00</span></div>
       <p style={{margin: "9px 0 10px", fontSize: 9.5, lineHeight: 1.45}}>Signals: Price below SMA(20) — short-term bearish | Death cross pattern | MACD bearish | Volume confirming decline</p>
       <ChartHeader label="PRICE" value="$156.95 – $235.74" legend={<Legend items={[[C.fg,"Close"],["#3b82f6","SMA(20)"],["#d97706","SMA(50)"],["#d4d4d8","Bollinger"]]} />} />

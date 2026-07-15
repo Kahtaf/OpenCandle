@@ -120,6 +120,7 @@ test("technical renderer mirrors the app's price, RSI, and MACD panes", () => {
   assert.match(guiSource, /data-research-chart="price"/);
   assert.match(guiSource, /data-research-chart="rsi"/);
   assert.match(guiSource, /data-research-chart="macd"/);
+  assert.match(guiSource, /Recorded values · illustrative chart/);
 });
 
 test("options renderer mirrors the app's stack bar, money tiles, and contract lists", () => {
