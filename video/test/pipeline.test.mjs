@@ -69,6 +69,16 @@ test("on-screen copy stays intentionally sparse", () => {
   assert.match(result.errors.join("\n"), /onScreenText/);
 });
 
+test("audio duration must be a positive integer", () => {
+  for (const durationFrames of [0, -1]) {
+    const broken = structuredClone(pipeline);
+    broken.audio.durationFrames = durationFrames;
+
+    const result = validatePipeline(broken, {projectRoot});
+    assert.match(result.errors.join("\n"), /audio\.durationFrames/);
+  }
+});
+
 test("the browser is the primary flow and the CLI is the continuation surface", () => {
   const browserIndex = pipeline.beats.findIndex((beat) => beat.surface === "gui");
   const architectureIndex = pipeline.beats.findIndex((beat) => beat.surface === "architecture");

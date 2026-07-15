@@ -115,8 +115,12 @@ export function validatePipeline(pipeline, {projectRoot, requireStaged = false} 
   } else if (!existsSync(resolve(root, "public", pipeline.audio.file))) {
     errors.push(`audio file does not exist: public/${pipeline.audio.file}`);
   }
-  if (!Number.isInteger(pipeline?.audio?.durationFrames) || pipeline.audio.durationFrames > pipeline?.totalFrames) {
-    errors.push("audio.durationFrames must fit inside totalFrames");
+  if (
+    !Number.isInteger(pipeline?.audio?.durationFrames)
+    || pipeline.audio.durationFrames <= 0
+    || pipeline.audio.durationFrames > pipeline?.totalFrames
+  ) {
+    errors.push("audio.durationFrames must be a positive integer that fits inside totalFrames");
   }
 
   return {errors, totalFrames: pipeline?.totalFrames ?? 0, beats: beats.length};
