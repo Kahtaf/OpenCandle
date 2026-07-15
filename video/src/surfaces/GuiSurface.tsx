@@ -450,7 +450,10 @@ const StockQuoteCard = () => (
       <strong style={{fontSize: 29, letterSpacing: -1.1}}>$194.83</strong>
       <span style={{color: "#ef4444", fontSize: 12}}>↓ $2.75 · 1.39%</span>
     </div>
-    <div style={{marginTop: 2, color: C.muted, fontSize: 10.2}}>Prev close $197.58</div>
+    <div style={{marginTop: 2, color: C.muted, fontSize: 10.2}}>
+      <div>Prev close $197.58</div>
+      <div style={{marginTop: 2}}>Recorded 2026-07-04 · 06:31 ET</div>
+    </div>
     <div style={{display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7, marginTop: 12}}>
       {[["OPEN", "$197.14"], ["HIGH", "$200.06"], ["LOW", "$192.35"], ["VOLUME", "129.94M"]].map(([label, value]) => <MoneyTile key={label} label={label} value={value} />)}
     </div>

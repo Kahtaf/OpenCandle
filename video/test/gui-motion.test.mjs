@@ -134,6 +134,7 @@ test("options renderer mirrors the app's stack bar, money tiles, and contract li
 
 test("frozen research values are identified as a recorded demo", () => {
   assert.match(guiSource, /Recorded demo/);
+  assert.match(guiSource, /Recorded 2026-07-04 · 06:31 ET/);
 });
 
 test("recorded browser evidence does not present missing values or unsupported conclusions", () => {
