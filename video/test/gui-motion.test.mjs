@@ -127,6 +127,12 @@ test("options renderer mirrors the app's stack bar, money tiles, and contract li
     assert.match(guiSource, new RegExp(label.replace("/", "\\/")));
   }
   assert.match(guiSource, /data-options-stack-bar/);
+  assert.match(guiSource, /Expiration Jul 17/);
+  assert.doesNotMatch(guiSource, /Expiration Jul 16/);
+});
+
+test("frozen research values are identified as a recorded demo", () => {
+  assert.match(guiSource, /Recorded demo/);
 });
 
 test("the replica removes invented research cards that do not exist in the app", () => {

@@ -573,7 +573,7 @@ const OptionsChainCard = ({frame, start}: {frame: number; start: number}) => {
   return (
     <div data-research-card="options-interest"><ToolCardShell>
       <div style={{display: "flex", alignItems: "baseline", gap: 9}}><span style={{fontFamily: mono, fontSize: 10.5}}>NVDA</span><strong style={{fontSize: 17}}>$194.83</strong><span style={{color: C.muted, fontSize: 9.5}}>underlying</span></div>
-      <div style={{marginTop: 5, color: C.muted, fontSize: 9.5}}>Expiration Jul 16 · 20 dates available</div>
+      <div style={{marginTop: 5, color: C.muted, fontSize: 9.5}}>Expiration Jul 17 · 20 dates available</div>
       <div style={{marginTop: 12, display: "flex", justifyContent: "space-between", color: C.muted, fontSize: 8.8}}><span>Calls 115.9K</span><span>Puts 81.0K</span></div>
       <div data-options-stack-bar style={{height: 7, marginTop: 5, display: "flex", borderRadius: 7, overflow: "hidden"}}><span style={{width: `${59*progress}%`, background: "#16a34a"}} /><span style={{width: `${41*progress}%`, background: "#ef4444"}} /></div>
       <div style={{marginTop: 9, color: C.muted, fontSize: 8.8}}>Put/Call ratio <span style={{color: C.fg}}>0.70</span></div>
@@ -771,6 +771,7 @@ const ToolDrawer = ({frame, openProgress}: {frame: number; openProgress: number}
           <div style={{minWidth: 0, flex: 1}}>
             <div style={{fontSize: 14, fontWeight: 550}}>Research &amp; analysis</div>
             <div style={{fontSize: 11, color: C.muted, marginTop: 3, display: "flex", alignItems: "center", gap: 6}}>
+              <span style={{padding: "1px 5px", border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 9, letterSpacing: .35}}>Recorded demo</span>
               {complete ? "Completed" : <><span style={{width: 7, height: 7, borderRadius: 7, background: C.green, boxShadow: "0 0 0 3px #e7f5eb"}} />Working…</>}
             </div>
           </div>
