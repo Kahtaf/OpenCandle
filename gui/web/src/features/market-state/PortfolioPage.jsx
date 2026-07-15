@@ -32,16 +32,7 @@ const ALLOCATION_COLORS = [
   "oklch(0.62 0.1 35)",
 ];
 
-export function PortfolioPage({
-  state,
-  loading = false,
-  filter,
-  setFilter,
-  readOnly,
-  openPanel,
-  invokeTool,
-  renderPageHeader,
-}) {
+function usePortfolioPageState(state, filter) {
   const portfolios = useMemo(() => {
     const saved = state.portfolios ?? [];
     return saved.length > 0 ? saved : [{ id: "default", name: "Default", isDefault: true }];
@@ -91,7 +82,6 @@ export function PortfolioPage({
       (candidate) => candidate.portfolioId === activePortfolio?.id,
     ) ?? (activePortfolio?.isDefault ? state.quoteSnapshot?.portfolioSummary : null);
   const [expanded, setExpanded] = useState(() => new Set());
-
   const toggleExpanded = (symbol) => {
     setExpanded((current) => {
       const next = new Set(current);
@@ -100,12 +90,52 @@ export function PortfolioPage({
       return next;
     });
   };
-
-  const lotCount = activeLots.length;
   const portfolioCounts = useMemo(
     () => countLotsByPortfolio(state.portfolio ?? []),
     [state.portfolio],
   );
+
+  return {
+    portfolios,
+    setActivePortfolioId,
+    activePortfolio,
+    activeLots,
+    holdings,
+    rows,
+    quoteFlashes,
+    quoteBadge,
+    summary,
+    expanded,
+    toggleExpanded,
+    portfolioCounts,
+  };
+}
+
+export function PortfolioPage({
+  state,
+  loading = false,
+  filter,
+  setFilter,
+  readOnly,
+  openPanel,
+  invokeTool,
+  renderPageHeader,
+}) {
+  const {
+    portfolios,
+    setActivePortfolioId,
+    activePortfolio,
+    activeLots,
+    holdings,
+    rows,
+    quoteFlashes,
+    quoteBadge,
+    summary,
+    expanded,
+    toggleExpanded,
+    portfolioCounts,
+  } = usePortfolioPageState(state, filter);
+  const lotCount = activeLots.length;
   const addHolding = () => openPanel("holding-add", { portfolio: activePortfolio });
 
   return (
@@ -231,7 +261,7 @@ export function PortfolioPage({
                             {moneyOrDash(row.marketValue, row.currency)}
                           </td>
                           <td className="px-2 py-1.5">
-                            <MarketSparkline symbol={row.symbol} />
+                            <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
                           </td>
                           <td className="px-2 py-2.5 text-right">
                             <SignedPercent value={row.changePercent} />
@@ -378,7 +408,7 @@ function MobileHoldingRows({
                 aria-hidden="true"
               />
               <Sym symbol={row.symbol} name={row.name} />
-              <MarketSparkline symbol={row.symbol} />
+              <MarketSparkline symbol={row.symbol} sparkline={row.sparkline} />
               <span className="flex flex-col items-end gap-0.5 tabular-nums">
                 <span>{moneyOrDash(row.currentPrice, row.currency)}</span>
                 <SignedPercent value={row.changePercent} />

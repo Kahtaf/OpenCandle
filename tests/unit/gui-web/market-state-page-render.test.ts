@@ -109,6 +109,14 @@ describe("MarketStatePage rendering", () => {
                   extendedChange: -0.53,
                   extendedChangePercent: -0.64,
                   extendedAsOf: "2026-06-12T20:14:00.000Z",
+                  sparkline: {
+                    status: "ok",
+                    source: "Yahoo Finance",
+                    points: [188, 189.5, 187.75, 190],
+                    fetchedAt: "2026-06-12T20:20:00.000Z",
+                    dataAsOf: "2026-06-12",
+                    stale: false,
+                  },
                 },
               ],
               portfolioQuotes: [],
@@ -126,11 +134,14 @@ describe("MarketStatePage rendering", () => {
 
     expect(html).toContain("Apple Inc. quote name");
     expect(html).toContain("24 hr sparkline");
-    expect(html).toContain('alt="AAPL 24-hour price sparkline"');
-    expect(html).toContain('data-slot="mobile-price-change"');
+    expect(html).toContain('data-slot="market-sparkline"');
     expect(html).toContain(
-      "https://ticker-line.com/v1/sparkline?ticker=AAPL&amp;timeframe=1d&amp;theme=light&amp;fill=true",
+      'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
     );
+    expect(html).toContain('data-source="Yahoo Finance"');
+    expect(html).toContain("Yahoo · 2026-06-12");
+    expect(html).toContain('data-slot="mobile-price-change"');
+    expect(html).not.toContain("ticker-line.com");
     expect(html).toContain("Price");
     expect(html).toContain("Change");
     expect(html).toContain("Volume");
@@ -226,6 +237,14 @@ describe("MarketStatePage rendering", () => {
                 extendedPrice: 151.25,
                 extendedChange: 1.25,
                 extendedChangePercent: 0.83,
+                sparkline: {
+                  status: "ok",
+                  source: "Yahoo Finance",
+                  points: [148, 149.25, 147.5, 150],
+                  fetchedAt: "2026-06-12T20:20:00.000Z",
+                  dataAsOf: "2026-06-12",
+                  stale: false,
+                },
               },
               {
                 lotId: 2,
@@ -270,7 +289,10 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("% of Portfolio");
     expect(html).toContain("Quantity");
     expect(html).toContain("Avg. Cost Basis");
-    expect(html).toContain('alt="AAPL 24-hour price sparkline"');
+    expect(html).toContain(
+      'aria-label="AAPL intraday price sparkline from Yahoo Finance, data as of 2026-06-12"',
+    );
+    expect(html).not.toContain("ticker-line.com");
     expect(html).toContain('data-slot="avg-cost-basis"');
     expect(html).toContain('data-slot="mobile-portfolio-holding"');
     expect(html).toContain("focus-visible:ring-inset");

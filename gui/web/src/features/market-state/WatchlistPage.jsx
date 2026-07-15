@@ -281,7 +281,7 @@ function QuoteBoard({
                 <Sym symbol={item.symbol} name={quote?.name ?? item.name} />
               </TableCell>
               <TableCell className="px-1 py-1.5 sm:px-3">
-                <MarketSparkline symbol={item.symbol} />
+                <MarketSparkline symbol={item.symbol} sparkline={quote?.sparkline} />
               </TableCell>
               <TableCell className="w-[82px] px-2 py-2.5 text-right tabular-nums sm:w-auto sm:px-3">
                 {quote?.status === "ok" ? (
