@@ -125,8 +125,14 @@ describe("MarketStatePage rendering", () => {
     );
 
     expect(html).toContain("Apple Inc. quote name");
-    expect(html).toContain("Chg $");
-    expect(html).toContain("Chg %");
+    expect(html).toContain("24 hr sparkline");
+    expect(html).toContain('alt="AAPL 24-hour price sparkline"');
+    expect(html).toContain('data-slot="mobile-price-change"');
+    expect(html).toContain(
+      "https://ticker-line.com/v1/sparkline?ticker=AAPL&amp;timeframe=1d&amp;theme=light&amp;fill=true",
+    );
+    expect(html).toContain("Price");
+    expect(html).toContain("Change");
     expect(html).toContain("Volume");
     expect(html).toContain("1.25");
     expect(html).toContain("+0.66%");
@@ -256,6 +262,18 @@ describe("MarketStatePage rendering", () => {
     expect(html).toContain("oklch(");
     expect(html).toContain("AAPL 60.0%");
     expect(html).toContain("NVDA 40.0%");
+    expect(html).toContain("Price");
+    expect(html).toContain("Value");
+    expect(html).toContain("24 hr sparkline");
+    expect(html).toContain("Change");
+    expect(html).toContain("Total Gain/Loss");
+    expect(html).toContain("% of Portfolio");
+    expect(html).toContain("Quantity");
+    expect(html).toContain("Avg. Cost Basis");
+    expect(html).toContain('alt="AAPL 24-hour price sparkline"');
+    expect(html).toContain('data-slot="avg-cost-basis"');
+    expect(html).toContain('data-slot="mobile-portfolio-holding"');
+    expect(html).toContain("focus-visible:ring-inset");
     expect(html).toContain("Apple Inc. quote name");
     expect(html).toContain("NVIDIA Corporation quote name");
     expect(html).toContain("Pre-market");

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Watchlist and portfolio rows now include 24-hour market sparklines from Ticker Line; portfolio tables also expose price, value, daily change, total gain/loss, allocation, quantity, and average cost basis in a responsive desktop table and expandable mobile summary.
 - A non-gating nightly GitHub Actions drift canary now runs live provider checks and, when `GEMINI_API_KEY` is configured, deterministic and advisory live-router evals.
 - GUI release smoke coverage now exercises first-run invalid OpenAI and Google model-key feedback, cold diagnostics readiness, and composer key management without relying on third-party APIs.
 - `OPENCANDLE_MODEL_KEY_PROBE_BASE_URL` provides a test-support override for routing model-key validation probes to a local server while retaining each provider's probe path; only loopback override hosts are honored so the probe's key-bearing headers cannot be redirected to a foreign host.
