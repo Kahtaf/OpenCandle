@@ -58,9 +58,9 @@ Follow AGENTS.md (TDD mandatory — failing test first for every code task; `.js
 
 ## 10. Verification
 
-- [ ] 10.1 `npm test` green.
-- [ ] 10.2 `npx tsc --noEmit` green (this also proves the registry exhaustiveness checks).
-- [ ] 10.3 `npx biome ci .` green.
+- [x] 10.1 `npm test` green.
+- [x] 10.2 `npx tsc --noEmit` green (this also proves the registry exhaustiveness checks).
+- [x] 10.3 `npx biome ci .` green.
 - [x] 10.4 Add a CHANGELOG.md `[Unreleased]` → `### Added` entry describing the LSE provider, the byte-budget gating, and the three tool fallback-chain integrations (use the changelog-automation skill conventions).
-- [ ] 10.5 `graphify update .` to refresh the knowledge graph.
-- [ ] 10.6 `npx openspec validate lse-data-provider --strict` passes (the `validate` command exists — verified via `npx openspec --help` on 2026-07-16).
+- [x] 10.5 `graphify update .` to refresh the knowledge graph.
+- [x] 10.6 `npx openspec validate lse-data-provider --strict` passes (the `validate` command exists — verified via `npx openspec --help` on 2026-07-16).
