@@ -9,7 +9,7 @@ import type { ProviderResult } from "../../runtime/evidence.js";
 import type { OHLCV } from "../../types/market.js";
 
 const DAILY_INTERVALS = new Set(["1d", "1wk", "1mo"]);
-const HISTORY_RANGES = [
+export const HISTORY_RANGES = [
   "1d",
   "5d",
   "1mo",
@@ -22,7 +22,7 @@ const HISTORY_RANGES = [
   "10y",
   "max",
 ] as const;
-const HISTORY_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"] as const;
+export const HISTORY_INTERVALS = ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"] as const;
 
 const params = Type.Object({
   symbol: Type.String({ description: "Stock ticker symbol (e.g. AAPL, MSFT)" }),

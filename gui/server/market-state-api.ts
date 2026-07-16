@@ -5,6 +5,189 @@ import { MarketStateService } from "../../src/market-state/service.js";
 import { initDefaultDatabase } from "../../src/memory/sqlite.js";
 import { wrapProvider } from "../../src/providers/wrap-provider.js";
 import { getHistory, getQuote } from "../../src/providers/yahoo-finance.js";
+import { HISTORY_INTERVALS, type HISTORY_RANGES } from "../../src/tools/market/stock-history.js";
+import { HistorySnapshotStore } from "./history-snapshot-store.js";
+
+type HistoryRange = (typeof HISTORY_RANGES)[number];
+type HistoryInterval = (typeof HISTORY_INTERVALS)[number];
+type GuiHistoryRange = "1D" | "5D" | "1M" | "6M" | "YTD" | "1Y" | "5Y" | "MAX";
+
+export interface ResolvedHistoryRange {
+  range: HistoryRange;
+  interval: HistoryInterval;
+}
+
+export interface InvalidHistoryRequest {
+  status: "invalid_request";
+  reason: string;
+}
+
+export interface InstrumentHistoryBar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface InstrumentHistorySnapshotOk {
+  status: "ok";
+  symbol: string;
+  range: string;
+  interval: HistoryInterval;
+  source: "Yahoo Finance";
+  fetchedAt: string;
+  dataAsOf?: string;
+  stale: boolean;
+  prevClose: number | null;
+  bars: InstrumentHistoryBar[];
+}
+
+export interface InstrumentHistorySnapshotUnavailable {
+  status: "unavailable";
+  reason: string;
+  dataAsOf?: string;
+  stale?: boolean;
+}
+
+export type InstrumentHistorySnapshot =
+  | InstrumentHistorySnapshotOk
+  | InstrumentHistorySnapshotUnavailable
+  | InvalidHistoryRequest;
+
+const instrumentHistorySnapshotStore = new HistorySnapshotStore<InstrumentHistorySnapshot>();
+
+const DEFAULT_HISTORY_RANGE_MAP: Record<GuiHistoryRange, ResolvedHistoryRange> = {
+  "1D": { range: "1d", interval: "5m" },
+  "5D": { range: "5d", interval: "15m" },
+  "1M": { range: "1mo", interval: "1h" },
+  "6M": { range: "6mo", interval: "1d" },
+  YTD: { range: "ytd", interval: "1d" },
+  "1Y": { range: "1y", interval: "1d" },
+  "5Y": { range: "5y", interval: "1wk" },
+  MAX: { range: "max", interval: "1mo" },
+};
+
+const HISTORY_RANGE_SPAN_DAYS: Record<GuiHistoryRange, number> = {
+  "1D": 1,
+  "5D": 5,
+  "1M": 31,
+  "6M": 183,
+  YTD: 366,
+  "1Y": 366,
+  "5Y": 1_827,
+  MAX: Number.POSITIVE_INFINITY,
+};
+
+const INTRADAY_DEPTH_CAP_DAYS: Partial<Record<HistoryInterval, number>> = {
+  "1m": 7,
+  "5m": 60,
+  "15m": 60,
+  "1h": 730,
+};
+
+const DAILY_OR_LONGER_INTERVALS = new Set<HistoryInterval>(["1d", "1wk", "1mo"]);
+
+export function resolveHistoryRange(
+  rangeLabel: string,
+  intervalOverride?: string,
+): ResolvedHistoryRange | InvalidHistoryRequest {
+  const resolved = DEFAULT_HISTORY_RANGE_MAP[rangeLabel as GuiHistoryRange];
+  if (!resolved) {
+    return { status: "invalid_request", reason: `Unknown history range: ${rangeLabel}` };
+  }
+  if (intervalOverride === undefined) return resolved;
+  if (!isHistoryInterval(intervalOverride)) {
+    return { status: "invalid_request", reason: `Unknown history interval: ${intervalOverride}` };
+  }
+
+  const depthCapDays = INTRADAY_DEPTH_CAP_DAYS[intervalOverride];
+  if (
+    depthCapDays !== undefined &&
+    HISTORY_RANGE_SPAN_DAYS[rangeLabel as GuiHistoryRange] > depthCapDays
+  ) {
+    return {
+      status: "invalid_request",
+      reason: `History range ${rangeLabel} exceeds the depth cap for interval ${intervalOverride}`,
+    };
+  }
+  return { range: resolved.range, interval: intervalOverride };
+}
+
+function isHistoryInterval(value: string): value is HistoryInterval {
+  return (HISTORY_INTERVALS as readonly string[]).includes(value);
+}
+
+export async function getInstrumentHistorySnapshot(
+  symbol: string,
+  rangeLabel = "1D",
+  intervalOverride?: string,
+): Promise<InstrumentHistorySnapshot> {
+  const resolved = resolveHistoryRange(rangeLabel, intervalOverride);
+  if ("status" in resolved) return resolved;
+
+  const key = `${symbol}|${resolved.range}|${resolved.interval}`;
+  return instrumentHistorySnapshotStore.get(key, async () => {
+    const result = await wrapProvider("yahoo", () =>
+      getHistory(symbol, resolved.range, resolved.interval),
+    );
+    if (result.status === "unavailable") {
+      return { status: "unavailable", reason: result.reason };
+    }
+
+    const bars = result.data.filter((bar) => Number.isFinite(bar.close));
+    const dataAsOf = bars.at(-1)?.date;
+    const chartBars: InstrumentHistoryBar[] = [];
+    for (const bar of bars) {
+      let time = bar.timestamp;
+      if (typeof time !== "number" || !Number.isFinite(time)) {
+        if (DAILY_OR_LONGER_INTERVALS.has(resolved.interval)) {
+          time = Date.parse(`${bar.date}T00:00:00Z`) / 1_000;
+        }
+        if (typeof time !== "number" || !Number.isFinite(time)) {
+          return {
+            status: "unavailable",
+            reason: `Historical bars for ${resolved.interval} are missing finite timestamps`,
+            dataAsOf,
+            stale: result.stale === true || undefined,
+          };
+        }
+      }
+      chartBars.push({
+        time,
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: bar.volume,
+      });
+    }
+
+    // Design D3: daily+ bars can honestly derive the previous close from the prior bar.
+    const prevClose =
+      DAILY_OR_LONGER_INTERVALS.has(resolved.interval) && bars.length >= 2
+        ? bars[bars.length - 2].close
+        : null;
+
+    return {
+      status: "ok",
+      symbol,
+      range: rangeLabel,
+      interval: resolved.interval,
+      source: "Yahoo Finance",
+      fetchedAt: result.timestamp,
+      dataAsOf,
+      stale: result.stale === true,
+      prevClose,
+      bars: chartBars,
+    };
+  });
+}
+
+export function resetInstrumentHistoryMemoForTests(): void {
+  instrumentHistorySnapshotStore.clear();
+}
 
 export type MarketSparklineSnapshot =
   | {
