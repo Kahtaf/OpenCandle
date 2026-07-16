@@ -52,7 +52,7 @@ Follow AGENTS.md (TDD mandatory — failing test first for every code task; `.js
 
 ## 9. Live e2e / drift canary
 
-- [ ] 9.1 Add an LSE check to the live provider e2e suite (the suite behind `npm run test:e2e:providers`, used by the nightly drift canary): with `LSE_API_KEY` present, call `getLseCandles("AAPL", "1d", { limit: 5 })` live and assert the row shape (`ts`, `open`, `high`, `low`, `close`, `volume` present and numeric where expected); without a key, record the check as an environment-limitation skip following the suite's existing skip semantics — never a failure.
+- [x] 9.1 Add an LSE check to the live provider e2e suite (the suite behind `npm run test:e2e:providers`, used by the nightly drift canary): with `LSE_API_KEY` present, call `getLseCandles("AAPL", "1d", { limit: 5 })` live and assert the row shape (`ts`, `open`, `high`, `low`, `close`, `volume` present and numeric where expected); without a key, record the check as an environment-limitation skip following the suite's existing skip semantics — never a failure.
 - [ ] 9.2 While a live key is available, capture one real allowance-429 `detail` wording if observable and update the 2.3 fixture to the live wording (the `/ref/financial_reports` fixtures were already captured live in task 2.2; re-verify they still match current responses and adjust the mapper tests if the vendor drifted).
 - [ ] 9.3 Verify the design-D5 UTC assumption: confirm from `GET /meta`, the vendor docs, or by comparing a known regular-session intraday candle's `ts` against the exchange session time, whether LSE `ts` values are UTC. Record the finding in the PR description; if they are exchange-local (US/Eastern) instead, fix the `timestamp` parse in the 8.x mapping before release.
 
@@ -61,6 +61,6 @@ Follow AGENTS.md (TDD mandatory — failing test first for every code task; `.js
 - [ ] 10.1 `npm test` green.
 - [ ] 10.2 `npx tsc --noEmit` green (this also proves the registry exhaustiveness checks).
 - [ ] 10.3 `npx biome ci .` green.
-- [ ] 10.4 Add a CHANGELOG.md `[Unreleased]` → `### Added` entry describing the LSE provider, the byte-budget gating, and the three tool fallback-chain integrations (use the changelog-automation skill conventions).
+- [x] 10.4 Add a CHANGELOG.md `[Unreleased]` → `### Added` entry describing the LSE provider, the byte-budget gating, and the three tool fallback-chain integrations (use the changelog-automation skill conventions).
 - [ ] 10.5 `graphify update .` to refresh the knowledge graph.
 - [ ] 10.6 `npx openspec validate lse-data-provider --strict` passes (the `validate` command exists — verified via `npx openspec --help` on 2026-07-16).
