@@ -2,6 +2,7 @@ import { BriefcaseBusiness, ChevronRight, Plus } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { MarketSparkline } from "../../components/market-sparkline.jsx";
 import { Button } from "../../components/ui/button.jsx";
+import { SERIES_COLORS } from "../../lib/series-colors.js";
 import { cn } from "../../lib/utils.js";
 import { degradedQuoteBadge, shortDateLabel } from "./format.js";
 import { buildHoldingRows } from "./portfolio-view-model.js";
@@ -22,15 +23,6 @@ import {
   Sym,
   useQuoteChangeFlash,
 } from "./shared.jsx";
-
-const ALLOCATION_COLORS = [
-  "oklch(0.62 0.1 250)",
-  "oklch(0.66 0.09 175)",
-  "oklch(0.7 0.1 65)",
-  "oklch(0.64 0.1 330)",
-  "oklch(0.66 0.09 145)",
-  "oklch(0.62 0.1 35)",
-];
 
 function usePortfolioPageState(state, filter) {
   const portfolios = useMemo(() => {
@@ -563,7 +555,7 @@ function ValueHeader({ summary, holdings, quoteBadge }) {
     .map((row, index) => ({
       symbol: row.symbol,
       percent: row.allocationPercent,
-      color: ALLOCATION_COLORS[index % ALLOCATION_COLORS.length],
+      color: SERIES_COLORS[index % SERIES_COLORS.length],
     }));
 
   return (
