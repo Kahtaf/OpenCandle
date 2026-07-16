@@ -4,11 +4,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../../../src/config.js";
 import * as configModule from "../../../src/config.js";
+import { buildDoctorReport } from "../../../src/doctor/report.js";
 import {
   type CommandRunner,
   clearProviderStatusCache,
+  formatProviderStatus,
   probeProviderStatus,
 } from "../../../src/onboarding/provider-status.js";
+import { getProvider } from "../../../src/onboarding/providers.js";
 import { markProviderNeverAsk, saveOnboardingState } from "../../../src/onboarding/state.js";
 
 const DEFAULT_EMPTY_CONFIG = {
@@ -17,6 +20,7 @@ const DEFAULT_EMPTY_CONFIG = {
   braveApiKey: undefined,
   exaApiKey: undefined,
   finnhubApiKey: undefined,
+  lseApiKey: undefined,
   routerMode: "llm",
   toolScopeMode: "observe",
   sentiment: undefined,
@@ -49,6 +53,42 @@ describe("provider status probes", () => {
       credentialSource: "env",
       cacheHit: false,
     });
+  });
+
+  it("treats an unconfigured London Strategic Edge key as optional and not degrading", async () => {
+    const home = mkdtempSync(join(tmpdir(), "opencandle-lse-provider-status-"));
+    vi.stubEnv("OPENCANDLE_HOME", home);
+
+    try {
+      const status = await probeProviderStatus("lse");
+      const report = await buildDoctorReport({
+        cwd: process.cwd(),
+        agentDir: "/tmp/opencandle-agent",
+        providerStatuses: [status],
+        modelSetup: { requirement: "ready", currentModel: "google/gemini-2.5-flash" },
+      });
+      const providerCheck = report.sections
+        .find((section) => section.id === "providers")
+        ?.checks.find((check) => check.id === "provider.lse.credential");
+
+      expect(status).toMatchObject({
+        providerId: "lse",
+        kind: "api-key",
+        state: "missing",
+        credentialSource: "absent",
+      });
+      expect(getProvider("lse").tier).toBe("soft");
+      expect(providerCheck).toMatchObject({
+        label: "London Strategic Edge",
+        status: "skip",
+        capability: "optional",
+      });
+      expect(report.status).toBe("ready");
+      expect(report.sections.find((section) => section.id === "providers")?.status).toBe("ready");
+      expect(formatProviderStatus(status)).toBe("London Strategic Edge: missing (absent)");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it("checks Twitter passive status with --version only", async () => {

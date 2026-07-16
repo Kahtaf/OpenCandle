@@ -137,4 +137,29 @@ describe("RateLimiter", () => {
       vi.useRealTimers();
     }
   });
+
+  it("configures the shared lse bucket for the 100 requests/minute free tier", async () => {
+    vi.useFakeTimers();
+    try {
+      const { rateLimiter } = await import("../../../src/infra/rate-limiter.js");
+
+      for (let i = 0; i < 100; i += 1) {
+        await rateLimiter.acquire("lse");
+      }
+
+      let acquired = false;
+      const acquirePromise = rateLimiter.acquire("lse").then(() => {
+        acquired = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(602);
+      expect(acquired).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await acquirePromise;
+      expect(acquired).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

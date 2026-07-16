@@ -24,6 +24,7 @@ export interface Config {
   braveApiKey?: string;
   exaApiKey?: string;
   finnhubApiKey?: string;
+  lseApiKey?: string;
   /**
    * Intent-router mode. The LLM router is the only production routing path;
    * `OPENCANDLE_ROUTER_MODE` accepts only `"llm"` (or unset). The removed
@@ -60,6 +61,9 @@ export interface OpenCandleFileConfig {
       apiKey?: string;
     };
     finnhub?: {
+      apiKey?: string;
+    };
+    lse?: {
       apiKey?: string;
     };
   };
@@ -196,6 +200,7 @@ function resolveConfig(fileConfig: OpenCandleFileConfig): Config {
     braveApiKey: process.env.BRAVE_API_KEY ?? fileConfig.providers?.brave?.apiKey,
     exaApiKey: process.env.EXA_API_KEY ?? fileConfig.providers?.exa?.apiKey,
     finnhubApiKey: process.env.FINNHUB_API_KEY ?? fileConfig.providers?.finnhub?.apiKey,
+    lseApiKey: process.env.LSE_API_KEY ?? fileConfig.providers?.lse?.apiKey,
     routerMode: resolveRouterMode(),
     toolScopeMode: resolveToolScopeMode(),
     planningMigrationStatuses: resolvePlanningMigrationStatuses(),

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Cache, runWithStaleMetadata } from "../../../src/infra/cache.js";
+import { Cache, runWithStaleMetadata, STALE_LIMIT, TTL } from "../../../src/infra/cache.js";
 
 describe("Cache", () => {
   let cache: Cache;
@@ -167,5 +167,14 @@ describe("Cache", () => {
       expect(result.stale).toBeUndefined();
       vi.useRealTimers();
     });
+  });
+});
+
+describe("LSE cache domains", () => {
+  it("uses the specified candle and financial-report fresh and stale lifetimes", () => {
+    expect(TTL.CANDLES).toBe(3_600_000);
+    expect(TTL.FINANCIAL_REPORTS).toBe(86_400_000);
+    expect(STALE_LIMIT.CANDLES).toBe(24 * 3_600_000);
+    expect(STALE_LIMIT.FINANCIAL_REPORTS).toBe(7 * 86_400_000);
   });
 });

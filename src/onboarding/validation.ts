@@ -148,5 +148,17 @@ export async function validateCredential(
         },
         body: JSON.stringify({ query: "test", numResults: 1 }),
       });
+
+    case "lse":
+      return validateWithFetch(
+        "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
+        {
+          method: "GET",
+          headers: {
+            "x-api-key": key,
+            Accept: "application/json",
+          },
+        },
+      );
   }
 }

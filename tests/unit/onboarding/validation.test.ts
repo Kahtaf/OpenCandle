@@ -215,4 +215,21 @@ describe("validateCredential", () => {
       expect(req.url).not.toContain("exa-key");
     });
   });
+
+  describe("lse", () => {
+    it("validates with a candle request and sends the x-api-key header", async () => {
+      const getRequest = mockFetchOnce({ status: 200, body: "[]" });
+
+      const result = await validateCredential("lse", "lse-live-key");
+      const request = getRequest();
+
+      expect(result.status).toBe("valid");
+      expect(request.method).toBe("GET");
+      expect(request.url).toBe(
+        "https://api.londonstrategicedge.com/vault/candles?symbol=AAPL&timeframe=1d&limit=1",
+      );
+      expect(request.headers.get("x-api-key")).toBe("lse-live-key");
+      expect(request.url).not.toContain("lse-live-key");
+    });
+  });
 });
